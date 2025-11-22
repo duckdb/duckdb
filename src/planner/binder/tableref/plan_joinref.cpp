@@ -220,18 +220,21 @@ void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinTy
 	                             arbitrary_expressions);
 }
 
-unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &context, JoinType type,
-                                                              JoinRefType reftype,
+//! Create the join operator based on conditions and join type
+unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, JoinRefType ref_type,
                                                               unique_ptr<LogicalOperator> left_child,
                                                               unique_ptr<LogicalOperator> right_child,
                                                               vector<JoinCondition> conditions,
                                                               vector<unique_ptr<Expression>> arbitrary_expressions) {
-	// Validate the conditions
-	bool need_to_consider_arbitrary_expressions = true;
-	const bool is_asof = reftype == JoinRefType::ASOF;
+	const bool is_asof = ref_type == JoinRefType::ASOF;
+
+	// validate ASOF join conditions
 	if (is_asof) {
-		// Handle case of zero conditions
-		auto asof_idx = conditions.size() + 1;
+		if (conditions.empty()) {
+			throw BinderException("ASOF JOIN requires at least one inequality condition");
+		}
+
+		idx_t asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
 			auto &cond = conditions[c];
 			switch (cond.comparison) {
@@ -256,89 +259,89 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 		}
 	}
 
-	if (type == JoinType::INNER && reftype == JoinRefType::REGULAR) {
-		// for inner joins we can push arbitrary expressions as a filter
-		// here we prefer to create a comparison join if possible
-		// that way we can use the much faster hash join to process the main join
-		// rather than doing a nested loop join to handle arbitrary expressions
+	// what type of join to create now?
+	// Case 1: ASOF join - use comparison join
+	if (is_asof) {
+		auto asof_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_ASOF_JOIN);
+		asof_join->conditions = std::move(conditions);
+		asof_join->children.push_back(std::move(left_child));
+		asof_join->children.push_back(std::move(right_child));
 
-		// for left and full outer joins we HAVE to process all join conditions
-		// because pushing a filter will lead to an incorrect result, as non-matching tuples cannot be filtered out
-		need_to_consider_arbitrary_expressions = false;
-	}
-	if ((need_to_consider_arbitrary_expressions && !arbitrary_expressions.empty()) || conditions.empty()) {
-		if (is_asof) {
-			D_ASSERT(!conditions.empty());
-			// We still need to produce an ASOF join here, but it will have to evaluate the arbitrary conditions itself
-			auto asof_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_ASOF_JOIN);
-			asof_join->conditions = std::move(conditions);
-			asof_join->children.push_back(std::move(left_child));
-			asof_join->children.push_back(std::move(right_child));
-			// AND all the arbitrary expressions together
+		if (!arbitrary_expressions.empty()) {
 			asof_join->predicate = std::move(arbitrary_expressions[0]);
 			for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
 				asof_join->predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 				                                                             std::move(asof_join->predicate),
 				                                                             std::move(arbitrary_expressions[i]));
 			}
-			return std::move(asof_join);
 		}
 
+		return std::move(asof_join);
+	}
+
+	// Case 2: No join conditions - use any join
+	if (conditions.empty()) {
 		if (arbitrary_expressions.empty()) {
-			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
-		// if we get here we could not create any JoinConditions
-		// turn this into an arbitrary expression join
+
 		auto any_join = make_uniq<LogicalAnyJoin>(type);
-		// create the condition
 		any_join->children.push_back(std::move(left_child));
 		any_join->children.push_back(std::move(right_child));
-		// AND all the arbitrary expressions together
-		// do the same with any remaining conditions
-		idx_t start_idx = 0;
-		if (conditions.empty()) {
-			// no conditions, just use the arbitrary expressions
-			any_join->condition = std::move(arbitrary_expressions[0]);
-			start_idx = 1;
+
+		any_join->condition = std::move(arbitrary_expressions[0]);
+		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+			any_join->condition = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
+		}
+
+		return std::move(any_join);
+	}
+
+	// Case 3: Has join conditions and arbitrary expressions - decide based on join type
+	if (!arbitrary_expressions.empty()) {
+		// for inner and semi join create comparison join + filter on top
+		if (type == JoinType::INNER || type == JoinType::SEMI) {
+			auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+			comp_join->conditions = std::move(conditions);
+			comp_join->children.push_back(std::move(left_child));
+			comp_join->children.push_back(std::move(right_child));
+
+			auto filter = make_uniq<LogicalFilter>();
+			for (auto &expr : arbitrary_expressions) {
+				filter->expressions.push_back(std::move(expr));
+			}
+			filter->children.push_back(std::move(comp_join));
+
+			return std::move(filter);
 		} else {
-			// we have some conditions as well
+			auto any_join = make_uniq<LogicalAnyJoin>(type);
+			any_join->children.push_back(std::move(left_child));
+			any_join->children.push_back(std::move(right_child));
+
 			any_join->condition = JoinCondition::CreateExpression(std::move(conditions[0]));
 			for (idx_t i = 1; i < conditions.size(); i++) {
 				any_join->condition = make_uniq<BoundConjunctionExpression>(
 				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition),
 				    JoinCondition::CreateExpression(std::move(conditions[i])));
 			}
-		}
-		for (idx_t i = start_idx; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_uniq<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
-		}
-		return std::move(any_join);
-	} else {
-		// we successfully converted expressions into JoinConditions
-		// create a LogicalComparisonJoin
-		auto logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-		if (is_asof) {
-			logical_type = LogicalOperatorType::LOGICAL_ASOF_JOIN;
-		}
-		auto comp_join = make_uniq<LogicalComparisonJoin>(type, logical_type);
-		comp_join->conditions = std::move(conditions);
-		comp_join->children.push_back(std::move(left_child));
-		comp_join->children.push_back(std::move(right_child));
-		if (!arbitrary_expressions.empty()) {
-			// we have some arbitrary expressions as well
-			// add them to a filter
-			auto filter = make_uniq<LogicalFilter>();
+
 			for (auto &expr : arbitrary_expressions) {
-				filter->expressions.push_back(std::move(expr));
+				any_join->condition = make_uniq<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(expr));
 			}
-			LogicalFilter::SplitPredicates(filter->expressions);
-			filter->children.push_back(std::move(comp_join));
-			return std::move(filter);
+
+			return std::move(any_join);
 		}
-		return std::move(comp_join);
 	}
+
+	// Case 4: Has join conditions but not arbitrary expressions - use comparison join
+	auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+	comp_join->conditions = std::move(conditions);
+	comp_join->children.push_back(std::move(left_child));
+	comp_join->children.push_back(std::move(right_child));
+
+	return std::move(comp_join);
 }
 
 static bool HasCorrelatedColumns(const Expression &root_expr) {
@@ -361,7 +364,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	vector<unique_ptr<Expression>> arbitrary_expressions;
 	LogicalComparisonJoin::ExtractJoinConditions(context, type, reftype, left_child, right_child, std::move(condition),
 	                                             conditions, arbitrary_expressions);
-	return LogicalComparisonJoin::CreateJoin(context, type, reftype, std::move(left_child), std::move(right_child),
+	return LogicalComparisonJoin::CreateJoin(type, reftype, std::move(left_child), std::move(right_child),
 	                                         std::move(conditions), std::move(arbitrary_expressions));
 }
 
