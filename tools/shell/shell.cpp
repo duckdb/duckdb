@@ -1352,9 +1352,12 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (cMode == RenderMode::DUCKBOX) {
 		return RenderDuckBoxResult(res);
 	}
-	// row rendering
+	// render the query result
 	auto renderer = GetRenderer();
-	return RenderQueryResult(*renderer, res);
+	RenderingQueryResult render_result(res, *renderer);
+
+	renderer->Analyze(render_result);
+	return renderer->RenderQueryResult(*this, render_result);
 }
 
 SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {

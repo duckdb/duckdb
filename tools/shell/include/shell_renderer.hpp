@@ -63,6 +63,7 @@ public:
 	string row_sep;
 
 public:
+	virtual SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result);
 	virtual void Analyze(RenderingQueryResult &result);
 	virtual void RenderHeader(ResultMetadata &result) = 0;
 	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;

@@ -108,7 +108,6 @@ public:
 	}
 	bool operator!=(const RenderingResultIterator &other) const {
 		return result != other.result;
-		;
 	}
 	RowData &operator*() {
 		return row_data;
@@ -127,16 +126,19 @@ SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::Quer
 	RenderingQueryResult result(query_result, renderer);
 
 	renderer.Analyze(result);
+	return renderer.RenderQueryResult(*this, result);
+}
 
-	renderer.RenderHeader(result.metadata);
+SuccessState ShellRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
+	RenderHeader(result.metadata);
 	for (auto &row_data : result) {
-		if (seenInterrupt) {
-			PrintF("Interrupt\n");
+		if (state.seenInterrupt) {
+			state.PrintF("Interrupt\n");
 			return SuccessState::FAILURE;
 		}
-		renderer.RenderRow(result.metadata, row_data);
+		RenderRow(result.metadata, row_data);
 	}
-	renderer.RenderFooter(result.metadata);
+	RenderFooter(result.metadata);
 	return SuccessState::SUCCESS;
 }
 
