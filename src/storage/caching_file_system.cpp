@@ -4,14 +4,44 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
-CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)) {
+namespace {
+
+// Return whether cache validation is enabled for the given path and config.
+bool GetValidationOption(QueryContext context, const OpenFileInfo &path, DatabaseInstance &db) {
+	// Check if file option is explicitly provided.
+	if (path.extended_info) {
+		const auto &open_options = path.extended_info->options;
+		const auto validate_entry = open_options.find("validate_external_file_cache");
+		if (validate_entry != open_options.end()) {
+			if (validate_entry->second.IsNull()) {
+				throw InvalidInputException("Cannot use NULL as argument for validate_external_file_cache");
+			}
+			return BooleanValue::Get(validate_entry->second);
+		}
+	}
+
+	// If file option not provided, use context setting.
+	if (context.Valid()) {
+		auto &config = DBConfig::GetConfig(*context.context);
+		return config.options.validate_external_file_cache;
+	}
+
+	// Fall back to database config
+	auto &config = DBConfig::GetConfig(db);
+	return config.options.validate_external_file_cache;
+}
+
+} // namespace
+
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db_p)), db(db_p) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
@@ -35,18 +65,9 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
-      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), validate(true),
-      cached_file(cached_file_p), position(0) {
-	if (path.extended_info) {
-		const auto &open_options = path.extended_info->options;
-		const auto validate_entry = open_options.find("validate_external_file_cache");
-		if (validate_entry != open_options.end()) {
-			if (validate_entry->second.IsNull()) {
-				throw InvalidInputException("Cannot use NULL as argument for validate_external_file_cache");
-			}
-			validate = BooleanValue::Get(validate_entry->second);
-		}
-	}
+      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
+      validate(GetValidationOption(context, path_p, caching_file_system_p.db)), cached_file(cached_file_p),
+      position(0) {
 	if (!external_file_cache.IsEnabled() || validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();

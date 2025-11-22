@@ -559,6 +559,16 @@ struct EnableExternalFileCacheSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ValidateExternalFileCacheSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "validate_external_file_cache";
+	static constexpr const char *Description = "Whether to validate external file cache entries by checking version tag (for remote files) or last modified time (for local files).";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableFSSTVectorsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_fsst_vectors";
