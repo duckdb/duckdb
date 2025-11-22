@@ -1,0 +1,50 @@
+# name: test/sql/join/inner/test_inner_join_filter_pushdown.test
+# description: Test INNER JOIN filter pushdown correctness
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE left_table (id INTEGER, val INTEGER, amount INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES (1, 1, 50), (2, 1, 75), (3, 2, 60), (4, 2, 90), (5, 3, 100);
+
+statement ok
+CREATE TABLE right_table (id INTEGER, category INTEGER, budget INTEGER);
+
+statement ok
+INSERT INTO right_table VALUES (1, 1, 1000), (2, 2, 2000), (3, 1, 1500);
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON l.id = r.id AND l.val > 1 AND r.category = 1;
+----
+3	2	60	3	1	1500
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON l.id = r.id AND r.category = 1;
+----
+1	1	50	1	1	1000
+3	2	60	3	1	1500
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON l.id = r.id AND l.val > 1;
+----
+3	2	60	3	1	1500
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON l.id = r.id AND true;
+----
+1	1	50	1	1	1000
+2	1	75	2	2	2000
+3	2	60	3	1	1500
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON l.id = r.id AND false;
+----
