@@ -296,7 +296,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 	// Case 3: Has join conditions and arbitrary expressions - decide based on join type
 	if (!arbitrary_expressions.empty()) {
-		// for inner and semi join create comparison join + filter on top
+		// for inner join create comparison join + filter on top
 		if (type == JoinType::INNER) {
 			auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 			comp_join->conditions = std::move(conditions);
