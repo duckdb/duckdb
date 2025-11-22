@@ -160,56 +160,36 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 	return false;
 }
 
+//! Extract join conditions, pushing single-side filters to children when it's safe
 void LogicalComparisonJoin::ExtractJoinConditions(
     ClientContext &context, JoinType type, JoinRefType ref_type, unique_ptr<LogicalOperator> &left_child,
     unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
     const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
     vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
 	for (auto &expr : expressions) {
-		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
-		if (total_side != JoinSide::BOTH) {
-			// join condition does not reference both sides, add it as filter under the join
-			if ((type == JoinType::LEFT || ref_type == JoinRefType::ASOF) && total_side == JoinSide::RIGHT) {
-				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
-				if (right_child->type != LogicalOperatorType::LOGICAL_FILTER) {
-					// not a filter yet, push a new empty filter
-					auto filter = make_uniq<LogicalFilter>();
-					filter->AddChild(std::move(right_child));
-					right_child = std::move(filter);
-				}
-				// push the expression into the filter
-				auto &filter = right_child->Cast<LogicalFilter>();
-				filter.expressions.push_back(std::move(expr));
+		auto side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
+
+		if (side == JoinSide::NONE) {
+			if (CanEliminate(context, type, expr)) {
+				continue; // Successfully eliminated
+			}
+		} else if (side == JoinSide::LEFT) {
+			if (CanPushToLeftChild(type)) {
+				PushFilterToChild(left_child, expr);
 				continue;
 			}
-			// if the join is a LEFT JOIN and the join expression constantly evaluates to TRUE,
-			// then we do not add it to the arbitrary expressions
-			if (type == JoinType::LEFT && expr->IsFoldable()) {
-				Value result;
-				ExpressionExecutor::TryEvaluateScalar(context, *expr, result);
-				if (!result.IsNull() && result == Value(true)) {
-					continue;
-				}
+		} else if (side == JoinSide::RIGHT) {
+			if (CanPushToRightChild(type)) {
+				PushFilterToChild(right_child, expr);
+				continue;
 			}
-		} else if (expr->GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHAN ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-		           expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM)
-
-		{
-			// comparison, check if we can create a comparison JoinCondition
-			if (IsJoinTypeCondition(ref_type, expr->GetExpressionType()) &&
+		} else if (side == JoinSide::BOTH) {
+			if (IsComparisonExpression(*expr) && IsJoinTypeCondition(ref_type, expr->GetExpressionType()) &&
 			    CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
-				// successfully created the join condition
 				continue;
 			}
 		}
+
 		arbitrary_expressions.push_back(std::move(expr));
 	}
 }
