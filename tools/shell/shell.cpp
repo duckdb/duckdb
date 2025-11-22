@@ -411,6 +411,10 @@ const string EVAL_SQL_NULL = "#NULL#";
 const string EVAL_SQL_EMPTY = "#EMPTY#";
 
 void ShellState::Print(PrintOutput output, const char *str) {
+	if (seenInterrupt) {
+		// no more printing after seeing an interrupt
+		return;
+	}
 	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
 }
 
@@ -1051,6 +1055,9 @@ static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
+	if (state.seenInterrupt >= 2) {
+		exit(1);
+	}
 	if (state.conn) {
 		state.conn->Interrupt();
 	}

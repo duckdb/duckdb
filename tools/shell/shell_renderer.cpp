@@ -1112,9 +1112,6 @@ public:
 	}
 
 	void PrintText(const string &text, HighlightElementType element_type) {
-		if (shell_highlight.state.seenInterrupt) {
-			return;
-		}
 		if (highlight) {
 			shell_highlight.PrintText(text, output, element_type);
 		} else {
