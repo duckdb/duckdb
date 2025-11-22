@@ -65,8 +65,8 @@ public:
 public:
 	virtual SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result);
 	virtual void Analyze(RenderingQueryResult &result);
-	virtual void RenderHeader(ResultMetadata &result) = 0;
-	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;
+	virtual void RenderHeader(ResultMetadata &result);
+	virtual void RenderRow(ResultMetadata &result, RowData &row);
 	virtual void RenderFooter(ResultMetadata &result);
 	static bool IsColumnar(RenderMode mode);
 	virtual string NullValue();
@@ -99,6 +99,13 @@ public:
 
 public:
 	virtual void RenderHeader(ResultMetadata &result) override;
+};
+
+class ModeDuckBoxRenderer : public ShellRenderer {
+public:
+	explicit ModeDuckBoxRenderer(ShellState &state);
+
+	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
 };
 
 } // namespace duckdb_shell

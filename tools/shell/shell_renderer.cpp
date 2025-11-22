@@ -1,6 +1,8 @@
 #include "shell_renderer.hpp"
 
 #include "shell_state.hpp"
+#include "duckdb/common/box_renderer.hpp"
+#include "shell_highlight.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -21,6 +23,12 @@ bool ShellRenderer::IsColumnar(RenderMode mode) {
 
 ShellRenderer::ShellRenderer(ShellState &state)
     : state(state), show_header(state.showHeader), col_sep(state.colSeparator), row_sep(state.rowSeparator) {
+}
+
+void ShellRenderer::RenderHeader(ResultMetadata &result) {
+}
+
+void ShellRenderer::RenderRow(ResultMetadata &result, RowData &row) {
 }
 
 void ShellRenderer::RenderFooter(ResultMetadata &result) {
@@ -1056,6 +1064,108 @@ public:
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// DuckBox Renderer
+//===--------------------------------------------------------------------===//
+class DuckBoxRenderer : public duckdb::BaseResultRenderer {
+public:
+	DuckBoxRenderer(ShellState &state, bool highlight)
+		: shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
+	}
+
+	void RenderLayout(const string &text) override {
+		PrintText(text, HighlightElementType::LAYOUT);
+	}
+
+	void RenderColumnName(const string &text) override {
+		PrintText(text, HighlightElementType::COLUMN_NAME);
+	}
+
+	void RenderType(const string &text) override {
+		PrintText(text, HighlightElementType::COLUMN_TYPE);
+	}
+
+	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
+		if (type.IsNumeric()) {
+			PrintText(text, HighlightElementType::NUMERIC_VALUE);
+		} else if (type.IsTemporal()) {
+			PrintText(text, HighlightElementType::TEMPORAL_VALUE);
+		} else {
+			PrintText(text, HighlightElementType::STRING_VALUE);
+		}
+	}
+
+	void RenderStringLiteral(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::STRING_CONSTANT);
+	}
+
+	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::NULL_VALUE);
+	}
+
+	void RenderFooter(const string &text) override {
+		PrintText(text, HighlightElementType::FOOTER);
+	}
+
+	void PrintText(const string &text, HighlightElementType element_type) {
+		if (highlight) {
+			shell_highlight.PrintText(text, output, element_type);
+		} else {
+			shell_highlight.state.Print(text);
+		}
+	}
+
+private:
+	ShellHighlight shell_highlight;
+	PrintOutput output;
+	bool highlight = true;
+};
+
+ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {}
+
+SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
+	DuckBoxRenderer result_renderer(state, state.HighlightResults());
+	try {
+		duckdb::BoxRendererConfig config;
+		config.max_rows = state.max_rows;
+		config.max_width = state.max_width;
+		if (config.max_width == 0) {
+			// if max_width is set to 0 (auto) - set it to infinite if we are writing to a file
+			if (!state.outfile.empty() && state.outfile[0] != '|') {
+				config.max_rows = (size_t)-1;
+				config.max_width = (size_t)-1;
+			}
+			if (!state.stdout_is_console) {
+				config.max_width = (size_t)-1;
+			}
+		}
+		LargeNumberRendering large_rendering = state.large_number_rendering;
+		if (large_rendering == LargeNumberRendering::DEFAULT) {
+			large_rendering = state.stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
+		}
+		config.null_value = state.nullValue;
+		if (state.columns) {
+			config.render_mode = duckdb::RenderMode::COLUMNS;
+		}
+		config.decimal_separator = state.decimal_separator;
+		config.thousand_separator = state.thousand_separator;
+		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+		duckdb::BoxRenderer renderer(config);
+		auto &query_result = result.result;
+		auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
+		auto &con = *state.conn;
+		renderer.Render(*con.context, result.metadata.column_names, materialized.Collection(), result_renderer);
+		return SuccessState::SUCCESS;
+	} catch (std::exception &ex) {
+		string error_str = duckdb::ErrorData(ex).Message() + "\n";
+		result_renderer.RenderLayout(error_str);
+		return SuccessState::FAILURE;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Get Renderer
+//===--------------------------------------------------------------------===//
 unique_ptr<ShellRenderer> ShellState::GetRenderer() {
 	return GetRenderer(cMode);
 }
@@ -1098,8 +1208,10 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 		return make_uniq<ModeBoxRenderer>(*this);
 	case RenderMode::LATEX:
 		return make_uniq<ModeLatexRenderer>(*this);
+	case RenderMode::DUCKBOX:
+		return make_uniq<ModeDuckBoxRenderer>(*this);
 	default:
-		throw std::runtime_error("Unsupported mode for GetRowRenderer");
+		throw std::runtime_error("Unsupported mode for GetRenderer");
 	}
 }
 

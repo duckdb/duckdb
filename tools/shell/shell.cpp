@@ -80,7 +80,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -1235,60 +1234,6 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
-class DuckBoxRenderer : public duckdb::BaseResultRenderer {
-public:
-	DuckBoxRenderer(ShellState &state, bool highlight)
-	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
-	}
-
-	void RenderLayout(const string &text) override {
-		PrintText(text, HighlightElementType::LAYOUT);
-	}
-
-	void RenderColumnName(const string &text) override {
-		PrintText(text, HighlightElementType::COLUMN_NAME);
-	}
-
-	void RenderType(const string &text) override {
-		PrintText(text, HighlightElementType::COLUMN_TYPE);
-	}
-
-	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
-		if (type.IsNumeric()) {
-			PrintText(text, HighlightElementType::NUMERIC_VALUE);
-		} else if (type.IsTemporal()) {
-			PrintText(text, HighlightElementType::TEMPORAL_VALUE);
-		} else {
-			PrintText(text, HighlightElementType::STRING_VALUE);
-		}
-	}
-
-	void RenderStringLiteral(const string &text, const duckdb::LogicalType &type) override {
-		PrintText(text, HighlightElementType::STRING_CONSTANT);
-	}
-
-	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
-		PrintText(text, HighlightElementType::NULL_VALUE);
-	}
-
-	void RenderFooter(const string &text) override {
-		PrintText(text, HighlightElementType::FOOTER);
-	}
-
-	void PrintText(const string &text, HighlightElementType element_type) {
-		if (highlight) {
-			shell_highlight.PrintText(text, output, element_type);
-		} else {
-			shell_highlight.state.Print(text);
-		}
-	}
-
-private:
-	ShellHighlight shell_highlight;
-	PrintOutput output;
-	bool highlight = true;
-};
-
 ShellState &ShellState::Get() {
 	static ShellState state;
 	return state;
@@ -1349,54 +1294,12 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		RenderDescribe(res);
 		return SuccessState::SUCCESS;
 	}
-	if (cMode == RenderMode::DUCKBOX) {
-		return RenderDuckBoxResult(res);
-	}
 	// render the query result
 	auto renderer = GetRenderer();
 	RenderingQueryResult render_result(res, *renderer);
 
 	renderer->Analyze(render_result);
 	return renderer->RenderQueryResult(*this, render_result);
-}
-
-SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
-	DuckBoxRenderer result_renderer(*this, HighlightResults());
-	try {
-		duckdb::BoxRendererConfig config;
-		config.max_rows = max_rows;
-		config.max_width = max_width;
-		if (config.max_width == 0) {
-			// if max_width is set to 0 (auto) - set it to infinite if we are writing to a file
-			if (!outfile.empty() && outfile[0] != '|') {
-				config.max_rows = (size_t)-1;
-				config.max_width = (size_t)-1;
-			}
-			if (!stdout_is_console) {
-				config.max_width = (size_t)-1;
-			}
-		}
-		LargeNumberRendering large_rendering = large_number_rendering;
-		if (large_rendering == LargeNumberRendering::DEFAULT) {
-			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
-		}
-		config.null_value = nullValue;
-		if (columns) {
-			config.render_mode = duckdb::RenderMode::COLUMNS;
-		}
-		config.decimal_separator = decimal_separator;
-		config.thousand_separator = thousand_separator;
-		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
-		duckdb::BoxRenderer renderer(config);
-		auto &materialized = res.Cast<duckdb::MaterializedQueryResult>();
-		auto &con = *conn;
-		renderer.Render(*con.context, res.names, materialized.Collection(), result_renderer);
-		return SuccessState::SUCCESS;
-	} catch (std::exception &ex) {
-		string error_str = duckdb::ErrorData(ex).Message() + "\n";
-		result_renderer.RenderLayout(error_str);
-		return SuccessState::FAILURE;
-	}
 }
 
 /*
