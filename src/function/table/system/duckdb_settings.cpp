@@ -46,13 +46,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("value");
-
-	bool in_bytes = ExtractInBytesArgument(input);
-	if (in_bytes) {
-		return_types.emplace_back(LogicalType::UBIGINT);
-	} else {
-		return_types.emplace_back(LogicalType::VARCHAR);
-	}
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("description");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -65,6 +59,12 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	bool in_bytes = ExtractInBytesArgument(input);
+	if (in_bytes) {
+		names.emplace_back("memory_in_bytes");
+		return_types.emplace_back(LogicalType::UBIGINT);
+	}
 
 	return nullptr;
 }
@@ -160,28 +160,12 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
 
-		optional_idx parsed;
-		if (in_bytes) {
-			// memory-like setting is represented as a VARCHAR, like '128 KiB'
-			parsed = TryParseBytes(entry.value.ToString());
-			if (!parsed.IsValid()) {
-				// We will skip this row as we're in bytes-mode but the value is not memory-like, by not
-				// increasing the counter and by not assigning a new row in the output
-				continue;
-			}
-		}
-
 		// return values:
 		// name, LogicalType::VARCHAR
 		output.SetValue(0, count, Value(entry.name));
 
-		// value - can vary between VARCHAR and UBIGINT according to the 'in_bytes' parameter
-		if (in_bytes) {
-			output.SetValue(1, count, Value::UBIGINT(parsed.GetIndex()));
-		} else {
-			// LogicalType::VARCHAR
-			output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
-		}
+		// LogicalType::VARCHAR
+		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
 
 		// description, LogicalType::VARCHAR
 		output.SetValue(2, count, Value(entry.description));
@@ -191,6 +175,17 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		output.SetValue(4, count, Value(entry.scope));
 		// aliases, LogicalType::VARCHAR[]
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+
+		if (in_bytes) {
+			// memory-like setting is represented as a VARCHAR, like '128 KiB'
+			optional_idx parsed = TryParseBytes(entry.value.ToString());
+			if (parsed.IsValid()) {
+				output.SetValue(6, count, Value::UBIGINT(parsed.GetIndex()));
+			} else {
+				output.SetValue(6, count, Value());
+			}
+		}
+
 		count++;
 	}
 	output.SetCardinality(count);
