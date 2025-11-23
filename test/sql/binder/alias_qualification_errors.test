@@ -6,7 +6,7 @@
 statement error
 SELECT alias.x + 1 AS y, 1 AS x
 ----
-Binder Error: Column "alias" referenced that exists in the SELECT clause - but this column cannot be referenced before it is defined
+Binder Error: Column "x" referenced that exists in the SELECT clause - but this column cannot be referenced before it is defined
 
 # unknown alias should error
 statement error
