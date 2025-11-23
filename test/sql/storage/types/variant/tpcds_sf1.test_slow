@@ -6,7 +6,7 @@ require tpcds
 load __TEST_DIR__/tpcds_sf1_variant.db
 
 statement ok
-call dsdgen(sf=1, suffix='_normal')
+call dsdgen(sf=0.01, suffix='_normal')
 
 statement ok
 SET variant_minimum_shredding_size = 0;
@@ -585,7 +585,7 @@ loop i 1 9
 query I
 PRAGMA tpcds(${i})
 ----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0${i}.csv
 
 endloop
 
@@ -594,6 +594,6 @@ loop i 10 100
 query I
 PRAGMA tpcds(${i})
 ----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
 
 endloop
