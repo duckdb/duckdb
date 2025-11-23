@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -212,7 +213,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool lateral, idx_t lateral_depth,
                                                         bool parent_is_dependent_join) {
-
 	bool is_lateral_join = false;
 
 	// check if this entry has correlated expressions
@@ -996,7 +996,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-
 #ifdef DEBUG
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();

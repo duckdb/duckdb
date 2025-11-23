@@ -5,46 +5,46 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('call histo') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('call histo') LIMIT 1;
 ----
 histogram	5
 
 query II
-FROM sql_auto_complete('call histogram_') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('call histogram_') LIMIT 1;
 ----
 histogram_values	5
 
 query II
-FROM sql_auto_complete('call duckdb_t') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('call duckdb_ty') LIMIT 1;
 ----
 duckdb_types	5
 
 query II
-FROM sql_auto_complete('FROM duckdb_c') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('FROM duckdb_c') LIMIT 1;
 ----
 duckdb_columns	5
 
 query II
-FROM sql_auto_complete('call read_cs') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('call read_cs') LIMIT 1;
 ----
 read_csv	5
 
 query II
-FROM sql_auto_complete('FROM read_csv_a') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('FROM read_csv_a') LIMIT 1;
 ----
 read_csv_auto	5
 
 query II
-FROM sql_auto_complete('call unnes') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('call unnes') LIMIT 1;
 ----
 unnest	5
 
 query II
-FROM sql_auto_complete('CALL glo') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CALL glo') LIMIT 1;
 ----
 "glob"	5
 
 query II
-FROM sql_auto_complete('from ran') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('from ran') LIMIT 1;
 ----
 "range"	5

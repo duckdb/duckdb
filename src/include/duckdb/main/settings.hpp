@@ -249,6 +249,17 @@ struct AutoloadKnownExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct BlockAllocatorMemorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "block_allocator_memory";
+	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use (this "
+	                                           "memory is never freed and cannot be reduced).";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct CatalogErrorMaxSchemasSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";
@@ -341,10 +352,30 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
+struct DebugPhysicalTableScanExecutionStrategySetting {
+	using RETURN_TYPE = PhysicalTableScanExecutionStrategy;
+	static constexpr const char *Name = "debug_physical_table_scan_execution_strategy";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force use of given strategy for executing physical table scans";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DebugSkipCheckpointOnCommitSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
 	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
+struct DebugVerifyBlocksSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_blocks";
+	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;

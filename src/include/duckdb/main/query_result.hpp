@@ -44,7 +44,7 @@ public:
 	DUCKDB_API void SetError(ErrorData error);
 	DUCKDB_API bool HasError() const;
 	DUCKDB_API const ExceptionType &GetErrorType() const;
-	DUCKDB_API const std::string &GetError();
+	DUCKDB_API const std::string &GetError() const;
 	DUCKDB_API ErrorData &GetErrorObject();
 	DUCKDB_API idx_t ColumnCount();
 
@@ -98,10 +98,10 @@ public:
 	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
 	//! Returns nullptr if there are no more results to fetch.
-	DUCKDB_API virtual unique_ptr<DataChunk> Fetch();
+	DUCKDB_API unique_ptr<DataChunk> Fetch();
 	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
 	//! returned.
-	DUCKDB_API virtual unique_ptr<DataChunk> FetchRaw() = 0;
+	DUCKDB_API unique_ptr<DataChunk> FetchRaw();
 	//! Converts the QueryResult to a string
 	DUCKDB_API virtual string ToString() = 0;
 	//! Converts the QueryResult to a box-rendered string
@@ -111,6 +111,9 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
+	//! Returns true if the query result has more rows than the given amount.
+	//! This might involve fetching up to that many rows - but wil not exhaust any
+	DUCKDB_API virtual bool MoreRowsThan(idx_t row_count);
 
 	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {
@@ -124,6 +127,9 @@ public:
 			return false;
 		}
 	}
+
+protected:
+	DUCKDB_API virtual unique_ptr<DataChunk> FetchInternal() = 0;
 
 private:
 	class QueryResultIterator;
@@ -141,6 +147,9 @@ private:
 		template <class T>
 		T GetValue(idx_t col_idx) const {
 			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();
+		}
+		Value GetBaseValue(idx_t col_idx) const {
+			return iterator.chunk->GetValue(col_idx, row);
 		}
 	};
 	//! The row-based query result iterator. Invoking the
@@ -199,6 +208,10 @@ public:
 	QueryResultIterator end() { // NOLINT: match stl API
 		return QueryResultIterator(nullptr);
 	}
+
+protected:
+	vector<unique_ptr<DataChunk>> stored_chunks;
+	bool result_exhausted = false;
 
 protected:
 	DUCKDB_API string HeaderToString();

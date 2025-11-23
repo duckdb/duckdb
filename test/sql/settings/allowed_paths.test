@@ -9,13 +9,13 @@ require no_extension_autoloading "EXPECTED: Test disable loading of extensions"
 
 # we can set allowed_directories as much as we want
 statement ok
-SET allowed_paths=['data/csv/glob/f_1.csv']
+SET allowed_paths=['{DATA_DIR}/csv/glob/f_1.csv']
 
 statement ok
 RESET allowed_paths
 
 statement ok
-SET allowed_paths=['data/csv/glob/f_1.csv', '__TEST_DIR__/allowed_file.csv']
+SET allowed_paths=['{DATA_DIR}/csv/glob/f_1.csv', '{TEMP_DIR}/allowed_file.csv']
 
 statement ok
 SET enable_external_access=false
@@ -33,7 +33,7 @@ Cannot change allowed_paths when enable_external_access is disabled
 
 # we can read our allowed files
 query III
-SELECT * FROM 'data/csv/glob/f_1.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/f_1.csv'
 ----
 1	alice	alice@email.com
 2	eve	eve@email.com
@@ -41,17 +41,17 @@ SELECT * FROM 'data/csv/glob/f_1.csv'
 
 # but not files that are not allowed
 statement error
-SELECT * FROM 'data/csv/glob/a1/a1.csv'
+SELECT * FROM '{DATA_DIR}/csv/glob/a1/a1.csv'
 ----
 Permission Error
 
 # we can also write to our allowed file
 statement ok
-COPY (SELECT 42 i) TO '__TEST_DIR__/allowed_file.csv'
+COPY (SELECT 42 i) TO '{TEMP_DIR}/allowed_file.csv'
 
 # but not to not-allowed files
 statement error
-COPY (SELECT 42 i) TO '__TEST_DIR__/not_allowed_file.csv'
+COPY (SELECT 42 i) TO '{TEMP_DIR}/not_allowed_file.csv'
 ----
 Permission Error
 

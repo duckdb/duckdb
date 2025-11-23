@@ -91,6 +91,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"NULLS_FIRST"}},
 	    {"debug_verify_vector", {"dictionary_expression"}},
+	    {"debug_physical_table_scan_execution_strategy", {"default"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
@@ -184,7 +185,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_progress_bar_print",
 	    "progress_bar_time",
 	    "index_scan_max_count",
-	    "profiling_mode"};
+	    "profiling_mode",
+	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
 

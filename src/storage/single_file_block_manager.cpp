@@ -14,6 +14,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -66,13 +67,12 @@ void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
 
 void GenerateDBIdentifier(uint8_t *db_identifier) {
 	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(db_identifier,
-	                                                                          MainHeader::DB_IDENTIFIER_LEN);
+	RandomEngine engine;
+	engine.RandomData(db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 }
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 
 	// we zero-out the iv and the (not yet) encrypted canary
@@ -248,7 +248,7 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db_p), options.block_alloc_size, options.block_header_size),
-      db(db_p), path(path_p), header_buffer(Allocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
+      db(db_p), path(path_p), header_buffer(BlockAllocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
                                             Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                             options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
@@ -362,6 +362,15 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
+	auto encryption_enabled = options.encryption_options.encryption_enabled;
+	if (encryption_enabled) {
+		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+			throw InvalidConfigurationException(
+			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
+			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
+		}
+	}
+
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
@@ -376,7 +385,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// Derive the encryption key and add it to the cache.
 	// Not used for plain databases.
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-	auto encryption_enabled = options.encryption_options.encryption_enabled;
 
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
@@ -487,6 +495,15 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	if (main_header.IsEncrypted()) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
+
+			//! Check if our encryption module can write, if not, we should throw here
+			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+				throw InvalidConfigurationException(
+				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
+				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
+				    "httpfs`.");
+			}
+
 			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache
 			CheckAndAddEncryptionKey(main_header);
@@ -506,6 +523,19 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       path, EncryptionTypes::CipherToString(config_cipher),
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
+
+		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// of the cipher used instead of this trick to avoid downgrades
+		if (stored_cipher != EncryptionTypes::GCM) {
+			if (config_cipher == EncryptionTypes::INVALID) {
+				throw CatalogException(
+				    "Cannot open encrypted database \"%s\" without explicitly specifying the "
+				    "encryption cipher for security reasons. Please make sure you understand the security implications "
+				    "and re-attach the database specifying the desired cipher.",
+				    path);
+			}
+		}
+
 		// this is ugly, but the storage manager does not know the cipher type before
 		db.GetStorageManager().SetCipher(stored_cipher);
 	}
@@ -620,7 +650,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
 		temp_buffer_manager =
-		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(context, *handle, location);
 	} else {
@@ -892,7 +922,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, *this);
+		result = make_uniq<Block>(BlockAllocator::Get(db), block_id, *this);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;

@@ -18,6 +18,8 @@
 
 #include "duckdb/main/prepared_statement_data.hpp"
 
+#include "duckdb/parser/keyword_helper.hpp"
+
 // We must leak the symbols of the init function
 AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error) {
 	if (!driver) {
@@ -196,7 +198,6 @@ AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *err
 }
 
 AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *error) {
-
 	if (database && database->private_data) {
 		auto wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
 
@@ -537,7 +538,8 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto count = duckdb_column_count(&result_wrapper->result);
 	std::vector<duckdb_logical_type> types(count);
 
-	std::vector<std::string> owned_names(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
 	duckdb::vector<const char *> names(count);
 	for (idx_t i = 0; i < count; i++) {
 		types[i] = duckdb_column_logical_type(&result_wrapper->result, i);
@@ -548,7 +550,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 
 	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
 
-	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names.data(), count, out);
+	auto res = duckdb_to_arrow_schema(arrow_options, types.data(), names.data(), count, out);
 	duckdb_destroy_arrow_options(&arrow_options);
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
@@ -605,7 +607,6 @@ const char *get_last_error(struct ArrowArrayStream *stream) {
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> stream_produce(uintptr_t factory_ptr,
                                                                    duckdb::ArrowStreamParameters &parameters) {
-
 	// TODO this will ignore any projections or filters but since we don't expose the scan it should be sort of fine
 	auto res = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
 	res->arrow_array_stream = *reinterpret_cast<ArrowArrayStream *>(factory_ptr);
@@ -619,7 +620,6 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, const char *schema,
                       struct ArrowArrayStream *input, struct AdbcError *error, IngestionMode ingestion_mode,
                       bool temporary) {
-
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -659,12 +659,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		std::ostringstream create_table;
 		create_table << "CREATE TABLE ";
 		if (schema) {
-			create_table << schema << ".";
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
 		}
-		create_table << table_name << " (";
+		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
 		for (idx_t i = 0; i < types.size(); i++) {
-			create_table << names[i] << " ";
-			create_table << types[i].ToString();
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
+			create_table << " " << types[i].ToString();
 			if (i + 1 < types.size()) {
 				create_table << ", ";
 			}
@@ -789,11 +789,9 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto count = prepared_wrapper->statement->data->properties.parameter_count;
-	if (count == 0) {
-		count = 1;
-	}
 	std::vector<duckdb_logical_type> types(count);
-	std::vector<std::string> owned_names(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
 	duckdb::vector<const char *> names(count);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -809,7 +807,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	duckdb_arrow_options arrow_options;
 	duckdb_connection_get_arrow_options(wrapper->connection, &arrow_options);
 
-	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names.data(), count, schema);
+	auto res = duckdb_to_arrow_schema(arrow_options, types.data(), names.data(), count, schema);
 
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
@@ -861,7 +859,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		return IngestToTableFromBoundStream(wrapper, error);
 	}
 	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
-	if (has_stream) {
+	// Only process the stream if there are parameters to bind
+	auto prepared_statement_params = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)
+	                                     ->statement->data->properties.parameter_count;
+	if (has_stream && prepared_statement_params > 0) {
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 		ConvertedSchemaWrapper out_types;
@@ -878,8 +879,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
 		}
-		auto prepared_statement_params =
-		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
 		duckdb::ArrowArrayWrapper arrow_array_wrapper;
 

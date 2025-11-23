@@ -17,7 +17,6 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
-
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
@@ -88,6 +87,9 @@ string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 }
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
+}
+FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
+	return handle.file_system.Stats(handle);
 }
 
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {

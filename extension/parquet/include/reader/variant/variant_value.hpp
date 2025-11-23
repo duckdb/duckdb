@@ -42,6 +42,7 @@ public:
 
 public:
 	yyjson_mut_val *ToJSON(ClientContext &context, yyjson_mut_doc *doc) const;
+	static void ToVARIANT(vector<VariantValue> &input, Vector &result);
 
 public:
 	VariantValueType value_type;

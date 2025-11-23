@@ -224,23 +224,19 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	// TODO: (@benfleis) Remove after ${} syntax replaced (test-env, loop vars, ???), and __BUILD_DIRECTORY__ and
+	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
+	//
 	// Replace environment variables in the SQL
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
 		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
+		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
 	}
 	auto &test_config = TestConfiguration::Get();
 	test_config.ProcessPath(input, file_name);
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
-
-	string data_location = test_config.DataLocation();
-
-	input = StringUtil::Replace(input, "'data/", string("'") + data_location);
-	input = StringUtil::Replace(input, "\"data/", string("\"") + data_location);
-	if (StringUtil::StartsWith(input, "data/")) {
-		input = data_location + input.substr(5);
-	}
 
 	return input;
 }
@@ -839,6 +835,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			auto command = make_uniq<Statement>(*this);
 
+			bool original_output_result_mode = output_result_mode;
+
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
 				command->expected_result = ExpectedResult::RESULT_SUCCESS;
@@ -846,6 +844,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				command->expected_result = ExpectedResult::RESULT_ERROR;
 			} else if (token.parameters[0] == "maybe") {
 				command->expected_result = ExpectedResult::RESULT_UNKNOWN;
+			} else if (token.parameters[0] == "debug") {
+				command->expected_result = ExpectedResult::RESULT_DONT_CARE;
+				output_result_mode = true;
+			} else if (token.parameters[0] == "debug_skip") {
+				command->expected_result = ExpectedResult::RESULT_DONT_CARE;
+				output_result_mode = true;
+				skip_level++;
 			} else {
 				parser.Fail("statement argument should be 'ok' or 'error");
 			}
@@ -859,8 +864,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
-			command->expected_error = parser.ExtractExpectedError(
-			    command->expected_result == ExpectedResult::RESULT_SUCCESS, original_sqlite_test);
+			command->expected_error = parser.ExtractExpectedError(command->expected_result, original_sqlite_test);
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
@@ -870,6 +874,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
+			output_result_mode = original_output_result_mode;
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");

@@ -397,10 +397,6 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 		options.binary_as_string = BooleanValue::Get(val);
 		return true;
 	}
-	if (key == "variant_legacy_encoding") {
-		options.variant_legacy_encoding = BooleanValue::Get(val);
-		return true;
-	}
 	if (key == "file_row_number") {
 		options.file_row_number = BooleanValue::Get(val);
 		return true;
@@ -575,12 +571,21 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 	gstate.row_group_index = 0;
 }
 
-void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                         LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+	}
+#endif
+
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
-	Scan(context, local_state.scan_state, chunk);
+	return Scan(context, local_state.scan_state, chunk);
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {

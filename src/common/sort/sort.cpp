@@ -161,7 +161,7 @@ class SortGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
 	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
 	      partition_size(0) {
 	}
@@ -464,7 +464,8 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 	chunk.Initialize(context.client, types);
 
 	// Initialize local output collection
-	auto local_column_data = make_uniq<BatchedDataCollection>(context.client, types, true);
+	auto local_column_data =
+	    make_uniq<BatchedDataCollection>(context.client, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 
 	while (true) {
 		// Check for interrupts since this could be a long-running task

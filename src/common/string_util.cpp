@@ -400,7 +400,10 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
-		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
+		if (a.second != b.second) {
+			return a.second > b.second;
+		}
+		return StringUtil::CILessThan(a.first, b.first);
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
@@ -738,7 +741,6 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 }
 
 string StringUtil::GetFileName(const string &file_path) {
-
 	idx_t pos = file_path.find_last_of("/\\");
 	if (pos == string::npos) {
 		return file_path;

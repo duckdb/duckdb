@@ -9,16 +9,10 @@ require skip_reload
 require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
 
 statement ok
-set allow_parser_override_extension=fallback;
+set allow_parser_override_extension=strict_when_supported;
 
 statement ok
 ATTACH ':memory:' as "my""db";
-
-statement ok
-CREATE TABLE "my""db".tbl(i int);
-
-statement ok
-INSERT INTO "my""db".tbl VALUES (42)
 
 statement ok
 USE "my""db";

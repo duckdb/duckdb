@@ -28,7 +28,6 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_pl
     : PhysicalOperator(physical_plan, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types),
                        estimated_cardinality),
       aggregates(std::move(expressions)) {
-
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
 	if (!distinct_collection_info) {
 		return;
@@ -239,7 +238,6 @@ public:
 public:
 	void InitializeDistinctAggregates(const PhysicalUngroupedAggregate &op,
 	                                  const UngroupedAggregateGlobalSinkState &gstate, ExecutionContext &context) {
-
 		if (!op.distinct_data) {
 			return;
 		}
@@ -628,7 +626,8 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 #ifdef DEBUG
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
-		if (state.counts[aggr_idx] == 0 && aggr.function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		if (state.counts[aggr_idx] == 0 &&
+		    aggr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
 			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);
@@ -649,8 +648,8 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 	}
 }
 
-SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                     OperatorSourceInput &input) const {
+SourceResultType PhysicalUngroupedAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                             OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalSinkState>();
 	D_ASSERT(gstate.finished);
 

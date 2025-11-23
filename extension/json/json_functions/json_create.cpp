@@ -473,7 +473,6 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 
 static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
-
 	value_v.Flatten(count);
 
 	// Initialize array for the nested values
@@ -729,7 +728,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
 
@@ -737,7 +736,7 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
 

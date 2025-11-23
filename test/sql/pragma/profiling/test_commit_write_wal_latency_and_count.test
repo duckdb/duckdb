@@ -1,0 +1,96 @@
+# name: test/sql/pragma/profiling/test_commit_write_wal_latency_and_count.test
+# description: Measure COMMIT write latency, then measure WAL replay on ATTACH
+# group: [profiling]
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+ATTACH '__TEST_DIR__/wal_latency.db' AS wal_latency;
+
+statement ok
+CREATE TABLE wal_latency.tbl AS SELECT range AS id, 0 AS v FROM range(500_000);
+
+# Perform a large change in a single transaction so COMMIT must write a big WAL
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE wal_latency.tbl SET v = id;
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/wal_commit.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"COMMIT_LOCAL_STORAGE_LATENCY": "true", "WRITE_TO_WAL_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+COMMIT;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE commit_metrics AS SELECT * FROM '__TEST_DIR__/wal_commit.json';
+
+query I
+SELECT CASE WHEN COMMIT_LOCAL_STORAGE_LATENCY > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+----
+true
+
+query I
+SELECT CASE WHEN WRITE_TO_WAL_LATENCY > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+----
+true
+
+statement ok
+DETACH wal_latency;
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/wal_replay.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"WAL_REPLAY_ENTRY_COUNT": "true", "ATTACH_REPLAY_WAL_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+ATTACH '__TEST_DIR__/wal_latency.db' AS wal_latency;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE replay_metrics AS SELECT * FROM '__TEST_DIR__/wal_replay.json';
+
+query I
+SELECT CASE WHEN wal_replay_entry_count > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+----
+true
+
+query I
+SELECT CASE WHEN attach_replay_wal_latency > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+----
+true

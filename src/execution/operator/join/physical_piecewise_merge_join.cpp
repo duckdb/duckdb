@@ -18,7 +18,6 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
                                                        unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
-
 	for (auto &join_cond : conditions) {
 		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);
 		join_key_types.push_back(join_cond.left->return_type);
@@ -477,7 +476,6 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 	BLOCK_ITERATOR l_ptr(l.state);
 	BLOCK_ITERATOR r_ptr(r.state);
 	while (true) {
-
 		if (l.entry_idx < prev_left_index) {
 			// left side smaller: found match
 			l.result.set_index(result_count, sel_t(l.entry_idx));
@@ -764,8 +762,8 @@ unique_ptr<LocalSourceState> PhysicalPiecewiseMergeJoin::GetLocalSourceState(Exe
 	return make_uniq<PiecewiseJoinLocalScanState>(gstate.Cast<PiecewiseJoinGlobalScanState>());
 }
 
-SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result,
-                                                     OperatorSourceInput &source) const {
+SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,
+                                                             OperatorSourceInput &source) const {
 	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &gsink = sink_state->Cast<MergeJoinGlobalState>();

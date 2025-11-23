@@ -44,7 +44,7 @@ inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 		memset(result_ptr, '\0', remainder);
 	}
 	result_ptr[0] = UnsafeNumericCast<data_t>(input.GetSize());
-	return result;
+	return BSwapIfBE(result);
 }
 
 template <class RESULT_TYPE>
@@ -55,13 +55,15 @@ inline RESULT_TYPE StringCompress(const string_t &input) {
 
 template <class RESULT_TYPE>
 inline RESULT_TYPE MiniStringCompress(const string_t &input) {
+	RESULT_TYPE result;
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPrefix()));
+		result = UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPrefix()));
 	} else if (input.GetSize() == 0) {
-		return 0;
+		result = 0;
 	} else {
-		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPointer()));
+		result = UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPointer()));
 	}
+	return BSwapIfBE(result);
 }
 
 template <>
@@ -126,19 +128,20 @@ public:
 
 template <class INPUT_TYPE>
 inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
-	const auto input_ptr = const_data_ptr_cast(&input);
-	string_t result(input_ptr[0]);
+	const auto le_input = BSwapIfBE(input);
+	const auto le_input_str = const_data_ptr_cast(&le_input);
+	string_t result(le_input_str[0]);
 	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
 		const auto result_ptr = data_ptr_cast(result.GetPrefixWriteable());
-		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(result_ptr, input_ptr);
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(result_ptr, le_input_str);
 		memset(result_ptr + sizeof(INPUT_TYPE) - 1, '\0', string_t::INLINE_LENGTH - sizeof(INPUT_TYPE) + 1);
 	} else if (result.GetSize() <= string_t::INLINE_LENGTH) {
 		static constexpr auto REMAINDER = sizeof(INPUT_TYPE) - string_t::INLINE_LENGTH;
 		const auto result_ptr = data_ptr_cast(result.GetPrefixWriteable());
-		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr, input_ptr + REMAINDER);
+		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr, le_input_str + REMAINDER);
 	} else {
 		result.SetPointer(char_ptr_cast(allocator.Allocate(sizeof(INPUT_TYPE))));
-		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(data_ptr_cast(result.GetPointer()), input_ptr);
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(data_ptr_cast(result.GetPointer()), le_input_str);
 		memcpy(result.GetPrefixWriteable(), result.GetPointer(), string_t::PREFIX_LENGTH);
 	}
 	return result;
@@ -146,7 +149,8 @@ inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &alloca
 
 template <class INPUT_TYPE>
 inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
-	if (input == 0) {
+	const auto le_input = BSwapIfBE(input);
+	if (le_input == 0) {
 		string_t result(uint32_t(0));
 		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 		return result;
@@ -155,10 +159,10 @@ inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAllocator &al
 	string_t result(1);
 	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
 		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-		*data_ptr_cast(result.GetPrefixWriteable()) = input - 1;
+		*data_ptr_cast(result.GetPrefixWriteable()) = le_input - 1;
 	} else {
 		result.SetPointer(char_ptr_cast(allocator.Allocate(1)));
-		*data_ptr_cast(result.GetPointer()) = input - 1;
+		*data_ptr_cast(result.GetPointer()) = le_input - 1;
 		memset(result.GetPrefixWriteable(), '\0', string_t::PREFIX_LENGTH);
 		*result.GetPrefixWriteable() = *result.GetPointer();
 	}
@@ -198,7 +202,7 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 	case LogicalTypeId::UHUGEINT:
 		return GetStringDecompressFunction<uhugeint_t>(input_type);
 	case LogicalTypeId::HUGEINT:
-		return GetStringCompressFunction<hugeint_t>(input_type);
+		return GetStringDecompressFunction<hugeint_t>(input_type);
 	default:
 		throw InternalException("Unexpected type in GetStringDecompressFunctionSwitch");
 	}
@@ -207,7 +211,7 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                const ScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.arguments);
-	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(101, "return_type", function.GetReturnType());
 }
 
 unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
@@ -225,7 +229,7 @@ void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<Func
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
-	function.return_type = deserializer.Get<const LogicalType &>();
+	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
 
@@ -248,9 +252,9 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 	result.serialize = CMStringCompressSerialize;
 	result.deserialize = CMStringCompressDeserialize;
 #if defined(D_ASSERT_IS_ENABLED)
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; // Can only throw runtime error when assertions are enabled
+	result.SetFallible(); // Can only throw runtime error when assertions are enabled
 #else
-	result.errors = FunctionErrors::CANNOT_ERROR;
+	result.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 #endif
 	return result;
 }

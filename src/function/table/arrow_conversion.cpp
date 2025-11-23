@@ -257,7 +257,6 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_offset, ArrowArrayScanState &array_state,
                                idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                const ValidityMask *parent_mask, int64_t parent_offset) {
-
 	auto &array_info = arrow_type.GetTypeInfo<ArrowArrayInfo>();
 	auto array_size = array_info.FixedSize();
 	auto child_count = array_size * size;
@@ -410,10 +409,10 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_
 		if (!validity_mask.RowIsValid(row)) {
 			continue;
 		}
-		tgt_ptr[row].lower = static_cast<uint64_t>(BSwap(src_ptr[row].upper));
+		tgt_ptr[row].lower = static_cast<uint64_t>(BSwapIfLE(src_ptr[row].upper));
 		// flip Upper MSD
-		tgt_ptr[row].upper =
-		    static_cast<int64_t>(static_cast<uint64_t>(BSwap(src_ptr[row].lower)) ^ (static_cast<uint64_t>(1) << 63));
+		tgt_ptr[row].upper = static_cast<int64_t>(static_cast<uint64_t>(BSwapIfLE(src_ptr[row].lower)) ^
+		                                          (static_cast<uint64_t>(1) << 63));
 	}
 }
 
@@ -695,7 +694,6 @@ template <class SRC>
 void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, int64_t nested_offset,
                     uint64_t parent_offset, idx_t chunk_offset, ValidityMask &val_mask,
                     DecimalBitWidth arrow_bit_width) {
-
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::INT16: {
 		auto tgt_ptr = FlatVector::GetData<int16_t>(vector);
@@ -1184,7 +1182,6 @@ static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, i
 
 template <class T>
 static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
-
 	auto indices = reinterpret_cast<T *>(indices_p);
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
@@ -1370,8 +1367,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
-                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected,
-                                       idx_t rowid_column_index) {
+                                       DataChunk &output, bool arrow_scan_is_projected, idx_t rowid_column_index) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 

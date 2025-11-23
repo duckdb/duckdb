@@ -291,8 +291,8 @@ unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bou
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;
-	bound_function.return_type = LogicalType::LIST(child_type);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::LIST(child_type));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -309,7 +309,6 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 } // namespace
 
 ScalarFunctionSet ListValueFun::GetFunctions() {
-
 	ScalarFunctionSet set("list_value");
 
 	// Overload for 0 arguments, which returns an empty list.
@@ -322,7 +321,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
 	                         ListValueStats);
 	value_fun.varargs = element_type;
-	value_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(value_fun);
 
 	return set;
@@ -332,7 +331,7 @@ ScalarFunction UnpivotListFun::GetFunction() {
 	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, nullptr,
 	                   ListValueStats);
 	fun.varargs = LogicalTypeId::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

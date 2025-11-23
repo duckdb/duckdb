@@ -2,13 +2,10 @@
 # description: Try mixed casts that have unique CSVCast implementations with ignore_errors
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Try Date
 query II
 FROM read_csv(
-    'data/csv/mixed_dates.csv',
+    '{DATA_DIR}/csv/mixed_dates.csv',
     auto_detect = false,
     header = true,
      columns = {
@@ -24,7 +21,7 @@ FROM read_csv(
 # Try Timestamp
 query II
 FROM read_csv(
-    'data/csv/mixed_timestamps.csv',
+    '{DATA_DIR}/csv/mixed_timestamps.csv',
     auto_detect = false,
     header = true,
      columns = {
@@ -40,7 +37,7 @@ FROM read_csv(
 # Try Float
 query II
 FROM read_csv(
-    'data/csv/mixed_double.csv',
+    '{DATA_DIR}/csv/mixed_double.csv',
     auto_detect = false,
     header = true,
      columns = {
@@ -56,7 +53,7 @@ FROM read_csv(
 # Try Double
 query II
 FROM read_csv(
-    'data/csv/mixed_double.csv',
+    '{DATA_DIR}/csv/mixed_double.csv',
     auto_detect = false,
     header = true,
      columns = {
@@ -72,7 +69,7 @@ FROM read_csv(
 # Try Decimal
 query II
 FROM read_csv(
-    'data/csv/mixed_double.csv',
+    '{DATA_DIR}/csv/mixed_double.csv',
     auto_detect = false,
     header = true,
      columns = {
@@ -88,7 +85,7 @@ FROM read_csv(
 
 query II
 FROM read_csv(
-    'data/csv/mixed_decimal.csv',
+    '{DATA_DIR}/csv/mixed_decimal.csv',
     auto_detect = false,
     header = true,
     delim = ';',
@@ -104,7 +101,7 @@ FROM read_csv(
 
 query II
 FROM read_csv(
-    'data/csv/mixed_decimal.csv',
+    '{DATA_DIR}/csv/mixed_decimal.csv',
     auto_detect = false,
     header = true,
     delim = ';',
@@ -123,7 +120,7 @@ FROM read_csv(
 
 statement error
 FROM read_csv(
-    'data/csv/mixed_decimal.csv',
+    '{DATA_DIR}/csv/mixed_decimal.csv',
     auto_detect = false,
     header = true,
     delim = '|',

@@ -86,6 +86,12 @@ PRAGMA json_execute_serialized_sql(
 15
 24
 
+# Test execute json serialized sql with multiple nested type tags
+query I
+select json_serialize_sql($$select '10'::blob$$);
+----
+<!REGEX>:.*query_location:.*11
+
 # TODO: We should add an option for the deserializer to allow missing properties in the JSON if they can be default constructed
 # Alternatively, make them optional for all the Deserializer's.
 statement error

@@ -11,6 +11,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -48,7 +49,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		result = make_uniq<FileBuffer>(*tmp, type, block_header_size);
 	} else {
 		// non re-usable buffer: allocate a new buffer
-		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
+		result = make_uniq<FileBuffer>(BlockAllocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
 	return result;
@@ -409,15 +410,16 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
-	auto &allocator = Allocator::Get(db);
+	auto &block_allocator = BlockAllocator::Get(db);
 	auto &buffer = handle->GetBuffer(lock);
 	auto block_header_size = buffer->GetHeaderSize();
 	auto alloc_size = buffer->AllocSize() - block_header_size;
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
-		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, block_header_size);
+		replacement_buffer = make_uniq<Block>(block_allocator, block->id, alloc_size, block_header_size);
 	} else {
-		replacement_buffer = make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, block_header_size);
+		replacement_buffer =
+		    make_uniq<FileBuffer>(block_allocator, buffer->GetBufferType(), alloc_size, block_header_size);
 	}
 	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
 	WriteGarbageIntoBuffer(lock, *handle);
@@ -495,7 +497,6 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
-
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
@@ -543,8 +544,10 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
                                                                   BlockHandle &block,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temporary_directory.path.empty());
-	D_ASSERT(temporary_directory.handle.get());
 	auto id = block.BlockId();
+	if (!temporary_directory.handle) {
+		throw InternalException("ReadTemporaryBuffer called but temporary directory has not been instantiated yet");
+	}
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));

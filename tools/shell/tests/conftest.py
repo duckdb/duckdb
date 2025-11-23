@@ -1,13 +1,17 @@
-import pytest
 import os
 import subprocess
+from typing import List, Union
 import sys
-from typing import List, NamedTuple, Union
+
+import pytest
 
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--shell-binary", action="store", default=None, help="Provide the shell binary to use for the tests"
+        "--shell-binary",
+        action="store",
+        default=None,
+        help="Provide the shell binary to use for the tests",
     )
     parser.addoption("--start-offset", action="store", type=int, help="Skip the first 'n' tests")
 
@@ -30,20 +34,30 @@ class TestResult:
         self.stderr: Union[str, bytes] = stderr
         self.status_code: int = status_code
 
-    def check_stdout(self, expected: Union[str, List[str], bytes]):
+    def check_stdout(self, expected: Union[str, List[str], bytes, None]):
+        if expected is None:
+            assert self.stdout == ""
+            return
         if isinstance(expected, list):
-            expected = '\n'.join(expected)
+            expected = "\n".join(expected)
         assert self.status_code == 0
-        assert expected in self.stdout
+        if not is_needle_in_haystack(expected, self.stdout):
+            print(self.stdout, file=sys.stderr)
+            assert is_needle_in_haystack(expected, self.stdout)
 
     def check_not_exist(self, not_exist: Union[str, List[str], bytes]):
         if isinstance(not_exist, list):
-            not_exist = '\n'.join(not_exist)
+            not_exist = "\n".join(not_exist)
         assert self.status_code == 0
-        assert not_exist not in self.stdout
+        if is_needle_in_haystack(not_exist, self.stdout):
+            print(self.stdout, file=sys.stderr)
+            assert not is_needle_in_haystack(not_exist, self.stdout)
 
-    def check_stderr(self, expected: str):
-        assert expected in self.stderr
+    def check_stderr(self, expected):
+        if expected is None:
+            assert self.stderr == ""
+        else:
+            assert is_needle_in_haystack(expected, self.stderr)
 
 
 class ShellTest:
@@ -51,7 +65,7 @@ class ShellTest:
         if not shell:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
-        self.arguments = [shell, '--batch', '--init', '/dev/null'] + arguments
+        self.arguments = [shell, "--batch", "--init", "/dev/null"] + arguments
         self.statements: List[str] = []
         self.input = None
         self.output = None
@@ -63,6 +77,10 @@ class ShellTest:
 
     def statement(self, stmt):
         self.statements.append(stmt)
+        return self
+
+    def env_var(self, key: str, value: str):
+        self.environment[key] = value
         return self
 
     def query(self, *stmts):
@@ -87,46 +105,56 @@ class ShellTest:
 
     def get_input_data(self, cmd: str):
         if self.input:
-            input_data = open(self.input, 'rb').read()
+            with open(self.input, "rb") as f:
+                input_data = f.read()
         else:
-            input_data = bytearray(cmd, 'utf8')
+            input_data = bytearray(cmd, "utf8")
         return input_data
 
-    def get_output_pipe(self):
-        output_pipe = subprocess.PIPE
-        if self.output:
-            output_pipe = open(self.output, 'w+')
-        return output_pipe
-
     def get_statements(self):
-        result = ""
         statements = []
         for statement in self.statements:
-            if statement.startswith('.'):
+            if statement.startswith("."):
                 statements.append(statement)
             else:
-                statements.append(statement + ';')
-        return '\n'.join(statements)
+                statements.append(statement + ";")
+        return "\n".join(statements)
 
     def get_output_data(self, res):
         if self.output:
-            stdout = open(self.output, 'r').read()
+            with open(self.output, "r") as f:
+                stdout = f.read()
         else:
-            stdout = res.stdout.decode('utf8').strip()
-        stderr = res.stderr.decode('utf8').strip()
+            stdout = res.stdout.decode("utf8").strip()
+        stderr = res.stderr.decode("utf8").strip()
         return stdout, stderr
 
     def run(self):
         statements = self.get_statements()
         command = self.get_command(statements)
         input_data = self.get_input_data(statements)
-        output_pipe = self.get_output_pipe()
 
         my_env = os.environ.copy()
         for key, val in self.environment.items():
             my_env[key] = val
 
-        res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE, env=my_env)
+        if self.output:
+            with open(self.output, "w") as output_pipe:
+                res = subprocess.run(
+                    command,
+                    input=input_data,
+                    stdout=output_pipe,
+                    stderr=subprocess.PIPE,
+                    env=my_env,
+                )
+        else:
+            res = subprocess.run(
+                command,
+                input=input_data,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=my_env,
+            )
 
         stdout, stderr = self.get_output_data(res)
         return TestResult(stdout, stderr, res.returncode)
@@ -141,7 +169,7 @@ def shell(request):
 
 
 @pytest.fixture()
-def random_filepath(request, tmp_path):
+def random_filepath(tmp_path):
     tmp_file = tmp_path / "random_import_file"
     return tmp_file
 
@@ -150,7 +178,7 @@ def random_filepath(request, tmp_path):
 def generated_file(request, random_filepath):
     param = request.param
     tmp_file = random_filepath
-    with open(tmp_file, 'w+') as f:
+    with open(tmp_file, "w+") as f:
         f.write(param)
     return tmp_file
 
@@ -162,19 +190,30 @@ def check_load_status(shell, extension: str):
     return result.stdout
 
 
+def is_needle_in_haystack(needle, haystack) -> bool:
+    if needle == "" or haystack == "":
+        return False
+    if isinstance(haystack, str) and isinstance(needle, str):
+        return needle in haystack
+    elif isinstance(haystack, bytes) and isinstance(needle, bytes):
+        return needle in haystack
+    else:
+        return False
+
+
 def assert_loaded(shell, extension: str):
     # TODO: add a command line argument to fail instead of skip if the extension is not loaded
     out = check_load_status(shell, extension)
-    if 'true' not in out:
+    if not is_needle_in_haystack("true", out):
         pytest.skip(reason=f"'{extension}' extension is not loaded!")
     return
 
 
 @pytest.fixture()
 def autocomplete_extension(shell):
-    assert_loaded(shell, 'autocomplete')
+    assert_loaded(shell, "autocomplete")
 
 
 @pytest.fixture()
 def json_extension(shell):
-    assert_loaded(shell, 'json')
+    assert_loaded(shell, "json")

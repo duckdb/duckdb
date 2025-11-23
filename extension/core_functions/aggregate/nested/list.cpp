@@ -47,7 +47,6 @@ struct ListFunction {
 
 void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &state_vector,
                         idx_t count) {
-
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
 	RecursiveUnifiedVectorFormat input_data;
@@ -75,7 +74,6 @@ void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputD
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
-
 		auto &state = *states_ptr[states_data.sel->get_index(i)];
 		if (state.linked_list.total_capacity == 0) {
 			// NULL, no need to append
@@ -98,7 +96,6 @@ void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputD
 
 void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                   idx_t offset) {
-
 	UnifiedVectorFormat states_data;
 	states_vector.ToUnifiedFormat(count, states_data);
 	auto states = UnifiedVectorFormat::GetData<ListAggState *>(states_data);
@@ -132,7 +129,6 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 	ListVector::Reserve(result, total_len);
 	auto &result_child = ListVector::GetEntry(result);
 	for (idx_t i = 0; i < count; i++) {
-
 		auto &state = *states[states_data.sel->get_index(i)];
 		const auto rid = i + offset;
 		if (state.linked_list.total_capacity == 0) {
@@ -147,7 +143,6 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 }
 
 void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
-
 	//	Can we use destructive combining?
 	if (aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
 		ListAbsorbFunction(states_vector, combined, aggr_input_data, count);
@@ -182,9 +177,8 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
-
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
-	return make_uniq<ListBindData>(function.return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	return make_uniq<ListBindData>(function.GetReturnType());
 }
 
 } // namespace

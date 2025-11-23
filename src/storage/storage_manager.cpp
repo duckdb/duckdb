@@ -81,7 +81,6 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
     : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY),
       in_memory_change_size(0) {
-
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 		return;
@@ -111,7 +110,10 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	return InMemory() ? in_memory_change_size.load() : wal->GetWALSize();
+	if (InMemory() || wal->GetDatabase().GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
+		return in_memory_change_size.load();
+	}
+	return wal->GetWALSize();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -147,6 +149,14 @@ bool StorageManager::InMemory() const {
 }
 
 void StorageManager::Destroy() {
+}
+
+inline void ClearUserKey(shared_ptr<string> const &encryption_key) {
+	if (encryption_key && !encryption_key->empty()) {
+		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(data_ptr_cast(&(*encryption_key)[0]),
+		                                                                 encryption_key->size());
+		encryption_key->clear();
+	}
 }
 
 void StorageManager::Initialize(QueryContext context) {
@@ -276,6 +286,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
+
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
@@ -348,7 +359,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 		// Replay the WAL.
 		auto wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(fs, db, wal_path);
+		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
 
 		// End timing the WAL replay step.
 		if (client_context) {
@@ -416,8 +427,15 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 		return;
 	}
 	try {
-		// truncate the WAL in case of a destructor
+		// Truncate the WAL in case of a destructor.
 		RevertCommit();
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		try {
+			DUCKDB_LOG_ERROR(wal.GetDatabase().GetDatabase(),
+			                 "SingleFileStorageCommitState::~SingleFileStorageCommitState()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
 	} catch (...) { // NOLINT
 	}
 }
@@ -507,9 +525,9 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 	auto &config = DBConfig::Get(db);
 	// We only need to checkpoint if there is anything in the WAL.
-	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
+	auto wal_size = GetWALSize();
+	if (wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		try {
-
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
 			if (client_context) {
@@ -529,7 +547,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
+			throw FatalException("Failed to create checkpoint because of error: %s", error.Message());
 		}
 	}
 

@@ -17,6 +17,7 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
+#include "duckdb/optimizer/join_elimination.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
@@ -42,6 +43,7 @@
 namespace duckdb {
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
+	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
@@ -129,12 +131,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
-	// convert common subplans into materialized CTEs
-	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-		CommonSubplanOptimizer common_subplan_optimizer(*this);
-		plan = common_subplan_optimizer.Optimize(std::move(plan));
-	});
-
 	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
 	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
 		SumRewriterOptimizer optimizer(*this);
@@ -196,6 +192,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = optimizer.Optimize(std::move(plan));
 	});
 
+	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
+		JoinElimination join_elimination;
+		plan = join_elimination.Optimize(std::move(plan));
+	});
+
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
 		UnnestRewriter unnest_rewriter;
@@ -231,6 +232,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
 		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan);
 		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
+	// convert common subplans into materialized CTEs
+	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+		CommonSubplanOptimizer common_subplan_optimizer(*this);
+		plan = common_subplan_optimizer.Optimize(std::move(plan));
 	});
 
 	// pushes LIMIT below PROJECTION

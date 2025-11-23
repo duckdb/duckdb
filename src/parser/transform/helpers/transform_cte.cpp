@@ -1,5 +1,6 @@
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -21,6 +22,13 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 }
 
 CommonTableExpressionInfo::~CommonTableExpressionInfo() {
+}
+
+CTEMaterialize CommonTableExpressionInfo::GetMaterializedForSerialization(Serializer &serializer) const {
+	if (serializer.ShouldSerialize(7)) {
+		return materialized;
+	}
+	return CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 }
 
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {

@@ -24,7 +24,6 @@ ErrorData::ErrorData(ExceptionType type, const string &message)
 
 ErrorData::ErrorData(const string &message)
     : initialized(true), type(ExceptionType::INVALID), raw_message(string()), final_message(string()) {
-
 	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {
 		// not JSON! Use the message as a raw Exception message and leave type as uninitialized
@@ -61,12 +60,12 @@ string ErrorData::ConstructFinalMessage() const {
 		error = Exception::ExceptionTypeToString(type) + " ";
 	}
 	error += "Error: " + raw_message;
-	if (type == ExceptionType::INTERNAL) {
+	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL) {
 		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
 		         "https://duckdb.org/docs/stable/dev/internal_errors";
 
-		// Ensure that we print the stack trace for internal exceptions.
+		// Ensure that we print the stack trace for internal and fatal exceptions.
 		auto entry = extra_info.find("stack_trace_pointers");
 		if (entry != extra_info.end()) {
 			auto stack_trace = StackTrace::ResolveStacktraceSymbols(entry->second);

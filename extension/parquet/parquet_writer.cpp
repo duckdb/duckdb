@@ -6,6 +6,7 @@
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -87,6 +89,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::GEOMETRY:
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
@@ -151,13 +154,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__set_JSON(duckdb_parquet::JsonType());
-		return;
-	}
-	if (duckdb_type.GetAlias() == "WKB_BLOB" && allow_geometry) {
-		schema_ele.__isset.logicalType = true;
-		schema_ele.logicalType.__isset.GEOMETRY = true;
-		// TODO: Set CRS in the future
-		schema_ele.logicalType.GEOMETRY.__isset.crs = false;
 		return;
 	}
 	switch (duckdb_type.id()) {
@@ -264,6 +260,13 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.DECIMAL.precision = schema_ele.precision;
 		schema_ele.logicalType.DECIMAL.scale = schema_ele.scale;
 		break;
+	case LogicalTypeId::GEOMETRY:
+		if (allow_geometry) { // Don't set this if we write GeoParquet V1
+			schema_ele.__isset.logicalType = true;
+			schema_ele.logicalType.__isset.GEOMETRY = true;
+			// TODO: Set CRS in the future
+			schema_ele.logicalType.GEOMETRY.__isset.crs = false;
+		}
 	default:
 		break;
 	}
@@ -366,13 +369,18 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       total_written(0), num_row_groups(0) {
-
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 
 	if (encryption_config) {
 		auto &config = DBConfig::GetConfig(context);
+
+		// To ensure we can write, we need to autoload httpfs
+		if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+			ExtensionHelper::TryAutoLoadExtension(context, "httpfs");
+		}
+
 		if (config.encryption_util && debug_use_openssl) {
 			// Use OpenSSL
 			encryption_util = config.encryption_util;
@@ -392,7 +400,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
-	file_meta_data.version = 1;
+	file_meta_data.version = UnsafeNumericCast<int32_t>(parquet_version);
 
 	file_meta_data.__isset.created_by = true;
 	file_meta_data.created_by =
@@ -656,7 +664,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	row_group.__isset.total_compressed_size = true;
 
 	if (encryption_config) {
-		auto row_group_ordinal = num_row_groups.load();
+		const auto row_group_ordinal = file_meta_data.row_groups.size();
 		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
 			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
 		}
@@ -676,6 +684,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 	if (buffer.Count() == 0) {
 		return;
 	}
+
+	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
+	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
+	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
+	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
+	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.
+	// PhysicalCopyToFile should be reworked to use prepare/flush batch separately for better accuracy.
+	total_written += buffer.SizeInBytes() / 2;
 
 	PreparedRowGroup prepared_row_group;
 	PrepareRowGroup(buffer, prepared_row_group, transform_data);
@@ -785,7 +801,6 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 };
 
 struct GeoStatsUnifier : public ColumnStatsUnifier {
-
 	void UnifyGeoStats(const GeometryStatsData &other) override {
 		if (geo_stats) {
 			geo_stats->Merge(other);
@@ -909,11 +924,9 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		}
 	}
 	case LogicalTypeId::BLOB:
-		if (type.GetAlias() == "WKB_BLOB") {
-			return make_uniq<GeoStatsUnifier>();
-		} else {
-			return make_uniq<BlobStatsUnifier>();
-		}
+		return make_uniq<BlobStatsUnifier>();
+	case LogicalTypeId::GEOMETRY:
+		return make_uniq<GeoStatsUnifier>();
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
@@ -1011,7 +1024,6 @@ void ParquetWriter::GatherWrittenStatistics() {
 			const auto &types = stats_unifier->geo_stats->types;
 
 			if (bbox.HasXY()) {
-
 				column_stats["bbox_xmin"] = Value::DOUBLE(bbox.x_min);
 				column_stats["bbox_xmax"] = Value::DOUBLE(bbox.x_max);
 				column_stats["bbox_ymin"] = Value::DOUBLE(bbox.y_min);

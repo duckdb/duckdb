@@ -1,6 +1,7 @@
 {
     "group": "arrow_interface",
     "deprecated": false,
+    "description": "Functions to convert from and to Arrow.",
     "entries": [
         {
             "name": "duckdb_to_arrow_schema",

@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -31,6 +32,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
@@ -163,12 +165,15 @@ bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConf
 //===----------------------------------------------------------------------===//
 bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_value = input.GetValue<string>();
-	if (!StringUtil::CIEquals(new_value, "default") && !StringUtil::CIEquals(new_value, "fallback") &&
-	    !StringUtil::CIEquals(new_value, "strict")) {
-		throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: \"default\", "
-		                            "\"fallback\", \"strict\".");
+	vector<string> supported_options = {"default", "fallback", "strict", "strict_when_supported"};
+	string supported_option_string;
+	for (const auto &option : supported_options) {
+		if (StringUtil::CIEquals(new_value, option)) {
+			return true;
+		}
 	}
-	return true;
+	throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: %s",
+	                            StringUtil::Join(supported_options, ", "));
 }
 
 bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
@@ -309,6 +314,41 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 		allowed_paths.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
+}
+
+//===----------------------------------------------------------------------===//
+// Block Allocator Memory
+//===----------------------------------------------------------------------===//
+void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	const auto input_string = input.ToString();
+	idx_t size;
+	if (!input_string.empty() && input_string.back() == '%') {
+		double percentage;
+		if (!TryDoubleCast(input_string.c_str(), input_string.size() - 1, percentage, false) || percentage < 0 ||
+		    percentage > 100) {
+			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
+		}
+		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
+	} else {
+		size = DBConfig::ParseMemoryLimit(input_string);
+	}
+	if (db) {
+		BlockAllocator::Get(*db).Resize(size);
+	}
+	config.options.block_allocator_size = size;
+}
+
+void BlockAllocatorMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	const auto size = DBConfigOptions().block_allocator_size;
+	if (db) {
+		BlockAllocator::Get(*db).Resize(size);
+	}
+	config.options.block_allocator_size = size;
+}
+
+Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
 }
 
 //===----------------------------------------------------------------------===//
@@ -988,9 +1028,15 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
 		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
-		if (CompressionTypeIsDeprecated(compression_type)) {
-			throw ParserException("Attempted to force a deprecated compression type (%s)",
-			                      CompressionTypeToString(compression_type));
+		auto compression_availability_result = CompressionTypeIsAvailable(compression_type);
+		if (!compression_availability_result.IsAvailable()) {
+			if (compression_availability_result.IsDeprecated()) {
+				throw ParserException("Attempted to force a deprecated compression type (%s)",
+				                      CompressionTypeToString(compression_type));
+			} else {
+				throw ParserException("Attempted to force a compression type that isn't available yet (%s)",
+				                      CompressionTypeToString(compression_type));
+			}
 		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");

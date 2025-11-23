@@ -5,7 +5,7 @@
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -230,10 +230,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				return LogicalType::TIME_TZ;
 			}
 			return LogicalType::TIME;
-		} else if (s_ele.logicalType.__isset.GEOMETRY) {
-			return LogicalType::BLOB;
-		} else if (s_ele.logicalType.__isset.GEOGRAPHY) {
-			return LogicalType::BLOB;
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -409,10 +405,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
                                                               const vector<ColumnIndex> &indexes,
                                                               const ParquetColumnSchema &schema) {
 	switch (schema.schema_type) {
-	case ParquetColumnSchemaType::GEOMETRY:
-		return GeoParquetFileMetadata::CreateColumnReader(*this, schema, context);
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
+	case ParquetColumnSchemaType::GEOMETRY: {
+		return GeometryColumnReader::Create(*this, schema, context);
+	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
@@ -478,56 +475,35 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	return ret;
 }
 
-static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnSchema> &children) {
-	if (children.size() < 2) {
-		return false;
-	}
-	auto &child0 = children[0];
-	auto &child1 = children[1];
-
-	ParquetColumnSchema const *metadata;
-	ParquetColumnSchema const *value;
-
-	if (child0.name == "metadata" && child1.name == "value") {
-		metadata = &child0;
-		value = &child1;
-	} else if (child1.name == "metadata" && child0.name == "value") {
-		metadata = &child1;
-		value = &child0;
-	} else {
+static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth) {
+	const auto is_blob = s_ele.__isset.type && s_ele.type == Type::BYTE_ARRAY;
+	if (!is_blob) {
 		return false;
 	}
 
-	//! Verify names
-	if (metadata->name != "metadata") {
-		return false;
-	}
-	if (value->name != "value") {
-		return false;
+	// TODO: Handle CRS in the future
+	const auto is_native_geom = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOMETRY;
+	const auto is_native_geog = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOGRAPHY;
+	if (is_native_geom || is_native_geog) {
+		return true;
 	}
 
-	//! Verify types
-	if (metadata->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
-		return false;
+	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
+	const auto is_at_root = depth == 1;
+	const auto is_in_gpq_metadata = metadata.geo_metadata && metadata.geo_metadata->IsGeometryColumn(s_ele.name);
+	const auto is_leaf = s_ele.num_children == 0;
+	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
+
+	if (is_geoparquet_geom) {
+		return true;
 	}
-	if (value->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
-		return false;
-	}
-	if (children.size() == 3) {
-		auto &typed_value = children[2];
-		if (typed_value.name != "typed_value") {
-			return false;
-		}
-	} else if (children.size() != 2) {
-		return false;
-	}
-	return true;
+
+	return false;
 }
 
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
-
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	if (next_schema_idx >= file_meta_data->schema.size()) {
@@ -548,15 +524,24 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		max_repeat++;
 	}
 
-	// Check for geoparquet spatial types
-	if (depth == 1) {
-		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
-		// geoarrow types, although geometry columns, are structs and have children and are handled below.
-		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
-			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-			return ParquetColumnSchema::FromParentSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
-			                                             ParquetColumnSchemaType::GEOMETRY);
-		}
+	// Check for geometry type
+	if (IsGeometryType(s_ele, *metadata, depth)) {
+		// Geometries in both GeoParquet and native parquet are stored as a WKB-encoded BLOB.
+		// Because we don't just want to validate that the WKB encoding is correct, but also transform it into
+		// little-endian if necessary, we cant just make use of the StringColumnReader without heavily modifying it.
+		// Therefore, we create a dedicated GEOMETRY parquet column schema type, which wraps the underlying BLOB column.
+		// This schema type gets instantiated as a ExpressionColumnReader on top of the standard Blob/String reader,
+		// which performs the WKB validation/transformation using the `ST_GeomFromWKB` function of DuckDB.
+		// This enables us to also support other geometry encodings (such as GeoArrow geometries) easier in the future.
+
+		// Inner BLOB schema
+		vector<ParquetColumnSchema> geometry_child;
+		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++));
+
+		// Wrap in geometry schema
+		return ParquetColumnSchema::FromChildSchemas(s_ele.name, LogicalType::GEOMETRY(), max_define, max_repeat,
+		                                             this_idx, next_file_idx, std::move(geometry_child),
+		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
 
 	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
@@ -590,9 +575,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
-		if (!is_variant) {
-			is_variant = parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas);
-		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
@@ -626,7 +608,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 			LogicalType result_type;
 			if (is_variant) {
-				result_type = LogicalType::JSON();
+				result_type = LogicalType::VARIANT();
 			} else {
 				result_type = LogicalType::STRUCT(std::move(struct_types));
 			}
@@ -659,13 +641,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			vector<ParquetColumnSchema> list_child = {std::move(result)};
 			return ParquetColumnSchema::FromChildSchemas(s_ele.name, std::move(list_type), max_define, max_repeat,
 			                                             this_idx, next_file_idx, std::move(list_child));
-		}
-
-		// Convert to geometry type if possible
-		if (s_ele.__isset.logicalType && (s_ele.logicalType.__isset.GEOMETRY || s_ele.logicalType.__isset.GEOGRAPHY) &&
-		    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-			return ParquetColumnSchema::FromParentSchema(std::move(result), GeoParquetFileMetadata::GeometryType(),
-			                                             ParquetColumnSchemaType::GEOMETRY);
 		}
 
 		return result;
@@ -768,9 +743,6 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
-	}
-	if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
-		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
 
@@ -1007,7 +979,6 @@ uint64_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	idx_t max_offset = NumericLimits<idx_t>::Minimum();
 
 	for (auto &column_chunk : group.columns) {
-
 		// Set the min offset
 		idx_t current_min_offset = NumericLimits<idx_t>::Maximum();
 		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
@@ -1214,15 +1185,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
-	while (ScanInternal(context, state, result)) {
-		if (result.size() > 0) {
-			break;
-		}
-		result.Reset();
-	}
-}
-
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
 	GetPartitionStats(*GetFileMetadata(), result);
 }
@@ -1240,9 +1202,10 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
-bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+	result.Reset();
 	if (state.finished) {
-		return false;
+		return SourceResultType::FINISHED;
 	}
 
 	// see if we have to switch to the next row group in the parquet file
@@ -1256,7 +1219,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
-			return false;
+			return SourceResultType::FINISHED;
 		}
 
 		// TODO: only need this if we have a deletion vector?
@@ -1328,7 +1291,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				}
 			}
 		}
-		return true;
+		result.Reset();
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
@@ -1336,7 +1300,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	if (scan_count == 0) {
 		state.finished = true;
-		return false; // end of last group, we are done
+		// end of last group, we are done
+		return SourceResultType::FINISHED;
 	}
 
 	auto &deletion_filter = state.root_reader->Reader().deletion_filter;
@@ -1422,7 +1387,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
-	return true;
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

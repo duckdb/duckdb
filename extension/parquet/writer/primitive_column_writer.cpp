@@ -307,7 +307,6 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 
 	if (state.stats_state->HasGeoStats()) {
-
 		auto gpq_version = writer.GetGeoParquetVersion();
 
 		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||

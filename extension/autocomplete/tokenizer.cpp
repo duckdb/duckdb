@@ -81,9 +81,17 @@ bool BaseTokenizer::CharacterIsNumber(char c) {
 	switch (c) {
 	case 'e': // exponents
 	case 'E':
-	case '-':
-	case '+':
 	case '_':
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool BaseTokenizer::CharacterIsScientific(char c) {
+	switch (c) {
+	case 'e':
+	case 'E':
 		return true;
 	default:
 		return false;
@@ -152,7 +160,6 @@ bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 
 bool BaseTokenizer::TokenizeInput() {
 	auto state = TokenizeState::STANDARD;
-
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
 	for (idx_t i = 0; i < sql.size(); i++) {
@@ -255,20 +262,37 @@ bool BaseTokenizer::TokenizeInput() {
 			last_pos = i;
 			break;
 		case TokenizeState::NUMERIC:
-			// numeric literal - check if this is still numeric
-			if (!CharacterIsNumber(c)) {
-				// not a number - return to standard state
-				// number must END with initial number
-				// i.e. we accept "_" in numbers (1_1), but "1_" is tokenized as the number "1" followed by the keyword
-				// "_" backtrack until it does
-				while (!CharacterIsInitialNumber(sql[i - 1])) {
-					i--;
+			// Check for "always allowed" numeric characters
+			if (CharacterIsInitialNumber(c) || c == '_') {
+				break; // Continue tokenizing
+			}
+
+			// Check for scientific notation marker
+			if (CharacterIsScientific(c)) {
+				// (e.g., "1ee5" is invalid)
+				if (!CharacterIsScientific(sql[i - 1])) {
+					break; // Valid 'e' or 'E', continue
 				}
-				PushToken(last_pos, i);
-				state = TokenizeState::STANDARD;
-				last_pos = i;
+			}
+
+			// Check for '+' or '-'
+			if (c == '+' || c == '-') {
+				if (CharacterIsScientific(sql[i - 1])) {
+					break; // Valid, e.g., "1e-5". Continue.
+				}
+				// Invalid, e.g., "1+5" or "1e5+5". Fall through to stop.
+			}
+
+			// --- End of number ---
+			// The character 'c' is not a valid part of the number.
+			// Stop tokenizing and backtrack as per your original logic.
+			while (!CharacterIsInitialNumber(sql[i - 1])) {
 				i--;
 			}
+			PushToken(last_pos, i);
+			state = TokenizeState::STANDARD;
+			last_pos = i;
+			i--;
 			break;
 		case TokenizeState::OPERATOR:
 			// operator literal - check if this is still an operator

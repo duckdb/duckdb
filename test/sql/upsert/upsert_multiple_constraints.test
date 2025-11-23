@@ -1,0 +1,16 @@
+# name: test/sql/upsert/upsert_multiple_constraints.test
+# description: Test upsert with a mix of primary / unique constraints
+# group: [upsert]
+
+statement ok
+CREATE TABLE IF NOT EXISTS tbl (id INTEGER PRIMARY KEY, uniq INTEGER, UNIQUE(uniq));
+
+query I
+INSERT OR IGNORE INTO tbl VALUES (1, 1), (2, 1);
+----
+1
+
+query I
+SELECT uniq FROM tbl
+----
+1

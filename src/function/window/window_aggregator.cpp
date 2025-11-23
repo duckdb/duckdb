@@ -12,7 +12,6 @@ namespace duckdb {
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
     : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type), state_size(aggr.function.state_size(aggr.function)),
       exclude_mode(wexpr.exclude_clause) {
-
 	for (auto &child : wexpr.children) {
 		arg_types.emplace_back(child->return_type);
 	}
@@ -30,9 +29,8 @@ WindowAggregator::~WindowAggregator() {
 
 WindowAggregatorGlobalState::WindowAggregatorGlobalState(ClientContext &client, const WindowAggregator &aggregator_p,
                                                          idx_t group_count)
-    : client(client), allocator(Allocator::DefaultAllocator()), aggregator(aggregator_p), aggr(aggregator.wexpr),
+    : client(client), allocator(BufferAllocator::Get(client)), aggregator(aggregator_p), aggr(aggregator.wexpr),
       locals(0), finalized(0) {
-
 	if (aggr.filter) {
 		// 	Start with all invalid and set the ones that pass
 		filter_mask.Initialize(group_count, false);
@@ -47,7 +45,7 @@ unique_ptr<GlobalSinkState> WindowAggregator::GetGlobalState(ClientContext &cont
 }
 
 WindowAggregatorLocalState::WindowAggregatorLocalState(ExecutionContext &context)
-    : allocator(Allocator::DefaultAllocator()) {
+    : allocator(BufferAllocator::Get(context.client)) {
 }
 
 void WindowAggregatorLocalState::Sink(ExecutionContext &context, WindowAggregatorGlobalState &gastate,

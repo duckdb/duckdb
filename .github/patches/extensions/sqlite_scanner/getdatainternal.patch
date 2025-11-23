@@ -1,0 +1,104 @@
+diff --git a/src/include/storage/sqlite_delete.hpp b/src/include/storage/sqlite_delete.hpp
+index 7315ebe..e7b5204 100644
+--- a/src/include/storage/sqlite_delete.hpp
++++ b/src/include/storage/sqlite_delete.hpp
+@@ -22,7 +22,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/sqlite_index.hpp b/src/include/storage/sqlite_index.hpp
+index f60a33a..a3d239d 100644
+--- a/src/include/storage/sqlite_index.hpp
++++ b/src/include/storage/sqlite_index.hpp
+@@ -23,7 +23,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/sqlite_insert.hpp b/src/include/storage/sqlite_insert.hpp
+index 89a3f39..0077fdb 100644
+--- a/src/include/storage/sqlite_insert.hpp
++++ b/src/include/storage/sqlite_insert.hpp
+@@ -33,7 +33,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/sqlite_update.hpp b/src/include/storage/sqlite_update.hpp
+index 8d40413..7c20e70 100644
+--- a/src/include/storage/sqlite_update.hpp
++++ b/src/include/storage/sqlite_update.hpp
+@@ -25,7 +25,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
+index e8d55d1..8b28385 100644
+--- a/src/storage/sqlite_delete.cpp
++++ b/src/storage/sqlite_delete.cpp
+@@ -65,7 +65,7 @@ SinkResultType SQLiteDelete::Sink(ExecutionContext &context, DataChunk &chunk, O
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType SQLiteDelete::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType SQLiteDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<SQLiteDeleteGlobalState>();
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.delete_count));
+diff --git a/src/storage/sqlite_index.cpp b/src/storage/sqlite_index.cpp
+index 9c05afa..251d74b 100644
+--- a/src/storage/sqlite_index.cpp
++++ b/src/storage/sqlite_index.cpp
+@@ -15,7 +15,7 @@ SQLiteCreateIndex::SQLiteCreateIndex(PhysicalPlan &physical_plan, unique_ptr<Cre
+ //===--------------------------------------------------------------------===//
+ // Source
+ //===--------------------------------------------------------------------===//
+-SourceResultType SQLiteCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType SQLiteCreateIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+ 	auto &schema = catalog.GetSchema(context.client, info->schema);
+diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
+index 926e037..95c4e39 100644
+--- a/src/storage/sqlite_insert.cpp
++++ b/src/storage/sqlite_insert.cpp
+@@ -118,7 +118,7 @@ SinkResultType SQLiteInsert::Sink(ExecutionContext &context, DataChunk &chunk, O
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType SQLiteInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType SQLiteInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<SQLiteInsertGlobalState>();
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
+diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
+index cfead5b..f49b4ea 100644
+--- a/src/storage/sqlite_update.cpp
++++ b/src/storage/sqlite_update.cpp
+@@ -81,7 +81,7 @@ SinkResultType SQLiteUpdate::Sink(ExecutionContext &context, DataChunk &chunk, O
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType SQLiteUpdate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType SQLiteUpdate::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<SQLiteUpdateGlobalState>();
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.update_count));

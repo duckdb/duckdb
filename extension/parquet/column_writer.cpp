@@ -1,7 +1,7 @@
 #include "column_writer.hpp"
 
 #include "duckdb.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
@@ -408,11 +408,6 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		schema.field_id = field_id->field_id;
 	}
 
-	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
-		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(writer, std::move(schema),
-		                                                                                    std::move(path_in_schema));
-	}
-
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<BooleanColumnWriter>(writer, std::move(schema), std::move(path_in_schema));
@@ -477,6 +472,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	case LogicalTypeId::BLOB:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(writer, std::move(schema),
 		                                                                                std::move(path_in_schema));
+	case LogicalTypeId::GEOMETRY:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(writer, std::move(schema),
+		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(writer, std::move(schema),
 		                                                                                  std::move(path_in_schema));

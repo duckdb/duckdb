@@ -105,8 +105,10 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
-void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id) {
+void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id,
+                            idx_t row_group_start) {
 	info.max = STANDARD_VECTOR_SIZE;
+	info.row_group_start = row_group_start;
 	info.version_number = transaction_id;
 	info.table = &data_table;
 	info.segment = nullptr;
@@ -384,6 +386,8 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	if (!root) {
 		return;
 	}
+	D_ASSERT(start_row <= column_data.count);
+	D_ASSERT(start_row + count <= column_data.count);
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	idx_t end_row = start_row + count;
@@ -487,13 +491,16 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 }
 
 void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
-	idx_t vector_index = (row_id - column_data.start) / STANDARD_VECTOR_SIZE;
+	if (row_id > column_data.count) {
+		throw InternalException("UpdateSegment::FetchRow out of range");
+	}
+	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	auto lock_handle = lock.GetSharedLock();
 	auto entry = GetUpdateNode(*lock_handle, vector_index);
 	if (!entry.IsSet()) {
 		return;
 	}
-	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
+	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
 	auto pin = entry.Pin();
 	fetch_row_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), row_in_vector, result,
 	                   result_idx);
@@ -816,8 +823,8 @@ struct ExtractValidityEntry {
 template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
                                     const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
-                                    idx_t count, const SelectionVector &sel) {
-	auto base_id = base_info.segment->column_data.start + base_info.vector_index * STANDARD_VECTOR_SIZE;
+                                    idx_t count, const SelectionVector &sel, idx_t row_group_start) {
+	auto base_id = row_group_start + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
@@ -920,20 +927,22 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 }
 
 static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-                              UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
+                              UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
+                              idx_t row_group_start) {
 	auto &base_validity = FlatVector::Validity(base_data);
 	auto &update_validity = update.validity;
-	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(base_info, &base_validity, update_info,
-	                                                                  *update.sel, &update_validity, ids, count, sel);
+	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(
+	    base_info, &base_validity, update_info, *update.sel, &update_validity, ids, count, sel, row_group_start);
 }
 
 template <class T>
 static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-                            UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
+                            UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
+                            idx_t row_group_start) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
-	                              sel);
+	                              sel, row_group_start);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -1239,10 +1248,10 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 }
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DataTable &data_table, idx_t type_size, idx_t count,
-                                  unsafe_unique_array<char> &data) {
+                                  unsafe_unique_array<char> &data, idx_t row_group_start) {
 	data = make_unsafe_uniq_array_uninitialized<char>(UpdateInfo::GetAllocSize(type_size));
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
-	UpdateInfo::Initialize(*update_info, data_table, transaction.transaction_id);
+	UpdateInfo::Initialize(*update_info, data_table, transaction.transaction_id, row_group_start);
 	return update_info;
 }
 
@@ -1261,7 +1270,7 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 }
 
 void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_p,
-                           row_t *ids, idx_t count, Vector &base_data) {
+                           row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -1288,8 +1297,8 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[sel.get_index(0)];
-	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
-	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - row_group_start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_offset = row_group_start + vector_index * STANDARD_VECTOR_SIZE;
 
 	if (!root || vector_index >= root->info.size() || !root->info[vector_index].IsSet()) {
 		// get a list of effective updates - i.e. updates that actually change rows
@@ -1304,7 +1313,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 
 	InitializeUpdateInfo(vector_index);
 
-	D_ASSERT(idx_t(first_id) >= column_data.start);
+	D_ASSERT(idx_t(first_id) >= row_group_start);
 
 	if (root->info[vector_index].IsSet()) {
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
@@ -1324,10 +1333,11 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
 				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count);
+				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count, row_group_start);
 				node = &UpdateInfo::Get(node_ref);
 			} else {
-				node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data);
+				node =
+				    CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
 			}
 			node->segment = this;
 			node->vector_index = vector_index;
@@ -1351,18 +1361,17 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		node->Verify();
 
 		// now we are going to perform the merge
-		merge_update_function(base_info, base_data, *node, update_format, ids, count, sel);
+		merge_update_function(base_info, base_data, *node, update_format, ids, count, sel, row_group_start);
 
 		base_info.Verify();
 		node->Verify();
 	} else {
-
 		// there is no version info yet: create the top level update info and fill it with the updates
 		// allocate space for the UpdateInfo in the allocator
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, data_table, TRANSACTION_ID_START - 1);
+		UpdateInfo::Initialize(update_info, data_table, TRANSACTION_ID_START - 1, row_group_start);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);
@@ -1372,10 +1381,11 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		UndoBufferReference node_ref;
 		optional_ptr<UpdateInfo> transaction_node;
 		if (transaction.transaction) {
-			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count);
+			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count, row_group_start);
 			transaction_node = &UpdateInfo::Get(node_ref);
 		} else {
-			transaction_node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data);
+			transaction_node =
+			    CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
 		}
 
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);

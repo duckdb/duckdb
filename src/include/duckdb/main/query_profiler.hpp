@@ -114,7 +114,7 @@ private:
 
 //! Top level query metrics.
 struct QueryMetrics {
-	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
+	QueryMetrics() : total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0) {};
 
 	//! Reset the query metrics.
 	void Reset() {
@@ -124,8 +124,12 @@ struct QueryMetrics {
 		attach_load_storage_latency.Reset();
 		attach_replay_wal_latency.Reset();
 		checkpoint_latency.Reset();
+		commit_local_storage_latency.Reset();
+		write_to_wal_latency.Reset();
+		wal_replay_entry_count = 0;
 		total_bytes_read = 0;
 		total_bytes_written = 0;
+		total_memory_allocated = 0;
 	}
 
 	ProfilingInfo query_global_info;
@@ -142,10 +146,18 @@ struct QueryMetrics {
 	Profiler attach_replay_wal_latency;
 	//! The timer for running checkpoints.
 	Profiler checkpoint_latency;
+	//! The timer for committing the transaction-local storage.
+	Profiler commit_local_storage_latency;
+	//! The timer for the WAL writes.
+	Profiler write_to_wal_latency;
+	//! The total number of entries to replay in the WAL.
+	atomic<idx_t> wal_replay_entry_count;
 	//! The total bytes read by the file system.
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system.
 	atomic<idx_t> total_bytes_written;
+	//! The total memory allocated by the buffer manager.
+	atomic<idx_t> total_memory_allocated;
 };
 
 //! QueryProfiler collects the profiling metrics of a query.
@@ -170,10 +182,8 @@ public:
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
 
-	//! Adds nr_bytes bytes to the total bytes read.
-	DUCKDB_API void AddBytesRead(const idx_t nr_bytes);
-	//! Adds nr_bytes bytes to the total bytes written.
-	DUCKDB_API void AddBytesWritten(const idx_t nr_bytes);
+	//! Adds amount to a specific metric type.
+	DUCKDB_API void AddToCounter(MetricsType type, const idx_t amount);
 
 	//! Start/End a timer for a specific metric type.
 	DUCKDB_API void StartTimer(MetricsType type);
@@ -184,7 +194,7 @@ public:
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
-	DUCKDB_API void SetInfo(const double &blocked_thread_time);
+	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
 
 	DUCKDB_API void StartPhase(MetricsType phase_metric);
 	DUCKDB_API void EndPhase();
@@ -204,8 +214,11 @@ public:
 	static Value JSONSanitize(const Value &input);
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
+	DUCKDB_API void ToLog() const;
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
+	DUCKDB_API idx_t GetBytesRead() const;
+	DUCKDB_API idx_t GetBytesWritten() const;
 
 	idx_t OperatorSize() {
 		return tree_map.size();

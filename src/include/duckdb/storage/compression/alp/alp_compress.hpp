@@ -28,14 +28,13 @@ namespace duckdb {
 
 template <class T>
 struct AlpCompressionState : public CompressionState {
-
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
@@ -89,12 +88,12 @@ public:
 		state.Reset();
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
@@ -114,9 +113,8 @@ public:
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
-			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
-			CreateEmptySegment(row_start);
+			CreateEmptySegment();
 		}
 
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
