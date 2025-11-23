@@ -27,7 +27,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	if (alias_index >= node.bound_column_count) {
 		throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
 		                      "cannot be referenced before it is defined",
-		                      colref.column_names[0]);
+		                      colref.column_names.back());
 	}
 
 	if (node.bind_state.AliasHasSubquery(alias_index)) {
