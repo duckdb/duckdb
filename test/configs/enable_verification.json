@@ -133,6 +133,7 @@
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/types/struct/struct_stats.test",
         "test/sql/storage/types/variant/variant_shredding.test",
+        "test/sql/storage/types/variant/variant_stats_merging.test",
         "test/sql/vacuum/test_analyze.test"
       ]
     },
