@@ -6,54 +6,60 @@
 statement ok
 PRAGMA wal_autocheckpoint='1 KiB';
 
-# Default behavior unchanged (VARCHAR)
+# Default behavior unchanged, value still exists as VARCHAR
 query I
 SELECT typeof(value) FROM duckdb_settings() WHERE name IN ('wal_autocheckpoint') LIMIT 1;
 ----
 VARCHAR
 
-# in_bytes=false should behave like default (VARCHAR)
-query I
-SELECT typeof(value) FROM duckdb_settings(in_bytes=false) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+# Default behavior unchanged, the memory column still does not exist
+statement error
+SELECT memory_in_bytes FROM duckdb_settings() WHERE name IN ('wal_autocheckpoint') LIMIT 1;
 ----
-VARCHAR
+Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
 
-# In bytes mode the value should be a number (UBIGINT) for memory-like settings
+# when in_bytes=false, Default behavior unchanged, the memory column still does not exist
+statement error
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=false) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
+
+# In bytes mode the memory column should be a number (UBIGINT) for memory-like settings
 query I
-SELECT typeof(value) FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+SELECT typeof(memory_in_bytes) FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
 ----
 UBIGINT
 
 # The numeric value should match 1024 for the memory-like setting we just set
 query I
-SELECT value FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
 ----
 1024
 
 # the 0 should be considered as false
-query I
-SELECT typeof(value) FROM duckdb_settings(in_bytes=0) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+statement error
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=0) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
 ----
-VARCHAR
+Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
 
-# Non-byte settings should not be returned at all
+# Non-byte settings should be returned as null in the memory_in_bytes column
 statement ok
 SET default_collation='nfc';
 
 query I
-SELECT value IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
+SELECT memory_in_bytes IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
 ----
-
+true
 
 # We consider 1 as true
 query I
-SELECT value FROM duckdb_settings(in_bytes=1) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=1) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
 ----
 1024
 
 # - non-zero should be consider true
 query I
-SELECT value FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
 ----
 1024
 

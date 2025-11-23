@@ -145,10 +145,9 @@ static optional_idx TryParseBytes(const string &str) {
 void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBSettingsData>();
 
-	// We can infer from the value column type that we are in byte mode or not, because of the binding step
-	const auto value_column = output.data[1];
-	const auto &value_type = value_column.GetType();
-	const bool in_bytes = value_type.id() == LogicalTypeId::UBIGINT;
+	// TODO - check if explicitly passing the `in_bytes` mode boolean via `BindData` is acceptable
+	// We can if we're in bytes-mode according to the existence of the `memory_in_bytes` column
+	const auto in_bytes = output.ColumnCount() >= 7;
 
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
@@ -182,7 +181,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 			if (parsed.IsValid()) {
 				output.SetValue(6, count, Value::UBIGINT(parsed.GetIndex()));
 			} else {
-				output.SetValue(6, count, Value());
+				output.SetValue(6, count, Value(nullptr));
 			}
 		}
 
