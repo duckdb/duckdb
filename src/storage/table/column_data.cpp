@@ -422,6 +422,10 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	}
 	// for dynamic filters we never consider the segment being "checked" as it can always change
 	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
+
+	// Increment segment checked counter
+	NumericStats::IncrementSegmentsChecked();
+
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
@@ -430,6 +434,12 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 	}
+
+	// If segment is pruned, increment skipped counter
+	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		NumericStats::IncrementSegmentsSkipped();
+	}
+
 	lock_guard<mutex> l(update_lock);
 	if (!updates) {
 		// no updates - return original result

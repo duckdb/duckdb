@@ -5,6 +5,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/scalar/debug/imprint_stats.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,9 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	EnableLoggingFun::RegisterFunction(*this);
 	TestAllTypesFun::RegisterFunction(*this);
 	TestVectorTypesFun::RegisterFunction(*this);
+
+	// column imprint statistics function
+	AddFunction(ImprintStatsFun::GetFunction());
 }
 
 } // namespace duckdb

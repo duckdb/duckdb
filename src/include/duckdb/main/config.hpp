@@ -222,8 +222,11 @@ struct DBConfigOptions {
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
-
 	bool operator==(const DBConfigOptions &other) const;
+
+	//! for column imprint
+	//! default: false
+	bool enable_column_imprint = false;
 };
 
 struct DBConfig {

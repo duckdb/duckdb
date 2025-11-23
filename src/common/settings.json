@@ -383,6 +383,14 @@
         "default_value": "50"
     },
     {
+        "name": "enable_column_imprint",
+        "description": "Enable column imprint for fine-grained pruning using 64-bit bitmaps (default: false).",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false",
+        "custom_implementation": true
+    },
+    {
         "name": "enable_external_access",
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",

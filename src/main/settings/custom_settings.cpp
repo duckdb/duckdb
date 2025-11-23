@@ -1587,4 +1587,22 @@ Value UsernameSetting::GetSetting(const ClientContext &context) {
 	return Value();
 }
 
+// for enable column imprint
+void EnableColumnImprintSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_column_imprint = input.GetValue<bool>();
+	// Update the global flag used by NumericStats::CheckZonemap
+	NumericStats::SetColumnImprintEnabled(config.options.enable_column_imprint);
+}
+
+void EnableColumnImprintSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_column_imprint = DBConfigOptions().enable_column_imprint;
+	// Update the global flag used by NumericStats::CheckZonemap
+	NumericStats::SetColumnImprintEnabled(config.options.enable_column_imprint);
+}
+
+Value EnableColumnImprintSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_column_imprint);
+}
+
 } // namespace duckdb
