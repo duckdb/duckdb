@@ -24,6 +24,7 @@
         "test/sql/catalog/test_set_search_path.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_temporary.test",
+        "test/sql/catalog/test_temporary_schema.test",
         "test/sql/pragma/test_show_tables_temp_views.test",
         "test/sql/storage/temp_directory/max_swap_space_error.test",
         "test/sql/pg_catalog/system_functions.test",
