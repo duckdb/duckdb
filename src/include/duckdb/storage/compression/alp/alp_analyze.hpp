@@ -44,7 +44,6 @@ public:
 		current_bytes_used_in_segment = 0;
 	}
 
-
 	void FlushVector() {
 		current_bytes_used_in_segment += inner_state.RequiredSpace();
 		inner_state.Reset();

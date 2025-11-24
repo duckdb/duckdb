@@ -101,7 +101,8 @@ public:
 		if (nulls_idx) {
 			alp::AlpUtils::FindAndReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
 		}
-		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, inner_state);
+		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx,
+		                                        inner_state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
 			FlushSegment();
@@ -149,18 +150,19 @@ public:
 			data_ptr += inner_state.bp_size;
 
 			if (inner_state.exceptions_count > 0) {
-				memcpy((void *)data_ptr, (void *)inner_state.exceptions, sizeof(EXACT_TYPE) * inner_state.exceptions_count);
+				memcpy((void *)data_ptr, (void *)inner_state.exceptions,
+				       sizeof(EXACT_TYPE) * inner_state.exceptions_count);
 				data_ptr += sizeof(EXACT_TYPE) * inner_state.exceptions_count;
 				memcpy((void *)data_ptr, (void *)inner_state.exceptions_positions,
-					   AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count);
+				       AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count);
 				data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
 			}
 
-			data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE +
-								inner_state.bp_size +
-							   (inner_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
-							   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
-							   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+			data_bytes_used +=
+			    AlpConstants::IS_COMPRESSED_SIZE + inner_state.bp_size +
+			    (inner_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+			    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
+			    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 		} else {
 			// Uncompressed mode
 			Store<uint8_t>(false, data_ptr);
@@ -279,7 +281,7 @@ unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointData &checkp
 }
 
 template <class T>
-void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count)  {
+void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (AlpOuterCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);

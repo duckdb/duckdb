@@ -89,15 +89,11 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	idx_t RequiredSpace() const {
-		idx_t required_space =
-			AlpConstants::IS_COMPRESSED_SIZE +
-			bp_size +
-			(exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
-			AlpConstants::EXPONENT_SIZE +
-			AlpConstants::FACTOR_SIZE +
-			AlpConstants::EXCEPTIONS_COUNT_SIZE +
-			AlpConstants::FOR_SIZE +
-			AlpConstants::BIT_WIDTH_SIZE;
+		idx_t required_space = AlpConstants::IS_COMPRESSED_SIZE + bp_size +
+		                       (exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		                       AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
+		                       AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
+		                       AlpConstants::BIT_WIDTH_SIZE;
 
 		return required_space;
 	}
