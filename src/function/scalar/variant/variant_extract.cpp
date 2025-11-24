@@ -68,35 +68,37 @@ static bool GetConstantArgument(ClientContext &context, Expression &expr, Value 
 	return false;
 }
 
-optional_ptr<const BaseStatistics> FindShreddedStats(const BaseStatistics &shredded, const VariantPathComponent &component) {
+optional_ptr<const BaseStatistics> FindShreddedStats(const BaseStatistics &shredded,
+                                                     const VariantPathComponent &component) {
 	D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(StructType::GetChildTypes(shredded.GetType()).size() == 2);
 
 	auto &typed_value_type = StructType::GetChildTypes(shredded.GetType())[1].second;
 	auto &typed_value_stats = StructStats::GetChildStats(shredded, 1);
 	switch (component.lookup_mode) {
-		case VariantChildLookupMode::BY_INDEX: {
-			if (typed_value_type.id() != LogicalTypeId::LIST) {
-				return nullptr;
-			}
-			auto &child_stats = ListStats::GetChildStats(typed_value_stats);
-			return child_stats;
-		}
-		case VariantChildLookupMode::BY_KEY: {
-			if (typed_value_type.id() != LogicalTypeId::STRUCT) {
-				return nullptr;
-			}
-			auto &object_fields = StructType::GetChildTypes(typed_value_type);
-			for (idx_t i = 0; i < object_fields.size(); i++) {
-				auto &object_field = object_fields[i];
-				if (StringUtil::CIEquals(object_field.first, component.key)) {
-					return StructStats::GetChildStats(typed_value_stats, i);
-				}
-			}
+	case VariantChildLookupMode::BY_INDEX: {
+		if (typed_value_type.id() != LogicalTypeId::LIST) {
 			return nullptr;
 		}
-		default:
-			throw InternalException("VariantChildLookupMode::%s not implemented for FindShreddedStats", EnumUtil::ToString(component.lookup_mode));
+		auto &child_stats = ListStats::GetChildStats(typed_value_stats);
+		return child_stats;
+	}
+	case VariantChildLookupMode::BY_KEY: {
+		if (typed_value_type.id() != LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		auto &object_fields = StructType::GetChildTypes(typed_value_type);
+		for (idx_t i = 0; i < object_fields.size(); i++) {
+			auto &object_field = object_fields[i];
+			if (StringUtil::CIEquals(object_field.first, component.key)) {
+				return StructStats::GetChildStats(typed_value_stats, i);
+			}
+		}
+		return nullptr;
+	}
+	default:
+		throw InternalException("VariantChildLookupMode::%s not implemented for FindShreddedStats",
+		                        EnumUtil::ToString(component.lookup_mode));
 	}
 }
 
@@ -282,7 +284,8 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	auto variant_type = LogicalType::VARIANT();
 
 	ScalarFunctionSet fun_set;
-	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind, nullptr, VariantExtractPropagateStats);
+	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
+	                               nullptr, VariantExtractPropagateStats);
 
 	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
 	fun_set.AddFunction(variant_extract);

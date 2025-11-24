@@ -83,14 +83,18 @@ void VariantStats::SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStat
 
 static void AssertShreddedStats(const BaseStatistics &stats) {
 	if (stats.GetType().id() != LogicalTypeId::STRUCT) {
-		throw InternalException("Shredded stats should be of type STRUCT, not %s", EnumUtil::ToString(stats.GetType().id()));
+		throw InternalException("Shredded stats should be of type STRUCT, not %s",
+		                        EnumUtil::ToString(stats.GetType().id()));
 	}
 	auto &struct_children = StructType::GetChildTypes(stats.GetType());
 	if (struct_children.size() != 2) {
-		throw InternalException("Shredded stats need to consist of 2 children, 'untyped_value_index' and 'typed_value', not: %s", stats.GetType().ToString());
+		throw InternalException(
+		    "Shredded stats need to consist of 2 children, 'untyped_value_index' and 'typed_value', not: %s",
+		    stats.GetType().ToString());
 	}
 	if (struct_children[0].second.id() != LogicalTypeId::UINTEGER) {
-		throw InternalException("Shredded stats 'untyped_value_index' should be of type UINTEGER, not %s", EnumUtil::ToString(struct_children[0].second.id()));
+		throw InternalException("Shredded stats 'untyped_value_index' should be of type UINTEGER, not %s",
+		                        EnumUtil::ToString(struct_children[0].second.id()));
 	}
 }
 

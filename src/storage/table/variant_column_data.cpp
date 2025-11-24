@@ -373,6 +373,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
+		global_stats->Merge(*validity_state->GetStatistics());
 		VariantStats::SetUnshreddedStats(*global_stats, child_states[0]->GetStatistics());
 		if (child_states.size() == 2) {
 			VariantStats::SetShreddedStats(*global_stats, child_states[1]->GetStatistics());
@@ -401,7 +402,9 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const
 	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type, BaseStatistics &stats) {
+vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group,
+                                                                    const LogicalType &shredded_type,
+                                                                    BaseStatistics &stats) {
 	//! scan_chunk
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
