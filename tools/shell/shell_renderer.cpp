@@ -749,11 +749,13 @@ public:
 		if (!show_header) {
 			return;
 		}
+		state.SetBinaryMode();
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			state.OutputCSV(col_names[i].c_str(), i < col_names.size() - 1);
 		}
 		state.Print(row_sep);
+		state.SetTextMode();
 	}
 
 	void RenderRow(ResultMetadata &result, RowData &row) override {
