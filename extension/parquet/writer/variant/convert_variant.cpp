@@ -809,6 +809,33 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	}
 }
 
+void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+	idx_t schema_idx = schemas.size();
+
+	auto &schema = Schema();
+	schema.SetSchemaIndex(schema_idx);
+
+	auto &repetition_type = schema.repetition_type;
+	auto &name = schema.name;
+
+	// variant group
+	duckdb_parquet::SchemaElement top_element;
+	top_element.repetition_type = repetition_type;
+	top_element.num_children = child_writers.size();
+	top_element.logicalType.__isset.VARIANT = true;
+	top_element.logicalType.VARIANT.__isset.specification_version = true;
+	top_element.logicalType.VARIANT.specification_version = 1;
+	top_element.__isset.logicalType = true;
+	top_element.__isset.num_children = true;
+	top_element.__isset.repetition_type = true;
+	top_element.name = name;
+	schemas.push_back(std::move(top_element));
+
+	for (auto &child_writer : child_writers) {
+		child_writer->FinalizeSchema(schemas);
+	}
+}
+
 LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT: {

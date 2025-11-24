@@ -30,7 +30,7 @@ class QueryContext;
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The default block header size.
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
-//! The default block header size.
+//! The default block header size for encrypted blocks.
 #define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
 //! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
@@ -56,8 +56,6 @@ struct Storage {
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
-	//! Block header size for encrypted blocks (64 bytes)
-	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 64ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 

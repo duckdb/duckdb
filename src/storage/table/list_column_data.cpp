@@ -60,8 +60,8 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(LogicalType::UBIGINT, 1);
-	auto index_in_segment = UnsafeNumericCast<row_t>(row_idx - segment->row_start);
-	segment->node->FetchRow(fetch_state, index_in_segment, result, 0U);
+	auto index_in_segment = UnsafeNumericCast<row_t>(row_idx - segment->GetRowStart());
+	segment->GetNode().FetchRow(fetch_state, index_in_segment, result, 0U);
 
 	// initialize the child scan with the required offset
 	return FlatVector::GetData<uint64_t>(result)[0];
@@ -377,6 +377,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
+		stats.Merge(*validity_state->GetStatistics());
 		ListStats::SetChildStats(stats, child_state->GetStatistics());
 		return stats.ToUnique();
 	}
