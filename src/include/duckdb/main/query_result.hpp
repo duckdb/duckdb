@@ -134,12 +134,11 @@ protected:
 private:
 	class QueryResultIterator;
 	class QueryResultRow {
+		friend class QueryResultIterator;
+
 	public:
 		explicit QueryResultRow() : row(0) {
 		}
-
-		shared_ptr<DataChunk> chunk;
-		idx_t row;
 
 		bool IsNull(idx_t col_idx) const {
 			return chunk->GetValue(col_idx, row).IsNull();
@@ -151,6 +150,16 @@ private:
 		Value GetBaseValue(idx_t col_idx) const {
 			return chunk->GetValue(col_idx, row);
 		}
+		DataChunk &GetChunk() const {
+			return *chunk;
+		}
+		idx_t GetRowInChunk() const {
+			return row;
+		}
+
+	private:
+		shared_ptr<DataChunk> chunk;
+		idx_t row;
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
