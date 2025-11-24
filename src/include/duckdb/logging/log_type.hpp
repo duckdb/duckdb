@@ -110,7 +110,7 @@ public:
 class MetricsLogType : public LogType {
 public:
 	static constexpr const char *NAME = "Metrics";
-	static constexpr LogLevel LEVEL = LogLevel::LOG_TRACE;
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
 
 	//! Construct the log type
 	MetricsLogType();
