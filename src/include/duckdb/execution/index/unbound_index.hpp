@@ -28,11 +28,7 @@ struct BufferedIndexData {
 	// Intermediate staging buffer before spilling to ColumnDataCollection data, since ColumnDataCollections
 	// only allow storing in fixed STANDARD_VECTOR_SIZE buffers, we keep this intermediate, resizable small_chunk
 	// to avoid eating up memory.
-	// Internally, it starts out at size 1 and grows by powers of 2. If we finish buffering in this BufferedIndexData
-	// element (i.e., switching the type of operation we are buffering), and there are more than RESIZE_THRESHOLD
-	// empty slots in small_chunk, it gets resized down to its size.
-	// For example, if UnboundIndex is buffering 1 INSERT -> 1 DELETE -> 1 INSERT -> 1 DELETE -> ...
-	// it will only ever store in small_chunk and avoid storing in ColumnDataCollection data.
+	// The ordering of replays is whatever is in data, followed by small_chunk.
 	unique_ptr<DataChunk> small_chunk;
 
 	explicit BufferedIndexData(BufferedIndexReplay replay_type);
@@ -53,7 +49,6 @@ private:
 	//! This is in sorted order of physical column IDs.
 	vector<StorageIndex> mapped_column_ids;
 
-	//! Resize or destroy small_chunk if it has too many free slots or is empty.
 	//! If the chunk is empty, it is destroyed. If unused capacity exceeds fixed threshold defined in unbound_index
 	//! it is resized down to how many elements it is storing (capacity = size).
 	static void ResizeSmallChunk(unique_ptr<DataChunk> &small_chunk, Allocator &allocator,

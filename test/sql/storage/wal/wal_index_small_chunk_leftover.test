@@ -96,5 +96,3 @@ analyzed_plan	<REGEX>:.*Type: Index Scan.*
 query I
 SELECT * FROM tbl WHERE a = 1500;
 ----
-
-

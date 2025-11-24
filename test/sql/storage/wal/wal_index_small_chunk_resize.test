@@ -263,4 +263,3 @@ query I
 SELECT * FROM tbl WHERE a = 2050;
 ----
 2050
-

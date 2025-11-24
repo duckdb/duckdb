@@ -191,7 +191,6 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
                                       vector<BufferedIndexData> &buffered_replays,
                                       const vector<StorageIndex> &mapped_column_ids) {
 	for (auto &replay : buffered_replays) {
-
 		if (replay.data) {
 			ColumnDataScanState state;
 			auto &buffered_data = *replay.data;
