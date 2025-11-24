@@ -24,6 +24,7 @@ static atomic<idx_t> g_imprint_checks_total(0);
 static atomic<idx_t> g_imprint_pruned_segments(0);
 static atomic<idx_t> g_imprint_equality_checks(0);
 static atomic<idx_t> g_imprint_greater_than_checks(0);
+static atomic<idx_t> g_imprint_less_than_checks(0);
 static atomic<idx_t> g_total_segments_checked(0);
 static atomic<idx_t> g_total_segments_skipped(0);
 
@@ -48,11 +49,16 @@ idx_t NumericStats::GetImprintGreaterThanChecks() {
 	return g_imprint_greater_than_checks.load();
 }
 
+idx_t NumericStats::GetImprintLessThanChecks() {
+	return g_imprint_less_than_checks.load();
+}
+
 void NumericStats::ResetImprintStatistics() {
 	g_imprint_checks_total = 0;
 	g_imprint_pruned_segments = 0;
 	g_imprint_equality_checks = 0;
 	g_imprint_greater_than_checks = 0;
+	g_imprint_less_than_checks = 0;
 	g_total_segments_checked = 0;
 	g_total_segments_skipped = 0;
 }
@@ -441,16 +447,17 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 	auto min = NumericStats::GetMinUnsafe<T>(stats);
 	auto max = NumericStats::GetMaxUnsafe<T>(stats);
 
-	auto bin_index = MinValue<uint8_t>(NumericStats::ComputeBinIndex<T>(constant, min, max, bins), bins - 1);
-
+	uint8_t bin_index = NumericStats::ComputeBinIndex(constant, min, max, bins);
+	// ensure bin_index is within valid range [0, bins-1]
 	if (bin_index >= bins) {
 		bin_index = bins - 1;
 	}
 
-	if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
 		g_imprint_equality_checks++;
 
-		// no matching bit, prune
+		// if segment doesn't contain this value, it gets pruned away
 		if ((bitmap & (uint64_t(1) << bin_index)) == 0) {
 			g_imprint_pruned_segments++;
 
@@ -461,14 +468,16 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 			    Value::CreateValue(constant).ToString().c_str(), min_str.c_str(), max_str.c_str()));
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
-	} else if (comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-	           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 		g_imprint_greater_than_checks++;
 
 		// set all bits to 1's from [bin_index, bins-1]
-		uint64_t all_bits =
-		    (bins == 64) ? UINT64_MAX : ((1ULL << bins) - 1); // just in case we need to change the bin size later
-		uint64_t lower_bits = (bin_index == 0) ? 0 : ((1ULL << bin_index) - 1);
+		uint64_t all_bits = (bins == 64)
+		                        ? UINT64_MAX
+		                        : ((uint64_t(1) << bins) - 1); // just in case we need to change the bin size later
+		uint64_t lower_bits = (bin_index == 0) ? 0 : ((uint64_t(1) << bin_index) - 1);
 		uint64_t greater_than_mask = all_bits & ~lower_bits;
 
 		// print greater_than_mask for debugging
@@ -489,8 +498,25 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 			    bin_index, Value::CreateValue(constant).ToString().c_str(), min_str.c_str(), max_str.c_str()));
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		break;
 	}
-	// TODO: ADD MORE CONDITIONS HERE
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+		g_imprint_less_than_checks++;
+
+		// set all bits to 1 from [0, bin_index]
+		uint64_t less_than_mask = (bin_index == 0) ? 0 : ((uint64_t(1) << (bin_index + 1)) - 1);
+
+		if ((bitmap & less_than_mask) == 0) {
+			g_imprint_pruned_segments++;
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		break;
+	}
+	default:
+		throw InternalException("Expression type in imprint check not implemented");
+		break;
+	}
 
 	// otherwise, still need to scan
 	string min_str = std::to_string(min);
@@ -504,14 +530,6 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 template <class T>
 FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
                                             array_ptr<const Value> constants) {
-	// check if the comparison type is supported
-	if (comparison_type != ExpressionType::COMPARE_EQUAL &&
-	    comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
-	    comparison_type != ExpressionType::COMPARE_GREATERTHAN &&
-	    comparison_type != ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
 	// iterate over the array, check the value
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());

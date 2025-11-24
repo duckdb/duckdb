@@ -81,6 +81,7 @@ struct NumericStats {
 	DUCKDB_API static idx_t GetImprintPrunedSegments();
 	DUCKDB_API static idx_t GetImprintEqualityChecks();
 	DUCKDB_API static idx_t GetImprintGreaterThanChecks();
+	DUCKDB_API static idx_t GetImprintLessThanChecks();
 	DUCKDB_API static void ResetImprintStatistics();
 
 	// segment pruning stats
