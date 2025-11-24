@@ -220,3 +220,27 @@ TEST_CASE("Test pluggable log storage", "[logging][.]") {
 
 	REQUIRE(my_log_storage->log_store.find("HELLO, BRO") != my_log_storage->log_store.end());
 }
+
+TEST_CASE("Thread-local logger writes through custom storage", "[logging][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto thread_local_storage = make_shared_ptr<MyLogStorage>();
+	duckdb::shared_ptr<LogStorage> base_ptr = thread_local_storage;
+	REQUIRE(db.instance->GetLogManager().RegisterLogStorage("thread_local_storage", base_ptr));
+
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("set logging_storage='thread_local_storage';"));
+	REQUIRE_NO_FAIL(con.Query("set logging_level='INFO';"));
+
+	LoggingContext log_context(LogContextScope::THREAD);
+	auto logger = db.instance->GetLogManager().CreateLogger(log_context, false);
+
+	REQUIRE_FALSE(logger->IsThreadSafe());
+	REQUIRE(logger->ShouldLog("default", LogLevel::LOG_INFO));
+
+	logger->WriteLog("default", LogLevel::LOG_INFO, "thread_local_message");
+	logger->Flush();
+
+	REQUIRE(thread_local_storage->log_store.find("thread_local_message") != thread_local_storage->log_store.end());
+}
