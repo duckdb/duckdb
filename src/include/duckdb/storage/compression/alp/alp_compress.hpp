@@ -115,66 +115,78 @@ public:
 			}
 		}
 		current_segment->count += vector_idx;
-		FlushVector();
-	}
-
-	// Stores the vector and its metadata
-	void FlushVector() {
 		idx_t uncompressed_size = AlpConstants::IS_COMPRESSED_SIZE + sizeof(T) * vector_idx;
 		idx_t compressed_size = inner_state.RequiredSpace();
 		bool should_compress = compressed_size < uncompressed_size;
-
 		if (should_compress) {
-			Store<uint8_t>(true, data_ptr);
-			data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
-
-			Store<uint8_t>(inner_state.vector_encoding_indices.exponent, data_ptr);
-			data_ptr += AlpConstants::EXPONENT_SIZE;
-
-			Store<uint8_t>(inner_state.vector_encoding_indices.factor, data_ptr);
-			data_ptr += AlpConstants::FACTOR_SIZE;
-
-			Store<uint16_t>(inner_state.exceptions_count, data_ptr);
-			data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
-
-			Store<uint64_t>(inner_state.frame_of_reference, data_ptr);
-			data_ptr += AlpConstants::FOR_SIZE;
-
-			Store<uint8_t>(UnsafeNumericCast<uint8_t>(inner_state.bit_width), data_ptr);
-			data_ptr += AlpConstants::BIT_WIDTH_SIZE;
-
-			memcpy((void *)data_ptr, (void *)inner_state.values_encoded, inner_state.bp_size);
-			// We should never go out of bounds in the values_encoded array
-			D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= inner_state.bp_size);
-
-			data_ptr += inner_state.bp_size;
-
-			if (inner_state.exceptions_count > 0) {
-				memcpy((void *)data_ptr, (void *)inner_state.exceptions,
-				       sizeof(EXACT_TYPE) * inner_state.exceptions_count);
-				data_ptr += sizeof(EXACT_TYPE) * inner_state.exceptions_count;
-				memcpy((void *)data_ptr, (void *)inner_state.exceptions_positions,
-				       AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count);
-				data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
-			}
-
-			data_bytes_used +=
-			    AlpConstants::IS_COMPRESSED_SIZE + inner_state.bp_size +
-			    (inner_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
-			    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-			    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+			FlushCompressedVector();
 		} else {
-			// Uncompressed mode
-			Store<uint8_t>(false, data_ptr);
-			data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
-
-			// Store uncompressed data
-			for (idx_t i = 0; i < vector_idx; i++) {
-				Store<T>(input_vector[i], data_ptr);
-				data_ptr += sizeof(T);
-			}
-			data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + (sizeof(T) * vector_idx);
+			FlushUncompressedVector();
 		}
+	}
+
+	// Stores the vector and its metadata
+	void FlushCompressedVector() {
+		Store<uint8_t>(true, data_ptr);
+		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+
+		Store<uint8_t>(inner_state.vector_encoding_indices.exponent, data_ptr);
+		data_ptr += AlpConstants::EXPONENT_SIZE;
+
+		Store<uint8_t>(inner_state.vector_encoding_indices.factor, data_ptr);
+		data_ptr += AlpConstants::FACTOR_SIZE;
+
+		Store<uint16_t>(inner_state.exceptions_count, data_ptr);
+		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
+
+		Store<uint64_t>(inner_state.frame_of_reference, data_ptr);
+		data_ptr += AlpConstants::FOR_SIZE;
+
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(inner_state.bit_width), data_ptr);
+		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
+
+		memcpy((void *)data_ptr, (void *)inner_state.values_encoded, inner_state.bp_size);
+		// We should never go out of bounds in the values_encoded array
+		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= inner_state.bp_size);
+
+		data_ptr += inner_state.bp_size;
+
+		if (inner_state.exceptions_count > 0) {
+			memcpy((void *)data_ptr, (void *)inner_state.exceptions, sizeof(EXACT_TYPE) * inner_state.exceptions_count);
+			data_ptr += sizeof(EXACT_TYPE) * inner_state.exceptions_count;
+			memcpy((void *)data_ptr, (void *)inner_state.exceptions_positions,
+			       AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count);
+			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
+		}
+
+		data_bytes_used +=
+		    AlpConstants::IS_COMPRESSED_SIZE + inner_state.bp_size +
+		    (inner_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
+		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+
+		// Write pointer to the vector data (metadata)
+		metadata_ptr -= sizeof(uint32_t);
+		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+
+		vectors_flushed++;
+		vector_idx = 0;
+		nulls_idx = 0;
+		ResetVector();
+	}
+
+	void FlushUncompressedVector() {
+		// Uncompressed mode
+		Store<uint8_t>(false, data_ptr);
+		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+
+		// Store uncompressed data
+		for (idx_t i = 0; i < vector_idx; i++) {
+			Store<T>(input_vector[i], data_ptr);
+			data_ptr += sizeof(T);
+		}
+		data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + (sizeof(T) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
