@@ -507,6 +507,7 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 		// set all bits to 1 from [0, bin_index]
 		uint64_t less_than_mask = (bin_index == 0) ? 0 : ((uint64_t(1) << (bin_index + 1)) - 1);
 
+		// if no matching bins, prune
 		if ((bitmap & less_than_mask) == 0) {
 			g_imprint_pruned_segments++;
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -514,7 +515,7 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 		break;
 	}
 	default:
-		throw InternalException("Expression type in imprint check not implemented");
+		IMPRINT_LOG(StringUtil::Format("Expression type in imprint check not implemented: %d", comparison_type));
 		break;
 	}
 

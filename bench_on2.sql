@@ -54,23 +54,57 @@ SELECT 'imprint_checks_total'       AS metric, imprint_stats('imprint_checks_tot
 SELECT 'imprint_pruned_segments'    AS metric, imprint_stats('imprint_pruned_segments');
 SELECT 'imprint_equality_checks'    AS metric, imprint_stats('imprint_equality_checks');
 SELECT 'imprint_greater_than_checks' AS metric, imprint_stats('imprint_greater_than_checks');
+SELECT 'imprint_less_than_checks'   AS metric, imprint_stats('imprint_less_than_checks');
 SELECT 'total_segments_checked'     AS metric, imprint_stats('total_segments_checked');
 SELECT 'total_segments_skipped'     AS metric, imprint_stats('total_segments_skipped');
 
 
-
-
 -- greater than
--- SELECT imprint_stats('reset');
+SELECT imprint_stats('reset');
 
--- SELECT 'ON / fact_imprint_demo / v > 60000000' AS case,
---        COUNT(*) AS cnt
--- FROM fact_imprint_demo
--- WHERE v > 60000000;
+SELECT 'OFF / fact_imprint_demo / v > 50000000' AS case,
+       COUNT(*) AS cnt
+FROM fact_imprint_demo
+WHERE v > 50000000;
 
--- SELECT 'imprint_checks_total'       AS metric, imprint_stats('imprint_checks_total');
--- SELECT 'imprint_pruned_segments'    AS metric, imprint_stats('imprint_pruned_segments');
--- SELECT 'imprint_equality_checks'    AS metric, imprint_stats('imprint_equality_checks');
--- SELECT 'imprint_greater_than_checks' AS metric, imprint_stats('imprint_greater_than_checks');
--- SELECT 'total_segments_checked'     AS metric, imprint_stats('total_segments_checked');
--- SELECT 'total_segments_skipped'     AS metric, imprint_stats('total_segments_skipped');
+SELECT 'imprint_checks_total'       AS metric, imprint_stats('imprint_checks_total');
+SELECT 'imprint_pruned_segments'    AS metric, imprint_stats('imprint_pruned_segments');
+SELECT 'imprint_equality_checks'    AS metric, imprint_stats('imprint_equality_checks');
+SELECT 'imprint_greater_than_checks' AS metric, imprint_stats('imprint_greater_than_checks');
+SELECT 'imprint_less_than_checks'   AS metric, imprint_stats('imprint_less_than_checks');
+SELECT 'total_segments_checked'     AS metric, imprint_stats('total_segments_checked');
+SELECT 'total_segments_skipped'     AS metric, imprint_stats('total_segments_skipped');
+
+
+-- less than
+SELECT imprint_stats('reset');
+
+SELECT 'OFF / fact_imprint_demo / v < 50000000' AS case,
+       COUNT(*) AS cnt
+FROM fact_imprint_demo
+WHERE v < 50000000;
+
+SELECT 'imprint_checks_total'       AS metric, imprint_stats('imprint_checks_total');
+SELECT 'imprint_pruned_segments'    AS metric, imprint_stats('imprint_pruned_segments');
+SELECT 'imprint_equality_checks'    AS metric, imprint_stats('imprint_equality_checks');
+SELECT 'imprint_greater_than_checks' AS metric, imprint_stats('imprint_greater_than_checks');
+SELECT 'imprint_less_than_checks'   AS metric, imprint_stats('imprint_less_than_checks');
+SELECT 'total_segments_checked'     AS metric, imprint_stats('total_segments_checked');
+SELECT 'total_segments_skipped'     AS metric, imprint_stats('total_segments_skipped');
+
+
+-- between
+SELECT imprint_stats('reset');
+
+SELECT 'OFF / fact_imprint_demo / v BETWEEN 500000 AND 500100' AS case,
+       COUNT(*) AS cnt
+FROM fact_imprint_demo
+WHERE v BETWEEN 500000 AND 500100;
+
+SELECT 'imprint_checks_total'       AS metric, imprint_stats('imprint_checks_total');
+SELECT 'imprint_pruned_segments'    AS metric, imprint_stats('imprint_pruned_segments');
+SELECT 'imprint_equality_checks'    AS metric, imprint_stats('imprint_equality_checks');
+SELECT 'imprint_greater_than_checks' AS metric, imprint_stats('imprint_greater_than_checks');
+SELECT 'imprint_less_than_checks'   AS metric, imprint_stats('imprint_less_than_checks');
+SELECT 'total_segments_checked'     AS metric, imprint_stats('total_segments_checked');
+SELECT 'total_segments_skipped'     AS metric, imprint_stats('total_segments_skipped');

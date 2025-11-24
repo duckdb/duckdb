@@ -38,6 +38,8 @@ static void ImprintStatsFunction(DataChunk &input, ExpressionState &state, Vecto
 			value = static_cast<int64_t>(NumericStats::GetImprintEqualityChecks());
 		} else if (name == "imprint_greater_than_checks") {
 			value = static_cast<int64_t>(NumericStats::GetImprintGreaterThanChecks());
+		} else if (name == "imprint_less_than_checks") {
+			value = static_cast<int64_t>(NumericStats::GetImprintLessThanChecks());
 		} else if (name == "total_segments_checked") {
 			value = static_cast<int64_t>(NumericStats::GetTotalSegmentsChecked());
 		} else if (name == "total_segments_skipped") {
