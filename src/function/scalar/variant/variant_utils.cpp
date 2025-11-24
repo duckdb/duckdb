@@ -75,7 +75,6 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 	return object_keys;
 }
 
-//! FIXME: this shouldn't return a "result", it should populate a validity mask instead.
 void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_ptr<const SelectionVector> sel, SelectionVector &res,
                                    ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count) {
