@@ -46,7 +46,6 @@ void UnboundIndex::ResizeSmallChunk(unique_ptr<DataChunk> &small_chunk, Allocato
 		return;
 	}
 	if (small_chunk->size() == 0) {
-		// Logically empty - destroy it entirely to free unused space.
 		small_chunk.reset();
 	} else {
 		// Only resize if unused space exceeds threshold.
@@ -76,6 +75,15 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	}
 	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
 
+	// combined_chunk has all the indexed columns according to mapped_column_ids ordering, as well as a rowid column.
+	DataChunk combined_chunk;
+	combined_chunk.InitializeEmpty(types);
+	for (idx_t i = 0; i < index_column_chunk.ColumnCount(); i++) {
+		combined_chunk.data[i].Reference(index_column_chunk.data[i]);
+	}
+	combined_chunk.data.back().Reference(row_ids);
+	combined_chunk.SetCardinality(index_column_chunk.size());
+
 	// If the replay type doesn't match the type of the BufferedIndexData at the end, we append a new
 	// BufferedIndexData that we can buffer into.
 	if (buffered_replays.empty() || buffered_replays.back().type != replay_type) {
@@ -88,55 +96,49 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 		BufferedIndexData buffered_data(replay_type);
 		buffered_replays.emplace_back(std::move(buffered_data));
 	}
-	// If it did match, we can buffer into the previous one.
+	// If the buffered_replays were non-empty and the replay_type matches, we can buffer in the previous one.
 	// Either way, our target for buffering is now the last element of buffered_replays.
-	BufferedIndexData &target = buffered_replays.back();
-
-	// Combined chunk has all the indexed columns and a rowid column.
-	DataChunk combined_chunk;
-	combined_chunk.InitializeEmpty(types);
-	for (idx_t i = 0; i < index_column_chunk.ColumnCount(); i++) {
-		combined_chunk.data[i].Reference(index_column_chunk.data[i]);
-	}
-	combined_chunk.data.back().Reference(row_ids);
-	combined_chunk.SetCardinality(index_column_chunk.size());
+	BufferedIndexData &buffer = buffered_replays.back();
 
 	// Initialize the small chunk.
-	if (!target.small_chunk) {
-		target.small_chunk = make_uniq<DataChunk>();
-		target.small_chunk->Initialize(allocator, types, 1);
-		target.small_chunk->SetCardinality(0);
+	if (!buffer.small_chunk) {
+		buffer.small_chunk = make_uniq<DataChunk>();
+		buffer.small_chunk->Initialize(allocator, types, 1);
+		buffer.small_chunk->SetCardinality(0);
 	}
 
-	if (combined_chunk.size() + target.small_chunk->size() < STANDARD_VECTOR_SIZE) {
-		// Append to small chunk and allow resizing, since we know we can fit under STANDARD_VECTOR_SIZE.
-		target.small_chunk->Append(combined_chunk, true);
+	if (combined_chunk.size() + buffer.small_chunk->size() < STANDARD_VECTOR_SIZE) {
+		// Append to small_chunk and allow resizing, since we know we can fit under STANDARD_VECTOR_SIZE.
+		buffer.small_chunk->Append(combined_chunk, true);
 	} else {
+		// Otherwise we have at least one STANDARD_VECTOR_SIZE chunk we can spill to ColumnDataCollection.
+
 		// Initialize ColumnDataCollection data buffer.
-		if (!target.data) {
-			target.data = make_uniq<ColumnDataCollection>(allocator, types);
+		if (!buffer.data) {
+			buffer.data = make_uniq<ColumnDataCollection>(allocator, types);
 		}
 
 		// Remainder is the remaining space we want to fill up in the ColumnDataCollection chunk, after writing the
 		// small chunk there.
-		idx_t remainder = STANDARD_VECTOR_SIZE - target.small_chunk->size();
-		// First, flush the small_chunk contents into ColumnDataCollection buffer.
-		if (target.small_chunk->size() > 0) {
-			target.data->Append(*target.small_chunk);
-			target.small_chunk->SetCardinality(0);
+		idx_t remainder = STANDARD_VECTOR_SIZE - buffer.small_chunk->size();
+		// First, flush the small_chunk contents into the ColumnDataCollection buffer.
+		if (buffer.small_chunk->size() > 0) {
+			buffer.data->Append(*buffer.small_chunk);
+			buffer.small_chunk->SetCardinality(0);
 		}
 
 		idx_t total = combined_chunk.size();
-		idx_t leftover = (total - remainder) % STANDARD_VECTOR_SIZE;
-		idx_t total_to_append = total - leftover;
+		// Leftover is whatever is leftover after we buffered a full STANDARD_VECTOR_SIZE amount into
+		// ColumnDataCollection data -- this goes into small_chunk.
+		idx_t leftover = (total - remainder);
 
-		if (total_to_append > 0) {
-			DataChunk full_chunks;
-			full_chunks.InitializeEmpty(types);
-			full_chunks.Reference(combined_chunk);
-			full_chunks.Slice(0, total_to_append);
-			full_chunks.SetCardinality(total_to_append);
-			target.data->Append(full_chunks);
+		if (remainder > 0) {
+			DataChunk remainder_chunk;
+			remainder_chunk.InitializeEmpty(types);
+			remainder_chunk.Reference(combined_chunk);
+			remainder_chunk.Slice(0, remainder);
+			remainder_chunk.SetCardinality(remainder);
+			buffer.data->Append(remainder_chunk);
 		}
 
 		// Buffer any leftover replays into the small chunk.
@@ -144,9 +146,9 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 			DataChunk tail_chunk;
 			tail_chunk.InitializeEmpty(types);
 			tail_chunk.Reference(combined_chunk);
-			tail_chunk.Slice(total_to_append, leftover);
+			tail_chunk.Slice(remainder, leftover);
 			tail_chunk.SetCardinality(leftover);
-			target.small_chunk->Append(tail_chunk, true);
+			buffer.small_chunk->Append(tail_chunk, true);
 		}
 	}
 }

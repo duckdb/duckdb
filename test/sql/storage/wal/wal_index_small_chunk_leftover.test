@@ -1,0 +1,100 @@
+# name: test/sql/storage/wal/wal_index_small_chunk_leftover.test
+# description: Test WAL replay when small_chunk flush leaves leftovers during inserts and deletes
+# group: [wal]
+
+load __TEST_DIR__/index_small_chunk_leftover_test.db
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 1;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE tbl(a INTEGER);
+
+statement ok
+CREATE INDEX idx_a ON tbl(a);
+
+statement ok
+INSERT INTO tbl SELECT * FROM range(0, 1024);
+
+statement ok
+INSERT INTO tbl SELECT * FROM range(1024, 3124);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 512;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 512;
+----
+512
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 2500;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 2500;
+----
+2500
+
+statement ok
+DELETE FROM tbl WHERE a <> 2500;
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 2500;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 2500;
+----
+2500
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 1500;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 1500;
+----
+
+restart
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 1;
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 2500;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 2500;
+----
+2500
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 1500;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 1500;
+----
+
+

@@ -35,7 +35,7 @@ struct BufferedIndexData {
 	// it will only ever store in small_chunk and avoid storing in ColumnDataCollection data.
 	unique_ptr<DataChunk> small_chunk;
 
-	BufferedIndexData(BufferedIndexReplay replay_type);
+	explicit BufferedIndexData(BufferedIndexReplay replay_type);
 };
 
 class UnboundIndex final : public Index {

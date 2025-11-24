@@ -181,7 +181,6 @@ static void ReplayChunk(BoundIndex &index, BufferedIndexReplay type, DataChunk &
 	}
 	case BufferedIndexReplay::DEL_ENTRY: {
 		index.Delete(table_chunk, scan_chunk.data.back());
-		return;
 	}
 	}
 }
@@ -205,7 +204,6 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
 				ReplayChunk(*this, replay.type, scan_chunk, table_types, mapped_column_ids);
 			}
 		}
-
 		if (replay.small_chunk && replay.small_chunk->size() > 0) {
 			ReplayChunk(*this, replay.type, *replay.small_chunk, table_types, mapped_column_ids);
 		}
