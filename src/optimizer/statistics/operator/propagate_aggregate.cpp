@@ -6,6 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -18,32 +19,28 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ValueComparator {
 	virtual ~ValueComparator() = default;
-	virtual Value &Compare(Value &lhs, Value &rhs) = 0;
-	virtual Value GetVal(BaseStatistics &stats) = 0;
+	virtual bool Compare(Value &lhs, Value &rhs) const = 0;
+	virtual Value GetVal(BaseStatistics &stats) const = 0;
 };
 
 struct MinValueComp : public ValueComparator {
-	Value &Compare(Value &lhs, Value &rhs) override {
-		if (lhs < rhs) {
-			return lhs;
-		}
-		return rhs;
+	bool Compare(Value &lhs, Value &rhs) const override {
+		return lhs < rhs;
 	}
-	Value GetVal(BaseStatistics &stats) override {
+	Value GetVal(BaseStatistics &stats) const override {
 		return NumericStats::Min(stats);
 	}
 };
 
 struct MaxValueComp : public ValueComparator {
-	Value &Compare(Value &lhs, Value &rhs) override {
-		if (lhs > rhs) {
-			return lhs;
-		}
-		return rhs;
+	bool Compare(Value &lhs, Value &rhs) const override {
+		return lhs > rhs;
 	}
-	Value GetVal(BaseStatistics &stats) override {
+	Value GetVal(BaseStatistics &stats) const override {
 		return NumericStats::Max(stats);
 	}
 };
@@ -55,6 +52,26 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
 	D_ASSERT(fun_name == "max");
 	return make_uniq<MaxValueComp>();
 }
+
+bool TryGetValueFromStats(const PartitionStatistics &stats, const column_t column_index,
+                          const ValueComparator &comparator, Value &result) {
+	if (stats.count_type == CountType::COUNT_APPROXIMATE) {
+		// we cannot get an exact count
+		return false;
+	}
+	if (!stats.partition_row_group) {
+		return false;
+	}
+	auto column_stats = stats.partition_row_group->GetColumnStatistics(column_index);
+	if (!NumericStats::HasMinMax(*column_stats)) {
+		// TODO: This also returns if an entire row group is null. In that case, we could skip/compare null
+		return false;
+	}
+	result = comparator.GetVal(*column_stats);
+	return true;
+}
+
+} // namespace
 
 void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_ptr<LogicalOperator> &node_ptr) {
 	if (!aggr.groups.empty()) {
@@ -90,7 +107,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 
 			min_max_bindings.push_back(col_ref.binding);
 			comparators.push_back(GetComparator(fun_name));
-		} else if (aggr_expr.function.name == "count_star") {
+		} else if (fun_name == "count_star") {
 			count_star_idxs.push_back(i);
 		} else {
 			// aggregate is not count star, min or max - bail
@@ -132,53 +149,50 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// no partition stats found
 		return;
 	}
-	idx_t count = 0;
-	vector<Value> min_max_results;
-	min_max_results.reserve(min_max_bindings.size());
 
-	for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
-		auto &stats = partition_stats[partition_idx];
-		if (stats.count_type == CountType::COUNT_APPROXIMATE) {
-			// we cannot get an exact count
-			return;
-		}
-		count += stats.count;
-
-		if (!stats.partition_row_group) {
-			return;
-		}
-		for (idx_t agg_idx = 0; agg_idx < min_max_bindings.size(); agg_idx++) {
-			const auto &binding = min_max_bindings[agg_idx];
-			const column_t column_index = get.GetColumnIds()[binding.column_index].GetPrimaryIndex(); // TODO: Pull
-			// these out
-			auto column_stats = stats.partition_row_group->GetColumnStatistics(column_index);
-			if (!NumericStats::HasMinMax(*column_stats)) {
-				// TODO: This also returns if an entire rowgroup is null. In that case, we could skip/compare null
-				return;
-			}
-			if (partition_idx == 0) {
-				min_max_results.push_back(comparators[agg_idx]->GetVal(*column_stats));
-			} else {
-				auto rhs = comparators[agg_idx]->GetVal(*column_stats);
-				min_max_results[agg_idx] = comparators[agg_idx]->Compare(min_max_results[agg_idx], rhs);
-			}
-		}
-	}
-
-	// we got an exact count/min/max - replace the entire aggregate with a scan of the result
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
-	for (idx_t min_max_index = 0; min_max_index < min_max_results.size(); min_max_index++) {
-		auto expr = make_uniq<BoundConstantExpression>(min_max_results[min_max_index]);
-		agg_results.push_back(std::move(expr));
-		types.push_back(min_max_results[min_max_index].GetTypeMutable());
-	}
 
-	for (idx_t aggregate_index = 0; aggregate_index < count_star_idxs.size(); ++aggregate_index) {
-		auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
-		const idx_t count_star_idx = count_star_idxs[aggregate_index];
-		agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
-		types.push_back(LogicalType::BIGINT);
+	if (!min_max_bindings.empty()) {
+		// Execute min/max aggregates on partition statistics
+		for (idx_t agg_idx = 0; agg_idx < min_max_bindings.size(); agg_idx++) {
+			const auto &binding = min_max_bindings[agg_idx];
+			const column_t column_index = get.GetColumnIds()[binding.column_index].GetPrimaryIndex();
+			auto &comparator = comparators[agg_idx];
+
+			Value agg_result;
+			if (!TryGetValueFromStats(partition_stats[0], column_index, *comparator, agg_result)) {
+				return;
+			}
+			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
+				Value rhs;
+				if (!TryGetValueFromStats(partition_stats[0], column_index, *comparator, rhs)) {
+					return;
+				}
+				if (comparator->Compare(agg_result, rhs)) {
+					agg_result = rhs;
+				}
+			}
+			types.push_back(agg_result.GetTypeMutable());
+			auto expr = make_uniq<BoundConstantExpression>(agg_result);
+			agg_results.push_back(std::move(expr));
+		}
+	}
+	if (!count_star_idxs.empty()) {
+		// Execute count_star aggregates on partition statistics
+		idx_t count = 0;
+		for (const auto &stats : partition_stats) {
+			if (stats.count_type == CountType::COUNT_APPROXIMATE) {
+				// we cannot get an exact count
+				return;
+			}
+			count += stats.count;
+		}
+		for (const auto count_star_idx : count_star_idxs) {
+			auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
+			agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
+			types.push_back(LogicalType::BIGINT);
+		}
 	}
 
 	// Set column names
