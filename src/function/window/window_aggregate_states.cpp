@@ -2,7 +2,6 @@
 
 namespace duckdb {
 
-
 WindowAggregateStates::WindowAggregateStates(ClientContext &client, const AggregateObject &aggr)
     : client(client), aggr(aggr), state_size(aggr.function.GetStateSizeCallback()(aggr.function)),
       allocator(Allocator::Get(client)) {
