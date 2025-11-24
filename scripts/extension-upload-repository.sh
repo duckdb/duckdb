@@ -21,17 +21,15 @@ else
     TARGET_BUCKET="$2"
 fi
 
-echo $BASE_DIR
-
 set -e
 
 # Ensure we do nothing on failed globs
 shopt -s nullglob
 
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
-    echo "Deploying extensions to `$TARGET_BUCKET`.."
+    echo "Deploying extensions from '$BASE_DIR' to bucket '$TARGET_BUCKET' .."
 else
-    echo "Deploying extensions to `$TARGET_BUCKET`.. (DRY RUN)"
+    echo "Deploying extensions from '$BASE_DIR' to bucket '$TARGET_BUCKET'.. (DRY RUN)"
 fi
 
 for version_dir in $BASE_DIR/*; do
@@ -44,6 +42,8 @@ for version_dir in $BASE_DIR/*; do
             FILES="$arch_dir/*.duckdb_extension"
         fi
 
+        echo ""
+
         for f in $FILES; do
             if [[ $architecture == wasm* ]]; then
                 ext_name=`basename $f .duckdb_extension.wasm`
@@ -55,6 +55,8 @@ for version_dir in $BASE_DIR/*; do
             
             # args: <name> <extension_version> <duckdb_version> <architecture> <s3_bucket> <copy_to_latest> <copy_to_versioned> [<path_to_ext>]
             $script_dir/extension-upload-single.sh $ext_name "" "$duckdb_version" "$architecture" "$TARGET_BUCKET" true false "$(dirname "$f")"
+
+            echo ""
         done
         echo ""
     done
