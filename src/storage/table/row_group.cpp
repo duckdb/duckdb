@@ -248,6 +248,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 
 void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
+	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_scans.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		column_scans.emplace_back(*this);
@@ -267,13 +268,13 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 	if (!CheckZonemap(filters)) {
 		return false;
 	}
-	if (!RefersToSameObject(*node.node, *this)) {
+	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScanWithOffset segment node mismatch");
 	}
 
 	state.row_group = node;
 	state.vector_index = vector_offset;
-	auto row_start = node.row_start;
+	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
 	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
 	if (state.max_row_group_row == 0) {
@@ -296,10 +297,10 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	if (!CheckZonemap(filters)) {
 		return false;
 	}
-	if (!RefersToSameObject(*node.node, *this)) {
+	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
-	auto row_start = node.row_start;
+	auto row_start = node.GetRowStart();
 	state.row_group = node;
 	state.vector_index = 0;
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -329,7 +330,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	scan_state.Initialize(executor.GetContext(), GetCollection().GetTypes());
 	InitializeScan(scan_state, node);
 
 	DataChunk append_chunk;
@@ -497,8 +497,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// no segment to skip
 			continue;
 		}
-		auto row_start = current_segment->row_start;
-		idx_t target_row = row_start + current_segment->node->count;
+		auto row_start = current_segment->GetRowStart();
+		idx_t target_row = row_start + current_segment->GetNode().count;
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
 		}
@@ -548,7 +548,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		auto &current_row_group = *state.row_group->node;
+		auto &current_row_group = state.row_group->GetNode();
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
@@ -1310,7 +1310,18 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
+struct DuckDBPartitionRowGroup : public PartitionRowGroup {
+	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	}
+
+	RowGroup &row_group;
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
+		return row_group.GetStatistics(column_id);
+	}
+};
+
+PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 	PartitionStatistics result;
 	result.row_start = row_group_start;
 	result.count = count;
@@ -1320,6 +1331,8 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
 	}
+
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this);
 	return result;
 }
 

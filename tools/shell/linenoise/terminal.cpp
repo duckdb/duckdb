@@ -30,6 +30,7 @@ static struct termios orig_termios; /* In order to restore at exit.*/
 #endif
 static int atexit_registered = 0; /* Register atexit just 1 time. */
 static int rawmode = 0;           /* For atexit() function to check if restore is needed*/
+static bool mouse_tracking = false;
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 
 /* At exit we'll try to fix the terminal to the initial conditions. */
@@ -122,6 +123,7 @@ int Terminal::EnableRawMode() {
 }
 
 void Terminal::DisableRawMode() {
+	Terminal::DisableMouseTracking();
 #if defined(_WIN32) || defined(WIN32)
 	if (console_in) {
 		// restore old mode
@@ -134,6 +136,28 @@ void Terminal::DisableRawMode() {
 	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
 		rawmode = 0;
 	}
+#endif
+}
+
+void Terminal::EnableMouseTracking() {
+#if !defined(_WIN32) && !defined(WIN32)
+	if (!rawmode) {
+		return;
+	}
+	// Enable XTerm mouse tracking (normal tracking)
+	printf("\x1b[?1000h");
+	fflush(stdout);
+	mouse_tracking = true;
+#endif
+}
+void Terminal::DisableMouseTracking() {
+#if !defined(_WIN32) && !defined(WIN32)
+	if (!mouse_tracking) {
+		return;
+	}
+	printf("\x1b[?1000l");
+	fflush(stdout);
+	mouse_tracking = false;
 #endif
 }
 
@@ -391,7 +415,7 @@ void Terminal::Beep() {
 	fflush(stderr);
 }
 
-EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
+EscapeSequence Terminal::ReadEscapeSequence(int ifd, KeyPress &key_press) {
 	char seq[5];
 	idx_t length = ReadEscapeSequence(ifd, seq);
 	if (length == 0) {
@@ -412,7 +436,7 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		case ESC: {
 			// Double ESC - this might be ALT + arrow key
 			// Read the next escape sequence
-			auto next_escape = ReadEscapeSequence(ifd);
+			auto next_escape = ReadEscapeSequence(ifd, key_press);
 			switch (next_escape) {
 			case EscapeSequence::LEFT:
 				return EscapeSequence::ALT_LEFT_ARROW;
@@ -516,6 +540,30 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		} else if (memcmp(seq, "[1;5D", 5) == 0 || memcmp(seq, "[1;3D", 5) == 0) {
 			// [1;5D: move word left
 			return EscapeSequence::CTRL_MOVE_BACKWARDS;
+		} else if (memcmp(seq, "[M", 2) == 0) {
+			// mouse event - consume it
+			EscapeSequence result_sequence = EscapeSequence::UNKNOWN;
+			if (seq[2] == ' ') {
+				// left mouse click
+				result_sequence = EscapeSequence::MOUSE_CLICK;
+				// get the co-ordinates, these are X + 32, Y + 32
+				key_press.position.ws_col = static_cast<uint8_t>(seq[3]);
+				key_press.position.ws_row = static_cast<uint8_t>(seq[4]);
+				if (key_press.position.ws_col <= 32 || key_press.position.ws_row < 32) {
+					// out of bounds of the terminal
+					result_sequence = EscapeSequence::UNKNOWN;
+				} else {
+					key_press.position.ws_col -= 33;
+					key_press.position.ws_row -= 32;
+				}
+			}
+			// get the cursor position and subtract it from the key press location
+			auto cursor_position = Terminal::GetCursorPosition();
+			key_press.position.ws_col -= cursor_position.ws_col;
+			key_press.position.ws_row -= cursor_position.ws_row;
+			// disable mouse tracking again - we only consume one mouse event at a time
+			Terminal::DisableMouseTracking();
+			return result_sequence;
 		} else {
 			Linenoise::Log("unrecognized escape sequence (;) %d\n", seq[1]);
 		}
@@ -545,6 +593,13 @@ idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
 
 	if (seq[0] != '[') {
 		return 2;
+	}
+	if (seq[1] == 'M') {
+		// mouse event - read 3 more bytes
+		if (read(ifd, seq + 2, 3) == -1) {
+			return 0;
+		}
+		return 5;
 	}
 	if (seq[1] < '0' || seq[1] > '9') {
 		return 2;
