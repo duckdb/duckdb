@@ -212,34 +212,49 @@ idx_t RoaringCompressState::GetContainerIndex() {
 	return index;
 }
 
-idx_t RoaringCompressState::GetRemainingSpace() {
-	return static_cast<idx_t>(metadata_ptr - data_ptr);
+idx_t RoaringCompressState::GetUsedDataSpace() {
+	return static_cast<idx_t>(data_ptr - (handle.Ptr() + sizeof(idx_t)));
 }
 
-bool RoaringCompressState::CanStore(idx_t container_size, const ContainerMetadata &metadata) {
-	idx_t required_space = 0;
-	if (metadata.IsUncompressed()) {
-		// Account for the alignment we might need for this container
-		required_space += (AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr))) - reinterpret_cast<idx_t>(data_ptr);
-	}
-	required_space += metadata.GetDataSizeInBytes(container_size);
+idx_t RoaringCompressState::GetAvailableSpace() {
+	return static_cast<idx_t>(metadata_ptr - (handle.Ptr() + sizeof(idx_t)));
+}
 
+bool RoaringCompressState::CanStore(idx_t container_size_in_tuples, const ContainerMetadata &metadata) {
+	//! Required space for all the containers already stored + this additional container
 	idx_t runs_count = metadata_collection.GetRunContainerCount();
 	idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
 #ifdef DEBUG
-	idx_t current_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
-	(void)current_size;
-	D_ASSERT(required_space + current_size <= GetRemainingSpace());
+	{
+		//! Assert that whatever is already stored can actually fit on the segment
+		idx_t current_metadata_size =
+		    metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+		(void)current_metadata_size;
+		auto used_data_space = GetUsedDataSpace();
+		used_data_space = AlignValue<idx_t, 8>(used_data_space);
+		D_ASSERT(used_data_space + current_metadata_size <= GetAvailableSpace());
+	}
 #endif
+	idx_t new_data_space = 0;
+	if (metadata.IsUncompressed()) {
+		//! Account for the alignment we might need for this container
+		//! Up to 7 bytes extra space required to align the data_ptr (see InitializeContainer)
+		new_data_space += (AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr))) - reinterpret_cast<idx_t>(data_ptr);
+	}
+	//! Additional space required to store this new container
+	new_data_space += metadata.GetDataSizeInBytes(container_size_in_tuples);
+
 	if (metadata.IsRun()) {
 		runs_count++;
 	} else {
+		//! arrays_count contains both uncompressed and array container count
 		arrays_count++;
 	}
-	idx_t metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
-	required_space += metadata_size;
+	idx_t new_metadata_space = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
 
-	if (required_space > GetRemainingSpace()) {
+	auto used_data_space = GetUsedDataSpace();
+	auto required_data_space = AlignValue<idx_t, 8>(used_data_space + new_data_space);
+	if (required_data_space + new_metadata_space > GetAvailableSpace()) {
 		return false;
 	}
 	return true;
@@ -300,7 +315,7 @@ void RoaringCompressState::FlushSegment() {
 	// +======================================+
 
 	// x: metadata_offset (to the "right" of it)
-	// d: data of the containers
+	// d: data of the containers (+ alignment)
 	// m: metadata of the containers
 
 	// This is after 'x'
@@ -308,7 +323,7 @@ void RoaringCompressState::FlushSegment() {
 
 	// Size of the 'd' part
 	auto unaligned_data_size = NumericCast<idx_t>(data_ptr - base_ptr);
-	auto data_size = AlignValue(unaligned_data_size);
+	auto data_size = AlignValue<idx_t, 8>(unaligned_data_size);
 	data_ptr += data_size - unaligned_data_size;
 
 	// Size of the 'm' part
@@ -475,10 +490,31 @@ idx_t RoaringCompressState::Count(RoaringCompressState &state) {
 void RoaringCompressState::Flush(RoaringCompressState &state) {
 	state.NextContainer();
 }
-
-void RoaringCompressState::Compress(Vector &input, idx_t count) {
+template <>
+void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
 	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input, count);
+}
+template <>
+void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	const bool *src = FlatVector::GetData<bool>(input);
+
+	Vector bitpacked_vector(LogicalType::UBIGINT, count);
+	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	bitpacked_vector_validity.EnsureWritable();
+	const auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
+
+	const auto &validity = FlatVector::Validity(input);
+	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
+	// mask.
+	if (validity.AllValid()) {
+		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+	} else {
+		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+	}
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector, count);
 }
 
 } // namespace roaring

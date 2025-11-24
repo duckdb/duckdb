@@ -12,6 +12,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
@@ -190,30 +191,6 @@ private:
 	unsafe_vector<bool> base_column_has_filter;
 	//! The amount of filters that are always true currently
 	idx_t always_true_filters = 0;
-};
-
-enum class OrderByStatistics { MIN, MAX };
-enum class RowGroupOrderType { ASC, DESC };
-enum class OrderByColumnType { NUMERIC, STRING };
-
-class RowGroupReorderer {
-public:
-	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
-	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(const RowGroupSegmentTree &row_groups);
-	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
-
-	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
-
-private:
-	const column_t column_idx;
-	const OrderByStatistics order_by;
-	const RowGroupOrderType order_type;
-	const OrderByColumnType column_type;
-	const optional_idx row_limit;
-
-	idx_t offset;
-	bool initialized;
-	vector<reference<SegmentNode<RowGroup>>> ordered_row_groups;
 };
 
 class CollectionScanState {
