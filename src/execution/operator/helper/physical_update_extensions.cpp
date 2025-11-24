@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-SourceResultType PhysicalUpdateExtensions::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                   OperatorSourceInput &input) const {
+SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                           OperatorSourceInput &input) const {
 	auto &data = input.global_state.Cast<UpdateExtensionsGlobalState>();
 
 	if (data.offset >= data.update_result_entries.size()) {

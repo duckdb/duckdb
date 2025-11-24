@@ -1443,8 +1443,8 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 	}
 }
 
-SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk,
-                                           OperatorSourceInput &input) const {
+SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSourceInput &input) const {
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto &gstate = input.global_state.Cast<HashJoinGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSourceState>();

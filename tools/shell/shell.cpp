@@ -3544,6 +3544,9 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 
 		auto &con = *state.conn;
 		auto result = con.Query(zSql);
+		if (result->HasError()) {
+			return;
+		}
 		for (auto &row : *result) {
 			auto zCompletion = row.GetValue<string>(0);
 			idx_t iStart = row.GetValue<idx_t>(1);
@@ -3560,9 +3563,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			                       score, extra_char);
 		}
 	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		state.PrintF(PrintOutput::STDERR, "Failure during auto-completion: %s\n", error.Message());
-		exit(1);
+		return;
 	}
 }
 #endif

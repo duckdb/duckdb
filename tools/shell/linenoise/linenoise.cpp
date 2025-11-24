@@ -426,7 +426,7 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 		if (cols >= ws.ws_col) {
 			// exceeded width - move to next line
 			rows++;
-			cols = 0;
+			cols = plen;
 		}
 		if (rows > target_row) {
 			// we have skipped our target row - that means "target_col" was out of range for this row
@@ -825,6 +825,22 @@ void Linenoise::EditSwapWord() {
 void Linenoise::EditDeleteAll() {
 	buf[0] = '\0';
 	pos = len = 0;
+	RefreshLine();
+}
+
+void Linenoise::SetCursorPosition(int x, int y) {
+	int current_row, current_col, cols, rows;
+	// key presses are *relative to the current cursor*
+	// first get the current cursor location
+	PositionToColAndRow(pos, current_row, current_col, rows, cols);
+	// adjust the location based on the provided x / y
+	current_col += x;
+	current_row += y;
+	if (current_col < 0 || current_row < 0 || current_row > rows) {
+		// out of bounds - ignore
+		return;
+	}
+	pos = ColAndRowToPosition(current_row, current_col);
 	RefreshLine();
 }
 
@@ -1360,7 +1376,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 	key_press.action = c;
 	if (key_press.action == ESC) {
 		// for ESC we need to read an escape sequence
-		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
+		key_press.sequence = Terminal::ReadEscapeSequence(ifd, key_press);
 	}
 	return true;
 #endif
@@ -1593,17 +1609,19 @@ int Linenoise::Edit() {
 		case ESC: /* escape sequence */ {
 			EscapeSequence escape = key_press.sequence;
 			switch (escape) {
-			case EscapeSequence::ALT_LEFT_ARROW:
+			case EscapeSequence::CTRL_UP:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_START);
 				break;
-			case EscapeSequence::ALT_RIGHT_ARROW:
+			case EscapeSequence::CTRL_DOWN:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_END);
 				break;
 			case EscapeSequence::CTRL_MOVE_BACKWARDS:
+			case EscapeSequence::ALT_LEFT_ARROW:
 			case EscapeSequence::ALT_B:
 				EditMoveWordLeft();
 				break;
 			case EscapeSequence::CTRL_MOVE_FORWARDS:
+			case EscapeSequence::ALT_RIGHT_ARROW:
 			case EscapeSequence::ALT_F:
 				EditMoveWordRight();
 				break;
@@ -1662,6 +1680,10 @@ int Linenoise::Edit() {
 			case EscapeSequence::DELETE_KEY:
 				EditDelete();
 				break;
+			case EscapeSequence::MOUSE_CLICK:
+				// mouse click
+				SetCursorPosition(key_press.position.ws_col, key_press.position.ws_row);
+				break;
 			default:
 				Linenoise::Log("Unrecognized escape\n");
 				break;
@@ -1692,6 +1714,9 @@ int Linenoise::Edit() {
 			break;
 		case CTRL_X: /* ctrl+x, insert newline */
 			EditInsertMulti("\r\n");
+			break;
+		case CTRL_Q: /* ctrl+q enables mouse tracking for a single click */
+			Terminal::EnableMouseTracking();
 			break;
 		case CTRL_Y:
 			// unsupported
