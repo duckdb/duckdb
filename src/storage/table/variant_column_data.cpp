@@ -401,8 +401,7 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const
 	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group,
-                                                                    const LogicalType &shredded_type) {
+vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type, BaseStatistics &stats) {
 	//! scan_chunk
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
@@ -453,7 +452,7 @@ vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGro
 
 		AppendShredded(scan_vector, append_vector, to_scan, append_data);
 	}
-	stats->statistics = std::move(transformed_stats);
+	stats = std::move(transformed_stats);
 	return ret;
 }
 
@@ -497,37 +496,46 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	auto &db = table_info.GetDB();
 	auto &config_options = DBConfig::Get(db).options;
 
-	if (!HasAnyChanges() || !EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+	bool should_shred = true;
+	if (!HasAnyChanges()) {
+		should_shred = false;
+	}
+	if (!EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+		should_shred = false;
+	}
+
+	LogicalType shredded_type;
+	if (should_shred) {
+		if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
+			shredded_type = config_options.force_variant_shredding;
+		} else {
+			shredded_type = GetShreddedType();
+		}
+		D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
+		auto &type_entries = StructType::GetChildTypes(shredded_type);
+		if (type_entries.size() != 2) {
+			//! We couldn't determine a shredding type from the data
+			should_shred = false;
+		}
+	}
+
+	if (!should_shred) {
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
 		}
 		return std::move(checkpoint_state);
 	}
 
-	LogicalType shredded_type;
-	if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
-		shredded_type = config_options.force_variant_shredding;
-	} else {
-		shredded_type = GetShreddedType();
-	}
+	//! STRUCT(unshredded VARIANT, shredded <...>)
+	BaseStatistics column_stats = BaseStatistics::CreateEmpty(shredded_type);
+	checkpoint_state->shredded_data = WriteShreddedData(row_group, shredded_type, column_stats);
+	D_ASSERT(checkpoint_state->shredded_data.size() == 2);
+	auto &unshredded = checkpoint_state->shredded_data[0];
+	auto &shredded = checkpoint_state->shredded_data[1];
 
-	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
-	auto &type_entries = StructType::GetChildTypes(shredded_type);
-	if (type_entries.size() == 2) {
-		//! STRUCT(unshredded VARIANT, shredded <...>)
-		checkpoint_state->shredded_data = WriteShreddedData(row_group, shredded_type);
-		D_ASSERT(checkpoint_state->shredded_data.size() == 2);
-		auto &unshredded = checkpoint_state->shredded_data[0];
-		auto &shredded = checkpoint_state->shredded_data[1];
-
-		//! Now checkpoint the shredded data
-		checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-		checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
-	} else {
-		D_ASSERT(type_entries.size() == 1);
-		//! STRUCT(unshredded VARIANT)
-		checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
-	}
+	//! Now checkpoint the shredded data
+	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
 
 	return std::move(checkpoint_state);
 }

@@ -77,7 +77,7 @@ public:
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
 
 private:
-	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type);
+	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type, BaseStatistics &stats);
 	void ReplaceColumns(shared_ptr<ColumnData> &&unshredded, shared_ptr<ColumnData> &&shredded);
 	void CreateScanStates(ColumnScanState &state);
 	LogicalType GetShreddedType();
