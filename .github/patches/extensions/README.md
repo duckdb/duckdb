@@ -37,6 +37,25 @@ workflow for this is as follows:
 - Remove `APPLY_PATCHES` flag from config
 - Update hash of extension in config
 
+# Workflow for small changes to extensions
+
+In some scenarios, the changes you are making in DuckDB require a very minor change to the extension, and you are 
+confident the change will not break anything, there is a simpler workflow that can be used: 
+
+1. Git clone extension. 
+2. In DuckDB repo, go to .github/config/extensions/your_extension.cmake
+3. If APPLY_PATCHES is not set in duckdb_extension_load, set it.
+4. In cloned extension, checkout the GIT_TAG from the your_extension.cmake file. 
+5. Apply existing patches found in .github/patches/extensions 
+    ```bash 
+    git apply [path to duckdb]/.github/patches/extensions/[your_extension]/fix.patch
+    ```
+6. Make necessary changes to extension.
+7. Generate new diff, and forward it to the original fix.patch location (or create the directory if it does not exist):
+    ```bash
+    git diff > [path to duckdb]/.github/patches/extensions/[your_extension]/fix.patch
+    ```
+
 
 
 
