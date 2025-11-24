@@ -3,6 +3,8 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -64,6 +66,56 @@ static bool GetConstantArgument(ClientContext &context, Expression &expr, Value 
 		return true;
 	}
 	return false;
+}
+
+optional_ptr<const BaseStatistics> FindShreddedStats(const BaseStatistics &shredded, const VariantPathComponent &component) {
+	D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(StructType::GetChildTypes(shredded.GetType()).size() == 2);
+
+	auto &typed_value_type = StructType::GetChildTypes(shredded.GetType())[1].second;
+	auto &typed_value_stats = StructStats::GetChildStats(shredded, 1);
+	switch (component.lookup_mode) {
+		case VariantChildLookupMode::BY_INDEX: {
+			if (typed_value_type.id() != LogicalTypeId::LIST) {
+				return nullptr;
+			}
+			auto &child_stats = ListStats::GetChildStats(typed_value_stats);
+			return child_stats;
+		}
+		case VariantChildLookupMode::BY_KEY: {
+			if (typed_value_type.id() != LogicalTypeId::STRUCT) {
+				return nullptr;
+			}
+			auto &object_fields = StructType::GetChildTypes(typed_value_type);
+			for (idx_t i = 0; i < object_fields.size(); i++) {
+				auto &object_field = object_fields[i];
+				if (StringUtil::CIEquals(object_field.first, component.key)) {
+					return StructStats::GetChildStats(typed_value_stats, i);
+				}
+			}
+			return nullptr;
+		}
+		default:
+			throw InternalException("VariantChildLookupMode::%s not implemented for FindShreddedStats", EnumUtil::ToString(component.lookup_mode));
+	}
+}
+
+static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &bind_data = input.bind_data;
+
+	auto &info = bind_data->Cast<BindData>();
+	auto &variant_stats = child_stats[0];
+	const bool is_shredded = VariantStats::IsShredded(variant_stats);
+	if (!is_shredded) {
+		return nullptr;
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
+	auto found_stats = FindShreddedStats(shredded_stats, info.component);
+	if (!found_stats) {
+		return nullptr;
+	}
+	return found_stats->ToUnique();
 }
 
 static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
@@ -230,10 +282,13 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	auto variant_type = LogicalType::VARIANT();
 
 	ScalarFunctionSet fun_set;
-	fun_set.AddFunction(ScalarFunction("variant_extract", {variant_type, LogicalType::VARCHAR}, variant_type,
-	                                   VariantExtractFunction, VariantExtractBind));
-	fun_set.AddFunction(ScalarFunction("variant_extract", {variant_type, LogicalType::UINTEGER}, variant_type,
-	                                   VariantExtractFunction, VariantExtractBind));
+	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind, nullptr, VariantExtractPropagateStats);
+
+	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
+	fun_set.AddFunction(variant_extract);
+
+	variant_extract.arguments = {variant_type, LogicalType::UBIGINT};
+	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }
 
