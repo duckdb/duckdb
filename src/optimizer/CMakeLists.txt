@@ -34,6 +34,7 @@ add_library_unity(
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
+  row_group_pruner.cpp
   statistics_propagator.cpp
   limit_pushdown.cpp
   topn_optimizer.cpp

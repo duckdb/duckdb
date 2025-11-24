@@ -16,9 +16,9 @@ public:
 	bool written_value;
 };
 
-EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
-                                   vector<string> schema_path_p, bool can_have_nulls)
-    : PrimitiveColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls) {
+EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
+                                   vector<string> schema_path_p)
+    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 	bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(Type()));
 }
 

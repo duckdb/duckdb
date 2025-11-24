@@ -14,8 +14,7 @@ namespace duckdb {
 
 class FixedDecimalColumnWriter : public PrimitiveColumnWriter {
 public:
-	FixedDecimalColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
-	                         vector<string> schema_path_p, bool can_have_nulls);
+	FixedDecimalColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p);
 	~FixedDecimalColumnWriter() override = default;
 
 public:
