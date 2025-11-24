@@ -215,6 +215,12 @@ public:
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
 				if (output.size() == 0) {
+					if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+						// We can avoid looping, and just return as appropriate
+						data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+						return;
+					}
+
 					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
 					continue;
 				}
