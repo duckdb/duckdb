@@ -38,6 +38,16 @@ EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t
 ----
 analyzed_plan	<!REGEX>:.*AGGREGATE.*
 
+query II
+EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t GROUP BY ALL
+----
+analyzed_plan	<REGEX>:.*AGGREGATE.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t WHERE i > 100
+----
+analyzed_plan	<REGEX>:.*AGGREGATE.*
+
 query III
 SELECT count(*), min(i), max(i) FROM t
 ----
@@ -47,4 +57,12 @@ query III
 SELECT max(i), count(i), min(i) FROM t
 ----
 8191	8192	0
+
+statement ok
+INSERT INTO t VALUES (9999)
+
+query III
+SELECT count(*), min(i), max(i) FROM t
+----
+8193	0	9999
 
