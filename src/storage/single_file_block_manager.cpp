@@ -707,7 +707,6 @@ void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 	for (idx_t i = 0; i < free_list_count; i++) {
 		auto block = reader.Read<block_id_t>(context);
 		free_list.insert(block);
-		newly_freed_list.insert(block);
 	}
 	auto multi_use_blocks_count = reader.Read<uint64_t>(context);
 	multi_use_blocks.clear();
@@ -733,11 +732,11 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 			block = *free_list.begin();
 			// erase the entry from the free list again
 			free_list.erase(free_list.begin());
-			newly_freed_list.erase(block);
 		} else {
 			block = max_block++;
 		}
 	}
+	// FIXME: should be an assertion
 	if (BlockIsRegistered(block)) {
 		throw InternalException("GetFreeBlockId() returned block %d - but that block has already been registered",
 		                        block);
@@ -752,18 +751,6 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	} else {
 		return max_block;
 	}
-}
-
-void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
-	D_ASSERT(block_id >= 0);
-	D_ASSERT(block_id < max_block);
-	if (free_list.find(block_id) != free_list.end()) {
-		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
-	}
-	multi_use_blocks.erase(block_id);
-	free_list.insert(block_id);
-	newly_freed_list.insert(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -782,7 +769,6 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 	} else if (free_list.find(block_id) != free_list.end()) {
 		// block is currently in the free list - erase
 		free_list.erase(block_id);
-		newly_freed_list.erase(block_id);
 	} else {
 		// block is already in use - increase reference count
 		IncreaseBlockReferenceCountInternal(block_id);
@@ -1015,7 +1001,6 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
 	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
@@ -1076,9 +1061,16 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
+	set<block_id_t> all_free_blocks = free_list;
+	set<block_id_t> fully_freed_blocks;
 	for (auto &block : modified_blocks) {
-		free_list.insert(block);
-		newly_freed_list.insert(block);
+		all_free_blocks.insert(block);
+		if (!BlockIsRegistered(block)) {
+			free_list.insert(block);
+			fully_freed_blocks.insert(block);
+		} else {
+			newly_freed_list.insert(block);
+		}
 	}
 	modified_blocks.clear();
 
@@ -1092,8 +1084,8 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		auto ptr = writer.GetMetaBlockPointer();
 		header.free_list = ptr.block_pointer;
 
-		writer.Write<uint64_t>(free_list.size());
-		for (auto &block_id : free_list) {
+		writer.Write<uint64_t>(all_free_blocks.size());
+		for (auto &block_id : all_free_blocks) {
 			writer.Write<block_id_t>(block_id);
 		}
 		writer.Write<uint64_t>(multi_use_blocks.size());
@@ -1143,31 +1135,48 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
-	// Release the free blocks to the filesystem.
-	TrimFreeBlocks();
+	// Release the free fully freed blocks to the filesystem.
+	TrimFreeBlocks(fully_freed_blocks);
 }
 
 void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::TrimFreeBlocks() {
-	if (DBConfig::Get(db).options.trim_free_blocks) {
-		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {
-			block_id_t first = *itr;
-			block_id_t last = first;
-			// Find end of contiguous range.
-			for (++itr; itr != newly_freed_list.end() && (*itr == last + 1); ++itr) {
-				last = *itr;
-			}
-			// We are now one too far.
-			--itr;
-			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
-			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
-		}
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	lock_guard<mutex> lock(block_lock);
+	// unregister the block - check if it is part of the newly free list
+	auto entry = newly_freed_list.find(id);
+	if (entry != newly_freed_list.end()) {
+		// it is! move it to the regular free list so the block can be re-used
+		free_list.insert(id);
+		newly_freed_list.erase(entry);
 	}
-	newly_freed_list.clear();
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+}
+
+void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
+	auto block_count = NumericCast<idx_t>(end + 1 - start);
+	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+}
+
+void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
+	if (!DBConfig::Get(db).options.trim_free_blocks) {
+		return;
+	}
+	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+		block_id_t first = *itr;
+		block_id_t last = first;
+		// Find end of contiguous range.
+		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+			last = *itr;
+		}
+		// We are now one too far.
+		--itr;
+		// Trim the range.
+		TrimFreeBlockRange(first, last);
+	}
 }
 
 } // namespace duckdb

@@ -125,9 +125,7 @@ void BlockManager::UnregisterBlock(BlockHandle &block) {
 		// in-memory buffer: buffer could have been offloaded to disk: remove the file
 		buffer_manager.DeleteTemporaryFile(block);
 	} else {
-		lock_guard<mutex> lock(blocks_lock);
-		// on-disk block: erase from list of blocks in manager
-		blocks.erase(id);
+		UnregisterBlock(id);
 	}
 }
 
