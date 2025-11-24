@@ -71,7 +71,7 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 	}
 
 	if (column_id.IsRowNumberColumn()) {
-		return StorageIndex(COLUMN_IDENTIFIER_ROW_NUMBER);
+		return StorageIndex();
 	}
 
 	// The index of the base ColumnIndex is equal to the physical column index in the table
@@ -257,6 +257,9 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
+			if (col.IsRowNumberColumn()) {
+				continue;
+			}
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 

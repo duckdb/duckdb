@@ -348,19 +348,12 @@ bool TableCatalogEntry::HasPrimaryKey() const {
 virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
 	virtual_column_map_t virtual_columns;
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
-	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("row_number", LogicalType::ROW_TYPE)));
 	return virtual_columns;
 }
 
 vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
 	vector<column_t> result;
 	result.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	return result;
-}
-
-vector<column_t> TableCatalogEntry::GetRowNumberColumns() const {
-	vector<column_t> result;
-	result.push_back(COLUMN_IDENTIFIER_ROW_NUMBER);
 	return result;
 }
 

@@ -210,12 +210,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		unused.VisitOperator(*plan);
 	});
 
-	// Rewrite window functions to emit row_numbers in parallel
-	RunOptimizer(OptimizerType::WINDOW_REWRITER, [&]() {
-		WindowRewriter window_rewriter;
-		plan = window_rewriter.Optimize(std::move(plan));
-	});
-
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
 		RemoveDuplicateGroups remove;
@@ -307,6 +301,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
+	});
+
+	// Rewrite window functions to emit row_numbers in parallel
+	RunOptimizer(OptimizerType::WINDOW_REWRITER, [&]() {
+		WindowRewriter window_rewriter;
+		plan = window_rewriter.Optimize(std::move(plan));
 	});
 }
 

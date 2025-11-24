@@ -93,11 +93,6 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_GET: {
 		// found LogicalGet
 		auto &get = probe_child.Cast<LogicalGet>();
-		for (auto &col_id : get.GetColumnIds()) {
-			if (col_id.IsRowNumberColumn()) {
-				return;
-			}
-		}
 		if (!get.function.filter_pushdown) {
 			// filter pushdown is not supported - no need to consider this node
 			return;

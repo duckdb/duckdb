@@ -102,3 +102,17 @@ EXPLAIN SELECT f.row_num AS foo_row, b.row_num AS bar_row, f.a, b.b FROM (SELECT
 JOIN (SELECT row_number() OVER () AS row_num, b FROM bar) b ON f.row_num = b.row_num;
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+create table tbl as select range a from range(3);
+
+statement ok
+pragma enable_optimizer;
+
+query II
+EXPLAIN SELECT row_number + 1 FROM (SELECT row_number() OVER () AS row_number FROM tbl);
+----
+physical_plan	<!REGEX>:.*WINDOW.*

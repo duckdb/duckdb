@@ -30,6 +30,7 @@ struct TableScanBindData : public TableFunctionData {
 	bool is_create_index;
 	//! In what order to scan the row groups
 	unique_ptr<RowGroupOrderOptions> order_options;
+	idx_t row_number_projection_index = DConstants::INVALID_INDEX;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {

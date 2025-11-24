@@ -55,6 +55,10 @@ public:
 		return true;
 	}
 
+	//! Returns the virtual columns for this table
+	virtual virtual_column_map_t GetVirtualColumns() const override;
+	virtual vector<column_t> GetRowNumberColumns() const;
+
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> RenameField(ClientContext &context, RenameFieldInfo &info);

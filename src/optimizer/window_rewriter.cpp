@@ -39,7 +39,7 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 
 	// and can only be a seq_scan
 	auto &get = window_ch->Cast<LogicalGet>();
-	if (get.function.name != "seq_scan") {
+	if (get.virtual_columns.find(COLUMN_IDENTIFIER_ROW_NUMBER) == get.virtual_columns.end()) {
 		return false;
 	}
 

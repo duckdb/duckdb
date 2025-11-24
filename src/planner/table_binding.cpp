@@ -161,6 +161,10 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 			// the empty column cannot be queried by the user
 			continue;
 		}
+		if (idx == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			// the row_number column cannot be queried by the user
+			continue;
+		}
 		if (name_map.find(name) == name_map.end()) {
 			name_map[name] = idx;
 		}

@@ -21,7 +21,6 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
-#include "duckdb/storage/table/row_number_column_data.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -121,19 +120,6 @@ ColumnData &RowGroup::GetRowIdColumnData() {
 	return *row_id_column_data;
 }
 
-ColumnData &RowGroup::GetRowNumberColumnData() {
-	if (row_number_is_loaded) {
-		return *row_number_column_data;
-	}
-	lock_guard<mutex> l(row_number_group_lock);
-	if (!row_number_column_data) {
-		row_number_column_data = make_uniq<RowNumberColumnData>(GetBlockManager(), GetTableInfo());
-		row_number_column_data->count = count.load();
-		row_number_is_loaded = true;
-	}
-	return *row_number_column_data;
-}
-
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
 	return GetColumn(c.GetPrimaryIndex());
 }
@@ -141,9 +127,6 @@ ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
 ColumnData &RowGroup::GetColumn(storage_t c) {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
 		return GetRowIdColumnData();
-	}
-	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
-		return GetRowNumberColumnData();
 	}
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
