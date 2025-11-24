@@ -161,6 +161,9 @@ public:
 	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
 
+protected:
+	bool BlockIsRegistered(block_id_t block_id);
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {

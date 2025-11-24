@@ -725,16 +725,22 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
-	lock_guard<mutex> lock(block_lock);
 	block_id_t block;
-	if (!free_list.empty()) {
-		// The free list is not empty, so we take its first element.
-		block = *free_list.begin();
-		// erase the entry from the free list again
-		free_list.erase(free_list.begin());
-		newly_freed_list.erase(block);
-	} else {
-		block = max_block++;
+	{
+		lock_guard<mutex> lock(block_lock);
+		if (!free_list.empty()) {
+			// The free list is not empty, so we take its first element.
+			block = *free_list.begin();
+			// erase the entry from the free list again
+			free_list.erase(free_list.begin());
+			newly_freed_list.erase(block);
+		} else {
+			block = max_block++;
+		}
+	}
+	if (BlockIsRegistered(block)) {
+		throw InternalException("GetFreeBlockId() returned block %d - but that block has already been registered",
+		                        block);
 	}
 	return block;
 }
