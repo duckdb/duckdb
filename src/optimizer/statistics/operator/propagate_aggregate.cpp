@@ -166,10 +166,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
 				Value rhs;
-				if (!TryGetValueFromStats(partition_stats[0], column_index, *comparator, rhs)) {
+				if (!TryGetValueFromStats(partition_stats[partition_idx], column_index, *comparator, rhs)) {
 					return;
 				}
-				if (comparator->Compare(agg_result, rhs)) {
+				if (!comparator->Compare(agg_result, rhs)) {
 					agg_result = rhs;
 				}
 			}
