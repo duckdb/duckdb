@@ -156,7 +156,7 @@ jobs:
       exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.git_ref }}
+      override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
@@ -172,7 +172,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.git_ref }}
+      override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
@@ -188,7 +188,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.git_ref }}
+      override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
