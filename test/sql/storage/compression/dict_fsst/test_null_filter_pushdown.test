@@ -1,63 +1,16 @@
+# name: test/sql/storage/compression/dict_fsst/test_null_filter_pushdown.test
+# group: [dict_fsst]
+
 load __TEST_DIR__/null_filter_dict_fsst.db readwrite v1.4.2
+
+statement ok
+pragma force_compression='DICT_FSST';
 
 statement ok
 CREATE OR REPLACE TABLE t1(type VARCHAR, id VARCHAR, problem VARCHAR);
 
 statement ok
-SELECT path, tags FROM duckdb_databases() WHERE path IS NOT NULL;
-
-statement ok
-INSERT INTO t1(type,id,problem) VALUES
-('events', 'bb233b60-213f-4d91-9ac8-c67dc2fd1b46', NULL),
-('events', 'd5a45abf-2506-4741-80aa-74f4000e4ba7', NULL),
-('events', 'bde7480d-72d3-4bac-9a3a-d7b9a807d593', NULL),
-('events', 'fe53408f-f778-46e1-a950-c0fdf3b94fe3', NULL),
-('events', '38520dc4-0076-4166-9ea0-dfccf88873ca', NULL),
-('events', '51385c92-99a8-47e0-811b-c6f54a56e827', NULL),
-('events', 'c6681111-2b49-4fc5-8705-82dcb0ab5923', NULL),
-('events', '72ee8e2a-274b-4779-b9be-8396a7ab0ccc', NULL),
-('events', 'e5125efd-7348-40f6-9668-f593b0a82802', NULL),
-('events', 'fbbcf433-3e12-42d8-a229-a5d9772104fc', NULL),
-('events', '3cf7e367-ed64-4322-87a7-8e867a22f2e4', NULL),
-('events', '9703e08a-f3e1-4edf-8c81-04bf3f7db9ee', NULL),
-('events', '304716ff-d264-428e-a132-5f6f64670645', NULL),
-('events', 'e322d08c-b983-4415-a3d0-5372ce520f7b', NULL),
-('events', '7456fff9-1a84-4dcc-847a-86dd3a9c31a0', NULL),
-('events', '7acf0caf-02b1-4b11-86c1-ae59bbedb604', NULL),
-('events', '02edbdb0-23c6-4d73-8167-75190f339175', NULL),
-('events', '522e7a39-313a-48ac-8ca8-e3fd2411e832', NULL),
-('events', '2e70dc7b-caf0-42cd-b1b0-40c0319932c4', NULL),
-('events', 'fe3fa0ac-d191-48ab-9487-9efae4d72743', NULL),
-('events', '8a26bd76-fa5c-4c27-aafb-5117891a0741', NULL),
-('events', '9dc8404c-cea5-4ee9-9d1b-d496416c04a4', NULL),
-('events', '275afb5f-0a2f-499d-97ab-669f04925a45', NULL),
-('events', '8d7ff166-28df-46f9-9682-35e91e1a832f', NULL),
-('events', '7a66abc5-a246-4e55-b9a4-f1b1fc3f02e1', NULL),
-('events', 'c3d8593f-8e3d-44db-a631-00c481e9ee7b', NULL),
-('events', 'e14f93a3-2af8-4ae9-b78c-4534387ef03f', NULL),
-('events', 'dcc661b8-6c70-485a-b763-8b1ad7298514', NULL),
-('events', '4a5beae6-e6ef-4c0c-af44-da219f7ab50c', NULL),
-('events', '41639e51-68b8-4adf-b2d6-354b0c06e66a', NULL),
-('events', 'a6406c93-2889-425d-8962-d9bba0f52165', NULL),
-('events', '5c70680b-7ceb-44aa-80d0-926690a104a9', NULL),
-('events', 'ae9f8f70-5ffb-4950-871a-826d15540c8d', NULL),
-('events', 'd8220a93-76c4-4c7e-b97b-f9fa9cc7cf1c', NULL),
-('events', '2213048b-e62a-4195-ace4-e43b8441075a', NULL),
-('events', '754db965-87b8-4464-a230-a69767041448', NULL),
-('events', 'e7cc9958-ddd1-43c1-be78-b4e4941f5330', NULL),
-('events', '2a2540d7-0c7a-439e-b8d2-2fb140118c02', NULL),
-('events', '37284475-c3e6-4ae2-9962-b35e130f8d91', NULL),
-('events', '82052d03-fb9b-44a4-84a2-0d21ce5121cb', NULL)
-;
-
-statement ok
-SELECT COUNT(*), COUNT(*) FILTER (problem IS NULL), COUNT(*) FILTER (problem IS NOT NULL) FROM t1;
-
-statement ok
-SELECT COUNT(*) FROM t1 WHERE problem IS NULL;
-
-statement ok
-SELECT COUNT(*) FROM t1 WHERE problem IS NOT NULL;
+INSERT INTO t1(type,id,problem) select 'events', 'test', NULL from range(40)
 
 query I
 SELECT COUNT(*) FROM t1 WHERE problem IS NULL;
