@@ -1,0 +1,40 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_various_distributions.test_slow
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+foreach ratio 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.99
+
+foreach null_ratio 0 0.2 0.4 0.6 0.8
+
+statement ok
+SET force_compression='uncompressed';
+
+statement ok
+CREATE OR REPLACE TABLE uncompressed_booleans(id BIGINT, b BOOL);
+
+statement ok
+SELECT setseed(0.4);
+WITH cte AS (
+   SELECT id, random() r FROM range(10_000_000) t(id)
+)
+INSERT INTO uncompressed_booleans
+SELECT id, case when r < ${null_ratio} then null else r <= ${ratio} end
+FROM cte;
+
+statement ok
+SET force_compression='roaring';
+
+statement ok
+CREATE OR REPLACE TABLE roaring_booleans(id BIGINT, b BOOL);
+
+statement ok
+INSERT INTO roaring_booleans FROM uncompressed_booleans;
+
+# should be empty
+query II
+FROM uncompressed_booleans EXCEPT ALL FROM roaring_booleans;
+----
+
+endloop
+
+endloop
