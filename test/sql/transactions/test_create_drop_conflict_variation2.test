@@ -41,7 +41,7 @@ DROP SCHEMA foo CASCADE;
 statement error
 select * from foo.bar;
 ----
-Table with name bar does not exist!
+Catalog Error: Catalog with name foo does not exist and there is no foo schema in the current catalog!
 
 query I
 select schema_name from duckdb_schemas() where schema_name = 'foo';

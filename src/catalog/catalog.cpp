@@ -912,7 +912,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 
 	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
 	// Throw an error about the schema instead of the table
-	if (schemas.empty() && !lookups.empty()) {
+	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
 		string schema_name = lookups[0].schema;
 		if (!IsInvalidSchema(schema_name)) {
 			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());

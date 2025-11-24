@@ -110,7 +110,7 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (
 statement error
 SELECT * FROM  recurring.tbl;
 ----
-Catalog Error: Table with name tbl does not exist!
+Catalog Error: Catalog with name recurring does not exist and there is no recurring schema in the current catalog!
 
 # no using key
 statement error
