@@ -22,6 +22,7 @@ public:
 	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (DEFAULT_ROW_GROUP_SIZE / RG_SAMPLES) / STANDARD_VECTOR_SIZE;
 
 	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
+	static constexpr uint8_t IS_COMPRESSED_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t EXPONENT_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t FACTOR_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(uint16_t);

@@ -136,6 +136,15 @@ public:
 
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
+		bool is_compressed = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+
+		if (!is_compressed) {
+			// Read uncompressed values
+			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			return;
+		}
+
 		// Load the vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;

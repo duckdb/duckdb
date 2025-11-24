@@ -345,7 +345,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 			if (!has_changes[i]) {
 				continue;
 			}
-			// Compression happens here
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
 			function->compress(*compression_state, scan_vector, count);

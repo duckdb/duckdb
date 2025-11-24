@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/alp/alp_simple.test
+# name: test/sql/storage/compression/alp/alp_uncompressed_mode.test
 # description: Test storage of alp, but simple
 # group: [alp]
 
@@ -10,6 +10,7 @@ load __TEST_DIR__/test_alp.db
 statement ok
 PRAGMA force_compression='uncompressed'
 
+# This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original. Our implementation of ALP now uses an uncompressed mode to handle this scenario.
 statement ok
 CREATE TABLE uncompressed_table AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
@@ -74,3 +75,4 @@ FROM (
      WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS compressed
 );
 ----
+true
