@@ -191,7 +191,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		for (const auto count_star_idx : count_star_idxs) {
 			auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
 			agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
-			types.push_back(LogicalType::BIGINT);
+			types.insert(types.begin() + NumericCast<int64_t>(count_star_idx), LogicalType::BIGINT);
 		}
 	}
 
