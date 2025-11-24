@@ -17,12 +17,6 @@ public:
 
 	HashedSortGroup(ClientContext &client, optional_ptr<Sort> sort, idx_t group_idx);
 
-	bool Scan(TupleDataCollection &payload, TupleDataLocalScanState &local_scan, DataChunk &chunk) {
-		//	Despite the name, TupleDataParallelScanState is not thread safe...
-		lock_guard<mutex> guard(scan_lock);
-		return payload.Scan(parallel_scan, local_scan, chunk);
-	}
-
 	const idx_t group_idx;
 	atomic<idx_t> count;
 
@@ -563,7 +557,7 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 		auto sort_local = sort->GetLocalSinkState(context);
 		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
 		idx_t combined = 0;
-		while (hash_group.Scan(partition, local_scan, chunk)) {
+		while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
 			sort->Sink(context, chunk, sink);
 			combined += chunk.size();
 		}
@@ -759,6 +753,16 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 		return hash_group.get_columns++ ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 	}
 
+	//	OVER(PARTITION BY...)
+	if (gsink.grouping_data) {
+		lock_guard<mutex> reset_guard(hash_group.scan_lock);
+		auto &partitions = gsink.grouping_data->GetPartitions();
+		if (hash_bin < partitions.size()) {
+			//	Release the memory now that we have finished scanning it.
+			partitions[hash_bin].reset();
+		}
+	}
+
 	auto &sort = *hash_group.sort;
 	auto &sort_global = *hash_group.sort_source;
 	auto sort_local = sort.GetLocalSourceState(context, sort_global);
@@ -792,6 +796,7 @@ HashedSort::HashGroupPtr HashedSort::GetColumnData(idx_t hash_bin, OperatorSourc
 
 	OperatorSourceInput input {sort_global, source.local_state, source.interrupt_state};
 	auto result = sort.GetColumnData(input);
+	hash_group.sort_source.reset();
 
 	//	Just because MaterializeColumnData returned FINISHED doesn't mean that the same thread will
 	//	get the result...
@@ -823,6 +828,8 @@ HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t h
 		D_ASSERT(hash_group.count == 0);
 		result = make_uniq<SortedRun>(client, sort, false);
 	}
+
+	hash_group.sort_source.reset();
 
 	return result;
 }

@@ -28,7 +28,7 @@ class StreamingWindowState : public OperatorState {
 public:
 	struct AggregateState {
 		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
-		    : wexpr(wexpr), arena_allocator(Allocator::DefaultAllocator()), executor(client), filter_executor(client),
+		    : wexpr(wexpr), arena_allocator(BufferAllocator::Get((client))), executor(client), filter_executor(client),
 		      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)), hashes(LogicalType::HASH),
 		      addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);

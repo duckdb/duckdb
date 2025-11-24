@@ -6,6 +6,7 @@
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -353,6 +355,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 
 	if (encryption_config) {
 		auto &config = DBConfig::GetConfig(context);
+
+		// To ensure we can write, we need to autoload httpfs
+		if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+			ExtensionHelper::TryAutoLoadExtension(context, "httpfs");
+		}
+
 		if (config.encryption_util && debug_use_openssl) {
 			// Use OpenSSL
 			encryption_util = config.encryption_util;

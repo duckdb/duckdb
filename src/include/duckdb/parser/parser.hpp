@@ -14,6 +14,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/simplified_token.hpp"
 #include "duckdb/parser/parser_options.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb_libpgquery {
@@ -74,7 +75,7 @@ public:
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
-	StatementType GetStatementType(const string &query);
+	unique_ptr<SQLStatement> GetStatement(const string &query);
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:

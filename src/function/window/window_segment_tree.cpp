@@ -32,12 +32,6 @@ public:
 
 	WindowSegmentTreeGlobalState(ClientContext &context, const WindowSegmentTree &aggregator, idx_t group_count);
 
-	ArenaAllocator &CreateTreeAllocator() {
-		lock_guard<mutex> tree_lock(lock);
-		tree_allocators.emplace_back(make_uniq<ArenaAllocator>(Allocator::DefaultAllocator()));
-		return *tree_allocators.back();
-	}
-
 	//! The owning aggregator
 	const WindowSegmentTree &tree;
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
@@ -295,9 +289,9 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	}
 }
 
-WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &context, const WindowSegmentTree &aggregator,
+WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client, const WindowSegmentTree &aggregator,
                                                            idx_t group_count)
-    : WindowAggregatorGlobalState(context, aggregator, group_count), tree(aggregator), levels_flat_native(aggr) {
+    : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr) {
 	D_ASSERT(!aggregator.wexpr.children.empty());
 
 	// compute space required to store internal nodes of segment tree
@@ -348,7 +342,7 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 	auto cursor = make_uniq<WindowCursor>(*collection, gastate.aggregator.child_idx);
 	const auto leaf_count = collection->size();
 	auto &filter_mask = gstate.filter_mask;
-	WindowSegmentTreePart gtstate(gstate.CreateTreeAllocator(), gastate.aggr, std::move(cursor), filter_mask);
+	WindowSegmentTreePart gtstate(allocator, gastate.aggr, std::move(cursor), filter_mask);
 
 	auto &levels_flat_native = gstate.levels_flat_native;
 	const auto &levels_flat_start = gstate.levels_flat_start;

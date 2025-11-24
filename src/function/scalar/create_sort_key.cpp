@@ -711,7 +711,7 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 	case LogicalTypeId::BIGINT: {
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for (idx_t r = 0; r < size; r++) {
-			result_data[r] = BSwap(result_data[r]);
+			result_data[r] = BSwapIfLE(result_data[r]);
 		}
 		break;
 	}
@@ -1213,13 +1213,13 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = sort_key_vec_format.sel->get_index(i);
 				D_ASSERT(sort_key_vec_format.validity.RowIsValid(idx));
-				bswapped_ints[i] = BSwap(sort_keys[idx]);
+				bswapped_ints[i] = BSwapIfLE(sort_keys[idx]);
 				decode_data[i] = DecodeSortKeyData(bswapped_ints[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
 				D_ASSERT(sort_key_vec_format.validity.RowIsValid(i));
-				bswapped_ints[i] = BSwap(sort_keys[i]);
+				bswapped_ints[i] = BSwapIfLE(sort_keys[i]);
 				decode_data[i] = DecodeSortKeyData(bswapped_ints[i]);
 			}
 		}

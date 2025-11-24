@@ -561,6 +561,19 @@ typedef struct {
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 #endif
 
+// New functions for interacting with catalog entries
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
+	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
+	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
+	                                                 duckdb_catalog_entry_type entry_type, const char *schema_name,
+	                                                 const char *entry_name);
+	void (*duckdb_destroy_catalog)(duckdb_catalog *catalog);
+	duckdb_catalog_entry_type (*duckdb_catalog_entry_get_type)(duckdb_catalog_entry entry);
+	const char *(*duckdb_catalog_entry_get_name)(duckdb_catalog_entry entry);
+	void (*duckdb_destroy_catalog_entry)(duckdb_catalog_entry *entry);
+#endif
+
 // New configuration options functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_config_option (*duckdb_create_config_option)();
@@ -662,6 +675,18 @@ typedef struct {
 	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
 	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
+#endif
+
+// API to register a custom log storage.
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_log_storage (*duckdb_create_log_storage)();
+	void (*duckdb_destroy_log_storage)(duckdb_log_storage *log_storage);
+	void (*duckdb_log_storage_set_write_log_entry)(duckdb_log_storage log_storage,
+	                                               duckdb_logger_write_log_entry_t function);
+	void (*duckdb_log_storage_set_extra_data)(duckdb_log_storage log_storage, void *extra_data,
+	                                          duckdb_delete_callback_t delete_callback);
+	void (*duckdb_log_storage_set_name)(duckdb_log_storage log_storage, const char *name);
+	duckdb_state (*duckdb_register_log_storage)(duckdb_database database, duckdb_log_storage log_storage);
 #endif
 
 // New functions around the client context
@@ -1174,6 +1199,15 @@ typedef struct {
 #define duckdb_data_chunk_from_arrow          duckdb_ext_api.duckdb_data_chunk_from_arrow
 #define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
 
+// Version unstable_new_catalog_interface
+#define duckdb_client_context_get_catalog duckdb_ext_api.duckdb_client_context_get_catalog
+#define duckdb_catalog_get_type_name      duckdb_ext_api.duckdb_catalog_get_type_name
+#define duckdb_catalog_get_entry          duckdb_ext_api.duckdb_catalog_get_entry
+#define duckdb_destroy_catalog            duckdb_ext_api.duckdb_destroy_catalog
+#define duckdb_catalog_entry_get_type     duckdb_ext_api.duckdb_catalog_entry_get_type
+#define duckdb_catalog_entry_get_name     duckdb_ext_api.duckdb_catalog_entry_get_name
+#define duckdb_destroy_catalog_entry      duckdb_ext_api.duckdb_destroy_catalog_entry
+
 // Version unstable_new_config_options_functions
 #define duckdb_create_config_option             duckdb_ext_api.duckdb_create_config_option
 #define duckdb_destroy_config_option            duckdb_ext_api.duckdb_destroy_config_option
@@ -1258,6 +1292,14 @@ typedef struct {
 #define duckdb_file_handle_seek               duckdb_ext_api.duckdb_file_handle_seek
 #define duckdb_file_handle_sync               duckdb_ext_api.duckdb_file_handle_sync
 #define duckdb_file_handle_close              duckdb_ext_api.duckdb_file_handle_close
+
+// Version unstable_new_logger_functions
+#define duckdb_create_log_storage              duckdb_ext_api.duckdb_create_log_storage
+#define duckdb_destroy_log_storage             duckdb_ext_api.duckdb_destroy_log_storage
+#define duckdb_log_storage_set_write_log_entry duckdb_ext_api.duckdb_log_storage_set_write_log_entry
+#define duckdb_log_storage_set_extra_data      duckdb_ext_api.duckdb_log_storage_set_extra_data
+#define duckdb_log_storage_set_name            duckdb_ext_api.duckdb_log_storage_set_name
+#define duckdb_register_log_storage            duckdb_ext_api.duckdb_register_log_storage
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context

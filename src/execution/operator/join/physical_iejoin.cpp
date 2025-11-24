@@ -322,8 +322,9 @@ struct IEJoinUnion {
 		const bool strict;
 	};
 
-	IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const ChunkRange &b1,
-	            SortedTable &t2, const ChunkRange &b2);
+	IEJoinUnion(SortedTable &t1, const ChunkRange &b1, SortedTable &t2, const ChunkRange &b2);
+
+	void Build(ExecutionContext &context, const PhysicalIEJoin &op);
 
 	idx_t SearchL1(idx_t pos);
 
@@ -332,6 +333,13 @@ struct IEJoinUnion {
 
 	using next_row_t = bool (duckdb::IEJoinUnion::*)();
 	next_row_t next_row_func;
+
+	//! Constructor arguments
+	bool built = false;
+	SortedTable &t1;
+	const ChunkRange b1;
+	SortedTable &t2;
+	const ChunkRange b2;
 
 	//! Inverted loop
 	idx_t JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rsel);
@@ -381,13 +389,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 	DataChunk scanned;
 	source.InitializeScanChunk(scanner, scanned);
-
-	// TODO: Random access into TupleDataCollection (NextScanIndex is private...)
-	idx_t table_idx = 0;
-	for (idx_t i = 0; i < chunk_begin; ++i) {
-		source.Scan(scanner, scanned);
-		table_idx += scanned.size();
-	}
+	idx_t table_idx = source.Seek(scanner, chunk_begin);
 
 	// Writing
 	auto &sort = *marked.sort;
@@ -500,9 +502,16 @@ bool IEJoinUnion::CompareBounds(SortedTable &t1, const ChunkRange &b1, SortedTab
 	return CompareKeys(state1, pos1, state2, pos2, strict, sort_key_type);
 }
 
-IEJoinUnion::IEJoinUnion(ExecutionContext &context, const PhysicalIEJoin &op, SortedTable &t1, const ChunkRange &b1,
-                         SortedTable &t2, const ChunkRange &b2)
-    : n(0), i(0) {
+IEJoinUnion::IEJoinUnion(SortedTable &t1, const ChunkRange &b1, SortedTable &t2, const ChunkRange &b2)
+    : t1(t1), b1(b1), t2(t2), b2(b2), n(0), i(0) {
+}
+
+void IEJoinUnion::Build(ExecutionContext &context, const PhysicalIEJoin &op) {
+	if (built) {
+		return;
+	}
+	built = true;
+
 	// input : query Q with 2 join predicates t1.X op1 t2.X' and t1.Y op2 t2.Y', tables T, T' of sizes m and n resp.
 	// output: a list of tuple pairs (ti , tj)
 	// Note that T/T' are already sorted on X/X' and contain the payload data
@@ -983,6 +992,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 	const auto &conditions = op.conditions;
+	joiner->Build(context, op);
 
 	auto &chunk = unprojected;
 
@@ -1151,7 +1161,7 @@ bool IEJoinGlobalSourceState::AssignTask(ExecutionContext &context, IEJoinLocalS
 			lstate.right_block_index = r_range.first;
 			lstate.right_base = right_table.BlockStart(r_range.first);
 
-			lstate.joiner = make_uniq<IEJoinUnion>(context, op, left_table, l_range, right_table, r_range);
+			lstate.joiner = make_uniq<IEJoinUnion>(left_table, l_range, right_table, r_range);
 			return true;
 		}
 		break;
@@ -1225,8 +1235,8 @@ ProgressData PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceSta
 	return gsource.GetProgress();
 }
 
-SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,
+                                                 OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<IEJoinGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<IEJoinLocalSourceState>();
 

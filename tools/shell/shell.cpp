@@ -742,10 +742,53 @@ int64_t ShellState::StringToInt(const string &arg) {
 }
 
 string ShellState::ModeToString(RenderMode mode) {
-	static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "html",        "insert",    "quote",
-	                                  "tcl",      "csv",    "explain", "ascii", "prettyprint", "eqp",       "json",
-	                                  "markdown", "table",  "box",     "latex", "trash",       "jsonlines", "duckbox"};
-	return modeDescr[int(mode)];
+	switch (mode) {
+	case RenderMode::LINE:
+		return "line";
+	case RenderMode::COLUMN:
+		return "column";
+	case RenderMode::LIST:
+		return "list";
+	case RenderMode::SEMI:
+		return "semi";
+	case RenderMode::HTML:
+		return "html";
+	case RenderMode::INSERT:
+		return "insert";
+	case RenderMode::QUOTE:
+		return "quote";
+	case RenderMode::TCL:
+		return "tcl";
+	case RenderMode::CSV:
+		return "csv";
+	case RenderMode::EXPLAIN:
+		return "explain";
+	case RenderMode::DESCRIBE:
+		return "describe";
+	case RenderMode::ASCII:
+		return "ascii";
+	case RenderMode::PRETTY:
+		return "prettyprint";
+	case RenderMode::EQP:
+		return "eqp";
+	case RenderMode::JSON:
+		return "json";
+	case RenderMode::MARKDOWN:
+		return "markdown";
+	case RenderMode::TABLE:
+		return "table";
+	case RenderMode::BOX:
+		return "box";
+	case RenderMode::LATEX:
+		return "latex";
+	case RenderMode::TRASH:
+		return "trash";
+	case RenderMode::JSONLINES:
+		return "jsonlines";
+	case RenderMode::DUCKBOX:
+		return "duckbox";
+	}
+	return "invalid";
 }
 
 /*
@@ -1389,6 +1432,10 @@ public:
 		}
 	}
 
+	void RenderStringLiteral(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::STRING_CONSTANT);
+	}
+
 	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
 		PrintText(text, HighlightElementType::NULL_VALUE);
 	}
@@ -1416,24 +1463,6 @@ ShellState &ShellState::Get() {
 	return state;
 }
 
-namespace duckdb_shell {
-
-struct PagerState {
-	explicit PagerState(ShellState &state) : state(state) {
-	}
-	~PagerState() {
-		if (state) {
-			state->ResetOutput();
-			ShellState::FinishPagerDisplay();
-			state = nullptr;
-		}
-	}
-
-	optional_ptr<ShellState> state;
-};
-
-} // namespace duckdb_shell
-
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (!statement->named_param_map.empty()) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -1442,7 +1471,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	auto &con = *conn;
 	unique_ptr<duckdb::QueryResult> result;
-	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
+	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX &&
+	    cMode != RenderMode::DESCRIBE) {
 		// for row-wise rendering we can use streaming results
 		result = con.SendQuery(std::move(statement));
 	} else {
@@ -1486,6 +1516,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	if (ShellRenderer::IsColumnar(cMode)) {
 		RenderColumnarResult(res);
+		return SuccessState::SUCCESS;
+	}
+	if (cMode == RenderMode::DESCRIBE) {
+		RenderDescribe(res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::DUCKBOX) {
@@ -1532,6 +1566,7 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 		return SuccessState::FAILURE;
 	}
 }
+
 /*
 ** Execute a statement or set of statements.  Print
 ** any result rows/columns depending on the current mode
@@ -1558,6 +1593,9 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			cMode = mode;
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
+			}
+			if (UseDescribeRenderMode(*statement, describe_table_name)) {
+				cMode = RenderMode::DESCRIBE;
 			}
 
 			auto rc = ExecuteStatement(std::move(statement));
@@ -1886,11 +1924,11 @@ string ShellState::GetSystemPager() {
 	return "more";
 #else
 	// On other systems, use 'less' as default pager
-	return "less -RX";
+	return "less -SRX";
 #endif
 }
 
-bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+bool ShellState::ShouldUsePager() {
 	if (out != stdout || !stdout_is_console || !outfile.empty()) {
 		// if we have an outfile specified we don't set up the pager
 		return false;
@@ -1907,14 +1945,45 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 			return false;
 		}
 	}
+	return true;
+}
+
+bool ShellState::ShouldUsePager(idx_t line_count) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
+	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
+		if (line_count < pager_min_rows) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
 	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
 		// in automatic mode we only use a pager when the output is large enough
-		if (mode == RenderMode::DUCKBOX) {
+		if (cMode == RenderMode::DUCKBOX) {
 			// in duckbox mode the output is automatically truncated to "max_rows"
 			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
 			if (max_rows < pager_min_rows) {
 				return false;
 			}
+		}
+		if (cMode == RenderMode::EXPLAIN) {
+			auto &materialized = result.Cast<MaterializedQueryResult>();
+			idx_t row_count = 0;
+			for (auto &row : materialized.Collection().Rows()) {
+				for (auto c : row.GetValue(1).GetValue<string>()) {
+					if (c == '\n') {
+						row_count++;
+					}
+				}
+			}
+			return row_count >= pager_min_rows;
 		}
 		// otherwise we check the size of the result set
 		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
@@ -2645,6 +2714,113 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
+SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
+	vector<ShellTableInfo> result;
+	ShellTableInfo table;
+	table.table_name = describe_table_name;
+	for (auto &row : res) {
+		ShellColumnInfo column;
+		column.column_name = row.GetValue<string>(0);
+		column.column_type = row.GetValue<string>(1);
+		if (!row.IsNull(2)) {
+			column.is_not_null = row.GetValue<string>(2) == "NO";
+		}
+		if (!row.IsNull(3)) {
+			column.is_primary_key = row.GetValue<string>(3) == "PRI";
+			column.is_unique = row.GetValue<string>(3) == "UNI";
+		}
+		if (!row.IsNull(4)) {
+			column.default_value = row.GetValue<string>(4);
+		}
+		table.columns.push_back(std::move(column));
+	}
+	result.push_back(std::move(table));
+	RenderTableMetadata(result);
+	return SuccessState::SUCCESS;
+}
+
+MetadataResult ShellState::DisplayTables(const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	// FIXME: copy pasted from below
+	// Parse the filter pattern to check for schema qualification
+	string filter_pattern = args.size() > 1 ? args[1] : string();
+	string schema_filter = "";
+	string table_filter = "%" + filter_pattern + "%";
+
+	// Parse the filter pattern to check for schema qualification
+	try {
+		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
+		if (components.size() >= 2) {
+			// e.g : "schema.table" or "schema.%"
+			schema_filter = "%" + components[0] + "%";
+			table_filter = "%" + components[1] + "%";
+		}
+	} catch (const duckdb::ParserException &) {
+		// If parsing fails, treat as a simple table pattern
+	}
+	string schema_filter_str;
+	string name_filter;
+	if (!table_filter.empty()) {
+		name_filter = StringUtil::Format(" AND columns.table_name ILIKE %s", SQLString(table_filter));
+	}
+	if (!schema_filter.empty()) {
+		schema_filter_str = StringUtil::Format(" AND columns.schema_name ILIKE %s", SQLString(schema_filter));
+	}
+	auto query = StringUtil::Format(R"(
+SELECT columns.database_name, columns.schema_name, columns.table_name, list(
+	struct_pack(column_name, data_type, is_primary_key := c.column_index IS NOT NULL) order by column_index),
+	t.estimated_size AS estimated_size, t.table_oid AS table_oid
+FROM duckdb_columns() columns
+LEFT JOIN duckdb_tables() t USING (table_oid)
+LEFT JOIN (
+	SELECT table_oid, UNNEST(constraint_column_indexes)+1 column_index
+	FROM duckdb_constraints()
+	WHERE constraint_type='PRIMARY KEY') c
+USING (table_oid, column_index)
+WHERE NOT columns.internal%s%s
+GROUP BY ALL;
+)",
+	                                schema_filter_str, name_filter);
+
+	auto &con = *conn;
+	auto query_result = con.Query(query);
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+		return MetadataResult::FAIL;
+	}
+	vector<ShellTableInfo> result;
+	for (auto &row : *query_result) {
+		ShellTableInfo table;
+		table.database_name = row.GetValue<string>(0);
+		table.schema_name = row.GetValue<string>(1);
+		table.table_name = row.GetValue<string>(2);
+
+		auto column_val = row.GetBaseValue(3);
+		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
+			ShellColumnInfo column;
+			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
+			column.column_name = struct_children[0].GetValue<string>();
+			column.column_type = struct_children[1].GetValue<string>();
+			column.is_primary_key = struct_children[2].GetValue<bool>();
+			table.columns.push_back(std::move(column));
+		}
+
+		if (!row.IsNull(4)) {
+			table.estimated_size = row.GetValue<idx_t>(4);
+		}
+		if (row.IsNull(5)) {
+			// view
+			table.is_view = true;
+		}
+
+		result.push_back(std::move(table));
+	}
+	RenderTableMetadata(result);
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
 
@@ -3355,7 +3531,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			// auto-complete dot command
 			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
 			for (auto &completion : dot_completions) {
-				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), nLine, "keyword");
+				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), 0, "keyword", 0, '\0');
 			}
 			return;
 		}
@@ -3368,16 +3544,26 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 
 		auto &con = *state.conn;
 		auto result = con.Query(zSql);
+		if (result->HasError()) {
+			return;
+		}
 		for (auto &row : *result) {
 			auto zCompletion = row.GetValue<string>(0);
 			idx_t iStart = row.GetValue<idx_t>(1);
 			auto completion_type = row.GetValue<string>(2);
-			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str());
+			auto score = row.GetValue<uint64_t>(3);
+			char extra_char = '\0';
+			if (!row.IsNull(4)) {
+				auto extra_char_str = row.GetValue<string>(4);
+				if (extra_char_str.size() == 1) {
+					extra_char = extra_char_str[0];
+				}
+			}
+			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str(),
+			                       score, extra_char);
 		}
 	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		state.PrintF(PrintOutput::STDERR, "Failure during auto-completion: %s\n", error.Message());
-		exit(1);
+		return;
 	}
 }
 #endif

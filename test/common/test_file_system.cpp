@@ -171,6 +171,12 @@ TEST_CASE("Test file operations", "[file_system]") {
 	}
 	// now open the file for reading
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
+	// Check file stats.
+	const auto file_metadata = fs->Stats(*handle);
+	REQUIRE(file_metadata.file_size == 4096);
+	REQUIRE(file_metadata.file_type == FileType::FILE_TYPE_REGULAR);
+	REQUIRE(file_metadata.last_modification_time > timestamp_t {-1});
+
 	// read the 10 integers back
 	REQUIRE_NOTHROW(handle->Read(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
@@ -235,4 +241,36 @@ TEST_CASE("re-register subsystem", "[file_system]") {
 	// Re-register an already registered subfilesystem should throw.
 	auto second_local_filesystem = FileSystem::CreateLocal();
 	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
+}
+
+TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+
+	auto fname = TestCreatePath("concurrent_delete_test_file");
+	const string payload = "DELETE_WHILE_OPEN_CONTENT";
+
+	// Open first handle to create/write, then close it.
+	auto write_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
+	                    /*location=*/0);
+	write_handle->Sync();
+	write_handle.reset();
+	REQUIRE(fs->FileExists(fname));
+
+	// Open second handle for reading.
+	auto read_handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ);
+
+	// Delete the file while the read handle is still open.
+	fs->RemoveFile(fname);
+	REQUIRE(!fs->FileExists(fname));
+
+	// Reading from the already-open read handle should still return the content.
+	string read_back(payload.size(), '\0');
+	read_handle->Read(QueryContext(), static_cast<void *>(const_cast<char *>(read_back.data())), payload.size(),
+	                  /*location=*/0);
+	REQUIRE(read_back == payload);
+
+	// Close the remaining handle; the file should not exist.
+	read_handle.reset();
+	REQUIRE(!fs->FileExists(fname));
 }

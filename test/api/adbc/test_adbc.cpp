@@ -780,6 +780,84 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
+TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Create connection
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	// Test 1: Query with no parameters (CREATE TABLE)
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetSqlQuery(&adbc_statement, "CREATE TABLE test_zero_params (id INTEGER)", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+		// Get parameter schema - should have 0 children
+		ArrowSchema param_schema;
+		param_schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &param_schema, &adbc_error)));
+		REQUIRE(param_schema.n_children == 0);
+		REQUIRE(param_schema.format != nullptr);
+		REQUIRE(strcmp(param_schema.format, "+s") == 0); // Should be a struct
+		param_schema.release(&param_schema);
+
+		// Execute the statement without binding any parameters
+		ArrowArrayStream arrow_stream;
+		arrow_stream.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, nullptr, &adbc_error)));
+		arrow_stream.release(&arrow_stream);
+
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test 2: Query with no parameters (SELECT constant)
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 42", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+		// Get parameter schema - should have 0 children
+		ArrowSchema param_schema;
+		param_schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &param_schema, &adbc_error)));
+		REQUIRE(param_schema.n_children == 0);
+		param_schema.release(&param_schema);
+
+		// Execute and verify result
+		ArrowArrayStream arrow_stream;
+		arrow_stream.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, nullptr, &adbc_error)));
+
+		ArrowSchema result_schema;
+		arrow_stream.get_schema(&arrow_stream, &result_schema);
+		REQUIRE(result_schema.n_children == 1); // One column in result
+		result_schema.release(&result_schema);
+
+		arrow_stream.release(&arrow_stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	adbc_error.release(&adbc_error);
+}
+
 TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	if (!duckdb_lib) {
 		return;

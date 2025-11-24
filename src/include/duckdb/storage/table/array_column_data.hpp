@@ -16,16 +16,11 @@ namespace duckdb {
 //! List column data represents a list
 class ArrayColumnData : public ColumnData {
 public:
-	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                LogicalType type, optional_ptr<ColumnData> parent = nullptr);
-
-	//! The child-column of the list
-	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the array
-	ValidityColumnData validity;
+	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+	                ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 public:
-	void SetStart(idx_t new_start) override;
+	void SetDataType(ColumnDataType data_type) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
@@ -44,21 +39,22 @@ public:
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
-	void RevertAppend(row_t start_row) override;
+	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
 	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
-	            row_t *row_ids, idx_t update_count) override;
+	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
-	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) override;
+	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
+	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -69,6 +65,15 @@ public:
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	void Verify(RowGroup &parent) override;
+
+	void SetValidityData(shared_ptr<ValidityColumnData> validity);
+	void SetChildData(shared_ptr<ColumnData> child_column);
+
+protected:
+	//! The child-column of the list
+	shared_ptr<ColumnData> child_column;
+	//! The validity column data of the array
+	shared_ptr<ValidityColumnData> validity;
 };
 
 } // namespace duckdb

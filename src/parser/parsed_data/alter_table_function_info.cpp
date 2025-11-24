@@ -1,7 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 
-#include "duckdb/parser/constraint.hpp"
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

@@ -107,7 +107,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 				auto new_colref = QualifyColumnName(*colref, error);
 				if (error.HasError()) {
 					// could not find the column - try to qualify the alias
-					if (!QualifyColumnAlias(*colref)) {
+					if (!DoesColumnAliasExist(*colref)) {
 						if (!allow_throw) {
 							return func;
 						}
