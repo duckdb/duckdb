@@ -267,13 +267,13 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 	if (!CheckZonemap(filters)) {
 		return false;
 	}
-	if (!RefersToSameObject(*node.node, *this)) {
+	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScanWithOffset segment node mismatch");
 	}
 
 	state.row_group = node;
 	state.vector_index = vector_offset;
-	auto row_start = node.row_start;
+	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
 	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
 	if (state.max_row_group_row == 0) {
@@ -296,10 +296,10 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	if (!CheckZonemap(filters)) {
 		return false;
 	}
-	if (!RefersToSameObject(*node.node, *this)) {
+	if (!RefersToSameObject(node.GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
-	auto row_start = node.row_start;
+	auto row_start = node.GetRowStart();
 	state.row_group = node;
 	state.vector_index = 0;
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -497,8 +497,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// no segment to skip
 			continue;
 		}
-		auto row_start = current_segment->row_start;
-		idx_t target_row = row_start + current_segment->node->count;
+		auto row_start = current_segment->GetRowStart();
+		idx_t target_row = row_start + current_segment->GetNode().count;
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
 		}
@@ -548,7 +548,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		auto &current_row_group = *state.row_group->node;
+		auto &current_row_group = state.row_group->GetNode();
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
