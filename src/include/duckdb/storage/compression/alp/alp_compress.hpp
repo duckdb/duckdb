@@ -65,10 +65,10 @@ public:
 		return AlpConstants::METADATA_POINTER_SIZE + data_bytes_used;
 	}
 
-	bool HasEnoughSpace() {
+	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + inner_state.RequiredSpace())) >=
+		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -103,8 +103,14 @@ public:
 		}
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx,
 		                                        inner_state);
+		const idx_t uncompressed_size = AlpConstants::IS_COMPRESSED_SIZE + sizeof(T) * vector_idx;
+		const idx_t compressed_size = inner_state.RequiredSpace();
+		const bool should_compress = compressed_size < uncompressed_size;
+
+		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
+
 		//! Check if the compressed vector fits on current segment
-		if (!HasEnoughSpace()) {
+		if (!HasEnoughSpace(vector_size)) {
 			FlushSegment();
 			CreateEmptySegment();
 		}
@@ -115,9 +121,7 @@ public:
 			}
 		}
 		current_segment->count += vector_idx;
-		idx_t uncompressed_size = AlpConstants::IS_COMPRESSED_SIZE + sizeof(T) * vector_idx;
-		idx_t compressed_size = inner_state.RequiredSpace();
-		bool should_compress = compressed_size < uncompressed_size;
+
 		if (should_compress) {
 			FlushCompressedVector();
 		} else {
