@@ -1055,7 +1055,7 @@ static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
-	if (state.seenInterrupt >= 2) {
+	if (state.seenInterrupt > 2) {
 		exit(1);
 	}
 	if (state.conn) {
