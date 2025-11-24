@@ -81,6 +81,47 @@ void VariantStats::SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStat
 // Shredded Stats
 //===--------------------------------------------------------------------===//
 
+static void AssertShreddedStats(const BaseStatistics &stats) {
+	if (stats.GetType().id() != LogicalTypeId::STRUCT) {
+		throw InternalException("Shredded stats should be of type STRUCT, not %s", EnumUtil::ToString(stats.GetType().id()));
+	}
+	auto &struct_children = StructType::GetChildTypes(stats.GetType());
+	if (struct_children.size() != 2) {
+		throw InternalException("Shredded stats need to consist of 2 children, 'untyped_value_index' and 'typed_value', not: %s", stats.GetType().ToString());
+	}
+	if (struct_children[0].second.id() != LogicalTypeId::UINTEGER) {
+		throw InternalException("Shredded stats 'untyped_value_index' should be of type UINTEGER, not %s", EnumUtil::ToString(struct_children[0].second.id()));
+	}
+}
+
+bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
+	AssertShreddedStats(stats);
+
+	auto &untyped_value_index_stats = StructStats::GetChildStats(stats, 0);
+	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
+
+	if (!typed_value_stats.CanHaveNull()) {
+		//! Fully shredded, no nulls
+		return true;
+	}
+	if (!untyped_value_index_stats.CanHaveNoNull()) {
+		//! In the event that this field is entirely missing from the parent OBJECT, both are NULL
+		return false;
+	}
+	if (!NumericStats::HasMin(untyped_value_index_stats) || !NumericStats::HasMax(untyped_value_index_stats)) {
+		//! Has no min/max values, essentially double-checking the CanHaveNoNull from above
+		return false;
+	}
+	auto min_value = NumericStats::GetMinUnsafe<uint32_t>(untyped_value_index_stats);
+	auto max_value = NumericStats::GetMaxUnsafe<uint32_t>(untyped_value_index_stats);
+	if (min_value != max_value) {
+		//! Not a constant
+		return false;
+	}
+	//! 0 is reserved for NULL Variant values
+	return min_value == 0;
+}
+
 LogicalType ToStructuredType(const LogicalType &shredding) {
 	D_ASSERT(shredding.id() == LogicalTypeId::STRUCT);
 	auto &child_types = StructType::GetChildTypes(shredding);
@@ -209,6 +250,31 @@ void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base)
 	}
 }
 
+static string ToStringInternal(const BaseStatistics &stats) {
+	string result;
+	result = StringUtil::Format("fully_shredded: %s", VariantShreddedStats::IsFullyShredded(stats) ? "true" : "false");
+
+	auto &typed_value = StructStats::GetChildStats(stats, 1);
+	auto type_id = typed_value.GetType().id();
+	if (type_id == LogicalTypeId::LIST) {
+		result += ", child: ";
+		auto &child_stats = ListStats::GetChildStats(typed_value);
+		result += ToStringInternal(child_stats);
+	} else if (type_id == LogicalTypeId::STRUCT) {
+		result += ", children: {";
+		auto &fields = StructType::GetChildTypes(typed_value.GetType());
+		for (idx_t i = 0; i < fields.size(); i++) {
+			if (i) {
+				result += ", ";
+			}
+			auto &child_stats = StructStats::GetChildStats(typed_value, i);
+			result += StringUtil::Format("%s: %s", fields[i].first, ToStringInternal(child_stats));
+		}
+		result += "}";
+	}
+	return result;
+}
+
 string VariantStats::ToString(const BaseStatistics &stats) {
 	auto &data = GetDataUnsafe(stats);
 	string result;
@@ -216,7 +282,7 @@ string VariantStats::ToString(const BaseStatistics &stats) {
 	if (data.is_shredded) {
 		result += ", shredding: {";
 		result += StringUtil::Format("typed_value_type: %s, ", ToStructuredType(stats.child_stats[1].type).ToString());
-		result += StringUtil::Format("stats:%s", stats.child_stats[1].ToString());
+		result += StringUtil::Format("stats: {%s}", ToStringInternal(stats.child_stats[1]));
 		result += "}";
 	}
 	return result;

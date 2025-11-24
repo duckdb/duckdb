@@ -28,7 +28,7 @@ restart
 query I
 select stats(col) from shredded_integer limit 1;
 ----
-<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Has Null: true, Has No Null: true\].*typed_value: \[Min: 0, Max: 99\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*fully_shredded: true.*
 
 # ------------------------------ Nothing is shredded ------------------------------
 
@@ -48,7 +48,7 @@ restart
 query I
 select stats(col) from nothing_is_shredded limit 1;
 ----
-<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: false, Has No Null: true\].*
+<REGEX>:.*is_shredded: true.*fully_shredded: false.*
 
 # ------------------------------ Partially shredded primitive ------------------------------
 
@@ -68,17 +68,10 @@ checkpoint
 
 restart
 
-# untyped_value_index contains NULL, indicating at least some of the VARIANT values are shredded
 query I
 select stats(col) from partial_primitive_shredding limit 1;
 ----
-<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\].*
-
-# typed_value contains NULL, indicating not everything is shredded
-query I
-select stats(col) from partial_primitive_shredding limit 1;
-----
-<REGEX>:.*is_shredded: true.*typed_value:.*\[Min: 42, Max: 42\]\[Has Null: true, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*fully_shredded: false.*
 
 # ------------------------------ Fully shredded OBJECT ------------------------------
 
@@ -104,7 +97,7 @@ restart
 query I
 select stats(col) from fully_shredded_object limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*{a: fully_shredded: true, b: fully_shredded: true}.*
 
 # ------------------------------ Partially shredded OBJECT ------------------------------
 
@@ -129,7 +122,7 @@ restart
 query I
 select stats(col) from partially_shredded_object limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*stats: {fully_shredded: true, children: {a: fully_shredded: false, b: fully_shredded: true}}.*
 
 statement ok
 delete from partially_shredded_object;
@@ -155,7 +148,7 @@ restart
 query I
 select stats(col) from partially_shredded_object limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*typed_value.*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*stats: {fully_shredded: true, children: {a: fully_shredded: false, b: fully_shredded: true}}.*
 
 # ------------------------------ Fully shredded ARRAY ------------------------------
 
@@ -177,7 +170,7 @@ restart
 query I
 select stats(col) from fully_shredded_array limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*
+<REGEX>:.*is_shredded: true.*stats: {fully_shredded: true, child: fully_shredded: true}.*
 
 # ------------------------------ Partially shredded ARRAY ------------------------------
 
@@ -201,7 +194,7 @@ restart
 query I
 select stats(col) from partially_shredded_array limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*typed_value.*\[Has Null: true, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*stats: {fully_shredded: true, child: fully_shredded: false}.*
 
 statement ok
 delete from partially_shredded_array;
@@ -222,4 +215,4 @@ restart
 query I
 select stats(col) from partially_shredded_array limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\].*typed_value.*\[Has Null: false, Has No Null: true\]\}\[Has Null: false, Has No Null: true\].*
+<REGEX>:.*is_shredded: true.*stats: {fully_shredded: true, child: fully_shredded: false}.*
