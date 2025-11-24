@@ -1,0 +1,11 @@
+# name: test/sql/storage/compression/alp/alp_nulls.test
+# group: [alp]
+
+# load the DB from disk
+load __TEST_DIR__/test_alp_nulls.db
+
+
+statement error
+CREATE TABLE '' AS SELECT 32;
+----
+error
