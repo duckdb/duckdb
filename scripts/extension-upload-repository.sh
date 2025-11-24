@@ -15,6 +15,12 @@ else
     BASE_DIR="$1"
 fi
 
+if [ -z "$2" ]; then
+    TARGET_BUCKET="duckdb-core-extensions"
+else
+    TARGET_BUCKET="$2"
+fi
+
 echo $BASE_DIR
 
 set -e
@@ -23,9 +29,9 @@ set -e
 shopt -s nullglob
 
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
-    echo "Deploying extensions.."
+    echo "Deploying extensions to `$TARGET_BUCKET`.."
 else
-    echo "Deploying extensions.. (DRY RUN)"
+    echo "Deploying extensions to `$TARGET_BUCKET`.. (DRY RUN)"
 fi
 
 for version_dir in $BASE_DIR/*; do
@@ -48,7 +54,7 @@ for version_dir in $BASE_DIR/*; do
             echo "Processing extension: $ext_name (architecture: $architecture, version: $duckdb_version, path: $f)"
             
             # args: <name> <extension_version> <duckdb_version> <architecture> <s3_bucket> <copy_to_latest> <copy_to_versioned> [<path_to_ext>]
-            $script_dir/extension-upload-single.sh $ext_name "" "$duckdb_version" "$architecture" "duckdb-core-extensions" true false "$(dirname "$f")"
+            $script_dir/extension-upload-single.sh $ext_name "" "$duckdb_version" "$architecture" "$TARGET_BUCKET" true false "$(dirname "$f")"
         done
         echo ""
     done

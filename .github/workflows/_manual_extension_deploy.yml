@@ -51,7 +51,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
 
       - id: set-extension
         name: Configure extension
@@ -152,4 +151,4 @@ jobs:
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
           pip install awscli
-          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ inputs.duckdb_ref }}
+          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ inputs.duckdb_ref }} duckdb-staging
