@@ -1057,7 +1057,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
 
-	lock_guard<mutex> lock(block_lock);
+	unique_lock<mutex> lock(block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
@@ -1099,7 +1099,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
+	block_lock.unlock();
 	metadata_manager.Flush();
+
 	header.block_count = NumericCast<idx_t>(max_block);
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
