@@ -32,7 +32,7 @@ struct PartitionStatistics {
 	PartitionStatistics();
 
 	//! The row id start
-	idx_t row_start;
+	optional_idx row_start;
 	//! The amount of rows in the partition
 	idx_t count;
 	//! Whether or not the count is exact or approximate
