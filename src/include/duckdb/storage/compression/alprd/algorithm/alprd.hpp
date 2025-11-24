@@ -32,11 +32,11 @@ struct AlpRDLeftPartInfo {
 };
 
 template <class T, bool EMPTY>
-class AlpRDCompressionState {
+class AlpRDInnerCompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpRDCompressionState() : right_bit_width(0), left_bit_width(0), exceptions_count(0) {
+	AlpRDInnerCompressionState() : right_bit_width(0), left_bit_width(0), exceptions_count(0) {
 	}
 
 	void Reset() {
@@ -58,11 +58,19 @@ public:
 	idx_t right_bit_packed_size;
 	unordered_map<uint16_t, uint16_t> left_parts_dict_map;
 	uint8_t actual_dictionary_size;
+
+	idx_t RequiredSpace() {
+		idx_t required_space =
+		    left_bit_packed_size + right_bit_packed_size +
+		    exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
+		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		return required_space;
+	}
 };
 
 template <class T, bool EMPTY>
 struct AlpRDCompression {
-	using State = AlpRDCompressionState<T, EMPTY>;
+	using InnerState = AlpRDInnerCompressionState<T, EMPTY>;
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(EXACT_TYPE) * 8;
 
@@ -79,7 +87,8 @@ struct AlpRDCompression {
 	}
 
 	template <bool PERSIST_DICT>
-	static double BuildLeftPartsDictionary(const vector<EXACT_TYPE> &values, uint8_t right_bit_width, State &state) {
+	static double BuildLeftPartsDictionary(const vector<EXACT_TYPE> &values, uint8_t right_bit_width,
+	                                       InnerState &state) {
 		unordered_map<EXACT_TYPE, int32_t> left_parts_hash;
 		vector<AlpRDLeftPartInfo> left_parts_sorted_repetitions;
 
@@ -134,7 +143,7 @@ struct AlpRDCompression {
 		return estimated_size;
 	}
 
-	static double FindBestDictionary(const vector<EXACT_TYPE> &values, State &state) {
+	static double FindBestDictionary(const vector<EXACT_TYPE> &values, InnerState &state) {
 		uint8_t right_bit_width = 0;
 		double best_dict_size = NumericLimits<int32_t>::Maximum();
 		//! Finding the best position to CUT the values
@@ -151,7 +160,7 @@ struct AlpRDCompression {
 		return estimated_size;
 	}
 
-	static void Compress(const EXACT_TYPE *input_vector, idx_t n_values, State &state) {
+	static void Compress(const EXACT_TYPE *input_vector, idx_t n_values, InnerState &state) {
 		uint64_t right_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 		uint16_t left_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 

@@ -1,0 +1,78 @@
+# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode.test
+# description: Test storage of alp, but simple
+# group: [alprd]
+
+require parquet
+
+# load the DB from disk
+load __TEST_DIR__/test_alp.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original. Our implementation of ALP now uses an uncompressed mode to handle this scenario.
+statement ok
+CREATE TABLE uncompressed_table AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
+
+statement ok
+checkpoint;
+
+query I
+SELECT compression FROM pragma_storage_info('uncompressed_table') WHERE segment_type == 'double' AND compression != 'Uncompressed';
+----
+
+# Now create a duplicate of this table, compressed with ALP instead
+statement ok
+PRAGMA force_compression='alprd'
+
+statement ok
+create table alp_table as select * from uncompressed_table;
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('alp_table') WHERE segment_type == 'double' AND compression != 'ALPRD';
+----
+
+# Assert that the data was not corrupted by compressing to ALP
+query I sort r1
+select * from uncompressed_table;
+----
+
+query I sort r1
+select * from alp_table;
+----
+
+statement ok
+CREATE TYPE test_result AS UNION (
+    ok BOOL,
+    err STRUCT(
+        uncompressed HUGEINT,
+        compressed HUGEINT,
+        actual_ratio FLOAT
+    )
+);
+
+query I
+SELECT
+    CASE
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > 1
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+    (SELECT COUNT(DISTINCT block_id)
+     FROM pragma_storage_info('uncompressed_table')
+     WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS uncompressed,
+    (SELECT COUNT(DISTINCT block_id)
+     FROM pragma_storage_info('alp_table')
+     WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS compressed
+);
+----
+true

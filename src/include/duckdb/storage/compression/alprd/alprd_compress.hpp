@@ -29,21 +29,21 @@
 namespace duckdb {
 
 template <class T>
-struct AlpRDCompressionState : public CompressionState {
+struct AlpRDOuterCompressionState : public CompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpRDCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpRDAnalyzeState<T> *analyze_state)
+	AlpRDOuterCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpRDAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {
 		//! State variables from the analyze step that are needed for compression
-		state.left_parts_dict_map = std::move(analyze_state->state.left_parts_dict_map);
-		state.left_bit_width = analyze_state->state.left_bit_width;
-		state.right_bit_width = analyze_state->state.right_bit_width;
-		state.actual_dictionary_size = analyze_state->state.actual_dictionary_size;
-		actual_dictionary_size_bytes = state.actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
+		inner_state.left_parts_dict_map = std::move(analyze_state->inner_state.left_parts_dict_map);
+		inner_state.left_bit_width = analyze_state->inner_state.left_bit_width;
+		inner_state.right_bit_width = analyze_state->inner_state.right_bit_width;
+		inner_state.actual_dictionary_size = analyze_state->inner_state.actual_dictionary_size;
+		actual_dictionary_size_bytes = inner_state.actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
-		memcpy((void *)state.left_parts_dict, (void *)analyze_state->state.left_parts_dict,
+		memcpy((void *)inner_state.left_parts_dict, (void *)analyze_state->inner_state.left_parts_dict,
 		       actual_dictionary_size_bytes);
 		CreateEmptySegment();
 	}
@@ -66,7 +66,7 @@ public:
 	EXACT_TYPE input_vector[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t vector_null_positions[AlpRDConstants::ALP_VECTOR_SIZE];
 
-	alp::AlpRDCompressionState<T, false> state;
+	alp::AlpRDInnerCompressionState<T, false> inner_state;
 
 public:
 	// Returns the space currently used in the segment (in bytes)
@@ -76,18 +76,11 @@ public:
 	}
 
 	// Returns the required space to store the newly compressed vector
-	idx_t RequiredSpace() {
-		idx_t required_space =
-		    state.left_bit_packed_size + state.right_bit_packed_size +
-		    state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
-		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
-		return required_space;
-	}
 
 	bool HasEnoughSpace() {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace())) >=
+		if ((handle.Ptr() + AlignValue(UsedSpace() + inner_state.RequiredSpace())) >=
 		    (metadata_ptr - AlpRDConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -95,7 +88,7 @@ public:
 	}
 
 	void ResetVector() {
-		state.Reset();
+		inner_state.Reset();
 	}
 
 	void CreateEmptySegment() {
@@ -122,7 +115,7 @@ public:
 			alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx,
 			                                                       nulls_idx);
 		}
-		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, state);
+		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, inner_state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
 			FlushSegment();
@@ -140,27 +133,28 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector() {
-		Store<uint16_t>(state.exceptions_count, data_ptr);
+		Store<uint16_t>(inner_state.exceptions_count, data_ptr);
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
-		memcpy((void *)data_ptr, (void *)state.left_parts_encoded, state.left_bit_packed_size);
-		data_ptr += state.left_bit_packed_size;
+		memcpy((void *)data_ptr, (void *)inner_state.left_parts_encoded, inner_state.left_bit_packed_size);
+		data_ptr += inner_state.left_bit_packed_size;
 
-		memcpy((void *)data_ptr, (void *)state.right_parts_encoded, state.right_bit_packed_size);
-		data_ptr += state.right_bit_packed_size;
+		memcpy((void *)data_ptr, (void *)inner_state.right_parts_encoded, inner_state.right_bit_packed_size);
+		data_ptr += inner_state.right_bit_packed_size;
 
-		if (state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)state.exceptions, AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count);
-			data_ptr += AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count;
-			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
-			       AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
-			data_ptr += AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
+		if (inner_state.exceptions_count > 0) {
+			memcpy((void *)data_ptr, (void *)inner_state.exceptions,
+			       AlpRDConstants::EXCEPTION_SIZE * inner_state.exceptions_count);
+			data_ptr += AlpRDConstants::EXCEPTION_SIZE * inner_state.exceptions_count;
+			memcpy((void *)data_ptr, (void *)inner_state.exceptions_positions,
+			       AlpRDConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count);
+			data_ptr += AlpRDConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
 		}
 
-		data_bytes_used +=
-		    state.left_bit_packed_size + state.right_bit_packed_size +
-		    (state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
-		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		data_bytes_used += inner_state.left_bit_packed_size + inner_state.right_bit_packed_size +
+		                   (inner_state.exceptions_count *
+		                    (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
+		                   AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
@@ -209,19 +203,19 @@ public:
 		dataptr += AlpRDConstants::METADATA_POINTER_SIZE;
 
 		// Store the right bw for the segment
-		Store<uint8_t>(state.right_bit_width, dataptr);
+		Store<uint8_t>(inner_state.right_bit_width, dataptr);
 		dataptr += AlpRDConstants::RIGHT_BIT_WIDTH_SIZE;
 
 		// Store the left bw for the segment
-		Store<uint8_t>(state.left_bit_width, dataptr);
+		Store<uint8_t>(inner_state.left_bit_width, dataptr);
 		dataptr += AlpRDConstants::LEFT_BIT_WIDTH_SIZE;
 
 		// Store the actual number of elements on the dictionary of the segment
-		Store<uint8_t>(state.actual_dictionary_size, dataptr);
+		Store<uint8_t>(inner_state.actual_dictionary_size, dataptr);
 		dataptr += AlpRDConstants::N_DICTIONARY_ELEMENTS_SIZE;
 
 		// Store the Dictionary
-		memcpy((void *)dataptr, (void *)state.left_parts_dict, actual_dictionary_size_bytes);
+		memcpy((void *)dataptr, (void *)inner_state.left_parts_dict, actual_dictionary_size_bytes);
 
 		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 		data_bytes_used = 0;
@@ -277,12 +271,12 @@ public:
 template <class T>
 unique_ptr<CompressionState> AlpRDInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                   unique_ptr<AnalyzeState> state) {
-	return make_uniq<AlpRDCompressionState<T>>(checkpoint_data, (AlpRDAnalyzeState<T> *)state.get());
+	return make_uniq<AlpRDOuterCompressionState<T>>(checkpoint_data, (AlpRDAnalyzeState<T> *)state.get());
 }
 
 template <class T>
 void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (AlpRDCompressionState<T> &)state_p;
+	auto &state = (AlpRDOuterCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -290,7 +284,7 @@ void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) 
 
 template <class T>
 void AlpRDFinalizeCompress(CompressionState &state_p) {
-	auto &state = (AlpRDCompressionState<T> &)state_p;
+	auto &state = (AlpRDOuterCompressionState<T> &)state_p;
 	state.Finalize();
 }
 
