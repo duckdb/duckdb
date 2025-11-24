@@ -216,7 +216,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		child_expr = std::move(list_filter);
 	}
 
-	auto columns_expr = make_uniq<StarExpression>();
+	auto columns_expr = make_uniq<StarExpression>(star.relation_name);
 	columns_expr->columns = true;
 	columns_expr->expr = std::move(child_expr);
 	columns_expr->SetAlias(std::move(original_alias));
