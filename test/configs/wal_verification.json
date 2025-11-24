@@ -35,6 +35,12 @@
       ]
     },
     {
+      "reason": "Empty WAL is necessary to trigger optimizer rule.",
+      "paths": [
+        "test/sql/topn/top_n_pruning.test"
+      ]
+    },
+    {
       "reason": "FIXME: Unexpected (?) binder error.",
       "paths": [
         "test/fuzzer/pedro/index_generated_column.test",

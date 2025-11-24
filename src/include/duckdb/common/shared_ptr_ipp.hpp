@@ -1,3 +1,7 @@
+#pragma once
+
+#include "duckdb/common/compatible_with_ipp.hpp"
+
 namespace duckdb {
 
 template <typename T, bool SAFE = true>
@@ -79,10 +83,11 @@ public:
 	shared_ptr(shared_ptr<U> &&ref) noexcept // NOLINT: not marked as explicit
 	    : internal(std::move(ref.internal)) {
 	}
+	// move constructor
 #ifdef DUCKDB_CLANG_TIDY
 	[[clang::reinitializes]]
 #endif
-	shared_ptr(shared_ptr<T> &&other) // NOLINT: not marked as explicit
+	shared_ptr(shared_ptr<T, SAFE> &&other) noexcept
 	    : internal(std::move(other.internal)) {
 	}
 
@@ -115,7 +120,7 @@ public:
 	~shared_ptr() = default;
 
 	// Assign from shared_ptr copy
-	shared_ptr<T> &operator=(const shared_ptr &other) noexcept {
+	shared_ptr<T, SAFE> &operator=(const shared_ptr<T, SAFE> &other) noexcept {
 		if (this == &other) {
 			return *this;
 		}
@@ -130,13 +135,13 @@ public:
 	}
 
 	// Assign from moved shared_ptr
-	shared_ptr<T> &operator=(shared_ptr &&other) noexcept {
+	shared_ptr<T, SAFE> &operator=(shared_ptr &&other) noexcept {
 		// Create a new shared_ptr using the move constructor, then swap out the ownership to *this
 		shared_ptr(std::move(other)).swap(*this);
 		return *this;
 	}
 	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
-	shared_ptr<T> &operator=(shared_ptr<U> &&other) {
+	shared_ptr<T, SAFE> &operator=(shared_ptr<U> &&other) {
 		shared_ptr(std::move(other)).swap(*this);
 		return *this;
 	}
@@ -146,7 +151,7 @@ public:
 	          typename std::enable_if<compatible_with_t<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
-	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE_P> &&ref) {
+	shared_ptr<T, SAFE> &operator=(unique_ptr<U, DELETER, SAFE_P> &&ref) {
 		shared_ptr(std::move(ref)).swap(*this);
 		return *this;
 	}
@@ -264,5 +269,8 @@ private:
 	void __enable_weak_this(...) noexcept { // NOLINT: invalid case style
 	}
 };
+
+template <typename T>
+using unsafe_shared_ptr = shared_ptr<T, false>;
 
 } // namespace duckdb

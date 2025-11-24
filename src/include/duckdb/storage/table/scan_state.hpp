@@ -12,6 +12,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
@@ -192,30 +193,6 @@ private:
 	idx_t always_true_filters = 0;
 };
 
-enum class OrderByStatistics { MIN, MAX };
-enum class RowGroupOrderType { ASC, DESC };
-enum class OrderByColumnType { NUMERIC, STRING };
-
-class RowGroupReorderer {
-public:
-	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
-	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
-	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
-
-	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
-
-private:
-	const column_t column_idx;
-	const OrderByStatistics order_by;
-	const RowGroupOrderType order_type;
-	const OrderByColumnType column_type;
-	const optional_idx row_limit;
-
-	idx_t offset;
-	bool initialized;
-	vector<reference<SegmentNode<RowGroup>>> ordered_row_groups;
-};
-
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -228,8 +205,8 @@ public:
 	idx_t max_row_group_row;
 	//! Child column scans
 	unsafe_vector<ColumnScanState> column_scans;
-	//! Row group segment tree
-	RowGroupSegmentTree *row_groups;
+	//! Row group segment tree we are scanning
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The current batch index
@@ -322,6 +299,7 @@ struct ParallelCollectionScanState {
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	optional_ptr<SegmentNode<RowGroup>> current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
@@ -352,6 +330,7 @@ struct PrefetchState {
 
 class CreateIndexScanState : public TableScanState {
 public:
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	vector<unique_ptr<StorageLockKey>> locks;
 	unique_lock<mutex> append_lock;
 	SegmentLock segment_lock;

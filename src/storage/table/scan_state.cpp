@@ -10,87 +10,6 @@
 
 namespace duckdb {
 
-namespace {
-
-struct RowGroupMapEntry {
-	reference<SegmentNode<RowGroup>> row_group;
-	unique_ptr<BaseStatistics> stats;
-};
-
-bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics order) {
-	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
-}
-
-idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type) {
-	if (!stats.CanHaveNull()) {
-		return row_group.count;
-	}
-
-	if (type == OrderByColumnType::NUMERIC) {
-		if (!NumericStats::HasMinMax(stats)) {
-			return 0;
-		}
-		if (NumericStats::IsConstant(stats)) {
-			return 1;
-		}
-		return 2;
-	}
-	// We cannot check if the min/max for StringStats have actually been set. As the strings may be truncated, we
-	// also cannot assume that min and max are the same
-	return 0;
-}
-
-template <typename It, typename End>
-void AddRowGroups(It it, End end, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, const idx_t row_limit,
-                  const OrderByColumnType column_type, const OrderByStatistics stat_type) {
-	const auto opposite_stat_type =
-	    stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-
-	idx_t qualifying_tuples = 0;
-	idx_t qualify_later = 0;
-
-	auto last_unresolved_entry = it;
-	auto &last_stats = it->second.stats;
-	idx_t last_unresolved_row_group_sum =
-	    GetQualifyingTupleCount(*it->second.row_group.get().node, *last_stats, column_type);
-	auto last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_stats, opposite_stat_type, column_type);
-
-	for (; it != end; ++it) {
-		auto &current_key = it->first;
-		auto &row_group = it->second.row_group;
-
-		while (last_unresolved_entry != it) {
-			if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
-				if (current_key != std::prev(it)->first) {
-					// Row groups overlap: we can only guarantee one additional qualifying tuple
-					qualifying_tuples += qualify_later;
-					qualify_later = 0;
-					qualifying_tuples++;
-				} else {
-					// Row groups have the same order value, we can only guarantee a qualifying tuple later
-					qualify_later++;
-				}
-
-				break;
-			}
-			// Row groups do not overlap: we can guarantee that the tuples qualify
-			qualifying_tuples = last_unresolved_row_group_sum;
-			++last_unresolved_entry;
-			auto &upcoming_row_group = *last_unresolved_entry->second.row_group.get().node;
-			auto &upcoming_stats = *last_unresolved_entry->second.stats;
-
-			last_unresolved_row_group_sum += GetQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type);
-			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
-		}
-		if (qualifying_tuples >= row_limit) {
-			return;
-		}
-		ordered_row_groups.emplace_back(row_group);
-	}
-}
-
-} // namespace
-
 TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 }
 
@@ -191,90 +110,6 @@ void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 	always_true_filters++;
 }
 
-RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options)
-    : column_idx(options.column_idx), order_by(options.order_by), order_type(options.order_type),
-      column_type(options.column_type), row_limit(options.row_limit), offset(0), initialized(false) {
-}
-
-optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetNextRowGroup(SegmentNode<RowGroup> &row_group) {
-	D_ASSERT(RefersToSameObject(ordered_row_groups[offset].get(), row_group));
-	if (offset >= ordered_row_groups.size() - 1) {
-		return nullptr;
-	}
-	return ordered_row_groups[++offset].get();
-}
-
-Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
-                                      OrderByColumnType column_type) {
-	switch (order_by) {
-	case OrderByStatistics::MIN:
-		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Min(stats) : StringStats::Min(stats);
-	case OrderByStatistics::MAX:
-		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Max(stats) : StringStats::Max(stats);
-	}
-	return Value();
-}
-
-void SetRowGroupVectorWithLimit(const multimap<Value, RowGroupMapEntry> &row_group_map, const optional_idx row_limit,
-                                const RowGroupOrderType order_type, const OrderByColumnType column_type,
-                                vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
-	D_ASSERT(row_limit.IsValid());
-
-	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-	ordered_row_groups.reserve(row_group_map.size());
-
-	Value previous_key;
-	if (order_type == RowGroupOrderType::ASC) {
-		auto it = row_group_map.begin();
-		auto end = row_group_map.end();
-		AddRowGroups(it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
-	} else {
-		auto it = row_group_map.rbegin();
-		auto end = row_group_map.rend();
-		AddRowGroups(it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
-	}
-}
-
-optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
-	if (initialized) {
-		if (ordered_row_groups.empty()) {
-			return nullptr;
-		}
-		return ordered_row_groups[0].get();
-	}
-
-	initialized = true;
-
-	multimap<Value, RowGroupMapEntry> row_group_map;
-	for (auto &row_group : row_groups.SegmentNodes()) {
-		auto stats = row_group.node->GetStatistics(column_idx);
-		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
-		auto entry = RowGroupMapEntry {row_group, std::move(stats)};
-		row_group_map.emplace(comparison_value, std::move(entry));
-	}
-
-	if (row_group_map.empty()) {
-		return nullptr;
-	}
-
-	if (row_limit.IsValid()) {
-		SetRowGroupVectorWithLimit(row_group_map, row_limit, order_type, column_type, ordered_row_groups);
-	} else {
-		ordered_row_groups.reserve(row_group_map.size());
-		if (order_type == RowGroupOrderType::ASC) {
-			for (auto &row_group : row_group_map) {
-				ordered_row_groups.emplace_back(row_group.second.row_group);
-			}
-		} else {
-			for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
-				ordered_row_groups.emplace_back(it->second.row_group);
-			}
-		}
-	}
-
-	return ordered_row_groups[0].get();
-}
-
 optional_ptr<AdaptiveFilter> ScanFilterInfo::GetAdaptiveFilter() {
 	return adaptive_filter.get();
 }
@@ -299,7 +134,7 @@ void ColumnScanState::NextInternal(idx_t count) {
 		return;
 	}
 	offset_in_column += count;
-	while (offset_in_column >= current->row_start + current->node->count) {
+	while (offset_in_column >= current->GetRowStart() + current->GetNode().count) {
 		current = segment_tree->GetNextSegment(*current);
 		initialized = false;
 		segment_checked = false;
@@ -307,12 +142,12 @@ void ColumnScanState::NextInternal(idx_t count) {
 			break;
 		}
 	}
-	D_ASSERT(!current ||
-	         (offset_in_column >= current->row_start && offset_in_column < current->row_start + current->node->count));
+	D_ASSERT(!current || (offset_in_column >= current->GetRowStart() &&
+	                      offset_in_column < current->GetRowStart() + current->GetNode().count));
 }
 
 idx_t ColumnScanState::GetPositionInSegment() const {
-	return offset_in_column - (current ? current->row_start : 0);
+	return offset_in_column - (current ? current->GetRowStart() : 0);
 }
 
 void ColumnScanState::Next(idx_t count) {
@@ -386,21 +221,21 @@ optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRootSegment() const 
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
 	while (row_group) {
-		row_group->node->Scan(transaction, *this, result);
+		row_group->GetNode().Scan(transaction, *this, result);
 		if (result.size() > 0) {
 			return true;
-		} else if (max_row <= row_group->row_start + row_group->node->count) {
+		} else if (max_row <= row_group->GetRowStart() + row_group->GetNode().count) {
 			row_group = nullptr;
 			return false;
 		} else {
 			do {
 				row_group = GetNextRowGroup(*row_group).get();
 				if (row_group) {
-					if (row_group->row_start >= max_row) {
+					if (row_group->GetRowStart() >= max_row) {
 						row_group = nullptr;
 						break;
 					}
-					bool scan_row_group = row_group->node->InitializeScan(*this, *row_group);
+					bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
 					if (scan_row_group) {
 						// scan this row group
 						break;
@@ -414,13 +249,13 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type) {
 	while (row_group) {
-		row_group->node->ScanCommitted(*this, result, type);
+		row_group->GetNode().ScanCommitted(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		} else {
 			row_group = GetNextRowGroup(l, *row_group).get();
 			if (row_group) {
-				row_group->node->InitializeScan(*this, *row_group);
+				row_group->GetNode().InitializeScan(*this, *row_group);
 			}
 		}
 	}
@@ -429,14 +264,14 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 	while (row_group) {
-		row_group->node->ScanCommitted(*this, result, type);
+		row_group->GetNode().ScanCommitted(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		}
 
 		row_group = GetNextRowGroup(*row_group).get();
 		if (row_group) {
-			row_group->node->InitializeScan(*this, *row_group);
+			row_group->GetNode().InitializeScan(*this, *row_group);
 		}
 	}
 	return false;

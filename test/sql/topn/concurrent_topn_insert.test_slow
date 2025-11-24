@@ -14,7 +14,7 @@ SET wal_autocheckpoint = '500 KiB';
 statement ok
 CREATE OR REPLACE TABLE integers AS SELECT i FROM range(0, 245000) t(i)
 
-concurrentloop threadid 0 20
+concurrentloop threadid 0 30
 
 loop k 0 20
 
@@ -27,15 +27,23 @@ onlyif threadid>=1&&threadid<=10
 statement ok
 SELECT * FROM integers ORDER BY i ASC LIMIT 100;
 
-onlyif threadid>=11
+onlyif threadid>=11&&threadid<=20
 statement ok
 SELECT * FROM integers ORDER BY i DESC LIMIT 100;
 
-endloop
+onlyif threadid>=21&&threadid<=25
+statement ok
+SELECT * FROM integers ORDER BY i ASC LIMIT 100 OFFSET (${threadid} - 20) * 246000;
+
+onlyif threadid>=26&&threadid<=30
+statement ok
+SELECT * FROM integers ORDER BY i DESC LIMIT 100 OFFSET (${threadid} - 25) * 246000;
 
 endloop
 
-concurrentloop threadid 0 20
+endloop
+
+concurrentloop threadid 0 30
 
 loop k 0 20
 
@@ -46,11 +54,19 @@ DELETE FROM integers WHERE i BETWEEN (245000 + ${k} * 100000) AND (345000 + ${k}
 
 onlyif threadid>=1&&threadid<=10
 statement ok
-SELECT * FROM integers ORDER BY i ASC LIMIT 100;
+SELECT * FROM integers ORDER BY i ASC LIMIT 100 OFFSET 246000;
 
-onlyif threadid>=11
+onlyif threadid>=11&&threadid<=20
 statement ok
 SELECT * FROM integers ORDER BY i DESC LIMIT 100;
+
+onlyif threadid>=21&&threadid<=25
+statement ok
+SELECT * FROM integers ORDER BY i ASC LIMIT 100 OFFSET (${threadid} - 20) * 246000;
+
+onlyif threadid>=26&&threadid<=30
+statement ok
+SELECT * FROM integers ORDER BY i DESC LIMIT 100 OFFSET (${threadid} - 25) * 246000;
 
 endloop
 
