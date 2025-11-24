@@ -46,11 +46,14 @@ public:
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager,
 	                                                 idx_t start);
 
+	bool HasUnserializedChanges();
+	vector<MetaBlockPointer> GetStoragePointers();
+
 private:
 	mutex version_lock;
 	idx_t start;
 	vector<unique_ptr<ChunkInfo>> vector_info;
-	bool has_changes;
+	bool has_unserialized_changes;
 	vector<MetaBlockPointer> storage_pointers;
 
 private:

@@ -1,0 +1,28 @@
+# name: test/sql/cte/cte_on_conflict_issue.test
+# description: Test CTE with ON CONFLICT rewrite
+# group: [cte]
+
+statement ok
+CREATE TABLE t1 (
+    t1c1 BIGINT,
+    t1c2 BIGINT,
+    PRIMARY KEY (t1c1, t1c2)
+);
+
+statement ok
+CREATE TABLE t2 (
+    t2c1 BIGINT
+);
+
+statement error
+WITH
+cte1 AS (
+    SELECT 42 AS cte1c1, [84] AS cte1c2
+),
+cte2 AS (
+    SELECT *
+    FROM t2 s
+)
+INSERT OR REPLACE INTO t1
+SELECT * FROM cte2;
+----

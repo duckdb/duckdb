@@ -1,6 +1,5 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/block_manager.hpp"

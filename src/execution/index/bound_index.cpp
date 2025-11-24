@@ -156,8 +156,8 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 
 namespace {
 
-static void ReplayChunk(BoundIndex &index, BufferedIndexReplay type, DataChunk &scan_chunk,
-                        const vector<LogicalType> &table_types, const vector<StorageIndex> &mapped_column_ids) {
+void ReplayChunk(BoundIndex &index, const BufferedIndexReplay type, DataChunk &scan_chunk,
+                 const vector<LogicalType> &table_types, const vector<StorageIndex> &mapped_column_ids) {
 	if (scan_chunk.size() == 0) {
 		return;
 	}

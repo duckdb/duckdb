@@ -102,7 +102,7 @@ jobs:
 
  linux-release:
     name: Linux Release (full suite)
-    needs: check-draft
+    needs: linux-debug
     runs-on: ubuntu-24.04
     env:
       GEN: ninja
@@ -134,7 +134,7 @@ jobs:
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-24.04
-    needs: linux-configs
+    needs: linux-debug
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -171,7 +171,7 @@ jobs:
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
-    needs: linux-configs
+    needs: linux-debug
     env:
       CC: gcc-10
       CXX: g++-10
@@ -215,7 +215,7 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
-    needs: linux-configs
+    needs: linux-debug
     env:
       CC: clang
       CXX: clang++
@@ -251,7 +251,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
-    needs: linux-configs
+    needs: linux-debug
     runs-on: ubuntu-24.04
     env:
       CC: clang
@@ -295,7 +295,7 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     runs-on: ubuntu-22.04
-    needs: check-draft
+    needs: linux-debug
     env:
       CC: clang
       CXX: clang++
@@ -326,7 +326,7 @@ jobs:
  linux-configs:
     name: Tests a release build with different configurations
     runs-on: ubuntu-24.04
-    needs: check-draft
+    needs: linux-debug
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 
