@@ -21,114 +21,51 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
-class QueryProfiler;
-
-struct ActiveTimer {
-public:
-	ActiveTimer(QueryProfiler &query_profiler, const MetricType metric, const bool is_active = true) : query_profiler(query_profiler), metric(metric), is_active(is_active) {
-		// start on constructor
-		if (!is_active) {
-			return;
-		}
-		profiler.Start();
-	}
-
-	~ActiveTimer() {
-		if (is_active) {
-			// automatically end in destructor
-			EndTimer();
-		}
-	}
-
-	// Automatically called in the destructor.
-	void EndTimer() {
-		if (!is_active) {
-			return;
-		}
-		// stop profiling and report
-		is_active = false;
-		profiler.End();
-		query_profiler.IncrementMetric(metric, profiler.Elapsed());
-	}
-
-
-private:
-	QueryProfiler &query_profiler;
-	const MetricType metric;
-	Profiler profiler;
-	bool is_active;
-};
+struct ActiveTimer;
 
 //! Top level query metrics.
 struct QueryMetrics {
-	QueryMetrics() : query_name(""), total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0), wal_replay_entry_count(0) {};
+	QueryMetrics() : query_name(""), attach_load_storage_latency(0), attach_replay_wal_latency(0), checkpoint_latency(0), commit_local_storage_latency(0), latency(0), waiting_to_attach_latency(0), write_to_wal_latency(0), total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0), wal_replay_entry_count(0) {};
 
 	//! Reset the query metrics
 	void Reset() {
 		query_name = "";
-		attach_load_storage_latency.Reset();
-		attach_replay_wal_latency.Reset();
-		checkpoint_latency.Reset();
-		commit_local_storage_latency.Reset();
-		latency.Reset();
-		waiting_to_attach_latency.Reset();
-		write_to_wal_latency.Reset();
+		attach_load_storage_latency = 0;
+		attach_replay_wal_latency = 0;
+		checkpoint_latency = 0;
+		commit_local_storage_latency = 0;
+		latency = 0;
+		latency_timer = nullptr;
+		waiting_to_attach_latency = 0;
+		write_to_wal_latency = 0;
 		total_bytes_read = 0;
 		total_bytes_written = 0;
 		total_memory_allocated = 0;
 		wal_replay_entry_count = 0;
 	}
 
-	void StartTimer(const MetricType type) {
+	void AddTiming(const MetricType type, const double amount) {
 		switch(type) {
 		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-			attach_load_storage_latency.Start();
+			attach_load_storage_latency.store(attach_load_storage_latency.load() + amount);
 			break;
 		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-			attach_replay_wal_latency.Start();
+			attach_replay_wal_latency.store(attach_replay_wal_latency.load() + amount);
 			break;
 		case MetricType::CHECKPOINT_LATENCY:
-			checkpoint_latency.Start();
+			checkpoint_latency.store(checkpoint_latency.load() + amount);
 			break;
 		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-			commit_local_storage_latency.Start();
+			commit_local_storage_latency.store(commit_local_storage_latency.load() + amount);
 			break;
 		case MetricType::LATENCY:
-			latency.Start();
+			latency.store(latency.load() + amount);
 			break;
 		case MetricType::WAITING_TO_ATTACH_LATENCY:
-			waiting_to_attach_latency.Start();
+			waiting_to_attach_latency.store(waiting_to_attach_latency.load() + amount);
 			break;
 		case MetricType::WRITE_TO_WAL_LATENCY:
-			write_to_wal_latency.Start();
-			break;
-		default:
-			return;
-		};
-	}
-
-	void EndTimer(const MetricType type) {
-		switch(type) {
-		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-			attach_load_storage_latency.End();
-			break;
-		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-			attach_replay_wal_latency.End();
-			break;
-		case MetricType::CHECKPOINT_LATENCY:
-			checkpoint_latency.End();
-			break;
-		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-			commit_local_storage_latency.End();
-			break;
-		case MetricType::LATENCY:
-			latency.End();
-			break;
-		case MetricType::WAITING_TO_ATTACH_LATENCY:
-			waiting_to_attach_latency.End();
-			break;
-		case MetricType::WRITE_TO_WAL_LATENCY:
-			write_to_wal_latency.End();
+			write_to_wal_latency.store(write_to_wal_latency.load() + amount);
 			break;
 		default:
 			return;
@@ -158,20 +95,21 @@ struct QueryMetrics {
 
 	//! The SQL string of the query
 	string query_name;
-	//! The timer for loading from storage.
-	Profiler attach_load_storage_latency;
-	//! The timer for replaying the WAL file.
-	Profiler attach_replay_wal_latency;
-	//! The timer for running checkpoints
-	Profiler checkpoint_latency;
-	//! The timer for committing the transaction-local storage.
-	Profiler commit_local_storage_latency;
-	//! The timer for executing the entire query
-	Profiler latency;
-	//! The timer for waiting to ATTACH a file.
-	Profiler waiting_to_attach_latency;
-	//! The timer for writing to the WAL.
-	Profiler write_to_wal_latency;
+	//! Time spent loading from storage.
+	atomic<double> attach_load_storage_latency;
+	//! Time spent replaying the WAL file.
+	atomic<double> attach_replay_wal_latency;
+	//! Time spent running checkpoints
+	atomic<double> checkpoint_latency;
+	//! Time spent committing the transaction-local storage.
+	atomic<double> commit_local_storage_latency;
+	//! Time spent executing the entire query
+	atomic<double> latency;
+	unique_ptr<ActiveTimer> latency_timer;
+	//! Time spent waiting to ATTACH a file.
+	atomic<double> waiting_to_attach_latency;
+	//! Time spent writing to the WAL.
+	atomic<double> write_to_wal_latency;
 	//! The total bytes read by the file system.
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system.
@@ -188,6 +126,49 @@ public:
 	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
 	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr,  profiler_metrics_t &metrics, const MetricType &type);
 	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingNode &node, ProfilingInfo &child_info);
+};
+
+struct ActiveTimer {
+public:
+	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true) : query_metrics(query_metrics), metric(metric), is_active(is_active) {
+		// start on constructor
+		if (!is_active) {
+			return;
+		}
+		profiler.Start();
+	}
+
+	~ActiveTimer() {
+		if (is_active) {
+			// automatically end in destructor
+			EndTimer();
+		}
+	}
+
+	// Automatically called in the destructor.
+	void EndTimer() {
+		if (!is_active) {
+			return;
+		}
+		// stop profiling and report
+		is_active = false;
+		profiler.End();
+		query_metrics.AddTiming(metric, profiler.Elapsed());
+	}
+
+	void Reset() {
+	    if (!is_active) {
+			return;
+		}
+		profiler.Reset();
+		is_active = false;
+	}
+
+private:
+	QueryMetrics &query_metrics;
+	const MetricType metric;
+	Profiler profiler;
+	bool is_active;
 };
 
 }

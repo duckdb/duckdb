@@ -102,7 +102,7 @@ def _generate_collection_methods(
         for m in metric_index.metrics_per_collection(c):
             cpp_f.write_indented(1, f"case MetricType::{m}:")
             if c == "timer":
-                cpp_f.write_indented(2, f"metric = query_metrics.{m.lower()}.Elapsed();")
+                cpp_f.write_indented(2, f"metric = Value::DOUBLE(query_metrics.{m.lower()});")
             elif c == "child":
                 cpp_f.write_indented(2, f"metric = child_info.metrics[MetricType::{metric_index.metric_child(m)}];")
             elif c == "cumulative_operators":
@@ -135,7 +135,11 @@ def _write_query_metric_functions(
     for m, t, d in query_metric_types:
         if t == group:
             hpp_f.write_indented(2, f"case MetricType::{m}:")
-            hpp_f.write_indented(3, f"{m.lower()}{action};")
+            a = action
+            m_lower = m.lower()
+            if action == "GEN_FROM_METRIC":
+                a = f".store({m_lower}.load() + amount)"
+            hpp_f.write_indented(3, f"{m_lower}{a};")
             hpp_f.write_indented(3, "break;")
     hpp_f.write_indented(2, "default:")
     hpp_f.write_indented(3, "return;")
@@ -154,8 +158,10 @@ def _generate_query_metrics(hpp_f: IndentedFileWriter, metric_index: MetricIndex
                 if t == "uint64_t":
                     t = "atomic<idx_t>"
                 elif t == "double":
-                    t = "Profiler"
+                    t = "atomic<double>"
                 query_metric_types.append((m, t, metric_index.metric_description(m)))
+                if m == "LATENCY":
+                    query_metric_types.append(("LATENCY_TIMER", "unique_ptr<ActiveTimer>", ""))
 
     # Move query_name to the front
     query_name_items = [item for item in query_metric_types if item[0] == "QUERY_NAME"]
@@ -167,10 +173,12 @@ def _generate_query_metrics(hpp_f: IndentedFileWriter, metric_index: MetricIndex
 
     query_metric_constructor = "QueryMetrics() : "
     for m, t, d in query_metric_types:
-        if t == "atomic<idx_t>":
-            query_metric_constructor += f"{m.lower()}(0), "
-        elif t == "string":
+        if t == "string":
             query_metric_constructor += f"{m.lower()}(\"\"), "
+        elif t == "unique_ptr<ActiveTimer>":
+            continue
+        else:
+            query_metric_constructor += f"{m.lower()}(0), "
     # remove trailing comma
     query_metric_constructor = query_metric_constructor[:-2]
     query_metric_constructor += " {};\n"
@@ -179,18 +187,21 @@ def _generate_query_metrics(hpp_f: IndentedFileWriter, metric_index: MetricIndex
     hpp_f.write_indented(1, "//! Reset the query metrics")
     hpp_f.write_indented(1, "void Reset() {")
     for m, t, d in query_metric_types:
-        if t == "atomic<idx_t>":
-            hpp_f.write_indented(2, f"{m.lower()} = 0;")
-        elif t == "string":
+        if t == "string":
             hpp_f.write_indented(2, f"{m.lower()} = \"\";")
-        elif t == "Profiler":
-            hpp_f.write_indented(2, f"{m.lower()}.Reset();")
+        elif t == "unique_ptr<ActiveTimer>":
+            hpp_f.write_indented(2, f"{m.lower()} = nullptr;")
+        else:
+            hpp_f.write_indented(2, f"{m.lower()} = 0;")
     hpp_f.write_indented(1, "}\n")
 
     _write_query_metric_functions(
-        hpp_f, query_metric_types, "StartTimer(const MetricType type)", "Profiler", ".Start()"
+        hpp_f,
+        query_metric_types,
+        "AddTiming(const MetricType type, const double amount)",
+        "atomic<double>",
+        "GEN_FROM_METRIC",
     )
-    _write_query_metric_functions(hpp_f, query_metric_types, "EndTimer(const MetricType type)", "Profiler", ".End()")
     _write_query_metric_functions(
         hpp_f,
         query_metric_types,
@@ -202,14 +213,8 @@ def _generate_query_metrics(hpp_f: IndentedFileWriter, metric_index: MetricIndex
     hpp_f.write_indented(1, "ProfilingInfo query_global_info;\n")
 
     for m, t, d in query_metric_types:
-        # if the type is a Profiler (ie timer) replace "Time spent" with "The timer for"
-        if t == "Profiler":
-            if d.find("Time spent") == -1:
-                raise Exception(
-                    f"Could not find 'Time spent' in metric description for {m}, description should match 'Time spent <description>'"
-                )
-            d = d.replace("Time spent", "The timer for")
-        hpp_f.write_indented(1, f"//! {d}")
+        if len(d) > 0:
+            hpp_f.write_indented(1, f"//! {d}")
         hpp_f.write_indented(1, f"{t} {m.lower()};")
 
     hpp_f.write_indented(0, "};")

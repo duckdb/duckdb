@@ -57,22 +57,25 @@ def _setup_hpp(out_hpp: Path, f: IndentedFileWriter, metric_index: MetricIndex):
 
     f.write("enum class MetricType : uint8_t {\n")
     previous_end = None
-    for t in metric_index.types_index():
-        t_name = t.replace("Value::", "").upper()
+    for g in metric_index.group_names:
+        if g == "all" or g == "default":
+            continue
 
-        start = "START_" + t_name
-        end = "END_" + t_name
+        g_name = g.upper()
 
-        metrics = list(metric_index.types_index()[t])
-        count_per_type[t_name + "_METRIC_COUNT"] = len(metrics)
+        start = "START_" + g_name
+        end = "END_" + g_name
 
-        f.write_indented(1, f"// {t_name}")
+        metrics = metric_index.metrics_per_group(g)
+        count_per_type[g_name + "_METRIC_COUNT"] = len(metrics)
+
+        f.write_indented(1, f"// {g_name}")
         if previous_end is None:
             # First type starts at 0
             f.write_indented(1, f"{start} = 0,")
         else:
             # Subsequent types start where previous ended
-            f.write_indented(1, f"{start} = {previous_end},")
+            f.write_indented(1, f"{start},")
 
         # First metric equals START
         f.write_indented(1, f"{metrics[0]} = {start},")
@@ -87,6 +90,21 @@ def _setup_hpp(out_hpp: Path, f: IndentedFileWriter, metric_index: MetricIndex):
         previous_end = end
 
     f.write("};\n")
+
+    f.write(
+        """
+inline MetricType &operator++(MetricType &metric) {
+	metric = static_cast<MetricType>(static_cast<uint8_t>(metric) + 1);
+	return metric;
+}
+
+inline MetricType operator++(MetricType &metric, int) {
+	const MetricType tmp = metric;
+	++metric;
+	return tmp;
+}
+"""
+    )
 
     f.write(HPP_TYPEDEFS)
     f.write('class MetricsUtils {\n')
@@ -110,10 +128,21 @@ def _generate_standard_functions(
     metrics = metric_index.metrics_per_group(group) if group != "root_scope" else metric_index.root_scope_metrics()
 
     cpp_f.write(f"profiler_settings_t MetricsUtils::{get_fn}() {{\n")
-    cpp_f.write_indented(1, "return {")
-    for m in metrics:
-        cpp_f.write_indented(2, f"MetricType::{m},")
-    cpp_f.write_indented(1, "};")
+
+    if group == "root_scope" or group == "default" or group == "all":
+        cpp_f.write_indented(1, "return {")
+        for m in metrics:
+            cpp_f.write_indented(2, f"MetricType::{m},")
+        cpp_f.write_indented(1, "};")
+    else:
+        cpp_f.write_indented(1, "profiler_settings_t result;")
+        cpp_f.write_indented(
+            1,
+            f"for (auto metric = MetricType::START_{group.upper()}; metric <= MetricType::END_{group.upper()}; metric++) {{",
+        )
+        cpp_f.write_indented(2, f"result.insert(metric);")
+        cpp_f.write_indented(1, "}")
+        cpp_f.write_indented(1, "return result;")
     cpp_f.write('}\n\n')
 
     if group == "all":

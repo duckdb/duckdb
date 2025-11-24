@@ -163,25 +163,25 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		GetCumulativeMetric<uint64_t>(node, MetricType::CUMULATIVE_ROWS_SCANNED, MetricType::OPERATOR_ROWS_SCANNED);
 		break;
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-		metric = query_metrics.attach_load_storage_latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.attach_load_storage_latency);
 		break;
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-		metric = query_metrics.attach_replay_wal_latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.attach_replay_wal_latency);
 		break;
 	case MetricType::CHECKPOINT_LATENCY:
-		metric = query_metrics.checkpoint_latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.checkpoint_latency);
 		break;
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-		metric = query_metrics.commit_local_storage_latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.commit_local_storage_latency);
 		break;
 	case MetricType::LATENCY:
-		metric = query_metrics.latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.latency);
 		break;
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
-		metric = query_metrics.waiting_to_attach_latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.waiting_to_attach_latency);
 		break;
 	case MetricType::WRITE_TO_WAL_LATENCY:
-		metric = query_metrics.write_to_wal_latency.Elapsed();
+		metric = Value::DOUBLE(query_metrics.write_to_wal_latency);
 		break;
 	case MetricType::QUERY_NAME:
 		metric = query_metrics.query_name;

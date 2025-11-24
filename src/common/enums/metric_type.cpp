@@ -99,16 +99,11 @@ profiler_settings_t MetricsUtils::GetMetricsByGroupType(MetricGroup type) {
 	}
 }
 profiler_settings_t MetricsUtils::GetCoreMetrics() {
-	return {
-		MetricType::CPU_TIME,
-		MetricType::CUMULATIVE_CARDINALITY,
-		MetricType::CUMULATIVE_ROWS_SCANNED,
-		MetricType::EXTRA_INFO,
-		MetricType::LATENCY,
-		MetricType::QUERY_NAME,
-		MetricType::RESULT_SET_SIZE,
-		MetricType::ROWS_RETURNED,
-	};
+	profiler_settings_t result;
+	for (auto metric = MetricType::START_CORE; metric <= MetricType::END_CORE; metric++) {
+		result.insert(metric);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsCoreMetric(MetricType type) {
@@ -193,12 +188,11 @@ bool MetricsUtils::IsDefaultMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetExecutionMetrics() {
-	return {
-		MetricType::BLOCKED_THREAD_TIME,
-		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
-		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-		MetricType::TOTAL_MEMORY_ALLOCATED,
-	};
+	profiler_settings_t result;
+	for (auto metric = MetricType::START_EXECUTION; metric <= MetricType::END_EXECUTION; metric++) {
+		result.insert(metric);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsExecutionMetric(MetricType type) {
@@ -214,17 +208,11 @@ bool MetricsUtils::IsExecutionMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetFileMetrics() {
-	return {
-		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
-		MetricType::ATTACH_REPLAY_WAL_LATENCY,
-		MetricType::CHECKPOINT_LATENCY,
-		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
-		MetricType::TOTAL_BYTES_READ,
-		MetricType::TOTAL_BYTES_WRITTEN,
-		MetricType::WAITING_TO_ATTACH_LATENCY,
-		MetricType::WAL_REPLAY_ENTRY_COUNT,
-		MetricType::WRITE_TO_WAL_LATENCY,
-	};
+	profiler_settings_t result;
+	for (auto metric = MetricType::START_FILE; metric <= MetricType::END_FILE; metric++) {
+		result.insert(metric);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsFileMetric(MetricType type) {
@@ -245,13 +233,11 @@ bool MetricsUtils::IsFileMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetOperatorMetrics() {
-	return {
-		MetricType::OPERATOR_CARDINALITY,
-		MetricType::OPERATOR_NAME,
-		MetricType::OPERATOR_ROWS_SCANNED,
-		MetricType::OPERATOR_TIMING,
-		MetricType::OPERATOR_TYPE,
-	};
+	profiler_settings_t result;
+	for (auto metric = MetricType::START_OPERATOR; metric <= MetricType::END_OPERATOR; metric++) {
+		result.insert(metric);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsOperatorMetric(MetricType type) {
@@ -268,39 +254,11 @@ bool MetricsUtils::IsOperatorMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
-	return {
-		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-		MetricType::OPTIMIZER_COLUMN_LIFETIME,
-		MetricType::OPTIMIZER_COMMON_AGGREGATE,
-		MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS,
-		MetricType::OPTIMIZER_COMMON_SUBPLAN,
-		MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
-		MetricType::OPTIMIZER_CTE_FILTER_PUSHER,
-		MetricType::OPTIMIZER_CTE_INLINING,
-		MetricType::OPTIMIZER_DELIMINATOR,
-		MetricType::OPTIMIZER_DUPLICATE_GROUPS,
-		MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP,
-		MetricType::OPTIMIZER_EXPRESSION_REWRITER,
-		MetricType::OPTIMIZER_EXTENSION,
-		MetricType::OPTIMIZER_FILTER_PULLUP,
-		MetricType::OPTIMIZER_FILTER_PUSHDOWN,
-		MetricType::OPTIMIZER_IN_CLAUSE,
-		MetricType::OPTIMIZER_JOIN_ELIMINATION,
-		MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-		MetricType::OPTIMIZER_JOIN_ORDER,
-		MetricType::OPTIMIZER_LATE_MATERIALIZATION,
-		MetricType::OPTIMIZER_LIMIT_PUSHDOWN,
-		MetricType::OPTIMIZER_MATERIALIZED_CTE,
-		MetricType::OPTIMIZER_REGEX_RANGE,
-		MetricType::OPTIMIZER_REORDER_FILTER,
-		MetricType::OPTIMIZER_SAMPLING_PUSHDOWN,
-		MetricType::OPTIMIZER_STATISTICS_PROPAGATION,
-		MetricType::OPTIMIZER_SUM_REWRITER,
-		MetricType::OPTIMIZER_TOP_N,
-		MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-		MetricType::OPTIMIZER_UNNEST_REWRITER,
-		MetricType::OPTIMIZER_UNUSED_COLUMNS,
-	};
+	profiler_settings_t result;
+	for (auto metric = MetricType::START_OPTIMIZER; metric <= MetricType::END_OPTIMIZER; metric++) {
+		result.insert(metric);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsOptimizerMetric(MetricType type) {
@@ -481,16 +439,11 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
-	return {
-		MetricType::ALL_OPTIMIZERS,
-		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
-		MetricType::PHYSICAL_PLANNER,
-		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
-		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
-		MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES,
-		MetricType::PLANNER,
-		MetricType::PLANNER_BINDING,
-	};
+	profiler_settings_t result;
+	for (auto metric = MetricType::START_PHASE_TIMING; metric <= MetricType::END_PHASE_TIMING; metric++) {
+		result.insert(metric);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {

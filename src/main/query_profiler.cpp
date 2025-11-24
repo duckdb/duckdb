@@ -99,7 +99,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_name = query;
-	query_metrics.latency.Start();
+	query_metrics.latency_timer = make_uniq<ActiveTimer>(query_metrics, MetricType::LATENCY);
 }
 
 void QueryProfiler::Reset() {
@@ -201,7 +201,7 @@ void QueryProfiler::EndQuery() {
 		return;
 	}
 
-	query_metrics.latency.End();
+	query_metrics.latency_timer->EndTimer();
 	if (root) {
 		auto &info = root->GetProfilingInfo();
 		if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_CARDINALITY)) {
@@ -273,7 +273,7 @@ idx_t QueryProfiler::GetBytesWritten() const {
 }
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
-	return ActiveTimer(*this, type, IsEnabled());
+	return ActiveTimer(query_metrics, type, IsEnabled());
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {
@@ -302,11 +302,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
-		duckdb::stringstream str;
-		auto &info = root->GetProfilingInfo();
-		if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_TIMING)) {
-			info.metrics[MetricType::OPERATOR_TIMING] = query_metrics.latency.Elapsed();
-		}
+		stringstream str;
 		renderer->Render(*root, str);
 		return str.str();
 	}
@@ -662,7 +658,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	constexpr idx_t TOTAL_BOX_WIDTH = 50;
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.latency.Elapsed());
+	string total_time = "Total Time: " + RenderTiming(query_metrics.latency);
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";

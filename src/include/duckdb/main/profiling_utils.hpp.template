@@ -18,11 +18,20 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
-class QueryProfiler;
+struct ActiveTimer;
+
+// DUCKDB_INSERT_CODE_HERE
+
+class ProfilingUtils {
+public:
+	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
+	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr,  profiler_metrics_t &metrics, const MetricType &type);
+	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingNode &node, ProfilingInfo &child_info);
+};
 
 struct ActiveTimer {
 public:
-	ActiveTimer(QueryProfiler &query_profiler, const MetricType metric, const bool is_active = true) : query_profiler(query_profiler), metric(metric), is_active(is_active) {
+	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true) : query_metrics(query_metrics), metric(metric), is_active(is_active) {
 		// start on constructor
 		if (!is_active) {
 			return;
@@ -45,24 +54,22 @@ public:
 		// stop profiling and report
 		is_active = false;
 		profiler.End();
-		query_profiler.IncrementMetric(metric, profiler.Elapsed());
+		query_metrics.AddTiming(metric, profiler.Elapsed());
 	}
 
+	void Reset() {
+	    if (!is_active) {
+			return;
+		}
+		profiler.Reset();
+		is_active = false;
+	}
 
 private:
-	QueryProfiler &query_profiler;
+	QueryMetrics &query_metrics;
 	const MetricType metric;
 	Profiler profiler;
 	bool is_active;
-};
-
-// DUCKDB_INSERT_CODE_HERE
-
-class ProfilingUtils {
-public:
-	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
-	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr,  profiler_metrics_t &metrics, const MetricType &type);
-	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingNode &node, ProfilingInfo &child_info);
 };
 
 }
