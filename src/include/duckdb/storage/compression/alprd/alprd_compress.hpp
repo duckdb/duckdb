@@ -76,8 +76,6 @@ public:
 		return AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes + data_bytes_used;
 	}
 
-	// Returns the required space to store the newly compressed vector
-
 	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)

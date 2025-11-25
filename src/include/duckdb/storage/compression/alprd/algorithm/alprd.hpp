@@ -59,11 +59,13 @@ public:
 	unordered_map<uint16_t, uint16_t> left_parts_dict_map;
 	uint8_t actual_dictionary_size;
 
+	// Returns the required space to store the newly compressed vector
 	idx_t RequiredSpace() {
-		idx_t required_space =
-		    left_bit_packed_size + right_bit_packed_size +
-		    exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
-		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		idx_t required_space = left_bit_packed_size + right_bit_packed_size +
+		                       (static_cast<idx_t>(AlpRDConstants::EXCEPTION_SIZE) +
+		                        static_cast<idx_t>(AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
+		                       static_cast<idx_t>(AlpRDConstants::EXCEPTIONS_COUNT_SIZE);
+		;
 		return required_space;
 	}
 };
