@@ -34,19 +34,19 @@ statement ok
 DETACH tmp
 
 query II
-EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t
+EXPLAIN SELECT count(*), min(i), max(i) FROM t
 ----
-analyzed_plan	<!REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*GROUP_BY.*
 
 query II
-EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t GROUP BY ALL
+EXPLAIN SELECT count(*), min(i), max(i) FROM t GROUP BY i
 ----
-analyzed_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<REGEX>:.*GROUP_BY.*
 
 query II
-EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t WHERE i > 100
+EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i > 100
 ----
-analyzed_plan	<REGEX>:.*AGGREGATE.*
+physical_plan	<!REGEX>:.*GROUP_BY.*
 
 query III
 SELECT count(*), min(i), max(i) FROM t
