@@ -263,6 +263,12 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
 		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
 		// unlock the transaction lock while we write to the WAL
+		unique_ptr<StorageLockKey> wal_checkpoint_lock;
+		if (!transaction.HasWriteLock()) {
+			// if this transaction does not have the checkpoint lock we need to grab it
+			// otherwise another transaction can instantiate a checkpoint while we are writing to the WAL
+			wal_checkpoint_lock = SharedCheckpointLock();
+		}
 		t_lock.unlock();
 		// grab the WAL lock and hold it until the entire commit is finished
 		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
