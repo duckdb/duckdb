@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -11,6 +12,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -1338,6 +1341,17 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
 		return row_group.GetStatistics(column_id);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &stats) override {
+		if (row_group.HasChanges()) {
+			return false;
+		}
+		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
+			return StringStats::HasMaxStringLength(stats) &&
+			       StringStats::MaxStringLength(stats) <= StringStatsData::MAX_STRING_MINMAX_SIZE;
+		}
+		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
 	}
 };
 
