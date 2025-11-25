@@ -217,7 +217,7 @@ void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<Functi
 unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
-	function.function = GetStringCompressFunctionSwitch(return_type);
+	function.SetFunctionCallback(GetStringCompressFunctionSwitch(return_type));
 	return nullptr;
 }
 
@@ -228,7 +228,7 @@ void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<Func
 
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
-	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
+	function.SetFunctionCallback(GetStringDecompressFunctionSwitch(function.arguments[0]));
 	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
@@ -249,8 +249,8 @@ ScalarFunctionSet GetStringDecompressFunctionSet() {
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
 	ScalarFunction result(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
 	                      GetStringCompressFunctionSwitch(result_type), CMUtils::Bind);
-	result.serialize = CMStringCompressSerialize;
-	result.deserialize = CMStringCompressDeserialize;
+	result.SetSerializeCallback(CMStringCompressSerialize);
+	result.SetDeserializeCallback(CMStringCompressDeserialize);
 #if defined(D_ASSERT_IS_ENABLED)
 	result.SetFallible(); // Can only throw runtime error when assertions are enabled
 #else
@@ -263,8 +263,8 @@ ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type)
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
 	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr, nullptr,
 	                      StringDecompressLocalState::Init);
-	result.serialize = CMStringDecompressSerialize;
-	result.deserialize = CMStringDecompressDeserialize;
+	result.SetSerializeCallback(CMStringDecompressSerialize);
+	result.SetDeserializeCallback(CMStringDecompressDeserialize);
 	return result;
 }
 

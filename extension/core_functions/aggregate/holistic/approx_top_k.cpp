@@ -395,8 +395,8 @@ unique_ptr<FunctionData> ApproxTopKBind(ClientContext &context, AggregateFunctio
 		}
 	}
 	if (arguments[0]->return_type.id() == LogicalTypeId::VARCHAR) {
-		function.update = ApproxTopKUpdate<string_t, HistogramStringFunctor>;
-		function.finalize = ApproxTopKFinalize<HistogramStringFunctor>;
+		function.SetStateUpdateCallback(ApproxTopKUpdate<string_t, HistogramStringFunctor>);
+		function.SetStateFinalizeCallback(ApproxTopKFinalize<HistogramStringFunctor>);
 	}
 	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 	return nullptr;

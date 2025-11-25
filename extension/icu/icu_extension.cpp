@@ -199,8 +199,8 @@ static ScalarFunction GetICUCollateFunction(const string &collation, const strin
 	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
-	result.serialize = IcuBindData::Serialize;
-	result.deserialize = IcuBindData::Deserialize;
+	result.SetSerializeCallback(IcuBindData::Serialize);
+	result.SetDeserializeCallback(IcuBindData::Deserialize);
 	return result;
 }
 
