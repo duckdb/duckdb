@@ -99,11 +99,6 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				return;
 			}
 			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
-			if (!col_ref.return_type.IsNumeric() && !col_ref.return_type.IsTemporal()) {
-				// Only use NumericStats (StringStats min/max may be truncated)
-				return;
-			}
-
 			min_max_bindings.push_back(col_ref.binding);
 			comparators.push_back(GetComparator(fun_name));
 		} else if (fun_name == "count_star") {
