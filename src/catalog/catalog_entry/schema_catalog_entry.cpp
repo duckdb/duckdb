@@ -15,6 +15,10 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
 	this->internal = info.internal;
 	this->comment = info.comment;
 	this->tags = info.tags;
+	this->temporary = info.temporary;
+	if (catalog.IsTemporaryCatalog()) {
+		this->temporary = true;
+	}
 }
 
 CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &context) {
@@ -64,6 +68,7 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	result->schema = name;
 	result->comment = comment;
 	result->tags = tags;
+	result->temporary = temporary;
 	return std::move(result);
 }
 

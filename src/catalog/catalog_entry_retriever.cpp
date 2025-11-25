@@ -86,17 +86,8 @@ const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
 
 void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	vector<CatalogSearchEntry> new_path;
-	for (auto &entry : entries) {
-		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
-			continue;
-		}
-		new_path.push_back(std::move(entry));
-	}
-	if (new_path.empty()) {
-		return;
-	}
 
-	// push the set paths from the ClientContext behind the provided paths
+	// First, push the set paths from the ClientContext - this allows temp schemas to shadow persistent ones
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
 	auto &set_paths = client_search_path.GetSetPaths();
 	for (auto path : set_paths) {
@@ -104,6 +95,18 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 			path.catalog = DatabaseManager::GetDefaultDatabase(context);
 		}
 		new_path.push_back(std::move(path));
+	}
+
+	// Then add the provided entries (e.g., view's catalog/schema)
+	for (auto &entry : entries) {
+		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
+			continue;
+		}
+		new_path.push_back(std::move(entry));
+	}
+
+	if (new_path.empty()) {
+		return;
 	}
 
 	this->search_path = make_shared_ptr<CatalogSearchPath>(context, std::move(new_path));
