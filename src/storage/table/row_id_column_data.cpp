@@ -10,7 +10,7 @@ RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &inf
 }
 
 FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	return RowGroup::CheckRowIdFilter(filter, row_start, row_start + count);
 }
 
@@ -50,7 +50,7 @@ void RowIdColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_
 }
 
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	if (result_offset != 0) {
 		throw InternalException("RowIdColumnData result_offset must be 0");
 	}
@@ -62,7 +62,7 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t &count, const TableFilter &filter,
                              TableFilterState &filter_state) {
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	auto current_row = row_start + state.offset_in_column;
 	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
@@ -104,7 +104,7 @@ void RowIdColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state
                                       idx_t count, bool allow_updates) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<row_t>(result);
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
 	}
@@ -119,7 +119,7 @@ void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
                                idx_t result_idx) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetData<row_t>(result);
-	auto row_start = state.row_group->row_start;
+	auto row_start = state.row_group->GetRowStart();
 	data[result_idx] = UnsafeNumericCast<row_t>(row_start) + row_id;
 }
 

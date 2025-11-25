@@ -85,7 +85,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<FinalizeState>();
 	local_state.allocator.Reset();
 
-	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size(bind_data.aggr));
+	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 	D_ASSERT(input.data.size() == 1);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 	auto aligned_state_size = AlignValue(bind_data.state_size);
@@ -105,13 +105,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
-			bind_data.aggr.initialize(bind_data.aggr, data_ptr_cast(target_ptr));
+			bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
 		}
 		state_vec_ptr[i] = data_ptr_cast(target_ptr);
 	}
 
 	AggregateInputData aggr_input_data(nullptr, local_state.allocator);
-	bind_data.aggr.finalize(local_state.addresses, aggr_input_data, result, input.size(), 0);
+	bind_data.aggr.GetStateFinalizeCallback()(local_state.addresses, aggr_input_data, result, input.size(), 0);
 
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
@@ -126,7 +126,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<CombineState>();
 	local_state.allocator.Reset();
 
-	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size(bind_data.aggr));
+	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 
 	D_ASSERT(input.data.size() == 2);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
@@ -176,7 +176,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
 		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
-		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
+		bind_data.aggr.GetStateCombineCallback()(local_state.state_vector0, local_state.state_vector1, aggr_input_data,
+		                                         1);
 
 		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),
 		                                              bind_data.state_size);
@@ -226,7 +227,7 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 		                        error.Message());
 	}
 	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function.GetIndex());
-	if (bound_aggr.bind) {
+	if (bound_aggr.GetBindCallback()) {
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
 		vector<unique_ptr<Expression>> args;
@@ -234,7 +235,7 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 		for (auto &arg_type : state_type.bound_argument_types) {
 			args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
 		}
-		auto bind_info = bound_aggr.bind(context, bound_aggr, args);
+		auto bind_info = bound_aggr.GetBindCallback()(context, bound_aggr, args);
 		if (bind_info) {
 			throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
 		}
@@ -252,14 +253,14 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 		bound_function.SetReturnType(arg_return_type);
 	}
 
-	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.state_size(bound_aggr));
+	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.GetStateSizeCallback()(bound_aggr));
 }
 
 void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto state_size = bind_data.aggregate->function.state_size(bind_data.aggregate->function);
+	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 	auto blob_ptr = FlatVector::GetData<string_t>(result);
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
@@ -291,18 +292,18 @@ unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deserializer
 unique_ptr<BoundAggregateExpression>
 ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggregate) {
 	auto &bound_function = child_aggregate->function;
-	if (!bound_function.combine) {
+	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.name);
 	}
-	if (bound_function.bind) {
+	if (bound_function.HasBindCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom binders");
 	}
-	if (bound_function.destructor) {
+	if (bound_function.HasStateDestructorCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom destructors");
 	}
 	// this should be required
-	D_ASSERT(bound_function.state_size);
-	D_ASSERT(bound_function.finalize);
+	D_ASSERT(bound_function.HasStateSizeCallback());
+	D_ASSERT(bound_function.HasStateFinalizeCallback());
 
 	D_ASSERT(child_aggregate->function.GetReturnType().id() != LogicalTypeId::INVALID);
 #ifdef DEBUG
@@ -317,13 +318,14 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 
 	auto export_function =
 	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.arguments, return_type,
-	                      bound_function.state_size, bound_function.initialize, bound_function.update,
-	                      bound_function.combine, ExportAggregateFinalize, bound_function.simple_update,
+	                      bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
+	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
+	                      ExportAggregateFinalize, bound_function.GetStateSimpleUpdateCallback(),
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
 	export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	export_function.serialize = ExportStateAggregateSerialize;
-	export_function.deserialize = ExportStateAggregateDeserialize;
+	export_function.SetSerializeCallback(ExportStateAggregateSerialize);
+	export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
 
 	return make_uniq<BoundAggregateExpression>(export_function, std::move(child_aggregate->children),
 	                                           std::move(child_aggregate->filter), std::move(export_bind_data),
@@ -348,8 +350,8 @@ ScalarFunction FinalizeFun::GetFunction() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.serialize = ExportStateScalarSerialize;
-	result.deserialize = ExportStateScalarDeserialize;
+	result.SetSerializeCallback(ExportStateScalarSerialize);
+	result.SetDeserializeCallback(ExportStateScalarDeserialize);
 	return result;
 }
 
@@ -358,8 +360,8 @@ ScalarFunction CombineFun::GetFunction() {
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.serialize = ExportStateScalarSerialize;
-	result.deserialize = ExportStateScalarDeserialize;
+	result.SetSerializeCallback(ExportStateScalarSerialize);
+	result.SetDeserializeCallback(ExportStateScalarDeserialize);
 	return result;
 }
 

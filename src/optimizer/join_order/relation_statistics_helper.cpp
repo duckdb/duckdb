@@ -21,14 +21,14 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
 		if (func.children.empty()) {
-			ret.found_expression = true;
+			ret.expression = expr;
 			ret.expression_is_constant = true;
 			return ret;
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF: {
-		ret.found_expression = true;
+		ret.expression = expr;
 		auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
 		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
 		return ret;
@@ -38,16 +38,21 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	case ExpressionClass::BOUND_DEFAULT:
 	case ExpressionClass::BOUND_PARAMETER:
 	case ExpressionClass::BOUND_REF:
-		ret.found_expression = true;
+		ret.expression = expr;
 		ret.expression_is_constant = true;
 		return ret;
 	default:
 		break;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
+		if (ret.FoundColumnRef()) {
+			//! Already found a column ref expression
+			return;
+		}
 		auto recursive_result = GetChildColumnBinding(*child);
-		if (recursive_result.found_expression) {
+		if (recursive_result.FoundExpression()) {
 			ret = recursive_result;
+			return;
 		}
 	});
 	// we didn't find a Bound Column Ref
@@ -163,7 +168,7 @@ RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection
 	for (auto &expr : proj.expressions) {
 		proj_stats.column_names.push_back(expr->GetName());
 		auto res = GetChildColumnBinding(*expr);
-		D_ASSERT(res.found_expression);
+		D_ASSERT(res.FoundExpression());
 		if (res.expression_is_constant) {
 			proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
 		} else {

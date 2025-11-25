@@ -111,8 +111,7 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-	                           const vector<shared_ptr<SegmentNode<RowGroup>>> &segments);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
@@ -155,7 +154,6 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	idx_t GetBaseRowId() const;
 	void SetAppendRequiresNewRowGroup();
 
 private:

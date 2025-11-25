@@ -1,0 +1,13 @@
+# name: test/sql/storage/types/variant/append_shredded.test
+# group: [variant]
+
+load __TEST_DIR__/append_shredded.db
+
+statement ok
+create table tbl (col VARIANT)
+
+statement ok
+insert into tbl SELECT NULL from range(154840)
+
+statement ok
+insert into tbl SELECT True from range(5000)
