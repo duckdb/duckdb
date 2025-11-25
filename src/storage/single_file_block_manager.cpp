@@ -736,11 +736,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 			block = max_block++;
 		}
 	}
-	// FIXME: should be an assertion
-	if (BlockIsRegistered(block)) {
-		throw InternalException("GetFreeBlockId() returned block %d - but that block has already been registered",
-		                        block);
-	}
+	D_ASSERT(!BlockIsRegistered(block));
 	return block;
 }
 
@@ -1069,7 +1065,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 			free_list.insert(block);
 			fully_freed_blocks.insert(block);
 		} else {
-			newly_freed_list.insert(block);
+			free_blocks_in_use.insert(block);
 		}
 	}
 	modified_blocks.clear();
@@ -1148,11 +1144,11 @@ void SingleFileBlockManager::FileSync() {
 void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 	lock_guard<mutex> lock(block_lock);
 	// unregister the block - check if it is part of the newly free list
-	auto entry = newly_freed_list.find(id);
-	if (entry != newly_freed_list.end()) {
+	auto entry = free_blocks_in_use.find(id);
+	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
 		free_list.insert(id);
-		newly_freed_list.erase(entry);
+		free_blocks_in_use.erase(entry);
 	}
 	// perform the actual unregistration
 	BlockManager::UnregisterBlock(id);

@@ -181,7 +181,7 @@ private:
 	//! The list of free blocks that can be written to currently
 	set<block_id_t> free_list;
 	//! The list of blocks that have been freed, but cannot yet be re-used because they are still in-use
-	set<block_id_t> newly_freed_list;
+	set<block_id_t> free_blocks_in_use;
 	//! The list of multi-use blocks (i.e. blocks that have >1 reference in the file)
 	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
 	//! Appending the block to the modified_blocks list
