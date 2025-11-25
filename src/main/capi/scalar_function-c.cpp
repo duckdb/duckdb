@@ -9,7 +9,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-
+namespace {
 struct CScalarFunctionInfo : public ScalarFunctionInfo {
 	~CScalarFunctionInfo() override {
 		if (extra_info && delete_callback) {
@@ -119,7 +119,7 @@ duckdb_function_info ToCScalarFunctionInfo(duckdb::CScalarFunctionInternalFuncti
 
 unique_ptr<FunctionData> CScalarFunctionBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
-	auto &info = bound_function.function_info->Cast<CScalarFunctionInfo>();
+	auto &info = bound_function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 
 	auto result = make_uniq<CScalarFunctionBindData>(info);
@@ -155,6 +155,7 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	}
 }
 
+} // namespace
 } // namespace duckdb
 
 using duckdb::ExpressionWrapper;
@@ -166,7 +167,7 @@ using duckdb::GetCScalarFunctionSet;
 duckdb_scalar_function duckdb_create_scalar_function() {
 	auto function = new duckdb::ScalarFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIScalarFunction,
 	                                           duckdb::CScalarFunctionBind);
-	function->function_info = duckdb::make_shared_ptr<duckdb::CScalarFunctionInfo>();
+	function->SetExtraFunctionInfo<duckdb::CScalarFunctionInfo>();
 	return reinterpret_cast<duckdb_scalar_function>(function);
 }
 
@@ -304,7 +305,7 @@ void duckdb_scalar_function_set_extra_info(duckdb_scalar_function function, void
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+	auto &info = scalar_function.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
 	info.extra_info = reinterpret_cast<duckdb_function_info>(extra_info);
 	info.delete_callback = destroy;
 }
@@ -314,7 +315,7 @@ void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_function, duc
 		return;
 	}
 	auto &sf = GetCScalarFunction(scalar_function);
-	auto &info = sf.function_info->Cast<duckdb::CScalarFunctionInfo>();
+	auto &info = sf.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
 	info.bind = bind;
 }
 
@@ -340,7 +341,7 @@ void duckdb_scalar_function_set_function(duckdb_scalar_function function, duckdb
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+	auto &info = scalar_function.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
 	info.function = execute_func;
 }
 
@@ -387,7 +388,7 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 	auto &scalar_function_set = GetCScalarFunctionSet(set);
 	for (idx_t idx = 0; idx < scalar_function_set.Size(); idx++) {
 		auto &scalar_function = scalar_function_set.GetFunctionReferenceByOffset(idx);
-		auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+		auto &info = scalar_function.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
 
 		if (scalar_function.name.empty() || !info.function) {
 			return DuckDBError;

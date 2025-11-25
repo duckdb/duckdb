@@ -1,5 +1,6 @@
 add_subdirectory(column)
 add_subdirectory(row)
+add_subdirectory(variant)
 
 if(${EXIT_TIME_DESTRUCTORS_WARNING})
   set(CMAKE_CXX_FLAGS_DEBUG

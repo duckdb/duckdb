@@ -428,8 +428,15 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 		return;
 	}
 	try {
-		// truncate the WAL in case of a destructor
+		// Truncate the WAL in case of a destructor.
 		RevertCommit();
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		try {
+			DUCKDB_LOG_ERROR(wal.GetDatabase().GetDatabase(),
+			                 "SingleFileStorageCommitState::~SingleFileStorageCommitState()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
 	} catch (...) { // NOLINT
 	}
 }
@@ -534,7 +541,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
+			throw FatalException("Failed to create checkpoint because of error: %s", error.Message());
 		}
 	}
 

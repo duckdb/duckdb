@@ -342,7 +342,8 @@ public:
 
 public:
 	idx_t GetContainerIndex();
-	idx_t GetRemainingSpace();
+	idx_t GetUsedDataSpace();
+	idx_t GetAvailableSpace();
 	bool CanStore(idx_t container_size, const ContainerMetadata &metadata);
 	void InitializeContainer();
 	void CreateEmptySegment();

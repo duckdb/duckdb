@@ -1,0 +1,12 @@
+{
+  "version": "unstable_new_logger_functions",
+  "description": "API to register a custom log storage.",
+  "entries": [
+    "duckdb_create_log_storage",
+    "duckdb_destroy_log_storage",
+    "duckdb_log_storage_set_write_log_entry",
+    "duckdb_log_storage_set_extra_data",
+    "duckdb_log_storage_set_name",
+    "duckdb_register_log_storage"
+  ]
+}

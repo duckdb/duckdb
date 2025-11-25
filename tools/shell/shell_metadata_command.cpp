@@ -109,9 +109,6 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 		}
 	}
 
-	/* When playing back a "dump", the content might appear in an order
-	** which causes immediate foreign key constraints to be violated.
-	** So disable foreign-key constraint enforcement to prevent problems. */
 	state.PrintF("BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
