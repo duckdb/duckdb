@@ -1142,16 +1142,16 @@ void SingleFileBlockManager::FileSync() {
 }
 
 void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	// check if it is part of the newly free list
 	lock_guard<mutex> lock(block_lock);
-	// unregister the block - check if it is part of the newly free list
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
 		free_list.insert(id);
 		free_blocks_in_use.erase(entry);
 	}
-	// perform the actual unregistration
-	BlockManager::UnregisterBlock(id);
 }
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
