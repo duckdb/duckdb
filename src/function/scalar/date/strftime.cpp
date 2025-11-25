@@ -228,9 +228,9 @@ struct StrpTimeFunction {
 			} else if (format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED)) {
 				bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
 				if (bound_function.name == "strptime") {
-					bound_function.function = Parse<timestamp_ns_t>;
+					bound_function.SetFunctionCallback(Parse<timestamp_ns_t>);
 				} else {
-					bound_function.function = TryParse<timestamp_ns_t>;
+					bound_function.SetFunctionCallback(TryParse<timestamp_ns_t>);
 				}
 			}
 			return make_uniq<StrpTimeBindData>(format, format_string);
@@ -266,9 +266,9 @@ struct StrpTimeFunction {
 				// unless there is an offset, in which case we produce
 				bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
 				if (bound_function.name == "strptime") {
-					bound_function.function = Parse<timestamp_ns_t>;
+					bound_function.SetFunctionCallback(Parse<timestamp_ns_t>);
 				} else {
-					bound_function.function = TryParse<timestamp_ns_t>;
+					bound_function.SetFunctionCallback(TryParse<timestamp_ns_t>);
 				}
 			}
 			return make_uniq<StrpTimeBindData>(formats, format_strings);

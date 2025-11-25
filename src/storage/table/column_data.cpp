@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/common/serializer/read_stream.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -161,6 +163,8 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 }
 
 void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
+	D_ASSERT(state.current);
+
 	state.previous_states.clear();
 	if (!state.initialized) {
 		auto &current = state.current->GetNode();
@@ -440,7 +444,7 @@ FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
 	return filter.CheckStatistics(stats->statistics);
 }
 
-unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
+unique_ptr<BaseStatistics> ColumnData::GetStatistics() const {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");
 	}
@@ -744,11 +748,12 @@ vector<DataPointer> ColumnData::GetDataPointers() {
 	return pointers;
 }
 
-PersistentColumnData::PersistentColumnData(PhysicalType physical_type_p) : physical_type(physical_type_p) {
+PersistentColumnData::PersistentColumnData(const LogicalType &logical_type)
+    : physical_type(logical_type.InternalType()), logical_type_id(logical_type.id()) {
 }
 
-PersistentColumnData::PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers_p)
-    : physical_type(physical_type), pointers(std::move(pointers_p)) {
+PersistentColumnData::PersistentColumnData(const LogicalType &logical_type, vector<DataPointer> pointers_p)
+    : physical_type(logical_type.InternalType()), logical_type_id(logical_type.id()), pointers(std::move(pointers_p)) {
 	D_ASSERT(!pointers.empty());
 }
 
@@ -766,6 +771,22 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 		return;
 	}
 	serializer.WriteProperty(101, "validity", child_columns[0]);
+
+	if (logical_type_id == LogicalTypeId::VARIANT) {
+		D_ASSERT(physical_type == PhysicalType::STRUCT);
+		D_ASSERT(child_columns.size() == 2 || child_columns.size() == 3);
+
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
+		serializer.WriteProperty<PersistentColumnData>(102, "unshredded", child_columns[1]);
+
+		if (child_columns.size() == 3) {
+			D_ASSERT(variant_shredded_type.id() == LogicalTypeId::STRUCT);
+			serializer.WriteProperty<LogicalType>(115, "shredded_type", variant_shredded_type);
+			serializer.WriteProperty<PersistentColumnData>(120, "shredded", child_columns[2]);
+		}
+		return;
+	}
+
 	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
 		D_ASSERT(child_columns.size() == 2);
 		serializer.WriteProperty(102, "child_column", child_columns[1]);
@@ -785,13 +806,32 @@ void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
 	auto &type = deserializer.Get<const LogicalType &>();
 	auto physical_type = type.InternalType();
-	PersistentColumnData result(physical_type);
+	PersistentColumnData result(type);
 	deserializer.ReadPropertyWithDefault(100, "data_pointers", static_cast<vector<DataPointer> &>(result.pointers));
 	if (result.physical_type == PhysicalType::BIT) {
 		// validity: return
 		return result;
 	}
 	result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
+
+		deserializer.Set<const LogicalType &>(unshredded_type);
+		result.child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(102, "unshredded"));
+		deserializer.Unset<LogicalType>();
+
+		auto shredded_type =
+		    deserializer.ReadPropertyWithExplicitDefault<LogicalType>(115, "shredded_type", LogicalType());
+		if (shredded_type.id() == LogicalTypeId::STRUCT) {
+			deserializer.Set<const LogicalType &>(shredded_type);
+			result.child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(120, "shredded"));
+			deserializer.Unset<LogicalType>();
+			result.SetVariantShreddedType(shredded_type);
+		}
+		return result;
+	}
+
 	switch (physical_type) {
 	case PhysicalType::ARRAY:
 		result.DeserializeField(deserializer, 102, "child_column", ArrayType::GetChildType(type));
@@ -824,6 +864,12 @@ bool PersistentColumnData::HasUpdates() const {
 		}
 	}
 	return false;
+}
+
+void PersistentColumnData::SetVariantShreddedType(const LogicalType &shredded_type) {
+	D_ASSERT(physical_type == PhysicalType::STRUCT);
+	D_ASSERT(logical_type_id == LogicalTypeId::VARIANT);
+	variant_shredded_type = shredded_type;
 }
 
 PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) : types(std::move(types_p)) {
@@ -878,8 +924,7 @@ bool PersistentCollectionData::HasUpdates() const {
 }
 
 PersistentColumnData ColumnData::Serialize() {
-	auto result = count ? PersistentColumnData(type.InternalType(), GetDataPointers())
-	                    : PersistentColumnData(type.InternalType());
+	auto result = count ? PersistentColumnData(type, GetDataPointers()) : PersistentColumnData(type);
 	result.has_updates = HasUpdates();
 	return result;
 }
@@ -995,6 +1040,9 @@ void ColumnData::Verify(RowGroup &parent) {
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return make_shared_ptr<VariantColumnData>(block_manager, info, column_index, type, data_type, parent);
+	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		return make_shared_ptr<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
