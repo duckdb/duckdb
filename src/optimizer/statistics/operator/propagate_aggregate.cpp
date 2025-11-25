@@ -55,14 +55,13 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
 
 bool TryGetValueFromStats(const PartitionStatistics &stats, const column_t column_index,
                           const ValueComparator &comparator, Value &result) {
-	if (stats.count_type == CountType::COUNT_APPROXIMATE) {
-		// we cannot get an exact count
-		return false;
-	}
 	if (!stats.partition_row_group) {
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(column_index);
+	if (!stats.partition_row_group->MinMaxIsExact(*column_stats)) {
+		return false;
+	}
 	if (!NumericStats::HasMinMax(*column_stats)) {
 		// TODO: This also returns if an entire row group is null. In that case, we could skip/compare null
 		return false;
