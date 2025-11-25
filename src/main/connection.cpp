@@ -23,11 +23,6 @@ Connection::Connection(DatabaseInstance &database)
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AddConnection(*context);
 	connection_manager.AssignConnectionId(*this);
-
-#ifdef DEBUG
-	EnableProfiling();
-	context->config.emit_profiler_output = false;
-#endif
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
