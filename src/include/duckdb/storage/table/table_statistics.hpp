@@ -32,6 +32,7 @@ class TableStatistics {
 public:
 	void Initialize(const vector<LogicalType> &types, PersistentTableData &data);
 	void InitializeEmpty(const vector<LogicalType> &types);
+	void InitializeEmpty(const TableStatistics &other);
 
 	void InitializeAddColumn(TableStatistics &parent, const LogicalType &new_column_type);
 	void InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column);

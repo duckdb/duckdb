@@ -192,7 +192,7 @@ public:
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	void MergeIntoStatistics(TableStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
+	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 	PartitionStatistics GetPartitionStats(idx_t row_group_start);
@@ -215,6 +215,7 @@ public:
 	idx_t GetRowGroupSize() const;
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
+	idx_t GetColumnCount() const;
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
@@ -225,7 +226,6 @@ private:
 	ColumnData &GetColumn(storage_t c) const;
 	void LoadColumn(storage_t c) const;
 	ColumnData &GetColumn(const StorageIndex &c) const;
-	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
