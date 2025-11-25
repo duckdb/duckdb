@@ -45,11 +45,11 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size(aggr.function));
-		aggr.function.initialize(aggr.function, state.get());
+		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
+		aggr.function.GetStateInitCallback()(aggr.function, state.get());
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(aggr.bind_info.get());
-		destructors.push_back(aggr.function.destructor);
+		destructors.push_back(aggr.function.GetStateDestructorCallback());
 #ifdef DEBUG
 		counts[i] = 0;
 #endif
@@ -115,7 +115,7 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
-		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
+		aggregate.function.GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
 #endif
@@ -136,7 +136,7 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
-		aggregate.function.combine(state_vec, combined_vec, aggr_input_data, 1);
+		aggregate.function.GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
 #ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
 #endif
@@ -268,7 +268,7 @@ public:
 bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
 	for (auto &expr : aggregates) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT) {
+		if (aggr.function.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
 			return true;
 		}
 	}
@@ -352,8 +352,8 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
 	AggregateInputData aggr_input_data(state.bind_data[aggr_idx], allocator);
-	aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt, state.aggregate_data[aggr_idx].get(),
-	                                 payload_chunk.size());
+	aggregate.function.GetStateSimpleUpdateCallback()(start_of_input, aggr_input_data, payload_cnt,
+	                                                  state.aggregate_data[aggr_idx].get(), payload_chunk.size());
 }
 
 //===--------------------------------------------------------------------===//
@@ -644,7 +644,8 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
-		aggregate.function.finalize(state_vector, aggr_input_data, result.data[column_offset + aggr_idx], 1, 0);
+		aggregate.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
+		                                              result.data[column_offset + aggr_idx], 1, 0);
 	}
 }
 

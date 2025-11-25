@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ struct PartitionStatistics {
 	PartitionStatistics();
 
 	//! The row id start
-	idx_t row_start;
+	optional_idx row_start;
 	//! The amount of rows in the partition
 	idx_t count;
 	//! Whether or not the count is exact or approximate

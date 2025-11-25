@@ -104,7 +104,7 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 ScalarFunction ConstantOrNullFun::GetFunction() {
 	auto fun = ScalarFunction("constant_or_null", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                          ConstantOrNullFunction);
-	fun.bind = ConstantOrNullBind;
+	fun.SetBindCallback(ConstantOrNullBind);
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }

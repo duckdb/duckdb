@@ -12,6 +12,45 @@
 
 namespace duckdb_shell {
 struct ShellState;
+struct RenderingResultIterator;
+
+struct ResultMetadata {
+	explicit ResultMetadata(duckdb::QueryResult &result);
+
+	vector<string> column_names;
+	vector<duckdb::LogicalType> types;
+	vector<string> type_names;
+
+	idx_t ColumnCount() const {
+		return column_names.size();
+	}
+};
+
+struct RowData {
+	vector<string> data;
+	vector<bool> is_null;
+	idx_t row_index = 0;
+};
+
+struct RenderingQueryResult {
+	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
+	    : result(result), renderer(renderer), metadata(result), is_converted(false) {
+	}
+
+	duckdb::QueryResult &result;
+	ShellRenderer &renderer;
+	ResultMetadata metadata;
+	vector<vector<string>> data;
+	bool is_converted = false;
+
+	idx_t ColumnCount() const {
+		return metadata.ColumnCount();
+	}
+
+public:
+	RenderingResultIterator begin(); // NOLINT: match stl API
+	RenderingResultIterator end();   // NOLINT: match stl API
+};
 
 class ShellRenderer {
 public:
@@ -24,32 +63,22 @@ public:
 	string row_sep;
 
 public:
+	virtual SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result);
+	virtual void Analyze(RenderingQueryResult &result);
+	virtual void RenderHeader(ResultMetadata &result);
+	virtual void RenderRow(ResultMetadata &result, RowData &row);
+	virtual void RenderFooter(ResultMetadata &result);
 	static bool IsColumnar(RenderMode mode);
-};
-
-struct ColumnarResult {
-	idx_t column_count = 0;
-	vector<string> data;
-	vector<duckdb::LogicalType> types;
-	vector<idx_t> column_width;
-	vector<bool> right_align;
-	vector<string> type_names;
-};
-
-struct RowResult {
-	vector<string> column_names;
-	vector<string> data;
-	vector<duckdb::LogicalType> types;
-	vector<bool> is_null;
+	virtual string NullValue();
 };
 
 class ColumnRenderer : public ShellRenderer {
 public:
 	explicit ColumnRenderer(ShellState &state);
 
+	void Analyze(RenderingQueryResult &result) override;
 	virtual string ConvertValue(const char *value);
-	virtual void RenderHeader(ColumnarResult &result) = 0;
-	virtual void RenderFooter(ColumnarResult &result);
+	void RenderRow(ResultMetadata &result, RowData &row) override;
 
 	virtual const char *GetColumnSeparator() = 0;
 	virtual const char *GetRowSeparator() = 0;
@@ -57,23 +86,26 @@ public:
 		return nullptr;
 	}
 
-	void RenderAlignedValue(ColumnarResult &result, idx_t i);
+	void RenderAlignedValue(ResultMetadata &result, idx_t c);
+
+protected:
+	vector<idx_t> column_width;
+	vector<bool> right_align;
 };
 
 class RowRenderer : public ShellRenderer {
 public:
 	explicit RowRenderer(ShellState &state);
 
-	bool first_row = true;
-
 public:
-	virtual void Render(RowResult &result);
+	virtual void RenderHeader(ResultMetadata &result) override;
+};
 
-	virtual void RenderHeader(RowResult &result);
-	virtual void RenderRow(RowResult &result) = 0;
-	virtual void RenderFooter(RowResult &result);
+class ModeDuckBoxRenderer : public ShellRenderer {
+public:
+	explicit ModeDuckBoxRenderer(ShellState &state);
 
-	virtual string NullValue();
+	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
 };
 
 } // namespace duckdb_shell
