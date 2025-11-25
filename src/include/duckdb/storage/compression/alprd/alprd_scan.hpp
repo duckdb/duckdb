@@ -155,8 +155,6 @@ public:
 
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-
-
 		// Load the vector data
 		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;

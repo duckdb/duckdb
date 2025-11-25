@@ -27,17 +27,17 @@
 namespace duckdb {
 
 template <class T>
-struct AlpOuterCompressionState : public CompressionState {
+struct AlpCompressionState : public CompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpOuterCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
+	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
-		inner_state.best_k_combinations = analyze_state->inner_state.best_k_combinations;
+		compression_data.best_k_combinations = analyze_state->compression_data.best_k_combinations;
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -57,7 +57,7 @@ public:
 	T input_vector[AlpConstants::ALP_VECTOR_SIZE]; // Uncompressed data
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
 
-	alp::AlpInnerCompressionState<T, false> inner_state;
+	alp::AlpCompressionData<T, false> compression_data;
 
 public:
 	// Returns the space currently used in the segment (in bytes)
@@ -76,7 +76,7 @@ public:
 	}
 
 	void ResetVector() {
-		inner_state.Reset();
+		compression_data.Reset();
 	}
 
 	void CreateEmptySegment() {
@@ -102,9 +102,9 @@ public:
 			alp::AlpUtils::FindAndReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
 		}
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx,
-		                                        inner_state);
+		                                        compression_data);
 		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_idx;
-		const idx_t compressed_size = inner_state.RequiredSpace();
+		const idx_t compressed_size = compression_data.RequiredSpace();
 		const bool should_compress = compressed_size < uncompressed_size;
 
 		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
@@ -131,38 +131,39 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushCompressedVector() {
-		Store<uint8_t>(inner_state.vector_encoding_indices.exponent, data_ptr);
+		Store<uint8_t>(compression_data.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		Store<uint8_t>(inner_state.vector_encoding_indices.factor, data_ptr);
+		Store<uint8_t>(compression_data.vector_encoding_indices.factor, data_ptr);
 		data_ptr += AlpConstants::FACTOR_SIZE;
 
-		Store<uint16_t>(inner_state.exceptions_count, data_ptr);
+		Store<uint16_t>(compression_data.exceptions_count, data_ptr);
 		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		Store<uint64_t>(inner_state.frame_of_reference, data_ptr);
+		Store<uint64_t>(compression_data.frame_of_reference, data_ptr);
 		data_ptr += AlpConstants::FOR_SIZE;
 
-		Store<uint8_t>(UnsafeNumericCast<uint8_t>(inner_state.bit_width), data_ptr);
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(compression_data.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
-		memcpy((void *)data_ptr, (void *)inner_state.values_encoded, inner_state.bp_size);
+		memcpy((void *)data_ptr, (void *)compression_data.values_encoded, compression_data.bp_size);
 		// We should never go out of bounds in the values_encoded array
-		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= inner_state.bp_size);
+		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= compression_data.bp_size);
 
-		data_ptr += inner_state.bp_size;
+		data_ptr += compression_data.bp_size;
 
-		if (inner_state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)inner_state.exceptions, sizeof(EXACT_TYPE) * inner_state.exceptions_count);
-			data_ptr += sizeof(EXACT_TYPE) * inner_state.exceptions_count;
-			memcpy((void *)data_ptr, (void *)inner_state.exceptions_positions,
-			       AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count);
-			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
+		if (compression_data.exceptions_count > 0) {
+			memcpy((void *)data_ptr, (void *)compression_data.exceptions,
+			       sizeof(EXACT_TYPE) * compression_data.exceptions_count);
+			data_ptr += sizeof(EXACT_TYPE) * compression_data.exceptions_count;
+			memcpy((void *)data_ptr, (void *)compression_data.exceptions_positions,
+			       AlpConstants::EXCEPTION_POSITION_SIZE * compression_data.exceptions_count);
+			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * compression_data.exceptions_count;
 		}
 
 		data_bytes_used +=
-		    inner_state.bp_size +
-		    (inner_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		    compression_data.bp_size +
+		    (compression_data.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
 		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
@@ -293,12 +294,12 @@ public:
 template <class T>
 unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                 unique_ptr<AnalyzeState> state) {
-	return make_uniq<AlpOuterCompressionState<T>>(checkpoint_data, (AlpAnalyzeState<T> *)state.get());
+	return make_uniq<AlpCompressionState<T>>(checkpoint_data, (AlpAnalyzeState<T> *)state.get());
 }
 
 template <class T>
 void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (AlpOuterCompressionState<T> &)state_p;
+	auto &state = (AlpCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -306,7 +307,7 @@ void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 
 template <class T>
 void AlpFinalizeCompress(CompressionState &state_p) {
-	auto &state = (AlpOuterCompressionState<T> &)state_p;
+	auto &state = (AlpCompressionState<T> &)state_p;
 	state.Finalize();
 }
 

@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/alp/alp_uncompressed_mode.test
+# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode_equal_compression.test
 # description: Test storage of alp, but simple
-# group: [alp]
+# group: [alprd]
 
 require parquet
 
@@ -12,7 +12,7 @@ PRAGMA force_compression='uncompressed'
 
 # This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original. Our implementation of ALP now uses an uncompressed mode to handle this scenario.
 statement ok
-CREATE TABLE uncompressed_table AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
+CREATE TABLE uncompressed_table AS SELECT x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
 statement ok
 checkpoint;
@@ -23,7 +23,7 @@ SELECT compression FROM pragma_storage_info('uncompressed_table') WHERE segment_
 
 # Now create a duplicate of this table, compressed with ALP instead
 statement ok
-PRAGMA force_compression='alp'
+PRAGMA force_compression='alprd'
 
 statement ok
 create table alp_table as select * from uncompressed_table;
@@ -32,7 +32,7 @@ statement ok
 checkpoint
 
 query I
-SELECT compression FROM pragma_storage_info('alp_table') WHERE segment_type == 'double' AND compression != 'ALP';
+SELECT compression FROM pragma_storage_info('alp_table') WHERE segment_type == 'double' AND compression != 'ALPRD';
 ----
 
 # Assert that the data was not corrupted by compressing to ALP
@@ -54,10 +54,12 @@ CREATE TYPE test_result AS UNION (
     )
 );
 
+# Differs from alp_uncompressed_mode_better_compression.test, as here the compression factor is equal to 1, and not
+# greater.
 query I
 SELECT
     CASE
-        WHEN (uncompressed::FLOAT / compressed::FLOAT) > 1
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) >= 1
             THEN True::test_result
         ELSE {
             'uncompressed': uncompressed,
