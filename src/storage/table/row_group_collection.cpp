@@ -1614,6 +1614,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
+	scan_state.table_state.Initialize(context, GetTypes());
 	scan_state.table_state.max_row = row_groups->GetBaseRowId() + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
@@ -1621,12 +1622,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	auto &changed_stats = result->stats.GetStats(*lock, changed_idx);
 	auto result_row_groups = result->GetRowGroups();
 
-	bool first_rowgroup = true;
 	for (auto &node : row_groups->SegmentNodes()) {
-		if (first_rowgroup) {
-			scan_state.table_state.Initialize(executor.GetContext(), GetTypes());
-			first_rowgroup = false;
-		}
 		auto &current_row_group = node.GetNode();
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
 		                                                 scan_state.table_state, node, scan_chunk);
