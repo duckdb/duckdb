@@ -82,7 +82,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
-	    {"extension_directory", {"test", "[test]"}},
+	    {"extension_directory", {"test"}},
+	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
@@ -275,18 +276,12 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 		}
 		auto original_value = GetValueForSetting(con, option.name, option.type);
 		for (auto &value_pair : value_set.pairs) {
-			// special case for extension_directory to do backward-compatibility testing
-			auto parameter_type = option.type;
-			if (option.name == "extension_directory") {
-				parameter_type = LogicalType::VARCHAR;
-			}
-
 			// Get the new value for the option
 			auto input = value_pair.input.CastAs(*con.context, option.type);
 			// Set the new option
 			REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET %s = %s", option.name, input.ToSQLString())));
 
-			auto changed_value = GetValueForSetting(con, option.name, parameter_type);
+			auto changed_value = GetValueForSetting(con, option.name, option.type);
 
 			// Get the value of the option again
 			REQUIRE_VALUE_EQUAL(option.name, changed_value, value_pair.output);
@@ -294,7 +289,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			// reset the option again
 			REQUIRE_NO_FAIL(con.Query(StringUtil::Format("RESET %s", option.name)));
 
-			auto reset_value = GetValueForSetting(con, option.name, parameter_type);
+			auto reset_value = GetValueForSetting(con, option.name, option.type);
 
 			// Get the reset value of the option
 			REQUIRE_VALUE_EQUAL(option.name, reset_value, original_value);

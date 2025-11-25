@@ -100,12 +100,17 @@ vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, 
 	vector<string> extension_directories;
 	auto &config = db.config;
 
+	if (!config.options.extension_directory.empty()) {
+		extension_directories.push_back(config.options.extension_directory);
+	}
+
 	if (!config.options.extension_directories.empty()) {
 		// Add all configured extension directories
 		for (const auto &dir : config.options.extension_directories) {
 			extension_directories.push_back(dir);
 		}
-	} else {
+	}
+	if (extension_directories.empty()) {
 		// Add default extension directory if no custom directories configured
 		for (const auto &default_dir : ExtensionHelper::DefaultExtensionFolders(fs)) {
 			extension_directories.push_back(default_dir);

@@ -11,8 +11,6 @@
 #include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 
-#include <iostream>
-
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
 #endif // DUCKDB_NO_THREADS
@@ -366,7 +364,17 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		};
 
 		// Collect all directories to search for extensions
-		vector<string> search_directories(db.config.options.extension_directories);
+		vector<string> search_directories;
+		if (!db.config.options.extension_directory.empty()) {
+			search_directories.push_back(db.config.options.extension_directory);
+		}
+
+		if (!db.config.options.extension_directories.empty()) {
+			// Add all configured extension directories
+			for (const auto &dir : db.config.options.extension_directories) {
+				search_directories.push_back(dir);
+			}
+		}
 
 		// Add default extension directory if no custom directories configured
 		if (search_directories.empty()) {

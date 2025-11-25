@@ -74,7 +74,6 @@ struct ConfigurationOption {
 	const char *name;
 	const char *description;
 	const char *parameter_type;
-	const char *alternative_parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
 	reset_global_function_t reset_global;
