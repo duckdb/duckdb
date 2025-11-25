@@ -56,7 +56,7 @@ public:
 	}
 
 	//! Returns the virtual columns for this table
-	virtual virtual_column_map_t GetVirtualColumns() const override;
+	virtual_column_map_t GetVirtualColumns() const override;
 	virtual vector<column_t> GetRowNumberColumns() const;
 
 private:
