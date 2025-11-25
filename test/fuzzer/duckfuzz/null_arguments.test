@@ -14,7 +14,7 @@ SELECT NULL FROM parquet_scan(NULL, "schema" := NULL);
 <REGEX>:.*NULL.*
 
 statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+create table all_types as select * exclude(time_ns, small_enum, medium_enum, large_enum) from test_all_types();
 
 statement error
 SELECT NULL FROM read_ndjson_auto(NULL, timestamp_format := 5469, "compression" := NULL)
