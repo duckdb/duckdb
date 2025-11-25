@@ -2,6 +2,9 @@
 # description: Test failing a delayed CHECKPOINT (after DETACH).
 # group: [checkpoint]
 
+# Alternative verification disables checkpointing on shutdown.
+require no_alternative_verify
+
 statement ok
 SET threads = 1;
 

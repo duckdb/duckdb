@@ -34,6 +34,12 @@
         "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
       ]
     },
+    {"reason": "Checkpointing is necessary to trigger expected checkpoint error.",
+      "paths": [
+        "test/sql/storage/checkpoint/test_checkpoint_failure_delayed.test",
+        "test/sql/storage/checkpoint/test_checkpoint_failure_on_detach.test"
+      ]
+    },
     {
       "reason": "Empty WAL is necessary to trigger optimizer rule.",
       "paths": [
