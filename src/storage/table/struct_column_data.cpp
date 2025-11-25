@@ -338,7 +338,7 @@ public:
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		PersistentColumnData data(PhysicalType::STRUCT);
+		PersistentColumnData data(original_column.type);
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
 			data.child_columns.push_back(child_state->ToPersistentData());
@@ -388,7 +388,7 @@ bool StructColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData StructColumnData::Serialize() {
-	PersistentColumnData persistent_data(PhysicalType::STRUCT);
+	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity->Serialize());
 	for (auto &sub_column : sub_columns) {
 		persistent_data.child_columns.push_back(sub_column->Serialize());
