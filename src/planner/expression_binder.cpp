@@ -15,8 +15,9 @@ void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callbac
 	binder.SetCatalogLookupCallback(std::move(callback));
 }
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
-    : binder(binder), context(context) {
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder,
+                                   bool bind_correlated_colums_p)
+    : bind_correlated_columns(bind_correlated_colums_p), binder(binder), context(context) {
 	InitializeStackCheck();
 	if (replace_binder) {
 		stored_binder = &binder.GetActiveBinder();
@@ -320,6 +321,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (error_msg.HasError()) {
+		if (!bind_correlated_columns) {
+			error_msg.Throw();
+		}
 		// Try binding the correlated column. If binding the correlated column
 		// has error messages, those should be propagated up. So for the test case
 		// having subquery failed to bind:14 the real error message should be something like

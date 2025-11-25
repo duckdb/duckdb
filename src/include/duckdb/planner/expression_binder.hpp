@@ -71,7 +71,8 @@ class ExpressionBinder {
 	friend class StackChecker<ExpressionBinder>;
 
 public:
-	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
+	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false,
+	                 bool bind_correlated_columns_p = true);
 	virtual ~ExpressionBinder();
 
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
@@ -80,6 +81,7 @@ public:
 
 	optional_ptr<DummyBinding> macro_binding;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
+	const bool bind_correlated_columns = true;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
