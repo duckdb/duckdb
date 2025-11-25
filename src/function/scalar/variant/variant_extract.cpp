@@ -290,7 +290,7 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.arguments = {variant_type, LogicalType::UBIGINT};
+	variant_extract.arguments = {variant_type, LogicalType::UINTEGER};
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }
