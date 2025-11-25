@@ -115,6 +115,7 @@ void RowGroup::LoadRowIdColumnData() const {
 		return;
 	}
 	row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo());
+	row_id_column_data->GetStatistics()->SetHasNoNullFast();
 	row_id_column_data->count = count.load();
 	row_id_is_loaded = true;
 }

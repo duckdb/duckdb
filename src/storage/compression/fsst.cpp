@@ -448,7 +448,13 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		auto idx = vdata.sel->get_index(i);
 
 		// Note: we treat nulls and empty strings the same
-		if (!vdata.validity.RowIsValid(idx) || data[idx].GetSize() == 0) {
+		const bool is_null = !vdata.validity.RowIsValid(idx);
+		if (is_null) {
+			state.current_segment->stats.statistics.SetHasNullFast();
+		} else {
+			state.current_segment->stats.statistics.SetHasNoNullFast();
+		}
+		if (is_null || data[idx].GetSize() == 0) {
 			continue;
 		}
 

@@ -72,8 +72,10 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 	auto list_stats = ArrayStats::CreateEmpty(expr.return_type);
 	auto &list_child_stats = ArrayStats::GetChildStats(list_stats);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
+		//! FIXME: should this use list_stats.CombineValidity(list_stats, child_stats[i]) ?
 		list_child_stats.Merge(child_stats[i]);
 	}
+	list_stats.SetHasNoNullFast();
 	return list_stats.ToUnique();
 }
 

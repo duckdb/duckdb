@@ -204,6 +204,7 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());
 		D_ASSERT(!constant_value.IsNull());
+		D_ASSERT(stats.CanHaveNoNull());
 		auto &constant = StringValue::Get(constant_value);
 		auto prune_result = CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
 		                                 StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
