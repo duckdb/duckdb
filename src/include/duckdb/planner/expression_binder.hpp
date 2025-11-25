@@ -71,7 +71,8 @@ class ExpressionBinder {
 	friend class StackChecker<ExpressionBinder>;
 
 public:
-	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
+	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false,
+	                 bool bind_correlated_columns_p = true);
 	virtual ~ExpressionBinder();
 
 	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
@@ -92,6 +93,7 @@ public:
 
 	optional_ptr<DummyBinding> macro_binding;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
+	const bool bind_correlated_columns = true;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
