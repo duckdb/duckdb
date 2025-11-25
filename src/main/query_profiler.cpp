@@ -99,7 +99,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_name = query;
-	query_metrics.latency_timer = make_uniq<ActiveTimer>(query_metrics, MetricType::LATENCY);
+	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer(MetricType::LATENCY));
 }
 
 void QueryProfiler::Reset() {

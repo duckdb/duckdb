@@ -50,7 +50,6 @@ def retrieve_optimizers(optimizer_file: Path) -> list[str]:
                     continue
                 result.append(name)
 
-    result.sort()
     return result
 
 

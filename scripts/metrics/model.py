@@ -30,7 +30,7 @@ class MetricIndex:
             by_group[g].sort()
 
         # Add optimizer group (names only)
-        optimizer_names = [f"OPTIMIZER_{o}" for o in sorted(optimizers)]
+        optimizer_names = [f"OPTIMIZER_{o}" for o in optimizers]
         by_group["optimizer"] = optimizer_names
 
         # Add "all"
