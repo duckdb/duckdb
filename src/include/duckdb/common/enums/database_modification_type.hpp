@@ -37,28 +37,28 @@ public:
 	}
 
 	bool InsertData() const {
-		return value | INSERT_DATA;
+		return value & INSERT_DATA;
 	}
 	bool DeleteData() const {
-		return value | DELETE_DATA;
+		return value & DELETE_DATA;
 	}
 	bool UpdateData() const {
-		return value | UPDATE_DATA;
+		return value & UPDATE_DATA;
 	}
 	bool AlterTable() const {
-		return value | ALTER_TABLE;
+		return value & ALTER_TABLE;
 	}
 	bool CreateCatalogEntry() const {
-		return value | CREATE_CATALOG_ENTRY;
+		return value & CREATE_CATALOG_ENTRY;
 	}
 	bool DropCatalogEntry() const {
-		return value | DROP_CATALOG_ENTRY;
+		return value & DROP_CATALOG_ENTRY;
 	}
 	bool Sequence() const {
-		return value | SEQUENCE;
+		return value & SEQUENCE;
 	}
 	bool CreateIndex() const {
-		return value | CREATE_INDEX;
+		return value & CREATE_INDEX;
 	}
 
 private:
