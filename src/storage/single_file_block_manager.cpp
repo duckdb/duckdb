@@ -1099,7 +1099,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
-	block_lock.unlock();
+	lock.unlock();
 	metadata_manager.Flush();
 
 	header.block_count = NumericCast<idx_t>(max_block);
