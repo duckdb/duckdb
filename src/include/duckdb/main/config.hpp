@@ -212,6 +212,8 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
+	//! Whether to validate external file cache entries, which check version tag and last modification timestamp.
+	bool validate_external_file_cache = true;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;

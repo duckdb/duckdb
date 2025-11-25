@@ -109,7 +109,7 @@ private:
 	friend struct CachingFileHandle;
 
 public:
-	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
+	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db_p);
 	DUCKDB_API ~CachingFileSystem();
 
 public:
@@ -124,6 +124,8 @@ private:
 	FileSystem &file_system;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
+	//! The DatabaseInstance.
+	DatabaseInstance &db;
 };
 
 } // namespace duckdb

@@ -732,6 +732,22 @@ Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Validate External File Cache
+//===----------------------------------------------------------------------===//
+void ValidateExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.validate_external_file_cache = input.GetValue<bool>();
+}
+
+void ValidateExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.validate_external_file_cache = DBConfigOptions().validate_external_file_cache;
+}
+
+Value ValidateExternalFileCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.validate_external_file_cache);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Logging
 //===----------------------------------------------------------------------===//
 Value EnableLogging::GetSetting(const ClientContext &context) {
