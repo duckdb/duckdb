@@ -282,7 +282,6 @@ public:
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-		auto &global_state = data_p.global_state->Cast<TableScanGlobalState>();
 
 		do {
 			if (context.interrupted) {
@@ -306,8 +305,7 @@ public:
 					auto count = output.size();
 
 					idx_t row_group_index = l_state.scan_state.table_state.batch_index - 1;
-					std::lock_guard<std::mutex> lock(global_state_mutex);
-					idx_t base = global_state.row_number_offsets[row_group_index] + l_state.row_number_count;
+					idx_t base = state.scan_state.collection->GetPrefixSum(row_group_index) + l_state.row_number_count;
 
 					for (idx_t i = 0; i < count; i++) {
 						row_number_data[i] = static_cast<row_t>(base + i + 1);
@@ -379,16 +377,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		}
 	}
 	if (g_state->row_number_col_index != DConstants::INVALID_INDEX) {
-		idx_t current_offset = 0;
-		int64_t counter = 0;
-		auto row_groups = g_state->state.scan_state.collection;
-		auto row_group = row_groups->GetRowGroup(counter);
-		while (row_group) {
-			g_state->row_number_offsets.push_back(current_offset);
-			current_offset += row_group->GetCommittedRowCount();
-			counter++;
-			row_group = row_groups->GetRowGroup(counter);
-		}
+		g_state->state.scan_state.collection->PrecomputePrefixSums();
 	}
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
