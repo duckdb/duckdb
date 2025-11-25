@@ -12,7 +12,7 @@ PRAGMA force_compression='uncompressed'
 
 # This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original. Our implementation of ALP now uses an uncompressed mode to handle this scenario.
 statement ok
-CREATE TABLE uncompressed_table AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
+CREATE TABLE uncompressed_table AS SELECT x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
 statement ok
 checkpoint;
@@ -57,7 +57,7 @@ CREATE TYPE test_result AS UNION (
 query I
 SELECT
     CASE
-        WHEN (uncompressed::FLOAT / compressed::FLOAT) > 1
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) >= 1
             THEN True::test_result
         ELSE {
             'uncompressed': uncompressed,

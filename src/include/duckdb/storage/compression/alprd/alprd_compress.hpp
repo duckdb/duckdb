@@ -77,10 +77,10 @@ public:
 
 	// Returns the required space to store the newly compressed vector
 
-	bool HasEnoughSpace() {
+	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + inner_state.RequiredSpace())) >=
+		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpRDConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -116,8 +116,15 @@ public:
 			                                                       nulls_idx);
 		}
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, inner_state);
+
+		const idx_t uncompressed_size = AlpConstants::IS_COMPRESSED_SIZE + sizeof(T) * vector_idx;
+		const idx_t compressed_size = inner_state.RequiredSpace();
+		const bool should_compress = compressed_size < uncompressed_size;
+
+		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
+
 		//! Check if the compressed vector fits on current segment
-		if (!HasEnoughSpace()) {
+		if (!HasEnoughSpace(vector_size)) {
 			FlushSegment();
 			CreateEmptySegment();
 		}
@@ -128,11 +135,19 @@ public:
 			}
 		}
 		current_segment->count += vector_idx;
-		FlushVector();
+
+		if (should_compress) {
+			FlushCompressedVector();
+		} else {
+			FlushUncompressedVector();
+		}
 	}
 
 	// Stores the vector and its metadata
-	void FlushVector() {
+	void FlushCompressedVector() {
+		Store<uint8_t>(true, data_ptr);
+		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+
 		Store<uint16_t>(inner_state.exceptions_count, data_ptr);
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
@@ -151,10 +166,33 @@ public:
 			data_ptr += AlpRDConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
 		}
 
-		data_bytes_used += inner_state.left_bit_packed_size + inner_state.right_bit_packed_size +
+		data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + inner_state.left_bit_packed_size + inner_state.right_bit_packed_size +
 		                   (inner_state.exceptions_count *
 		                    (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
 		                   AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+
+		// Write pointer to the vector data (metadata)
+		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
+		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+
+		vectors_flushed++;
+		vector_idx = 0;
+		nulls_idx = 0;
+		ResetVector();
+	}
+
+	void FlushUncompressedVector() {
+		// Uncompressed mode
+		Store<uint8_t>(false, data_ptr);
+		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+
+		// Store uncompressed data
+		for (idx_t i = 0; i < vector_idx; i++) {
+			Store<EXACT_TYPE>(input_vector[i], data_ptr);
+			data_ptr += sizeof(EXACT_TYPE);
+		}
+		data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + (sizeof(T) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
