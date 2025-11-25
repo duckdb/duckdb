@@ -146,7 +146,9 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto sep = fs->PathSeparator("dummy");
-	auto collapse = [&](const string &path) { return StringUtil::Replace(path, "/", sep); };
+	auto collapse = [&](const string &path) {
+		return StringUtil::Replace(path, "/", sep);
+	};
 
 	auto normalized = fs->JoinPath("dir//subdir/", "./file");
 	REQUIRE(normalized == collapse("dir/subdir/file"));
