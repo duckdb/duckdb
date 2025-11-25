@@ -115,7 +115,6 @@ void RowGroup::LoadRowIdColumnData() const {
 		return;
 	}
 	row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo());
-	row_id_column_data->GetStatistics()->SetHasNoNullFast();
 	row_id_column_data->count = count.load();
 	row_id_is_loaded = true;
 }
@@ -452,6 +451,7 @@ void RowGroup::NextVector(CollectionScanState &state) {
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
 	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	dummy_stats.SetHasNoNullFast();
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
 	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
 

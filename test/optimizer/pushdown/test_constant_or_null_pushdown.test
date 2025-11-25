@@ -9,7 +9,15 @@ statement ok
 insert into t1 values (NULL), (NULL);
 
 query II
-explain select count(*) from t1 where constant_or_null(true, COALESCE(ts_stop, '9999-09-09 07:09:09+00'::TIMESTAMPTZ), '2025-06-23 10:32:02.216+00'::TIMESTAMPTZ);
+explain select
+	count(*)
+from t1
+where
+	constant_or_null(
+		true,
+		COALESCE(ts_stop, '9999-09-09 07:09:09+00'::TIMESTAMPTZ),
+		'2025-06-23 10:32:02.216+00'::TIMESTAMPTZ
+	);
 ----
 physical_plan	<REGEX>:.*constant_or_null.*
 
