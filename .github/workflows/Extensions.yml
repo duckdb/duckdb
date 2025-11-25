@@ -14,6 +14,11 @@ on:
         type: string
       run_all:
         type: string
+      # disabling this can result in faster builds, but may run out of space on some runners
+      run_disk_clean_step:
+        type: boolean
+        required: false
+        default: true
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -38,6 +43,11 @@ on:
         type: string
         required: false
         default: 'true'
+      run_disk_clean_step:
+        description: 'Disabling this can result in faster builds, but may run out of space on some runners'
+        type: boolean
+        required: false
+        default: true
   push:
     branches-ignore:
       - 'main'
@@ -247,6 +257,16 @@ jobs:
         - create-extension-repository
 
     steps:
+      - name: Free disk space
+        uses: endersonmenezes/free-disk-space@v3
+        continue-on-error: true
+        if: inputs.run_disk_clean_step
+        with:
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_folders: "/usr/local/share/powershell /usr/share/swift"
+          testing: false
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
