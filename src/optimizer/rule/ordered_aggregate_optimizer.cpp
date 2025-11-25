@@ -22,15 +22,17 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 		// no ORDER BYs defined
 		return nullptr;
 	}
-	if (aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
-		// not an order dependent aggregate but we have an ORDER BY clause - remove it
+
+	// Remove unnecessary ORDER BY clauses and return if nothing remains
+	if (aggr.order_bys->Simplify(groups,
+	                             aggr.function.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT)) {
 		aggr.order_bys.reset();
 		changes_made = true;
 		return nullptr;
 	}
 
-	// Remove unnecessary ORDER BY clauses and return if nothing remains
-	if (aggr.order_bys->Simplify(groups)) {
+	if (aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+		// not an order dependent aggregate but we have an ORDER BY clause - remove it
 		aggr.order_bys.reset();
 		changes_made = true;
 		return nullptr;

@@ -683,7 +683,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	}
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (context.config.enable_optimizer) {
-		if (expr.order_bys->Simplify(groups)) {
+		if (expr.order_bys->Simplify(groups,
+		                             expr.function.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT)) {
 			expr.order_bys.reset();
 			return;
 		}
@@ -741,7 +742,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	}
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (context.config.enable_optimizer) {
-		if (BoundOrderModifier::Simplify(expr.arg_orders, expr.partitions)) {
+		if (BoundOrderModifier::Simplify(expr.arg_orders, expr.partitions,
+		                                 aggregate.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT)) {
 			expr.arg_orders.clear();
 			return;
 		}

@@ -155,8 +155,9 @@ public:
 
 	//! Remove unneeded/duplicate order elements.
 	//! Returns true of orders is not empty.
-	static bool Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups);
-	bool Simplify(const vector<unique_ptr<Expression>> &groups);
+	static bool Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups,
+	                     bool is_order_dependent);
+	bool Simplify(const vector<unique_ptr<Expression>> &groups, bool is_order_dependent);
 };
 
 enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };

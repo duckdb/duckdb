@@ -26,11 +26,11 @@ query I nosort order_by_agg_grp
 EXPLAIN SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY grp
 ----
 
-query I nosort order_by_agg_grp
+query I nosort order_by_agg_grp_2
 EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i) FROM integers GROUP BY grp ORDER BY grp
 ----
 
-query I nosort order_by_agg_grp
+query I nosort order_by_agg_grp_2
 EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY grp
 ----
 
@@ -39,11 +39,11 @@ query I nosort order_by_none
 EXPLAIN SELECT grp, FIRST(i) FROM integers GROUP BY grp ORDER BY grp
 ----
 
-query I nosort order_by_none
+query I nosort order_by_none_2
 EXPLAIN SELECT grp, FIRST(i ORDER BY grp) FROM integers GROUP BY grp ORDER BY grp
 ----
 
-query I nosort order_by_none
+query I nosort order_by_none_2
 EXPLAIN SELECT grp, FIRST(i ORDER BY grp, grp DESC, grp DESC NULLS FIRST) FROM integers GROUP BY grp ORDER BY grp
 ----
 

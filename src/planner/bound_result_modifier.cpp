@@ -101,15 +101,28 @@ bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
 	return BoundOrderModifier::Equals(*left, *right);
 }
 
-bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups) {
-	// for each ORDER BY - check if it is actually necessary
-	// expressions that are in the groups do not need to be ORDERED BY
-	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
-	// similarly, we only need to ORDER BY each aggregate once
+bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups,
+                                  bool is_order_dependent) {
+	// for each ORDER BY clause - check if it is actually necessary.
+	// expressions that are in the GROUP BY do not need to be ORDERED BY
+	//
+	// `ORDER BY` on a group has no effect, because for each aggregate,
+	// the GROUP BY value will be unique (and thus ordering on it is redundant);
+	// similarly, we only need to ORDER BY each aggregate once.
+	//
+	// Caveat: If there is an aggregate function that is order dependent, we cannot
+	// remove the ORDER BY clause even if its appears in the GROUP BY.
+	//
+	// The problem is that removing the ORDER BY means that the aggregate function may be
+	// asked to process data in parallel, and if the function is order dependent, it
+	// it may not be able to implement combine.
+
 	expression_set_t seen_expressions;
+	// If the function is not order dependent, we can skip expressions in the GROUP BY.
 	for (auto &target : groups) {
 		seen_expressions.insert(*target);
 	}
+
 	vector<BoundOrderByNode> new_order_nodes;
 	for (auto &order_node : orders) {
 		if (seen_expressions.find(*order_node.expression) != seen_expressions.end()) {
@@ -119,13 +132,19 @@ bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector
 		seen_expressions.insert(*order_node.expression);
 		new_order_nodes.push_back(std::move(order_node));
 	}
+
+	if (is_order_dependent && new_order_nodes.empty() && !orders.empty()) {
+		// If the aggregate is order dependent, we need at least one ORDER BY clause to prevent parallel execution.
+		new_order_nodes.push_back(std::move(orders[0]));
+	}
+
 	orders.swap(new_order_nodes);
 
 	return orders.empty(); // NOLINT
 }
 
-bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) {
-	return Simplify(orders, groups);
+bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups, bool is_order_dependent) {
+	return Simplify(orders, groups, is_order_dependent);
 }
 
 BoundLimitNode::BoundLimitNode(LimitNodeType type, idx_t constant_integer, double constant_percentage,
