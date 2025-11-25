@@ -412,14 +412,6 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 	return result;
 }
 
-/*
-*ErrorData data(ex);
-            try {
-                DUCKDB_LOG_ERROR(db, "AttachedDatabase::Close()\t\t" + data.Message());
-            } catch (...) { // NOLINT
-            }
- */
-
 void DatabaseManager::ResetDatabases() {
 	auto shared_db_pointers = GetDatabases();
 	for (auto &entry : shared_db_pointers) {

@@ -29,4 +29,4 @@ DETACH db;
 statement error con1
 COMMIT;
 ----
-asdf
+Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag

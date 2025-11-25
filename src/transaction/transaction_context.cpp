@@ -57,18 +57,15 @@ void TransactionContext::Commit() {
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	}
-
 	for (auto &state : context.registered_state->States()) {
 		state->TransactionCommit(*transaction, context);
 	}
 
 	// Try to checkpoint any attached databases potentially still held by this transaction.
-	auto referenced_databases = transaction->ReferencedDatabases();
+	auto &referenced_databases = transaction->ReferencedDatabases();
 	for (auto &database : referenced_databases) {
 		auto &attached_db = database.second;
 		auto use_count = attached_db.use_count();
-		Printer::Print(attached_db->name);
-		Printer::Print(to_string(use_count));
 		if (use_count == 1) {
 			// We already detached the database meaning new transactions can no longer obtain a shared pointer to it.
 			try {

@@ -115,7 +115,9 @@ TEST_CASE("Test logging silent exceptions using a custom log storage in the CAPI
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA wal_autocheckpoint = '1TB';"));
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA debug_checkpoint_abort = 'before_header';"));
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE log_storage_test.integers AS SELECT * FROM range(100) tbl(i);"));
-	REQUIRE_NO_FAIL(tester.Query("DETACH log_storage_test;"));
+
+	// Shut down - should silently fail while resetting the databases.
+	tester.Cleanup();
 
 	REQUIRE(my_log_store.Contains("Failed to create checkpoint because of error"));
 
