@@ -21,6 +21,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class ClientContext;
+struct DatabaseModificationType;
 class Transaction;
 
 enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
