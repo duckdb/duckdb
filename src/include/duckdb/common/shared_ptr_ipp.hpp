@@ -1,3 +1,6 @@
+#include <memory>
+#include <type_traits>
+
 namespace duckdb {
 
 template <typename T, bool SAFE = true>
