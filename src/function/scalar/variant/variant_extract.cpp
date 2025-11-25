@@ -117,7 +117,13 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	if (!found_stats) {
 		return nullptr;
 	}
-	return found_stats->ToUnique();
+
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(variant_stats);
+	auto child_variant_stats = VariantStats::CreateShredded(found_stats->GetType());
+	VariantStats::SetUnshreddedStats(child_variant_stats, unshredded_stats);
+	VariantStats::SetShreddedStats(child_variant_stats, *found_stats);
+
+	return child_variant_stats.ToUnique();
 }
 
 static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,

@@ -7,9 +7,18 @@
 namespace duckdb {
 class BaseStatistics;
 
+enum class VariantStatsShreddingState : uint8_t {
+	//! No shredding applied yet
+	NOT_SHREDDED,
+	//! Shredded consistently
+	SHREDDED,
+	//! Result from combining incompatible shreddings
+	INCONSISTENT
+};
+
 struct VariantStatsData {
 	//! Whether the VARIANT is stored in shredded form
-	bool is_shredded;
+	VariantStatsShreddingState shredding_state;
 };
 
 struct VariantShreddedStats {
