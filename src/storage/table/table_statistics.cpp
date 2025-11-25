@@ -37,7 +37,16 @@ void TableStatistics::InitializeEmpty(const TableStatistics &other) {
 	}
 
 	for (auto &stats : other.column_stats) {
-		column_stats.push_back(ColumnStatistics::CreateEmptyStats(stats->Statistics().GetType()));
+		auto new_column_stats = ColumnStatistics::CreateEmptyStats(stats->Statistics().GetType());
+		if (stats->HasDistinctStats()) {
+			new_column_stats->SetDistinct(stats->DistinctStats().Copy());
+		}
+
+		auto &base_stats = new_column_stats->Statistics();
+		if (new_column_stats->HasDistinctStats()) {
+			base_stats.SetDistinctCount(new_column_stats->DistinctStats().GetCount());
+		}
+		column_stats.push_back(new_column_stats);
 	}
 }
 

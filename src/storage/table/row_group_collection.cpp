@@ -1297,7 +1297,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	auto l = new_row_groups->Lock();
 
 	// initialize new empty stats
-	global_stats.InitializeEmpty(types);
+	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
