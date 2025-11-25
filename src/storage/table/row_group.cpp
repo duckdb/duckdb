@@ -192,6 +192,14 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		// validity - nothing to initialize
 		return;
 	}
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		// variant - column scan states are created later
+		// this is done because the internal shape of the VARIANT is different per rowgroup
+		scan_child_column.resize(2, true);
+		return;
+	}
+
 	D_ASSERT(child_states.empty());
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		// validity + struct children
@@ -248,6 +256,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 
 void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
+	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_scans.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		column_scans.emplace_back(*this);
@@ -329,7 +338,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	scan_state.Initialize(executor.GetContext(), GetCollection().GetTypes());
 	InitializeScan(scan_state, node);
 
 	DataChunk append_chunk;
@@ -1309,7 +1317,18 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
+struct DuckDBPartitionRowGroup : public PartitionRowGroup {
+	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	}
+
+	RowGroup &row_group;
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
+		return row_group.GetStatistics(column_id);
+	}
+};
+
+PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 	PartitionStatistics result;
 	result.row_start = row_group_start;
 	result.count = count;
@@ -1319,6 +1338,8 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
 	}
+
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this);
 	return result;
 }
 

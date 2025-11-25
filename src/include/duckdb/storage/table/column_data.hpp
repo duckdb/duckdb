@@ -96,7 +96,7 @@ public:
 	}
 
 	bool HasParent() const {
-		return parent != nullptr;
+		return parent;
 	}
 	void SetParent(optional_ptr<ColumnData> parent) {
 		this->parent = parent;
@@ -207,7 +207,7 @@ public:
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics();
+	unique_ptr<BaseStatistics> GetStatistics() const;
 
 protected:
 	//! Append a transient segment
@@ -277,8 +277,9 @@ public:
 };
 
 struct PersistentColumnData {
-	explicit PersistentColumnData(PhysicalType physical_type);
-	PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers);
+public:
+	explicit PersistentColumnData(const LogicalType &logical_type);
+	PersistentColumnData(const LogicalType &logical_type, vector<DataPointer> pointers);
 	// disable copy constructors
 	PersistentColumnData(const PersistentColumnData &other) = delete;
 	PersistentColumnData &operator=(const PersistentColumnData &) = delete;
@@ -287,16 +288,21 @@ struct PersistentColumnData {
 	PersistentColumnData &operator=(PersistentColumnData &&) = default;
 	~PersistentColumnData();
 
-	PhysicalType physical_type;
-	vector<DataPointer> pointers;
-	vector<PersistentColumnData> child_columns;
-	bool has_updates = false;
-
+public:
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
 	bool HasUpdates() const;
+	void SetVariantShreddedType(const LogicalType &shredded_type);
+
+public:
+	PhysicalType physical_type;
+	LogicalTypeId logical_type_id;
+	vector<DataPointer> pointers;
+	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
+	LogicalType variant_shredded_type;
 };
 
 struct PersistentRowGroupData {

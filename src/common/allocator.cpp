@@ -9,7 +9,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdint>
-
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"

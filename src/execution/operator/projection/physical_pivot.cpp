@@ -21,12 +21,12 @@ PhysicalPivot::PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> ty
 	for (auto &aggr_expr : bound_pivot.aggregates) {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
-		auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size(aggr.function));
-		aggr.function.initialize(aggr.function, state.get());
+		auto state = make_unsafe_uniq_array<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
+		aggr.function.GetStateInitCallback()(aggr.function, state.get());
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())));
 		Vector result_vector(aggr_expr->return_type);
 		AggregateInputData aggr_input_data(aggr.bind_info.get(), physical_plan.ArenaRef());
-		aggr.function.finalize(state_vector, aggr_input_data, result_vector, 1, 0);
+		aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data, result_vector, 1, 0);
 		empty_aggregates.push_back(result_vector.GetValue(0));
 	}
 }
