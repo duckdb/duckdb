@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 class AlpRDConstants {
