@@ -3,6 +3,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
@@ -140,6 +141,24 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs->DirectoryExists(dname));
 	REQUIRE(!fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->FileExists(fname_in_dir2));
+}
+
+TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto sep = fs->PathSeparator("dummy");
+	auto collapse = [&](const string &path) { return StringUtil::Replace(path, "/", sep); };
+
+	auto normalized = fs->JoinPath("dir//subdir/", "./file");
+	REQUIRE(normalized == collapse("dir/subdir/file"));
+
+	auto parent = fs->JoinPath("dir/subdir", "../sibling");
+	REQUIRE(parent == collapse("dir/sibling"));
+
+	auto abs_override = fs->JoinPath("dir", "/abs/path");
+	REQUIRE(abs_override == fs->ConvertSeparators("/abs/path"));
+
+	auto dedup = fs->JoinPath("dir///", "nested///child");
+	REQUIRE(dedup == collapse("dir/nested/child"));
 }
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
