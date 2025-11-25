@@ -117,7 +117,7 @@ public:
 		}
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, inner_state);
 
-		const idx_t uncompressed_size = AlpConstants::IS_COMPRESSED_SIZE + sizeof(T) * vector_idx;
+		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_idx;
 		const idx_t compressed_size = inner_state.RequiredSpace();
 		const bool should_compress = compressed_size < uncompressed_size;
 
@@ -145,9 +145,6 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushCompressedVector() {
-		Store<uint8_t>(true, data_ptr);
-		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
-
 		Store<uint16_t>(inner_state.exceptions_count, data_ptr);
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
@@ -166,7 +163,7 @@ public:
 			data_ptr += AlpRDConstants::EXCEPTION_POSITION_SIZE * inner_state.exceptions_count;
 		}
 
-		data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + inner_state.left_bit_packed_size + inner_state.right_bit_packed_size +
+		data_bytes_used += inner_state.left_bit_packed_size + inner_state.right_bit_packed_size +
 		                   (inner_state.exceptions_count *
 		                    (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
 		                   AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
@@ -182,17 +179,19 @@ public:
 		ResetVector();
 	}
 
+	//! Uncompressed mode
 	void FlushUncompressedVector() {
-		// Uncompressed mode
-		Store<uint8_t>(false, data_ptr);
-		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+		// Store a sentinel value, signaling the coming data is stored uncompressed.
+		constexpr uint16_t sentinel = AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
+		Store<uint16_t>(sentinel, data_ptr);
+		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		// Store uncompressed data
 		for (idx_t i = 0; i < vector_idx; i++) {
 			Store<EXACT_TYPE>(input_vector[i], data_ptr);
 			data_ptr += sizeof(EXACT_TYPE);
 		}
-		data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + (sizeof(T) * vector_idx);
+		data_bytes_used += AlpConstants::EXCEPTIONS_COUNT_SIZE + (sizeof(T) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;

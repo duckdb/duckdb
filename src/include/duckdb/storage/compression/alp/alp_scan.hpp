@@ -136,19 +136,16 @@ public:
 
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		bool is_compressed = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::IS_COMPRESSED_SIZE;
-
-		if (!is_compressed) {
-			// Read uncompressed values
-			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
-			return;
-		}
-
 		// Load the vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
+		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			// Read uncompressed values
+			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			return;
+		}
 		vector_state.v_factor = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::FACTOR_SIZE;
 
@@ -162,7 +159,6 @@ public:
 		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		D_ASSERT(vector_state.exceptions_count <= vector_size);
-		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
 		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 

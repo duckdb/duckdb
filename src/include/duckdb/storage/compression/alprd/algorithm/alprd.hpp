@@ -61,7 +61,6 @@ public:
 
 	idx_t RequiredSpace() {
 		idx_t required_space =
-			AlpConstants::IS_COMPRESSED_SIZE +
 		    left_bit_packed_size + right_bit_packed_size +
 		    exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
 		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;

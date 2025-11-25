@@ -103,7 +103,7 @@ public:
 		}
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx,
 		                                        inner_state);
-		const idx_t uncompressed_size = AlpConstants::IS_COMPRESSED_SIZE + sizeof(T) * vector_idx;
+		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_idx;
 		const idx_t compressed_size = inner_state.RequiredSpace();
 		const bool should_compress = compressed_size < uncompressed_size;
 
@@ -131,9 +131,6 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushCompressedVector() {
-		Store<uint8_t>(true, data_ptr);
-		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
-
 		Store<uint8_t>(inner_state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -164,7 +161,7 @@ public:
 		}
 
 		data_bytes_used +=
-		    AlpConstants::IS_COMPRESSED_SIZE + inner_state.bp_size +
+		    inner_state.bp_size +
 		    (inner_state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
 		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
@@ -180,17 +177,20 @@ public:
 		ResetVector();
 	}
 
+	// Uncompressed mode
 	void FlushUncompressedVector() {
-		// Uncompressed mode
-		Store<uint8_t>(false, data_ptr);
-		data_ptr += AlpConstants::IS_COMPRESSED_SIZE;
+		// Store a sentinel value instead of the exponent, signaling the coming data is stored uncompressed.
+		constexpr uint8_t sentinel = AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
+		Store<uint8_t>(sentinel, data_ptr);
+		data_ptr += AlpConstants::EXPONENT_SIZE;
 
 		// Store uncompressed data
 		for (idx_t i = 0; i < vector_idx; i++) {
 			Store<T>(input_vector[i], data_ptr);
 			data_ptr += sizeof(T);
 		}
-		data_bytes_used += AlpConstants::IS_COMPRESSED_SIZE + (sizeof(T) * vector_idx);
+
+		data_bytes_used += AlpConstants::EXPONENT_SIZE + (sizeof(T) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);

@@ -54,6 +54,7 @@ CREATE TYPE test_result AS UNION (
     )
 );
 
+# Differs from alp_uncompressed_mode.test, as here the compression factor is equal to 1, and not greater.
 query I
 SELECT
     CASE

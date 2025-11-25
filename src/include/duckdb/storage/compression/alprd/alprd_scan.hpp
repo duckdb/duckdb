@@ -155,19 +155,18 @@ public:
 
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		bool is_compressed = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::IS_COMPRESSED_SIZE;
 
-		if (!is_compressed) {
-			// Read uncompressed values
-			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
-			return;
-		}
 
 		// Load the vector data
 		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
+
+		const bool uncompressed_mode = vector_state.exceptions_count == AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			// Read uncompressed values
+			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			return;
+		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
