@@ -93,7 +93,7 @@ public:
 
 	optional_ptr<DummyBinding> macro_binding;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
-	const bool bind_correlated_columns = true;
+	const bool bind_correlated_columns;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
