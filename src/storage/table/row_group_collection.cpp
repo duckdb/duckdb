@@ -1285,6 +1285,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
 			}
 			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+
+			// copy over existing stats into the global stats
+			CopyStats(global_stats);
 			return;
 		}
 	}
@@ -1292,6 +1295,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto l = new_row_groups->Lock();
+
+	// initialize new empty stats
+	global_stats.InitializeEmpty(types);
 
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
