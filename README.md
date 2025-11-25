@@ -20,7 +20,7 @@ All commands below are run from the root folder of the DuckDB repo.
 This creates the benchmark tables and populates them with data:
 
 ```bash
-build/debug/duckdb bench.db < bench_setup.sql
+build/debug/duckdb bench.db < bench_setup2.sql
 ```
 
 ### 2.2 Run benchmark with column imprints OFF
@@ -28,7 +28,7 @@ build/debug/duckdb bench.db < bench_setup.sql
 This query run with the column imprints turned off and saves the output to `bench_off.out`:
 
 ```bash
-build/debug/duckdb bench.db < bench_off.sql | tee bench_off.out
+build/debug/duckdb bench.db < bench_off2.sql | tee bench_off2.out
 ```
 
 ### 2.3 Run benchmark with column imprints ON
@@ -36,5 +36,5 @@ build/debug/duckdb bench.db < bench_off.sql | tee bench_off.out
 This query run enables column imprints and the result is saved to `bench_on.out`:
 
 ```bash
-build/debug/duckdb bench.db < bench_on.sql | tee bench_on.out
+build/debug/duckdb bench.db < bench_on2.sql | tee bench_on2.out
 ```
