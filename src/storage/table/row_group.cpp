@@ -1161,7 +1161,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
-		row_group_pointer.deletes_pointers = deletes_pointers;
+		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 		if (metadata_manager) {
 			vector<MetaBlockPointer> extra_metadata_block_pointers;
 			extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
@@ -1223,14 +1223,13 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
 		metadata_blocks.insert(column_pointer.block_pointer);
 	}
+	if (metadata_manager) {
+		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+	}
 	// set up the pointers correctly within this row group for future operations
 	column_pointers = row_group_pointer.data_pointers;
 	has_metadata_blocks = true;
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
-
-	if (metadata_manager) {
-		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
-	}
 	Verify();
 	return row_group_pointer;
 }
@@ -1239,11 +1238,11 @@ bool RowGroup::HasChanges() const {
 	if (has_changes) {
 		return true;
 	}
-	if (version_info.load()) {
+	auto version_info_loaded = version_info.load();
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
 		// we have deletes
 		return true;
 	}
-	D_ASSERT(!deletes_is_loaded.load());
 	// check if any of the columns have changes
 	// avoid loading unloaded columns - unloaded columns can never have changes
 	for (idx_t c = 0; c < columns.size(); c++) {
