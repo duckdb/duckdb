@@ -132,7 +132,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 		return;
 	}
 	auto &seq = input.bind_data->Cast<NextvalBindData>();
-	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context);
+	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context, DatabaseModificationType::SEQUENCE);
 }
 
 } // namespace
