@@ -43,6 +43,7 @@ public:
 	void MergeStats(idx_t i, BaseStatistics &stats);
 	void MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats);
 
+	void SetStats(TableStatistics &&other);
 	void CopyStats(TableStatistics &other);
 	void CopyStats(TableStatisticsLock &lock, TableStatistics &other);
 	unique_ptr<BaseStatistics> CopyStats(idx_t i);

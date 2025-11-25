@@ -188,6 +188,12 @@ void TableStatistics::DestroyTableSample(TableStatisticsLock &lock) const {
 	}
 }
 
+void TableStatistics::SetStats(TableStatistics &&other) {
+	TableStatisticsLock lock(*stats_lock);
+	column_stats = std::move(other.column_stats);
+	table_sample = std::move(other.table_sample);
+}
+
 unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 	lock_guard<mutex> l(*stats_lock);
 	auto result = column_stats[i]->Statistics().Copy();
