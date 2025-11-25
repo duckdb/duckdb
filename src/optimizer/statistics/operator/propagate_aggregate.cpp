@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -62,9 +63,15 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const column_t colum
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats)) {
 		return false;
 	}
-	if (!NumericStats::HasMinMax(*column_stats)) {
+	if (column_stats->GetStatsType() == StatisticsType::NUMERIC_STATS && !NumericStats::HasMinMax(*column_stats)) {
 		// TODO: This also returns if an entire row group is null. In that case, we could skip/compare null
 		return false;
+	} else {
+		D_ASSERT(column_stats->GetStatsType() == StatisticsType::STRING_STATS);
+		if (StringStats::Min(*column_stats) > StringStats::Max(*column_stats)) {
+			// No min/max statistics availabe
+			return false;
+		}
 	}
 	result = comparator.GetVal(*column_stats);
 	return true;
