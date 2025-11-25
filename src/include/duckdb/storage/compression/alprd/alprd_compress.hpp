@@ -116,7 +116,7 @@ public:
 		}
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, compression_data);
 
-		const idx_t uncompressed_size = AlpConstants::EXCEPTIONS_COUNT_SIZE + sizeof(T) * vector_idx;
+		const idx_t uncompressed_size = AlpConstants::EXCEPTIONS_COUNT_SIZE + sizeof(EXACT_TYPE) * vector_idx;
 		const idx_t compressed_size = compression_data.RequiredSpace();
 
 		const auto storage_version = checkpoint_data.GetStorageManager().GetStorageVersion();
@@ -188,11 +188,10 @@ public:
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		// Store uncompressed data
-		for (idx_t i = 0; i < vector_idx; i++) {
-			Store<EXACT_TYPE>(input_vector[i], data_ptr);
-			data_ptr += sizeof(EXACT_TYPE);
-		}
-		data_bytes_used += AlpConstants::EXCEPTIONS_COUNT_SIZE + (sizeof(T) * vector_idx);
+		memcpy(data_ptr, input_vector, sizeof(EXACT_TYPE) * vector_idx);
+		data_ptr += sizeof(EXACT_TYPE) * vector_idx;
+
+		data_bytes_used += AlpConstants::EXCEPTIONS_COUNT_SIZE + (sizeof(EXACT_TYPE) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;

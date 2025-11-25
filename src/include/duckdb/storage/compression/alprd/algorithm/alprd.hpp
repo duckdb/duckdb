@@ -60,10 +60,10 @@ public:
 	uint8_t actual_dictionary_size;
 
 	idx_t RequiredSpace() const {
-		const idx_t required_space =
-			left_bit_packed_size + right_bit_packed_size +
-			static_cast<idx_t>(exceptions_count) * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
-			AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		const idx_t required_space = left_bit_packed_size + right_bit_packed_size +
+		                             static_cast<idx_t>(exceptions_count) *
+		                                 (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE) +
+		                             AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 		return required_space;
 	}
 };

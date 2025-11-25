@@ -1,11 +1,11 @@
-# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode_v1_5_0.test
+# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode_v1_4_0.test_slow
 # description: Test storage of alp, but simple
 # group: [alprd]
 
 require parquet
 
 # load the DB from disk
-load __TEST_DIR__/test_alp.db readwrite v1.5.0
+load __TEST_DIR__/test_alp.db readwrite v1.4.0
 
 statement ok
 PRAGMA force_compression='uncompressed'
@@ -59,7 +59,7 @@ CREATE TYPE test_result AS UNION (
 query I
 SELECT
     CASE
-        WHEN (uncompressed::FLOAT / compressed::FLOAT) >= 1
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) < 1
             THEN True::test_result
         ELSE {
             'uncompressed': uncompressed,

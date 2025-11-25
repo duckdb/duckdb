@@ -188,10 +188,8 @@ public:
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
 		// Store uncompressed data
-		for (idx_t i = 0; i < vector_idx; i++) {
-			Store<T>(input_vector[i], data_ptr);
-			data_ptr += sizeof(T);
-		}
+		memcpy(data_ptr, input_vector, sizeof(T) * vector_idx);
+		data_ptr += sizeof(T) * vector_idx;
 
 		data_bytes_used += AlpConstants::EXPONENT_SIZE + (sizeof(T) * vector_idx);
 
