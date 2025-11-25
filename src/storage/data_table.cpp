@@ -235,6 +235,14 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 	return table.GetTableIOManager();
 }
 
+RowGroupCollection &DataTable::GetRowGroupCollection() {
+	return *row_groups;
+}
+
+const RowGroupCollection &DataTable::GetRowGroupCollection() const {
+	return *row_groups;
+}
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//

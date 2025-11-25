@@ -36,7 +36,7 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 
-using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
+using column_segment_vector_t = vector<unique_ptr<SegmentNode<ColumnSegment>>>;
 
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx);
@@ -114,6 +114,17 @@ public:
 	virtual bool HasAnyChanges() const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
+
+	// for column imprint
+	// access segment tree nodes for this column
+	const column_segment_vector_t &ReferenceSegments() {
+		return data.ReferenceSegments();
+	}
+	const column_segment_vector_t &ReferenceSegments() const {
+		auto &tree = const_cast<ColumnSegmentTree &>(data);
+		auto l = tree.Lock();
+		return tree.ReferenceSegments(l);
+	}
 
 	//! Initialize prefetch state with required I/O data for the next N rows
 	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);

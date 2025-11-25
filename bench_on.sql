@@ -6,34 +6,36 @@ SELECT imprint_stats('reset');
 
 -- for equality
 
+EXPLAIN ANALYZE
 SELECT 'ON / fact_sorted / value = 5000000' AS case, COUNT(*) AS cnt
 FROM fact_sorted
 WHERE value = 5000000;
 
-SELECT 'ON / fact_random / value = 5000000' AS case, COUNT(*) AS cnt
-FROM fact_random
-WHERE value = 5000000;
+-- EXPLAIN ANALYZE
+-- SELECT 'ON / fact_random / value = 5000000' AS case, COUNT(*) AS cnt
+-- FROM fact_random
+-- WHERE value = 5000000;
 
 -- for greater than 
 
-SELECT 'ON / fact_sorted / value > 9999900' AS case, COUNT(*) AS cnt
-FROM fact_sorted
-WHERE value > 9999900;
+-- SELECT 'ON / fact_sorted / value > 9999900' AS case, COUNT(*) AS cnt
+-- FROM fact_sorted
+-- WHERE value > 9999900;
 
-SELECT 'ON / fact_random / value > 9999900' AS case, COUNT(*) AS cnt
-FROM fact_random
-WHERE value > 9999900;
+-- SELECT 'ON / fact_random / value > 9999900' AS case, COUNT(*) AS cnt
+-- FROM fact_random
+-- WHERE value > 9999900;
 
-SELECT 'ON / fact_sorted / value > 5000000' AS case, COUNT(*) AS cnt
-FROM fact_sorted
-WHERE value > 5000000;
+-- SELECT 'ON / fact_sorted / value > 5000000' AS case, COUNT(*) AS cnt
+-- FROM fact_sorted
+-- WHERE value > 5000000;
 
-SELECT 'ON / fact_random / value > 5000000' AS case, COUNT(*) AS cnt
-FROM fact_random
-WHERE value > 5000000;
+-- SELECT 'ON / fact_random / value > 5000000' AS case, COUNT(*) AS cnt
+-- FROM fact_random
+-- WHERE value > 5000000;
 
-EXPLAIN ANALYZE
-SELECT COUNT(*) FROM fact_sorted WHERE value > 9999900;
+-- EXPLAIN ANALYZE
+-- SELECT COUNT(*) FROM fact_sorted WHERE value > 9999900;
 
 SELECT 'imprint_checks_total' AS metric, imprint_stats('imprint_checks_total');
 SELECT 'imprint_pruned_segments' AS metric, imprint_stats('imprint_pruned_segments');

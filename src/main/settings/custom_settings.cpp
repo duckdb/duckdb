@@ -1587,22 +1587,38 @@ Value UsernameSetting::GetSetting(const ClientContext &context) {
 	return Value();
 }
 
-// for enable column imprint
+//===----------------------------------------------------------------------===//
+// Column Imprint
+//===----------------------------------------------------------------------===//
 void EnableColumnImprintSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!OnGlobalSet(db, config, input)) {
+		return;
+	}
 	config.options.enable_column_imprint = input.GetValue<bool>();
-	// Update the global flag used by NumericStats::CheckZonemap
 	NumericStats::SetColumnImprintEnabled(config.options.enable_column_imprint);
 }
 
 void EnableColumnImprintSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!OnGlobalReset(db, config)) {
+		return;
+	}
 	config.options.enable_column_imprint = DBConfigOptions().enable_column_imprint;
-	// Update the global flag used by NumericStats::CheckZonemap
 	NumericStats::SetColumnImprintEnabled(config.options.enable_column_imprint);
 }
 
 Value EnableColumnImprintSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.enable_column_imprint);
+}
+
+bool EnableColumnImprintSetting::OnGlobalSet(DatabaseInstance *, DBConfig &, const Value &) {
+	// no special validation required
+	return true;
+}
+
+bool EnableColumnImprintSetting::OnGlobalReset(DatabaseInstance *, DBConfig &) {
+	// no special validation required
+	return true;
 }
 
 } // namespace duckdb

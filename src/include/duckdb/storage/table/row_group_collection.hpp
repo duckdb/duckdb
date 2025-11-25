@@ -122,6 +122,9 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 	const vector<LogicalType> &GetTypes() const;
 
+	// build column imprints for a given physical column index
+	void BuildColumnImprints(idx_t column_idx);
+
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
 	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);

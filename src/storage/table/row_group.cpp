@@ -467,6 +467,8 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	return true;
 }
 
+// return false = can skip segment
+// return true = cannot skip
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &filters = state.GetFilterInfo();
 	for (auto &entry : filters.GetFilterList()) {
@@ -479,6 +481,10 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto &filter = entry.filter;
 
 		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
+
+		// Increment segment checked counter
+		NumericStats::IncrementSegmentsChecked();
+
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			continue;
 		}
@@ -510,6 +516,15 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		while (state.vector_index < target_vector_index) {
 			NextVector(state);
 		}
+
+		// Increment segment skipped counter
+		NumericStats::IncrementSegmentsSkipped();
+
+		// debug: its been pruned
+		fprintf(stderr, "[row-group-segment-prune] table_col=%lld scan_col=%lld row_start=%lld row_end=%lld\n",
+		        static_cast<long long>(base_column_idx), static_cast<long long>(column_idx),
+		        static_cast<long long>(row_start), static_cast<long long>(target_row));
+
 		return false;
 	}
 

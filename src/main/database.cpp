@@ -34,6 +34,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -54,6 +55,7 @@ DBConfig::DBConfig() {
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
 	storage_extensions["__open_file__"] = OpenFileStorageExtension::Create();
+	NumericStats::SetColumnImprintEnabled(options.enable_column_imprint);
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {

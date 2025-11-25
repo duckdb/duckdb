@@ -424,7 +424,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
 
 	// Increment segment checked counter
-	NumericStats::IncrementSegmentsChecked();
+	// NumericStats::IncrementSegmentsChecked();
 
 	FilterPropagateResult prune_result;
 	{
@@ -436,9 +436,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	}
 
 	// If segment is pruned, increment skipped counter
-	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-		NumericStats::IncrementSegmentsSkipped();
-	}
+	// if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+	// 	NumericStats::IncrementSegmentsSkipped();
+	// }
 
 	lock_guard<mutex> l(update_lock);
 	if (!updates) {

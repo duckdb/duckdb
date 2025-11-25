@@ -12,6 +12,6 @@ CREATE TABLE fact_sorted AS
 SELECT * FROM fact_seq
 ORDER BY value;
 
-CREATE TABLE fact_random AS
-SELECT * FROM fact_seq
-ORDER BY random();
+-- CREATE TABLE fact_random AS
+-- SELECT * FROM fact_seq
+-- ORDER BY random();

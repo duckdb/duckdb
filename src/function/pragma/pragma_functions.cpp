@@ -13,6 +13,12 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <cctype>
 
@@ -121,6 +127,28 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 	ClientConfig::GetConfig(context).enable_optimizer = false;
 }
 
+// PRAGMA handler for command 'PRAGMA build_column_imprints('table_name', 'column_name')'
+static void PragmaBuildColumnImprints(ClientContext &context, const FunctionParameters &parameters) {
+	auto table_name = parameters.values[0].GetValue<string>();
+	auto column_name = parameters.values[1].GetValue<string>();
+
+	// parse table name, schema and catalog
+	auto qname = QualifiedName::Parse(table_name);
+	auto schema = qname.schema.empty() ? DEFAULT_SCHEMA : qname.schema;
+	auto catalog = qname.catalog.empty() ? INVALID_CATALOG : qname.catalog;
+
+	// access the physical storage
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, qname.name);
+	auto &duck_table = table_entry.Cast<DuckTableEntry>();
+
+	// find the logical column index and convert it to physical storage index
+	auto logical_idx = duck_table.GetColumnIndex(column_name);
+	auto physical_idx = duck_table.GetColumns().LogicalToPhysical(logical_idx);
+
+	// trigger the building for bitmap
+	duck_table.GetStorage().GetRowGroupCollection().BuildColumnImprints(physical_idx.index);
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -163,6 +191,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
+
+	set.AddFunction(PragmaFunction::PragmaCall("build_column_imprints", PragmaBuildColumnImprints,
+	                                           {LogicalType::VARCHAR, LogicalType::VARCHAR}));
 }
 
 } // namespace duckdb

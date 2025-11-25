@@ -78,6 +78,42 @@ const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 	return types;
 }
 
+/*
+    build bitmap from the given column_idx (0-based, physical column index
+    within the table storage)
+*/
+void RowGroupCollection::BuildColumnImprints(idx_t column_idx) {
+	if (column_idx >= types.size()) {
+		throw CatalogException("Column index out of range for imprint build");
+	}
+
+	// counter for calculating how many bitmaps are built
+	idx_t built = 0;
+
+	// iterate over all row groups of this table
+	for (auto &row_group_node : row_groups->SegmentNodes()) {
+		auto &row_group = *row_group_node.node;
+
+		// get the coulmn data for the target column
+		auto &col_data = row_group.GetColumn(StorageIndex(column_idx));
+
+		// iterate thru all the segments
+		for (auto &segment_node_ptr : col_data.ReferenceSegments()) {
+			NumericStats::BuildImprintForSegment(col_data, *segment_node_ptr);
+
+			// increment the built counter for the log
+			auto &segment = *segment_node_ptr->node;
+			if (NumericStats::HasImprint(segment.stats.statistics)) {
+				built++;
+			}
+		}
+	}
+
+	// summary log
+	fprintf(stderr, "[imprint-build-summary] column_idx=%lld built_segments=%lld\n", static_cast<long long>(column_idx),
+	        static_cast<long long>(built));
+}
+
 Allocator &RowGroupCollection::GetAllocator() const {
 	return Allocator::Get(info->GetDB());
 }

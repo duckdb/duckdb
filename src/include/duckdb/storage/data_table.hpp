@@ -80,6 +80,11 @@ public:
 	vector<LogicalType> GetTypes();
 	const vector<ColumnDefinition> &Columns() const;
 
+	// for column imprint bitmap building
+	// expose getter functions
+	RowGroupCollection &GetRowGroupCollection();
+	const RowGroupCollection &GetRowGroupCollection() const;
+
 	void InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
 	                    const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
 

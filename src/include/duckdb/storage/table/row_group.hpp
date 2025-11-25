@@ -84,6 +84,8 @@ struct RowGroupWriteData {
 class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
+	// for column imprint
+	friend class RowGroupCollection;
 
 public:
 	RowGroup(RowGroupCollection &collection, idx_t count);

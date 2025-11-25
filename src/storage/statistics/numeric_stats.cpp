@@ -5,12 +5,19 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include <cstdio>
+#include <atomic>
 
 namespace duckdb {
 
-static bool g_enable_column_imprint = false;
+// for column imprint
+static atomic<bool> column_imprint_enabled {false};
 
 // stats for column imprint
 static atomic<idx_t> g_imprint_checks_total(0);
@@ -20,13 +27,9 @@ static atomic<idx_t> g_imprint_greater_than_checks(0);
 static atomic<idx_t> g_total_segments_checked(0);
 static atomic<idx_t> g_total_segments_skipped(0);
 
-bool NumericStats::IsColumnImprintEnabled() {
-	return g_enable_column_imprint;
-}
-
-void NumericStats::SetColumnImprintEnabled(bool enabled) {
-	g_enable_column_imprint = enabled;
-}
+// for debug
+#define IMPRINT_LOG(msg) fprintf(stderr, "%s\n", (msg).c_str())
+static atomic<uint64_t> imprint_prune_counter {0};
 
 // stats getters
 idx_t NumericStats::GetImprintChecksTotal() {
@@ -72,14 +75,11 @@ void NumericStats::IncrementSegmentsSkipped() {
 
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
-	result.InitializeUnknown(); // mark the stats as unkown
+	result.InitializeUnknown();
 	SetMin(result, Value(result.GetType()));
 	SetMax(result, Value(result.GetType()));
 
-	// for column imprint
-	auto &data = NumericStats::GetDataUnsafe(result);
-	data.imprint_bitmap = 0;
-	data.imprint_bins = 64;
+	ResetImprint(result);
 
 	return result;
 }
@@ -87,15 +87,10 @@ BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-
-	// set min = +inf, max = -inf
 	SetMin(result, Value::MaximumValue(result.GetType()));
 	SetMax(result, Value::MinimumValue(result.GetType()));
 
-	// for column imprint: initalize
-	auto &data = NumericStats::GetDataUnsafe(result);
-	data.imprint_bitmap = 0;
-	data.imprint_bins = 64;
+	ResetImprint(result);
 
 	return result;
 }
@@ -103,8 +98,6 @@ BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 NumericStatsData &NumericStats::GetDataUnsafe(BaseStatistics &stats) {
 	D_ASSERT(stats.GetStatsType() == StatisticsType::NUMERIC_STATS);
 	return stats.stats_union.numeric_data;
-	// stores min, max value (NumericValueUnion)
-	// contains flags has_min, has_max
 }
 
 const NumericStatsData &NumericStats::GetDataUnsafe(const BaseStatistics &stats) {
@@ -112,14 +105,43 @@ const NumericStatsData &NumericStats::GetDataUnsafe(const BaseStatistics &stats)
 	return stats.stats_union.numeric_data;
 }
 
+void NumericStats::SetImprint(BaseStatistics &stats, uint64_t bitmap, uint8_t bins) {
+	auto &data = NumericStats::GetDataUnsafe(stats);
+	data.imprint_bitmap = bitmap;
+	data.imprint_bins = bins;
+}
+
+void NumericStats::ResetImprint(BaseStatistics &stats) {
+	SetImprint(stats, 0, 0);
+}
+
+uint64_t NumericStats::GetImprintBitmapUnsafe(const BaseStatistics &stats) {
+	return NumericStats::GetDataUnsafe(stats).imprint_bitmap;
+}
+
+uint8_t NumericStats::GetImprintBinsUnsafe(const BaseStatistics &stats) {
+	return NumericStats::GetDataUnsafe(stats).imprint_bins;
+}
+
+// when bins > 0, confirm the imprint is live
+bool NumericStats::HasImprint(const BaseStatistics &stats) {
+	auto &data = NumericStats::GetDataUnsafe(stats);
+	return data.imprint_bins > 0;
+}
+
+void NumericStats::SetColumnImprintEnabled(bool enabled) {
+	column_imprint_enabled.store(enabled);
+}
+
+bool NumericStats::IsColumnImprintEnabled() {
+	return column_imprint_enabled.load();
+}
+
 void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
 	D_ASSERT(stats.GetType() == other.GetType());
-
-	// if both sides have a min, take the smaller one,
-	// otherwise set it to unkown (value())
 	if (NumericStats::HasMin(other) && NumericStats::HasMin(stats)) {
 		auto other_min = NumericStats::Min(other);
 		if (other_min < NumericStats::Min(stats)) {
@@ -136,30 +158,15 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	} else {
 		NumericStats::SetMax(stats, Value());
 	}
-
-	// for column imprint: merge the imprintbitmaps
-	auto &target_data = NumericStats::GetDataUnsafe(stats);
-	auto &source_data = NumericStats::GetDataUnsafe(other);
-
-	// assume the bin size is fixed for now
-	if (target_data.imprint_bins > 0 && source_data.imprint_bins > 0) {
-		if (target_data.imprint_bins == source_data.imprint_bins) {
-			target_data.imprint_bitmap |= source_data.imprint_bitmap;
-		}
-	} else if (target_data.imprint_bins == 0 && source_data.imprint_bins > 0) {
-		// target has no imprint, but source does: copy from source
-		target_data.imprint_bitmap = source_data.imprint_bitmap;
-		target_data.imprint_bins = source_data.imprint_bins;
-	}
+	// we assume imprints only exist on segments, so invalidate it for global stats
+	ResetImprint(stats);
 }
 
-// a tagged union that can store any numeric type
 struct GetNumericValueUnion {
 	template <class T>
 	static T Operation(const NumericValueUnion &v);
 };
 
-// specialize it for each type
 template <>
 int8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 	return v.value_.tinyint;
@@ -220,7 +227,6 @@ double GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 	return v.value_.double_;
 }
 
-// gives an int32_t of the stored min
 template <class T>
 T NumericStats::GetMinUnsafe(const BaseStatistics &stats) {
 	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).min);
@@ -231,27 +237,101 @@ T NumericStats::GetMaxUnsafe(const BaseStatistics &stats) {
 	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).max);
 }
 
-uint64_t NumericStats::GetImprintBitmapUnsafe(const BaseStatistics &stats) {
-	return NumericStats::GetDataUnsafe(stats).GetImprintBitmap();
+template <class T>
+uint8_t NumericStats::ComputeBinIndex(T value, T min, T max, uint8_t bins) {
+	if (min == max || bins <= 1) {
+		return 0;
+	}
+	if (LessThanEquals::Operation(value, min)) {
+		return 0;
+	}
+	if (GreaterThanEquals::Operation(value, max)) {
+		return bins - 1;
+	}
+	long double range = static_cast<long double>(max) - static_cast<long double>(min);
+	long double normalized = static_cast<long double>(value) - static_cast<long double>(min);
+	auto idx = static_cast<uint8_t>((normalized / range) * bins);
+
+	return idx;
 }
 
-uint8_t NumericStats::GetImprintBinsUnsafe(const BaseStatistics &stats) {
-	return NumericStats::GetDataUnsafe(stats).GetImprintBins();
+// build a bitmap for a single segment from a column
+template <class T>
+static void BuildImprintForSegmentInternal(BaseStatistics &stats, ColumnData &col_data,
+                                           SegmentNode<ColumnSegment> &segment_node) {
+	// invalid the imprint if the segment does not have valid min/max stats
+	if (!NumericStats::HasMinMax(stats)) {
+		NumericStats::ResetImprint(stats);
+		return;
+	}
+	auto min = NumericStats::GetMinUnsafe<T>(stats);
+	auto max = NumericStats::GetMaxUnsafe<T>(stats);
+
+	constexpr uint8_t bins = 64;
+	uint64_t bitmap = 0;
+
+	// if only one value exist, set the first bit
+	if (min == max) {
+		NumericStats::SetImprint(stats, 1ULL, bins);
+		return;
+	}
+
+	// get the ref to the column segment passed in
+	auto &segment = *segment_node.node;
+	ColumnScanState scan_state(nullptr);
+	scan_state.current = &segment_node;
+	segment.InitializeScan(scan_state);
+
+	// temp vector to hold a batch from the segment
+	Vector scan_vector(col_data.type);
+
+	// scan the entire segment
+	for (idx_t base_row = 0; base_row < segment.count; base_row += STANDARD_VECTOR_SIZE) {
+		// number of rows to read inside a batch
+		const auto count = MinValue<idx_t>(segment.count - base_row, STANDARD_VECTOR_SIZE);
+
+		// calculate the offset
+		scan_state.offset_in_column = segment_node.row_start + base_row;
+
+		// fill the scan_vector with the batch data
+		col_data.CheckpointScan(segment, scan_state, count, scan_vector);
+
+		// convert the vector to a unified format
+		UnifiedVectorFormat vdata;
+		scan_vector.ToUnifiedFormat(count, vdata);
+		auto data_ptr = UnifiedVectorFormat::GetData<T>(vdata);
+
+		// iterate over every value in the batch, compute the bin index and update bitmap
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				continue;
+			}
+
+			auto bin_index =
+			    MinValue<uint8_t>(NumericStats::ComputeBinIndex<T>(data_ptr[idx], min, max, bins), bins - 1);
+			bitmap |= (uint64_t(1) << bin_index);
+		}
+	}
+
+	// set the imprint
+	NumericStats::SetImprint(stats, bitmap, bins);
+
+	// for debug
+	IMPRINT_LOG(StringUtil::Format("[imprint-build] col_idx=%lld row_start=%lld count=%lld bins=%d bitmap=0x%016llx",
+	                               static_cast<long long>(col_data.column_index),
+	                               static_cast<long long>(segment_node.row_start),
+	                               static_cast<long long>(segment.count), bins, static_cast<long long>(bitmap)));
 }
 
-// helper functions
 template <class T>
 bool ConstantExactRange(T min, T max, T constant) {
 	return Equals::Operation(constant, min) && Equals::Operation(constant, max);
-	// min == constant && max == constant
-	// the entire segment is constant with that value
 }
 
 template <class T>
 bool ConstantValueInRange(T min, T max, T constant) {
 	return !(LessThan::Operation(constant, min) || GreaterThan::Operation(constant, max));
-	// min <= constant <= max
-	// constant could possibly appear in this segment
 }
 
 template <class T>
@@ -262,12 +342,11 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		if (ConstantExactRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			// every row matches
 		}
 		if (ConstantValueInRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE; // can be skipped
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		if (!ConstantValueInRange(min_value, max_value, constant)) {
@@ -345,50 +424,43 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-// for column imprint
+// for single value
 template <class T>
 FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, ExpressionType comparison_type, T constant) {
-	// stats counter
-	g_imprint_checks_total++;
+	auto bins = NumericStats::GetImprintBinsUnsafe(stats);
+	auto bitmap = NumericStats::GetImprintBitmapUnsafe(stats);
 
-	uint64_t bitmap = NumericStats::GetImprintBitmapUnsafe(stats);
-	uint8_t bins = NumericStats::GetImprintBinsUnsafe(stats); // 64 for now fixed
-
-	// check if we have valid imprint data
+	// if no imprint stats exist, return
 	if (bins == 0 || bitmap == 0) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	// get min/max to compute bin index
-	T min = NumericStats::GetMinUnsafe<T>(stats);
-	T max = NumericStats::GetMaxUnsafe<T>(stats);
+	// stats counter - increment only when imprint is actually used
+	g_imprint_checks_total++;
+
+	auto min = NumericStats::GetMinUnsafe<T>(stats);
+	auto max = NumericStats::GetMaxUnsafe<T>(stats);
+
+	auto bin_index = MinValue<uint8_t>(NumericStats::ComputeBinIndex<T>(constant, min, max, bins), bins - 1);
+
+	if (bin_index >= bins) {
+		bin_index = bins - 1;
+	}
 
 	if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 		g_imprint_equality_checks++;
-		uint8_t bin_index = NumericStats::ComputeBinIndex(constant, min, max, bins);
 
-		// ensure bin_index is within valid range [0, bins-1]
-		if (bin_index >= bins) {
-			bin_index = bins - 1;
-		}
-
-		// if segment doesn't contain this value, it gets pruned away
-		if ((bitmap & (1ULL << bin_index)) == 0) {
+		// no matching bit, prune
+		if ((bitmap & (uint64_t(1) << bin_index)) == 0) {
 			g_imprint_pruned_segments++;
+
+			IMPRINT_LOG(StringUtil::Format("[imprint-check] prune for equal col bitmap=0x%016llx bin=%d constant=%s",
+			                               bitmap, bin_index, Value::CreateValue(constant).ToString()));
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
-
 	} else if (comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 	           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		g_imprint_greater_than_checks++;
-
-		// find the bin index for constant
-		uint8_t bin_index = NumericStats::ComputeBinIndex(constant, min, max, bins);
-
-		// make sure the bin index is within the range
-		if (bin_index >= bins) {
-			bin_index = bins - 1;
-		}
 
 		// set all bits to 1's from [bin_index, bins-1]
 		uint64_t all_bits =
@@ -399,12 +471,48 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 		// if no matching bins, prune
 		if ((bitmap & greater_than_mask) == 0) {
 			g_imprint_pruned_segments++;
+
+			IMPRINT_LOG(StringUtil::Format("[imprint-check] prune for ge col bitmap=0x%016llx bin=%d constant=%s",
+			                               bitmap, bin_index, Value::CreateValue(constant).ToString()));
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+	}
+	// TODO: ADD MORE CONDITIONS HERE
 
+	// otherwise, still need to scan
+	IMPRINT_LOG(StringUtil::Format("[imprint-check] need scanning: bitmap=0x%016llx bin=%d constant=%s", bitmap,
+	                               bin_index, Value::CreateValue(constant).ToString()));
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+template <class T>
+FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
+                                            array_ptr<const Value> constants) {
+	// check if the comparison type is supported
+	if (comparison_type != ExpressionType::COMPARE_EQUAL &&
+	    comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
+	    comparison_type != ExpressionType::COMPARE_GREATERTHAN &&
+	    comparison_type != ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
+	// iterate over the array, check the value
+	for (auto &constant_value : constants) {
+		D_ASSERT(constant_value.type() == stats.GetType());
+
+		if (constant_value.IsNull()) {
+			continue;
+		}
+
+		auto prune_result = CheckImprintTemplated<T>(stats, comparison_type, constant_value.GetValueUnsafe<T>());
+
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			auto prunes = imprint_prune_counter.fetch_add(1) + 1;
+			IMPRINT_LOG(StringUtil::Format("[imprint-prune] total=%llu constant=%s",
+			                               static_cast<long long unsigned>(prunes), constant_value.ToString()));
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
@@ -417,7 +525,8 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 
 	// first check zonemap (min/max)
 	FilterPropagateResult zonemap_result;
-	switch (stats.GetType().InternalType()) {
+	auto internal_type = stats.GetType().InternalType();
+	switch (internal_type) {
 	case PhysicalType::INT8:
 		zonemap_result = CheckZonemapTemplated<int8_t>(stats, comparison_type, constants);
 		break;
@@ -458,76 +567,50 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		throw InternalException("Unsupported type for NumericStats::CheckZonemap");
 	}
 
-	// then if zonemap check returns NO_PRUNING_POSSIBLE, try imprint
-	if (zonemap_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && NumericStats::IsColumnImprintEnabled()) {
-		auto internal_type = stats.GetType().InternalType();
-		bool is_integer_type = (internal_type == PhysicalType::INT8 || internal_type == PhysicalType::INT16 ||
-		                        internal_type == PhysicalType::INT32 || internal_type == PhysicalType::INT64 ||
-		                        internal_type == PhysicalType::UINT8 || internal_type == PhysicalType::UINT16 ||
-		                        internal_type == PhysicalType::UINT32 || internal_type == PhysicalType::UINT64);
-
-		if (is_integer_type && (comparison_type == ExpressionType::COMPARE_EQUAL ||
-		                        comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		                        comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
-						for (auto &constant_value : constants) {
-				D_ASSERT(constant_value.type() == stats.GetType());
-				D_ASSERT(!constant_value.IsNull());
-
-				FilterPropagateResult imprint_result;
-				switch (internal_type) {
-				case PhysicalType::INT8:
-					imprint_result =
-					    CheckImprintTemplated<int8_t>(stats, comparison_type, constant_value.GetValueUnsafe<int8_t>());
-					break;
-				case PhysicalType::INT16:
-					imprint_result = CheckImprintTemplated<int16_t>(stats, comparison_type,
-					                                                constant_value.GetValueUnsafe<int16_t>());
-					break;
-				case PhysicalType::INT32:
-					imprint_result = CheckImprintTemplated<int32_t>(stats, comparison_type,
-					                                                constant_value.GetValueUnsafe<int32_t>());
-					break;
-				case PhysicalType::INT64:
-					imprint_result = CheckImprintTemplated<int64_t>(stats, comparison_type,
-					                                                constant_value.GetValueUnsafe<int64_t>());
-					break;
-				case PhysicalType::UINT8:
-					imprint_result = CheckImprintTemplated<uint8_t>(stats, comparison_type,
-					                                                constant_value.GetValueUnsafe<uint8_t>());
-					break;
-				case PhysicalType::UINT16:
-					imprint_result = CheckImprintTemplated<uint16_t>(stats, comparison_type,
-					                                                 constant_value.GetValueUnsafe<uint16_t>());
-					break;
-				case PhysicalType::UINT32:
-					imprint_result = CheckImprintTemplated<uint32_t>(stats, comparison_type,
-					                                                 constant_value.GetValueUnsafe<uint32_t>());
-					break;
-				case PhysicalType::UINT64:
-					imprint_result = CheckImprintTemplated<uint64_t>(stats, comparison_type,
-					                                                 constant_value.GetValueUnsafe<uint64_t>());
-					break;
-				default:
-					break;
-				}
-
-				// if is able to prune, return right away
-				if (imprint_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-					return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-				}
-			}
-		}
+	if (zonemap_result != FilterPropagateResult::NO_PRUNING_POSSIBLE || !IsColumnImprintEnabled() ||
+	    !HasImprint(stats)) {
+		return zonemap_result;
 	}
 
-	return zonemap_result;
+	// if (comparison_type != ExpressionType::COMPARE_EQUAL &&
+	//     comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+	// 	return zonemap_result;
+	// }
+
+	IMPRINT_LOG(StringUtil::Format("[imprint-check-enter] type=%s bitmap=0x%016llx bins=%d", stats.GetType().ToString(),
+	                               NumericStats::GetImprintBitmapUnsafe(stats),
+	                               NumericStats::GetImprintBinsUnsafe(stats)));
+
+	switch (internal_type) {
+	case PhysicalType::INT8:
+		return CheckImprintTemplated<int8_t>(stats, comparison_type, constants);
+	case PhysicalType::INT16:
+		return CheckImprintTemplated<int16_t>(stats, comparison_type, constants);
+	case PhysicalType::INT32:
+		return CheckImprintTemplated<int32_t>(stats, comparison_type, constants);
+	case PhysicalType::INT64:
+		return CheckImprintTemplated<int64_t>(stats, comparison_type, constants);
+	case PhysicalType::UINT8:
+		return CheckImprintTemplated<uint8_t>(stats, comparison_type, constants);
+	case PhysicalType::UINT16:
+		return CheckImprintTemplated<uint16_t>(stats, comparison_type, constants);
+	case PhysicalType::UINT32:
+		return CheckImprintTemplated<uint32_t>(stats, comparison_type, constants);
+	case PhysicalType::UINT64:
+		return CheckImprintTemplated<uint64_t>(stats, comparison_type, constants);
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	default:
+		return zonemap_result;
+	}
 }
 
 bool NumericStats::IsConstant(const BaseStatistics &stats) {
 	return NumericStats::Max(stats) <= NumericStats::Min(stats);
 }
 
-// helper for setMin and setMax, so that they get to match
-// with their corresponding data types
 void SetNumericValueInternal(const Value &input, const LogicalType &type, NumericValueUnion &val, bool &has_val) {
 	if (input.IsNull()) {
 		has_val = false;
@@ -790,12 +873,8 @@ void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer
 	serializer.WriteObject(201, "min", [&](Serializer &object) {
 		SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
-
-	// column imprint
-	serializer.WriteObject(202, "imprint", [&](Serializer &obj) {
-		obj.WriteProperty<uint8_t>(110, "imprint_bins", numeric_stats.imprint_bins);
-		obj.WriteProperty<uint64_t>(111, "imprint_bitmap", numeric_stats.imprint_bitmap);
-	});
+	serializer.WriteProperty(202, "imprint_bins", numeric_stats.imprint_bins);
+	serializer.WriteProperty(203, "imprint_bitmap", numeric_stats.imprint_bitmap);
 }
 
 void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &result) {
@@ -807,15 +886,10 @@ void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &resul
 	deserializer.ReadObject(201, "min", [&](Deserializer &object) {
 		DeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
-
-	// for column imprint
-	deserializer.ReadObject(202, "imprint", [&](Deserializer &obj) {
-		numeric_stats.imprint_bins = obj.ReadPropertyWithExplicitDefault<uint8_t>(110, "imprint_bins", 64);
-		numeric_stats.imprint_bitmap = obj.ReadPropertyWithExplicitDefault<uint64_t>(111, "imprint_bitmap", 0);
-	});
+	deserializer.ReadPropertyWithExplicitDefault<uint8_t>(202, "imprint_bins", numeric_stats.imprint_bins, 0);
+	deserializer.ReadPropertyWithExplicitDefault<uint64_t>(203, "imprint_bitmap", numeric_stats.imprint_bitmap, 0);
 }
 
-// debug
 string NumericStats::ToString(const BaseStatistics &stats) {
 	return StringUtil::Format("[Min: %s, Max: %s]", NumericStats::MinOrNull(stats).ToString(),
 	                          NumericStats::MaxOrNull(stats).ToString());
@@ -890,6 +964,48 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 		break;
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());
+	}
+}
+
+void NumericStats::BuildImprintForSegment(ColumnData &col_data, SegmentNode<ColumnSegment> &segment_node) {
+	auto &segment = *segment_node.node;
+	auto &stats = segment.stats.statistics;
+
+	// only support persistent segments
+	if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
+		NumericStats::ResetImprint(stats);
+		return;
+	}
+
+	switch (segment.type.InternalType()) {
+	case PhysicalType::INT8:
+		BuildImprintForSegmentInternal<int8_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::INT16:
+		BuildImprintForSegmentInternal<int16_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::INT32:
+		BuildImprintForSegmentInternal<int32_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::INT64:
+		BuildImprintForSegmentInternal<int64_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::UINT8:
+		BuildImprintForSegmentInternal<uint8_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::UINT16:
+		BuildImprintForSegmentInternal<uint16_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::UINT32:
+		BuildImprintForSegmentInternal<uint32_t>(stats, col_data, segment_node);
+		break;
+	case PhysicalType::UINT64:
+		BuildImprintForSegmentInternal<uint64_t>(stats, col_data, segment_node);
+		break;
+	default:
+		// for unsupported types, invalid imprint stats
+		NumericStats::ResetImprint(stats);
+		break;
 	}
 }
 
