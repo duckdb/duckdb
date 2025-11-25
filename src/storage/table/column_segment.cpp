@@ -242,7 +242,9 @@ void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<Block
 	// Thus, we set the compression function to constant and reset the block buffer.
 	D_ASSERT(stats.statistics.IsConstant());
 	auto &config = DBConfig::GetConfig(db);
-	function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	if (GetCompressionFunction().type != CompressionType::COMPRESSION_EMPTY) {
+		function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	}
 	block.reset();
 }
 
