@@ -1,0 +1,9 @@
+# name: test/fuzzer/duckfuzz/list_zip_no_args.test
+# description: Test table function with named parameter that is NULL
+# group: [duckfuzz]
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/4206
+statement error
+SELECT 8099 FROM duckdb_logs(denormalized_table := NULL)
+----
+Invalid Input Error: denormalized_table cannot be NULL
