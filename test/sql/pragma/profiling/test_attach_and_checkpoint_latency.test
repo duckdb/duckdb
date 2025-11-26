@@ -18,15 +18,6 @@ SET wal_autocheckpoint = '1TB';
 statement ok
 PRAGMA disable_checkpoint_on_shutdown;
 
-statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
-
-statement ok
-PRAGMA custom_profiling_settings='{"WAITING_TO_ATTACH_LATENCY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "CHECKPOINT_LATENCY": "true"}';
-
-statement ok
-SET profiling_coverage='ALL';
-
 # Finished setup.
 
 # CHECKPOINT_LATENCY.
@@ -39,6 +30,15 @@ CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(100_000);
 
 statement ok
 PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"WAITING_TO_ATTACH_LATENCY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
 
 statement ok
 CHECKPOINT profile_fs;
