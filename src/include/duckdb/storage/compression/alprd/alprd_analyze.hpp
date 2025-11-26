@@ -43,7 +43,7 @@ unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType typ
 	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<AlpRDAnalyzeState<T>>(info);
 	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
-	return state;
+	return unique_ptr<AnalyzeState>(state.release());
 }
 
 /*
