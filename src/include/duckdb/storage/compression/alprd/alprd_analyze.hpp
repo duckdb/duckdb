@@ -16,7 +16,6 @@
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
 #include <cmath>
 
@@ -35,15 +34,12 @@ public:
 	idx_t vectors_sampled_count = 0;
 	vector<EXACT_TYPE> rowgroup_sample;
 	alp::AlpRDCompressionData<T, true> compression_data;
-	idx_t storage_version = 0;
 };
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<AlpRDAnalyzeState<T>>(info);
-	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
-	return unique_ptr<AnalyzeState>(state.release());
+	return make_uniq<AlpRDAnalyzeState<T>>(info);
 }
 
 /*
@@ -130,13 +126,7 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	    analyze_state.rowgroup_sample, analyze_state.compression_data);
 	double estimated_compressed_bits =
 	    estimated_bits_per_value * static_cast<double>(analyze_state.rowgroup_sample.size());
-
-	const double uncompressed_bytes = sizeof(T) * analyze_state.rowgroup_sample.size();
-
-	const auto uncompressed_mode_compatible = analyze_state.storage_version >= 7;
-	const double estimated_compressed_bytes = uncompressed_mode_compatible
-	                                              ? std::min(estimated_compressed_bits / 8, uncompressed_bytes)
-	                                              : estimated_compressed_bits / 8;
+	double estimated_compressed_bytes = estimated_compressed_bits / 8;
 
 	//! Overhead per segment: [Pointer to metadata + right bitwidth + left bitwidth + n dict elems] + Dictionary Size
 	double per_segment_overhead = AlpRDConstants::HEADER_SIZE + AlpRDConstants::MAX_DICTIONARY_SIZE_BYTES;
