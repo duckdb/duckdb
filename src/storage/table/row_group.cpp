@@ -1348,8 +1348,11 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-			// TODO: Strings could be truncated and there is currently no way to be sure that they are not
-			return false;
+			if (!StringStats::HasMaxStringLength(stats)) {
+				return false;
+			}
+			const idx_t max_length = StringStats::MaxStringLength(stats);
+			return max_length == StringStats::Max(stats).length() && max_length == StringStats::Min(stats).length();
 		}
 		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
 	}
