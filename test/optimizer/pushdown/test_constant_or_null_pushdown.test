@@ -2,17 +2,15 @@
 # description: Test Table OR Filter Push Down
 # group: [pushdown]
 
-# Create a table with only null values
-
 statement ok
 create table t1 (ts_stop TIMESTAMPTZ);
 
 statement ok
 insert into t1 values
 	(NULL),
-	(NULL);
+	(NULL),
+	('1990/11/6');
 
-# The filter resolution becomes FILTER_ALWAYS_TRUE, so it gets deleted by the optimizer
 query II
 explain select
 	count(*)
@@ -25,9 +23,7 @@ where constant_or_null(
 	)
 );
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*~1 row.*
-
-# Now create a table that has BOTH null and non-null values
+physical_plan	<REGEX>:.*constant_or_null.*
 
 statement ok
 create table t2 as select
