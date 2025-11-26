@@ -201,10 +201,10 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
                                                 array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
+	D_ASSERT(stats.CanHaveNoNull());
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());
 		D_ASSERT(!constant_value.IsNull());
-		D_ASSERT(stats.CanHaveNoNull());
 		auto &constant = StringValue::Get(constant_value);
 		auto prune_result = CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
 		                                 StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
