@@ -734,7 +734,7 @@ DotOperator <- '.' (FunctionExpression / ColLabel)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
-StepSliceBOund <- ':' Expression?
+StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
 
@@ -946,7 +946,9 @@ QualifiedSchemaName <- CatalogQualification? SchemaName
 DropSecretStorage <- 'FROM' Identifier
 UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
 
-UpdateTarget <- (BaseTableName 'SET') / (BaseTableName UpdateAlias? 'SET')
+UpdateTarget <- BaseTableSet / BaseTableAliasSet
+BaseTableSet <- BaseTableName 'SET'
+BaseTableAliasSet <- BaseTableName UpdateAlias? 'SET'
 UpdateAlias <- 'AS'? ColId
 UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
 UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression

@@ -575,6 +575,12 @@ void PEGTransformerFactory::RegisterTransaction() {
 }
 
 void PEGTransformerFactory::RegisterUpdate() {
+	// update.gram
+	REGISTER_TRANSFORM(TransformUpdateStatement);
+	REGISTER_TRANSFORM(TransformUpdateTarget);
+	REGISTER_TRANSFORM(TransformBaseTableSet);
+	REGISTER_TRANSFORM(TransformBaseTableAliasSet);
+	REGISTER_TRANSFORM(TransformUpdateAlias);
 	REGISTER_TRANSFORM(TransformUpdateSetClause);
 	REGISTER_TRANSFORM(TransformUpdateSetTuple);
 	REGISTER_TRANSFORM(TransformUpdateSetElementList);
