@@ -36,6 +36,11 @@ enum class AttachVisibility { SHOWN, HIDDEN };
 //! Use this mode with caution, as it disables recovery from crashes for the file.
 enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
+//! CHECKPOINT: Throws, if the checkpoint fails. Always cleans up.
+//! TRY_CHECKPOINT: Does not throw when failing a checkpoint. Always cleans up.
+//! CLEANUP_ONLY: Cleans up and does not try to CHECKPOINT.
+enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, CLEANUP_ONLY };
+
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
@@ -46,7 +51,6 @@ struct StoredDatabasePath {
 	DatabaseFilePathManager &manager;
 	string path;
 
-public:
 	void OnDetach();
 };
 
@@ -68,7 +72,7 @@ struct AttachOptions {
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
 	QualifiedName default_table;
-	//! Whether or not this is the main database
+	//! Whether this is the main database.
 	bool is_main_database = false;
 	//! The visibility of the attached database
 	AttachVisibility visibility = AttachVisibility::SHOWN;
@@ -91,11 +95,8 @@ public:
 	//! Initializes the catalog and storage of the attached database.
 	void Initialize(optional_ptr<ClientContext> context = nullptr);
 	void FinalizeLoad(optional_ptr<ClientContext> context);
-	//! Checkpoint the database before shutting it down.
-	void Checkpoint();
-	//! Clean any (shared) resources held by the database. Should always be called when shutting down the database,
-	//! even if a previous checkpoint fails.
-	void Cleanup();
+	//! Close the database before shutting it down.
+	void Close(const DatabaseCloseAction action);
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
@@ -134,6 +135,9 @@ public:
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
+	// Destroy an attached database, if its use count is 1.
+	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
+	static void DestroyIfLastReference(shared_ptr<AttachedDatabase> &attached_db);
 
 private:
 	DatabaseInstance &db;
@@ -147,8 +151,11 @@ private:
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
-	bool checkpoint = true;
-	bool cleanup = true;
+	bool close = true;
+
+private:
+	//! Clean any (shared) resources held by the database.
+	void Cleanupp();
 };
 
 } // namespace duckdb

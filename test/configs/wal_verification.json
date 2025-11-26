@@ -36,7 +36,8 @@
     },
     {"reason": "Checkpointing is necessary to trigger expected checkpoint error.",
       "paths": [
-        "test/sql/storage/checkpoint/test_checkpoint_failure_delayed.test",
+        "test/sql/storage/checkpoint/test_checkpoint_failure_delayed_commit.test",
+        "test/sql/storage/checkpoint/test_checkpoint_failure_delayed_rollback.test",
         "test/sql/storage/checkpoint/test_checkpoint_failure_on_detach.test"
       ]
     },

@@ -60,24 +60,7 @@ void TransactionContext::Commit() {
 	for (auto &state : context.registered_state->States()) {
 		state->TransactionCommit(*transaction, context);
 	}
-
-	// Try to checkpoint any attached databases potentially still held by this transaction.
-	auto &referenced_databases = transaction->ReferencedDatabases();
-	for (auto &database : referenced_databases) {
-		auto &attached_db = database.second;
-		auto use_count = attached_db.use_count();
-		if (use_count == 1) {
-			// We already detached the database meaning new transactions can no longer obtain a shared pointer to it.
-			try {
-				attached_db->Checkpoint();
-			} catch (std::exception &ex) {
-				ErrorData data(ex);
-				data.Throw();
-			} catch (...) { // NOLINT
-			}
-			database.second->Checkpoint();
-		}
-	}
+	transaction->Finalize();
 }
 
 void TransactionContext::SetAutoCommit(bool value) {
@@ -112,6 +95,7 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (rollback_error.HasError()) {
 		rollback_error.Throw();
 	}
+	transaction->Finalize();
 }
 
 void TransactionContext::ClearTransaction() {

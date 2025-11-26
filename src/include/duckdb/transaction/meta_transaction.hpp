@@ -62,6 +62,8 @@ public:
 
 	ErrorData Commit();
 	void Rollback();
+	// Finalize the transaction after a COMMIT of ROLLBACK.
+	void Finalize();
 
 	idx_t GetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
@@ -79,9 +81,6 @@ public:
 	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
-	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> &ReferencedDatabases() {
-		return referenced_databases;
-	}
 
 private:
 	//! Lock to prevent all_transactions and transactions from getting out of sync.

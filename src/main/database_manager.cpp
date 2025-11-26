@@ -215,20 +215,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
-	// Thus, if the use count is 1, then we know it will be destroyed after the function is over.
-	if (attached_db.use_count() == 1) {
-		try {
-			attached_db->Checkpoint();
-		} catch (std::exception &ex) {
-			attached_db->Cleanup();
-			ErrorData data(ex);
-			data.Throw("Detached database '" + attached_db->name + "', but CHECKPOINT during DETACH failed. \n");
-		} catch (...) { // NOLINT
-		}
-
-		// Successful CHECKPOINT. We still need to clean up.
-		attached_db->Cleanup();
-	}
+	AttachedDatabase::DestroyIfLastReference(attached_db);
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
@@ -417,17 +404,7 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 void DatabaseManager::ResetDatabases() {
 	auto shared_db_pointers = GetDatabases();
 	for (auto &entry : shared_db_pointers) {
-		try {
-			entry->Checkpoint();
-		} catch (std::exception &ex) {
-			ErrorData data(ex);
-			try {
-				DUCKDB_LOG_ERROR(entry->GetDatabase(), "DatabaseManager::ResetDatabases()\t\t" + data.Message());
-			} catch (...) { // NOLINT
-			}
-		} catch (...) { // NOLINT
-		}
-		entry->Cleanup();
+		entry->Close(DatabaseCloseAction::TRY_CHECKPOINT);
 		entry.reset();
 	}
 }

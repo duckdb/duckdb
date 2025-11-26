@@ -1,5 +1,5 @@
-# name: test/sql/storage/checkpoint/test_checkpoint_failure_delayed.test
-# description: Test failing a delayed CHECKPOINT (after DETACH).
+# name: test/sql/storage/checkpoint/test_checkpoint_failure_delayed_rollback.test
+# description: Test failing a delayed CHECKPOINT (after DETACH) on ROLLBACK.
 # group: [checkpoint]
 
 # Alternative verification disables checkpointing on shutdown.
@@ -30,6 +30,6 @@ statement ok con2
 DETACH db;
 
 statement error con1
-COMMIT;
+ROLLBACK;
 ----
 Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag
