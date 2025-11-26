@@ -41,7 +41,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			vector<unique_ptr<ParsedExpression>> struct_children;
 			struct_children.push_back(std::move(expr));
 			struct_children.push_back(std::move(indirection_expr));
-			auto struct_expr = make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(struct_children));
+			auto struct_expr =
+			    make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(struct_children));
 			expr = std::move(struct_expr);
 		} else {
 			throw NotImplementedException("Unhandled case for Base Expression with indirection");
@@ -509,17 +510,20 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeOp(PEG
 	return expr;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInClause(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpression(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto expr_list_pr = ExtractParseResultsFromList(extract_parens);
@@ -531,7 +535,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto result = make_uniq<SubqueryExpression>();
@@ -984,6 +989,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	auto repeat_colid_opt = list_pr.Child<OptionalParseResult>(0);
 	if (repeat_colid_opt.HasResult()) {
 		auto repeat_colid = repeat_colid_opt.optional_result->Cast<RepeatParseResult>();
+		if (repeat_colid.children.size() > 1) {
+			throw ParserException("Did not expect more than one column in front of a star expression");
+		}
+		auto colid_list = repeat_colid.children[0]->Cast<ListParseResult>();
+		result->relation_name = transformer.Transform<string>(colid_list.Child<ListParseResult>(0));
 	}
 	transformer.TransformOptional<qualified_column_set_t>(list_pr, 2, result->exclude_list);
 	auto replace_list_opt = list_pr.Child<OptionalParseResult>(3);
