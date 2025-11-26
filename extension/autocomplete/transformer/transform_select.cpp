@@ -985,6 +985,23 @@ GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transfor
 	return result;
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupByExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEmptyGroupingItem(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Rule 'EmptyGroupingItem' has not been implemented yet");
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCubeOrRollupClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Rule 'CubeOrRollupClause' has not been implemented yet");
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupingSetsClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Rule 'GroupingSetsClause' has not been implemented yet");
+}
+
 CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

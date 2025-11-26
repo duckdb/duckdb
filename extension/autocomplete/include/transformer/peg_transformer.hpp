@@ -929,6 +929,10 @@ private:
 	static GroupByNode TransformGroupByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformGroupByExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformEmptyGroupingItem(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCubeOrRollupClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformGroupingSetsClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	static CommonTableExpressionMap TransformWithClause(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
