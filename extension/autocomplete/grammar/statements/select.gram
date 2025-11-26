@@ -1,7 +1,11 @@
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- SelectOrParens RepeatSetopSelect* ResultModifiers?
 RepeatSetopSelect <- SetOpClause SelectStatementInternal
-SetopClause <- ('UNION' / 'EXCEPT' / 'INTERSECT') DistinctOrAll? ByName?
+SetopClause <- SetopType DistinctOrAll? ByName?
+SetopType <- SetopUnion / SetopExcept / SetopIntersect
+SetopUnion <- 'UNION'
+SetopExcept <- 'EXCEPT'
+SetopIntersect <- 'INSERSECT'
 ByName <- 'BY' 'NAME'
 SelectOrParens <- BaseSelect / SelectParens
 SelectParens <- Parens(SelectStatementInternal)

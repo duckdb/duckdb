@@ -571,10 +571,14 @@ private:
 	                                                                     optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenInLikeOp(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformInClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformInExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformInExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformInSelectStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInClause(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInExpression(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInExpressionList(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInSelectStatement(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenClause(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer,
@@ -786,6 +790,12 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectStatementInternal(PEGTransformer &transformer,
 	                                                                    optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SetOperationNode> TransformRepeatSetopSelect(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static SetOperationType TransformSetopType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SetOperationNode> TransformSetopClause(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static bool TransformDistinctOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectOrParens(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectParens(PEGTransformer &transformer,
@@ -933,10 +943,14 @@ private:
 	static GroupByNode TransformGroupByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformGroupByExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformEmptyGroupingItem(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformCubeOrRollupClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformGroupingSetsClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformGroupByExpression(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformEmptyGroupingItem(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCubeOrRollupClause(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformGroupingSetsClause(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 
 	static CommonTableExpressionMap TransformWithClause(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);

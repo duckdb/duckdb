@@ -456,6 +456,10 @@ void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
 	REGISTER_TRANSFORM(TransformSelectStatement);
 	REGISTER_TRANSFORM(TransformSelectStatementInternal);
+	REGISTER_TRANSFORM(TransformRepeatSetopSelect);
+	REGISTER_TRANSFORM(TransformSetopClause);
+	REGISTER_TRANSFORM(TransformSetopType);
+	REGISTER_TRANSFORM(TransformDistinctOrAll);
 	REGISTER_TRANSFORM(TransformSelectOrParens);
 	REGISTER_TRANSFORM(TransformSelectParens);
 	REGISTER_TRANSFORM(TransformBaseSelect);
@@ -705,6 +709,10 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<ExpressionType>("OperatorGreaterThan", ExpressionType::COMPARE_GREATERTHAN);
 	RegisterEnum<ExpressionType>("OperatorLessThanEquals", ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	RegisterEnum<ExpressionType>("OperatorGreaterThanEquals", ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+
+	RegisterEnum<SetOperationType>("SetopUnion", SetOperationType::UNION);
+	RegisterEnum<SetOperationType>("SetopExcept", SetOperationType::EXCEPT);
+	RegisterEnum<SetOperationType>("SetopIntersect", SetOperationType::INTERSECT);
 
 	RegisterEnum<string>("TrimBoth", "trim");
 	RegisterEnum<string>("TrimLeading", "ltrim");
