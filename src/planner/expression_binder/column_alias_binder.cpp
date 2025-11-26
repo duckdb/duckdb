@@ -42,7 +42,11 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 }
 
 bool ColumnAliasBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
-	return bind_state.alias_map.find(colref.column_names.back()) != bind_state.alias_map.end();
+	if (!colref.IsQualified()) {
+		return bind_state.alias_map.find(colref.column_names[0]) != bind_state.alias_map.end();
+	}
+	return false;
+	// return bind_state.alias_map.find(colref.column_names.back()) != bind_state.alias_map.end();
 }
 
 } // namespace duckdb
