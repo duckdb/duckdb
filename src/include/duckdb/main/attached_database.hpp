@@ -134,9 +134,9 @@ public:
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
-	// Destroy an attached database, if its use count is 1.
+	// Close an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
-	static void DestroyIfLastReference(shared_ptr<AttachedDatabase> &attached_db);
+	static void CloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db);
 
 private:
 	DatabaseInstance &db;

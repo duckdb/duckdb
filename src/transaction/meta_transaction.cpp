@@ -179,7 +179,7 @@ void MetaTransaction::Finalize() {
 	for (auto &database : referenced_databases) {
 		// If the use count is down to one, then we already detached the database.
 		// That means new transactions can no longer obtain a shared pointer to it.
-		AttachedDatabase::DestroyIfLastReference(database.second);
+		AttachedDatabase::CloseIfLastReference(database.second);
 	}
 }
 

@@ -152,7 +152,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 
 AttachedDatabase::~AttachedDatabase() {
 	// FIXME: Theoretically, we should catch all places higher up the call stack where the
-	// FIXME: shared pointer goes out of scope and we need to invoke CHECKPOINT.
+	// FIXME: shared pointer goes out of scope and we need to invoke a checkpoint.
 	// FIXME: However, for now, we keep this to avoid unintentional behavior / oversights.
 	Close(DatabaseCloseAction::TRY_CHECKPOINT);
 }
@@ -197,7 +197,7 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::DestroyIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
+void AttachedDatabase::CloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
 	if (attached_db.use_count() != 1) {
 		return;
 	}
