@@ -23,6 +23,10 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 }
 
 FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
+	if (!stats.CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
 	switch (values[0].type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
@@ -38,13 +42,8 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
 	case PhysicalType::DOUBLE:
 		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
 		                                  array_ptr<const Value>(values.data(), values.size()));
-	case PhysicalType::VARCHAR: {
-		if (!stats.CanHaveNoNull()) {
-			//! The values are all null, the filter will never match
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		}
+	case PhysicalType::VARCHAR:
 		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL, array_ptr<const Value>(values.data(), values.size()));
-	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
