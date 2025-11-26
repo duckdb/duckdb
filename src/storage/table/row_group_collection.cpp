@@ -1659,8 +1659,8 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 // Statistics
 //===---------------------------------------------------------------r-----===//
 
-void RowGroupCollection::SetStats(TableStatistics &&new_stats) {
-	stats.SetStats(std::move(new_stats));
+void RowGroupCollection::SetStats(TableStatistics &new_stats) {
+	stats.SetStats(new_stats);
 }
 
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {

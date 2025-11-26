@@ -188,7 +188,7 @@ void TableStatistics::DestroyTableSample(TableStatisticsLock &lock) const {
 	}
 }
 
-void TableStatistics::SetStats(TableStatistics &&other) {
+void TableStatistics::SetStats(TableStatistics &other) {
 	TableStatisticsLock lock(*stats_lock);
 	column_stats = std::move(other.column_stats);
 	table_sample = std::move(other.table_sample);
