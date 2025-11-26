@@ -46,17 +46,19 @@ void UnboundIndex::ResizeSmallChunk(unique_ptr<DataChunk> &small_chunk, Allocato
 	}
 	if (small_chunk->size() == 0) {
 		small_chunk.reset();
-	} else {
-		// Only resize if unused space exceeds threshold.
-		auto unused_space = small_chunk->GetCapacity() - small_chunk->size();
-		if (unused_space >= RESIZE_THRESHOLD) {
-			auto current_size = small_chunk->size();
-			auto old_chunk = std::move(small_chunk);
-			small_chunk = make_uniq<DataChunk>();
-			small_chunk->Initialize(allocator, types, current_size);
-			small_chunk->Append(*old_chunk, false);
-		}
+		return;
 	}
+	// Only resize if unused space exceeds RESIZE_THRESHOLD.
+	auto unused_space = small_chunk->GetCapacity() - small_chunk->size();
+	if (unused_space < RESIZE_THRESHOLD) {
+		return;
+	}
+	const auto current_size = small_chunk->size();
+	auto old_chunk = std::move(small_chunk);
+	small_chunk = make_uniq<DataChunk>();
+	small_chunk->Initialize(allocator, types, current_size);
+	small_chunk->Append(*old_chunk, false);
+
 }
 
 void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,

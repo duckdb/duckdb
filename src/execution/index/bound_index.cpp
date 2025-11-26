@@ -181,7 +181,11 @@ void ReplayChunk(BoundIndex &index, const BufferedIndexReplay type, DataChunk &s
 	}
 	case BufferedIndexReplay::DEL_ENTRY: {
 		index.Delete(table_chunk, scan_chunk.data.back());
+		return;
 	}
+	default:
+		throw InternalException("Invalid BufferedIndexReplay type");
+
 	}
 }
 
