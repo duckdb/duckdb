@@ -115,6 +115,10 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+		if (!aggregate.function.HasStateCombineCallback()) {
+			throw InternalException("Aggregate function " + aggregate.function.name +
+			                        " does not support combining of states");
+		}
 		aggregate.function.GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
@@ -136,6 +140,10 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
+		if (!aggregate.function.HasStateCombineCallback()) {
+			throw InternalException("Aggregate function " + aggregate.function.name +
+			                        " does not support combining of states");
+		}
 		aggregate.function.GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
 #ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
