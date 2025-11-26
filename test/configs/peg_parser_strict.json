@@ -77,6 +77,20 @@
       ]
     },
     {
+      "reason": "Error handling",
+      "paths": [
+        "test/sql/error/error_position.test"
+      ]
+    },
+    {
+      "reason": "Special strings",
+      "paths": [
+        "test/sql/copy/csv/unquoted_escape/basic.test",
+        "test/sqlserver/sqlserver_cte.test",
+        "test/optimizer/compare_blob.test"
+      ]
+    },
+    {
       "reason": "Case insensitive preservation",
       "paths": [
         "test/sql/settings/setting_preserve_identifier_case.test"
@@ -150,7 +164,8 @@
         "test/sql/show_select/test_summarize_quoted.test",
         "test/sql/pragma/test_show_tables.test",
         "test/sql/export/export_quoted_enum.test",
-        "test/sql/catalog/test_quoted_column_name.test"
+        "test/sql/catalog/test_quoted_column_name.test",
+        "test/sql/catalog/function/query_function.test"
       ]
     },
     {
