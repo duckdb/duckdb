@@ -1,9 +1,12 @@
 # name: test/sql/index/art/storage/test_art_interleaved_insert_delete_restart.test_slow
-# description: Test interleaved inserts and deletes with restart to verify buffered replays are applied correctly
+# description: Test interleaved index inserts and delete buffering doesn't cause OOM.
 # group: [storage]
 
-statement ok
-SET memory_limit='1GB'
+# FIXME: When indexes are buffer managed, this should be uncommented, and also the loop iteration can be reduced
+# by an order of 10 to hit the 1GB threshold without the allocation fixes.
+# right now this test should OOM without the unbound index allocation fixes in place.
+# statement ok
+# SET memory_limit='1GB'
 
 load __TEST_DIR__/test_art_interleaved_insert_delete_restart.db
 
@@ -19,7 +22,7 @@ CREATE TABLE tbl (i INTEGER);
 statement ok
 CREATE UNIQUE INDEX idx_i ON tbl (i);
 
-loop i 0 10000
+loop i 0 1000000
 
 statement ok
 INSERT INTO tbl VALUES (${i});
