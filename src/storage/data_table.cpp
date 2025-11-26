@@ -1004,13 +1004,14 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	storage.FinalizeLocalAppend(append_state);
 }
 
-void DataTable::AppendLock(TableAppendState &state) {
+void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state) {
 	state.append_lock = unique_lock<mutex>(append_lock);
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to insert into table \"%s\" but it has been %s by "
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
+	state.table_lock = transaction.SharedLockTable(*info);
 	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
 	state.current_row = state.row_start;
 }
@@ -1020,7 +1021,6 @@ void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState 
 	if (!state.append_lock) {
 		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
 	}
-	state.table_lock = transaction.SharedLockTable(*info);
 	row_groups->InitializeAppend(transaction, state);
 }
 

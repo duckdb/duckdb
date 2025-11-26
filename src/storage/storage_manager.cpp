@@ -151,7 +151,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block) {
 
 	// replace the WAL with a new WAL (.wal.2) that transactions can write to while the checkpoint is happening
 	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
-	wal = make_uniq<WriteAheadLog>(*this, GetWALPath(".wal.2"));
+	wal = make_uniq<WriteAheadLog>(*this, GetWALPath(".checkpoint.wal"));
 	return true;
 }
 
