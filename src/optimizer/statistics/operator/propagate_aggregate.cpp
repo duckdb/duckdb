@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -28,30 +29,42 @@ struct ValueComparator {
 	virtual Value GetVal(BaseStatistics &stats) const = 0;
 };
 
+template <typename StatsType>
 struct MinValueComp : public ValueComparator {
 	bool Compare(Value &lhs, Value &rhs) const override {
 		return lhs < rhs;
 	}
 	Value GetVal(BaseStatistics &stats) const override {
-		return NumericStats::Min(stats);
+		return StatsType::Min(stats);
 	}
 };
 
+template <typename StatsType>
 struct MaxValueComp : public ValueComparator {
 	bool Compare(Value &lhs, Value &rhs) const override {
 		return lhs > rhs;
 	}
 	Value GetVal(BaseStatistics &stats) const override {
-		return NumericStats::Max(stats);
+		return StatsType::Max(stats);
 	}
 };
 
+template <typename StatsType>
 unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
 	if (fun_name == "min") {
-		return make_uniq<MinValueComp>();
+		return make_uniq<MinValueComp<StatsType>>();
 	}
 	D_ASSERT(fun_name == "max");
-	return make_uniq<MaxValueComp>();
+	return make_uniq<MaxValueComp<StatsType>>();
+}
+
+unique_ptr<ValueComparator> GetComparator(const string &fun_name, const LogicalType &type) {
+	if (type == LogicalType::VARCHAR) {
+		return GetComparator<StringStats>(fun_name);
+	} else if (type.IsNumeric() || type.IsTemporal()) {
+		return GetComparator<NumericStats>(fun_name);
+	}
+	return nullptr;
 }
 
 bool TryGetValueFromStats(const PartitionStatistics &stats, const column_t column_index,
@@ -63,9 +76,11 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const column_t colum
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats)) {
 		return false;
 	}
-	if (column_stats->GetStatsType() == StatisticsType::NUMERIC_STATS && !NumericStats::HasMinMax(*column_stats)) {
-		// TODO: This also returns if an entire row group is null. In that case, we could skip/compare null
-		return false;
+	if (column_stats->GetStatsType() == StatisticsType::NUMERIC_STATS) {
+		if (!NumericStats::HasMinMax(*column_stats)) {
+			// TODO: This also returns if an entire row group is null. In that case, we could skip/compare null
+			return false;
+		}
 	} else {
 		D_ASSERT(column_stats->GetStatsType() == StatisticsType::STRING_STATS);
 		if (StringStats::Min(*column_stats) > StringStats::Max(*column_stats)) {
@@ -107,7 +122,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
 			min_max_bindings.push_back(col_ref.binding);
-			comparators.push_back(GetComparator(fun_name));
+			auto comparator = GetComparator(fun_name, col_ref.return_type);
+			if (!comparator) {
+				// Type has no min max statistics
+				return;
+			}
+			comparators.push_back(std::move(comparator));
 		} else if (fun_name == "count_star") {
 			count_star_idxs.push_back(i);
 		} else {
