@@ -16,6 +16,7 @@
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 #include <cmath>
 

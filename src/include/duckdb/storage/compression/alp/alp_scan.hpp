@@ -141,7 +141,7 @@ public:
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
 		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
-		if (uncompressed_mode) {
+		if (uncompressed_mode && !SKIP) {
 			// Read uncompressed values
 			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
 			return;
