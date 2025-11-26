@@ -1,0 +1,9 @@
+# name: benchmark/micro/window/row_number.benchmark
+# description: Check if the time to generate row_numbers after rewriting is way worse than a select * without rewriting. The reason is that we traverse the row groups to get the offset before actually handling the row groups and that can be slow
+# group: [window]
+
+load
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(1300000000);
+
+run
+SELECT a, row_number() over() from foo;

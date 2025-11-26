@@ -57,6 +57,10 @@ public:
 	static BindingAlias GetAlias(const string &explicit_alias, const StandardEntry &entry);
 	static BindingAlias GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry);
 
+	const case_insensitive_map_t<column_t> &GetNameMap() const {
+		return name_map;
+	}
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {

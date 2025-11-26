@@ -54,7 +54,7 @@ physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 query TT
 explain select row_number() over (), i, j from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TTT
 select row_number() over (), i, j from integers

@@ -235,6 +235,7 @@ private:
 
 private:
 	mutable mutex row_group_lock;
+	mutex row_number_group_lock;
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)
 	mutable unique_ptr<atomic<bool>[]> is_loaded;

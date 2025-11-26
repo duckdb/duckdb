@@ -40,6 +40,7 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
+	idx_t row_number_count;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -70,6 +71,10 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 		return StorageIndex();
 	}
 
+	if (column_id.IsRowNumberColumn()) {
+		return StorageIndex();
+	}
+
 	// The index of the base ColumnIndex is equal to the physical column index in the table
 	// for any child indices because the indices are already the physical indices.
 	// Only the top-level can have generated columns.
@@ -94,6 +99,10 @@ public:
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
+	//! row_number column index
+	idx_t row_number_col_index = DConstants::INVALID_INDEX;
+	//! Synchronize changes to the global scan state.
+	mutex global_state_mutex;
 
 public:
 	virtual unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -279,6 +288,9 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
+			if (col.IsRowNumberColumn()) {
+				continue;
+			}
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
@@ -317,6 +329,20 @@ public:
 				storage.Scan(tx, output, l_state.scan_state);
 			}
 			if (output.size() > 0) {
+				if (row_number_col_index != DConstants::INVALID_INDEX) {
+					auto &row_number_vec = output.data[row_number_col_index];
+					row_number_vec.SetVectorType(VectorType::FLAT_VECTOR);
+					auto row_number_data = FlatVector::GetData<row_t>(row_number_vec);
+					auto count = output.size();
+
+					idx_t row_group_index = l_state.scan_state.table_state.batch_index - 1;
+					idx_t base = state.scan_state.collection->GetPrefixSum(row_group_index) + l_state.row_number_count;
+
+					for (idx_t i = 0; i < count; i++) {
+						row_number_data[i] = static_cast<row_t>(base + i + 1);
+					}
+					l_state.row_number_count += count;
+				}
 				return;
 			}
 
@@ -324,6 +350,8 @@ public:
 			if (!next) {
 				return;
 			}
+			// One thread is assigned more than one batches. When we are done with one batch, we reset the counter.
+			l_state.row_number_count = 0;
 		} while (true);
 	}
 
@@ -373,6 +401,15 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 
 	storage.InitializeParallelScan(context, g_state->state);
+	for (idx_t i = 0; i < input.column_ids.size(); i++) {
+		if (input.column_ids[i] == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			g_state->row_number_col_index = i;
+			break;
+		}
+	}
+	if (g_state->row_number_col_index != DConstants::INVALID_INDEX) {
+		g_state->state.scan_state.collection->PrecomputePrefixSums();
+	}
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}
@@ -381,7 +418,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		if (col_idx.IsRowIdColumn()) {
+		if (col_idx.IsRowIdColumn() || col_idx.IsRowNumberColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
