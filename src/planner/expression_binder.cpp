@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression_binder.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -15,9 +14,8 @@ void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callbac
 	binder.SetCatalogLookupCallback(std::move(callback));
 }
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder,
-                                   bool bind_correlated_colums_p)
-    : bind_correlated_columns(bind_correlated_colums_p), binder(binder), context(context) {
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
+    : binder(binder), context(context) {
 	InitializeStackCheck();
 	if (replace_binder) {
 		stored_binder = &binder.GetActiveBinder();
@@ -167,7 +165,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		}
 		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
 		candidates.insert(candidate);
-		scores.emplace_back(make_pair(std::move(candidate), score));
+		scores.emplace_back(std::move(candidate), score);
 	}
 	// get a new top-n
 	auto top_candidates = StringUtil::TopNStrings(scores);
@@ -321,7 +319,8 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (error_msg.HasError()) {
-		if (!bind_correlated_columns) {
+		if (!BindsUnfoldableExpressions()) {
+			// We are in a constant binder and therefore do not try to bind the correlated column
 			error_msg.Throw();
 		}
 		// Try binding the correlated column. If binding the correlated column
