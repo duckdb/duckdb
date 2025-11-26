@@ -63,6 +63,8 @@ public:
 
 	//! Obtains a shared lock to the checkpoint lock
 	unique_ptr<StorageLockKey> SharedCheckpointLock();
+	//! Try to obtain an exclusive checkpoint lock
+	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)

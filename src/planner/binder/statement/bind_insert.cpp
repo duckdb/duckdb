@@ -514,7 +514,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::INSERT_DATA);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());

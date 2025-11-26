@@ -135,7 +135,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
