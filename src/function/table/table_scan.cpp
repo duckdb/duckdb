@@ -98,8 +98,6 @@ public:
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
-	//! row_number offsets for each row group
-	vector<idx_t> row_number_offsets;
 	//! row_number column index
 	idx_t row_number_col_index = DConstants::INVALID_INDEX;
 	//! Synchronize changes to the global scan state.
