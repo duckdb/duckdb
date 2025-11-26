@@ -37,6 +37,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
 			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
 			expr = std::move(function_expr);
+		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			vector<unique_ptr<ParsedExpression>> struct_children;
+			struct_children.push_back(std::move(expr));
+			struct_children.push_back(std::move(indirection_expr));
+			auto struct_expr = make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(struct_children));
+			expr = std::move(struct_expr);
+		} else {
+			throw NotImplementedException("Unhandled case for Base Expression with indirection");
 		}
 	}
 	return expr;
@@ -960,7 +968,6 @@ PEGTransformerFactory::TransformTableReservedColumnName(PEGTransformer &transfor
 	auto table = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto column = list_pr.Child<IdentifierParseResult>(1).identifier;
 	return make_uniq<ColumnRefExpression>(column, table);
-	;
 }
 
 string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transformer,
