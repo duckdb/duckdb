@@ -166,7 +166,8 @@
         "test/sql/pragma/test_show_tables.test",
         "test/sql/export/export_quoted_enum.test",
         "test/sql/catalog/test_quoted_column_name.test",
-        "test/sql/catalog/function/query_function.test"
+        "test/sql/catalog/function/query_function.test",
+        "test/sql/json/issues/large_quoted_string_constant.test"
       ]
     },
     {
