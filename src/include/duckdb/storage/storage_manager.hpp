@@ -181,6 +181,8 @@ public:
 	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
 
+	//! Mutex used to control writes to the WAL
+	mutex wal_lock;
 	//! The BlockManager to read from and write to blocks (meta data and data).
 	unique_ptr<BlockManager> block_manager;
 	//! The table I/O manager.

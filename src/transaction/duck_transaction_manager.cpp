@@ -259,19 +259,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_ptr<lock_guard<mutex>> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
 	if (!checkpoint_decision.can_checkpoint && transaction.ShouldWriteToWAL(db)) {
+		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
 		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
 		// unlock the transaction lock while we write to the WAL
 		t_lock.unlock();
-		unique_ptr<StorageLockKey> wal_checkpoint_lock;
-		if (!lock && !transaction.HasWriteLock()) {
-			// if this transaction does not have the checkpoint lock we need to grab it
-			// otherwise another transaction can instantiate a checkpoint while we are writing to the WAL
-			wal_checkpoint_lock = SharedCheckpointLock();
-		}
 		// grab the WAL lock and hold it until the entire commit is finished
-		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
+		held_wal_lock = make_uniq<lock_guard<mutex>>(storage_manager.wal_lock);
 
 		// Commit the changes to the WAL.
 		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {

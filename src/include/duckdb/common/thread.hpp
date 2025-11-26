@@ -8,8 +8,20 @@
 
 #pragma once
 
+#ifndef DUCKDB_NO_THREADS
 #include <thread>
 
 namespace duckdb {
 using std::thread;
+
 }
+
+#endif
+
+namespace duckdb {
+
+struct ThreadUtil {
+	static void SleepMs(idx_t ms);
+};
+
+} // namespace duckdb

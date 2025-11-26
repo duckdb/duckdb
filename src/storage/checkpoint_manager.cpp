@@ -32,6 +32,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
@@ -147,6 +148,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
+	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
+	if (checkpoint_sleep_ms > 0) {
+		ThreadUtil::SleepMs(checkpoint_sleep_ms);
+	}
+
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
@@ -195,11 +201,15 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
 	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
 	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
-	bool wal_is_empty = storage_manager.GetWALSize() == 0;
-	if (!wal_is_empty) {
-		auto wal = storage_manager.GetWAL();
-		wal->WriteCheckpoint(meta_block);
-		wal->Flush();
+	bool wal_is_empty;
+	{
+		lock_guard<mutex> guard(storage_manager.wal_lock);
+		wal_is_empty = storage_manager.GetWALSize() == 0;
+		if (!wal_is_empty) {
+			auto wal = storage_manager.GetWAL();
+			wal->WriteCheckpoint(meta_block);
+			wal->Flush();
+		}
 	}
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
@@ -252,6 +262,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (!wal_is_empty) {
+		lock_guard<mutex> guard(storage_manager.wal_lock);
 		storage_manager.ResetWAL();
 	}
 }
