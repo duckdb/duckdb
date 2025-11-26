@@ -218,19 +218,19 @@ jobs:
       - uses: actions/download-artifact@v4
         name: Download main extensions
         with:
-          pattern: main-extensions-${{ github.sha }}*
+          pattern: main-extensions*
           path: /tmp/repository_generation/main-extensions
 
       - uses: actions/download-artifact@v4
         name: Download rust-based extensions
         with:
-          pattern: rust-based-extensions-${{ github.sha }}*
+          pattern: rust-based-extensions*
           path: /tmp/repository_generation/rust-based-extensions
 
       - uses: actions/download-artifact@v4
         name: Download external extensions
         with:
-          pattern: external-extensions-${{ github.sha }}*
+          pattern: external-extensions*
           path: /tmp/repository_generation/external-extensions
 
       - name: Print all extensions
@@ -246,7 +246,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: extension-repository-${{ github.sha }}
+          name: extension-repository
           path: |
             /tmp/merged_repository/**/*.duckdb_extension*
 
@@ -273,13 +273,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository
           path: /tmp
 
       - name: List extensions to deploy
         shell: bash
         run: |
-          tree /tmp/extension-repository-${{ github.sha }}
+          tree /tmp/extension-repository
 
       - name: Deploy extensions
         shell: bash
@@ -291,7 +291,7 @@ jobs:
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
           pip install awscli
-          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ github.sha }}
+          ./scripts/extension-upload-repository.sh /tmp/extension-repository
 
   autoload-tests:
     name: Extension Autoloading Tests
@@ -318,13 +318,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository
           path: /tmp
 
       - name: List extensions to test with
         shell: bash
         run: |
-          tree /tmp/extension-repository-${{ github.sha }}
+          tree /tmp/extension-repository
 
       - name: Build DuckDB
         env:
@@ -340,7 +340,7 @@ jobs:
 
       - name: Run Tests
         env:
-          LOCAL_EXTENSION_REPO: /tmp/extension-repository-${{ github.sha }}
+          LOCAL_EXTENSION_REPO: /tmp/extension-repository
         run: |
           ./build/release/test/unittest --autoloading available --skip-compiled
 
@@ -385,13 +385,13 @@ jobs:
       - uses: actions/download-artifact@v4
         name: Download extension repository artifact
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository
           path: /tmp
 
       - name: Copy over local extension repository
         shell: bash
         run: |
-          cp -r /tmp/extension-repository-${{ github.sha }} build/release/repository
+          cp -r /tmp/extension-repository build/release/repository
           tree build/release/repository
           find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
           tree build/release/repository
