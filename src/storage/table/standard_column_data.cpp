@@ -250,6 +250,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
+		global_stats->Merge(*validity_state->GetStatistics());
 		return std::move(global_stats);
 	}
 
