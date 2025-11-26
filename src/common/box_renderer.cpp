@@ -1,4 +1,5 @@
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -566,6 +567,9 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	idx_t chunk_idx = 0;
 	idx_t row_idx = 0;
 	while (row_idx < top_rows) {
+		if (context.IsInterrupted()) {
+			break;
+		}
 		fetch_result.Reset();
 		insert_result.Reset();
 		// fetch the next chunk
@@ -623,6 +627,9 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	row_idx = 0;
 	chunk_idx = result.ChunkCount() - 1;
 	while (row_idx < bottom_rows) {
+		if (context.IsInterrupted()) {
+			break;
+		}
 		fetch_result.Reset();
 		insert_result.Reset();
 		// fetch the next chunk
@@ -686,6 +693,9 @@ list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<Colu
 		row_chunk.SetValue(current_index++, row_index, RenderType(result_types[c]));
 		for (auto &collection : input) {
 			for (auto &chunk : collection.Chunks(column_ids)) {
+				if (context.IsInterrupted()) {
+					break;
+				}
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					row_chunk.SetValue(current_index++, row_index, chunk.GetValue(0, r));
 				}
@@ -1757,7 +1767,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						}
 						rows_left--;
 					}
-					bool can_add_extra_row = rows_left > min_leftover_rows;
+					bool can_add_extra_row = current_row + 1 < extra_rows.size() || rows_left > min_leftover_rows;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row

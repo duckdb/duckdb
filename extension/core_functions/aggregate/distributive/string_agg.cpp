@@ -166,8 +166,8 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind);
-	string_agg_param.serialize = StringAggSerialize;
-	string_agg_param.deserialize = StringAggDeserialize;
+	string_agg_param.SetSerializeCallback(StringAggSerialize);
+	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);

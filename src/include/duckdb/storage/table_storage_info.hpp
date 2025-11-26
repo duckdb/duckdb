@@ -13,6 +13,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
