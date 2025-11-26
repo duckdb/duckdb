@@ -122,7 +122,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// If there is a context available, bind indexes before serialization.
 	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
 	// we would lose them if there was a restart after this.
-	if (context != nullptr) {
+	if (context && context->transaction.HasActiveTransaction()) {
 		info.BindIndexes(*context);
 	}
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
