@@ -34,7 +34,7 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-bool ChunkInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+bool ChunkInfo::Cleanup(transaction_t lowest_transaction) const {
 	return false;
 }
 
@@ -101,7 +101,7 @@ idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
 }
 
-bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
 	if (delete_id != NOT_DELETED_ID) {
 		// the chunk info is labeled as deleted - we need to keep it around
 		return false;
@@ -349,7 +349,7 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	}
 }
 
-bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction) const {
 	if (AnyDeleted()) {
 		// if any rows are deleted we can't clean-up
 		return false;
