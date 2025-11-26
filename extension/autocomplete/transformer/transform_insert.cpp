@@ -152,7 +152,7 @@ InsertValues PEGTransformerFactory::TransformInsertValues(PEGTransformer &transf
 InsertColumnOrder PEGTransformerFactory::TransformByNameOrPosition(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<InsertColumnOrder>(list_pr.Child<ChoiceParseResult>(1).result);
+	return transformer.TransformEnum<InsertColumnOrder>(list_pr.Child<ChoiceParseResult>(1).result);
 }
 
 vector<string> PEGTransformerFactory::TransformInsertColumnList(PEGTransformer &transformer,
