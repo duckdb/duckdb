@@ -134,9 +134,9 @@ public:
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
-	// Close an attached database, if its use count is 1.
+	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
-	static void CloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db);
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> attached_database);
 
 private:
 	DatabaseInstance &db;
@@ -150,7 +150,7 @@ private:
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
-	bool close = true;
+	bool is_closed = false;
 
 private:
 	//! Clean any (shared) resources held by the database.

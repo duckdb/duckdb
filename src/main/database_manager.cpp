@@ -215,7 +215,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
-	AttachedDatabase::CloseIfLastReference(attached_db);
+	AttachedDatabase::InvokeCloseIfLastReference(std::move(attached_db));
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {

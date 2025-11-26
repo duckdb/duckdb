@@ -197,7 +197,7 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::CloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> attached_db) {
 	if (attached_db.use_count() != 1) {
 		return;
 	}
@@ -268,11 +268,11 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 }
 
 void AttachedDatabase::Close(const DatabaseCloseAction action) {
-	if (!close) {
+	if (is_closed) {
 		return;
 	}
 	D_ASSERT(catalog);
-	close = false;
+	is_closed = true;
 
 	try {
 		auto create_checkpoint = true;
