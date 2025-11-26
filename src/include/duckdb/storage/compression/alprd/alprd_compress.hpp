@@ -119,7 +119,6 @@ public:
 
 	void CompressVector() {
 		if (nulls_idx) {
-			current_segment->stats.statistics.SetHasNullFast();
 			alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx,
 			                                                       nulls_idx);
 		}
@@ -128,6 +127,9 @@ public:
 		if (!HasEnoughSpace()) {
 			FlushSegment();
 			CreateEmptySegment();
+		}
+		if (nulls_idx) {
+			current_segment->stats.statistics.SetHasNullFast();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
 			current_segment->stats.statistics.SetHasNoNullFast();
