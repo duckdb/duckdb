@@ -30,6 +30,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_COLUMN_LIFETIME,
         MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
         MetricsType::OPTIMIZER_LIMIT_PUSHDOWN,
+        MetricsType::OPTIMIZER_ROW_GROUP_PRUNER,
         MetricsType::OPTIMIZER_TOP_N,
         MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
         MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
@@ -97,6 +98,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
         case OptimizerType::LIMIT_PUSHDOWN:
             return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
+        case OptimizerType::ROW_GROUP_PRUNER:
+            return MetricsType::OPTIMIZER_ROW_GROUP_PRUNER;
         case OptimizerType::TOP_N:
             return MetricsType::OPTIMIZER_TOP_N;
         case OptimizerType::TOP_N_WINDOW_ELIMINATION:
@@ -168,6 +171,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::BUILD_SIDE_PROBE_SIDE;
         case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
             return OptimizerType::LIMIT_PUSHDOWN;
+        case MetricsType::OPTIMIZER_ROW_GROUP_PRUNER:
+            return OptimizerType::ROW_GROUP_PRUNER;
         case MetricsType::OPTIMIZER_TOP_N:
             return OptimizerType::TOP_N;
         case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
@@ -222,6 +227,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
         case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
         case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+        case MetricsType::OPTIMIZER_ROW_GROUP_PRUNER:
         case MetricsType::OPTIMIZER_TOP_N:
         case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:

@@ -20,7 +20,19 @@ struct DistinctCount {
 };
 
 struct ExpressionBinding {
-	bool found_expression = false;
+public:
+	bool FoundExpression() const {
+		return expression;
+	}
+	bool FoundColumnRef() const {
+		if (!FoundExpression()) {
+			return false;
+		}
+		return expression->type == ExpressionType::BOUND_COLUMN_REF;
+	}
+
+public:
+	optional_ptr<Expression> expression;
 	ColumnBinding child_binding;
 	bool expression_is_constant = false;
 };

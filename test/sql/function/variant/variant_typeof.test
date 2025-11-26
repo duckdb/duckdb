@@ -21,20 +21,13 @@ OBJECT(bool, tinyint, smallint, int, bigint, hugeint, uhugeint, utinyint, usmall
 OBJECT(bool, tinyint, smallint, int, bigint, hugeint, uhugeint, utinyint, usmallint, uint, ubigint, bignum, date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, float, double, dec_4_1, dec_9_4, dec_18_6, dec38_10, uuid, interval, varchar, blob, bit, small_enum, medium_enum, large_enum, int_array, double_array, date_array, timestamp_array, timestamptz_array, varchar_array, nested_int_array, struct, struct_of_arrays, array_of_structs, map, union, fixed_int_array, fixed_varchar_array, fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list, list_of_fixed_int_array)
 OBJECT(bool, tinyint, smallint, int, bigint, hugeint, uhugeint, utinyint, usmallint, uint, ubigint, bignum, date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, float, double, dec_4_1, dec_9_4, dec_18_6, dec38_10, uuid, interval, varchar, blob, bit, small_enum, medium_enum, large_enum, int_array, double_array, date_array, timestamp_array, timestamptz_array, varchar_array, nested_int_array, struct, struct_of_arrays, array_of_structs, map, union, fixed_int_array, fixed_varchar_array, fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list, list_of_fixed_int_array)
 
-statement error
-CREATE TABLE T  (v VARIANT);
-----
-A table cannot be created from a VARIANT column yet
+statement ok
+CREATE TABLE T (v VARIANT);
 
-statement error
+statement ok
 create table all_types as select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types();
-----
-Not implemented Error: A table cannot be created from a VARIANT column yet
 
 query I
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
-)
 select variant_typeof(variant_extract(test, 'bool')) from all_types;
 ----
 BOOL_FALSE
@@ -42,9 +35,6 @@ BOOL_TRUE
 VARIANT_NULL
 
 query I
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
-)
 select variant_typeof(variant_extract(test, 'struct')) from all_types;
 ----
 OBJECT(a, b)
@@ -52,9 +42,6 @@ OBJECT(a, b)
 VARIANT_NULL
 
 query I
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
-)
 select variant_typeof(variant_extract(test, 'struct').a) from all_types;
 ----
 VARIANT_NULL
@@ -62,18 +49,12 @@ INT32
 VARIANT_NULL
 
 query I
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
-)
 select variant_typeof(variant_extract(test, 'struct').variant_extract('a')) from all_types limit 2;
 ----
 VARIANT_NULL
 INT32
 
 query I
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
-)
 select variant_typeof(variant_extract(test, 'dec_18_6')) from all_types
 ----
 DECIMAL(18, 6)
@@ -81,9 +62,6 @@ DECIMAL(18, 6)
 VARIANT_NULL
 
 query I
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types()
-)
 select variant_typeof(variant_extract(test, 'array_of_structs')) from all_types
 ----
 ARRAY(0)
@@ -91,9 +69,9 @@ ARRAY(3)
 VARIANT_NULL
 
 query III
-with all_types as (
-	select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types() offset 1 limit 1
+with cte as (
+	select * from all_types limit 1 offset 1
 )
-select variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]), variant_typeof(variant_extract(test, 'array_of_structs')[3]) from all_types;
+select variant_typeof(variant_extract(test, 'array_of_structs')[1]), variant_typeof(variant_extract(test, 'array_of_structs')[2]), variant_typeof(variant_extract(test, 'array_of_structs')[3]) from cte;
 ----
 OBJECT(a, b)	OBJECT(a, b)	VARIANT_NULL

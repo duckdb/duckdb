@@ -32,6 +32,7 @@ class TableStatistics {
 public:
 	void Initialize(const vector<LogicalType> &types, PersistentTableData &data);
 	void InitializeEmpty(const vector<LogicalType> &types);
+	void InitializeEmpty(const TableStatistics &other);
 
 	void InitializeAddColumn(TableStatistics &parent, const LogicalType &new_column_type);
 	void InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column);
@@ -42,6 +43,7 @@ public:
 	void MergeStats(idx_t i, BaseStatistics &stats);
 	void MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats);
 
+	void SetStats(TableStatistics &other);
 	void CopyStats(TableStatistics &other);
 	void CopyStats(TableStatisticsLock &lock, TableStatistics &other);
 	unique_ptr<BaseStatistics> CopyStats(idx_t i);

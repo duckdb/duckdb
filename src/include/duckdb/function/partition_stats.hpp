@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -22,15 +24,22 @@ enum class TablePartitionInfo : uint8_t {
 
 enum class CountType { COUNT_EXACT, COUNT_APPROXIMATE };
 
+struct PartitionRowGroup {
+	virtual ~PartitionRowGroup() = default;
+	virtual unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) = 0;
+};
+
 struct PartitionStatistics {
 	PartitionStatistics();
 
 	//! The row id start
-	idx_t row_start;
+	optional_idx row_start;
 	//! The amount of rows in the partition
 	idx_t count;
 	//! Whether or not the count is exact or approximate
 	CountType count_type;
+	//! Optional accessor for row group statistics
+	shared_ptr<PartitionRowGroup> partition_row_group;
 };
 
 } // namespace duckdb
