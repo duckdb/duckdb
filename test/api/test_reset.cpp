@@ -187,6 +187,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
+	    "extension_directories",
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
