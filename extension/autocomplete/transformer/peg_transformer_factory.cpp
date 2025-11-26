@@ -319,6 +319,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIsDistinctFromExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeOp);
+	REGISTER_TRANSFORM(TransformInClause);
+	REGISTER_TRANSFORM(TransformInExpression);
+	REGISTER_TRANSFORM(TransformInExpressionList);
+	REGISTER_TRANSFORM(TransformInSelectStatement);
 	REGISTER_TRANSFORM(TransformBetweenClause);
 	REGISTER_TRANSFORM(TransformLikeClause);
 	REGISTER_TRANSFORM(TransformLikeVariations);
@@ -687,9 +691,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<OrderType>("AscendingOrder", OrderType::ASCENDING);
 	RegisterEnum<OrderByNullType>("NullsFirst", OrderByNullType::NULLS_FIRST);
 	RegisterEnum<OrderByNullType>("NullsLast", OrderByNullType::NULLS_LAST);
-
-	RegisterEnum<ExpressionType>("ConjunctionOr", ExpressionType::CONJUNCTION_OR);
-	RegisterEnum<ExpressionType>("ConjunctionAnd", ExpressionType::CONJUNCTION_AND);
 
 	RegisterEnum<JoinType>("FullJoin", JoinType::OUTER);
 	RegisterEnum<JoinType>("LeftJoin", JoinType::LEFT);

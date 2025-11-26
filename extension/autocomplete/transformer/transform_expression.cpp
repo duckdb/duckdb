@@ -471,6 +471,10 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(between_in_like_expr));
 		func_expr->children.insert(func_expr->children.begin(), std::move(expr));
 		expr = std::move(func_expr);
+	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+		auto &operator_expr = between_in_like_expr->Cast<OperatorExpression>();
+		operator_expr.children.insert(operator_expr.children.begin(), std::move(expr));
+		expr = std::move(between_in_like_expr);
 	}
 	return expr;
 }
@@ -491,6 +495,32 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeOp(PEG
 		throw NotImplementedException("Not in combination with in or like is not yet implemented.");
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto expr_list_pr = ExtractParseResultsFromList(extract_parens);
+	vector<unique_ptr<ParsedExpression>> in_children;
+	for (auto &expr : expr_list_pr) {
+		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(std::move(expr)));
+	}
+	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("Not in select statements is not yet implemented.");
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer,

@@ -571,6 +571,10 @@ private:
 	                                                                     optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenInLikeOp(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformInSelectStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenClause(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer,

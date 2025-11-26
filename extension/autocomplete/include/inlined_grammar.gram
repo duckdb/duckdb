@@ -689,7 +689,9 @@ NotLikeOp      <- '!~~'
 NotSimilarToOp <- '!~'
 
 InClause <- 'IN' InExpression
-InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
+InExpression <- InExpressionList / InSelectStatement / OtherOperatorExpression
+InExpressionList <- Parens(List(Expression))
+InSelectStatement <- Parens(SelectStatement)
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
