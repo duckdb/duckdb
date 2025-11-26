@@ -33,9 +33,7 @@ public:
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                                        OperatorState &state) const override;
 
-	bool ParallelOperator() const override {
-		return true;
-	}
+	bool ParallelOperator() const override;
 
 	bool RequiresFinalExecute() const override {
 		return function.in_out_function_final;
