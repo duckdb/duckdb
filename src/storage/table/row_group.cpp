@@ -192,6 +192,14 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		// validity - nothing to initialize
 		return;
 	}
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		// variant - column scan states are created later
+		// this is done because the internal shape of the VARIANT is different per rowgroup
+		scan_child_column.resize(2, true);
+		return;
+	}
+
 	D_ASSERT(child_states.empty());
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		// validity + struct children
@@ -248,6 +256,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 
 void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
+	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_scans.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		column_scans.emplace_back(*this);
@@ -329,7 +338,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	scan_state.Initialize(executor.GetContext(), GetCollection().GetTypes());
 	InitializeScan(scan_state, node);
 
 	DataChunk append_chunk;
@@ -1153,7 +1161,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
-		row_group_pointer.deletes_pointers = deletes_pointers;
+		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
 		if (metadata_manager) {
 			vector<MetaBlockPointer> extra_metadata_block_pointers;
 			extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
@@ -1215,14 +1223,13 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
 		metadata_blocks.insert(column_pointer.block_pointer);
 	}
+	if (metadata_manager) {
+		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+	}
 	// set up the pointers correctly within this row group for future operations
 	column_pointers = row_group_pointer.data_pointers;
 	has_metadata_blocks = true;
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
-
-	if (metadata_manager) {
-		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
-	}
 	Verify();
 	return row_group_pointer;
 }
@@ -1231,11 +1238,11 @@ bool RowGroup::HasChanges() const {
 	if (has_changes) {
 		return true;
 	}
-	if (version_info.load()) {
+	auto version_info_loaded = version_info.load();
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
 		// we have deletes
 		return true;
 	}
-	D_ASSERT(!deletes_is_loaded.load());
 	// check if any of the columns have changes
 	// avoid loading unloaded columns - unloaded columns can never have changes
 	for (idx_t c = 0; c < columns.size(); c++) {

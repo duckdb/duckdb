@@ -1,0 +1,18 @@
+# name: test/sql/storage/compression/dict_fsst/test_null_filter_pushdown.test
+# group: [dict_fsst]
+
+load __TEST_DIR__/null_filter_dict_fsst.db readwrite v1.4.2
+
+statement ok
+pragma force_compression='DICT_FSST';
+
+statement ok
+CREATE OR REPLACE TABLE t1(type VARCHAR, id VARCHAR, problem VARCHAR);
+
+statement ok
+INSERT INTO t1(type,id,problem) select 'events', 'test', NULL from range(40)
+
+query I
+SELECT COUNT(*) FROM t1 WHERE problem IS NULL;
+----
+40

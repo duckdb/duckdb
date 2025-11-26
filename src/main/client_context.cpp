@@ -1116,6 +1116,10 @@ void ClientContext::Interrupt() {
 	interrupted = true;
 }
 
+bool ClientContext::IsInterrupted() const {
+	return interrupted;
+}
+
 void ClientContext::CancelTransaction() {
 	auto lock = LockContext();
 	InitialCleanup(*lock);

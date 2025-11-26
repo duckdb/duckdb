@@ -76,21 +76,25 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 }
 
 void EncryptionKeyManager::AddKey(const string &key_name, data_ptr_t key) {
+	lock_guard<mutex> guard(lock);
 	derived_keys.emplace(key_name, EncryptionKey(key));
 	// Zero-out the encryption key
 	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key, DERIVED_KEY_LENGTH);
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {
+	lock_guard<mutex> guard(lock);
 	return derived_keys.find(key_name) != derived_keys.end();
 }
 
 const_data_ptr_t EncryptionKeyManager::GetKey(const string &key_name) const {
 	D_ASSERT(HasKey(key_name));
+	lock_guard<mutex> guard(lock);
 	return derived_keys.at(key_name).GetPtr();
 }
 
 void EncryptionKeyManager::DeleteKey(const string &key_name) {
+	lock_guard<mutex> guard(lock);
 	derived_keys.erase(key_name);
 }
 

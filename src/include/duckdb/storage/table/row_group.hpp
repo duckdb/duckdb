@@ -112,10 +112,6 @@ public:
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
-	//! Returns the list of meta block pointers used by the deletes
-	const vector<MetaBlockPointer> &GetDeletesPointers() const {
-		return deletes_pointers;
-	}
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
 
@@ -216,6 +212,8 @@ public:
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 
+	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
+
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
@@ -232,8 +230,6 @@ private:
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 

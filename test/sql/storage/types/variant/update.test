@@ -1,0 +1,16 @@
+# name: test/sql/storage/types/variant/update.test
+# group: [variant]
+
+statement ok
+create table tbl (a VARIANT)
+
+statement ok
+insert into tbl VALUES (42)
+
+statement ok
+update tbl SET a = 21
+
+query I
+select * from tbl
+----
+21

@@ -58,6 +58,10 @@ endif
 ifeq (${STATIC_LIBCPP}, 1)
 	STATIC_LIBCPP=-DSTATIC_LIBCPP=TRUE
 endif
+GIT_BASE_BRANCH:=main
+ifneq (${DUCKDB_GIT_BASE_BRANCH}, )
+	GIT_BASE_BRANCH:=${DUCKDB_GIT_BASE_BRANCH}
+endif
 
 COMMON_CMAKE_VARS ?=
 CMAKE_VARS_BUILD ?=
@@ -435,7 +439,7 @@ tidy-check-diff:
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	cd ../../ && \
-	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+	git diff origin/${GIT_BASE_BRANCH} . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \

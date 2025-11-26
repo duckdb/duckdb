@@ -1,0 +1,695 @@
+# name: test/optimizer/estimated_cardinalities_through_struct_extract.test
+# group: [optimizer]
+
+require tpcds
+
+statement ok
+call dsdgen(sf=0.01, suffix='_normal')
+
+foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
+
+statement ok
+create TABLE ${tbl}_struct as select ${tbl}_normal ${tbl} from ${tbl}_normal;
+
+endloop
+
+statement ok
+pragma explain_output = 'OPTIMIZED_ONLY';
+
+# --- Create views ----
+
+statement ok
+CREATE VIEW web_site as SELECT
+    web_site.web_site_sk as web_site_sk,
+    web_site.web_site_id as web_site_id,
+    web_site.web_rec_start_date as web_rec_start_date,
+    web_site.web_rec_end_date as web_rec_end_date,
+    web_site.web_name as web_name,
+    web_site.web_open_date_sk as web_open_date_sk,
+    web_site.web_close_date_sk as web_close_date_sk,
+    web_site.web_class as web_class,
+    web_site.web_manager as web_manager,
+    web_site.web_mkt_id as web_mkt_id,
+    web_site.web_mkt_class as web_mkt_class,
+    web_site.web_mkt_desc as web_mkt_desc,
+    web_site.web_market_manager as web_market_manager,
+    web_site.web_company_id as web_company_id,
+    web_site.web_company_name as web_company_name,
+    web_site.web_street_number as web_street_number,
+    web_site.web_street_name as web_street_name,
+    web_site.web_street_type as web_street_type,
+    web_site.web_suite_number as web_suite_number,
+    web_site.web_city as web_city,
+    web_site.web_county as web_county,
+    web_site.web_state as web_state,
+    web_site.web_zip as web_zip,
+    web_site.web_country as web_country,
+    web_site.web_gmt_offset as web_gmt_offset,
+    web_site.web_tax_percentage as web_tax_percentage
+FROM
+    web_site_struct;
+
+statement ok
+CREATE VIEW web_sales as SELECT
+    web_sales.ws_sold_date_sk as ws_sold_date_sk,
+    web_sales.ws_sold_time_sk as ws_sold_time_sk,
+    web_sales.ws_ship_date_sk as ws_ship_date_sk,
+    web_sales.ws_item_sk as ws_item_sk,
+    web_sales.ws_bill_customer_sk as ws_bill_customer_sk,
+    web_sales.ws_bill_cdemo_sk as ws_bill_cdemo_sk,
+    web_sales.ws_bill_hdemo_sk as ws_bill_hdemo_sk,
+    web_sales.ws_bill_addr_sk as ws_bill_addr_sk,
+    web_sales.ws_ship_customer_sk as ws_ship_customer_sk,
+    web_sales.ws_ship_cdemo_sk as ws_ship_cdemo_sk,
+    web_sales.ws_ship_hdemo_sk as ws_ship_hdemo_sk,
+    web_sales.ws_ship_addr_sk as ws_ship_addr_sk,
+    web_sales.ws_web_page_sk as ws_web_page_sk,
+    web_sales.ws_web_site_sk as ws_web_site_sk,
+    web_sales.ws_ship_mode_sk as ws_ship_mode_sk,
+    web_sales.ws_warehouse_sk as ws_warehouse_sk,
+    web_sales.ws_promo_sk as ws_promo_sk,
+    web_sales.ws_order_number as ws_order_number,
+    web_sales.ws_quantity as ws_quantity,
+    web_sales.ws_wholesale_cost as ws_wholesale_cost,
+    web_sales.ws_list_price as ws_list_price,
+    web_sales.ws_sales_price as ws_sales_price,
+    web_sales.ws_ext_discount_amt as ws_ext_discount_amt,
+    web_sales.ws_ext_sales_price as ws_ext_sales_price,
+    web_sales.ws_ext_wholesale_cost as ws_ext_wholesale_cost,
+    web_sales.ws_ext_list_price as ws_ext_list_price,
+    web_sales.ws_ext_tax as ws_ext_tax,
+    web_sales.ws_coupon_amt as ws_coupon_amt,
+    web_sales.ws_ext_ship_cost as ws_ext_ship_cost,
+    web_sales.ws_net_paid as ws_net_paid,
+    web_sales.ws_net_paid_inc_tax as ws_net_paid_inc_tax,
+    web_sales.ws_net_paid_inc_ship as ws_net_paid_inc_ship,
+    web_sales.ws_net_paid_inc_ship_tax as ws_net_paid_inc_ship_tax,
+    web_sales.ws_net_profit as ws_net_profit
+FROM
+    web_sales_struct;
+
+statement ok
+CREATE VIEW web_returns as SELECT
+    web_returns.wr_returned_date_sk as wr_returned_date_sk,
+    web_returns.wr_returned_time_sk as wr_returned_time_sk,
+    web_returns.wr_item_sk as wr_item_sk,
+    web_returns.wr_refunded_customer_sk as wr_refunded_customer_sk,
+    web_returns.wr_refunded_cdemo_sk as wr_refunded_cdemo_sk,
+    web_returns.wr_refunded_hdemo_sk as wr_refunded_hdemo_sk,
+    web_returns.wr_refunded_addr_sk as wr_refunded_addr_sk,
+    web_returns.wr_returning_customer_sk as wr_returning_customer_sk,
+    web_returns.wr_returning_cdemo_sk as wr_returning_cdemo_sk,
+    web_returns.wr_returning_hdemo_sk as wr_returning_hdemo_sk,
+    web_returns.wr_returning_addr_sk as wr_returning_addr_sk,
+    web_returns.wr_web_page_sk as wr_web_page_sk,
+    web_returns.wr_reason_sk as wr_reason_sk,
+    web_returns.wr_order_number as wr_order_number,
+    web_returns.wr_return_quantity as wr_return_quantity,
+    web_returns.wr_return_amt as wr_return_amt,
+    web_returns.wr_return_tax as wr_return_tax,
+    web_returns.wr_return_amt_inc_tax as wr_return_amt_inc_tax,
+    web_returns.wr_fee as wr_fee,
+    web_returns.wr_return_ship_cost as wr_return_ship_cost,
+    web_returns.wr_refunded_cash as wr_refunded_cash,
+    web_returns.wr_reversed_charge as wr_reversed_charge,
+    web_returns.wr_account_credit as wr_account_credit,
+    web_returns.wr_net_loss as wr_net_loss
+FROM
+    web_returns_struct;
+
+statement ok
+CREATE VIEW web_page as SELECT
+    web_page.wp_web_page_sk as wp_web_page_sk,
+    web_page.wp_web_page_id as wp_web_page_id,
+    web_page.wp_rec_start_date as wp_rec_start_date,
+    web_page.wp_rec_end_date as wp_rec_end_date,
+    web_page.wp_creation_date_sk as wp_creation_date_sk,
+    web_page.wp_access_date_sk as wp_access_date_sk,
+    web_page.wp_autogen_flag as wp_autogen_flag,
+    web_page.wp_customer_sk as wp_customer_sk,
+    web_page.wp_url as wp_url,
+    web_page.wp_type as wp_type,
+    web_page.wp_char_count as wp_char_count,
+    web_page.wp_link_count as wp_link_count,
+    web_page.wp_image_count as wp_image_count,
+    web_page.wp_max_ad_count as wp_max_ad_count
+FROM
+    web_page_struct;
+
+statement ok
+CREATE VIEW warehouse as SELECT
+    warehouse.w_warehouse_sk as w_warehouse_sk,
+    warehouse.w_warehouse_id as w_warehouse_id,
+    warehouse.w_warehouse_name as w_warehouse_name,
+    warehouse.w_warehouse_sq_ft as w_warehouse_sq_ft,
+    warehouse.w_street_number as w_street_number,
+    warehouse.w_street_name as w_street_name,
+    warehouse.w_street_type as w_street_type,
+    warehouse.w_suite_number as w_suite_number,
+    warehouse.w_city as w_city,
+    warehouse.w_county as w_county,
+    warehouse.w_state as w_state,
+    warehouse.w_zip as w_zip,
+    warehouse.w_country as w_country,
+    warehouse.w_gmt_offset as w_gmt_offset
+FROM
+    warehouse_struct;
+
+statement ok
+CREATE VIEW time_dim as SELECT
+    time_dim.t_time_sk as t_time_sk,
+    time_dim.t_time_id as t_time_id,
+    time_dim.t_time as t_time,
+    time_dim.t_hour as t_hour,
+    time_dim.t_minute as t_minute,
+    time_dim.t_second as t_second,
+    time_dim.t_am_pm as t_am_pm,
+    time_dim.t_shift as t_shift,
+    time_dim.t_sub_shift as t_sub_shift,
+    time_dim.t_meal_time as t_meal_time
+FROM
+    time_dim_struct;
+
+statement ok
+CREATE VIEW store_sales as SELECT
+    store_sales.ss_sold_date_sk as ss_sold_date_sk,
+    store_sales.ss_sold_time_sk as ss_sold_time_sk,
+    store_sales.ss_item_sk as ss_item_sk,
+    store_sales.ss_customer_sk as ss_customer_sk,
+    store_sales.ss_cdemo_sk as ss_cdemo_sk,
+    store_sales.ss_hdemo_sk as ss_hdemo_sk,
+    store_sales.ss_addr_sk as ss_addr_sk,
+    store_sales.ss_store_sk as ss_store_sk,
+    store_sales.ss_promo_sk as ss_promo_sk,
+    store_sales.ss_ticket_number as ss_ticket_number,
+    store_sales.ss_quantity as ss_quantity,
+    store_sales.ss_wholesale_cost as ss_wholesale_cost,
+    store_sales.ss_list_price as ss_list_price,
+    store_sales.ss_sales_price as ss_sales_price,
+    store_sales.ss_ext_discount_amt as ss_ext_discount_amt,
+    store_sales.ss_ext_sales_price as ss_ext_sales_price,
+    store_sales.ss_ext_wholesale_cost as ss_ext_wholesale_cost,
+    store_sales.ss_ext_list_price as ss_ext_list_price,
+    store_sales.ss_ext_tax as ss_ext_tax,
+    store_sales.ss_coupon_amt as ss_coupon_amt,
+    store_sales.ss_net_paid as ss_net_paid,
+    store_sales.ss_net_paid_inc_tax as ss_net_paid_inc_tax,
+    store_sales.ss_net_profit as ss_net_profit
+FROM
+    store_sales_struct;
+
+statement ok
+CREATE VIEW store_returns as SELECT
+    store_returns.sr_returned_date_sk as sr_returned_date_sk,
+    store_returns.sr_return_time_sk as sr_return_time_sk,
+    store_returns.sr_item_sk as sr_item_sk,
+    store_returns.sr_customer_sk as sr_customer_sk,
+    store_returns.sr_cdemo_sk as sr_cdemo_sk,
+    store_returns.sr_hdemo_sk as sr_hdemo_sk,
+    store_returns.sr_addr_sk as sr_addr_sk,
+    store_returns.sr_store_sk as sr_store_sk,
+    store_returns.sr_reason_sk as sr_reason_sk,
+    store_returns.sr_ticket_number as sr_ticket_number,
+    store_returns.sr_return_quantity as sr_return_quantity,
+    store_returns.sr_return_amt as sr_return_amt,
+    store_returns.sr_return_tax as sr_return_tax,
+    store_returns.sr_return_amt_inc_tax as sr_return_amt_inc_tax,
+    store_returns.sr_fee as sr_fee,
+    store_returns.sr_return_ship_cost as sr_return_ship_cost,
+    store_returns.sr_refunded_cash as sr_refunded_cash,
+    store_returns.sr_reversed_charge as sr_reversed_charge,
+    store_returns.sr_store_credit as sr_store_credit,
+    store_returns.sr_net_loss as sr_net_loss
+FROM
+    store_returns_struct;
+
+statement ok
+CREATE VIEW store as SELECT
+    store.s_store_sk as s_store_sk,
+    store.s_store_id as s_store_id,
+    store.s_rec_start_date as s_rec_start_date,
+    store.s_rec_end_date as s_rec_end_date,
+    store.s_closed_date_sk as s_closed_date_sk,
+    store.s_store_name as s_store_name,
+    store.s_number_employees as s_number_employees,
+    store.s_floor_space as s_floor_space,
+    store.s_hours as s_hours,
+    store.s_manager as s_manager,
+    store.s_market_id as s_market_id,
+    store.s_geography_class as s_geography_class,
+    store.s_market_desc as s_market_desc,
+    store.s_market_manager as s_market_manager,
+    store.s_division_id as s_division_id,
+    store.s_division_name as s_division_name,
+    store.s_company_id as s_company_id,
+    store.s_company_name as s_company_name,
+    store.s_street_number as s_street_number,
+    store.s_street_name as s_street_name,
+    store.s_street_type as s_street_type,
+    store.s_suite_number as s_suite_number,
+    store.s_city as s_city,
+    store.s_county as s_county,
+    store.s_state as s_state,
+    store.s_zip as s_zip,
+    store.s_country as s_country,
+    store.s_gmt_offset as s_gmt_offset,
+    store.s_tax_percentage as s_tax_percentage
+FROM
+    store_struct;
+
+statement ok
+CREATE VIEW ship_mode as SELECT
+    ship_mode.sm_ship_mode_sk as sm_ship_mode_sk,
+    ship_mode.sm_ship_mode_id as sm_ship_mode_id,
+    ship_mode.sm_type as sm_type,
+    ship_mode.sm_code as sm_code,
+    ship_mode.sm_carrier as sm_carrier,
+    ship_mode.sm_contract as sm_contract
+FROM
+    ship_mode_struct;
+
+statement ok
+CREATE VIEW reason as SELECT
+    reason.r_reason_sk as r_reason_sk,
+    reason.r_reason_id as r_reason_id,
+    reason.r_reason_desc as r_reason_desc
+FROM
+    reason_struct;
+
+statement ok
+CREATE VIEW promotion as SELECT
+    promotion.p_promo_sk as p_promo_sk,
+    promotion.p_promo_id as p_promo_id,
+    promotion.p_start_date_sk as p_start_date_sk,
+    promotion.p_end_date_sk as p_end_date_sk,
+    promotion.p_item_sk as p_item_sk,
+    promotion.p_cost as p_cost,
+    promotion.p_response_target as p_response_target,
+    promotion.p_promo_name as p_promo_name,
+    promotion.p_channel_dmail as p_channel_dmail,
+    promotion.p_channel_email as p_channel_email,
+    promotion.p_channel_catalog as p_channel_catalog,
+    promotion.p_channel_tv as p_channel_tv,
+    promotion.p_channel_radio as p_channel_radio,
+    promotion.p_channel_press as p_channel_press,
+    promotion.p_channel_event as p_channel_event,
+    promotion.p_channel_demo as p_channel_demo,
+    promotion.p_channel_details as p_channel_details,
+    promotion.p_purpose as p_purpose,
+    promotion.p_discount_active as p_discount_active
+FROM
+    promotion_struct;
+
+statement ok
+CREATE VIEW item as SELECT
+    item.i_item_sk as i_item_sk,
+    item.i_item_id as i_item_id,
+    item.i_rec_start_date as i_rec_start_date,
+    item.i_rec_end_date as i_rec_end_date,
+    item.i_item_desc as i_item_desc,
+    item.i_current_price as i_current_price,
+    item.i_wholesale_cost as i_wholesale_cost,
+    item.i_brand_id as i_brand_id,
+    item.i_brand as i_brand,
+    item.i_class_id as i_class_id,
+    item.i_class as i_class,
+    item.i_category_id as i_category_id,
+    item.i_category as i_category,
+    item.i_manufact_id as i_manufact_id,
+    item.i_manufact as i_manufact,
+    item.i_size as i_size,
+    item.i_formulation as i_formulation,
+    item.i_color as i_color,
+    item.i_units as i_units,
+    item.i_container as i_container,
+    item.i_manager_id as i_manager_id,
+    item.i_product_name as i_product_name
+FROM
+    item_struct;
+
+statement ok
+CREATE VIEW inventory as SELECT
+    inventory.inv_date_sk as inv_date_sk,
+    inventory.inv_item_sk as inv_item_sk,
+    inventory.inv_warehouse_sk as inv_warehouse_sk,
+    inventory.inv_quantity_on_hand as inv_quantity_on_hand
+FROM
+    inventory_struct;
+
+statement ok
+CREATE VIEW income_band as SELECT
+    income_band.ib_income_band_sk as ib_income_band_sk,
+    income_band.ib_lower_bound as ib_lower_bound,
+    income_band.ib_upper_bound as ib_upper_bound
+FROM
+    income_band_struct;
+
+statement ok
+CREATE VIEW household_demographics as SELECT
+    household_demographics.hd_demo_sk as hd_demo_sk,
+    household_demographics.hd_income_band_sk as hd_income_band_sk,
+    household_demographics.hd_buy_potential as hd_buy_potential,
+    household_demographics.hd_dep_count as hd_dep_count,
+    household_demographics.hd_vehicle_count as hd_vehicle_count
+FROM
+    household_demographics_struct;
+
+statement ok
+CREATE VIEW date_dim as SELECT
+    date_dim.d_date_sk as d_date_sk,
+    date_dim.d_date_id as d_date_id,
+    date_dim.d_date as d_date,
+    date_dim.d_month_seq as d_month_seq,
+    date_dim.d_week_seq as d_week_seq,
+    date_dim.d_quarter_seq as d_quarter_seq,
+    date_dim.d_year as d_year,
+    date_dim.d_dow as d_dow,
+    date_dim.d_moy as d_moy,
+    date_dim.d_dom as d_dom,
+    date_dim.d_qoy as d_qoy,
+    date_dim.d_fy_year as d_fy_year,
+    date_dim.d_fy_quarter_seq as d_fy_quarter_seq,
+    date_dim.d_fy_week_seq as d_fy_week_seq,
+    date_dim.d_day_name as d_day_name,
+    date_dim.d_quarter_name as d_quarter_name,
+    date_dim.d_holiday as d_holiday,
+    date_dim.d_weekend as d_weekend,
+    date_dim.d_following_holiday as d_following_holiday,
+    date_dim.d_first_dom as d_first_dom,
+    date_dim.d_last_dom as d_last_dom,
+    date_dim.d_same_day_ly as d_same_day_ly,
+    date_dim.d_same_day_lq as d_same_day_lq,
+    date_dim.d_current_day as d_current_day,
+    date_dim.d_current_week as d_current_week,
+    date_dim.d_current_month as d_current_month,
+    date_dim.d_current_quarter as d_current_quarter,
+    date_dim.d_current_year as d_current_year
+FROM
+    date_dim_struct;
+
+statement ok
+CREATE VIEW customer_demographics as SELECT
+    customer_demographics.cd_demo_sk as cd_demo_sk,
+    customer_demographics.cd_gender as cd_gender,
+    customer_demographics.cd_marital_status as cd_marital_status,
+    customer_demographics.cd_education_status as cd_education_status,
+    customer_demographics.cd_purchase_estimate as cd_purchase_estimate,
+    customer_demographics.cd_credit_rating as cd_credit_rating,
+    customer_demographics.cd_dep_count as cd_dep_count,
+    customer_demographics.cd_dep_employed_count as cd_dep_employed_count,
+    customer_demographics.cd_dep_college_count as cd_dep_college_count
+FROM
+    customer_demographics_struct;
+
+statement ok
+CREATE VIEW customer_address as SELECT
+    customer_address.ca_address_sk as ca_address_sk,
+    customer_address.ca_address_id as ca_address_id,
+    customer_address.ca_street_number as ca_street_number,
+    customer_address.ca_street_name as ca_street_name,
+    customer_address.ca_street_type as ca_street_type,
+    customer_address.ca_suite_number as ca_suite_number,
+    customer_address.ca_city as ca_city,
+    customer_address.ca_county as ca_county,
+    customer_address.ca_state as ca_state,
+    customer_address.ca_zip as ca_zip,
+    customer_address.ca_country as ca_country,
+    customer_address.ca_gmt_offset as ca_gmt_offset,
+    customer_address.ca_location_type as ca_location_type
+FROM
+    customer_address_struct;
+
+statement ok
+CREATE VIEW customer as SELECT
+    customer.c_customer_sk as c_customer_sk,
+    customer.c_customer_id as c_customer_id,
+    customer.c_current_cdemo_sk as c_current_cdemo_sk,
+    customer.c_current_hdemo_sk as c_current_hdemo_sk,
+    customer.c_current_addr_sk as c_current_addr_sk,
+    customer.c_first_shipto_date_sk as c_first_shipto_date_sk,
+    customer.c_first_sales_date_sk as c_first_sales_date_sk,
+    customer.c_salutation as c_salutation,
+    customer.c_first_name as c_first_name,
+    customer.c_last_name as c_last_name,
+    customer.c_preferred_cust_flag as c_preferred_cust_flag,
+    customer.c_birth_day as c_birth_day,
+    customer.c_birth_month as c_birth_month,
+    customer.c_birth_year as c_birth_year,
+    customer.c_birth_country as c_birth_country,
+    customer.c_login as c_login,
+    customer.c_email_address as c_email_address,
+    customer.c_last_review_date_sk as c_last_review_date_sk
+FROM
+    customer_struct;
+
+statement ok
+CREATE VIEW catalog_sales as SELECT
+    catalog_sales.cs_sold_date_sk as cs_sold_date_sk,
+    catalog_sales.cs_sold_time_sk as cs_sold_time_sk,
+    catalog_sales.cs_ship_date_sk as cs_ship_date_sk,
+    catalog_sales.cs_bill_customer_sk as cs_bill_customer_sk,
+    catalog_sales.cs_bill_cdemo_sk as cs_bill_cdemo_sk,
+    catalog_sales.cs_bill_hdemo_sk as cs_bill_hdemo_sk,
+    catalog_sales.cs_bill_addr_sk as cs_bill_addr_sk,
+    catalog_sales.cs_ship_customer_sk as cs_ship_customer_sk,
+    catalog_sales.cs_ship_cdemo_sk as cs_ship_cdemo_sk,
+    catalog_sales.cs_ship_hdemo_sk as cs_ship_hdemo_sk,
+    catalog_sales.cs_ship_addr_sk as cs_ship_addr_sk,
+    catalog_sales.cs_call_center_sk as cs_call_center_sk,
+    catalog_sales.cs_catalog_page_sk as cs_catalog_page_sk,
+    catalog_sales.cs_ship_mode_sk as cs_ship_mode_sk,
+    catalog_sales.cs_warehouse_sk as cs_warehouse_sk,
+    catalog_sales.cs_item_sk as cs_item_sk,
+    catalog_sales.cs_promo_sk as cs_promo_sk,
+    catalog_sales.cs_order_number as cs_order_number,
+    catalog_sales.cs_quantity as cs_quantity,
+    catalog_sales.cs_wholesale_cost as cs_wholesale_cost,
+    catalog_sales.cs_list_price as cs_list_price,
+    catalog_sales.cs_sales_price as cs_sales_price,
+    catalog_sales.cs_ext_discount_amt as cs_ext_discount_amt,
+    catalog_sales.cs_ext_sales_price as cs_ext_sales_price,
+    catalog_sales.cs_ext_wholesale_cost as cs_ext_wholesale_cost,
+    catalog_sales.cs_ext_list_price as cs_ext_list_price,
+    catalog_sales.cs_ext_tax as cs_ext_tax,
+    catalog_sales.cs_coupon_amt as cs_coupon_amt,
+    catalog_sales.cs_ext_ship_cost as cs_ext_ship_cost,
+    catalog_sales.cs_net_paid as cs_net_paid,
+    catalog_sales.cs_net_paid_inc_tax as cs_net_paid_inc_tax,
+    catalog_sales.cs_net_paid_inc_ship as cs_net_paid_inc_ship,
+    catalog_sales.cs_net_paid_inc_ship_tax as cs_net_paid_inc_ship_tax,
+    catalog_sales.cs_net_profit as cs_net_profit
+FROM
+    catalog_sales_struct;
+
+statement ok
+CREATE VIEW catalog_returns as SELECT
+    catalog_returns.cr_returned_date_sk as cr_returned_date_sk,
+    catalog_returns.cr_returned_time_sk as cr_returned_time_sk,
+    catalog_returns.cr_item_sk as cr_item_sk,
+    catalog_returns.cr_refunded_customer_sk as cr_refunded_customer_sk,
+    catalog_returns.cr_refunded_cdemo_sk as cr_refunded_cdemo_sk,
+    catalog_returns.cr_refunded_hdemo_sk as cr_refunded_hdemo_sk,
+    catalog_returns.cr_refunded_addr_sk as cr_refunded_addr_sk,
+    catalog_returns.cr_returning_customer_sk as cr_returning_customer_sk,
+    catalog_returns.cr_returning_cdemo_sk as cr_returning_cdemo_sk,
+    catalog_returns.cr_returning_hdemo_sk as cr_returning_hdemo_sk,
+    catalog_returns.cr_returning_addr_sk as cr_returning_addr_sk,
+    catalog_returns.cr_call_center_sk as cr_call_center_sk,
+    catalog_returns.cr_catalog_page_sk as cr_catalog_page_sk,
+    catalog_returns.cr_ship_mode_sk as cr_ship_mode_sk,
+    catalog_returns.cr_warehouse_sk as cr_warehouse_sk,
+    catalog_returns.cr_reason_sk as cr_reason_sk,
+    catalog_returns.cr_order_number as cr_order_number,
+    catalog_returns.cr_return_quantity as cr_return_quantity,
+    catalog_returns.cr_return_amount as cr_return_amount,
+    catalog_returns.cr_return_tax as cr_return_tax,
+    catalog_returns.cr_return_amt_inc_tax as cr_return_amt_inc_tax,
+    catalog_returns.cr_fee as cr_fee,
+    catalog_returns.cr_return_ship_cost as cr_return_ship_cost,
+    catalog_returns.cr_refunded_cash as cr_refunded_cash,
+    catalog_returns.cr_reversed_charge as cr_reversed_charge,
+    catalog_returns.cr_store_credit as cr_store_credit,
+    catalog_returns.cr_net_loss as cr_net_loss
+FROM
+    catalog_returns_struct;
+
+statement ok
+CREATE VIEW catalog_page as SELECT
+    catalog_page.cp_catalog_page_sk as cp_catalog_page_sk,
+    catalog_page.cp_catalog_page_id as cp_catalog_page_id,
+    catalog_page.cp_start_date_sk as cp_start_date_sk,
+    catalog_page.cp_end_date_sk as cp_end_date_sk,
+    catalog_page.cp_department as cp_department,
+    catalog_page.cp_catalog_number as cp_catalog_number,
+    catalog_page.cp_catalog_page_number as cp_catalog_page_number,
+    catalog_page.cp_description as cp_description,
+    catalog_page.cp_type as cp_type
+FROM
+    catalog_page_struct;
+
+statement ok
+CREATE VIEW call_center as SELECT
+    call_center.cc_call_center_sk as cc_call_center_sk,
+    call_center.cc_call_center_id as cc_call_center_id,
+    call_center.cc_rec_start_date as cc_rec_start_date,
+    call_center.cc_rec_end_date as cc_rec_end_date,
+    call_center.cc_closed_date_sk as cc_closed_date_sk,
+    call_center.cc_open_date_sk as cc_open_date_sk,
+    call_center.cc_name as cc_name,
+    call_center.cc_class as cc_class,
+    call_center.cc_employees as cc_employees,
+    call_center.cc_sq_ft as cc_sq_ft,
+    call_center.cc_hours as cc_hours,
+    call_center.cc_manager as cc_manager,
+    call_center.cc_mkt_id as cc_mkt_id,
+    call_center.cc_mkt_class as cc_mkt_class,
+    call_center.cc_mkt_desc as cc_mkt_desc,
+    call_center.cc_market_manager as cc_market_manager,
+    call_center.cc_division as cc_division,
+    call_center.cc_division_name as cc_division_name,
+    call_center.cc_company as cc_company,
+    call_center.cc_company_name as cc_company_name,
+    call_center.cc_street_number as cc_street_number,
+    call_center.cc_street_name as cc_street_name,
+    call_center.cc_street_type as cc_street_type,
+    call_center.cc_suite_number as cc_suite_number,
+    call_center.cc_city as cc_city,
+    call_center.cc_county as cc_county,
+    call_center.cc_state as cc_state,
+    call_center.cc_zip as cc_zip,
+    call_center.cc_country as cc_country,
+    call_center.cc_gmt_offset as cc_gmt_offset,
+    call_center.cc_tax_percentage as cc_tax_percentage
+FROM
+    call_center_struct;
+
+# Verify that we don't have an estimate of 0 rows for TPCDS query 64 (which is the query below)
+
+query II
+EXPLAIN
+WITH cs_ui AS
+  (SELECT cs_item_sk,
+          sum(cs_ext_list_price) AS sale,
+          sum(cr_refunded_cash+cr_reversed_charge+cr_store_credit) AS refund
+   FROM catalog_sales,
+        catalog_returns
+   WHERE cs_item_sk = cr_item_sk
+     AND cs_order_number = cr_order_number
+   GROUP BY cs_item_sk
+   HAVING sum(cs_ext_list_price)>2*sum(cr_refunded_cash+cr_reversed_charge+cr_store_credit)),
+     cross_sales AS
+  (SELECT i_product_name product_name,
+          i_item_sk item_sk,
+          s_store_name store_name,
+          s_zip store_zip,
+          ad1.ca_street_number b_street_number,
+          ad1.ca_street_name b_street_name,
+          ad1.ca_city b_city,
+          ad1.ca_zip b_zip,
+          ad2.ca_street_number c_street_number,
+          ad2.ca_street_name c_street_name,
+          ad2.ca_city c_city,
+          ad2.ca_zip c_zip,
+          d1.d_year AS syear,
+          d2.d_year AS fsyear,
+          d3.d_year s2year,
+          count(*) cnt,
+          sum(ss_wholesale_cost) s1,
+          sum(ss_list_price) s2,
+          sum(ss_coupon_amt) s3
+   FROM store_sales,
+        store_returns,
+        cs_ui,
+        date_dim d1,
+        date_dim d2,
+        date_dim d3,
+        store,
+        customer,
+        customer_demographics cd1,
+        customer_demographics cd2,
+        promotion,
+        household_demographics hd1,
+        household_demographics hd2,
+        customer_address ad1,
+        customer_address ad2,
+        income_band ib1,
+        income_band ib2,
+        item
+   WHERE ss_store_sk = s_store_sk
+     AND ss_sold_date_sk = d1.d_date_sk
+     AND ss_customer_sk = c_customer_sk
+     AND ss_cdemo_sk= cd1.cd_demo_sk
+     AND ss_hdemo_sk = hd1.hd_demo_sk
+     AND ss_addr_sk = ad1.ca_address_sk
+     AND ss_item_sk = i_item_sk
+     AND ss_item_sk = sr_item_sk
+     AND ss_ticket_number = sr_ticket_number
+     AND ss_item_sk = cs_ui.cs_item_sk
+     AND c_current_cdemo_sk = cd2.cd_demo_sk
+     AND c_current_hdemo_sk = hd2.hd_demo_sk
+     AND c_current_addr_sk = ad2.ca_address_sk
+     AND c_first_sales_date_sk = d2.d_date_sk
+     AND c_first_shipto_date_sk = d3.d_date_sk
+     AND ss_promo_sk = p_promo_sk
+     AND hd1.hd_income_band_sk = ib1.ib_income_band_sk
+     AND hd2.hd_income_band_sk = ib2.ib_income_band_sk
+     AND cd1.cd_marital_status <> cd2.cd_marital_status
+     AND i_color IN ('purple',
+                     'burlywood',
+                     'indian',
+                     'spring',
+                     'floral',
+                     'medium')
+     AND i_current_price BETWEEN 64 AND 64 + 10
+     AND i_current_price BETWEEN 64 + 1 AND 64 + 15
+   GROUP BY i_product_name,
+            i_item_sk,
+            s_store_name,
+            s_zip,
+            ad1.ca_street_number,
+            ad1.ca_street_name,
+            ad1.ca_city,
+            ad1.ca_zip,
+            ad2.ca_street_number,
+            ad2.ca_street_name,
+            ad2.ca_city,
+            ad2.ca_zip,
+            d1.d_year,
+            d2.d_year,
+            d3.d_year)
+SELECT cs1.product_name,
+       cs1.store_name,
+       cs1.store_zip,
+       cs1.b_street_number,
+       cs1.b_street_name,
+       cs1.b_city,
+       cs1.b_zip,
+       cs1.c_street_number,
+       cs1.c_street_name,
+       cs1.c_city,
+       cs1.c_zip,
+       cs1.syear cs1syear,
+       cs1.cnt cs1cnt,
+       cs1.s1 AS s11,
+       cs1.s2 AS s21,
+       cs1.s3 AS s31,
+       cs2.s1 AS s12,
+       cs2.s2 AS s22,
+       cs2.s3 AS s32,
+       cs2.syear,
+       cs2.cnt
+FROM cross_sales cs1,
+     cross_sales cs2
+WHERE cs1.item_sk=cs2.item_sk
+  AND cs1.syear = 1999
+  AND cs2.syear = 1999 + 1
+  AND cs2.cnt <= cs1.cnt
+  AND cs1.store_name = cs2.store_name
+  AND cs1.store_zip = cs2.store_zip
+ORDER BY cs1.product_name,
+         cs1.store_name,
+         cs2.cnt,
+         cs1.s1,
+         cs2.s1;
+----
+logical_opt	<!REGEX>:.*Table Index:.*~0.*

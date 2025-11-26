@@ -1,0 +1,145 @@
+# name: test/sql/storage/types/variant/tpch_sf1.test_slow
+# group: [variant]
+
+require tpch
+
+load __TEST_DIR__/tpch_sf1_variant.db
+
+statement ok
+call dbgen(sf=1, suffix='_normal');
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# --- Create tables stored as VARIANT ---
+
+foreach tbl customer lineitem nation orders part partsupp region supplier
+
+statement ok
+create table ${tbl}_variant as select ${tbl}_normal::VARIANT ${tbl} from ${tbl}_normal;
+
+endloop
+
+statement ok
+checkpoint;
+
+restart
+
+# --- Create views ----
+
+statement ok
+CREATE VIEW lineitem AS SELECT
+	lineitem.l_orderkey::DECIMAL(15,2) l_orderkey,
+	lineitem.l_partkey::DECIMAL(15,2) l_partkey,
+	lineitem.l_suppkey::DECIMAL(15,2) l_suppkey,
+	lineitem.l_linenumber::DECIMAL(15,2) l_linenumber,
+	lineitem.l_quantity::DECIMAL(15,2) l_quantity,
+	lineitem.l_extendedprice::DECIMAL(15,2) l_extendedprice,
+	lineitem.l_discount::DECIMAL(15,2) l_discount,
+	lineitem.l_tax::DECIMAL(15,2) l_tax,
+	lineitem.l_returnflag::VARCHAR l_returnflag,
+	lineitem.l_linestatus::VARCHAR l_linestatus,
+	lineitem.l_shipdate::DATE l_shipdate,
+	lineitem.l_commitdate::DATE l_commitdate,
+	lineitem.l_receiptdate::DATE l_receiptdate,
+	lineitem.l_shipinstruct::VARCHAR l_shipinstruct,
+	lineitem.l_shipmode::VARCHAR l_shipmode,
+	lineitem.l_comment::VARCHAR l_comment
+FROM
+	lineitem_variant
+
+statement ok
+CREATE VIEW orders AS SELECT
+	orders.o_orderkey::DECIMAL(15,2) o_orderkey,
+	orders.o_custkey::DECIMAL(15,2) o_custkey,
+	orders.o_orderstatus::VARCHAR o_orderstatus,
+	orders.o_totalprice::DECIMAL(15,2) o_totalprice,
+	orders.o_orderdate::DATE o_orderdate,
+	orders.o_orderpriority::VARCHAR o_orderpriority,
+	orders.o_clerk::VARCHAR o_clerk,
+	orders.o_shippriority::DECIMAL(15,2) o_shippriority,
+	orders.o_comment::VARCHAR o_comment
+FROM
+	orders_variant
+
+statement ok
+CREATE VIEW partsupp AS SELECT
+	partsupp.ps_partkey::DECIMAL(15,2) ps_partkey,
+	partsupp.ps_suppkey::DECIMAL(15,2) ps_suppkey,
+	partsupp.ps_availqty::DECIMAL(15,2) ps_availqty,
+	partsupp.ps_supplycost::DECIMAL(15,2) ps_supplycost,
+	partsupp.ps_comment::VARCHAR ps_comment
+FROM
+	partsupp_variant
+
+statement ok
+CREATE VIEW part AS SELECT
+	part.p_partkey::INTEGER p_partkey,
+	part.p_name::VARCHAR p_name,
+	part.p_mfgr::VARCHAR p_mfgr,
+	part.p_brand::VARCHAR p_brand,
+	part.p_type::VARCHAR p_type,
+	part.p_size::DECIMAL(15,2) p_size,
+	part.p_container::VARCHAR p_container,
+	part.p_retailprice::DECIMAL(15,2) p_retailprice,
+	part.p_comment::VARCHAR p_comment,
+FROM
+	part_variant
+
+statement ok
+CREATE VIEW customer AS SELECT
+	customer.c_custkey::DECIMAL(15,2) c_custkey,
+	customer.c_name::VARCHAR c_name,
+	customer.c_address::VARCHAR c_address,
+	customer.c_nationkey::DECIMAL(15,2) c_nationkey,
+	customer.c_phone::VARCHAR c_phone,
+	customer.c_acctbal::DECIMAL(15,2) c_acctbal,
+	customer.c_mktsegment::VARCHAR c_mktsegment,
+	customer.c_comment::VARCHAR c_comment,
+FROM customer_variant
+
+statement ok
+CREATE VIEW supplier AS SELECT
+	supplier.s_suppkey::DECIMAL(15,2) s_suppkey,
+	supplier.s_name::VARCHAR s_name,
+	supplier.s_address::VARCHAR s_address,
+	supplier.s_nationkey::DECIMAL(15,2) s_nationkey,
+	supplier.s_phone::VARCHAR s_phone,
+	supplier.s_acctbal::DECIMAL(15,2) s_acctbal,
+	supplier.s_comment::VARCHAR s_comment,
+FROM supplier_variant
+
+statement ok
+CREATE VIEW nation AS SELECT
+	nation.n_nationkey::DECIMAL(15,2) n_nationkey,
+	nation.n_name::VARCHAR n_name,
+	nation.n_regionkey::DECIMAL(15,2) n_regionkey,
+	nation.n_comment::VARCHAR n_comment,
+FROM nation_variant
+
+statement ok
+CREATE VIEW region AS SELECT
+	region.r_regionkey::DECIMAL(15,2) r_regionkey,
+	region.r_name::VARCHAR r_name,
+	region.r_comment::VARCHAR r_comment,
+FROM region_variant
+
+# --- Run queries ---
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
