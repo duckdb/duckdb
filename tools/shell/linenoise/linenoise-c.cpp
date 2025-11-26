@@ -100,18 +100,6 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
 	Linenoise::SetCompletionCallback(fn);
 }
 
-/* Register a hits function to be called to show hits to the user at the
- * right of the prompt. */
-void linenoiseSetHintsCallback(linenoiseHintsCallback *fn) {
-	Linenoise::SetHintsCallback(fn);
-}
-
-/* Register a function to free the hints returned by the hints callback
- * registered with linenoiseSetHintsCallback(). */
-void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
-	Linenoise::SetFreeHintsCallback(fn);
-}
-
 void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }

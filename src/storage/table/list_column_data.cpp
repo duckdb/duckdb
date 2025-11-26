@@ -377,6 +377,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
+		stats.Merge(*validity_state->GetStatistics());
 		ListStats::SetChildStats(stats, child_state->GetStatistics());
 		return stats.ToUnique();
 	}
