@@ -536,6 +536,11 @@ void ColumnData::RevertAppend(row_t start_row_p) {
 	if (segment->start == start_row) {
 		// we are truncating exactly this segment - erase it entirely
 		data.EraseSegments(l, segment_index);
+		if (segment_index > 0) {
+			// if we have a previous segment, we need to update the next pointer
+			auto previous_segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index - 1));
+			previous_segment->next = nullptr;
+		}
 	} else {
 		// we need to truncate within the segment
 		// remove any segments AFTER this segment: they should be deleted entirely
