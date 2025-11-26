@@ -46,6 +46,10 @@ public:
 	//! Information for WITH ORDINALITY
 	optional_idx ordinality_idx;
 
+	bool SinkOrderDependent() const override {
+		return function.in_out_function_order_dependent;
+	}
+
 private:
 	//! The table function
 	TableFunction function;
