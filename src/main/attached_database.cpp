@@ -274,42 +274,40 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 	D_ASSERT(catalog);
 	close = false;
 
-	if (action == DatabaseCloseAction::CHECKPOINT || action == DatabaseCloseAction::TRY_CHECKPOINT) {
-		try {
-			auto create_checkpoint = true;
-			if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
-				create_checkpoint = false;
-			} else if (!storage || storage->InMemory() || ValidChecker::IsInvalidated(db)) {
-				create_checkpoint = false;
-			}
-
-			if (create_checkpoint) {
-				auto &config = DBConfig::GetConfig(db);
-				if (config.options.checkpoint_on_shutdown) {
-					CheckpointOptions options;
-					options.wal_action = CheckpointWALAction::DELETE_WAL;
-					storage->CreateCheckpoint(QueryContext(), options);
-				}
-			}
-		} catch (std::exception &ex) {
-			ErrorData data(ex);
-			if (action == DatabaseCloseAction::TRY_CHECKPOINT) {
-				try {
-					DUCKDB_LOG_ERROR(db, "Silent exception in AttachedDatabase::Close():\t" + data.Message());
-				} catch (...) { // NOLINT
-				}
-			} else {
-				Cleanupp();
-				data.Throw("Detached database '" + name + "', but CHECKPOINT during DETACH failed. \n");
-			}
-		} catch (...) { // NOLINT
+	try {
+		auto create_checkpoint = true;
+		if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
+			create_checkpoint = false;
+		} else if (!storage || storage->InMemory() || ValidChecker::IsInvalidated(db)) {
+			create_checkpoint = false;
 		}
+
+		if (create_checkpoint) {
+			auto &config = DBConfig::GetConfig(db);
+			if (config.options.checkpoint_on_shutdown) {
+				CheckpointOptions options;
+				options.wal_action = CheckpointWALAction::DELETE_WAL;
+				storage->CreateCheckpoint(QueryContext(), options);
+			}
+		}
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		if (action == DatabaseCloseAction::TRY_CHECKPOINT) {
+			try {
+				DUCKDB_LOG_ERROR(db, "Silent exception in AttachedDatabase::Close():\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
+		} else {
+			Cleanup();
+			data.Throw("Detached database '" + name + "', but CHECKPOINT during DETACH failed. \n");
+		}
+	} catch (...) { // NOLINT
 	}
 
-	Cleanupp();
+	Cleanup();
 }
 
-void AttachedDatabase::Cleanupp() {
+void AttachedDatabase::Cleanup() {
 	transaction_manager.reset();
 	catalog.reset();
 	storage.reset();

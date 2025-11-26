@@ -38,8 +38,7 @@ enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
 //! CHECKPOINT: Throws, if the checkpoint fails. Always cleans up.
 //! TRY_CHECKPOINT: Does not throw when failing a checkpoint. Always cleans up.
-//! CLEANUP_ONLY: Cleans up and does not try to CHECKPOINT.
-enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT, CLEANUP_ONLY };
+enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT };
 
 class DatabaseFilePathManager;
 
@@ -155,7 +154,7 @@ private:
 
 private:
 	//! Clean any (shared) resources held by the database.
-	void Cleanupp();
+	void Cleanup();
 };
 
 } // namespace duckdb
