@@ -266,7 +266,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// unlock the transaction lock while we write to the WAL
 		t_lock.unlock();
 		// grab the WAL lock and hold it until the entire commit is finished
-		held_wal_lock = make_uniq<lock_guard<mutex>>(storage_manager.wal_lock);
+		held_wal_lock = storage_manager.GetWALLock();
 
 		// Commit the changes to the WAL.
 		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {

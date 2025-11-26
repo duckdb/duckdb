@@ -58,6 +58,9 @@ public:
 
 	AttachedDatabase &GetDatabase();
 
+	const string &GetPath() const {
+		return wal_path;
+	}
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetWALSize() const;
 	//! Gets the total bytes written to the WAL since startup

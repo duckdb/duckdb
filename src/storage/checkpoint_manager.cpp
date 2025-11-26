@@ -148,6 +148,14 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
+	// write a checkpoint flag to the WAL
+	// FIXME: this comment is now wrong
+	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
+	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
+	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
+	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block);
+
 	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {
 		ThreadUtil::SleepMs(checkpoint_sleep_ms);
@@ -196,21 +204,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	metadata_writer->Flush();
 	table_metadata_writer->Flush();
 
-	// write a checkpoint flag to the WAL
-	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
-	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
-	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
-	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
-	bool wal_is_empty;
-	{
-		lock_guard<mutex> guard(storage_manager.wal_lock);
-		wal_is_empty = storage_manager.GetWALSize() == 0;
-		if (!wal_is_empty) {
-			auto wal = storage_manager.GetWAL();
-			wal->WriteCheckpoint(meta_block);
-			wal->Flush();
-		}
-	}
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
@@ -261,9 +254,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	block_manager.Truncate();
 
 	// truncate the WAL
-	if (!wal_is_empty) {
-		lock_guard<mutex> guard(storage_manager.wal_lock);
-		storage_manager.ResetWAL();
+	if (has_wal) {
+		storage_manager.WALFinishCheckpoint();
 	}
 }
 

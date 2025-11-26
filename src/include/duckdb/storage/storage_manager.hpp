@@ -84,6 +84,12 @@ public:
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Deletes the WAL file, and resets the unique pointer.
 	void ResetWAL();
+	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
+	bool WALStartCheckpoint(MetaBlockPointer meta_block);
+	//! Finishes a checkpoint
+	void WALFinishCheckpoint();
+	// Get the WAL lock
+	unique_ptr<lock_guard<mutex>> GetWALLock();
 
 	//! Returns the database file path
 	string GetDBPath() const {
@@ -93,7 +99,7 @@ public:
 		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
-	string GetWALPath() const;
+	string GetWALPath(const string &suffix = ".wal");
 	bool InMemory() const;
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
@@ -147,8 +153,12 @@ protected:
 	AttachedDatabase &db;
 	//! The path of the database
 	string path;
+	//! The WAL path
+	string wal_path;
 	//! The WriteAheadLog of the storage manager
 	unique_ptr<WriteAheadLog> wal;
+	//! Mutex used to control writes to the WAL
+	mutex wal_lock;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
@@ -181,8 +191,6 @@ public:
 	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
 
-	//! Mutex used to control writes to the WAL
-	mutex wal_lock;
 	//! The BlockManager to read from and write to blocks (meta data and data).
 	unique_ptr<BlockManager> block_manager;
 	//! The table I/O manager.

@@ -127,20 +127,82 @@ void StorageManager::ResetWAL() {
 	wal->Delete();
 }
 
-string StorageManager::GetWALPath() const {
+bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block) {
+	if (!wal) {
+		return false;
+	}
+	// start the checkpoint process around the WAL
+	lock_guard<mutex> guard(wal_lock);
+	if (wal->GetWALSize() == 0) {
+		// no WAL - we don't need to do anything here
+		return false;
+	}
+	// verify the main WAL is the active WAL currently
+	if (wal->GetPath() != wal_path) {
+		throw InternalException("Current WAL path %s does not match base WAL path %s in WALStartCheckpoint",
+		                        wal->GetPath(), wal_path);
+	}
+	// write to the main WAL that we have initiated a checkpoint
+	wal->WriteCheckpoint(meta_block);
+	wal->Flush();
+
+	// close the main WAL
+	wal.reset();
+
+	// replace the WAL with a new WAL (.wal.2) that transactions can write to while the checkpoint is happening
+	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
+	wal = make_uniq<WriteAheadLog>(db, GetWALPath(".wal.2"));
+	return true;
+}
+
+void StorageManager::WALFinishCheckpoint() {
+	lock_guard<mutex> guard(wal_lock);
+	D_ASSERT(wal.get());
+
+	// "wal" points to the secondary WAL
+	// first check if the WAL has been written to
+	auto &fs = FileSystem::Get(db);
+	if (!wal->Initialized()) {
+		// the secondary WAL has not been written to
+		// this is the common scenario if there are no concurrent writes happening while checkpointing
+		// in this case we can just remove the main WAL and re-instantiate it to empty
+		fs.TryRemoveFile(wal_path);
+
+		wal = make_uniq<WriteAheadLog>(db, wal_path);
+		return;
+	}
+
+	// we have had writes to the secondary WAL - we need to override our WAL with the new secondary WAL
+	// first close the WAL writer
+	auto secondary_wal_path = wal->GetPath();
+	wal.reset();
+
+	// move the secondary WAL over the main WAL
+	fs.MoveFile(secondary_wal_path, wal_path);
+
+	// open what is now the main WAL again
+	wal = make_uniq<WriteAheadLog>(db, wal_path);
+	wal->Initialize();
+}
+
+unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
+	return make_uniq<lock_guard<mutex>>(wal_lock);
+}
+
+string StorageManager::GetWALPath(const string &suffix) {
 	// we append the ".wal" **before** a question mark in case of GET parameters
 	// but only if we are not in a windows long path (which starts with \\?\)
 	std::size_t question_mark_pos = std::string::npos;
 	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
 		question_mark_pos = path.find('?');
 	}
-	auto wal_path = path;
+	auto result = path;
 	if (question_mark_pos != std::string::npos) {
-		wal_path.insert(question_mark_pos, ".wal");
+		result.insert(question_mark_pos, suffix);
 	} else {
-		wal_path += ".wal";
+		result += suffix;
 	}
-	return wal_path;
+	return result;
 }
 
 bool StorageManager::InMemory() const {
@@ -250,7 +312,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// file does not exist and we are in read-write mode
 		// create a new file
 
-		auto wal_path = GetWALPath();
+		wal_path = GetWALPath();
 		// try to remove the WAL file if it exists
 		fs.TryRemoveFile(wal_path);
 
@@ -358,7 +420,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 
 		// Replay the WAL.
-		auto wal_path = GetWALPath();
+		wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
 
 		// End timing the WAL replay step.
