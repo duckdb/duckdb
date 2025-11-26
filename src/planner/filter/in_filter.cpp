@@ -38,9 +38,13 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
 	case PhysicalType::DOUBLE:
 		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
 		                                  array_ptr<const Value>(values.data(), values.size()));
-	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                 array_ptr<const Value>(values.data(), values.size()));
+	case PhysicalType::VARCHAR: {
+		if (!stats.CanHaveNoNull()) {
+			//! The values are all null, the filter will never match
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL, array_ptr<const Value>(values.data(), values.size()));
+	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
