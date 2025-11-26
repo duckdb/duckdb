@@ -1,10 +1,12 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 
 namespace duckdb {
 
 ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause)
-    : ExpressionBinder(binder, context, false, false), clause(std::move(clause)) {
+    : ExpressionBinder(binder, context), clause(std::move(clause)) {
 }
 
 BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {

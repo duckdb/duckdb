@@ -10,9 +10,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
-#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/error_data.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -71,8 +69,7 @@ class ExpressionBinder {
 	friend class StackChecker<ExpressionBinder>;
 
 public:
-	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false,
-	                 bool bind_correlated_columns_p = true);
+	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
 	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
@@ -84,6 +81,10 @@ public:
 		return false;
 	}
 
+	virtual bool BindsUnfoldableExpressions() const {
+		return true;
+	}
+
 	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
 	static bool IsPotentialAlias(const ColumnRefExpression &colref);
 
@@ -93,7 +94,6 @@ public:
 
 	optional_ptr<DummyBinding> macro_binding;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
-	const bool bind_correlated_columns;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
