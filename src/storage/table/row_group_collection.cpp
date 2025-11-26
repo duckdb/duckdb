@@ -1292,6 +1292,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				row_group.CheckpointDeletes(metadata_manager);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+
+			// copy over existing stats into the global stats
+			CopyStats(global_stats);
 			return;
 		}
 	}
@@ -1299,6 +1302,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto l = new_row_groups->Lock();
+
+	// initialize new empty stats
+	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
@@ -1315,6 +1321,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
+
+			auto lock = global_stats.GetLock();
+			for (idx_t column_idx = 0; column_idx < row_group.GetColumnCount(); column_idx++) {
+				global_stats.GetStats(*lock, column_idx).Statistics().Merge(*row_group.GetStatistics(column_idx));
+			}
 			continue;
 		}
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
@@ -1683,6 +1694,11 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 //===--------------------------------------------------------------------===//
 // Statistics
 //===---------------------------------------------------------------r-----===//
+
+void RowGroupCollection::SetStats(TableStatistics &new_stats) {
+	stats.SetStats(new_stats);
+}
+
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }

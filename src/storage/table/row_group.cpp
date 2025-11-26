@@ -932,7 +932,7 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, 
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
 
-unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
+unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) const {
 	auto &col_data = GetColumn(column_idx);
 	return col_data.GetStatistics();
 }
@@ -1175,6 +1175,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 			// remember metadata_blocks to avoid loading them on future checkpoints
 			has_metadata_blocks = true;
 			extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+		}
+		// merge row group stats into the global stats
+		auto lock = global_stats.GetLock();
+		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+			GetColumn(column_idx).MergeIntoStatistics(global_stats.GetStats(*lock, column_idx).Statistics());
 		}
 		return row_group_pointer;
 	}

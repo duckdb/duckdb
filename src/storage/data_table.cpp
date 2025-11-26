@@ -1593,7 +1593,6 @@ unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
 	if (!HasIndexes()) {
 		row_groups->SetAppendRequiresNewRowGroup();
@@ -1605,6 +1604,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
+	row_groups->SetStats(global_stats);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {
