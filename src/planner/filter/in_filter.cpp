@@ -43,7 +43,8 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
 		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
 		                                  array_ptr<const Value>(values.data(), values.size()));
 	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL, array_ptr<const Value>(values.data(), values.size()));
+		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
+		                                 array_ptr<const Value>(values.data(), values.size()));
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
