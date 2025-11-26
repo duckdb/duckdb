@@ -506,6 +506,11 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	if (segment.start == start_row) {
 		// we are truncating exactly this row group - erase it entirely
 		row_groups->EraseSegments(l, segment_index);
+		if (segment_index > 0) {
+			// if we have a previous segment, we need to update the next pointer
+			auto previous_segment = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index - 1));
+			previous_segment->next = nullptr;
+		}
 	} else {
 		// we need to truncate within a row group
 		// remove any segments AFTER this segment: they should be deleted entirely
