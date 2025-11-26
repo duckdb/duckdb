@@ -79,8 +79,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 }
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
-    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY),
-      in_memory_change_size(0) {
+    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY), wal_size(0) {
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 		return;
@@ -110,10 +109,15 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	if (InMemory() || wal->GetDatabase().GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
-		return in_memory_change_size.load();
-	}
-	return wal->GetWALSize();
+	return wal_size;
+}
+
+void StorageManager::AddWALSize(idx_t size) {
+	wal_size += size;
+}
+
+void StorageManager::SetWALSize(idx_t size) {
+	wal_size = size;
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -123,17 +127,13 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	return wal.get();
 }
 
-void StorageManager::ResetWAL() {
-	wal->Delete();
-}
-
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block) {
 	if (!wal) {
 		return false;
 	}
 	// start the checkpoint process around the WAL
 	lock_guard<mutex> guard(wal_lock);
-	if (wal->GetWALSize() == 0) {
+	if (GetWALSize() == 0) {
 		// no WAL - we don't need to do anything here
 		return false;
 	}
@@ -151,7 +151,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block) {
 
 	// replace the WAL with a new WAL (.wal.2) that transactions can write to while the checkpoint is happening
 	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
-	wal = make_uniq<WriteAheadLog>(db, GetWALPath(".wal.2"));
+	wal = make_uniq<WriteAheadLog>(*this, GetWALPath(".wal.2"));
 	return true;
 }
 
@@ -168,7 +168,7 @@ void StorageManager::WALFinishCheckpoint() {
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
 
-		wal = make_uniq<WriteAheadLog>(db, wal_path);
+		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 		return;
 	}
 
@@ -181,7 +181,7 @@ void StorageManager::WALFinishCheckpoint() {
 	fs.MoveFile(secondary_wal_path, wal_path);
 
 	// open what is now the main WAL again
-	wal = make_uniq<WriteAheadLog>(db, wal_path);
+	wal = make_uniq<WriteAheadLog>(*this, wal_path);
 	wal->Initialize();
 }
 
@@ -347,7 +347,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
-		wal = make_uniq<WriteAheadLog>(db, wal_path);
+		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
@@ -421,7 +421,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 		// Replay the WAL.
 		wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
+		wal = WriteAheadLog::Replay(context, fs, *this, wal_path);
 
 		// End timing the WAL replay step.
 		if (client_context) {
@@ -611,10 +611,6 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.Message());
 		}
-	}
-
-	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
-		ResetWAL();
 	}
 
 	if (db.GetStorageExtension()) {

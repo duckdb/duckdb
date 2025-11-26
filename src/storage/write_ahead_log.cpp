@@ -28,16 +28,17 @@ namespace duckdb {
 constexpr uint64_t WAL_VERSION_NUMBER = 2;
 constexpr uint64_t WAL_ENCRYPTED_VERSION_NUMBER = 3;
 
-WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
+WriteAheadLog::WriteAheadLog(StorageManager &storage_manager, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)
-    : database(database), wal_path(wal_path), wal_size(wal_size), init_state(init_state) {
+    : storage_manager(storage_manager), wal_path(wal_path), init_state(init_state) {
+	storage_manager.SetWALSize(wal_size);
 }
 
 WriteAheadLog::~WriteAheadLog() {
 }
 
 AttachedDatabase &WriteAheadLog::GetDatabase() {
-	return database;
+	return storage_manager.GetAttached();
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
@@ -47,22 +48,17 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
 		writer =
-		    make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
+		    make_uniq<BufferedFileWriter>(FileSystem::Get(GetDatabase()), wal_path,
 		                                  FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 		                                      FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
 		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
-			writer->Truncate(wal_size);
+			writer->Truncate(storage_manager.GetWALSize());
+		} else {
+			storage_manager.SetWALSize(writer->GetFileSize());
 		}
-		wal_size = writer->GetFileSize();
 		init_state = WALInitState::INITIALIZED;
 	}
 	return *writer;
-}
-
-//! Gets the total bytes written to the WAL since startup
-idx_t WriteAheadLog::GetWALSize() const {
-	D_ASSERT(init_state != WALInitState::NO_WAL || wal_size == 0);
-	return wal_size;
 }
 
 idx_t WriteAheadLog::GetTotalWritten() const {
@@ -79,27 +75,15 @@ void WriteAheadLog::Truncate(idx_t size) {
 	}
 	if (!Initialized()) {
 		init_state = WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
-		wal_size = size;
+		storage_manager.SetWALSize(size);
 		return;
 	}
 	writer->Truncate(size);
-	wal_size = writer->GetFileSize();
+	storage_manager.SetWALSize(writer->GetFileSize());
 }
 
 bool WriteAheadLog::Initialized() const {
 	return init_state == WALInitState::INITIALIZED;
-}
-
-void WriteAheadLog::Delete() {
-	if (init_state == WALInitState::NO_WAL) {
-		// no WAL to delete
-		return;
-	}
-	writer.reset();
-	auto &fs = FileSystem::Get(database);
-	fs.TryRemoveFile(wal_path);
-	init_state = WALInitState::NO_WAL;
-	wal_size = 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -254,6 +238,7 @@ void WriteAheadLog::WriteHeader() {
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
 
+	auto &database = GetDatabase();
 	auto &catalog = database.GetCatalog().Cast<DuckCatalog>();
 	auto encryption_version_number =
 	    catalog.GetIsEncrypted() ? idx_t(WAL_ENCRYPTED_VERSION_NUMBER) : idx_t(WAL_VERSION_NUMBER);
@@ -399,6 +384,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	// Serialize the index data to the persistent storage and write the metadata.
 	auto &index_entry = entry.Cast<DuckIndexEntry>();
 	auto &list = index_entry.GetDataTableInfo().GetIndexes();
+	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, index_entry.name);
 	serializer.End();
 }
@@ -521,6 +507,7 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &list = parent_info->GetIndexes();
 
 	auto name = unique.GetName(parent.name);
+	auto &database = GetDatabase();
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();
 }
@@ -539,7 +526,7 @@ void WriteAheadLog::Flush() {
 
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
-	wal_size = writer->GetFileSize();
+	storage_manager.SetWALSize(writer->GetFileSize());
 }
 
 } // namespace duckdb

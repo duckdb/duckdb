@@ -257,29 +257,30 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, FileSystem &fs, AttachedDatabase &db,
+unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, FileSystem &fs, StorageManager &storage_manager,
                                                 const string &wal_path) {
 	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		// WAL does not exist - instantiate an empty WAL
-		return make_uniq<WriteAheadLog>(db, wal_path);
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path);
 	}
 
 	// context is passed for metric collection purposes only!!
-	auto wal_handle = ReplayInternal(context, db, std::move(handle));
+	auto wal_handle = ReplayInternal(context, storage_manager, std::move(handle));
 	if (wal_handle) {
 		return wal_handle;
 	}
 	// replay returning NULL indicates we can nuke the WAL entirely - but only if this is not a read-only connection
-	if (!db.IsReadOnly()) {
+	if (!storage_manager.GetAttached().IsReadOnly()) {
 		fs.TryRemoveFile(wal_path);
 	}
-	return make_uniq<WriteAheadLog>(db, wal_path);
+	return make_uniq<WriteAheadLog>(storage_manager, wal_path);
 }
 
 // QueryContext is passed for metric collection purposes only!!
-unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, AttachedDatabase &database,
+unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, StorageManager &storage_manager,
                                                         unique_ptr<FileHandle> handle) {
+	auto &database = storage_manager.GetAttached();
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
@@ -387,7 +388,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 		throw;
 	} // LCOV_EXCL_STOP
 	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
-	return make_uniq<WriteAheadLog>(database, wal_path, successful_offset, init_state);
+	return make_uniq<WriteAheadLog>(storage_manager, wal_path, successful_offset, init_state);
 }
 
 //===--------------------------------------------------------------------===//

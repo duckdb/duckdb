@@ -37,7 +37,7 @@ void InMemoryCheckpointer::CreateCheckpoint() {
 
 		WriteTable(table, serializer);
 	}
-	storage_manager.ResetInMemoryChange();
+	storage_manager.SetWALSize(0);
 }
 
 MetadataWriter &InMemoryCheckpointer::GetMetadataWriter() {

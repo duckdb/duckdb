@@ -280,7 +280,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
 		if (storage_manager.InMemory() || db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
-			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
+			storage_manager.AddWALSize(undo_properties.estimated_size);
 		}
 	}
 	// obtain a commit id for the transaction
