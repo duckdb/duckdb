@@ -185,7 +185,6 @@ void ReplayChunk(BoundIndex &index, const BufferedIndexReplay type, DataChunk &s
 	}
 	default:
 		throw InternalException("Invalid BufferedIndexReplay type");
-
 	}
 }
 

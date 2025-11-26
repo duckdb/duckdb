@@ -58,7 +58,6 @@ void UnboundIndex::ResizeSmallChunk(unique_ptr<DataChunk> &small_chunk, Allocato
 	small_chunk = make_uniq<DataChunk>();
 	small_chunk->Initialize(allocator, types, current_size);
 	small_chunk->Append(*old_chunk, false);
-
 }
 
 void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
