@@ -29,12 +29,12 @@ workflow for this is as follows:
 3. In DuckDB repo, go to .github/config/extensions/your_extension.cmake
 4. If APPLY_PATCHES is not set in duckdb_extension_load, set it.
 5. In cloned extension, checkout the GIT_TAG from the your_extension.cmake file.
-6. Apply existing patches found in .github/patches/extensions
+6. In cloned extension, apply existing patches found in .github/patches/extensions
     ```bash 
     git apply [path to duckdb]/.github/patches/extensions/[your_extension]/fix.patch
     ```
 7. Make necessary changes to extension.
-8. Generate new diff, and forward it to the original fix.patch location (or create the directory if it does not exist):
+8. Generate diff in cloned extension, and forward it to the original fix.patch location (or create the directory if it does not exist):
     ```bash
     git diff > [path to duckdb]/.github/patches/extensions/[your_extension]/fix.patch
 
@@ -49,8 +49,3 @@ If the change is very minor, and you are confident everything will build, you ca
 - Remove patches in `.github/patches/extensions/x/*.patch`
 - Remove `APPLY_PATCHES` flag from config
 - Update hash of extension in config
-
-
-
-
-
