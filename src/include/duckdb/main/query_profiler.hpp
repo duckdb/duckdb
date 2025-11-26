@@ -21,11 +21,8 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/profiling_utils.hpp"
-
-#include <stack>
 
 namespace duckdb {
 
@@ -34,7 +31,7 @@ class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
-struct QueryMetrics;
+struct ActiveTimer;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
