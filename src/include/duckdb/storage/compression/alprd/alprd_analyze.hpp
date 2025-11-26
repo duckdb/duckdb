@@ -34,12 +34,15 @@ public:
 	idx_t vectors_sampled_count = 0;
 	vector<EXACT_TYPE> rowgroup_sample;
 	alp::AlpRDCompressionData<T, true> compression_data;
+	idx_t storage_version = 0;
 };
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<AlpRDAnalyzeState<T>>(info);
+	auto state = make_uniq<AlpRDAnalyzeState<T>>(info);
+	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
+	return state;
 }
 
 /*
@@ -126,7 +129,13 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	    analyze_state.rowgroup_sample, analyze_state.compression_data);
 	double estimated_compressed_bits =
 	    estimated_bits_per_value * static_cast<double>(analyze_state.rowgroup_sample.size());
-	double estimed_compressed_bytes = estimated_compressed_bits / 8;
+
+	const double uncompressed_bytes = sizeof(T) * analyze_state.rowgroup_sample.size();
+
+	const auto uncompressed_mode_compatible = analyze_state.storage_version >= 7;
+	const double estimated_compressed_bytes = uncompressed_mode_compatible
+	                                              ? std::min(estimated_compressed_bits / 8, uncompressed_bytes)
+	                                              : estimated_compressed_bits / 8;
 
 	//! Overhead per segment: [Pointer to metadata + right bitwidth + left bitwidth + n dict elems] + Dictionary Size
 	double per_segment_overhead = AlpRDConstants::HEADER_SIZE + AlpRDConstants::MAX_DICTIONARY_SIZE_BYTES;
@@ -137,7 +146,7 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	uint32_t n_vectors = LossyNumericCast<uint32_t>(
 	    std::ceil((double)analyze_state.total_values_count / AlpRDConstants::ALP_VECTOR_SIZE));
 
-	auto estimated_size = (estimed_compressed_bytes * factor_of_sampling) + (n_vectors * per_vector_overhead);
+	auto estimated_size = (estimated_compressed_bytes * factor_of_sampling) + (n_vectors * per_vector_overhead);
 	uint32_t estimated_n_blocks = LossyNumericCast<uint32_t>(
 	    std::ceil(estimated_size / (static_cast<double>(state.info.GetBlockSize()) - per_segment_overhead)));
 

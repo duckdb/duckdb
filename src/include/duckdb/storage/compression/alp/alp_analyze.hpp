@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_utils.hpp"
@@ -35,6 +36,7 @@ public:
 	vector<vector<T>> rowgroup_sample;
 	vector<vector<T>> complete_vectors_sampled;
 	alp::AlpCompressionData<T, true> compression_data;
+	idx_t storage_version = 0;
 
 public:
 	// Returns the required space to hyphotetically store the compressed segment
@@ -65,7 +67,9 @@ public:
 template <class T>
 unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<AlpAnalyzeState<T>>(info);
+	auto state = make_uniq<AlpAnalyzeState<T>>(info);
+	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
+	return state;
 }
 
 /*
@@ -154,7 +158,8 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 		                                       analyze_state.compression_data);
 		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_to_compress.size();
 		const idx_t compressed_size = analyze_state.compression_data.RequiredSpace();
-		const bool should_compress = compressed_size < uncompressed_size;
+		const bool should_compress = compressed_size < uncompressed_size || analyze_state.storage_version < 7;
+
 		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
 
 		if (!analyze_state.HasEnoughSpace(vector_size)) {
