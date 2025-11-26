@@ -297,6 +297,9 @@ void Relation::Create(const string &schema_name, const string &table_name, bool 
 
 void Relation::Create(const string &catalog_name, const string &schema_name, const string &table_name, bool temporary,
                       OnCreateConflict on_conflict) {
+	if (table_name == "") {
+		throw ParserException("Empty table name not supported");
+	}
 	auto create = CreateRel(catalog_name, schema_name, table_name, temporary, on_conflict);
 	auto res = create->Execute();
 	if (res->HasError()) {
