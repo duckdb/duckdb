@@ -44,14 +44,14 @@ public:
 		current_bytes_used_in_segment = 0;
 	}
 
-	void FlushVector() {
-		current_bytes_used_in_segment += compression_data.RequiredSpace();
+	void FlushVector(idx_t vector_size) {
+		current_bytes_used_in_segment += vector_size;
 		compression_data.Reset();
 	}
 
 	// Check if we have enough space in the segment to hyphotetically store the compressed vector
-	bool HasEnoughSpace() {
-		idx_t bytes_to_be_used = AlignValue(current_bytes_used_in_segment + compression_data.RequiredSpace());
+	bool HasEnoughSpace(idx_t vector_size) {
+		idx_t bytes_to_be_used = AlignValue(current_bytes_used_in_segment + vector_size);
 		// We have enough space if the already used space + the required space for a new vector
 		// does not exceed the space of the block - the segment header (the pointer to the metadata)
 		return bytes_to_be_used <= (info.GetBlockSize() - AlpConstants::METADATA_POINTER_SIZE);
@@ -152,10 +152,16 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
 		alp::AlpCompression<T, true>::Compress(vector_to_compress.data(), vector_to_compress.size(),
 		                                       analyze_state.compression_data);
-		if (!analyze_state.HasEnoughSpace()) {
+		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_to_compress.size();
+		const idx_t compressed_size = analyze_state.compression_data.RequiredSpace();
+		const bool should_compress = compressed_size < uncompressed_size;
+		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
+
+		if (!analyze_state.HasEnoughSpace(vector_size)) {
 			analyze_state.FlushSegment();
 		}
-		analyze_state.FlushVector();
+		analyze_state.FlushVector(vector_size);
+
 		compressed_values += vector_to_compress.size();
 	}
 
