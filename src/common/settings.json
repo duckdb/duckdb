@@ -543,6 +543,14 @@
         "custom_implementation": true
     },
     {
+        "name": "force_variant_shredding",
+        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "ForceVariantShredding",
+        "custom_implementation": true
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",
@@ -935,6 +943,14 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "variant_minimum_shredding_size",
+        "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "30000",
+        "struct": "VariantMinimumShreddingSize"
     },
     {
         "name": "write_buffer_row_group_count",

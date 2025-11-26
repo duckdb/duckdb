@@ -112,10 +112,6 @@ public:
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
-	//! Returns the list of meta block pointers used by the deletes
-	const vector<MetaBlockPointer> &GetDeletesPointers() const {
-		return deletes_pointers;
-	}
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
 
@@ -192,7 +188,7 @@ public:
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	void MergeIntoStatistics(TableStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
+	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 	PartitionStatistics GetPartitionStats(idx_t row_group_start);
@@ -215,6 +211,9 @@ public:
 	idx_t GetRowGroupSize() const;
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
+	idx_t GetColumnCount() const;
+
+	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
@@ -225,15 +224,12 @@ private:
 	ColumnData &GetColumn(storage_t c) const;
 	void LoadColumn(storage_t c) const;
 	ColumnData &GetColumn(const StorageIndex &c) const;
-	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 

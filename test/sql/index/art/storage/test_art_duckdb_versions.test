@@ -220,8 +220,13 @@ CHECKPOINT
 
 query I
 SELECT
-CASE WHEN get_block_size('test_art_import') = 16384 THEN used_blocks < 3
-ELSE used_blocks < 2 END
-FROM pragma_database_size();
+	CASE WHEN (
+		CASE WHEN get_block_size('test_art_import') = 16384
+		THEN used_blocks < 3
+		ELSE used_blocks < 2 END
+	)
+	THEN NULL
+	ELSE T END
+FROM pragma_database_size() T;
 ----
-1
+NULL
