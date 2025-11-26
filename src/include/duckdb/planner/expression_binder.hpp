@@ -11,6 +11,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
