@@ -995,7 +995,7 @@ SetopClause <- SetopType DistinctOrAll? ByName?
 SetopType <- SetopUnion / SetopExcept / SetopIntersect
 SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
-SetopIntersect <- 'INSERSECT'
+SetopIntersect <- 'INTERSECT'
 ByName <- 'BY' 'NAME'
 SelectOrParens <- BaseSelect / SelectParens
 SelectParens <- Parens(SelectStatementInternal)

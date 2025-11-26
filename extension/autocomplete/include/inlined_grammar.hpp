@@ -928,7 +928,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"SetopType <- SetopUnion / SetopExcept / SetopIntersect\n"
 	"SetopUnion <- 'UNION'\n"
 	"SetopExcept <- 'EXCEPT'\n"
-	"SetopIntersect <- 'INSERSECT'\n"
+	"SetopIntersect <- 'INTERSECT'\n"
 	"ByName <- 'BY' 'NAME'\n"
 	"SelectOrParens <- BaseSelect / SelectParens\n"
 	"SelectParens <- Parens(SelectStatementInternal)\n"
