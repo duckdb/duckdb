@@ -103,53 +103,41 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	// Initialize the small chunk.
 	if (!buffer.small_chunk) {
 		buffer.small_chunk = make_uniq<DataChunk>();
-		buffer.small_chunk->Initialize(allocator, types, 1);
+		buffer.small_chunk->Initialize(allocator, types, combined_chunk.size());
 		buffer.small_chunk->SetCardinality(0);
 	}
 
 	if (combined_chunk.size() + buffer.small_chunk->size() < STANDARD_VECTOR_SIZE) {
 		// Append to small_chunk and allow resizing, since we know we can fit under STANDARD_VECTOR_SIZE.
 		buffer.small_chunk->Append(combined_chunk, true);
-	} else {
-		// Otherwise we have at least one STANDARD_VECTOR_SIZE chunk we can spill to ColumnDataCollection.
+		return;
+	}
+	// Otherwise we have at least one STANDARD_VECTOR_SIZE chunk we can spill to ColumnDataCollection, with the
+	// leftover going into small_chunk.
 
-		// Initialize ColumnDataCollection data buffer.
-		if (!buffer.data) {
-			buffer.data = make_uniq<ColumnDataCollection>(allocator, types);
-		}
+	// Initialize ColumnDataCollection data buffer.
+	if (!buffer.data) {
+		buffer.data = make_uniq<ColumnDataCollection>(allocator, types);
+	}
 
-		// Remainder is the remaining space we want to fill up in the ColumnDataCollection chunk, after writing the
-		// small chunk there.
-		idx_t remainder = STANDARD_VECTOR_SIZE - buffer.small_chunk->size();
-		// First, flush the small_chunk contents into the ColumnDataCollection buffer.
-		if (buffer.small_chunk->size() > 0) {
-			buffer.data->Append(*buffer.small_chunk);
-			buffer.small_chunk->SetCardinality(0);
-		}
+	// Remainder is how much of the combined_chunk we want to append to small_chunk to make it a full
+	// STANDARD_VECTOR_SIZE.
+	idx_t remainder = STANDARD_VECTOR_SIZE - buffer.small_chunk->size();
+	idx_t total = combined_chunk.size();
 
-		idx_t total = combined_chunk.size();
-		// Leftover is whatever is leftover after we buffered a full STANDARD_VECTOR_SIZE amount into
-		// ColumnDataCollection data -- this goes into small_chunk.
-		idx_t leftover = (total - remainder);
+	// Append remainder to small_chunk.
+	SelectionVector remainder_sel(0, remainder);
+	buffer.small_chunk->Append(combined_chunk, true, &remainder_sel, remainder);
 
-		if (remainder > 0) {
-			DataChunk remainder_chunk;
-			remainder_chunk.InitializeEmpty(types);
-			remainder_chunk.Reference(combined_chunk);
-			remainder_chunk.Slice(0, remainder);
-			remainder_chunk.SetCardinality(remainder);
-			buffer.data->Append(remainder_chunk);
-		}
+	// Flush small chunk to data.
+	buffer.data->Append(*buffer.small_chunk);
+	buffer.small_chunk->SetCardinality(0);
 
-		// Buffer any leftover replays into the small chunk.
-		if (leftover > 0) {
-			DataChunk tail_chunk;
-			tail_chunk.InitializeEmpty(types);
-			tail_chunk.Reference(combined_chunk);
-			tail_chunk.Slice(remainder, leftover);
-			tail_chunk.SetCardinality(leftover);
-			buffer.small_chunk->Append(tail_chunk, true);
-		}
+	// Leftover goes into small_chunk.
+	idx_t leftover = total - remainder;
+	if (leftover > 0) {
+		SelectionVector leftover_sel(remainder, leftover);
+		buffer.small_chunk->Append(combined_chunk, true, &leftover_sel, leftover);
 	}
 }
 
