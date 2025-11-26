@@ -79,7 +79,8 @@
     {
       "reason": "Error handling",
       "paths": [
-        "test/sql/error/error_position.test"
+        "test/sql/error/error_position.test",
+        "test/sql/catalog/table/test_default_values.test"
       ]
     },
     {
