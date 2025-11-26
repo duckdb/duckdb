@@ -22,6 +22,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class CoordinateReferenceSystem;
 
 struct string_t; // NOLINT: mimic std casing
 
@@ -542,6 +543,11 @@ struct IntegerLiteral {
 struct TemplateType {
 	// Get the name of the template type
 	DUCKDB_API static const string &GetName(const LogicalType &type);
+};
+
+struct GeoType {
+	DUCKDB_API static bool HasCRS(const LogicalType &type);
+	DUCKDB_API static const CoordinateReferenceSystem &GetCRS(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

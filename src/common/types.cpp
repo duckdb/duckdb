@@ -2031,6 +2031,26 @@ LogicalType LogicalType::GEOMETRY() {
 	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
 }
 
+bool GeoType::HasCRS(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
+	auto &geo_info = info->Cast<GeoTypeInfo>();
+
+	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
+}
+
+const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
+	auto &geo_info = info->Cast<GeoTypeInfo>();
+
+	return geo_info.crs;
+}
+
 //===--------------------------------------------------------------------===//
 // Logical Type
 //===--------------------------------------------------------------------===//
