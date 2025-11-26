@@ -8,6 +8,8 @@ namespace duckdb {
 class BaseStatistics;
 
 enum class VariantStatsShreddingState : uint8_t {
+	//! Uninitialized, not unshredded/shredded
+	UNINITIALIZED,
 	//! No shredding applied yet
 	NOT_SHREDDED,
 	//! Shredded consistently
@@ -48,6 +50,7 @@ public:
 
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
+	DUCKDB_API static void MarkAsNotShredded(BaseStatistics &stats);
 
 public:
 	//! Stats related to the 'shredded' column, which holds all structured data created during shredding

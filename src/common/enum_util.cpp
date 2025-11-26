@@ -4988,6 +4988,7 @@ VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetVariantStatsShreddingStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VariantStatsShreddingState::UNINITIALIZED), "UNINITIALIZED" },
 		{ static_cast<uint32_t>(VariantStatsShreddingState::NOT_SHREDDED), "NOT_SHREDDED" },
 		{ static_cast<uint32_t>(VariantStatsShreddingState::SHREDDED), "SHREDDED" },
 		{ static_cast<uint32_t>(VariantStatsShreddingState::INCONSISTENT), "INCONSISTENT" }
@@ -4997,12 +4998,12 @@ const StringUtil::EnumStringLiteral *GetVariantStatsShreddingStateValues() {
 
 template<>
 const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value) {
-	return StringUtil::EnumToString(GetVariantStatsShreddingStateValues(), 3, "VariantStatsShreddingState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVariantStatsShreddingStateValues(), 4, "VariantStatsShreddingState", static_cast<uint32_t>(value));
 }
 
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value) {
-	return static_cast<VariantStatsShreddingState>(StringUtil::StringToEnum(GetVariantStatsShreddingStateValues(), 3, "VariantStatsShreddingState", value));
+	return static_cast<VariantStatsShreddingState>(StringUtil::StringToEnum(GetVariantStatsShreddingStateValues(), 4, "VariantStatsShreddingState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantValueTypeValues() {

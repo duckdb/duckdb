@@ -233,6 +233,7 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
 		}
+		VariantStats::MarkAsNotShredded(stats);
 	}
 	this->count += count;
 }

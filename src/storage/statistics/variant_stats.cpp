@@ -25,7 +25,7 @@ static void AssertVariant(const BaseStatistics &stats) {
 
 void VariantStats::Construct(BaseStatistics &stats) {
 	stats.child_stats = unsafe_unique_array<BaseStatistics>(new BaseStatistics[2]);
-	GetDataUnsafe(stats).shredding_state = VariantStatsShreddingState::NOT_SHREDDED;
+	GetDataUnsafe(stats).shredding_state = VariantStatsShreddingState::UNINITIALIZED;
 	CreateUnshreddedStats(stats);
 }
 
@@ -41,7 +41,7 @@ BaseStatistics VariantStats::CreateUnknown(LogicalType type) {
 BaseStatistics VariantStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	GetDataUnsafe(result).shredding_state = VariantStatsShreddingState::NOT_SHREDDED;
+	GetDataUnsafe(result).shredding_state = VariantStatsShreddingState::UNINITIALIZED;
 	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(VariantShredding::GetUnshreddedType()));
 	return result;
 }
@@ -76,6 +76,14 @@ void VariantStats::SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStat
 	} else {
 		SetUnshreddedStats(stats, *new_stats);
 	}
+}
+
+void VariantStats::MarkAsNotShredded(BaseStatistics &stats) {
+	D_ASSERT(!IsShredded(stats));
+	auto &data = GetDataUnsafe(stats);
+	//! All Variant stats start off as UNINITIALIZED, to support merging
+	//! This method marks the stats as being unshredded, so they produce INCONSISTENT when merged with SHREDDED stats
+	data.shredding_state = VariantStatsShreddingState::NOT_SHREDDED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -191,6 +199,7 @@ void VariantStats::SetShreddedStats(BaseStatistics &stats, const BaseStatistics 
 	auto &data = GetDataUnsafe(stats);
 	if (!IsShredded(stats)) {
 		BaseStatistics::Construct(stats.child_stats[1], new_stats.GetType());
+		D_ASSERT(data.shredding_state != VariantStatsShreddingState::INCONSISTENT);
 		data.shredding_state = VariantStatsShreddingState::SHREDDED;
 	}
 	stats.child_stats[1].Copy(new_stats);
@@ -425,12 +434,17 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	const auto other_shredding_state = other_data.shredding_state;
 	const auto shredding_state = data.shredding_state;
 
+	if (other_shredding_state == VariantStatsShreddingState::UNINITIALIZED) {
+		//! No need to merge
+		return;
+	}
+
 	switch (shredding_state) {
 	case VariantStatsShreddingState::INCONSISTENT: {
 		//! INCONSISTENT + ANY -> INCONSISTENT
 		return;
 	}
-	case VariantStatsShreddingState::NOT_SHREDDED: {
+	case VariantStatsShreddingState::UNINITIALIZED: {
 		switch (other_shredding_state) {
 		case VariantStatsShreddingState::SHREDDED:
 			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
@@ -439,8 +453,17 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 		default:
 			break;
 		}
-		//! NOT_SHREDDED + ANY -> ANY
+		//! UNINITIALIZED + ANY -> ANY
 		data.shredding_state = other_shredding_state;
+		break;
+	}
+	case VariantStatsShreddingState::NOT_SHREDDED: {
+		if (other_shredding_state == VariantStatsShreddingState::NOT_SHREDDED) {
+			return;
+		}
+		//! NOT_SHREDDED + !NOT_SHREDDED -> INCONSISTENT
+		data.shredding_state = VariantStatsShreddingState::INCONSISTENT;
+		stats.child_stats[1].type = LogicalType::INVALID;
 		break;
 	}
 	case VariantStatsShreddingState::SHREDDED: {
@@ -458,8 +481,7 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 			}
 			break;
 		}
-		case VariantStatsShreddingState::INCONSISTENT:
-		case VariantStatsShreddingState::NOT_SHREDDED:
+		default:
 			//! SHREDDED + !SHREDDED -> INCONSISTENT
 			data.shredding_state = VariantStatsShreddingState::INCONSISTENT;
 			stats.child_stats[1].type = LogicalType::INVALID;
