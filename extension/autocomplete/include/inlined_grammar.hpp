@@ -677,7 +677,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"InClause <- 'IN' InExpression\n"
 	"InExpression <- InExpressionList / InSelectStatement / OtherOperatorExpression\n"
 	"InExpressionList <- Parens(List(Expression))\n"
-	"InSelectStatement <- Parens(SelectStatement)\n"
+	"InSelectStatement <- Parens(SelectStatementInternal)\n"
 	"BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression\n"
 	"# LEVEL 8\n"
 	"OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*\n"

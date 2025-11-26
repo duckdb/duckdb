@@ -475,6 +475,10 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 		auto &operator_expr = between_in_like_expr->Cast<OperatorExpression>();
 		operator_expr.children.insert(operator_expr.children.begin(), std::move(expr));
 		expr = std::move(between_in_like_expr);
+	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery_expr = between_in_like_expr->Cast<SubqueryExpression>();
+		subquery_expr.child = std::move(expr);
+		expr = std::move(between_in_like_expr);
 	}
 	return expr;
 }
@@ -520,7 +524,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("Not in select statements is not yet implemented.");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto result = make_uniq<SubqueryExpression>();
+	result->subquery_type = SubqueryType::ANY;
+	result->comparison_type = ExpressionType::COMPARE_EQUAL;
+	result->subquery = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
+	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer,
