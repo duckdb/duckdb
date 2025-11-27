@@ -1204,7 +1204,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTr
 	for (auto expr : expr_list) {
 		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
-	auto func_expr = make_uniq<FunctionExpression>("row", std::move(results));
+	auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(results));
 	return std::move(func_expr);
 }
 
@@ -1404,4 +1404,38 @@ PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
 	return result;
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+    auto &list_pr = parse_result->Cast<ListParseResult>();
+    auto children = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+    return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "map", std::move(children));
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformMapStructExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+    auto &list_pr = parse_result->Cast<ListParseResult>();
+    vector<unique_ptr<ParsedExpression>> keys;
+    vector<unique_ptr<ParsedExpression>> values;
+    auto map_struct_opt = list_pr.Child<OptionalParseResult>(1);
+
+    if (map_struct_opt.HasResult()) {
+        auto field_list = ExtractParseResultsFromList(map_struct_opt.optional_result);
+        for (auto &field : field_list) {
+            // Get the pair {key, value} from the field transformer
+            auto key_val_pair = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(field);
+            keys.push_back(std::move(key_val_pair[0]));
+            values.push_back(std::move(key_val_pair[1]));
+        }
+    }
+    vector<unique_ptr<ParsedExpression>> result;
+    result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(keys)));
+    result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(values)));
+    return result;
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformMapStructField(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+    auto &list_pr = parse_result->Cast<ListParseResult>();
+    vector<unique_ptr<ParsedExpression>> fields;
+    fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
+    fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2)));
+    return fields;
+}
 } // namespace duckdb

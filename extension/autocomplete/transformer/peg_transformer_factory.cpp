@@ -411,6 +411,9 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIntervalLiteral);
 	REGISTER_TRANSFORM(TransformIntervalParameter);
 	REGISTER_TRANSFORM(TransformSubqueryExpression);
+	REGISTER_TRANSFORM(TransformMapExpression);
+	REGISTER_TRANSFORM(TransformMapStructExpression);
+	REGISTER_TRANSFORM(TransformMapStructField);
 }
 
 void PEGTransformerFactory::RegisterImport() {
