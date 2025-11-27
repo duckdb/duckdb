@@ -108,8 +108,8 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
-	CheckpointType GetCheckpointType() const {
-		return options.type;
+	CheckpointOptions GetCheckpointOptions() const {
+		return options;
 	}
 	optional_ptr<ClientContext> GetClientContext() const {
 		return context;

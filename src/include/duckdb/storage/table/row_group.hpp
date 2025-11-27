@@ -19,6 +19,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -56,7 +57,7 @@ enum class ColumnDataType;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT);
+	                  CheckpointOptions options = CheckpointOptions());
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
 	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p);
 
@@ -65,7 +66,7 @@ private:
 
 public:
 	const vector<CompressionType> &compression_types;
-	CheckpointType checkpoint_type;
+	CheckpointOptions options;
 
 public:
 	PartialBlockManager &GetPartialBlockManager(idx_t column_idx);
@@ -80,6 +81,7 @@ struct RowGroupWriteData {
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
 	vector<idx_t> existing_extra_metadata_blocks;
+	optional_idx write_count;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {

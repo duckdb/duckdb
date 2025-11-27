@@ -14,7 +14,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
-#include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 #include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
@@ -45,18 +45,6 @@ public:
 	virtual bool HasRowGroupData() {
 		return false;
 	}
-};
-
-struct CheckpointOptions {
-	CheckpointOptions()
-	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
-	      type(CheckpointType::FULL_CHECKPOINT), transaction_id(MAX_TRANSACTION_ID) {
-	}
-
-	CheckpointWALAction wal_action;
-	CheckpointAction action;
-	CheckpointType type;
-	transaction_t transaction_id;
 };
 
 //! StorageManager is responsible for managing the physical storage of a persistent database.

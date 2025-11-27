@@ -959,13 +959,13 @@ ColumnCheckpointInfo::ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column
 }
 
 RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-                                     CheckpointType checkpoint_type)
-    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
+                                     CheckpointOptions options_p)
+    : manager(manager), compression_types(compression_types), options(options_p) {
 }
 
 RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
                                      vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p)
-    : manager(manager), compression_types(compression_types), checkpoint_type(CheckpointType::FULL_CHECKPOINT),
+    : manager(manager), compression_types(compression_types), options(),
       column_partial_block_managers(column_partial_block_managers_p) {
 }
 
@@ -1001,6 +1001,9 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	}
 
 	// Checkpoint the row groups
+	// for each row group we need to figure out which rows we should write
+
+
 	// In order to co-locate columns across different row groups, we write column-at-a-time
 	// i.e. we first write column #0 of all row groups, then column #1, ...
 
@@ -1113,6 +1116,8 @@ const vector<MetaBlockPointer> &RowGroup::GetColumnStartPointers() const {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
+	// FIXME: "HasChanges()" is a global check - in the future we might want to check if this row group has changes
+	// for the checkpoint transaction that we are going to write
 	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
 	    !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
@@ -1134,8 +1139,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			                        column_idx, this->count.load(), column.count.load());
 		}
 	}
-
-	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
+	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointOptions());
 	return WriteToDisk(info);
 }
 
