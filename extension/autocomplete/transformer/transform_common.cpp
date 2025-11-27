@@ -319,6 +319,14 @@ LogicalType PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
 	return LogicalType::STRUCT(colid_list);
 }
 
+LogicalType PEGTransformerFactory::TransformGeometryType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	return LogicalType::GEOMETRY();
+}
+
+LogicalType PEGTransformerFactory::TransformVariantType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	return LogicalType::VARIANT();
+}
+
 LogicalType PEGTransformerFactory::TransformUnionType(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
