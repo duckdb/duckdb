@@ -160,9 +160,11 @@ public:
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
 		const bool uncompressed_mode = vector_state.exceptions_count == AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
-		if (uncompressed_mode && !SKIP) {
-			// Read uncompressed values
-			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+		if (uncompressed_mode) {
+			if (!SKIP) {
+				// Read uncompressed values
+				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			}
 			return;
 		}
 
