@@ -39,10 +39,10 @@ namespace duckdb {
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
-                                                       BlockManager &block_manager, CheckpointType checkpoint_type)
+                                                       BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
       partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
-      checkpoint_type(checkpoint_type) {
+      options(options_p) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -157,7 +157,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// if the checkpoint was completed we don't need to replay the WAL - otherwise we need to replay the WAL
 	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
 	// to replay any concurrent commits that have succeeded and ensure these are not lost
-	auto has_wal = storage_manager.WALStartCheckpoint(meta_block);
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
 
 	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {

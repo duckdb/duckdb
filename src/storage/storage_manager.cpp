@@ -17,6 +17,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -127,12 +128,17 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	return wal.get();
 }
 
-bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block) {
+bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
+	lock_guard<mutex> guard(wal_lock);
+	// while holding the WAL lock - get the last committed transaction from the transaction manager
+	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
+	// any new commits made will be written to the next wal
+	auto &transaction_manager = db.GetTransactionManager();
+	options.transaction_id = ((DuckTransactionManager &)transaction_manager).GetLastCommit();
 	if (!wal) {
 		return false;
 	}
 	// start the checkpoint process around the WAL
-	lock_guard<mutex> guard(wal_lock);
 	if (GetWALSize() == 0) {
 		// no WAL - we don't need to do anything here
 		return false;
@@ -149,7 +155,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block) {
 	// close the main WAL
 	wal.reset();
 
-	// replace the WAL with a new WAL (.wal.2) that transactions can write to while the checkpoint is happening
+	// replace the WAL with a new WAL (.checkpoint.wal) that transactions can write to while the checkpoint is happening
 	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
 	wal = make_uniq<WriteAheadLog>(*this, GetWALPath(".checkpoint.wal"));
 	return true;
@@ -159,11 +165,11 @@ void StorageManager::WALFinishCheckpoint() {
 	lock_guard<mutex> guard(wal_lock);
 	D_ASSERT(wal.get());
 
-	// "wal" points to the secondary WAL
-	// first check if the WAL has been written to
+	// "wal" points to the checkpoint WAL
+	// first check if the checkpoint WAL has been written to
 	auto &fs = FileSystem::Get(db);
 	if (!wal->Initialized()) {
-		// the secondary WAL has not been written to
+		// the checkpoint WAL has not been written to
 		// this is the common scenario if there are no concurrent writes happening while checkpointing
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
@@ -172,13 +178,13 @@ void StorageManager::WALFinishCheckpoint() {
 		return;
 	}
 
-	// we have had writes to the secondary WAL - we need to override our WAL with the new secondary WAL
+	// we have had writes to the checkpoint WAL - we need to override our WAL with the checkpoint WAL
 	// first close the WAL writer
-	auto secondary_wal_path = wal->GetPath();
+	auto checkpoint_wal_path = wal->GetPath();
 	wal.reset();
 
 	// move the secondary WAL over the main WAL
-	fs.MoveFile(secondary_wal_path, wal_path);
+	fs.MoveFile(checkpoint_wal_path, wal_path);
 
 	// open what is now the main WAL again
 	wal = make_uniq<WriteAheadLog>(*this, wal_path);
@@ -572,9 +578,9 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
                                                                               CheckpointOptions options) {
 	if (InMemory()) {
-		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options.type);
+		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options);
 	}
-	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options.type);
+	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
 }
 
 void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {

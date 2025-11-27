@@ -9,10 +9,10 @@ namespace duckdb {
 // In-Memory Checkpoint Writer
 //===--------------------------------------------------------------------===//
 InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
-                                           StorageManager &storage_manager, CheckpointType checkpoint_type)
+                                           StorageManager &storage_manager, CheckpointOptions options)
     : CheckpointWriter(db), context(context.GetClientContext()),
       partial_block_manager(context, block_manager, PartialBlockType::IN_MEMORY_CHECKPOINT),
-      storage_manager(storage_manager), checkpoint_type(checkpoint_type) {
+      storage_manager(storage_manager), checkpoint_type(options.type) {
 }
 
 void InMemoryCheckpointer::CreateCheckpoint() {

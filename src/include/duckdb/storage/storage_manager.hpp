@@ -50,12 +50,13 @@ public:
 struct CheckpointOptions {
 	CheckpointOptions()
 	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
-	      type(CheckpointType::FULL_CHECKPOINT) {
+	      type(CheckpointType::FULL_CHECKPOINT), transaction_id(MAX_TRANSACTION_ID) {
 	}
 
 	CheckpointWALAction wal_action;
 	CheckpointAction action;
 	CheckpointType type;
+	transaction_t transaction_id;
 };
 
 //! StorageManager is responsible for managing the physical storage of a persistent database.
@@ -85,7 +86,7 @@ public:
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
-	bool WALStartCheckpoint(MetaBlockPointer meta_block);
+	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options);
 	//! Finishes a checkpoint
 	void WALFinishCheckpoint();
 	// Get the WAL lock

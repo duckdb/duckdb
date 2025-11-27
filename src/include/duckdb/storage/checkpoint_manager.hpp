@@ -99,7 +99,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 
 public:
 	SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
-	                           CheckpointType checkpoint_type);
+	                           CheckpointOptions options);
 
 	void CreateCheckpoint() override;
 
@@ -109,7 +109,7 @@ public:
 
 	BlockManager &GetBlockManager();
 	CheckpointType GetCheckpointType() const {
-		return checkpoint_type;
+		return options.type;
 	}
 	optional_ptr<ClientContext> GetClientContext() const {
 		return context;
@@ -128,7 +128,7 @@ private:
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
 	//! Checkpoint type
-	CheckpointType checkpoint_type;
+	CheckpointOptions options;
 	//! Block usage count for verification purposes
 	unordered_map<block_id_t, idx_t> verify_block_usage_count;
 };
