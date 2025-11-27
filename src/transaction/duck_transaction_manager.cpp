@@ -229,6 +229,10 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(Stor
 	return checkpoint_lock.TryUpgradeCheckpointLock(lock);
 }
 
+unique_ptr<StorageLockKey> DuckTransactionManager::TryGetCheckpointLock() {
+	return checkpoint_lock.TryGetExclusiveLock();
+}
+
 transaction_t DuckTransactionManager::GetCommitTimestamp() {
 	auto commit_ts = current_start_timestamp++;
 	last_commit = commit_ts;
@@ -258,16 +262,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
 		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
-		if (!transaction.HasWriteLock()) {
-			// sanity check - this transaction should have a write lock
-			// the write lock prevents other transactions from checkpointing until this transaction is fully finished
-			// if we do not hold the write lock here, other transactions can bypass this branch by auto-checkpoint
-			// this would lead to a checkpoint WHILE this thread is writing to the WAL
-			// this should never happen
-			throw InternalException("Transaction writing to WAL does not have the write lock");
-		}
 		// unlock the transaction lock while we write to the WAL
 		t_lock.unlock();
+		unique_ptr<StorageLockKey> wal_checkpoint_lock;
+		if (!lock && !transaction.HasWriteLock()) {
+			// if this transaction does not have the checkpoint lock we need to grab it
+			// otherwise another transaction can instantiate a checkpoint while we are writing to the WAL
+			wal_checkpoint_lock = SharedCheckpointLock();
+		}
 		// grab the WAL lock and hold it until the entire commit is finished
 		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
 

@@ -63,8 +63,8 @@ ScalarFunction UnionValueFun::GetFunction() {
 	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.serialize = VariableReturnBindData::Serialize;
-	fun.deserialize = VariableReturnBindData::Deserialize;
+	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
+	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;
 }
 

@@ -602,7 +602,7 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 		children.push_back(std::move(mapping.default_value));
 	}
 	auto remap_fun = RemapStructFun::GetFunction();
-	auto bind_data = remap_fun.bind(context, remap_fun, children);
+	auto bind_data = remap_fun.GetBindCallback()(context, remap_fun, children);
 	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.arguments[0]);
 	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
 	                                          std::move(bind_data));

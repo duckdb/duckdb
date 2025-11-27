@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -30,6 +31,9 @@ void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
 		break;
 	case StatisticsType::ARRAY_STATS:
 		ArrayStats::Construct(stats);
+		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Construct(stats);
 		break;
 	default:
 		break;
@@ -64,6 +68,9 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	}
 	if (type.id() == LogicalTypeId::GEOMETRY) {
 		return StatisticsType::GEOMETRY_STATS;
+	}
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return StatisticsType::VARIANT_STATS;
 	}
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -159,6 +166,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	case StatisticsType::GEOMETRY_STATS:
 		GeometryStats::Merge(*this, other);
 		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Merge(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -182,6 +192,8 @@ BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {
 		return ArrayStats::CreateUnknown(std::move(type));
 	case StatisticsType::GEOMETRY_STATS:
 		return GeometryStats::CreateUnknown(std::move(type));
+	case StatisticsType::VARIANT_STATS:
+		return VariantStats::CreateUnknown(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -201,6 +213,8 @@ BaseStatistics BaseStatistics::CreateEmptyType(LogicalType type) {
 		return ArrayStats::CreateEmpty(std::move(type));
 	case StatisticsType::GEOMETRY_STATS:
 		return GeometryStats::CreateEmpty(std::move(type));
+	case StatisticsType::VARIANT_STATS:
+		return VariantStats::CreateEmpty(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -229,8 +243,10 @@ BaseStatistics BaseStatistics::CreateEmpty(LogicalType type) {
 void BaseStatistics::Copy(const BaseStatistics &other) {
 	D_ASSERT(GetType() == other.GetType());
 	CopyBase(other);
+	auto stats_type = GetStatsType();
+
 	stats_union = other.stats_union;
-	switch (GetStatsType()) {
+	switch (stats_type) {
 	case StatisticsType::LIST_STATS:
 		ListStats::Copy(*this, other);
 		break;
@@ -239,6 +255,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 		break;
 	case StatisticsType::ARRAY_STATS:
 		ArrayStats::Copy(*this, other);
+		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Copy(*this, other);
 		break;
 	default:
 		break;
@@ -288,6 +307,10 @@ void BaseStatistics::Set(StatsInfo info) {
 
 void BaseStatistics::SetHasNull() {
 	has_null = true;
+	if (type.id() == LogicalTypeId::VARIANT) {
+		VariantStats::GetUnshreddedStats(*this).SetHasNull();
+		return;
+	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
 			StructStats::GetChildStats(*this, c).SetHasNull();
@@ -297,6 +320,10 @@ void BaseStatistics::SetHasNull() {
 
 void BaseStatistics::SetHasNoNull() {
 	has_no_null = true;
+	if (type.id() == LogicalTypeId::VARIANT) {
+		VariantStats::GetUnshreddedStats(*this).SetHasNoNull();
+		return;
+	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
 			StructStats::GetChildStats(*this, c).SetHasNoNull();
@@ -342,6 +369,9 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 		case StatisticsType::GEOMETRY_STATS:
 			GeometryStats::Serialize(*this, serializer);
 			break;
+		case StatisticsType::VARIANT_STATS:
+			VariantStats::Serialize(*this, serializer);
+			break;
 		default:
 			break;
 		}
@@ -383,6 +413,9 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 		case StatisticsType::GEOMETRY_STATS:
 			GeometryStats::Deserialize(obj, stats);
 			break;
+		case StatisticsType::VARIANT_STATS:
+			VariantStats::Deserialize(obj, stats);
+			break;
 		default:
 			break;
 		}
@@ -416,6 +449,9 @@ string BaseStatistics::ToString() const {
 	case StatisticsType::GEOMETRY_STATS:
 		result = GeometryStats::ToString(*this) + result;
 		break;
+	case StatisticsType::VARIANT_STATS:
+		result = VariantStats::ToString(*this) + result;
+		break;
 	default:
 		break;
 	}
@@ -442,6 +478,9 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		break;
 	case StatisticsType::GEOMETRY_STATS:
 		GeometryStats::Verify(*this, vector, sel, count);
+		break;
+	case StatisticsType::VARIANT_STATS:
+		VariantStats::Verify(*this, vector, sel, count);
 		break;
 	default:
 		break;
@@ -532,6 +571,17 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
 			GeometryStats::Update(result, string_t(string_value));
+		}
+		return result;
+	}
+	case StatisticsType::VARIANT_STATS: {
+		auto result = VariantStats::CreateEmpty(input.type());
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
+		if (input.IsNull()) {
+			VariantStats::SetUnshreddedStats(result, FromConstant(Value(unshredded_type)));
+		} else {
+			VariantStats::SetUnshreddedStats(
+			    result, FromConstant(Value::STRUCT(unshredded_type, StructValue::GetChildren(input))));
 		}
 		return result;
 	}
