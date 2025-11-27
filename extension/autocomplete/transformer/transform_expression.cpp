@@ -532,7 +532,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(std::move(expr)));
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer,
@@ -543,7 +543,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(P
 	result->subquery_type = SubqueryType::ANY;
 	result->comparison_type = ExpressionType::COMPARE_EQUAL;
 	result->subquery = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer,
@@ -1405,7 +1405,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalLiteral(PEG
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(expr));
 	auto result = make_uniq<FunctionExpression>(func_name, std::move(children));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalParameter(PEGTransformer &transformer,
@@ -1442,9 +1442,9 @@ PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(result));
 		auto not_operator = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(children));
-		return not_operator;
+		return std::move(not_operator);
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapExpression(PEGTransformer &transformer,

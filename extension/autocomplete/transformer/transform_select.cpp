@@ -947,7 +947,7 @@ unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEG
 		auto result = make_uniq<LimitPercentModifier>();
 		result->limit = std::move(limit_percent.expression);
 		result->offset = std::move(offset_percent.expression);
-		return result;
+		return std::move(result);
 	} else {
 		auto result = make_uniq<LimitModifier>();
 		if (limit_percent.expression) {
@@ -959,7 +959,7 @@ unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEG
 		if (!result->limit && !result->offset) {
 			return nullptr;
 		}
-		return result;
+		return std::move(result);
 	}
 }
 

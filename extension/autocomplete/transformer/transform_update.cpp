@@ -16,11 +16,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(PEGTran
 	transformer.TransformOptional<unique_ptr<TableRef>>(list_pr, 4, result->from_table);
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, result->set_info->condition);
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 6, result->returning_list);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformUpdateTarget(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
+                                                                 optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
@@ -36,7 +36,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransf
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto table_ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<string>(list_pr, 1, table_ref->alias);
-	return table_ref;
+	return std::move(table_ref);
 }
 
 string PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer,
