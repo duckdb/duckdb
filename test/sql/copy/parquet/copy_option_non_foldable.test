@@ -1,0 +1,15 @@
+require parquet
+
+statement error
+PREPARE statement2 as COPY (
+	SELECT
+		42 AS number,
+		true AS is_even
+) TO '__TEST_DIR__/non_foldable_copy_option.parquet' (
+	FORMAT parquet,
+	KV_METADATA {
+		number: random()
+	}
+);
+----
+Binder Error: Can't evaluate the COPY option (main.struct_pack(number := random())), only foldable/constant expressions are allowed

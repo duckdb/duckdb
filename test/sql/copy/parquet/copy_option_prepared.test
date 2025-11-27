@@ -1,0 +1,21 @@
+require parquet
+
+statement ok
+PREPARE statement as COPY (
+	SELECT
+		42 AS number,
+		true AS is_even
+) TO '__TEST_DIR__/prepared_parquet_copy.parquet' (
+	FORMAT parquet,
+	KV_METADATA {
+		number: $1,
+	}
+);
+
+statement ok
+execute statement(42)
+
+query II
+select * from '__TEST_DIR__/prepared_parquet_copy.parquet';
+----
+42	true
