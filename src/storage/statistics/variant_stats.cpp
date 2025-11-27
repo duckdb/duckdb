@@ -391,6 +391,7 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 		for (idx_t i = 0; i < new_child_stats.size(); i++) {
 			StructStats::SetChildStats(new_typed_value, i, new_child_stats[i]);
 		}
+		new_typed_value.CombineValidity(stats_typed_value, other_typed_value);
 		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
 		return true;
 	} else if (stats_typed_value_type.id() == LogicalTypeId::LIST) {
@@ -407,6 +408,7 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 			return false;
 		}
 		auto new_typed_value = BaseStatistics::CreateEmpty(LogicalType::LIST(new_child_stats.type));
+		new_typed_value.CombineValidity(stats_typed_value, other_typed_value);
 		ListStats::SetChildStats(new_typed_value, new_child_stats.ToUnique());
 		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
 		return true;
