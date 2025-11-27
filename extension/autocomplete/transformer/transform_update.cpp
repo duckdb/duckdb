@@ -20,7 +20,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(PEGTran
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformUpdateTarget(PEGTransformer &transformer,
-                                                                 optional_ptr<ParseResult> parse_result) {
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
