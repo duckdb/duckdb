@@ -149,11 +149,14 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
 	// write a checkpoint flag to the WAL
-	// FIXME: this comment is now wrong
-	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
-	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
-	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
-	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
+	// in case a crash happens during the checkpoint, we know a checkpoint was instantiated
+	// we write the root meta block of the planned checkpoint to the WAL
+	// during recovery we use this:
+	// * if the root meta block matches the checkpoint entry, we know the checkpoint was completed
+	// * if the root meta block does not match the checkpoint entry, we know the checkpoint was not completed
+	// if the checkpoint was completed we don't need to replay the WAL - otherwise we need to replay the WAL
+	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
+	// to replay any concurrent commits that have succeeded and ensure these are not lost
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block);
 
 	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
