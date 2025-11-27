@@ -749,7 +749,8 @@ private:
 	                                                                         optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformMapStructField(PEGTransformer &transformer,
 	                                                                    optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer,
+	                                                                         optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,

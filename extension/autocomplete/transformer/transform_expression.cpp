@@ -1486,7 +1486,9 @@ PEGTransformerFactory::TransformMapStructField(PEGTransformer &transformer, opti
 	return fields;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto rhs_lambda = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 	auto col_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
@@ -1506,7 +1508,5 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 	list_comp_children.push_back(std::move(lambda_expression));
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(list_comp_children));
 }
-
-
 
 } // namespace duckdb
