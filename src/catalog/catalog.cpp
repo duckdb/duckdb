@@ -916,10 +916,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		string schema_name = lookups[0].schema;
 		if (!IsInvalidSchema(schema_name)) {
 			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
+			string relation_name = schema_name + "." + lookup_info.GetEntryName();
 			auto except = CatalogException(
 			    schema_lookup.GetErrorContext(),
-			    "Catalog with name %s does not exist and there is no %s schema in the current catalog!", schema_name,
-			    schema_name);
+			    "the relation \"%s\" does not exist", relation_name);
 			return {nullptr, nullptr, ErrorData(except)};
 		}
 	}
