@@ -48,7 +48,7 @@ struct StructKeysFun {
 struct StructValuesFun {
 	static constexpr const char *Name = "struct_values";
 	static constexpr const char *Parameters = "struct";
-	static constexpr const char *Description = "Returns the field names of a STRUCT as a list";
+	static constexpr const char *Description = "Returns the field values of a STRUCT as an UnnamedStruct";
 	static constexpr const char *Example = "struct_values({'a': 1, 'b': 'world'})";
 	static constexpr const char *Categories = "";
 
