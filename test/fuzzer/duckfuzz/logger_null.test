@@ -1,4 +1,4 @@
-# name: test/fuzzer/duckfuzz/list_zip_no_args.test
+# name: test/fuzzer/duckfuzz/logger_null.test
 # description: Test table function with named parameter that is NULL
 # group: [duckfuzz]
 
