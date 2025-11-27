@@ -17,13 +17,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	if (stmt.query->type != duckdb_libpgquery::T_PGSelectStmt) {
 		throw ParserException("CREATE TABLE AS requires a SELECT clause");
 	}
-	if (stmt.into->rel->relname[0] == '\0') {
-		throw ParserException("Empty table name not supported");
-	}
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>();
 	auto qname = TransformQualifiedName(*stmt.into->rel);
+	if (qname.name.empty()) {
+		throw ParserException("Empty table name not supported");
+	}
 	auto query = TransformSelectStmt(*stmt.query, false);
 
 	// push a LIMIT 0 if 'WITH NO DATA' is specified
