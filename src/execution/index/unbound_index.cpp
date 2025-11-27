@@ -5,11 +5,12 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "fmt/format.h"
 
 namespace duckdb {
 
-BufferedIndexData::BufferedIndexData(BufferedIndexReplay replay_type)
-    : type(replay_type), data(nullptr), small_chunk(nullptr) {
+BufferedReplayRange::BufferedReplayRange(BufferedIndexReplay replay_type, idx_t start_p, idx_t end_p)
+    : type(replay_type), start(start_p), end(end_p) {
 }
 
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
@@ -39,27 +40,6 @@ void UnboundIndex::CommitDrop() {
 	}
 }
 
-void UnboundIndex::ResizeSmallChunk(unique_ptr<DataChunk> &small_chunk, Allocator &allocator,
-                                    const vector<LogicalType> &types) {
-	if (!small_chunk) {
-		return;
-	}
-	if (small_chunk->size() == 0) {
-		small_chunk.reset();
-		return;
-	}
-	// Only resize if unused space exceeds RESIZE_THRESHOLD.
-	auto unused_space = small_chunk->GetCapacity() - small_chunk->size();
-	if (unused_space < RESIZE_THRESHOLD) {
-		return;
-	}
-	const auto current_size = small_chunk->size();
-	auto old_chunk = std::move(small_chunk);
-	small_chunk = make_uniq<DataChunk>();
-	small_chunk->Initialize(allocator, types, current_size);
-	small_chunk->Append(*old_chunk, false);
-}
-
 void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
                                const vector<StorageIndex> &mapped_column_ids_p, BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
@@ -84,61 +64,19 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	combined_chunk.data.back().Reference(row_ids);
 	combined_chunk.SetCardinality(index_column_chunk.size());
 
-	// If the replay type doesn't match the type of the BufferedIndexData at the end, we append a new
-	// BufferedIndexData that we can buffer into.
-	if (buffered_replays.empty() || buffered_replays.back().type != replay_type) {
-		// Before creating a new BufferedIndexData, resize the previous small_chunk if it has too many free slots,
-		// or destroy it if it's empty.
-		if (!buffered_replays.empty()) {
-			auto &prev = buffered_replays.back();
-			ResizeSmallChunk(prev.small_chunk, allocator, types);
-		}
-		BufferedIndexData buffered_data(replay_type);
-		buffered_replays.emplace_back(std::move(buffered_data));
+	auto &buffer = buffered_replays.GetBuffer(replay_type);
+	if (buffer == nullptr) {
+		buffer = make_uniq<ColumnDataCollection>(allocator, types);
 	}
-	// If the buffered_replays were non-empty and the replay_type matches, we can buffer in the previous one.
-	// Either way, our target for buffering is now the last element of buffered_replays.
-	BufferedIndexData &buffer = buffered_replays.back();
-
-	// Initialize the small chunk.
-	if (!buffer.small_chunk) {
-		buffer.small_chunk = make_uniq<DataChunk>();
-		buffer.small_chunk->Initialize(allocator, types, combined_chunk.size());
-		buffer.small_chunk->SetCardinality(0);
+	idx_t start = buffer->Count();
+	idx_t end = start + combined_chunk.size();
+	auto &ranges = buffered_replays.ranges;
+	if (ranges.empty() || ranges.back().type != replay_type) {
+		ranges.emplace_back(replay_type, start, end);
+	} else {
+		ranges.back().end = end;
 	}
-
-	if (combined_chunk.size() + buffer.small_chunk->size() < STANDARD_VECTOR_SIZE) {
-		// Append to small_chunk and allow resizing, since we know we can fit under STANDARD_VECTOR_SIZE.
-		buffer.small_chunk->Append(combined_chunk, true);
-		return;
-	}
-	// Otherwise we have at least one STANDARD_VECTOR_SIZE chunk we can spill to ColumnDataCollection, with the
-	// leftover going into small_chunk.
-
-	// Initialize ColumnDataCollection data buffer.
-	if (!buffer.data) {
-		buffer.data = make_uniq<ColumnDataCollection>(allocator, types);
-	}
-
-	// Remainder is how much of the combined_chunk we want to append to small_chunk to make it a full
-	// STANDARD_VECTOR_SIZE.
-	idx_t remainder = STANDARD_VECTOR_SIZE - buffer.small_chunk->size();
-	idx_t total = combined_chunk.size();
-
-	// Append remainder to small_chunk.
-	SelectionVector remainder_sel(0, remainder);
-	buffer.small_chunk->Append(combined_chunk, true, &remainder_sel, remainder);
-
-	// Flush small chunk to data.
-	buffer.data->Append(*buffer.small_chunk);
-	buffer.small_chunk->SetCardinality(0);
-
-	// Leftover goes into small_chunk.
-	idx_t leftover = total - remainder;
-	if (leftover > 0) {
-		SelectionVector leftover_sel(remainder, leftover);
-		buffer.small_chunk->Append(combined_chunk, true, &leftover_sel, leftover);
-	}
+	buffer->Append(combined_chunk);
 }
 
 } // namespace duckdb

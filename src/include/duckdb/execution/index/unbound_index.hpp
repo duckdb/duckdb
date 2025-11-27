@@ -17,21 +17,28 @@ namespace duckdb {
 class ColumnDataCollection;
 
 enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
-static constexpr idx_t RESIZE_THRESHOLD = 128;
 
-struct BufferedIndexData {
+struct BufferedReplayRange {
 	BufferedIndexReplay type;
+	idx_t start;
+	idx_t end;
+	explicit BufferedReplayRange(BufferedIndexReplay replay_type, idx_t start, idx_t end);
+};
 
-	// Buffered replay data.
-	unique_ptr<ColumnDataCollection> data;
+struct BufferedIndexReplays {
+	vector<BufferedReplayRange> ranges;
+	unique_ptr<ColumnDataCollection> buffered_inserts;
+	unique_ptr<ColumnDataCollection> buffered_deletes;
 
-	// Intermediate staging buffer before spilling to ColumnDataCollection data, since ColumnDataCollections
-	// only allow storing in fixed STANDARD_VECTOR_SIZE buffers, we keep this intermediate, resizable small_chunk
-	// to avoid eating up memory.
-	// The ordering of replays is whatever is in data, followed by small_chunk.
-	unique_ptr<DataChunk> small_chunk;
+	BufferedIndexReplays() = default;
 
-	explicit BufferedIndexData(BufferedIndexReplay replay_type);
+	unique_ptr<ColumnDataCollection> &GetBuffer(BufferedIndexReplay replay_type) {
+		return replay_type == BufferedIndexReplay::INSERT_ENTRY ? buffered_inserts : buffered_deletes;
+	}
+
+	bool HasBufferedReplays() const {
+		return !ranges.empty();
+	}
 };
 
 class UnboundIndex final : public Index {
@@ -40,19 +47,14 @@ private:
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
 	IndexStorageInfo storage_info;
-	//! Buffer for WAL replays.
-	vector<BufferedIndexData> buffered_replays;
+
+	BufferedIndexReplays buffered_replays;
 
 	//! Maps the column IDs in the buffered replays to a physical table offset.
 	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
 	//! physical table index mapped_column_ids[i].
 	//! This is in sorted order of physical column IDs.
 	vector<StorageIndex> mapped_column_ids;
-
-	//! If the chunk is empty, it is destroyed. If unused capacity exceeds fixed threshold defined in unbound_index
-	//! it is resized down to how many elements it is storing (capacity = size).
-	static void ResizeSmallChunk(unique_ptr<DataChunk> &small_chunk, Allocator &allocator,
-	                             const vector<LogicalType> &types);
 
 public:
 	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
@@ -92,12 +94,13 @@ public:
 	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
 	                 BufferedIndexReplay replay_type);
 	bool HasBufferedReplays() const {
-		return !buffered_replays.empty();
+		return buffered_replays.HasBufferedReplays();
 	}
 
-	vector<BufferedIndexData> &GetBufferedReplays() {
+	BufferedIndexReplays &GetBufferedReplays() {
 		return buffered_replays;
 	}
+
 	const vector<StorageIndex> &GetMappedColumnIds() const {
 		return mapped_column_ids;
 	}
