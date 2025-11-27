@@ -72,11 +72,6 @@
       "paths": [
         "test/extension/loadable_parser_override.test"
       ]
-    }, {
-      "reason": "Temporary disable because of error thrown",
-      "paths": [
-       "test/sql/peg_parser/transformer/peg_transformer.test"
-      ]
     }
   ]
 }

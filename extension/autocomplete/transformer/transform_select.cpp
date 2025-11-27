@@ -17,9 +17,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("TransformSelectStatement");
-	return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
+	throw NotImplementedException("No transformer function found for rule 'SelectStatement'");
 }
 
 unique_ptr<SelectStatement>
