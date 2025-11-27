@@ -1,6 +1,8 @@
 # name: test/sql/storage/types/variant/variant_extract_stats.test
 # group: [variant]
 
+require noforcestorage
+
 load __TEST_DIR__/variant_extract_stats_propagation.db
 
 statement ok
