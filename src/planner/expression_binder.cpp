@@ -319,10 +319,6 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (error_msg.HasError()) {
-		if (!BindsUnfoldableExpressions()) {
-			// We are in a constant binder and therefore do not try to bind the correlated column
-			error_msg.Throw();
-		}
 		// Try binding the correlated column. If binding the correlated column
 		// has error messages, those should be propagated up. So for the test case
 		// having subquery failed to bind:14 the real error message should be something like

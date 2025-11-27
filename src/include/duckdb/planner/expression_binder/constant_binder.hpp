@@ -17,10 +17,6 @@ class ConstantBinder : public ExpressionBinder {
 public:
 	ConstantBinder(Binder &binder, ClientContext &context, string clause);
 
-	bool BindsUnfoldableExpressions() const override {
-		return false;
-	}
-
 	//! The location where this binder is used, used for error messages
 	string clause;
 
