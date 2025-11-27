@@ -69,7 +69,7 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
 	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<AlpAnalyzeState<T>>(info);
 	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
-	return unique_ptr<AnalyzeState>(state.release());
+	return unique_ptr<AnalyzeState>(std::move(state));
 }
 
 /*
