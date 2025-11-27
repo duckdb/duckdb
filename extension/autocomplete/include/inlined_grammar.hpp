@@ -604,7 +604,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ColLabelParameter <- '$' ColLabel\n"
 	"PositionalExpression <- '#' NumberLiteral\n"
 	"DefaultExpression <- 'DEFAULT'\n"
-	"ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'\n"
+	"ListComprehensionExpression <- '[' Expression 'FOR' List(ColIdOrString) 'IN' Expression ListComprehensionFilter? ']'\n"
 	"ListComprehensionFilter <- 'IF' Expression\n"
 	"ParensExpression <- Parens(Expression)\n"
 	"SingleExpression <-\n"

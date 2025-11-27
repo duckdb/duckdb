@@ -28,6 +28,7 @@ SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transform
 
 	SettingInfo result;
 	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	// TODO(Dtenwolde) Introduce TransformSettingScope for this bit
 	if (optional_scope_pr.optional_result) {
 		auto setting_scope = optional_scope_pr.optional_result->Cast<ListParseResult>();
 		auto scope_value = setting_scope.Child<ChoiceParseResult>(0);

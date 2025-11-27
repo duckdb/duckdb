@@ -1484,4 +1484,28 @@ PEGTransformerFactory::TransformMapStructField(PEGTransformer &transformer, opti
 	fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2)));
 	return fields;
 }
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto rhs_lambda = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+	auto col_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
+	vector<string> lambda_columns;
+	for (auto col : col_list) {
+		lambda_columns.push_back(transformer.Transform<string>(col));
+	}
+	auto lhs_lambda = make_uniq<ColumnRefExpression>(lambda_columns);
+	auto lambda_expression = make_uniq<LambdaExpression>(std::move(lhs_lambda), std::move(rhs_lambda));
+	auto in_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(5));
+	auto list_comprehension_filter = list_pr.Child<OptionalParseResult>(6);
+	if (list_comprehension_filter.HasResult()) {
+		throw NotImplementedException("List comprehension filter is not yet implemented");
+	}
+	vector<unique_ptr<ParsedExpression>> list_comp_children;
+	list_comp_children.push_back(std::move(in_expr));
+	list_comp_children.push_back(std::move(lambda_expression));
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(list_comp_children));
+}
+
+
+
 } // namespace duckdb

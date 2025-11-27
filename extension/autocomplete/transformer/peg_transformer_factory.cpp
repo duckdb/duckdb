@@ -420,6 +420,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformMapExpression);
 	REGISTER_TRANSFORM(TransformMapStructExpression);
 	REGISTER_TRANSFORM(TransformMapStructField);
+	REGISTER_TRANSFORM(TransformListComprehensionExpression);
 }
 
 void PEGTransformerFactory::RegisterImport() {

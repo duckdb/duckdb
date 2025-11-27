@@ -612,7 +612,7 @@ ColLabelParameter <- '$' ColLabel
 PositionalExpression <- '#' NumberLiteral
 DefaultExpression <- 'DEFAULT'
 
-ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'
+ListComprehensionExpression <- '[' Expression 'FOR' List(ColIdOrString) 'IN' Expression ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF' Expression
 
 ParensExpression <- Parens(Expression)
