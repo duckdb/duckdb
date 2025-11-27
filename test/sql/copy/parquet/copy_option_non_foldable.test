@@ -1,3 +1,6 @@
+# name: test/sql/copy/parquet/copy_option_non_foldable.test
+# group: [parquet]
+
 require parquet
 
 statement error

@@ -428,7 +428,8 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 		if (bound_expr->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
-		throw BinderException("Can't evaluate the COPY option (%s), only foldable/constant expressions are allowed", expr_copy->ToString());
+		throw BinderException("Can't evaluate the COPY option (%s), only foldable/constant expressions are allowed",
+		                      expr_copy->ToString());
 	}
 	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
 	if (val.IsNull()) {
