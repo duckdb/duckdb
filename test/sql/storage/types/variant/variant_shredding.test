@@ -26,7 +26,7 @@ checkpoint
 query I
 select stats(col) from shredded_integer limit 1;
 ----
-<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Has Null: true, Has No Null: true\].*typed_value: \[Min: 0, Max: 99\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Has Null: true, Has No Null: false\].*typed_value: \[Min: 0, Max: 99\]\[Has Null: false, Has No Null: true\]\}.*
 
 # ------------------------------ Nothing is shredded ------------------------------
 
@@ -96,7 +96,7 @@ checkpoint
 query I
 select stats(col) from fully_shredded_object limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: false\].*\{a:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
 
 # ------------------------------ Partially shredded OBJECT ------------------------------
 
@@ -119,7 +119,7 @@ checkpoint
 query I
 select stats(col) from partially_shredded_object limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: false\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: false\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
 
 statement ok
 delete from partially_shredded_object;
@@ -143,7 +143,7 @@ checkpoint
 query I
 select stats(col) from partially_shredded_object limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*typed_value.*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*typed_value.*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: false\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
 
 # ------------------------------ Fully shredded ARRAY ------------------------------
 
@@ -163,7 +163,7 @@ checkpoint
 query I
 select stats(col) from fully_shredded_array limit 1;
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: false\].*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*
 
 # ------------------------------ Partially shredded ARRAY ------------------------------
 
