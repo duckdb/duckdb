@@ -361,7 +361,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
 		D_ASSERT(!path_value.IsNull());
 		auto cwd = TestGetCurrentDirectory();
-		auto path =  TestJoinPath(cwd, path_value.ToString());
+		auto path = TestJoinPath(cwd, path_value.ToString());
 		TestConfiguration inherit_config;
 		inherit_config.LoadConfig(path);
 
