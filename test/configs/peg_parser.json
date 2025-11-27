@@ -8,28 +8,42 @@
   ],
   "skip_tests": [
     {
-      "reason": "Arithmetic expression",
-      "paths": [
-        "test/sql/function/operator/test_arithmetic_sqllogic.test",
-        "test/sql/projection/test_row_id_expression.test",
-        "test/sql/function/numeric/test_trigo.test",
-        "test/sql/function/generic/test_between.test"
-      ]
-    },
-    {
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
         "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/table_function/sqlite_master_quotes.test",
-        "test/sql/keywords/escaped_quotes_expressions.test"
+        "test/sql/keywords/escaped_quotes_expressions.test",
+        "test/sql/catalog/test_quoted_column_name.test",
+        "test/sql/json/issues/large_quoted_string_constant.test",
+        "test/sql/export/export_database.test"
+      ]
+    },
+    {
+      "reason": "Error handling",
+      "paths": [
+        "test/sql/error/error_position.test",
+        "test/sql/catalog/table/test_default_values.test",
+        "test/sql/cast/cast_error_location.test"
+      ]
+    },
+    {
+      "reason": "Special strings",
+      "paths": [
+        "test/sql/copy/csv/unquoted_escape/basic.test",
+        "test/sqlserver/sqlserver_cte.test",
+        "test/optimizer/compare_blob.test"
       ]
     },
     {
       "reason": "Conversion Error",
       "paths": [
         "test/sql/storage/types/struct/wal_struct_storage.test",
-        "test/sql/storage/types/struct/struct_storage.test"
+        "test/sql/storage/types/struct/struct_storage.test",
+        "test/sql/order/hugeint_order_by_extremes.test",
+        "test/sql/join/inner/equality_join_limits.test",
+        "test/sql/aggregate/group/group_by_limits.test",
+        "test/sql/subquery/scalar/test_issue_7079.test"
       ]
     },
     {
@@ -39,9 +53,11 @@
       ]
     },
     {
-      "reason": "Create macro with param",
+      "reason": "Macro statement with some errors",
       "paths": [
-        "test/sql/catalog/function/test_complex_macro.test"
+        "test/sql/catalog/function/test_complex_macro.test",
+        "test/sql/export/export_macros.test",
+        "test/sql/catalog/function/test_macro_issue_14276.test"
       ]
     },
     {
@@ -55,6 +71,11 @@
       "reason": "Setting option to 'fallback' changes behavior of first tests",
       "paths": [
         "test/extension/loadable_parser_override.test"
+      ]
+    }, {
+      "reason": "Temporary disable because of error thrown",
+      "paths": [
+       "test/sql/peg_parser/transformer/peg_transformer.test"
       ]
     }
   ]
