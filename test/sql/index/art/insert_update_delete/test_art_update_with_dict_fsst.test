@@ -1,0 +1,25 @@
+# name: test/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst.test
+# description: Test
+# group: [insert_update_delete]
+
+load __TEST_DIR__/foo.db readwrite v1.4.2
+
+statement ok
+CREATE OR REPLACE TABLE bar (col1 VARCHAR, col2 VARCHAR UNIQUE)
+
+statement ok
+INSERT INTO bar (col1, col2) VALUES (NULL, 'one');
+
+statement ok
+CHECKPOINT
+
+statement ok
+SET wal_autocheckpoint='1TB'
+
+statement ok
+UPDATE bar AS original SET col1 = 'a'
+
+query I
+SELECT col1 FROM bar WHERE col2 = 'one'
+----
+a

@@ -200,8 +200,8 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
 		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
-	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
+	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 }
 
 void StandardColumnData::CommitDropColumn() {
