@@ -6,6 +6,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
 
 namespace duckdb {
 
