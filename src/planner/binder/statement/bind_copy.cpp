@@ -422,16 +422,11 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 			return result;
 		}
 	}
-	auto expr_copy = expr->Copy();
 	auto bound_expr = option_binder.Bind(expr);
-	if (!bound_expr->IsFoldable()) {
-		if (bound_expr->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		throw BinderException("Can't evaluate the COPY option (%s), only foldable/constant expressions are allowed",
-		                      expr_copy->ToString());
+	if (bound_expr->HasParameter()) {
+		throw ParameterNotResolvedException();
 	}
-	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
+	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 	if (val.IsNull()) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
 	}

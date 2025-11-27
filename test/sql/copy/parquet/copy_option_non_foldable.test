@@ -3,7 +3,7 @@
 
 require parquet
 
-statement error
+statement ok
 PREPARE statement2 as COPY (
 	SELECT
 		42 AS number,
@@ -14,5 +14,11 @@ PREPARE statement2 as COPY (
 		number: random()
 	}
 );
+
+statement ok
+EXECUTE statement2;
+
+query II
+select * from '__TEST_DIR__/non_foldable_copy_option.parquet'
 ----
-Binder Error: Can't evaluate the COPY option (main.struct_pack(number := random())), only foldable/constant expressions are allowed
+42	true
