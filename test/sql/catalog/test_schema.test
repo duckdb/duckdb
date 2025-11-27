@@ -76,12 +76,12 @@ ROLLBACK;
 statement error con2
 SELECT * FROM test.hello
 ----
-Catalog Error: Catalog with name test does not exist and there is no test schema in the current catalog!
+Catalog Error: the relation "test.hello" does not exist
 
 statement error
 SELECT COUNT(*) FROM non_exist_schema.data
 ----
-Catalog Error: Catalog with name non_exist_schema does not exist and there is no non_exist_schema schema in the current catalog!
+Catalog Error: the relation "non_exist_schema.data" does not exist
 
 statement ok
 SET catalog_error_max_schemas = 0;
@@ -89,7 +89,7 @@ SET catalog_error_max_schemas = 0;
 statement error
 SELECT COUNT(*) FROM nonexistent_schema.some_table
 ----
-Catalog Error: Catalog with name nonexistent_schema does not exist and there is no nonexistent_schema schema in the current catalog!
+Catalog Error: the relation "nonexistent_schema.some_table" does not exist
 
 statement ok
 ATTACH ':memory:' AS test_catalog;
@@ -101,7 +101,7 @@ CREATE TABLE test_catalog.main.existing_table(i INTEGER);
 statement error
 SELECT COUNT(*) FROM test_catalog.nonexistent_schema.some_table
 ----
-Catalog Error: Catalog with name nonexistent_schema does not exist and there is no nonexistent_schema schema in the current catalog!
+Catalog Error: the relation "nonexistent_schema.some_table" does not exist
 
 statement error
 SELECT COUNT(*) FROM test_catalog.main.nonexistent_table
@@ -111,7 +111,7 @@ Catalog Error: Table with name nonexistent_table does not exist!
 statement error
 SELECT * FROM test_catalog.missing_schema.missing_table
 ----
-Catalog Error: Catalog with name missing_schema does not exist and there is no missing_schema schema in the current catalog!
+Catalog Error: the relation "missing_schema.missing_table" does not exist
 
 statement ok
 ATTACH ':memory:' AS another_catalog;
@@ -119,7 +119,7 @@ ATTACH ':memory:' AS another_catalog;
 statement error
 SELECT COUNT(*) FROM another_catalog.invalid_schema.table_name
 ----
-Catalog Error: Catalog with name invalid_schema does not exist and there is no invalid_schema schema in the current catalog!
+Catalog Error: the relation "invalid_schema.table_name" does not exist
 
 statement ok
 DETACH test_catalog;

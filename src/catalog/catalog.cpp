@@ -917,9 +917,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		if (!IsInvalidSchema(schema_name)) {
 			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
 			string relation_name = schema_name + "." + lookup_info.GetEntryName();
-			auto except = CatalogException(
-			    schema_lookup.GetErrorContext(),
-			    "the relation \"%s\" does not exist", relation_name);
+			auto except =
+			    CatalogException(schema_lookup.GetErrorContext(), "the relation \"%s\" does not exist", relation_name);
 			return {nullptr, nullptr, ErrorData(except)};
 		}
 	}
