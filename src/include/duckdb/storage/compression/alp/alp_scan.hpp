@@ -40,11 +40,7 @@ public:
 		index += count;
 	}
 
-	template <bool SKIP>
 	void LoadValues(T *value_buffer, idx_t count) {
-		if (SKIP) {
-			return;
-		}
 		value_buffer[0] = (T)0;
 		alp::AlpDecompression<T>::Decompress(for_encoded, value_buffer, count, v_factor, v_exponent, exceptions_count,
 		                                     exceptions, exceptions_positions, frame_of_reference, bit_width);
@@ -101,14 +97,7 @@ public:
 		D_ASSERT(vector_size <= AlpConstants::ALP_VECTOR_SIZE);
 		D_ASSERT(vector_size <= LeftInVector());
 		if (VectorFinished() && total_value_count < count) {
-			if (vector_size == AlpConstants::ALP_VECTOR_SIZE) {
-				LoadVector<SKIP>(values);
-				total_value_count += vector_size;
-				return;
-			} else {
-				// Even if SKIP is given, the vector size is not big enough to be able to fully skip the entire vector
-				LoadVector<false>(vector_state.decoded_values);
-			}
+			LoadVector(vector_state.decoded_values);
 		}
 		vector_state.template Scan<SKIP>((uint8_t *)values, vector_size);
 
@@ -123,7 +112,6 @@ public:
 		total_value_count += vector_size;
 	}
 
-	template <bool SKIP = false>
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
 
@@ -142,10 +130,8 @@ public:
 
 		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
 		if (uncompressed_mode) {
-			if (!SKIP) {
-				// Read uncompressed values
-				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
-			}
+			// Read uncompressed values
+			memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
 			return;
 		}
 		vector_state.v_factor = Load<uint8_t>(vector_ptr);
@@ -178,7 +164,7 @@ public:
 		}
 
 		// Decode all the vector values to the specified 'value_buffer'
-		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
+		vector_state.LoadValues(value_buffer, vector_size);
 	}
 
 public:
