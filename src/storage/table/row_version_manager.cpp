@@ -36,6 +36,15 @@ optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 	return vector_info[vector_idx].get();
 }
 
+idx_t RowVersionManager::GetCheckpointRowCount(TransactionData transaction, idx_t vector_idx, idx_t max_count) {
+	lock_guard<mutex> l(version_lock);
+	auto chunk_info = GetChunkInfo(vector_idx);
+	if (!chunk_info) {
+		return max_count;
+	}
+	return chunk_info->GetCheckpointRowCount(transaction, max_count);
+}
+
 idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                                       idx_t max_count) {
 	lock_guard<mutex> l(version_lock);

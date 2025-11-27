@@ -774,6 +774,34 @@ RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
 	return *GetOrCreateVersionInfoInternal();
 }
 
+optional_ptr<RowVersionManager> RowGroup::GetVersionInfoIfLoaded() const {
+	if (!HasUnloadedDeletes()) {
+		// deletes are loaded - return the version info
+		return version_info;
+	}
+	return nullptr;
+}
+
+optional_idx RowGroup::GetCheckpointRowCount(TransactionData transaction) const {
+	// gets the maximum row count to read from this row group given the specified transaction identifier
+	auto vinfo = GetVersionInfoIfLoaded();
+	if (!vinfo) {
+		return optional_idx();
+	}
+	idx_t total_count = 0;
+	for (idx_t read_count = 0, vector_idx = 0; read_count < count; read_count += STANDARD_VECTOR_SIZE, vector_idx++) {
+		idx_t max_count = MinValue<idx_t>(count - read_count, STANDARD_VECTOR_SIZE);
+		auto checkpoint_count = vinfo->GetCheckpointRowCount(transaction, vector_idx, max_count);
+		if (checkpoint_count > 0) {
+			if (total_count != read_count) {
+				throw InternalException("Error in RowGroup::GetCheckpointRowCount - insertions are not sequential");
+			}
+			total_count += checkpoint_count;
+		}
+	}
+	return total_count == count ? optional_idx() : total_count;
+}
+
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                              idx_t max_count) {
 	auto vinfo = GetVersionInfo();
@@ -997,12 +1025,22 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
+		if (info.options.transaction_id != MAX_TRANSACTION_ID) {
+			// a transaction id is specified
+			TransactionData checkpoint_transaction(MAX_TRANSACTION_ID, info.options.transaction_id);
+			write_data.write_count = row_group.get().GetCheckpointRowCount(checkpoint_transaction);
+			if (write_data.write_count.IsValid()) {
+				if (write_data.write_count.GetIndex() != 0) {
+					throw InternalException("eek checkpointing %d rows out of %d", write_data.write_count.GetIndex(),
+					                        row_group.get().count.load());
+				}
+			}
+		}
 		result.push_back(std::move(write_data));
 	}
 
 	// Checkpoint the row groups
 	// for each row group we need to figure out which rows we should write
-
 
 	// In order to co-locate columns across different row groups, we write column-at-a-time
 	// i.e. we first write column #0 of all row groups, then column #1, ...
@@ -1020,6 +1058,10 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
+			if (row_group_write_data.write_count.IsValid() && row_group_write_data.write_count.GetIndex() == 0) {
+				// this row group is empty for this transaction - skip it
+				continue;
+			}
 			auto &column = row_group.GetColumn(column_idx);
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
@@ -1040,6 +1082,10 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 		auto &row_group_write_data = result[row_group_idx];
 		auto &row_group = row_groups[row_group_idx].get();
+		if (row_group_write_data.write_count.IsValid() && row_group_write_data.write_count.GetIndex() == 0) {
+			// this row group is empty for this transaction - leave it empty
+			continue;
+		}
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
 		result_row_group->columns = std::move(result_columns[row_group_idx]);
 		result_row_group->version_info = row_group.version_info.load();

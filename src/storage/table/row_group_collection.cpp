@@ -1336,16 +1336,21 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// row group was unchanged - emit previous row group
 			new_row_group = entry->ReferenceNode();
 		}
-		auto pointer =
-		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
-
+		// check if we should write this row group to the persistent storage
+		RowGroupPointer pointer_copy;
 		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-		RowGroupPointer pointer_copy;
-		if (debug_verify_blocks) {
-			pointer_copy = pointer;
+		if (!row_group_write_data.statistics.empty()) {
+			auto pointer =
+			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
+
+			if (debug_verify_blocks) {
+				pointer_copy = pointer;
+			}
+			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
+		} else {
+			debug_verify_blocks = false;
 		}
-		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;
 
