@@ -113,7 +113,7 @@ void BaseStatistics::InitializeUnknown() {
 
 void BaseStatistics::InitializeEmpty() {
 	has_null = false;
-	has_no_null = true;
+	has_no_null = false;
 }
 
 bool BaseStatistics::CanHaveNull() const {
