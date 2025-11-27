@@ -349,6 +349,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(StructInsertFun),
 	DUCKDB_SCALAR_FUNCTION(StructKeysFun),
 	DUCKDB_SCALAR_FUNCTION(StructUpdateFun),
+	DUCKDB_SCALAR_FUNCTION(StructValuesFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(SumFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(SumNoOverflowFun),
 	DUCKDB_AGGREGATE_FUNCTION_ALIAS(SumkahanFun),
