@@ -69,7 +69,7 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 		buffer = make_uniq<ColumnDataCollection>(allocator, types);
 	}
 	idx_t start = buffer->Count();
-	idx_t end = start + combined_chunk.size();
+	idx_t end = start + combined_chunk.size() - 1;
 	auto &ranges = buffered_replays.ranges;
 	if (ranges.empty() || ranges.back().type != replay_type) {
 		ranges.emplace_back(replay_type, start, end);
