@@ -141,9 +141,16 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_from = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
-	auto opt_where_clause = list_pr.Child<OptionalParseResult>(1);
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, select_from->where_clause);
-	transformer.TransformOptional<GroupByNode>(list_pr, 2, select_from->groups);
+	auto group_opt = list_pr.Child<OptionalParseResult>(2);
+	if (group_opt.HasResult()) {
+		auto group_by_node = transformer.Transform<GroupByNode>(group_opt.optional_result);
+		if (group_by_node.group_expressions[0]->GetExpressionClass() == ExpressionClass::STAR) {
+			select_from->aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+		} else {
+			select_from->groups = std::move(group_by_node);
+		}
+	}
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, select_from->having);
 	auto opt_window_clause = list_pr.Child<OptionalParseResult>(4);
 	if (opt_window_clause.HasResult()) {
