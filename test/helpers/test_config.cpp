@@ -364,7 +364,8 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		TestConfiguration inherit_config;
 		inherit_config.LoadConfig(path);
 
-		tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(), inherit_config.tests_to_be_skipped.end());
+		tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
+		                           inherit_config.tests_to_be_skipped.end());
 	}
 
 	// Convert to unordered_set<string> the list of tests to be skipped

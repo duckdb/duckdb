@@ -2,6 +2,7 @@ import json
 from collections import defaultdict
 import sys
 
+
 def load_skip_dict(path):
     """Load a skip_tests list into a dict: reason -> set(paths)."""
     with open(path) as f:
