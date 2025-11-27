@@ -378,6 +378,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformTableReservedColumnName);
 	REGISTER_TRANSFORM(TransformTableQualification);
 	REGISTER_TRANSFORM(TransformStarExpression);
+	REGISTER_TRANSFORM(TransformExcludeList);
+	REGISTER_TRANSFORM(TransformExcludeNameList);
+	REGISTER_TRANSFORM(TransformExcludeNameSingle);
+	REGISTER_TRANSFORM(TransformExcludeName);
 
 	REGISTER_TRANSFORM(TransformOverClause);
 	REGISTER_TRANSFORM(TransformWindowFrame);

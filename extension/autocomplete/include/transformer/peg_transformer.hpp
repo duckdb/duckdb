@@ -672,6 +672,14 @@ private:
 	static string TransformTableQualification(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformStarExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
+	static qualified_column_set_t TransformExcludeList(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
+	static qualified_column_set_t TransformExcludeNameList(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static qualified_column_set_t TransformExcludeNameSingle(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static QualifiedColumnName TransformExcludeName(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
 
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
@@ -733,9 +741,12 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformMapExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformMapStructExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformMapStructField(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformMapExpression(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformMapStructExpression(PEGTransformer &transformer,
+	                                                                         optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformMapStructField(PEGTransformer &transformer,
+	                                                                    optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,

@@ -24,7 +24,9 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
 CastOrTryCast <- 'CAST' / 'TRY_CAST'
 
 StarExpression <- (ColId '.')* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE' (Parens(List(ExcludeName)) / ExcludeName)
+ExcludeList <- 'EXCLUDE' ExcludeNameList / ExcludeNameSingle
+ExcludeNameList <- Parens(List(ExcludeName))
+ExcludeNameSingle <- ExcludeName
 ExcludeName <- DottedIdentifier / ColIdOrString
 ReplaceList <- 'REPLACE' (Parens(List(ReplaceEntry)) / ReplaceEntry)
 ReplaceEntry <- Expression 'AS' ColumnReference

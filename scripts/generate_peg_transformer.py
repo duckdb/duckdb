@@ -28,7 +28,7 @@ EXCLUDED_RULES = {
     "StartOrBegin",
     "Transaction",
     "VariableAssign",
-    "MacroOrFunction"
+    "MacroOrFunction",
 }
 
 

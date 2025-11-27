@@ -1008,6 +1008,48 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	return std::move(result);
 }
 
+qualified_column_set_t PEGTransformerFactory::TransformExcludeList(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<qualified_column_set_t>(list_pr.Child<ChoiceParseResult>(1).result);
+}
+
+qualified_column_set_t PEGTransformerFactory::TransformExcludeNameList(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto exclude_name_list = ExtractParseResultsFromList(extract_parens);
+	qualified_column_set_t result;
+	for (auto exclude_name : exclude_name_list) {
+		result.insert(transformer.Transform<QualifiedColumnName>(exclude_name));
+	}
+	return result;
+}
+
+qualified_column_set_t PEGTransformerFactory::TransformExcludeNameSingle(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	qualified_column_set_t result;
+	result.insert(transformer.Transform<QualifiedColumnName>(list_pr.Child<ListParseResult>(0)));
+	return result;
+}
+
+QualifiedColumnName PEGTransformerFactory::TransformExcludeName(PEGTransformer &transformer,
+                                                                optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (StringUtil::CIEquals(choice_pr->name, "dottedidentifier")) {
+		auto result = transformer.Transform<vector<string>>(choice_pr);
+		auto result_string = StringUtil::Join(result, ".");
+		return QualifiedColumnName::Parse(result_string);
+	} else if (StringUtil::CIEquals(choice_pr->name, "colidorstring")) {
+		auto result = transformer.Transform<string>(choice_pr);
+		return QualifiedColumnName(result);
+	} else {
+		throw InternalException("Unexpected option encountered for ExcludeName");
+	}
+}
+
 unique_ptr<WindowExpression> PEGTransformerFactory::TransformOverClause(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -1404,38 +1446,42 @@ PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-    auto &list_pr = parse_result->Cast<ListParseResult>();
-    auto children = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
-    return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "map", std::move(children));
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapExpression(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto children = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "map", std::move(children));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformMapStructExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-    auto &list_pr = parse_result->Cast<ListParseResult>();
-    vector<unique_ptr<ParsedExpression>> keys;
-    vector<unique_ptr<ParsedExpression>> values;
-    auto map_struct_opt = list_pr.Child<OptionalParseResult>(1);
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformMapStructExpression(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> keys;
+	vector<unique_ptr<ParsedExpression>> values;
+	auto map_struct_opt = list_pr.Child<OptionalParseResult>(1);
 
-    if (map_struct_opt.HasResult()) {
-        auto field_list = ExtractParseResultsFromList(map_struct_opt.optional_result);
-        for (auto &field : field_list) {
-            // Get the pair {key, value} from the field transformer
-            auto key_val_pair = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(field);
-            keys.push_back(std::move(key_val_pair[0]));
-            values.push_back(std::move(key_val_pair[1]));
-        }
-    }
-    vector<unique_ptr<ParsedExpression>> result;
-    result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(keys)));
-    result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(values)));
-    return result;
+	if (map_struct_opt.HasResult()) {
+		auto field_list = ExtractParseResultsFromList(map_struct_opt.optional_result);
+		for (auto &field : field_list) {
+			// Get the pair {key, value} from the field transformer
+			auto key_val_pair = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(field);
+			keys.push_back(std::move(key_val_pair[0]));
+			values.push_back(std::move(key_val_pair[1]));
+		}
+	}
+	vector<unique_ptr<ParsedExpression>> result;
+	result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(keys)));
+	result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(values)));
+	return result;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformMapStructField(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-    auto &list_pr = parse_result->Cast<ListParseResult>();
-    vector<unique_ptr<ParsedExpression>> fields;
-    fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
-    fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2)));
-    return fields;
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformMapStructField(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> fields;
+	fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
+	fields.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2)));
+	return fields;
 }
 } // namespace duckdb

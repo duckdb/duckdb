@@ -53,7 +53,6 @@ unique_ptr<SetOperationNode> PEGTransformerFactory::TransformRepeatSetopSelect(P
 	return setop_clause;
 }
 
-
 unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetopClause(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -74,7 +73,8 @@ unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetopClause(PEGTran
 	return result;
 }
 
-bool PEGTransformerFactory::TransformDistinctOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+bool PEGTransformerFactory::TransformDistinctOrAll(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	return StringUtil::CIEquals(choice_pr->Cast<KeywordParseResult>().keyword, "all");
