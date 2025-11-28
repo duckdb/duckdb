@@ -27,6 +27,7 @@ class TableCatalogEntry;
 template <class T>
 struct SegmentNode;
 class RowGroupSegmentTree;
+class CheckpointLock;
 
 struct TableAppendState;
 
@@ -65,6 +66,7 @@ struct TableAppendState {
 
 	RowGroupAppendState row_group_append_state;
 	unique_lock<mutex> append_lock;
+	shared_ptr<CheckpointLock> table_lock;
 	row_t row_start;
 	row_t current_row;
 	//! The total number of rows appended by the append operation

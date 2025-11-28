@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/settings.hpp"
@@ -561,6 +562,12 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	if (segment.GetRowStart() == start_row) {
 		// we are truncating exactly this row group - erase it entirely
 		row_groups->EraseSegments(l, segment_index);
+
+		if (segment_index > 0) {
+			// if we have a previous segment, we need to update the next pointer
+			auto previous_segment = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index - 1));
+			previous_segment->SetNext(nullptr);
+		}
 	} else {
 		// we need to truncate within a row group
 		// remove any segments AFTER this segment: they should be deleted entirely
@@ -1282,9 +1289,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 					extra_metadata_block_pointers.emplace_back(block_pointer, 0);
 				}
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
-				metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
+				row_group.CheckpointDeletes(metadata_manager);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+
+			// copy over existing stats into the global stats
+			CopyStats(global_stats);
 			return;
 		}
 	}
@@ -1292,6 +1302,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto l = new_row_groups->Lock();
+
+	// initialize new empty stats
+	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
@@ -1308,6 +1321,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
+
+			auto lock = global_stats.GetLock();
+			for (idx_t column_idx = 0; column_idx < row_group.GetColumnCount(); column_idx++) {
+				global_stats.GetStats(*lock, column_idx).Statistics().Merge(*row_group.GetStatistics(column_idx));
+			}
 			continue;
 		}
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
@@ -1407,6 +1425,39 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				oss << "\n";
 
 				throw InternalException("Reloading blocks just written does not yield same blocks: " + oss.str());
+			}
+
+			vector<MetaBlockPointer> read_deletes_pointers;
+			if (!pointer_copy.deletes_pointers.empty()) {
+				auto root_delete = pointer_copy.deletes_pointers[0];
+				auto vm = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager());
+				read_deletes_pointers = vm->GetStoragePointers();
+			}
+
+			set<idx_t> all_written_deletes_block_ids;
+			for (auto &ptr : pointer_copy.deletes_pointers) {
+				all_written_deletes_block_ids.insert(ptr.block_pointer);
+			}
+			set<idx_t> all_read_deletes_block_ids;
+			for (auto &ptr : read_deletes_pointers) {
+				all_read_deletes_block_ids.insert(ptr.block_pointer);
+			}
+
+			if (all_written_deletes_block_ids != all_read_deletes_block_ids) {
+				std::stringstream oss;
+				oss << "Written: ";
+				for (auto &block : all_written_deletes_block_ids) {
+					oss << block << ", ";
+				}
+				oss << "\n";
+				oss << "Read: ";
+				for (auto &block : all_read_deletes_block_ids) {
+					oss << block << ", ";
+				}
+				oss << "\n";
+
+				throw InternalException("Reloading deletes blocks just written does not yield same blocks: " +
+				                        oss.str());
 			}
 		}
 	}
@@ -1580,12 +1631,14 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
+	scan_state.table_state.Initialize(context, GetTypes());
 	scan_state.table_state.max_row = row_groups->GetBaseRowId() + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
 	auto lock = result->stats.GetLock();
 	auto &changed_stats = result->stats.GetStats(*lock, changed_idx);
 	auto result_row_groups = result->GetRowGroups();
+
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
@@ -1641,6 +1694,11 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 //===--------------------------------------------------------------------===//
 // Statistics
 //===---------------------------------------------------------------r-----===//
+
+void RowGroupCollection::SetStats(TableStatistics &new_stats) {
+	stats.SetStats(new_stats);
+}
+
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }

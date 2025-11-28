@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 project(ParquetExtension)
 
-add_third_party(zstd)
-
 include_directories(
   include ../../third_party/lz4 ../../third_party/parquet
   ../../third_party/thrift ../../third_party/snappy
@@ -28,6 +26,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_timestamp.cpp
     parquet_writer.cpp
     parquet_shredding.cpp
+    parquet_column_schema.cpp
     parquet_geometry.cpp
     serialize_parquet.cpp
     zstd_file_system.cpp)
