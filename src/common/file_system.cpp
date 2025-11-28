@@ -346,7 +346,8 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 			}
 		}
 
-		bool drive_root = !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
+		bool drive_root =
+		    !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
 		bool clamp_to_root = is_absolute || drive_root || !drive_prefix.empty();
 		vector<string> stack;
 		for (auto &part : parts) {
