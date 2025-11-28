@@ -1346,7 +1346,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &stats) override {
-		if (!is_exact) {
+		if (!is_exact || row_group.HasChanges()) {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {

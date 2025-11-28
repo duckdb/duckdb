@@ -1,5 +1,5 @@
-# name: test/sql/transactions/min_max_transactions.test
-# description: Test MIN/MAX with transaction local changes
+# name: test/sql/transactions/min_max_deletes.test
+# description: Test MIN/MAX with transaction local deletes
 # group: [transactions]
 
 statement ok
