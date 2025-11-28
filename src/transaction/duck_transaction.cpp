@@ -32,8 +32,8 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      catalog_version(catalog_version_p), awaiting_cleanup(false), transaction_manager(manager),
-      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
+      catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
+      storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -49,6 +49,10 @@ DuckTransaction &DuckTransaction::Get(ClientContext &context, Catalog &catalog) 
 		throw InternalException("DuckTransaction::Get called on non-DuckDB transaction");
 	}
 	return transaction.Cast<DuckTransaction>();
+}
+
+DuckTransactionManager &DuckTransaction::GetTransactionManager() {
+	return manager.Cast<DuckTransactionManager>();
 }
 
 LocalStorage &DuckTransaction::GetLocalStorage() {
@@ -307,15 +311,15 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 
 	if (require_write_lock) {
 		// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
-		write_lock = transaction_manager.SharedCheckpointLock();
+		write_lock = GetTransactionManager().SharedCheckpointLock();
 	}
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 	if (!write_lock) {
-		return transaction_manager.TryGetCheckpointLock();
+		return GetTransactionManager().TryGetCheckpointLock();
 	} else {
-		return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
+		return GetTransactionManager().TryUpgradeCheckpointLock(*write_lock);
 	}
 }
 

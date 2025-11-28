@@ -1318,7 +1318,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
-			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
+			D_ASSERT(writer.GetCheckpointOptions().type == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
 

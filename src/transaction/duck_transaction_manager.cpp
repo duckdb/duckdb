@@ -42,6 +42,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	current_transaction_id = TRANSACTION_ID_START;
 	lowest_active_id = TRANSACTION_ID_START;
 	lowest_active_start = MAX_TRANSACTION_ID;
+	active_checkpoint = MAX_TRANSACTION_ID;
 	if (!db.GetCatalog().IsDuckCatalog()) {
 		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
 		throw InternalException("DuckTransactionManager should only be created together with a DuckCatalog");
@@ -87,6 +88,27 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// store it in the set of active transactions
 	active_transactions.push_back(std::move(transaction));
 	return transaction_ref;
+}
+
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(DuckTransactionManager &manager) : manager(manager) {
+}
+
+ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
+	manager.ResetCheckpointId();
+}
+
+transaction_t DuckTransactionManager::GetNewCheckpointId() {
+	if (active_checkpoint != MAX_TRANSACTION_ID) {
+		throw InternalException(
+		    "DuckTransactionManager::GetNewCheckpointId requested a new id but active_checkpoint was already set");
+	}
+	auto result = last_commit.load();
+	active_checkpoint = result;
+	return result;
+}
+
+void DuckTransactionManager::ResetCheckpointId() {
+	active_checkpoint = MAX_TRANSACTION_ID;
 }
 
 DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)

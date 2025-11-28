@@ -14,6 +14,7 @@
 #include "duckdb/common/queue.hpp"
 
 namespace duckdb {
+class DuckTransactionManager;
 class DuckTransaction;
 struct UndoBufferProperties;
 
@@ -26,6 +27,13 @@ struct DuckCleanupInfo {
 
 	void Cleanup() noexcept;
 	bool ScheduleCleanup() noexcept;
+};
+
+struct ActiveCheckpointWrapper {
+	ActiveCheckpointWrapper(DuckTransactionManager &manager);
+	~ActiveCheckpointWrapper();
+
+	DuckTransactionManager &manager;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -56,6 +64,11 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
+	transaction_t GetActiveCheckpoint() const {
+		return active_checkpoint;
+	}
+	transaction_t GetNewCheckpointId();
+	void ResetCheckpointId();
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -108,6 +121,8 @@ private:
 	atomic<transaction_t> lowest_active_start;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
+	//! The currently active checkpoint
+	atomic<transaction_t> active_checkpoint;
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions

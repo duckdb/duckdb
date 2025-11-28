@@ -18,6 +18,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -156,6 +157,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// if the checkpoint was completed we don't need to replay the WAL - otherwise we need to replay the WAL
 	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
 	// to replay any concurrent commits that have succeeded and ensure these are not lost
+	ActiveCheckpointWrapper active_checkpoint(db.GetTransactionManager().Cast<DuckTransactionManager>());
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
 
 	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());

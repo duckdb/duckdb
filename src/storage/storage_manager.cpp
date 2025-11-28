@@ -133,8 +133,9 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	// while holding the WAL lock - get the last committed transaction from the transaction manager
 	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
 	// any new commits made will be written to the next wal
-	auto &transaction_manager = db.GetTransactionManager();
-	options.transaction_id = ((DuckTransactionManager &)transaction_manager).GetLastCommit();
+	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
+	;
+	options.transaction_id = transaction_manager.GetNewCheckpointId();
 	if (!wal) {
 		return false;
 	}
