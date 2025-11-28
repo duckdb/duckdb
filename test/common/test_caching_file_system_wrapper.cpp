@@ -18,7 +18,7 @@ public:
 	TestFileGuard(const string &filename, const string &content) : file_path(TestCreatePath(filename)) {
 		auto local_fs = FileSystem::CreateLocal();
 		auto handle = local_fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-		handle->Write(QueryContext(), const_cast<char*>(content.data()), content.size(), 0);
+		handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
 		handle->Sync();
 	}
 
@@ -89,10 +89,11 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 	// Test that write operations are not allowed - CachingFileSystemWrapper is read-only
 	const string write_data = "Attempted write data";
 	string write_buffer(100, '\0');
-	memcpy(const_cast<char*>(write_buffer.data()), write_data.c_str(), write_data.size());
+	memcpy(const_cast<char *>(write_buffer.data()), write_data.c_str(), write_data.size());
 
 	// Try to write at a location, which should throw NotImplementedException
-	REQUIRE_THROWS_AS(caching_wrapper.Write(*handle, &write_buffer[0], write_data.size(), /*location=*/0), NotImplementedException);
+	REQUIRE_THROWS_AS(caching_wrapper.Write(*handle, &write_buffer[0], write_data.size(), /*location=*/0),
+	                  NotImplementedException);
 
 	// Try truncate, which should also throw NotImplementedException
 	REQUIRE_THROWS_AS(caching_wrapper.Truncate(*handle, 0), NotImplementedException);
@@ -106,9 +107,11 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 	handle.reset();
 
 	// Test that opening file with write flags is rejected
-	REQUIRE_THROWS_AS(caching_wrapper.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_WRITE), NotImplementedException);
-	REQUIRE_THROWS_AS(caching_wrapper.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE),
+	REQUIRE_THROWS_AS(caching_wrapper.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_WRITE),
 	                  NotImplementedException);
+	REQUIRE_THROWS_AS(
+	    caching_wrapper.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE),
+	    NotImplementedException);
 }
 
 TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
@@ -278,12 +281,7 @@ TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") 
 	};
 
 	vector<SeekReadTest> tests = {
-	    {0, 3, "012"},
-	    {5, 4, "5678"},
-	    {10, 5, "ABCDE"},
-	    {15, 4, "FGHI"},
-	    {20, 3, "KLM"},
-	    {25, 4, "PQRS"},
+	    {0, 3, "012"}, {5, 4, "5678"}, {10, 5, "ABCDE"}, {15, 4, "FGHI"}, {20, 3, "KLM"}, {25, 4, "PQRS"},
 	};
 
 	for (const auto &test : tests) {
@@ -327,7 +325,7 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 		file_paths.push_back(file_path);
 		auto handle = local_fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 		const string content = "Test content for " + filename;
-		handle->Write(QueryContext(), const_cast<char*>(content.data()), content.size(), /*location=*/0);
+		handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), /*location=*/0);
 		handle->Sync();
 		handle.reset();
 	}
@@ -374,7 +372,8 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 
 	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
 		threads.emplace_back([&, idx]() {
-			auto handle = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS);
+			auto handle =
+			    caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS);
 			string buffer(200, '\0');
 			handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
 			results[idx] = (buffer.substr(0, test_content.size()) == test_content);
@@ -392,4 +391,3 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 }
 
 } // namespace duckdb
-

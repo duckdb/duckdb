@@ -11,7 +11,7 @@ namespace duckdb {
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
 CachingFileHandleWrapper::CachingFileHandleWrapper(CachingFileSystemWrapper &file_system,
-                                                     unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
+                                                   unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
     : FileHandle(file_system, handle->GetPath(), flags), caching_handle(std::move(handle)) {
 	// Flags should already be validated to be read-only in OpenFileExtended
 }
@@ -43,23 +43,28 @@ std::string CachingFileSystemWrapper::GetName() const {
 // Write Operations (Not Supported - Read-Only Filesystem)
 //===----------------------------------------------------------------------===//
 void CachingFileSystemWrapper::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("CachingFileSystemWrapper: Write operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+	throw NotImplementedException("CachingFileSystemWrapper: Write operations are not supported. "
+	                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 }
 
 int64_t CachingFileSystemWrapper::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	throw NotImplementedException("CachingFileSystemWrapper: Write operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+	throw NotImplementedException("CachingFileSystemWrapper: Write operations are not supported. "
+	                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 }
 
 bool CachingFileSystemWrapper::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
-	throw NotImplementedException("CachingFileSystemWrapper: Trim operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+	throw NotImplementedException("CachingFileSystemWrapper: Trim operations are not supported. "
+	                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 }
 
 void CachingFileSystemWrapper::Truncate(FileHandle &handle, int64_t new_size) {
-	throw NotImplementedException("CachingFileSystemWrapper: Truncate operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+	throw NotImplementedException("CachingFileSystemWrapper: Truncate operations are not supported. "
+	                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 }
 
 void CachingFileSystemWrapper::FileSync(FileHandle &handle) {
-	throw NotImplementedException("CachingFileSystemWrapper: FileSync operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+	throw NotImplementedException("CachingFileSystemWrapper: FileSync operations are not supported. "
+	                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 }
 
 //===----------------------------------------------------------------------===//
@@ -81,12 +86,12 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const OpenFileInfo &pa
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
                                                                   optional_ptr<FileOpener> opener) {
 	if (flags.OpenForWriting()) {
-		throw NotImplementedException(
-		    "CachingFileSystemWrapper: Cannot open file for writing. CachingFileSystemWrapper is a read-only caching filesystem.");
+		throw NotImplementedException("CachingFileSystemWrapper: Cannot open file for writing. "
+		                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 	}
 	if (!flags.OpenForReading()) {
-		throw NotImplementedException(
-		    "CachingFileSystemWrapper: File must be opened for reading. CachingFileSystemWrapper is a read-only caching filesystem.");
+		throw NotImplementedException("CachingFileSystemWrapper: File must be opened for reading. "
+		                              "CachingFileSystemWrapper is a read-only caching filesystem.");
 	}
 
 	auto caching_handle = caching_file_system.OpenFile(path, flags);
@@ -110,8 +115,8 @@ void CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr
 	data_ptr_t cached_buffer = nullptr;
 	auto buffer_handle = caching_handle.Read(cached_buffer, NumericCast<idx_t>(nr_bytes), location);
 	if (!buffer_handle.IsValid()) {
-		throw IOException("Failed to read from caching file handle: file=\"%s\", offset=%llu, bytes=%lld", handle.GetPath().c_str(),
-		                  location, nr_bytes);
+		throw IOException("Failed to read from caching file handle: file=\"%s\", offset=%llu, bytes=%lld",
+		                  handle.GetPath().c_str(), location, nr_bytes);
 	}
 
 	// Copy data from cached buffer handle to user's buffer.
@@ -177,7 +182,8 @@ void CachingFileSystemWrapper::RemoveDirectory(const string &directory, optional
 	underlying_file_system.RemoveDirectory(directory, opener);
 }
 
-bool CachingFileSystemWrapper::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+bool CachingFileSystemWrapper::ListFiles(const string &directory,
+                                         const std::function<void(const string &, bool)> &callback,
                                          FileOpener *opener) {
 	return underlying_file_system.ListFiles(directory, callback, opener);
 }
@@ -310,4 +316,3 @@ bool CachingFileSystemWrapper::SubSystemIsDisabled(const string &name) {
 }
 
 } // namespace duckdb
-
