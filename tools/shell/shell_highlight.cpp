@@ -42,8 +42,10 @@ static HighlightElement highlight_elements[] = {
     {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
+    {"warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
-    {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
+    {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD},
+};
 
 const HighlightElement &ShellHighlight::GetHighlightElement(HighlightElementType type) {
 	auto index = static_cast<uint32_t>(type);

@@ -3,6 +3,7 @@
 #include "shell_state.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "shell_highlight.hpp"
+#include "duckdb/logging/log_storage.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -1220,6 +1221,16 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 	default:
 		throw std::runtime_error("Unsupported mode for GetRenderer");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Shell Logging Storage
+//===--------------------------------------------------------------------===//
+
+void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+                                    const string &log_message, const duckdb::RegisteredLoggingContext &context) {
+	shell_highlight.PrintText("Warning:\n", PrintOutput::STDOUT, HighlightElementType::WARNING);
+	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, HighlightElementType::NONE);
 }
 
 } // namespace duckdb_shell

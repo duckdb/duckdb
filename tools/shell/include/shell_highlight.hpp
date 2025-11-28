@@ -50,6 +50,7 @@ enum class HighlightElementType : uint32_t {
 	TABLE_LAYOUT,
 	VIEW_LAYOUT,
 	PRIMARY_KEY_COLUMN,
+	WARNING,
 	NONE
 };
 
