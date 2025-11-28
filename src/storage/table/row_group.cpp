@@ -1028,7 +1028,7 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		if (info.options.transaction_id != MAX_TRANSACTION_ID) {
 			// a transaction id is specified - we might only have to checkpoint a part of this row group
 			// figure out how many rows of this row group we need to checkpoint
-			TransactionData checkpoint_transaction(MAX_TRANSACTION_ID, info.options.transaction_id);
+			TransactionData checkpoint_transaction(info.options.transaction_id, info.options.transaction_id);
 			write_data.write_count = row_group.get().GetCheckpointRowCount(checkpoint_transaction);
 			if (write_data.write_count.IsValid() && write_data.write_count.GetIndex() != 0) {
 				throw InternalException("GetCheckpointRowCount returned a non-zero valid value, this means we need to "

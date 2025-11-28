@@ -9,8 +9,8 @@ SET checkpoint_threshold='1TB'
 
 # no sleep means data loss
 # sleep means too much data (caused by checkpoint always checkpointing ALL committed data)
-statement ok
-SET debug_checkpoint_sleep_ms=100
+# statement ok
+# SET debug_checkpoint_sleep_ms=100
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
