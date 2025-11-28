@@ -454,8 +454,11 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 		if ((bitmap & (uint64_t(1) << bin_index)) == 0) {
 			g_imprint_pruned_segments++;
 
-			IMPRINT_LOG(StringUtil::Format("[imprint-check] prune for equal col bitmap=0x%016llx bin=%d constant=%s",
-			                               bitmap, bin_index, Value::CreateValue(constant).ToString()));
+			string min_str = std::to_string(min);
+			string max_str = std::to_string(max);
+			IMPRINT_LOG(StringUtil::Format(
+			    "[imprint-check][equal] prune: bitmap=0x%016llx bin=%d constant=%s min=%s max=%s", bitmap, bin_index,
+			    Value::CreateValue(constant).ToString().c_str(), min_str.c_str(), max_str.c_str()));
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	} else if (comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
@@ -468,20 +471,33 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 		uint64_t lower_bits = (bin_index == 0) ? 0 : ((1ULL << bin_index) - 1);
 		uint64_t greater_than_mask = all_bits & ~lower_bits;
 
+		// print greater_than_mask for debugging
+		string min_str = std::to_string(min);
+		string max_str = std::to_string(max);
+		IMPRINT_LOG(StringUtil::Format(
+		    "[imprint-check][greater_than] stats: bitmap=0x%016llx bin_index=%d bins=%d all_bits=0x%016llx "
+		    "lower_bits=0x%016llx greater_than_mask=0x%016llx constant=%s min=%s max=%s",
+		    bitmap, bin_index, bins, all_bits, lower_bits, greater_than_mask,
+		    Value::CreateValue(constant).ToString().c_str(), min_str.c_str(), max_str.c_str()));
+
 		// if no matching bins, prune
 		if ((bitmap & greater_than_mask) == 0) {
 			g_imprint_pruned_segments++;
 
-			IMPRINT_LOG(StringUtil::Format("[imprint-check] prune for ge col bitmap=0x%016llx bin=%d constant=%s",
-			                               bitmap, bin_index, Value::CreateValue(constant).ToString()));
+			IMPRINT_LOG(StringUtil::Format(
+			    "[imprint-check][greater_than] prune: bitmap=0x%016llx bin=%d constant=%s min=%s max=%s", bitmap,
+			    bin_index, Value::CreateValue(constant).ToString().c_str(), min_str.c_str(), max_str.c_str()));
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	}
 	// TODO: ADD MORE CONDITIONS HERE
 
 	// otherwise, still need to scan
-	IMPRINT_LOG(StringUtil::Format("[imprint-check] need scanning: bitmap=0x%016llx bin=%d constant=%s", bitmap,
-	                               bin_index, Value::CreateValue(constant).ToString()));
+	string min_str = std::to_string(min);
+	string max_str = std::to_string(max);
+	IMPRINT_LOG(StringUtil::Format("[imprint-check] need scanning: bitmap=0x%016llx bin=%d constant=%s min=%s max=%s",
+	                               bitmap, bin_index, Value::CreateValue(constant).ToString().c_str(), min_str.c_str(),
+	                               max_str.c_str()));
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 

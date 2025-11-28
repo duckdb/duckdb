@@ -97,16 +97,26 @@ void RowGroupCollection::BuildColumnImprints(idx_t column_idx) {
 		// get the coulmn data for the target column
 		auto &col_data = row_group.GetColumn(StorageIndex(column_idx));
 
+		// track if any segment in this row group was modified
+		// bool row_group_modified = false;
+
 		// iterate thru all the segments
 		for (auto &segment_node_ptr : col_data.ReferenceSegments()) {
+			// build imprint for this segment
 			NumericStats::BuildImprintForSegment(col_data, *segment_node_ptr);
 
 			// increment the built counter for the log
 			auto &segment = *segment_node_ptr->node;
 			if (NumericStats::HasImprint(segment.stats.statistics)) {
 				built++;
+				// row_group_modified = true;
 			}
 		}
+
+		// mark the row group as changed
+		// if (row_group_modified) {
+		// 	row_group.has_changes = true;
+		// }
 	}
 
 	// summary log

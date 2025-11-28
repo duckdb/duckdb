@@ -480,6 +480,63 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
 
+		// get current segment stats for logging
+		auto &column_scan_state = state.column_scans[column_idx];
+		auto current_segment = column_scan_state.current;
+		if (current_segment) {
+			auto &segment_stats = current_segment->node->stats.statistics;
+			auto &col_data = GetColumn(base_column_idx);
+			auto segment_type = col_data.type;
+
+			// print min/max if it's numeric type
+			if (NumericStats::HasMinMax(segment_stats)) {
+				string min_str, max_str;
+				auto internal_type = segment_type.InternalType();
+				switch (internal_type) {
+				case PhysicalType::INT8:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<int8_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<int8_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::INT16:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<int16_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<int16_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::INT32:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<int32_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<int32_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::INT64:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<int64_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<int64_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::UINT8:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<uint8_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<uint8_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::UINT16:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<uint16_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<uint16_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::UINT32:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<uint32_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<uint32_t>(segment_stats)).ToString();
+					break;
+				case PhysicalType::UINT64:
+					min_str = Value::CreateValue(NumericStats::GetMinUnsafe<uint64_t>(segment_stats)).ToString();
+					max_str = Value::CreateValue(NumericStats::GetMaxUnsafe<uint64_t>(segment_stats)).ToString();
+					break;
+				default:
+					min_str = "N/A";
+					max_str = "N/A";
+					break;
+				}
+				fprintf(stderr, "[segment-stats] col_idx=%lld row_start=%lld count=%lld type=%s min=%s max=%s\n",
+				        static_cast<long long>(base_column_idx), static_cast<long long>(current_segment->row_start),
+				        static_cast<long long>(current_segment->node->count), segment_type.ToString().c_str(),
+				        min_str.c_str(), max_str.c_str());
+			}
+		}
+
 		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
 
 		// Increment segment checked counter
@@ -490,8 +547,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		}
 
 		// check zone map segment.
-		auto &column_scan_state = state.column_scans[column_idx];
-		auto current_segment = column_scan_state.current;
+		// auto &column_scan_state = state.column_scans[column_idx];
+		// auto current_segment = column_scan_state.current;
 		if (!current_segment) {
 			// no segment to skip
 			continue;

@@ -6,12 +6,10 @@ SELECT imprint_stats('reset');
 
 -- for equality
 
-EXPLAIN ANALYZE
 SELECT 'OFF / fact_sorted / value = 5000000' AS case, COUNT(*) AS cnt
 FROM fact_sorted
 WHERE value = 5000000;
 
-EXPLAIN ANALYZE
 SELECT 'OFF / fact_random / value = 5000000' AS case, COUNT(*) AS cnt
 FROM fact_random
 WHERE value = 5000000;
