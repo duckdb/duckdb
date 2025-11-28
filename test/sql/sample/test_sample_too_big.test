@@ -11,9 +11,9 @@ INSERT INTO t1 VALUES(1), (2), (3), (3), (5);
 statement error
 SELECT * FROM t1 TABLESAMPLE RESERVOIR(1222222220022220);
 ----
-<REGEX>:.*Cannot sample over.*
+<REGEX>:.*Sample rows.*out of range.*
 
 statement error
 SELECT * FROM t1 WHERE a IN (SELECT * FROM t1 TABLESAMPLE RESERVOIR(1222222220022220));
 ----
-<REGEX>:.*Cannot sample over.*
+<REGEX>:.*Sample rows.*out of range.*
