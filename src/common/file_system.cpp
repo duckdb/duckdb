@@ -346,7 +346,8 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 			}
 		}
 
-		bool clamp_to_root = is_absolute || !drive_prefix.empty();
+		bool drive_root = !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
+		bool clamp_to_root = is_absolute || drive_root || !drive_prefix.empty();
 		vector<string> stack;
 		for (auto &part : parts) {
 			if (part.empty() || part == ".") {
@@ -364,7 +365,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 		}
 
 		string result;
-		if (is_absolute) {
+		if (is_absolute || drive_root) {
 			result = drive_prefix.empty() ? separator : drive_prefix + separator;
 		} else if (!drive_prefix.empty()) {
 			result = drive_prefix;
@@ -372,7 +373,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 
 		for (idx_t i = 0; i < stack.size(); i++) {
 			bool need_separator = !result.empty() && result.back() != separator[0];
-			if (!is_absolute && !drive_prefix.empty() && result == drive_prefix) {
+			if (!is_absolute && !drive_root && !drive_prefix.empty() && result == drive_prefix) {
 				// drive-relative path keeps the drive prefix without an extra separator
 				need_separator = false;
 			}
@@ -384,7 +385,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 
 		if (result.empty() && !drive_prefix.empty()) {
 			result = drive_prefix;
-			if (is_absolute) {
+			if (is_absolute || drive_root) {
 				result += separator;
 			}
 		}
