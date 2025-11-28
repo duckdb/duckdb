@@ -92,6 +92,8 @@ enum class BlockIteratorStateType : int8_t;
 
 enum class BlockState : uint8_t;
 
+enum class BufferedIndexReplay : uint8_t;
+
 enum class CAPIResultSetType : uint8_t;
 
 enum class CSVState : uint8_t;
@@ -442,6 +444,10 @@ enum class VariantChildLookupMode : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
 
+enum class VariantStatsShreddingState : uint8_t;
+
+enum class VariantValueType : uint8_t;
+
 enum class VectorAuxiliaryDataType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
@@ -554,6 +560,9 @@ const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType val
 
 template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
+
+template<>
+const char* EnumUtil::ToChars<BufferedIndexReplay>(BufferedIndexReplay value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
@@ -1081,6 +1090,12 @@ template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
+const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
+
+template<>
+const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
+
+template<>
 const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
 template<>
@@ -1203,6 +1218,9 @@ BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *
 
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);
+
+template<>
+BufferedIndexReplay EnumUtil::FromString<BufferedIndexReplay>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
@@ -1728,6 +1746,12 @@ VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
+
+template<>
+VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
+
+template<>
+VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
 
 template<>
 VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);

@@ -56,6 +56,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"debug_force_external", {Value(true)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
+	    {"variant_minimum_shredding_size", {Value::INTEGER(-1)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
 	    {"default_secret_storage", {"custom_storage"}},
@@ -165,6 +166,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "disable_database_invalidation", // cant change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
+	    "force_variant_shredding",
 	    "streaming_buffer_size",
 	    "log_query_path",
 	    "password",
@@ -185,7 +187,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_progress_bar_print",
 	    "progress_bar_time",
 	    "index_scan_max_count",
-	    "profiling_mode"};
+	    "profiling_mode",
+	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
 

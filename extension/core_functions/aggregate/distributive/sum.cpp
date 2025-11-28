@@ -94,20 +94,20 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		function.bind = SumNoOverflowBind;
-		function.serialize = SumNoOverflowSerialize;
-		function.deserialize = SumNoOverflowDeserialize;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		function.SetBindCallback(SumNoOverflowBind);
+		function.SetSerializeCallback(SumNoOverflowSerialize);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize);
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		function.bind = SumNoOverflowBind;
-		function.serialize = SumNoOverflowSerialize;
-		function.deserialize = SumNoOverflowDeserialize;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		function.SetBindCallback(SumNoOverflowBind);
+		function.SetSerializeCallback(SumNoOverflowSerialize);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize);
 		return function;
 	}
 	default:
@@ -118,8 +118,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
 	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind);
-	aggr.serialize = SumNoOverflowSerialize;
-	aggr.deserialize = SumNoOverflowDeserialize;
+	aggr.SetSerializeCallback(SumNoOverflowSerialize);
+	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
 }
 
@@ -163,13 +163,13 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	case PhysicalType::BOOL: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 
@@ -177,23 +177,23 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.statistics = SumPropagateStats;
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.SetStatisticsCallback(SumPropagateStats);
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.statistics = SumPropagateStats;
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.SetStatisticsCallback(SumPropagateStats);
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 	case PhysicalType::INT128: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
 	default:
@@ -208,7 +208,7 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	function.name = "sum";
 	function.arguments[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
 }
 

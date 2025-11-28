@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/arena_containers.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -578,7 +578,8 @@ unique_ptr<LocalSourceState> PhysicalTopN::GetLocalSourceState(ExecutionContext 
 	return make_uniq<TopNLocalSourceState>();
 }
 
-SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalTopN::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
 	if (limit == 0) {
 		return SourceResultType::FINISHED;
 	}

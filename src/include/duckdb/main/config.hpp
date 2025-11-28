@@ -40,6 +40,7 @@
 
 namespace duckdb {
 
+class BlockAllocator;
 class BufferManager;
 class BufferPool;
 class CastFunctionSet;
@@ -165,6 +166,10 @@ struct DBConfigOptions {
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
+	//! Force a specific schema for VARIANT shredding
+	LogicalType force_variant_shredding = LogicalType::INVALID;
+	//! Minimum size of a rowgroup to enable VARIANT shredding, -1 to disable
+	int64_t variant_minimum_shredding_size = 30000;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -219,6 +224,8 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
+	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
+	idx_t block_allocator_size = 0;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -246,6 +253,8 @@ public:
 	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
+	//! The block allocator used by the system
+	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
 	//! Extensions made to the parser

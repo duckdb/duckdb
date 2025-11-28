@@ -10,7 +10,10 @@
     {
       "reason": "Multi-statement containing unimplemented statementType",
       "paths": [
-        "test/sql/delete/test_segment_deletes.test"
+        "test/sql/delete/test_segment_deletes.test",
+        "test/sql/types/union/union_join.test",
+        "test/sql/catalog/did_you_mean.test",
+        "test/sql/storage/wal/wal_view_storage.test"
       ]
     },
     {
@@ -31,7 +34,38 @@
         "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
         "test/sql/index/art/scan/test_art_scan_coverage.test",
         "test/sql/index/art/storage/test_art_storage.test",
-        "test/sql/cte/materialized/dml_materialized_cte.test"
+        "test/sql/cte/materialized/dml_materialized_cte.test",
+        "test/sql/storage/wal/wal_index_delete_gen.test",
+        "test/sql/cte/materialized/dml_materialized_cte.test",
+        "test/issues/general/test_15432.test",
+        "test/sql/types/list/unnest_aggregate.test",
+        "test/sql/generated_columns/virtual/create_table.test",
+        "test/sql/binder/function_chaining_19035.test",
+        "test/sql/subquery/complex/correlated_internal_issue_5975.test",
+        "test/sql/subquery/scalar/test_issue_7079.test",
+        "test/sql/aggregate/qualify/test_qualify_macro.test",
+        "test/sql/catalog/function/test_complex_macro.test",
+        "test/sql/catalog/function/macro_query_table.test",
+        "test/sql/catalog/function/test_cte_macro.test",
+        "test/sql/catalog/function/test_subquery_macro.test",
+        "test/sql/catalog/function/test_macro_with_unknown_types.test",
+        "test/sql/catalog/function/test_macro_issue_14276.test",
+        "test/sql/catalog/function/test_sequence_macro.test",
+        "test/sql/catalog/function/test_simple_macro.test",
+        "test/sql/function/list/lambdas/arrow/test_lambda_arrow_storage_deprecated.test",
+        "test/sql/function/list/lambdas/arrow/expression_iterator_cases_deprecated.test",
+        "test/sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test",
+        "test/sql/function/list/lambdas/incorrect.test",
+        "test/sql/function/list/lambdas/lambdas_and_macros.test",
+        "test/sql/function/list/lambdas/expression_iterator_cases.test",
+        "test/sql/export/export_macros.test",
+        "test/sql/catalog/function/test_recursive_macro.test",
+        "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
+        "test/sql/catalog/function/test_macro_default_arg_with_dependencies.test",
+        "test/sql/attach/reattach_schema.test",
+        "test/sql/pivot/pivot_enum.test",
+        "test/sql/types/enum/test_5983.test",
+        "test/sql/binder/test_alias_map_in_subquery.test"
       ]
     },
     {
@@ -39,6 +73,20 @@
       "paths": [
         "test/sql/storage/types/struct/wal_struct_storage.test",
         "test/sql/storage/types/struct/struct_storage.test"
+      ]
+    },
+    {
+      "reason": "Case insensitive preservation",
+      "paths": [
+        "test/sql/settings/setting_preserve_identifier_case.test"
+      ]
+    },
+    {
+      "reason": "Create Table Statement",
+      "paths": [
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/export/export_generated_columns.test",
+        "test/sql/export/export_database.test"
       ]
     },
     {
@@ -92,7 +140,20 @@
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/attach/attach_dbname_quotes.test"
+        "test/sql/attach/attach_dbname_quotes.test",
+        "test/sql/table_function/sqlite_master_quotes.test",
+        "test/sql/keywords/escaped_quotes_expressions.test",
+        "test/sql/keywords/keywords_in_expressions.test",
+        "test/sql/show_select/test_describe_quoted.test",
+        "test/sql/show_select/test_summarize_quoted.test",
+        "test/sql/pragma/test_show_tables.test",
+        "test/sql/export/export_quoted_enum.test"
+      ]
+    },
+    {
+      "reason": "Parser error",
+      "paths": [
+        "test/sql/catalog/issue_9459.test"
       ]
     },
     {

@@ -6,6 +6,7 @@
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -330,6 +332,26 @@ public:
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
 };
 
+ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
+                                                     vector<unique_ptr<Expression>> expressions_p)
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
+      executor(context, expressions) {
+	chunk.Initialize(buffer.GetAllocator(), types);
+}
+
+//! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
+//! no locks Either every local state needs its own copy of this or we need a lock so its used by one thread at a time..
+//! The former has my preference
+ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollection &input) {
+	buffer.Reset();
+	for (auto &input_chunk : input.Chunks()) {
+		chunk.Reset();
+		executor.Execute(input_chunk, chunk);
+		buffer.Append(chunk);
+	}
+	return buffer;
+}
+
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              ShreddingType shredding_types_p, const vector<pair<string, string>> &kv_metadata,
@@ -353,6 +375,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 
 	if (encryption_config) {
 		auto &config = DBConfig::GetConfig(context);
+
+		// To ensure we can write, we need to autoload httpfs
+		if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+			ExtensionHelper::TryAutoLoadExtension(context, "httpfs");
+		}
+
 		if (config.encryption_util && debug_use_openssl) {
 			// Use OpenSSL
 			encryption_util = config.encryption_util;
@@ -378,8 +406,6 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.created_by =
 	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
-	file_meta_data.schema.resize(1);
-
 	for (auto &kv_pair : kv_metadata) {
 		duckdb_parquet::KeyValue kv;
 		kv.__set_key(kv_pair.first);
@@ -388,37 +414,132 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		file_meta_data.__isset.key_value_metadata = true;
 	}
 
-	// populate root schema object
-	file_meta_data.schema[0].name = "duckdb_schema";
-	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
-	file_meta_data.schema[0].__isset.num_children = true;
-	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
-	file_meta_data.schema[0].__isset.repetition_type = true;
-
 	auto &unique_names = column_names;
 	VerifyUniqueNames(unique_names);
 
 	// V1 GeoParquet stores geometries as blobs, no logical type
 	auto allow_geometry = geoparquet_version != GeoParquetVersion::V1;
 
-	// construct the child schemas
+	// construct the column writers
+	D_ASSERT(sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		auto child_schema = ColumnWriter::FillParquetSchema(file_meta_data.schema, sql_types[i], unique_names[i],
-		                                                    allow_geometry, &field_ids, &shredding_types);
-		column_schemas.push_back(std::move(child_schema));
-	}
-	// now construct the writers based on the schemas
-	for (auto &child_schema : column_schemas) {
 		vector<string> path_in_schema;
-		column_writers.push_back(
-		    ColumnWriter::CreateWriterRecursive(context, *this, file_meta_data.schema, child_schema, path_in_schema));
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(context, *this, path_in_schema, sql_types[i],
+		                                                             unique_names[i], allow_geometry, &field_ids,
+		                                                             &shredding_types));
 	}
 }
 
 ParquetWriter::~ParquetWriter() {
 }
 
-void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
+void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers) {
+	D_ASSERT(buffer.ColumnCount() == column_writers.size());
+	vector<unique_ptr<ParquetAnalyzeSchemaState>> states;
+	bool needs_analyze = false;
+	lock_guard<mutex> glock(lock);
+
+	vector<column_t> column_ids;
+	for (idx_t i = 0; i < column_writers.size(); i++) {
+		auto &writer = column_writers[i];
+		auto state = writer->AnalyzeSchemaInit();
+		if (state) {
+			needs_analyze = true;
+			states.push_back(std::move(state));
+			column_ids.push_back(i);
+		} else {
+			states.push_back(nullptr);
+		}
+	}
+
+	if (!needs_analyze) {
+		return;
+	}
+
+	for (auto &chunk : buffer.Chunks(column_ids)) {
+		idx_t index = 0;
+		for (idx_t i = 0; i < column_writers.size(); i++) {
+			auto &state = states[i];
+			if (!state) {
+				continue;
+			}
+			auto &writer = column_writers[i];
+			writer->AnalyzeSchema(*state, chunk.data[index++], chunk.size());
+		}
+	}
+
+	for (idx_t i = 0; i < column_writers.size(); i++) {
+		auto &writer = column_writers[i];
+		auto &state = states[i];
+		if (!state) {
+			continue;
+		}
+		writer->AnalyzeSchemaFinalize(*state);
+	}
+}
+
+void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
+	if (transform_data) {
+		return;
+	}
+
+	vector<LogicalType> transformed_types;
+	vector<unique_ptr<Expression>> transform_expressions;
+	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+		auto &column_writer = *column_writers[col_idx];
+		auto &original_type = sql_types[col_idx];
+		auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
+		if (!column_writer.HasTransform()) {
+			transformed_types.push_back(original_type);
+			transform_expressions.push_back(std::move(expr));
+			continue;
+		}
+		transformed_types.push_back(column_writer.TransformedType());
+		transform_expressions.push_back(column_writer.TransformExpression(std::move(expr)));
+	}
+	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));
+}
+
+void ParquetWriter::InitializeSchemaElements() {
+	//! Populate the schema elements of the parquet file we're writing
+	lock_guard<mutex> glock(lock);
+	if (!file_meta_data.schema.empty()) {
+		return;
+	}
+	// populate root schema object
+	file_meta_data.schema.resize(1);
+	file_meta_data.schema[0].name = "duckdb_schema";
+	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
+	file_meta_data.schema[0].__isset.num_children = true;
+	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+	file_meta_data.schema[0].__isset.repetition_type = true;
+
+	for (auto &column_writer : column_writers) {
+		column_writer->FinalizeSchema(file_meta_data.schema);
+	}
+}
+
+void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result,
+                                    unique_ptr<ParquetWriteTransformData> &transform_data) {
+	AnalyzeSchema(raw_buffer, column_writers);
+
+	bool requires_transform = false;
+	for (auto &writer_p : column_writers) {
+		auto &writer = *writer_p;
+
+		if (writer.HasTransform()) {
+			requires_transform = true;
+			break;
+		}
+	}
+
+	reference<ColumnDataCollection> buffer_ref(raw_buffer);
+	if (requires_transform) {
+		InitializePreprocessing(transform_data);
+		buffer_ref = transform_data->ApplyTransform(raw_buffer);
+	}
+	auto &buffer = buffer_ref.get();
+
 	// We write 8 columns at a time so that iterating over ColumnDataCollection is more efficient
 	static constexpr idx_t COLUMNS_PER_PASS = 8;
 
@@ -429,6 +550,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	auto &row_group = result.row_group;
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
 	row_group.__isset.file_offset = true;
+
+	InitializeSchemaElements();
 
 	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
@@ -541,7 +664,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	row_group.__isset.total_compressed_size = true;
 
 	if (encryption_config) {
-		auto row_group_ordinal = num_row_groups.load();
+		const auto row_group_ordinal = file_meta_data.row_groups.size();
 		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
 			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
 		}
@@ -557,13 +680,21 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	++num_row_groups;
 }
 
-void ParquetWriter::Flush(ColumnDataCollection &buffer) {
+void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data) {
 	if (buffer.Count() == 0) {
 		return;
 	}
 
+	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
+	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
+	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
+	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
+	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.
+	// PhysicalCopyToFile should be reworked to use prepare/flush batch separately for better accuracy.
+	total_written += buffer.SizeInBytes() / 2;
+
 	PreparedRowGroup prepared_row_group;
-	PrepareRowGroup(buffer, prepared_row_group);
+	PrepareRowGroup(buffer, prepared_row_group, transform_data);
 	buffer.Reset();
 
 	FlushRowGroup(prepared_row_group);
@@ -807,20 +938,25 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	}
 }
 
-static void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
                             string base_name = string()) {
-	if (!base_name.empty()) {
-		base_name += ".";
+	auto &schema = column_writer.Schema();
+	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
+		if (!base_name.empty()) {
+			base_name += ".";
+		}
+		base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
 	}
-	base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
-	if (schema.children.empty()) {
+
+	auto &children = column_writer.ChildWriters();
+	if (children.empty()) {
 		auto unifier = GetBaseStatsUnifier(schema.type);
 		unifier->column_name = std::move(base_name);
 		unifiers.push_back(std::move(unifier));
 		return;
 	}
-	for (auto &child_schema : schema.children) {
-		GetStatsUnifier(child_schema, unifiers, base_name);
+	for (auto &child_writer : children) {
+		GetStatsUnifier(*child_writer, unifiers, base_name);
 	}
 }
 
@@ -917,6 +1053,8 @@ void ParquetWriter::GatherWrittenStatistics() {
 }
 
 void ParquetWriter::Finalize() {
+	InitializeSchemaElements();
+
 	// dump the bloom filters right before footer, not if stuff is encrypted
 
 	for (auto &bloom_filter_entry : bloom_filters) {
@@ -1009,7 +1147,7 @@ void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_sta
 	stats_accumulator = make_uniq<ParquetStatsAccumulator>();
 	// create the per-column stats unifiers
 	for (auto &column_writer : column_writers) {
-		GetStatsUnifier(column_writer->Schema(), stats_accumulator->stats_unifiers);
+		GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
 	}
 }
 

@@ -4,6 +4,10 @@
 #include "fsst.h"
 #include "duckdb/common/fsst.hpp"
 
+#if defined(__MVS__) && !defined(alloca)
+#define alloca __builtin_alloca
+#endif
+
 namespace duckdb {
 namespace dict_fsst {
 
@@ -17,7 +21,7 @@ DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &che
           1                                                                // maximum_target_capacity_p (byte capacity)
           ),
       analyze(std::move(analyze_p)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+	CreateEmptySegment();
 }
 
 DictFSSTCompressionState::~DictFSSTCompressionState() {
@@ -233,12 +237,12 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 	dictionary_encoding_buffer.clear();
 }
 
-void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
+void DictFSSTCompressionState::CreateEmptySegment() {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-	                                                                info.GetBlockManager());
+	auto compressed_segment =
+	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 	current_segment = std::move(compressed_segment);
 
 	// Reset the pointers into the current segment.
@@ -273,7 +277,6 @@ void DictFSSTCompressionState::Flush(bool final) {
 
 	current_segment->count = tuple_count;
 
-	auto next_start = current_segment->start + current_segment->count;
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
@@ -297,7 +300,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 	total_tuple_count += tuple_count;
 
 	if (!final) {
-		CreateEmptySegment(next_start);
+		CreateEmptySegment();
 	}
 }
 
@@ -863,6 +866,8 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 		} while (false);
 		if (!is_null) {
 			UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
+		} else {
+			current_segment->stats.statistics.SetHasNullFast();
 		}
 		tuple_count++;
 	}

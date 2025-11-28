@@ -140,7 +140,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE) {
 		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {

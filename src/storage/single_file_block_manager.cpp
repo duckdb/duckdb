@@ -14,6 +14,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -66,8 +67,8 @@ void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
 
 void GenerateDBIdentifier(uint8_t *db_identifier) {
 	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(db_identifier,
-	                                                                          MainHeader::DB_IDENTIFIER_LEN);
+	RandomEngine engine;
+	engine.RandomData(db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 }
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
@@ -247,7 +248,7 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db_p), options.block_alloc_size, options.block_header_size),
-      db(db_p), path(path_p), header_buffer(Allocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
+      db(db_p), path(path_p), header_buffer(BlockAllocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
                                             Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                             options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
@@ -361,6 +362,15 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
+	auto encryption_enabled = options.encryption_options.encryption_enabled;
+	if (encryption_enabled) {
+		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+			throw InvalidConfigurationException(
+			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
+			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
+		}
+	}
+
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
@@ -375,7 +385,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// Derive the encryption key and add it to the cache.
 	// Not used for plain databases.
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-	auto encryption_enabled = options.encryption_options.encryption_enabled;
 
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
@@ -486,6 +495,15 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	if (main_header.IsEncrypted()) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
+
+			//! Check if our encryption module can write, if not, we should throw here
+			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+				throw InvalidConfigurationException(
+				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
+				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
+				    "httpfs`.");
+			}
+
 			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache
 			CheckAndAddEncryptionKey(main_header);
@@ -505,6 +523,19 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       path, EncryptionTypes::CipherToString(config_cipher),
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
+
+		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// of the cipher used instead of this trick to avoid downgrades
+		if (stored_cipher != EncryptionTypes::GCM) {
+			if (config_cipher == EncryptionTypes::INVALID) {
+				throw CatalogException(
+				    "Cannot open encrypted database \"%s\" without explicitly specifying the "
+				    "encryption cipher for security reasons. Please make sure you understand the security implications "
+				    "and re-attach the database specifying the desired cipher.",
+				    path);
+			}
+		}
+
 		// this is ugly, but the storage manager does not know the cipher type before
 		db.GetStorageManager().SetCipher(stored_cipher);
 	}
@@ -619,7 +650,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
 		temp_buffer_manager =
-		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(context, *handle, location);
 	} else {
@@ -676,7 +707,6 @@ void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 	for (idx_t i = 0; i < free_list_count; i++) {
 		auto block = reader.Read<block_id_t>(context);
 		free_list.insert(block);
-		newly_freed_list.insert(block);
 	}
 	auto multi_use_blocks_count = reader.Read<uint64_t>(context);
 	multi_use_blocks.clear();
@@ -694,17 +724,19 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
-	lock_guard<mutex> lock(block_lock);
 	block_id_t block;
-	if (!free_list.empty()) {
-		// The free list is not empty, so we take its first element.
-		block = *free_list.begin();
-		// erase the entry from the free list again
-		free_list.erase(free_list.begin());
-		newly_freed_list.erase(block);
-	} else {
-		block = max_block++;
+	{
+		lock_guard<mutex> lock(block_lock);
+		if (!free_list.empty()) {
+			// The free list is not empty, so we take its first element.
+			block = *free_list.begin();
+			// erase the entry from the free list again
+			free_list.erase(free_list.begin());
+		} else {
+			block = max_block++;
+		}
 	}
+	D_ASSERT(!BlockIsRegistered(block));
 	return block;
 }
 
@@ -715,18 +747,6 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	} else {
 		return max_block;
 	}
-}
-
-void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
-	D_ASSERT(block_id >= 0);
-	D_ASSERT(block_id < max_block);
-	if (free_list.find(block_id) != free_list.end()) {
-		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
-	}
-	multi_use_blocks.erase(block_id);
-	free_list.insert(block_id);
-	newly_freed_list.insert(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -745,7 +765,6 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 	} else if (free_list.find(block_id) != free_list.end()) {
 		// block is currently in the free list - erase
 		free_list.erase(block_id);
-		newly_freed_list.erase(block_id);
 	} else {
 		// block is already in use - increase reference count
 		IncreaseBlockReferenceCountInternal(block_id);
@@ -891,7 +910,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, *this);
+		result = make_uniq<Block>(BlockAllocator::Get(db), block_id, *this);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
@@ -978,7 +997,6 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
 	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
@@ -1035,13 +1053,20 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
 
-	lock_guard<mutex> lock(block_lock);
+	unique_lock<mutex> lock(block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
+	set<block_id_t> all_free_blocks = free_list;
+	set<block_id_t> fully_freed_blocks;
 	for (auto &block : modified_blocks) {
-		free_list.insert(block);
-		newly_freed_list.insert(block);
+		all_free_blocks.insert(block);
+		if (!BlockIsRegistered(block)) {
+			free_list.insert(block);
+			fully_freed_blocks.insert(block);
+		} else {
+			free_blocks_in_use.insert(block);
+		}
 	}
 	modified_blocks.clear();
 
@@ -1055,8 +1080,8 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		auto ptr = writer.GetMetaBlockPointer();
 		header.free_list = ptr.block_pointer;
 
-		writer.Write<uint64_t>(free_list.size());
-		for (auto &block_id : free_list) {
+		writer.Write<uint64_t>(all_free_blocks.size());
+		for (auto &block_id : all_free_blocks) {
 			writer.Write<block_id_t>(block_id);
 		}
 		writer.Write<uint64_t>(multi_use_blocks.size());
@@ -1070,7 +1095,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
+	lock.unlock();
 	metadata_manager.Flush();
+
 	header.block_count = NumericCast<idx_t>(max_block);
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
@@ -1106,31 +1133,48 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
-	// Release the free blocks to the filesystem.
-	TrimFreeBlocks();
+	// Release the free fully freed blocks to the filesystem.
+	TrimFreeBlocks(fully_freed_blocks);
 }
 
 void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::TrimFreeBlocks() {
-	if (DBConfig::Get(db).options.trim_free_blocks) {
-		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {
-			block_id_t first = *itr;
-			block_id_t last = first;
-			// Find end of contiguous range.
-			for (++itr; itr != newly_freed_list.end() && (*itr == last + 1); ++itr) {
-				last = *itr;
-			}
-			// We are now one too far.
-			--itr;
-			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
-			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
-		}
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	// check if it is part of the newly free list
+	lock_guard<mutex> lock(block_lock);
+	auto entry = free_blocks_in_use.find(id);
+	if (entry != free_blocks_in_use.end()) {
+		// it is! move it to the regular free list so the block can be re-used
+		free_list.insert(id);
+		free_blocks_in_use.erase(entry);
 	}
-	newly_freed_list.clear();
+}
+
+void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
+	auto block_count = NumericCast<idx_t>(end + 1 - start);
+	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+}
+
+void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
+	if (!DBConfig::Get(db).options.trim_free_blocks) {
+		return;
+	}
+	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+		block_id_t first = *itr;
+		block_id_t last = first;
+		// Find end of contiguous range.
+		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+			last = *itr;
+		}
+		// We are now one too far.
+		--itr;
+		// Trim the range.
+		TrimFreeBlockRange(first, last);
+	}
 }
 
 } // namespace duckdb

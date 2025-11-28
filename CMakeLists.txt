@@ -419,7 +419,11 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
-if(WIN32 OR ZOS)
+if(ZOS)
+  set(EXTENSION_STATIC_BUILD TRUE)
+endif()
+
+if(WIN32)
   set(EXTENSION_STATIC_BUILD TRUE)
   add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
@@ -539,10 +543,6 @@ endif()
 
 if(LATEST_STORAGE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
-endif()
-
-if(BLOCK_VERIFICATION)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_VERIFICATION")
 endif()
 
 if(DEBUG_ALLOCATION)
@@ -850,7 +850,7 @@ else()
 endif()
 
 set(LOCAL_EXTENSION_REPO FALSE)
-if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+if (NOT ${EXTENSION_CONFIG_BUILD} AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
   if (NOT Python3_FOUND)
     add_custom_target(
           duckdb_local_extension_repo ALL)

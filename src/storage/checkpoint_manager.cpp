@@ -213,18 +213,21 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(context, header);
 
-#ifdef DUCKDB_BLOCK_VERIFICATION
-	// extend verify_block_usage_count
-	auto metadata_info = storage_manager.GetMetadataInfo();
-	for (auto &info : metadata_info) {
-		verify_block_usage_count[info.block_id]++;
-	}
-	for (auto &entry_ref : catalog_entries) {
-		auto &entry = entry_ref.get();
-		if (entry.type == CatalogType::TABLE_ENTRY) {
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(db.GetDatabase());
+	if (debug_verify_blocks) {
+		// extend verify_block_usage_count
+		auto metadata_info = storage_manager.GetMetadataInfo();
+		for (auto &info : metadata_info) {
+			verify_block_usage_count[info.block_id]++;
+		}
+		for (auto &entry_ref : catalog_entries) {
+			auto &entry = entry_ref.get();
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				continue;
+			}
 			auto &table = entry.Cast<DuckTableEntry>();
 			auto &storage = table.GetStorage();
-			auto segment_info = storage.GetColumnSegmentInfo();
+			auto segment_info = storage.GetColumnSegmentInfo(context);
 			for (auto &segment : segment_info) {
 				verify_block_usage_count[segment.block_id]++;
 				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
@@ -237,9 +240,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 				}
 			}
 		}
+		block_manager.VerifyBlocks(verify_block_usage_count);
 	}
-	block_manager.VerifyBlocks(verify_block_usage_count);
-#endif
 
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
 		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
@@ -538,12 +540,10 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
-	if (auto writer = GetTableDataWriter(table)) {
+	auto writer = GetTableDataWriter(table);
+	if (writer) {
 		writer->WriteTableData(serializer);
 	}
-	// flush any partial blocks BEFORE releasing the table lock
-	// flushing partial blocks updates where data lives and is not thread-safe
-	partial_block_manager.FlushPartialBlocks();
 }
 
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {

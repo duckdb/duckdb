@@ -214,6 +214,10 @@ public:
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
 	}
+	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
+	//! Returns the number of tuples found (can be smaller than the vector capacity).
+	idx_t ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const;
+
 	bool NullValuesAreEqual(idx_t col_idx) const {
 		return null_values_are_equal[col_idx];
 	}
@@ -279,6 +283,8 @@ public:
 	bool single_join_error_on_multiple_rows = true;
 	//! Whether or not to perform deduplication based on join_keys when building ht
 	bool insert_duplicate_keys = true;
+	//! Number of probe matches
+	atomic<idx_t> total_probe_matches {0};
 
 	struct {
 		mutex mj_lock;

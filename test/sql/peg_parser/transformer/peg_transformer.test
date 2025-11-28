@@ -17,4 +17,5 @@ SET threads=1;
 statement error
 select 1;
 ----
-Not implemented Error: Parser override has not yet implemented this transformer rule. (Original error: No transformer function found for rule 'SelectStatement')
+Not implemented Error: Parser override has not yet implemented this transformer rule.
+Original error: No transformer function found for rule 'SelectStatement'

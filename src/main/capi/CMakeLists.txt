@@ -7,6 +7,7 @@ add_library_unity(
   appender-c.cpp
   arrow-c.cpp
   cast_function-c.cpp
+  catalog-c.cpp
   config-c.cpp
   data_chunk-c.cpp
   datetime-c.cpp
@@ -16,6 +17,7 @@ add_library_unity(
   expression-c.cpp
   helper-c.cpp
   hugeint-c.cpp
+  logging-c.cpp
   logical_types-c.cpp
   pending-c.cpp
   prepared-c.cpp

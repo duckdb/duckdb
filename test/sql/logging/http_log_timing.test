@@ -1,0 +1,26 @@
+# name: test/sql/logging/http_log_timing.test
+# description: Test basic logging functionality
+# group: [logging]
+
+require noforcestorage
+
+require httpfs
+
+statement ok
+CALL enable_logging('HTTP')
+
+statement ok
+FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/title.principals.tsv'
+
+# Confirm that our request timing returns something reasonable
+query  III
+SELECT 
+	request.type, 
+	request.duration_ms >= 0,
+	request.duration_ms <= 1000 * 1000
+FROM 
+	duckdb_logs_parsed('HTTP')
+WHERE 
+	request.type='HEAD'
+----
+HEAD	true	true

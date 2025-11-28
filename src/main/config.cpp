@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -77,6 +78,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
+    DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
@@ -88,6 +90,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
+    DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyVectorSetting),
     DUCKDB_SETTING_CALLBACK(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
@@ -124,6 +127,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(FileSearchPathSetting),
     DUCKDB_GLOBAL(ForceBitpackingModeSetting),
     DUCKDB_GLOBAL(ForceCompressionSetting),
+    DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_LOCAL(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     DUCKDB_GLOBAL(HTTPProxySetting),
@@ -177,16 +181,17 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
+    DUCKDB_GLOBAL(VariantMinimumShreddingSize),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 85),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 35),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 104),
-                                                     DUCKDB_SETTING_ALIAS("user", 119),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 118),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 88),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 37),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 107),
+                                                     DUCKDB_SETTING_ALIAS("user", 122),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 121),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

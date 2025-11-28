@@ -71,7 +71,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = Load<BitpackingMode>(data_ptr_cast(metadata_encoded) + 3);
+	metadata.mode = static_cast<BitpackingMode>((*metadata_encoded >> 24) & 0xFF);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
 	return metadata;
 }
@@ -125,6 +125,9 @@ public:
 	bool all_valid;
 	bool all_invalid;
 
+	bool has_valid;
+	bool has_invalid;
+
 	bool can_do_delta;
 	bool can_do_for;
 
@@ -140,6 +143,8 @@ public:
 		delta_offset = 0;
 		all_valid = true;
 		all_invalid = true;
+		has_valid = false;
+		has_invalid = false;
 		can_do_delta = false;
 		can_do_for = false;
 		compression_buffer_idx = 0;
@@ -300,6 +305,8 @@ public:
 	template <class OP = EmptyBitpackingWriter>
 	bool Update(T value, bool is_valid) {
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
+		has_valid = has_valid || is_valid;
+		has_invalid = has_invalid || !is_valid;
 		all_valid = all_valid && is_valid;
 		all_invalid = all_invalid && !is_valid;
 
@@ -383,7 +390,7 @@ public:
 	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 
@@ -482,9 +489,18 @@ public:
 		static void UpdateStats(BitpackingCompressionState<T, WRITE_STATISTICS> *state, idx_t count) {
 			state->current_segment->count += count;
 
-			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+			if (WRITE_STATISTICS) {
+				if (state->state.has_valid) {
+					state->current_segment->stats.statistics.SetHasNoNullFast();
+				}
+				if (state->state.has_invalid) {
+					state->current_segment->stats.statistics.SetHasNullFast();
+				}
+
+				if (!state->state.all_invalid) {
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+				}
 			}
 		}
 	};
@@ -497,12 +513,12 @@ public:
 		       info.GetBlockSize() - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -524,9 +540,8 @@ public:
 
 	void FlushAndCreateSegmentIfFull(idx_t required_data_bytes, idx_t required_meta_bytes) {
 		if (!CanStore(required_data_bytes, required_meta_bytes)) {
-			idx_t row_start = current_segment->start + current_segment->count;
 			FlushSegment();
-			CreateEmptySegment(row_start);
+			CreateEmptySegment();
 		}
 	}
 

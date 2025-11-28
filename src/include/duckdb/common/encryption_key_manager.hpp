@@ -64,6 +64,8 @@ public:
 	static void KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
 	                                        data_ptr_t derived_key);
 	static string Base64Decode(const string &key);
+
+	//! Generate a (non-cryptographically secure) random key ID
 	static string GenerateRandomKeyID();
 
 public:
@@ -72,6 +74,7 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
+	mutable mutex lock;
 	std::unordered_map<std::string, EncryptionKey> derived_keys;
 };
 

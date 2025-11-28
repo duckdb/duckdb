@@ -270,6 +270,20 @@ typedef enum duckdb_config_option_scope {
 	DUCKDB_CONFIG_OPTION_SCOPE_GLOBAL = 3,
 } duckdb_config_option_scope;
 
+//! An enum over DuckDB's catalog entry types.
+typedef enum duckdb_catalog_entry_type {
+	DUCKDB_CATALOG_ENTRY_TYPE_INVALID = 0,
+	DUCKDB_CATALOG_ENTRY_TYPE_TABLE = 1,
+	DUCKDB_CATALOG_ENTRY_TYPE_SCHEMA = 2,
+	DUCKDB_CATALOG_ENTRY_TYPE_VIEW = 3,
+	DUCKDB_CATALOG_ENTRY_TYPE_INDEX = 4,
+	DUCKDB_CATALOG_ENTRY_TYPE_PREPARED_STATEMENT = 5,
+	DUCKDB_CATALOG_ENTRY_TYPE_SEQUENCE = 6,
+	DUCKDB_CATALOG_ENTRY_TYPE_COLLATION = 7,
+	DUCKDB_CATALOG_ENTRY_TYPE_TYPE = 8,
+	DUCKDB_CATALOG_ENTRY_TYPE_DATABASE = 9,
+} duckdb_catalog_entry_type;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -847,6 +861,35 @@ typedef struct _duckdb_file_system {
 typedef struct _duckdb_file_handle {
 	void *internal_ptr;
 } * duckdb_file_handle;
+
+//===--------------------------------------------------------------------===//
+// Catalog Interface
+//===--------------------------------------------------------------------===//
+
+//! A handle to a database catalog.
+//! Must be destroyed with `duckdb_destroy_catalog`.
+typedef struct _duckdb_catalog {
+	void *internal_ptr;
+} * duckdb_catalog;
+
+//! A handle to a catalog entry (e.g., table, view, index, etc.).
+//! Must be destroyed with `duckdb_destroy_catalog_entry`.
+typedef struct _duckdb_catalog_entry {
+	void *internal_ptr;
+} * duckdb_catalog_entry;
+
+//===--------------------------------------------------------------------===//
+// Logging Types
+//===--------------------------------------------------------------------===//
+
+//! Holds a log storage object.
+typedef struct _duckdb_log_storage {
+	void *internal_ptr;
+} * duckdb_log_storage;
+
+//! This function is missing the logging context, which will be added later.
+typedef void (*duckdb_logger_write_log_entry_t)(void *extra_data, duckdb_timestamp *timestamp, const char *level,
+                                                const char *log_type, const char *log_message);
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -4573,6 +4616,15 @@ duckdb_appender_destroy to destroy the invalidated appender.
 DUCKDB_C_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
 
 /*!
+Clears all buffered data from the appender without flushing it to the table. This discards any data that has been
+appended but not yet written. The appender can continue to be used after clearing.
+
+* @param appender The appender to clear.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_appender_clear(duckdb_appender appender);
+
+/*!
 Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data
 triggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
 Call duckdb_appender_error_data to obtain the error data followed by duckdb_appender_destroy to destroy the invalidated
@@ -5959,6 +6011,146 @@ The result must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_table_function_bind_get_result_column_type(duckdb_bind_info info,
                                                                                    idx_t col_idx);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Catalog Interface
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to interact with database catalogs and catalog entries.
+// You will most likely not need this API for typical usage of DuckDB as SQL is the preferred way to interact with the
+// database, but this interface can be useful for advanced extensions that need to inspect the state of the catalog from
+// inside a running query.
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+Retrieve a database catalog instance by name.
+This function can only be called from within the context of an active transaction, e.g. during execution of a registered
+function callback. Otherwise returns `nullptr`.
+* @param context The client context.
+* @param catalog_name The name of the catalog.
+* @return The resulting catalog instance, or `nullptr` if called from outside an active transaction or if a catalog with
+the specified name does not exist. Must be destroyed with `duckdb_destroy_catalog`
+*/
+DUCKDB_C_API duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, const char *catalog_name);
+
+/*!
+Retrieve the "type name" of the given catalog.
+E.g. for a DuckDB database, this returns 'duckdb'.
+The returned string is owned by the catalog and remains valid until the catalog is destroyed.
+
+* @param catalog The catalog.
+* @return The type name of the catalog.
+*/
+DUCKDB_C_API const char *duckdb_catalog_get_type_name(duckdb_catalog catalog);
+
+/*!
+Retrieve a catalog entry from the given catalog by type, schema name and entry name.
+The returned catalog entry remains valid for the duration of the current transaction.
+
+* @param catalog The catalog.
+* @param context The client context.
+* @param entry_type The type of the catalog entry to retrieve.
+* @param schema_name The schema name of the catalog entry.
+* @param entry_name The name of the catalog entry.
+* @return The resulting catalog entry, or `nullptr` if no such entry exists. Must be destroyed with
+`duckdb_destroy_catalog_entry`. Remains valid for the duration of the current transaction.
+*/
+DUCKDB_C_API duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_client_context context,
+                                                           duckdb_catalog_entry_type entry_type,
+                                                           const char *schema_name, const char *entry_name);
+
+/*!
+Destroys the given catalog instance.
+
+Note that this does not actually "drop" the contents of the catalog; it merely frees the C API handle.
+
+* @param catalog The catalog instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_catalog(duckdb_catalog *catalog);
+
+/*!
+Get the type of the given catalog entry.
+
+* @param entry The catalog entry.
+* @return The type of the catalog entry.
+*/
+DUCKDB_C_API duckdb_catalog_entry_type duckdb_catalog_entry_get_type(duckdb_catalog_entry entry);
+
+/*!
+Get the name of the given catalog entry.
+
+* @param entry The catalog entry.
+* @return The name of the catalog entry. The returned string is owned by the catalog entry and remains valid until the
+catalog entry is destroyed.
+*/
+DUCKDB_C_API const char *duckdb_catalog_entry_get_name(duckdb_catalog_entry entry);
+
+/*!
+Destroys the given catalog entry instance.
+
+Note that this does not actually "drop" the catalog entry from the database catalog; it merely frees the C API handle.
+
+* @param entry The catalog entry instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Logging
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions exposing the log storage, which allows the configuration of a custom logger. This API is not yet ready to
+// be stabilized.
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+Creates a new log storage object.
+
+* @return A log storage object. Must be destroyed with `duckdb_destroy_log_storage`.
+*/
+DUCKDB_C_API duckdb_log_storage duckdb_create_log_storage();
+
+/*!
+Destroys a log storage object.
+
+* @param log_storage The log storage object to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_log_storage(duckdb_log_storage *log_storage);
+
+/*!
+Sets the callback function for writing log entries.
+
+* @param log_storage The log storage object.
+* @param function The function to call.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_write_log_entry(duckdb_log_storage log_storage,
+                                                         duckdb_logger_write_log_entry_t function);
+
+/*!
+Sets the extra data of the custom log storage.
+
+* @param log_storage The log storage object.
+* @param extra_data The extra data that is passed back into the callbacks.
+* @param delete_callback The delete callback to call on the extra data, if any.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_extra_data(duckdb_log_storage log_storage, void *extra_data,
+                                                    duckdb_delete_callback_t delete_callback);
+
+/*!
+Sets the name of the log storage.
+
+* @param log_storage The log storage object.
+* @param name The name of the log storage.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_name(duckdb_log_storage log_storage, const char *name);
+
+/*!
+Registers a custom log storage for the logger.
+
+* @param database A database object.
+* @param log_storage The log storage object.
+* @return Whether the registration was successful.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_storage log_storage);
 
 #endif
 

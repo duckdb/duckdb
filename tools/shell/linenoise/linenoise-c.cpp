@@ -100,18 +100,6 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
 	Linenoise::SetCompletionCallback(fn);
 }
 
-/* Register a hits function to be called to show hits to the user at the
- * right of the prompt. */
-void linenoiseSetHintsCallback(linenoiseHintsCallback *fn) {
-	Linenoise::SetHintsCallback(fn);
-}
-
-/* Register a function to free the hints returned by the hints callback
- * registered with linenoiseSetHintsCallback(). */
-void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
-	Linenoise::SetFreeHintsCallback(fn);
-}
-
 void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }
@@ -141,7 +129,7 @@ void linenoiseSetPrompt(const char *continuation, const char *continuationSelect
  * user typed <tab>. See the example.c source code for a very easy to
  * understand example. */
 void linenoiseAddCompletion(linenoiseCompletions *lc, const char *zLine, const char *completion, size_t nCompletion,
-                            size_t completion_start, const char *completion_type) {
+                            size_t completion_start, const char *completion_type, size_t score, char extra_char) {
 	auto &completions = *reinterpret_cast<duckdb::TabCompletion *>(lc);
 	duckdb::Completion c;
 	c.original_completion = duckdb::string(completion, nCompletion);
@@ -150,6 +138,8 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *zLine, const c
 	c.completion += c.original_completion;
 	c.completion_type = Linenoise::GetCompletionType(completion_type);
 	c.cursor_pos = c.completion.size();
+	c.score = score;
+	c.extra_char = extra_char;
 	completions.completions.push_back(std::move(c));
 }
 

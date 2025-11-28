@@ -921,7 +921,6 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	default:
 		throw NotImplementedException("Vector::GetAllocationSize not implemented for type: %s", type.ToString());
-		break;
 	}
 }
 

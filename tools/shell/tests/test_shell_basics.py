@@ -414,7 +414,9 @@ def test_tables(shell):
         .statement(".tables")
     )
     result = test.run()
-    result.check_stdout("asda  bsdf  csda")
+    result.check_stdout("asda")
+    result.check_stdout("bsdf")
+    result.check_stdout("csda")
 
 def test_tables_pattern(shell):
     test = (
@@ -425,7 +427,8 @@ def test_tables_pattern(shell):
         .statement(".tables %da")
     )
     result = test.run()
-    result.check_stdout("asda  csda")
+    result.check_stdout("asda")
+    result.check_stdout("csda")
 
 def test_tables_schema_disambiguation(shell):
     test = (
@@ -437,7 +440,7 @@ def test_tables_schema_disambiguation(shell):
         .statement(".tables")
     )
     result = test.run()
-    result.check_stdout("a.foobar  b.foobar")
+    result.check_stdout("foobar")
 
 def test_tables_schema_filtering(shell):
     test = (
@@ -451,7 +454,8 @@ def test_tables_schema_filtering(shell):
         .statement(".tables a.%")
     )
     result = test.run()
-    result.check_stdout("foobar        unique_table")
+    result.check_stdout("foobar")
+    result.check_stdout("unique_table")
 
 def test_tables_backward_compatibility(shell):
     test = (
@@ -461,7 +465,8 @@ def test_tables_backward_compatibility(shell):
         .statement(".tables")
     )
     result = test.run()
-    result.check_stdout("main_table    unique_table")
+    result.check_stdout("main_table")
+    result.check_stdout("unique_table")
 
 def test_tables_with_views(shell):
     test = (
@@ -475,7 +480,10 @@ def test_tables_with_views(shell):
         .statement(".tables")
     )
     result = test.run()
-    result.check_stdout("a.foobar     a.test_view  b.foobar     b.test_view")
+    result.check_stdout("foobar")
+    result.check_stdout("test_view")
+    result.check_stdout("foobar")
+    result.check_stdout("test_view")
 
 def test_indexes(shell):
     test = (

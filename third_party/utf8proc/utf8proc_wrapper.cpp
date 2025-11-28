@@ -162,6 +162,46 @@ bool Utf8Proc::IsValid(const char *s, size_t len) {
 	return Utf8Proc::Analyze(s, len) != UnicodeType::INVALID;
 }
 
+std::string Utf8Proc::RemoveInvalid(const char *s, size_t len) {
+	std::string result;
+	result.reserve(len); // Reserve the maximum possible size
+
+	for (size_t i = 0; i < len; i++) {
+		int c = (int)s[i];
+		if ((c & 0x80) == 0) {
+			// ASCII character - always valid
+			result.push_back(s[i]);
+			continue;
+		}
+
+		int first_pos_seq = i;
+		if ((c & 0xE0) == 0xC0) {
+			/* 2 byte sequence */
+			int utf8char = c & 0x1F;
+			UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+		} else if ((c & 0xF0) == 0xE0) {
+			/* 3 byte sequence */
+			int utf8char = c & 0x0F;
+			UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+		} else if ((c & 0xF8) == 0xF0) {
+			/* 4 byte sequence */
+			int utf8char = c & 0x07;
+			UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+		} else {
+			// invalid, do not write to output
+			continue;
+		}
+
+		// If we get here, the sequence is valid, so add all bytes of the sequence to result
+		for (size_t j = first_pos_seq; j <= i; j++) {
+			result.push_back(s[j]);
+		}
+	}
+
+	D_ASSERT(Utf8Proc::IsValid(result.c_str(), result.size()));
+	return result;
+}
+
 size_t Utf8Proc::NextGraphemeCluster(const char *s, size_t len, size_t cpos) {
 	int sz;
 	auto prev_codepoint = Utf8Proc::UTF8ToCodepoint(s + cpos, sz);

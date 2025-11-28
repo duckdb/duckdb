@@ -45,7 +45,7 @@ public:
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 		memcpy((void *)state.left_parts_dict, (void *)analyze_state->state.left_parts_dict,
 		       actual_dictionary_size_bytes);
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment();
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -98,12 +98,12 @@ public:
 		state.Reset();
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -125,11 +125,14 @@ public:
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
-			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
-			CreateEmptySegment(row_start);
+			CreateEmptySegment();
+		}
+		if (nulls_idx) {
+			current_segment->stats.statistics.SetHasNullFast();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
+			current_segment->stats.statistics.SetHasNoNullFast();
 			for (idx_t i = 0; i < vector_idx; i++) {
 				T floating_point_value = Load<T>(const_data_ptr_cast(&input_vector[i]));
 				current_segment->stats.statistics.UpdateNumericStats<T>(floating_point_value);

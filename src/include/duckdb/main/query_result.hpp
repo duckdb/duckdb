@@ -98,10 +98,10 @@ public:
 	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
 	//! Returns nullptr if there are no more results to fetch.
-	DUCKDB_API virtual unique_ptr<DataChunk> Fetch();
+	DUCKDB_API unique_ptr<DataChunk> Fetch();
 	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
 	//! returned.
-	DUCKDB_API virtual unique_ptr<DataChunk> FetchRaw() = 0;
+	DUCKDB_API unique_ptr<DataChunk> FetchRaw();
 	//! Converts the QueryResult to a string
 	DUCKDB_API virtual string ToString() = 0;
 	//! Converts the QueryResult to a box-rendered string
@@ -111,6 +111,9 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
+	//! Returns true if the query result has more rows than the given amount.
+	//! This might involve fetching up to that many rows - but wil not exhaust any
+	DUCKDB_API virtual bool MoreRowsThan(idx_t row_count);
 
 	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {
@@ -125,57 +128,70 @@ public:
 		}
 	}
 
+protected:
+	DUCKDB_API virtual unique_ptr<DataChunk> FetchInternal() = 0;
+
 private:
 	class QueryResultIterator;
 	class QueryResultRow {
+		friend class QueryResultIterator;
+
 	public:
-		explicit QueryResultRow(QueryResultIterator &iterator_p, idx_t row_idx) : iterator(iterator_p), row(0) {
+		explicit QueryResultRow() : row(0) {
 		}
 
-		QueryResultIterator &iterator;
-		idx_t row;
-
 		bool IsNull(idx_t col_idx) const {
-			return iterator.chunk->GetValue(col_idx, row).IsNull();
+			return chunk->GetValue(col_idx, row).IsNull();
 		}
 		template <class T>
 		T GetValue(idx_t col_idx) const {
-			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();
+			return chunk->GetValue(col_idx, row).GetValue<T>();
 		}
+		Value GetBaseValue(idx_t col_idx) const {
+			return chunk->GetValue(col_idx, row);
+		}
+		DataChunk &GetChunk() const {
+			return *chunk;
+		}
+		idx_t GetRowInChunk() const {
+			return row;
+		}
+
+	private:
+		shared_ptr<DataChunk> chunk;
+		idx_t row;
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		explicit QueryResultIterator(optional_ptr<QueryResult> result_p)
-		    : current_row(*this, 0), result(result_p), base_row(0) {
+		explicit QueryResultIterator(optional_ptr<QueryResult> result_p = nullptr) : result(result_p), base_row(0) {
 			if (result) {
-				chunk = shared_ptr<DataChunk>(result->Fetch().release());
-				if (!chunk) {
+				current_row.chunk = shared_ptr<DataChunk>(result->Fetch().release());
+				if (!current_row.chunk) {
 					result = nullptr;
 				}
 			}
 		}
 
 		QueryResultRow current_row;
-		shared_ptr<DataChunk> chunk;
 		optional_ptr<QueryResult> result;
 		idx_t base_row;
 
 	public:
 		void Next() {
-			if (!chunk) {
+			if (!current_row.chunk) {
 				return;
 			}
 			current_row.row++;
-			if (current_row.row >= chunk->size()) {
-				base_row += chunk->size();
-				chunk = shared_ptr<DataChunk>(result->Fetch().release());
+			if (current_row.row >= current_row.chunk->size()) {
+				base_row += current_row.chunk->size();
+				current_row.chunk = shared_ptr<DataChunk>(result->Fetch().release());
 				current_row.row = 0;
-				if (!chunk || chunk->size() == 0) {
+				if (!current_row.chunk || current_row.chunk->size() == 0) {
 					// exhausted all rows
 					base_row = 0;
 					result = nullptr;
-					chunk.reset();
+					current_row.chunk.reset();
 				}
 			}
 		}
@@ -187,18 +203,27 @@ private:
 		bool operator!=(const QueryResultIterator &other) const {
 			return result != other.result || base_row != other.base_row || current_row.row != other.current_row.row;
 		}
+		bool operator==(const QueryResultIterator &other) const {
+			return !(*this != other);
+		}
 		const QueryResultRow &operator*() const {
 			return current_row;
 		}
 	};
 
 public:
-	QueryResultIterator begin() { // NOLINT: match stl API
+	using iterator = QueryResultIterator;
+
+	iterator begin() { // NOLINT: match stl API
 		return QueryResultIterator(this);
 	}
-	QueryResultIterator end() { // NOLINT: match stl API
+	iterator end() { // NOLINT: match stl API
 		return QueryResultIterator(nullptr);
 	}
+
+protected:
+	vector<unique_ptr<DataChunk>> stored_chunks;
+	bool result_exhausted = false;
 
 protected:
 	DUCKDB_API string HeaderToString();

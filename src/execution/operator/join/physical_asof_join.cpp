@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/join/physical_asof_join.hpp"
 
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
@@ -75,41 +75,41 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 //===--------------------------------------------------------------------===//
 class AsOfGlobalSinkState : public GlobalSinkState {
 public:
-	using HashedSortPtr = unique_ptr<HashedSort>;
-	using HashedSinkPtr = unique_ptr<GlobalSinkState>;
+	using SortStrategyPtr = unique_ptr<SortStrategy>;
+	using SortStrategySinkPtr = unique_ptr<GlobalSinkState>;
 	using PartitionMarkers = vector<OuterJoinMarker>;
 
 	AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op) {
 		// Set up partitions for both sides
-		hashed_sorts.reserve(2);
-		hashed_sinks.reserve(2);
+		sort_strategies.reserve(2);
+		strategy_sinks.reserve(2);
 		const vector<unique_ptr<BaseStatistics>> partitions_stats;
 		auto &lhs = op.children[0].get();
-		auto sort = make_uniq<HashedSort>(client, op.lhs_partitions, op.lhs_orders, lhs.GetTypes(), partitions_stats,
+		auto sort = SortStrategy::Factory(client, op.lhs_partitions, op.lhs_orders, lhs.GetTypes(), partitions_stats,
 		                                  lhs.estimated_cardinality, true);
-		hashed_sinks.emplace_back(sort->GetGlobalSinkState(client));
-		hashed_sorts.emplace_back(std::move(sort));
+		strategy_sinks.emplace_back(sort->GetGlobalSinkState(client));
+		sort_strategies.emplace_back(std::move(sort));
 
 		auto &rhs = op.children[1].get();
-		sort = make_uniq<HashedSort>(client, op.rhs_partitions, op.rhs_orders, rhs.GetTypes(), partitions_stats,
+		sort = SortStrategy::Factory(client, op.rhs_partitions, op.rhs_orders, rhs.GetTypes(), partitions_stats,
 		                             rhs.estimated_cardinality, true);
-		hashed_sinks.emplace_back(sort->GetGlobalSinkState(client));
-		hashed_sorts.emplace_back(std::move(sort));
+		strategy_sinks.emplace_back(sort->GetGlobalSinkState(client));
+		sort_strategies.emplace_back(std::move(sort));
 	}
 
 	//! The child that is being materialised (right/1 then left/0)
 	size_t child = 1;
 	//! The child's partitioning description
-	vector<HashedSortPtr> hashed_sorts;
+	vector<SortStrategyPtr> sort_strategies;
 	//! The child's partitioning buffer
-	vector<HashedSinkPtr> hashed_sinks;
+	vector<SortStrategySinkPtr> strategy_sinks;
 };
 
 class AsOfLocalSinkState : public LocalSinkState {
 public:
 	AsOfLocalSinkState(ExecutionContext &context, AsOfGlobalSinkState &gsink) {
-		auto &hashed_sort = *gsink.hashed_sorts[gsink.child];
-		local_partition = hashed_sort.GetLocalSinkState(context);
+		auto &sort_strategy = *gsink.sort_strategies[gsink.child];
+		local_partition = sort_strategy.GetLocalSinkState(context);
 	}
 
 	unique_ptr<LocalSinkState> local_partition;
@@ -128,24 +128,24 @@ SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, DataChunk &chun
 	auto &gstate = sink.global_state.Cast<AsOfGlobalSinkState>();
 	auto &lstate = sink.local_state.Cast<AsOfLocalSinkState>();
 
-	auto &hashed_sort = *gstate.hashed_sorts[gstate.child];
-	auto &gsink = *gstate.hashed_sinks[gstate.child];
+	auto &sort_strategy = *gstate.sort_strategies[gstate.child];
+	auto &gsink = *gstate.strategy_sinks[gstate.child];
 	auto &lsink = *lstate.local_partition;
 
 	OperatorSinkInput hsink {gsink, lsink, sink.interrupt_state};
-	return hashed_sort.Sink(context, chunk, hsink);
+	return sort_strategy.Sink(context, chunk, hsink);
 }
 
 SinkCombineResultType PhysicalAsOfJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &combine) const {
 	auto &gstate = combine.global_state.Cast<AsOfGlobalSinkState>();
 	auto &lstate = combine.local_state.Cast<AsOfLocalSinkState>();
 
-	auto &hashed_sort = *gstate.hashed_sorts[gstate.child];
-	auto &gsink = *gstate.hashed_sinks[gstate.child];
+	auto &sort_strategy = *gstate.sort_strategies[gstate.child];
+	auto &gsink = *gstate.strategy_sinks[gstate.child];
 	auto &lsink = *lstate.local_partition;
 
 	OperatorSinkCombineInput hcombine {gsink, lsink, combine.interrupt_state};
-	return hashed_sort.Combine(context, hcombine);
+	return sort_strategy.Combine(context, hcombine);
 }
 
 //===--------------------------------------------------------------------===//
@@ -156,19 +156,19 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &gstate = finalize.global_state.Cast<AsOfGlobalSinkState>();
 
 	// The data is all in so we can synchronise the left partitioning.
-	auto &hashed_sort = *gstate.hashed_sorts[gstate.child];
-	auto &hashed_sink = *gstate.hashed_sinks[gstate.child];
+	auto &sort_strategy = *gstate.sort_strategies[gstate.child];
+	auto &hashed_sink = *gstate.strategy_sinks[gstate.child];
 	OperatorSinkFinalizeInput hfinalize {hashed_sink, finalize.interrupt_state};
 	if (gstate.child == 1) {
-		auto &lhs_groups = *gstate.hashed_sinks[1 - gstate.child];
+		auto &lhs_groups = *gstate.strategy_sinks[1 - gstate.child];
 		auto &rhs_groups = hashed_sink;
-		hashed_sort.Synchronize(rhs_groups, lhs_groups);
+		sort_strategy.Synchronize(rhs_groups, lhs_groups);
 	}
 
 	// Switch sides
 	gstate.child = 1 - gstate.child;
 
-	return hashed_sort.Finalize(client, hfinalize);
+	return sort_strategy.Finalize(client, hfinalize);
 }
 
 OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -179,7 +179,7 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-enum class AsOfJoinSourceStage : uint8_t { INIT, MATERIALIZE, GET, LEFT, RIGHT, DONE };
+enum class AsOfJoinSourceStage : uint8_t { INIT, SORT, MATERIALIZE, GET, LEFT, RIGHT, DONE };
 
 struct AsOfSourceTask {
 	AsOfSourceTask() {
@@ -203,7 +203,7 @@ public:
 	using Types = vector<LogicalType>;
 	using Columns = vector<column_t>;
 
-	AsOfPayloadScanner(const SortedRun &sorted_run, const HashedSort &hashed_sort);
+	AsOfPayloadScanner(const SortedRun &sorted_run, const SortStrategy &sort_strategy);
 	idx_t Base() const {
 		return base;
 	}
@@ -273,10 +273,10 @@ private:
 	idx_t chunk_idx = 0;
 };
 
-AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const HashedSort &hashed_sort)
+AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const SortStrategy &sort_strategy)
     : sorted_run(sorted_run), block_state(*sorted_run.key_data, sorted_run.payload_data.get()),
-      scan_state(sorted_run.context, sorted_run.sort), scan_ids(hashed_sort.scan_ids), count(sorted_run.Count()) {
-	scan_chunk.Initialize(sorted_run.context, hashed_sort.payload_types);
+      scan_state(sorted_run.context, sorted_run.sort), scan_ids(sort_strategy.scan_ids), count(sorted_run.Count()) {
+	scan_chunk.Initialize(sorted_run.context, sort_strategy.payload_types);
 	const auto sort_key_type = sorted_run.key_data->GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
@@ -314,7 +314,7 @@ AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const Hashed
 class AsOfHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<SortedRun>;
-	using ChunkRow = HashedSort::ChunkRow;
+	using ChunkRow = SortStrategy::ChunkRow;
 
 	template <typename T>
 	static T BinValue(T n, T val) {
@@ -388,6 +388,8 @@ public:
 	vector<idx_t> stage_begin;
 	//! The next task to process
 	idx_t next_task = 0;
+	//! Count of sorting tasks completed
+	std::atomic<idx_t> sorted;
 	//! Count of materialization tasks completed
 	std::atomic<idx_t> materialized;
 	//! Count of get tasks completed
@@ -401,8 +403,8 @@ public:
 AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
                              const idx_t hash_group)
     : op(op), group_idx(hash_group), left_stats(left_stats), right_stats(right_stats),
-      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), materialized(0), gotten(0),
-      left_completed(0), right_completed(0) {
+      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0),
+      gotten(0), left_completed(0), right_completed(0) {
 	right_outer.Initialize(right_stats.count);
 };
 
@@ -412,17 +414,19 @@ idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
 	//	INIT
 	stage_tasks.emplace_back(0);
 
-	//	MATERIALIZE
+	//	SORT
 	auto materialize_tasks = BinValue(LeftChunks(), per_thread);
 	materialize_tasks += BinValue(RightChunks(), per_thread);
+	stage_tasks.emplace_back(materialize_tasks);
+
+	//	MATERIALIZE
 	stage_tasks.emplace_back(materialize_tasks);
 
 	//	GET
 	stage_tasks.emplace_back(materialize_tasks ? 1 : 0);
 
 	//	LEFT
-	const auto left_chunks = LeftChunks();
-	const auto left_tasks = BinValue(left_chunks, per_thread);
+	const auto left_tasks = BinValue(LeftChunks(), per_thread);
 	stage_tasks.emplace_back(left_tasks);
 
 	//	RIGHT
@@ -440,7 +444,7 @@ idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
 		begin += stage_task;
 	}
 
-	stage = AsOfJoinSourceStage::MATERIALIZE;
+	stage = AsOfJoinSourceStage(1);
 
 	return GetTaskCount();
 }
@@ -448,8 +452,14 @@ idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
 bool AsOfHashGroup::TryPrepareNextStage() {
 	switch (stage) {
 	case AsOfJoinSourceStage::INIT:
-		stage = AsOfJoinSourceStage::MATERIALIZE;
+		stage = AsOfJoinSourceStage::SORT;
 		return true;
+	case AsOfJoinSourceStage::SORT:
+		if (sorted >= stage_tasks[size_t(stage)]) {
+			stage = AsOfJoinSourceStage::MATERIALIZE;
+			return true;
+		}
+		break;
 	case AsOfJoinSourceStage::MATERIALIZE:
 		if (materialized >= stage_tasks[size_t(stage)]) {
 			stage = AsOfJoinSourceStage::GET;
@@ -505,6 +515,11 @@ bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
 	task.end_idx = 0;
 
 	switch (task.stage) {
+	case AsOfJoinSourceStage::SORT:
+		task.begin_idx = task.thread_idx * per_thread;
+		task.max_idx = LeftChunks() + RightChunks();
+		task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
+		break;
 	case AsOfJoinSourceStage::MATERIALIZE:
 		if (!left_group || !right_group) {
 			task.begin_idx = task.thread_idx * per_thread;
@@ -544,6 +559,7 @@ bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
 bool AsOfHashGroup::FinishTask(AsOfSourceTask &task) {
 	//	Inside the lock
 	switch (task.stage) {
+	case AsOfJoinSourceStage::SORT:
 	case AsOfJoinSourceStage::MATERIALIZE:
 	case AsOfJoinSourceStage::GET:
 		break;
@@ -630,14 +646,14 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
-	using ChunkRow = HashedSort::ChunkRow;
-	using ChunkRows = HashedSort::ChunkRows;
+	using ChunkRow = SortStrategy::ChunkRow;
+	using ChunkRows = SortStrategy::ChunkRows;
 	vector<ChunkRows> child_groups(2);
 	for (idx_t child = 0; child < child_groups.size(); ++child) {
-		auto &hashed_sort = *gsink.hashed_sorts[child];
-		auto &hashed_sink = *gsink.hashed_sinks[child];
-		auto hashed_source = hashed_sort.GetGlobalSourceState(client, hashed_sink);
-		child_groups[child] = hashed_sort.GetHashGroups(*hashed_source);
+		auto &sort_strategy = *gsink.sort_strategies[child];
+		auto &hashed_sink = *gsink.strategy_sinks[child];
+		auto hashed_source = sort_strategy.GetGlobalSourceState(client, hashed_sink);
+		child_groups[child] = sort_strategy.GetHashGroups(*hashed_source);
 		hashed_sources.emplace_back(std::move(hashed_source));
 	}
 
@@ -980,7 +996,7 @@ void AsOfProbeBuffer::BeginLeftScan(TaskPtr task_p) {
 		throw NotImplementedException("Unsupported comparison type for ASOF join");
 	}
 
-	lhs_scanner = make_uniq<AsOfPayloadScanner>(*left_group, *gsink.hashed_sorts[0]);
+	lhs_scanner = make_uniq<AsOfPayloadScanner>(*left_group, *gsink.sort_strategies[0]);
 	lhs_scanner->SeekBlock(task->begin_idx);
 	left_itr = CreateIteratorState(*left_group);
 
@@ -991,7 +1007,7 @@ void AsOfProbeBuffer::BeginLeftScan(TaskPtr task_p) {
 		right_outer = &asof_hash_group->right_outer;
 		if (right_group && right_group->Count()) {
 			right_itr = CreateIteratorState(*right_group);
-			rhs_scanner = make_uniq<AsOfPayloadScanner>(*right_group, *gsink.hashed_sorts[1]);
+			rhs_scanner = make_uniq<AsOfPayloadScanner>(*right_group, *gsink.sort_strategies[1]);
 		}
 	}
 }
@@ -1260,6 +1276,7 @@ public:
 	//! Assign the next task
 	bool TryAssignTask();
 
+	void ExecuteSortTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteMaterializeTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteGetTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteLeftTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
@@ -1267,6 +1284,9 @@ public:
 
 	void ExecuteTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source) {
 		switch (task->stage) {
+		case AsOfJoinSourceStage::SORT:
+			ExecuteSortTask(context, chunk, source);
+			break;
 		case AsOfJoinSourceStage::MATERIALIZE:
 			ExecuteMaterializeTask(context, chunk, source);
 			break;
@@ -1279,12 +1299,9 @@ public:
 		case AsOfJoinSourceStage::RIGHT:
 			ExecuteRightTask(context, chunk, source);
 			break;
-		default:
+		case AsOfJoinSourceStage::INIT:
+		case AsOfJoinSourceStage::DONE:
 			throw InternalException("Invalid state for AsOf Task");
-		}
-
-		if (TaskFinished()) {
-			++gsource.finished;
 		}
 	}
 
@@ -1344,7 +1361,7 @@ void AsOfLocalSourceState::BeginRightScan() {
 		return;
 	}
 	auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
-	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.hashed_sorts[1]);
+	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.sort_strategies[1]);
 	scanner->SeekBlock(task->begin_idx);
 
 	rhs_matches = asof_groups[hash_bin]->right_outer.GetMatches();
@@ -1371,6 +1388,8 @@ void AsOfGlobalSourceState::FinishTask(TaskPtr task) {
 		return;
 	}
 
+	++finished;
+
 	const auto group_idx = task->group_idx;
 	auto &finished_hash_group = asof_groups[group_idx];
 	D_ASSERT(finished_hash_group);
@@ -1388,6 +1407,9 @@ bool AsOfLocalSourceState::TryAssignTask() {
 	// we can't "finish" a task until we are about to get the next one.
 	if (task) {
 		switch (task->stage) {
+		case AsOfJoinSourceStage::SORT:
+			gsource.asof_groups[task_local.group_idx]->sorted++;
+			break;
 		case AsOfJoinSourceStage::MATERIALIZE:
 			gsource.asof_groups[task_local.group_idx]->materialized++;
 			break;
@@ -1411,6 +1433,7 @@ bool AsOfLocalSourceState::TryAssignTask() {
 	}
 
 	switch (task->stage) {
+	case AsOfJoinSourceStage::SORT:
 	case AsOfJoinSourceStage::MATERIALIZE:
 	case AsOfJoinSourceStage::GET:
 		break;
@@ -1474,6 +1497,22 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	return false;
 }
 
+void AsOfLocalSourceState::ExecuteSortTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source) {
+	auto &asof_group = *gsource.asof_groups[task_local.group_idx];
+
+	//	Left or right?
+	const idx_t child = task_local.begin_idx >= asof_group.LeftChunks();
+	const auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
+	auto &sort_strategy = *gsink.sort_strategies[child];
+	auto &hashed_sink = *gsink.strategy_sinks[child];
+
+	OperatorSinkFinalizeInput finalize {hashed_sink, source.interrupt_state};
+	sort_strategy.SortColumnData(context, task_local.group_idx, finalize);
+
+	//	Mark this range as done
+	task->begin_idx = task->end_idx;
+}
+
 void AsOfLocalSourceState::ExecuteMaterializeTask(ExecutionContext &context, DataChunk &chunk,
                                                   OperatorSourceInput &source) {
 	auto &asof_group = *gsource.asof_groups[task_local.group_idx];
@@ -1481,12 +1520,12 @@ void AsOfLocalSourceState::ExecuteMaterializeTask(ExecutionContext &context, Dat
 	//	Left or right?
 	const idx_t child = task_local.begin_idx >= asof_group.LeftChunks();
 	const auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
-	auto &hashed_sort = *gsink.hashed_sorts[child];
+	auto &sort_strategy = *gsink.sort_strategies[child];
 	auto &hashed_source = *gsource.hashed_sources[child];
 
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput hsource {hashed_source, *unused, source.interrupt_state};
-	hashed_sort.MaterializeSortedRun(context, task_local.group_idx, hsource);
+	sort_strategy.MaterializeSortedRun(context, task_local.group_idx, hsource);
 
 	//	Mark this range as done
 	task->begin_idx = task->end_idx;
@@ -1498,7 +1537,7 @@ void AsOfLocalSourceState::ExecuteGetTask(ExecutionContext &context, DataChunk &
 	const auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto unused = make_uniq<LocalSourceState>();
 
-	for (idx_t child = 0; child < gsink.hashed_sorts.size(); ++child) {
+	for (idx_t child = 0; child < gsink.sort_strategies.size(); ++child) {
 		//	Don't get children that don't exist
 		if (child) {
 			if (!asof_group.RightChunks()) {
@@ -1510,11 +1549,11 @@ void AsOfLocalSourceState::ExecuteGetTask(ExecutionContext &context, DataChunk &
 			}
 		}
 
-		auto &hashed_sort = *gsink.hashed_sorts[child];
+		auto &sort_strategy = *gsink.sort_strategies[child];
 		auto &hashed_source = *gsource.hashed_sources[child];
 		OperatorSourceInput hsource {hashed_source, *unused, source.interrupt_state};
 
-		auto group = hashed_sort.GetSortedRun(context.client, task_local.group_idx, hsource);
+		auto group = sort_strategy.GetSortedRun(context.client, task_local.group_idx, hsource);
 		if (group) {
 			if (child) {
 				asof_group.right_group = std::move(group);
@@ -1537,8 +1576,8 @@ void AsOfLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChunk 
 	}
 }
 
-SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
-                                           OperatorSourceInput &input) const {
+SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
 
@@ -1546,7 +1585,12 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
-			lsource.ExecuteTask(context, chunk, input);
+			try {
+				lsource.ExecuteTask(context, chunk, input);
+			} catch (...) {
+				gsource.stopped = true;
+				throw;
+			}
 		} else {
 			auto guard = gsource.Lock();
 			if (!gsource.HasMoreTasks()) {
