@@ -83,6 +83,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'config_options_interface',
     'copy_functions',
     'catalog_interface',
+    'logging',
 ]
 
 # The file that forms the base for the header generation

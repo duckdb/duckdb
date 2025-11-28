@@ -143,20 +143,8 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-
-	idx_t key_count = 0;
-	if (data_collection.ChunkCount() > 0) {
-		JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-		                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-
-		// Go through all the blocks and fill the keys addresses
-		key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
-	}
-
-	// Scan the build keys in the hash table
-	Vector build_vector(key_type, key_count);
-	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, 0, build_vector,
-	                       *FlatVector::IncrementalSelectionVector(), nullptr);
+	Vector build_vector(key_type, ht.Count());
+	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
 
 	// Now fill the selection vector using the build keys and create a sequential vector
 	// TODO: add check for fast pass when probe is part of build domain

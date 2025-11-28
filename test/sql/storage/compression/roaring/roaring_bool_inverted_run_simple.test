@@ -1,0 +1,35 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_inverted_run_simple.test
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+# Runs can't be inverted, this would be better off being inverted but the space saving is only 1 run at most.
+statement ok
+INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then true else false end FROM range(0,10000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Constant';
+----
+
+query I
+select count(*) from test WHERE a IS true;
+----
+8062
+
+statement ok
+DROP TABLE test;

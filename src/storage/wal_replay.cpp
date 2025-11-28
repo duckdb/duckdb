@@ -289,7 +289,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 	}
 
 	con.BeginTransaction();
-	MetaTransaction::Get(*con.context).ModifyDatabase(database);
+	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
@@ -368,7 +368,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 					break;
 				}
 				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database);
+				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -955,21 +955,20 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 	}
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
-	row_t row_ids[1];
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_ids));
-	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
+	auto &row_identifiers = chunk.data[0];
+	row_identifiers.Flatten(chunk.size());
+	auto source_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// Delete the row IDs from the current table.
 	auto &storage = state.current_table->GetStorage();
 	auto total_rows = storage.GetTotalRows();
-	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (source_ids[i] >= UnsafeNumericCast<row_t>(total_rows)) {
 			throw SerializationException("invalid row ID delete in WAL");
 		}
-		row_ids[0] = source_ids[i];
-		storage.Delete(delete_state, context, row_identifiers, 1);
 	}
+	TableDeleteState delete_state;
+	storage.Delete(delete_state, context, row_identifiers, chunk.size());
 }
 
 void WriteAheadLogDeserializer::ReplayUpdate() {

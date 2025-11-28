@@ -78,6 +78,7 @@ big_json = '''
 def test_long_string(shell):
     test = (
         ShellTest(shell)
+        .statement('.maxwidth 160')
         .statement(f"SELECT '{long_string}' s")
     )
     result = test.run()
@@ -87,6 +88,7 @@ def test_long_string(shell):
 def test_extremely_long_string(shell):
     test = (
         ShellTest(shell)
+        .statement('.maxwidth 160')
         .statement(f"SELECT repeat('abcdefghijklmnopqrstuvwxyz', 10000)")
     )
     result = test.run()
@@ -97,6 +99,7 @@ def test_extremely_long_string(shell):
 def test_multiple_long_strings(shell):
     test = (
         ShellTest(shell)
+        .statement('.maxwidth 160')
         .statement(f"SELECT '{long_string}' s1, '{long_string}' s2, '{long_string}' s3")
     )
     result = test.run()
@@ -106,6 +109,7 @@ def test_multiple_long_strings(shell):
 def test_multiple_long_strings_many_rows(shell):
     test = (
         ShellTest(shell)
+        .statement('.maxwidth 160')
         .statement(f"SELECT '{long_string}' s1, '{long_string}' s2, '{long_string}' s3 FROM range(100)")
     )
     result = test.run()
@@ -115,6 +119,7 @@ def test_multiple_long_strings_many_rows(shell):
     # UNLESS we increase the max rows printed
     test = (
         ShellTest(shell)
+        .statement('.maxwidth 160')
         .statement('.maxrows -1')
         .statement(f"SELECT '{long_string}' s1, '{long_string}' s2, '{long_string}' s3 FROM range(100)")
     )

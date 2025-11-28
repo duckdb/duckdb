@@ -32,10 +32,10 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 	if (wexpr.aggregate && ClientConfig::GetConfig(context).enable_optimizer) {
 		const auto &aggr = wexpr.aggregate;
 		auto &arg_orders = wexpr.arg_orders;
-		if (aggr->distinct_dependent != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+		if (aggr->GetDistinctDependent() != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
 			wexpr.distinct = false;
 		}
-		if (aggr->order_dependent != AggregateOrderDependent::ORDER_DEPENDENT) {
+		if (aggr->GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT) {
 			arg_orders.clear();
 		} else {
 			//	If the argument order is prefix of the partition ordering,

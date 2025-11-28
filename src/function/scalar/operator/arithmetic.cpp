@@ -179,7 +179,7 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
+		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType()));
 	}
 	auto result = NumericStats::CreateEmpty(expr.return_type);
 	NumericStats::SetMin(result, new_min);
@@ -251,16 +251,17 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
 	if (bind_data->check_overflow) {
-		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType());
+		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(result_type.InternalType()));
 	} else {
-		bound_function.function = GetScalarBinaryFunction<OP>(result_type.InternalType());
+		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
 	}
 	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128) {
 		if (IS_SUBTRACT) {
-			bound_function.statistics =
-			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
+			bound_function.SetStatisticsCallback(
+			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
 		} else {
-			bound_function.statistics = PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+			bound_function.SetStatisticsCallback(
+			    PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
 		}
 	}
 	return std::move(bind_data);
@@ -282,11 +283,11 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
 	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
 	if (check_overflow) {
-		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
+		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType()));
 	} else {
-		bound_function.function = GetScalarBinaryFunction<OP>(return_type.InternalType());
+		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(return_type.InternalType()));
 	}
-	bound_function.statistics = nullptr; // TODO we likely dont want to do stats prop again
+	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
 	bound_function.arguments = arguments;
 
@@ -353,8 +354,8 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			auto function = ScalarFunction("+", {left_type, right_type}, left_type, nullptr,
 			                               BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
 			function.SetFallible();
-			function.serialize = SerializeDecimalArithmetic;
-			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
+			function.SetSerializeCallback(SerializeDecimalArithmetic);
+			function.SetDeserializeCallback(DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>);
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -593,14 +594,18 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 	auto &decimal_type = arguments[0]->return_type;
 	auto width = DecimalType::GetWidth(decimal_type);
 	if (width <= Decimal::MAX_WIDTH_INT16) {
-		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT);
+		bound_function.SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT));
 	} else if (width <= Decimal::MAX_WIDTH_INT32) {
-		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::INTEGER);
+		bound_function.SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::INTEGER));
 	} else if (width <= Decimal::MAX_WIDTH_INT64) {
-		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT);
+		bound_function.SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT));
 	} else {
 		D_ASSERT(width <= Decimal::MAX_WIDTH_INT128);
-		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
+		bound_function.SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT));
 	}
 	decimal_type.Verify();
 	bound_function.arguments[0] = decimal_type;
@@ -693,8 +698,9 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			ScalarFunction function("-", {left_type, right_type}, left_type, nullptr,
 			                        BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.SetFallible();
-			function.serialize = SerializeDecimalArithmetic;
-			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
+			function.SetSerializeCallback(SerializeDecimalArithmetic);
+			function.SetDeserializeCallback(
+			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
@@ -915,13 +921,14 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	bound_function.SetReturnType(result_type);
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {
-		bound_function.function = GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType());
+		bound_function.SetFunctionCallback(
+		    GetScalarBinaryFunction<DecimalMultiplyOverflowCheck>(result_type.InternalType()));
 	} else {
-		bound_function.function = GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType());
+		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
 	}
 	if (result_type.InternalType() != PhysicalType::INT128) {
-		bound_function.statistics =
-		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
+		bound_function.SetStatisticsCallback(
+		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
 	}
 	return std::move(bind_data);
 }
@@ -933,8 +940,9 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			ScalarFunction function({type, type}, type, nullptr, BindDecimalMultiply);
-			function.serialize = SerializeDecimalArithmetic;
-			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
+			function.SetSerializeCallback(SerializeDecimalArithmetic);
+			function.SetDeserializeCallback(
+			    DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>);
 			multiply.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
 			multiply.AddFunction(ScalarFunction(
@@ -1093,9 +1101,10 @@ template <class OP>
 unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
 	if (DBConfig::GetSetting<IeeeFloatingPointOpsSetting>(context)) {
-		bound_function.function = GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType());
+		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
-		bound_function.function = GetBinaryFunctionIgnoreZero<OP>(bound_function.GetReturnType().InternalType());
+		bound_function.SetFunctionCallback(
+		    GetBinaryFunctionIgnoreZero<OP>(bound_function.GetReturnType().InternalType()));
 	}
 	return nullptr;
 }
@@ -1148,7 +1157,7 @@ static unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, Scalar
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 	}
 	auto &result_type = bound_function.GetReturnType();
-	bound_function.function = GetBinaryFunctionIgnoreZero<OP>(result_type.InternalType());
+	bound_function.SetFunctionCallback(GetBinaryFunctionIgnoreZero<OP>(result_type.InternalType()));
 	return std::move(bind_data);
 }
 

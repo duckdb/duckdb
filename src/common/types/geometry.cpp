@@ -977,29 +977,33 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 	return true;
 }
 
-void Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
+bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
 	if (strict) {
 		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
 			string_t geom;
-			FromBinary(wkb, geom, result, strict);
+			FromBinary(wkb, geom, result, true);
 			return geom;
 		});
-	} else {
-		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
-		                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
-			                                                    string_t geom;
-			                                                    if (!FromBinary(wkb, geom, result, strict)) {
-				                                                    mask.SetInvalid(idx);
-				                                                    return string_t();
-			                                                    }
-			                                                    return geom;
-		                                                    });
+		return true;
 	}
+
+	auto all_ok = true;
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
+	                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
+		                                                    string_t geom;
+		                                                    if (!FromBinary(wkb, geom, result, false)) {
+			                                                    all_ok = false;
+			                                                    mask.SetInvalid(idx);
+			                                                    return string_t();
+		                                                    }
+		                                                    return geom;
+	                                                    });
+	return all_ok;
 }
 
 void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
 	// We are currently using WKB internally, so just copy as-is!
-	result.Reference(source);
+	result.Reinterpret(source);
 }
 
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {

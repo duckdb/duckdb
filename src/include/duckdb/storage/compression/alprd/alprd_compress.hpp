@@ -128,7 +128,11 @@ public:
 			FlushSegment();
 			CreateEmptySegment();
 		}
+		if (nulls_idx) {
+			current_segment->stats.statistics.SetHasNullFast();
+		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
+			current_segment->stats.statistics.SetHasNoNullFast();
 			for (idx_t i = 0; i < vector_idx; i++) {
 				T floating_point_value = Load<T>(const_data_ptr_cast(&input_vector[i]));
 				current_segment->stats.statistics.UpdateNumericStats<T>(floating_point_value);

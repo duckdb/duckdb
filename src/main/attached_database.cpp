@@ -275,6 +275,12 @@ void AttachedDatabase::Close() {
 					options.wal_action = CheckpointWALAction::DELETE_WAL;
 					storage->CreateCheckpoint(QueryContext(), options);
 				}
+			} catch (std::exception &ex) {
+				ErrorData data(ex);
+				try {
+					DUCKDB_LOG_ERROR(db, "AttachedDatabase::Close()\t\t" + data.Message());
+				} catch (...) { // NOLINT
+				}
 			} catch (...) { // NOLINT
 			}
 		}

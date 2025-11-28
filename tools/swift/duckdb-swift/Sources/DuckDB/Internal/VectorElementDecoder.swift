@@ -130,6 +130,10 @@ extension VectorElementDataDecoder {
     func decodeNil() -> Bool {
       element.unwrapNull()
     }
+      
+    func decode(_ type: Bool.Type) throws -> Bool {
+      try attemptDecode { try element.unwrap(type) }
+    }
     
     func decode(_ type: Int.Type) throws -> Int {
       try attemptDecode { try element.unwrap(type) }

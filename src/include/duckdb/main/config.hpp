@@ -166,6 +166,10 @@ struct DBConfigOptions {
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
+	//! Force a specific schema for VARIANT shredding
+	LogicalType force_variant_shredding = LogicalType::INVALID;
+	//! Minimum size of a rowgroup to enable VARIANT shredding, -1 to disable
+	int64_t variant_minimum_shredding_size = 30000;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;

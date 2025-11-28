@@ -58,6 +58,7 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 	        MetricsType::TOTAL_BYTES_READ,
 	        MetricsType::TOTAL_BYTES_WRITTEN,
+	        MetricsType::TOTAL_MEMORY_ALLOCATED,
 	        MetricsType::WAITING_TO_ATTACH_LATENCY,
 	        MetricsType::WAL_REPLAY_ENTRY_COUNT,
 	        MetricsType::COMMIT_LOCAL_STORAGE_LATENCY,
@@ -126,6 +127,7 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 		case MetricsType::TOTAL_BYTES_READ:
 		case MetricsType::TOTAL_BYTES_WRITTEN:
+		case MetricsType::TOTAL_MEMORY_ALLOCATED:
 		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 			metrics[metric] = Value::CreateValue<uint64_t>(0);
 			break;
@@ -269,7 +271,8 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN: {
+		case MetricsType::TOTAL_BYTES_WRITTEN:
+		case MetricsType::TOTAL_MEMORY_ALLOCATED: {
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
 			break;
 		}

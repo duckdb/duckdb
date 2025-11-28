@@ -1,0 +1,50 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_bitset_simple_w_null.test
+# description: Test bitpacking with NULLs.
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# Simple compression with a few values.
+statement ok
+CREATE TABLE test (a BOOL);
+
+statement ok
+INSERT INTO test SELECT
+CASE
+    WHEN i % 6 = 0 THEN true
+    WHEN i % 3 = 0 THEN false
+    ELSE NULL
+END
+FROM range(0, 10000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' AND compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' AND compression != 'Roaring';
+----
+
+query I
+SELECT COUNT(*) FROM test WHERE a IS true;
+----
+1667
+
+query I
+SELECT COUNT(*) FROM test WHERE a IS false;
+----
+1667
+
+query I
+SELECT COUNT(*) FROM test WHERE a IS null;
+----
+6666
+
+statement ok
+DROP TABLE test;

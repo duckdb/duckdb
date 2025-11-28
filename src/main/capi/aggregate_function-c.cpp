@@ -218,7 +218,7 @@ void duckdb_aggregate_function_set_destructor(duckdb_aggregate_function function
 	auto &aggregate_function = GetCAggregateFunction(function);
 	auto &function_info = aggregate_function.function_info->Cast<duckdb::CAggregateFunctionInfo>();
 	function_info.destroy = destroy;
-	aggregate_function.destructor = duckdb::CAPIAggregateDestructor;
+	aggregate_function.SetStateDestructorCallback(duckdb::CAPIAggregateDestructor);
 }
 
 duckdb_state duckdb_register_aggregate_function(duckdb_connection connection, duckdb_aggregate_function function) {

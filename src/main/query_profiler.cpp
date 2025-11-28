@@ -266,6 +266,10 @@ void QueryProfiler::EndQuery() {
 			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_WRITTEN)) {
 				info.metrics[MetricsType::TOTAL_BYTES_WRITTEN] = Value::UBIGINT(query_metrics.total_bytes_written);
 			}
+			if (info.Enabled(settings, MetricsType::TOTAL_MEMORY_ALLOCATED)) {
+				info.metrics[MetricsType::TOTAL_MEMORY_ALLOCATED] =
+				    Value::UBIGINT(query_metrics.total_memory_allocated);
+			}
 			if (info.Enabled(settings, MetricsType::ROWS_RETURNED)) {
 				info.metrics[MetricsType::ROWS_RETURNED] = child_info.metrics[MetricsType::OPERATOR_CARDINALITY];
 			}
@@ -352,6 +356,9 @@ void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
 		return;
 	case MetricsType::TOTAL_BYTES_WRITTEN:
 		query_metrics.total_bytes_written += amount;
+		return;
+	case MetricsType::TOTAL_MEMORY_ALLOCATED:
+		query_metrics.total_memory_allocated += amount;
 		return;
 	case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 		query_metrics.wal_replay_entry_count += amount;

@@ -708,22 +708,13 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
                                           const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 	// first scan the entire vector at the probe side
-	// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
 	auto build_idx = join_condition[filter_idx];
-	auto &data_collection = ht.GetDataCollection();
-
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-
-	JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-	                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-
-	// Go through all the blocks and fill the keys addresses
-	idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
-
-	// Scan the build keys in the hash table
-	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], key_count);
-	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, build_idx,
-	                       build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
+	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
+	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
+	if (key_count == 0) {
+		return;
+	}
 
 	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
 	value_set_t unique_ht_values;

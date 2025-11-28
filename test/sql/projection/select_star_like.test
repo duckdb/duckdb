@@ -105,3 +105,34 @@ statement error
 SELECT * RENAME (col1 AS other_) SIMILAR TO '.*col.*' FROM integers
 ----
 Rename list cannot be combined with a filtering operation
+
+# Create two tables with overlapping column name
+statement ok
+CREATE TABLE t1(id INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (1, 10, 20)
+
+statement ok
+CREATE TABLE t2(name VARCHAR, category VARCHAR, col2 INTEGER)
+
+statement ok
+INSERT INTO t2 VALUES ('foo', 'bar', 30)
+
+# t1.* LIKE should only select from t1 table
+query II
+SELECT t1.* LIKE 'col%' FROM t1, t2
+----
+10	20
+
+# t2.* LIKE should only select from t2 table
+query I
+SELECT t2.* LIKE 'col%' FROM t1, t2
+----
+30
+
+# Combining both tables - each should only select from its own table
+query III
+SELECT t1.* LIKE 'col%', t2.* LIKE 'col%' FROM t1, t2
+----
+10	20	30

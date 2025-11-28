@@ -379,10 +379,10 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	auto name = std::move(function.name);
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.name = std::move(name);
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
-	if (function.bind) {
-		return function.bind(context, function, arguments);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	if (function.HasBindCallback()) {
+		return function.GetBindCallback()(context, function, arguments);
 	} else {
 		return nullptr;
 	}
@@ -483,13 +483,13 @@ void SpecializeMinMaxNFunction(AggregateFunction &function) {
 	using STATE = MinMaxNState<VAL_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
-	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
-	function.combine = AggregateFunction::StateCombine<STATE, OP>;
-	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 
-	function.finalize = MinMaxNOperation::Finalize<STATE>;
-	function.update = MinMaxNUpdate<STATE>;
+	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
+	function.SetStateUpdateCallback(MinMaxNUpdate<STATE>);
 }
 
 template <class COMPARATOR>

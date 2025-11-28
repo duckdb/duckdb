@@ -1,0 +1,12 @@
+# name: test/sql/attach/remote_file_concurrently.test
+# description: Concurrently attach the same read only database
+# group: [attach]
+
+require httpfs
+
+statement ok con1
+ATTACH 'https://raw.githubusercontent.com/duckdb/duckdb/main/data/attach_test/attach.db' AS db;
+
+statement ok con2
+ATTACH 'https://raw.githubusercontent.com/duckdb/duckdb/main/data/attach_test/attach.db' AS db2;
+

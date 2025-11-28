@@ -1,0 +1,220 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_compression_ratio.test_slow
+# description: Assert roaring compression ratio is within reasonable margins for each container type
+# group: [roaring]
+
+require block_size 262144
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+set variable dataset_size = 120_000_000;
+
+#### Array container Roaring Compression ratio calculation:
+# For single row group
+# 60 vectors with 82 non-true values per vector
+# Total compressed bytes:
+# metadata: (64 / (8 / 2 (bitwidth))) + 60 = 76
+# data: (8 + (82 * 1)) * 60 = 5400
+# 5476 bytes
+
+# Total uncompressed bytes = (60 * 256) = 15360 bytes
+# Expected Ratio ~= 2.8x
+statement ok
+PRAGMA force_compression='roaring'
+
+statement ok
+CREATE TABLE test_roaring AS SELECT case when i%25=0 then true else false end FROM range(getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT case when i%25=0 then true else false end FROM range(getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_roaring') WHERE segment_type = 'BOOLEAN' AND compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type = 'BOOLEAN' AND compression != 'BitPacking';
+----
+
+statement ok
+CREATE TYPE test_result AS UNION (
+    ok BOOLEAN,
+    err STRUCT(
+        bitpacked HUGEINT,
+        compressed HUGEINT,
+        allowed_minimum_ratio DECIMAL(2,1),
+        allowed_maximum_ratio DECIMAL(2,1),
+        actual_ratio FLOAT
+    )
+);
+
+statement ok
+set variable min_ratio = 2.6;
+set variable max_ratio = 2.8;
+
+query I
+SELECT
+    CASE
+        WHEN (bitpacked::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (bitpacked::FLOAT / compressed::FLOAT) <= getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'bitpacked': bitpacked,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': bitpacked::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_roaring') where segment_type in ('BOOLEAN')) as compressed,
+        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type in ('BOOLEAN')) as bitpacked
+) AS blocks_tbl;
+----
+true
+
+statement ok
+drop table test_roaring;
+drop table test_bitpacked;
+
+#### Run container Roaring Compression ratio calculation:
+# For single row group
+# 60 vectors with 7/8 runs of trues per vector
+# Total compressed bytes:
+# metadata: (64 / (8 / 2 (bitwidth))) + ((64 * 7) / 8) = 72
+# data: (8 + (8 * 2)) * 60 = 1440
+# 1512 bytes
+
+# Total uncompressed bytes = (60 * 256) = 15360 bytes
+# Expected Ratio ~= 10.15x
+statement ok
+PRAGMA force_compression='roaring'
+
+statement ok
+CREATE TABLE test_roaring AS SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then false else true end FROM range(0, getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then false else true end FROM range(0, getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_roaring') WHERE segment_type = 'BOOLEAN' AND compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type = 'BOOLEAN' AND compression != 'BitPacking';
+----
+
+statement ok
+checkpoint
+
+# Hmm, this doesnt actually match the result from the back-of-the-napkin calculation
+statement ok
+set variable min_ratio = 8.6;
+set variable max_ratio = 8.8;
+
+query I
+SELECT
+    CASE
+        WHEN (bitpacked::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (bitpacked::FLOAT / compressed::FLOAT) <= getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'bitpacked': bitpacked,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': bitpacked::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_roaring') where segment_type in ('BOOLEAN')) as compressed,
+        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type in ('BOOLEAN')) as bitpacked
+) AS blocks_tbl;
+----
+true
+
+statement ok
+drop table test_roaring;
+drop table test_bitpacked;
+
+#### Bitset container Roaring Compression ratio calculation:
+# For single row group
+# 60 vectors stored uncompressed, + metadata
+# Total compressed bytes = (60 * 2 (metadata)) + (60 * 256) = 15480 bytes
+# Total uncompressed bytes = (60 * 256) = 15360 bytes
+# Expected Ratio ~= 7.5x
+statement ok
+PRAGMA force_compression='roaring'
+
+statement ok
+CREATE TABLE test_roaring AS SELECT case when i%3=0 then true else false end FROM range(getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+CREATE TABLE test_bitpacked AS SELECT case when i%3=0 then true else false end FROM range(getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test_roaring') WHERE segment_type = 'BOOLEAN' AND compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type = 'BOOLEAN' AND compression != 'BitPacking';
+----
+
+statement ok
+checkpoint
+
+statement ok
+set variable min_ratio = 0.9;
+set variable max_ratio = 1;
+
+query I
+SELECT
+    CASE
+        WHEN (bitpacked::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (bitpacked::FLOAT / compressed::FLOAT) <= getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'bitpacked': bitpacked,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': bitpacked::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_roaring') where segment_type in ('BOOLEAN')) as compressed,
+        (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type in ('BOOLEAN')) as bitpacked
+) AS blocks_tbl;
+----
+true
+
+statement ok
+drop table test_roaring;
+drop table test_bitpacked;

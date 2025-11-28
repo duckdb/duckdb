@@ -36,6 +36,7 @@ public:
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
 	virtual CheckpointType GetCheckpointType() const = 0;
+	virtual void FlushPartialBlocks() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
 
 	DatabaseInstance &GetDatabase();
@@ -59,6 +60,7 @@ public:
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	CheckpointType GetCheckpointType() const override;
+	void FlushPartialBlocks() override;
 	MetadataManager &GetMetadataManager() override;
 
 private:

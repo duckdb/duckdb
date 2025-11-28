@@ -87,6 +87,7 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNull() {
+	current_segment->stats.statistics.SetHasNullFast();
 	selection_buffer.push_back(0);
 	current_segment->count++;
 }

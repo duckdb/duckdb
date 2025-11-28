@@ -29,8 +29,7 @@ using duckdb::unique_ptr;
 using duckdb::vector;
 struct ColumnarResult;
 struct RowResult;
-class ColumnRenderer;
-class RowRenderer;
+class ShellRenderer;
 using duckdb::atomic;
 using duckdb::ErrorData;
 using duckdb::KeywordHelper;
@@ -310,7 +309,6 @@ public:
 	void Print(PrintOutput output, const string &str);
 	void Print(const char *str);
 	void Print(const string &str);
-	void PrintPadded(const char *str, idx_t len);
 	template <typename... ARGS>
 	void PrintF(PrintOutput stream, const string &str, ARGS... params) {
 		Print(stream, StringUtil::Format(str, params...));
@@ -320,14 +318,10 @@ public:
 		PrintF(PrintOutput::STDOUT, str, std::forward<ARGS>(params)...);
 	}
 	bool ColumnTypeIsInteger(const char *type);
-	void ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result);
-	unique_ptr<ColumnRenderer> GetColumnRenderer();
-	unique_ptr<RowRenderer> GetRowRenderer();
-	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
-	void RenderColumnarResult(duckdb::QueryResult &res);
+	unique_ptr<ShellRenderer> GetRenderer();
+	unique_ptr<ShellRenderer> GetRenderer(RenderMode mode);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
-	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
 	SuccessState RenderDescribe(duckdb::QueryResult &res);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
@@ -335,8 +329,6 @@ public:
 	void PrintDatabaseError(const string &zErr);
 	int RunInitialCommand(const char *sql, bool bail);
 	void AddError();
-
-	int RenderRow(RowRenderer &renderer, RowResult &result);
 
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
@@ -407,8 +399,8 @@ public:
 	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
-	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
-	SuccessState RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &result);
+	SuccessState RenderQuery(ShellRenderer &renderer, const string &query);
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 

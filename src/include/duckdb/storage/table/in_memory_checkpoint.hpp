@@ -53,6 +53,7 @@ public:
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
+	void FlushPartialBlocks() override;
 	CheckpointType GetCheckpointType() const override;
 	MetadataManager &GetMetadataManager() override;
 

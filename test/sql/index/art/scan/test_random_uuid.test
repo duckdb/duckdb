@@ -1,0 +1,113 @@
+# name: test/sql/index/art/scan/test_random_uuid.test
+# description: Test ART index with many random uuid in transaction
+# group: [scan]
+
+statement ok
+create or replace table t as select id: uuid(), v: i from generate_series(1, 700000) s(i);
+
+# create a table with the values [0, 1, 0, 1, ..., 0, 1]
+statement ok
+create unique index uid on t(id);
+
+statement ok
+set variable u1 = uuid();
+
+statement ok
+set variable u2 = uuid();
+
+statement ok
+set variable u3 = uuid();
+
+statement ok
+set variable u4 = uuid();
+
+statement ok
+start transaction;
+
+statement ok
+insert into t select * replace (getvariable('u1') as id) from t using sample 1 rows;
+
+statement ok
+select * from t where id = getvariable('u1');
+
+statement ok
+insert into t select * replace (getvariable('u2') as id) from t using sample 1 rows;
+
+statement ok
+select * from t where id = getvariable('u2');
+
+statement ok
+insert into t select * replace (getvariable('u3') as id) from t using sample 1 rows;
+
+statement ok r4
+select * from t where id = getvariable('u4');
+
+statement ok
+commit;
+
+statement ok r1
+select * from t where id = getvariable('u1');
+
+statement ok r2
+select * from t where id = getvariable('u2');
+
+statement ok r3
+select * from t where id = getvariable('u3');
+
+statement ok r4
+select * from t where id = getvariable('u4');
+
+statement ok
+start transaction;
+
+statement ok
+drop index uid;
+
+statement ok r1
+select * from t where id = getvariable('u1');
+
+statement ok r2
+select * from t where id = getvariable('u2');
+
+statement ok r3
+select * from t where id = getvariable('u3');
+
+statement ok r4
+select * from t where id = getvariable('u4');
+
+statement ok
+rollback;
+
+statement ok
+start transaction;
+
+statement ok
+drop index uid;
+
+statement ok r1
+select * from t where id = getvariable('u1');
+
+statement ok r2
+select * from t where id = getvariable('u2');
+
+statement ok r3
+select * from t where id = getvariable('u3');
+
+statement ok r4
+select * from t where id = getvariable('u4');
+
+statement ok
+commit;
+
+statement ok r1
+select * from t where id = getvariable('u1');
+
+statement ok r2
+select * from t where id = getvariable('u2');
+
+statement ok r3
+select * from t where id = getvariable('u3');
+
+statement ok r4
+select * from t where id = getvariable('u4');
+

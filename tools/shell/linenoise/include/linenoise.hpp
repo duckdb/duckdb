@@ -75,11 +75,6 @@ public:
 	int Edit();
 
 	static void SetCompletionCallback(linenoiseCompletionCallback *fn);
-	static void SetHintsCallback(linenoiseHintsCallback *fn);
-	static void SetFreeHintsCallback(linenoiseFreeHintsCallback *fn);
-
-	static linenoiseHintsCallback *HintsCallback();
-	static linenoiseFreeHintsCallback *FreeHintsCallback();
 
 	static void SetPrompt(const char *continuation, const char *continuationSelected);
 	static size_t ComputeRenderWidth(const char *buf, size_t len);
@@ -114,6 +109,7 @@ public:
 	void EditRemoveSpaces();
 	void EditSwapCharacter();
 	void EditSwapWord();
+	void SetCursorPosition(int x, int y);
 
 	void StartSearch();
 	void CancelSearch();
@@ -132,7 +128,6 @@ public:
 	void RefreshMultiLine();
 	void RefreshSingleLine() const;
 	void RefreshSearch();
-	void RefreshShowHints(AppendBuffer &append_buffer, int plen) const;
 
 	size_t PrevChar() const;
 	size_t NextChar() const;
@@ -141,6 +136,7 @@ public:
 	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const;
 	void PositionToColAndRow(int plen, const char *buf, idx_t len, size_t target_pos, int &out_row, int &out_col,
 	                         int &rows, int &cols) const;
+	size_t ColAndRowToPosition(int plen, const char *buf, idx_t len, int target_row, int target_col) const;
 	size_t ColAndRowToPosition(int target_row, int target_col) const;
 	static bool HandleANSIEscape(const char *buf, size_t len, size_t &cpos);
 

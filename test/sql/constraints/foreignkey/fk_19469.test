@@ -1,0 +1,79 @@
+# name: test/sql/constraints/foreignkey/fk_19469.test
+# description: Issue #19469: Error in constraint violation message when checking foreign key constraints.
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE B (b1 INTEGER,
+b2 INTEGER,
+PRIMARY KEY(b1, b2));
+
+statement ok
+CREATE TABLE A (a1 VARCHAR(1),
+a2 VARCHAR(1),
+a3 VARCHAR(1),
+a4 VARCHAR(1),
+a5 INTEGER,
+a6 INTEGER,
+PRIMARY KEY(a1, a2),
+UNIQUE(a3, a4),
+FOREIGN KEY (a5, a6) REFERENCES B(b1, b2));
+
+statement ok
+INSERT INTO B (b1, b2) VALUES
+(1, 2),
+(2, 3),
+(6, 7);
+
+statement error
+INSERT INTO A (a1, a2, a3, a4, a5, a6) VALUES
+('x', 'y', 'z', 'u', 1, 2),
+('y', 'z', 'x', 'v', 1, 2),
+('x', 'x', 'y', 'y', 2, 3),
+('z', 'z', 'v', 'x', 4, 5);
+----
+Constraint Error: Violates foreign key constraint because key "b1: 4, b2: 5" does not exist in the referenced table
+
+statement ok
+CREATE TABLE C (
+    c1 INTEGER,
+    c2 INTEGER,
+    c3 VARCHAR(1),
+    c4 VARCHAR(1),
+    PRIMARY KEY (c1, c2),
+    UNIQUE (c3, c4)
+);
+
+statement ok
+CREATE TABLE D (
+    d1 INTEGER,
+    d2 INTEGER,
+    d3 VARCHAR(1),
+    d4 VARCHAR(1),
+    payload INTEGER,
+    FOREIGN KEY (d1, d2) REFERENCES C (c1, c2),
+    FOREIGN KEY (d3, d4) REFERENCES C (c3, c4)
+);
+
+statement ok
+INSERT INTO C VALUES
+(0, 1, 'a', 'b'),
+(1, 0, 'a', 'c'),
+(2, 2, 'd', 'e');
+
+statement ok
+INSERT INTO D VALUES
+(0, 1, 'a', 'b', 10),
+(1, 0, 'a', 'c', 20),
+(2, 2, 'd', 'e', 30);
+
+statement error
+INSERT INTO D VALUES
+(9, 9, 'a', 'b', 40);
+----
+Constraint Error: Violates foreign key constraint because key "c1: 9, c2: 9" does not exist in the referenced table
+
+statement error
+INSERT INTO D VALUES
+(0, 1, 'x', 'y', 50);
+----
+Constraint Error: Violates foreign key constraint because key "c3: x, c4: y" does not exist in the referenced table

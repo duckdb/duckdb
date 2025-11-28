@@ -12,7 +12,7 @@ DropEntries <-
 	DropSecret
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction <- 'MACRO' 'TABLE' IfExists? List(TableFunctionName)
+DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
@@ -22,7 +22,8 @@ DropCollation <- 'COLLATION' IfExists? List(CollationName)
 DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
 DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
 
-TableOrView <- 'TABLE' / 'VIEW' / ('MATERIALIZED' 'VIEW')
+TableOrView <- CommentTable / CommentView / MaterializedViewEntry
+MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
 FunctionType <- 'MACRO' / 'FUNCTION'
 
 DropBehavior <- 'CASCADE' / 'RESTRICT'
