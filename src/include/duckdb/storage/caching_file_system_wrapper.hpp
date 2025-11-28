@@ -14,32 +14,30 @@
 
 namespace duckdb {
 
+// Forward declaration.
 class DatabaseInstance;
 class QueryContext;
 class CachingFileSystemWrapper;
 
-//! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API
+//! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API.
 class CachingFileHandleWrapper : public FileHandle {
 	friend class CachingFileSystemWrapper;
 
 public:
-	DUCKDB_API CachingFileHandleWrapper(CachingFileSystemWrapper &file_system, unique_ptr<CachingFileHandle> handle);
+	DUCKDB_API CachingFileHandleWrapper(CachingFileSystemWrapper &file_system, unique_ptr<CachingFileHandle> handle,
+	                                    FileOpenFlags flags);
 	DUCKDB_API ~CachingFileHandleWrapper() override;
 
 	DUCKDB_API void Close() override;
 
-	//! Get the underlying CachingFileHandle
-	DUCKDB_API CachingFileHandle &GetCachingFileHandle();
-
 private:
 	unique_ptr<CachingFileHandle> caching_handle;
-	//! Current position for non-seeking reads
-	idx_t position;
-	//! BufferHandle to keep cached data alive during reads
-	BufferHandle current_buffer_handle;
 };
 
-//! CachingFileSystemWrapper wraps CachingFileSystem to conform to FileSystem API
+//! [CachingFileSystemWrapper] wraps [CachingFileSystem] to conform to FileSystem API.
+//! Different from [CachingFileSystem], which returns a [BufferHandle] to achieve zero-copy on read, the wrapper class always copies requested byted into the provided address.
+//!
+//! NOTICE: Currently only read and seek operations are supported, write operations are disabled.
 class CachingFileSystemWrapper : public FileSystem {
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db);
@@ -47,7 +45,6 @@ public:
 
 	DUCKDB_API std::string GetName() const override;
 
-	// FileSystem API implementation
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                           optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,

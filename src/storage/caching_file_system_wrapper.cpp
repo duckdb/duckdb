@@ -7,29 +7,27 @@
 
 namespace duckdb {
 
+//===----------------------------------------------------------------------===//
 // CachingFileHandleWrapper implementation
+//===----------------------------------------------------------------------===//
 CachingFileHandleWrapper::CachingFileHandleWrapper(CachingFileSystemWrapper &file_system,
-                                                     unique_ptr<CachingFileHandle> handle)
-    : FileHandle(file_system, handle->GetPath(), FileOpenFlags::FILE_FLAGS_READ), caching_handle(std::move(handle)),
-      position(0) {
-	// CachingFileSystem is read-only, so we use FILE_FLAGS_READ
+                                                     unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
+    : FileHandle(file_system, handle->GetPath(), flags), caching_handle(std::move(handle)) {
+	// Flags should already be validated to be read-only in OpenFileExtended
 }
 
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {
 }
 
 void CachingFileHandleWrapper::Close() {
-	current_buffer_handle = BufferHandle(); // Release buffer handle
 	if (caching_handle) {
 		caching_handle.reset();
 	}
 }
 
-CachingFileHandle &CachingFileHandleWrapper::GetCachingFileHandle() {
-	return *caching_handle;
-}
-
+//===----------------------------------------------------------------------===//
 // CachingFileSystemWrapper implementation
+//===----------------------------------------------------------------------===//
 CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db)
     : caching_file_system(file_system, db), underlying_file_system(file_system) {
 }
@@ -41,6 +39,32 @@ std::string CachingFileSystemWrapper::GetName() const {
 	return "CachingFileSystemWrapper";
 }
 
+//===----------------------------------------------------------------------===//
+// Write Operations (Not Supported - Read-Only Filesystem)
+//===----------------------------------------------------------------------===//
+void CachingFileSystemWrapper::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	throw NotImplementedException("CachingFileSystemWrapper: Write operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+}
+
+int64_t CachingFileSystemWrapper::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	throw NotImplementedException("CachingFileSystemWrapper: Write operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+}
+
+bool CachingFileSystemWrapper::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	throw NotImplementedException("CachingFileSystemWrapper: Trim operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+}
+
+void CachingFileSystemWrapper::Truncate(FileHandle &handle, int64_t new_size) {
+	throw NotImplementedException("CachingFileSystemWrapper: Truncate operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+}
+
+void CachingFileSystemWrapper::FileSync(FileHandle &handle) {
+	throw NotImplementedException("CachingFileSystemWrapper: FileSync operations are not supported. CachingFileSystemWrapper is a read-only caching filesystem.");
+}
+
+//===----------------------------------------------------------------------===//
+// OpenFile Operations
+//===----------------------------------------------------------------------===//
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const string &path, FileOpenFlags flags,
                                                           optional_ptr<FileOpener> opener) {
 	return OpenFile(OpenFileInfo(path), flags, opener);
@@ -56,120 +80,87 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFile(const OpenFileInfo &pa
 
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
                                                                   optional_ptr<FileOpener> opener) {
+	if (flags.OpenForWriting()) {
+		throw NotImplementedException(
+		    "CachingFileSystemWrapper: Cannot open file for writing. CachingFileSystemWrapper is a read-only caching filesystem.");
+	}
+	if (!flags.OpenForReading()) {
+		throw NotImplementedException(
+		    "CachingFileSystemWrapper: File must be opened for reading. CachingFileSystemWrapper is a read-only caching filesystem.");
+	}
+
 	auto caching_handle = caching_file_system.OpenFile(path, flags);
 	if (!caching_handle) {
 		return nullptr;
 	}
-	return make_uniq<CachingFileHandleWrapper>(*this, std::move(caching_handle));
+	return make_uniq<CachingFileHandleWrapper>(*this, std::move(caching_handle), flags);
 }
 
 bool CachingFileSystemWrapper::SupportsOpenFileExtended() const {
 	return true;
 }
 
+//===----------------------------------------------------------------------===//
+// Read Operations
+//===----------------------------------------------------------------------===//
 void CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &caching_handle = wrapper.GetCachingFileHandle();
+	auto &caching_handle = *wrapper.caching_handle;
 
 	data_ptr_t cached_buffer = nullptr;
-	auto buffer_handle = caching_handle.Read(cached_buffer, UnsafeNumericCast<idx_t>(nr_bytes), location);
+	auto buffer_handle = caching_handle.Read(cached_buffer, NumericCast<idx_t>(nr_bytes), location);
 	if (!buffer_handle.IsValid()) {
-		throw IOException("Failed to read from caching file handle");
+		throw IOException("Failed to read from caching file handle: file=\"%s\", offset=%llu, bytes=%lld", handle.GetPath().c_str(),
+		                  location, nr_bytes);
 	}
 
-	// Copy data from cached buffer to user's buffer
-	memcpy(buffer, cached_buffer, UnsafeNumericCast<size_t>(nr_bytes));
-
-	// Keep the buffer handle alive in the wrapper
-	wrapper.current_buffer_handle = std::move(buffer_handle);
+	// Copy data from cached buffer handle to user's buffer.
+	memcpy(buffer, cached_buffer, NumericCast<size_t>(nr_bytes));
 }
 
 int64_t CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &caching_handle = wrapper.GetCachingFileHandle();
-
-	idx_t bytes_to_read = UnsafeNumericCast<idx_t>(nr_bytes);
-	data_ptr_t cached_buffer = nullptr;
-	auto buffer_handle = caching_handle.Read(cached_buffer, bytes_to_read);
-
-	if (!buffer_handle.IsValid()) {
-		throw IOException("Failed to read from caching file handle");
-	}
-
-	// Copy data from cached buffer to user's buffer
-	memcpy(buffer, cached_buffer, UnsafeNumericCast<size_t>(bytes_to_read));
-
-	// Keep the buffer handle alive in the wrapper
-	wrapper.current_buffer_handle = std::move(buffer_handle);
-
-	// Update position
-	wrapper.position += bytes_to_read;
-
-	return UnsafeNumericCast<int64_t>(bytes_to_read);
+	idx_t current_position = SeekPosition(handle);
+	Read(handle, buffer, nr_bytes, current_position);
+	Seek(handle, current_position + NumericCast<idx_t>(nr_bytes));
+	return nr_bytes;
 }
 
-void CachingFileSystemWrapper::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	// CachingFileSystem is read-only, delegate to underlying file system
-	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
-	underlying_file_system.Write(file_handle, buffer, nr_bytes, location);
-}
-
-int64_t CachingFileSystemWrapper::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	// CachingFileSystem is read-only, delegate to underlying file system
-	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
-	return underlying_file_system.Write(file_handle, buffer, nr_bytes);
-}
-
-bool CachingFileSystemWrapper::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
-	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
-	return underlying_file_system.Trim(file_handle, offset_bytes, length_bytes);
-}
-
+//===----------------------------------------------------------------------===//
+// File Metadata Operations
+//===----------------------------------------------------------------------===//
 int64_t CachingFileSystemWrapper::GetFileSize(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &caching_handle = wrapper.GetCachingFileHandle();
-	return UnsafeNumericCast<int64_t>(caching_handle.GetFileSize());
+	auto &caching_handle = *wrapper.caching_handle;
+	return NumericCast<int64_t>(caching_handle.GetFileSize());
 }
 
 timestamp_t CachingFileSystemWrapper::GetLastModifiedTime(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &caching_handle = wrapper.GetCachingFileHandle();
+	auto &caching_handle = *wrapper.caching_handle;
 	return caching_handle.GetLastModifiedTime();
 }
 
 string CachingFileSystemWrapper::GetVersionTag(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &caching_handle = wrapper.GetCachingFileHandle();
+	auto &caching_handle = *wrapper.caching_handle;
 	return caching_handle.GetVersionTag();
 }
 
 FileType CachingFileSystemWrapper::GetFileType(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
+	auto &file_handle = wrapper.caching_handle->GetFileHandle();
 	return underlying_file_system.GetFileType(file_handle);
 }
 
 FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
+	auto &file_handle = wrapper.caching_handle->GetFileHandle();
 	return underlying_file_system.Stats(file_handle);
 }
 
-void CachingFileSystemWrapper::Truncate(FileHandle &handle, int64_t new_size) {
-	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
-	underlying_file_system.Truncate(file_handle, new_size);
-}
-
-void CachingFileSystemWrapper::FileSync(FileHandle &handle) {
-	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
-	underlying_file_system.FileSync(file_handle);
-}
-
+//===----------------------------------------------------------------------===//
+// Directory Operations
+//===----------------------------------------------------------------------===//
 bool CachingFileSystemWrapper::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	return underlying_file_system.DirectoryExists(directory, opener);
 }
@@ -194,14 +185,12 @@ bool CachingFileSystemWrapper::ListFiles(const string &directory, const std::fun
 bool CachingFileSystemWrapper::ListFilesExtended(const string &directory,
                                                  const std::function<void(OpenFileInfo &info)> &callback,
                                                  optional_ptr<FileOpener> opener) {
-	// Use the public ListFiles API which will internally call ListFilesExtended if supported
+	// Use the public ListFiles API which will internally call `ListFilesExtended` if supported.
 	return underlying_file_system.ListFiles(directory, callback, opener);
 }
 
 bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
-	// Check if the underlying file system supports it by checking if it has the method
-	// Since we can't call the protected method directly, we assume it does if it's a VirtualFileSystem
-	// or we can just return true and let the public API handle the fallback
+	// Cannot delegate to internal filesystem's invocaton since it's `protected`.
 	return true;
 }
 
@@ -225,6 +214,9 @@ bool CachingFileSystemWrapper::TryRemoveFile(const string &filename, optional_pt
 	return underlying_file_system.TryRemoveFile(filename, opener);
 }
 
+//===----------------------------------------------------------------------===//
+// Path Operations
+//===----------------------------------------------------------------------===//
 string CachingFileSystemWrapper::GetHomeDirectory() {
 	return underlying_file_system.GetHomeDirectory();
 }
@@ -241,6 +233,9 @@ vector<OpenFileInfo> CachingFileSystemWrapper::Glob(const string &path, FileOpen
 	return underlying_file_system.Glob(path, opener);
 }
 
+//===----------------------------------------------------------------------===//
+// SubSystem Operations
+//===----------------------------------------------------------------------===//
 void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	underlying_file_system.RegisterSubSystem(std::move(sub_fs));
 }
@@ -265,10 +260,12 @@ bool CachingFileSystemWrapper::CanHandleFile(const string &fpath) {
 	return underlying_file_system.CanHandleFile(fpath);
 }
 
+//===----------------------------------------------------------------------===//
+// File Handle Operations
+//===----------------------------------------------------------------------===//
 void CachingFileSystemWrapper::Seek(FileHandle &handle, idx_t location) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	wrapper.position = location;
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
+	auto &file_handle = wrapper.caching_handle->GetFileHandle();
 	underlying_file_system.Seek(file_handle, location);
 }
 
@@ -278,7 +275,7 @@ void CachingFileSystemWrapper::Reset(FileHandle &handle) {
 
 idx_t CachingFileSystemWrapper::SeekPosition(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.GetCachingFileHandle().GetFileHandle();
+	auto &file_handle = wrapper.caching_handle->GetFileHandle();
 	return underlying_file_system.SeekPosition(file_handle);
 }
 
@@ -292,10 +289,13 @@ bool CachingFileSystemWrapper::CanSeek() {
 
 bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &caching_handle = wrapper.GetCachingFileHandle();
+	auto &caching_handle = *wrapper.caching_handle;
 	return caching_handle.OnDiskFile();
 }
 
+//===----------------------------------------------------------------------===//
+// Other Operations
+//===----------------------------------------------------------------------===//
 unique_ptr<FileHandle> CachingFileSystemWrapper::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                                     bool write) {
 	return underlying_file_system.OpenCompressedFile(context, std::move(handle), write);
