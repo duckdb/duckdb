@@ -162,6 +162,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// we cannot do this if the GET has filters
 		return;
 	}
+	if (get.extra_info.sample_options) {
+		// only use row group statistics if we query the whole table
+		return;
+	}
 
 	// we can do the rewrite! get the stats
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
