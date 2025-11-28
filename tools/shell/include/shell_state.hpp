@@ -46,6 +46,7 @@ struct Prompt;
 struct ShellProgressBar;
 struct PagerState;
 struct ShellTableInfo;
+enum class HighlightElementType : uint32_t;
 
 using idx_t = uint64_t;
 
@@ -244,6 +245,8 @@ public:
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
+	//! User-configured highlight elements
+	duckdb::unordered_set<HighlightElementType> user_configured_elements;
 
 #ifdef HAVE_LINENOISE
 	ReadLineVersion rl_version = ReadLineVersion::LINENOISE;

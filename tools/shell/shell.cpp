@@ -3543,18 +3543,9 @@ int wmain(int argc, wchar_t **wargv) {
 				// detect terminal colors
 				auto terminal_color = linenoiseGetTerminalColorMode();
 				if (terminal_color == LINENOISE_DARK_MODE) {
-					highlight.SetColor("keyword", "deepskyblue1", "bold");
-					highlight.SetColor("string_constant", "lightgoldenrod4", "standard");
-					highlight.SetColor("numeric_constant", "lightgoldenrod4", "standard");
-					highlight.SetColor("continuation_selected", "deepskyblue1", "standard");
+					highlight.ToggleMode(HighlightMode::DARK_MODE);
 				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
-					highlight.SetColor("keyword", "deepskyblue6", "bold");
-					highlight.SetColor("string_constant", "orange5", "standard");
-					highlight.SetColor("numeric_constant", "orange5", "standard");
-					highlight.SetColor("continuation_selected", "deepskyblue6", "standard");
-					highlight.SetColor("prompt", "darkorange4", "bold");
-					highlight.SetColor("database_name", "darkorange4", "standard");
-					highlight.SetColor("schema_name", "deepskyblue6", "standard");
+					highlight.ToggleMode(HighlightMode::LIGHT_MODE);
 				}
 			}
 #endif
