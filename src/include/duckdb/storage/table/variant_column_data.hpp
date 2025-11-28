@@ -22,11 +22,12 @@ public:
 	//! The sub-columns of the struct
 	vector<shared_ptr<ColumnData>> sub_columns;
 	shared_ptr<ValidityColumnData> validity;
-	//! Whether (some of) the fields are stored outside of the VARIANT data
-	bool is_shredded = false;
 
 public:
 	idx_t GetMaxEntry() override;
+	bool IsShredded() const {
+		return sub_columns.size() == 2;
+	}
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
@@ -77,8 +78,8 @@ public:
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
 
 private:
-	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type);
-	void ReplaceColumns(shared_ptr<ColumnData> &&unshredded, shared_ptr<ColumnData> &&shredded);
+	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type,
+	                                                 BaseStatistics &stats);
 	void CreateScanStates(ColumnScanState &state);
 	LogicalType GetShreddedType();
 };
