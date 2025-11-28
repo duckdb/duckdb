@@ -3,7 +3,6 @@
 # group: [storage]
 
 # FIXME: When indexes are buffer managed, this should be uncommented, and also the loop iteration can be reduced
-# by an order of 10 to hit the 1GB threshold without the allocation fixes.
 # right now this test should OOM without the unbound index allocation fixes in place.
 # statement ok
 # SET memory_limit='1GB'
@@ -17,29 +16,34 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown;
 
 statement ok
-CREATE TABLE tbl (i INTEGER);
+CREATE TABLE tbl (c0 INTEGER, c1 INTEGER, c2 INTEGER, c3 INTEGER, c4 INTEGER, c5 INTEGER, c6 INTEGER, c7 INTEGER, c8 INTEGER, c9 INTEGER);
 
 statement ok
-CREATE UNIQUE INDEX idx_i ON tbl (i);
+CREATE UNIQUE INDEX idx_tbl ON tbl (c0, c1, c2, c3, c4, c5, c6, c7, c8, c9);
 
-loop i 0 1000000
-
-statement ok
-INSERT INTO tbl VALUES (${i});
+loop i 0 300001
 
 statement ok
-DELETE FROM tbl WHERE i = ${i};
+INSERT INTO tbl VALUES (${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i});
+
+statement ok
+DELETE FROM tbl WHERE c0 = ${i} AND c1 = ${i} AND c2 = ${i} AND c3 = ${i} AND c4 = ${i} AND c5 = ${i} AND c6 = ${i} AND c7 = ${i} AND c8 = ${i} AND c9 = ${i};
 
 endloop
 
+loop i 100 101
+
+statement ok
+INSERT INTO tbl VALUES (${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i}, ${i});
+
+endloop
+
+
+
 restart
 
-query II
-EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 2;
+statement error
+INSERT INTO tbl VALUES (100, 100, 100, 100, 100, 100, 100, 100, 100, 100);
 ----
-analyzed_plan	<REGEX>:.*Type: Index Scan.*
-
-query I
-SELECT i FROM tbl WHERE i = 2;
-----
+Constraint Error: Duplicate key "c0: 100, c1: 100, c2: 100, c3: 100, c4: 100, c5: 100, c6: 100, c7: 100, c8: 100, c9: 100" violates unique constraint.
 

@@ -75,7 +75,7 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 		buffer->Append(combined_chunk);
 		return;
 	}
-	// Otherwise extend the range.
+	// Otherwise merge the range with the previous one.
 	ranges.back().end = end;
 	buffer->Append(combined_chunk);
 }

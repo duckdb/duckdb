@@ -200,6 +200,8 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 				}
 			}
 
+			// We need to process the remaining rows in the current chunk, which is the minimum of the available
+			// rows in the chunk and the remaining rows in the current range.
 			auto offset_in_chunk = current_row - state.scan_state.current_row_index;
 			auto available_in_chunk = state.current_chunk.size() - offset_in_chunk;
 			auto range_remaining = replay_range.end - current_row + 1;

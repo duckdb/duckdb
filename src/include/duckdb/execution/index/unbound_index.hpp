@@ -66,6 +66,7 @@ private:
 	//! The serialized storage information of the index.
 	IndexStorageInfo storage_info;
 
+	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
 
 	//! Maps the column IDs in the buffered replays to a physical table offset.
