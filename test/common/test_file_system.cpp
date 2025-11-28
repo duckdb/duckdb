@@ -163,6 +163,55 @@ TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
 	REQUIRE(dedup == collapse("dir/nested/child"));
 }
 
+TEST_CASE("JoinPath handles edge cases", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto sep = fs->PathSeparator("dummy");
+	auto collapse = [&](const string &path) {
+		return StringUtil::Replace(path, "/", sep);
+	};
+
+	auto lhs_parent = fs->JoinPath("dir/subdir/..", "sibling");
+	REQUIRE(lhs_parent == collapse("dir/sibling"));
+
+	auto mixed_dots = fs->JoinPath("./dir/./subdir/./..", "./sibling/.");
+	REQUIRE(mixed_dots == collapse("dir/sibling"));
+
+	auto overflowing_rel = fs->JoinPath("dir/..", "../..");
+	REQUIRE(overflowing_rel == fs->ConvertSeparators("../.."));
+
+	auto walk_up_absolute = fs->JoinPath("/usr/local", "../..");
+	REQUIRE(walk_up_absolute == fs->ConvertSeparators("/"));
+
+	auto root_child = fs->JoinPath("/", "usr/local");
+	REQUIRE(root_child == fs->ConvertSeparators("/usr/local"));
+
+	auto past_root = fs->JoinPath("/usr/local", "../../..");
+	REQUIRE(past_root == fs->ConvertSeparators("/"));
+
+	auto uri_join = fs->JoinPath("file:/usr/local", "../bin");
+	REQUIRE(uri_join == "file:/usr/local/../bin");
+
+#ifdef _WIN32
+	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
+	REQUIRE(clamp_drive_root == fs->ConvertSeparators("C:/"));
+
+	auto clamp_drive_root_twice = fs->JoinPath(R"(C:\)", R"(..\..)");
+	REQUIRE(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
+
+	auto drive_relative = fs->JoinPath("C:", "system32");
+	REQUIRE(drive_relative == "C:system32");
+
+	auto drive_absolute_child = fs->JoinPath(R"(C:\)", "system32");
+	REQUIRE(drive_absolute_child == fs->ConvertSeparators("C:/system32"));
+
+	auto drive_relative_child = fs->JoinPath("C:drive_relative_path", "path");
+	REQUIRE(drive_relative_child == fs->ConvertSeparators("C:drive_relative_path/path"));
+
+	auto drive_relative_parent = fs->JoinPath("C:drive_relative_path", R"(..\path)");
+	REQUIRE(drive_relative_parent == "C:path");
+#endif
+}
+
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
 // this is required for the Direct-IO as on Windows Direct-IO can only write multiples of sector sizes
 // sector sizes are typically one of [512/1024/2048/4096] bytes, hence a 4096 bytes write succeeds.
