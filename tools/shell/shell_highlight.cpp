@@ -42,6 +42,7 @@ static HighlightElement highlight_elements[] = {
     {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
+    {"prompt", PrintColor::DARKORANGE, PrintIntensity::BOLD},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
 
@@ -216,34 +217,40 @@ void ShellHighlight::PrintError(string error_msg) {
 	PrintText("\n", PrintOutput::STDERR, PrintColor::STANDARD, PrintIntensity::STANDARD);
 }
 
-bool ShellHighlight::SetColor(const char *element_type, const char *color, const char *intensity) {
-	idx_t i;
-	for (i = 0; highlight_elements[i].name; i++) {
-		if (duckdb::StringUtil::CIEquals(element_type, highlight_elements[i].name)) {
-			break;
+HighlightElementType ShellHighlight::TryGetHighlightElement(const char *element_type, string &error_msg) {
+	for (idx_t i = 0; highlight_elements[i].name; i++) {
+		if (StringUtil::CIEquals(element_type, highlight_elements[i].name)) {
+			return static_cast<HighlightElementType>(i);
 		}
 	}
-	if (!highlight_elements[i].name) {
-		// element not found
-		string supported_options;
-		for (i = 0; highlight_elements[i].name; i++) {
-			if (!supported_options.empty()) {
-				supported_options += ", ";
-			}
-			supported_options += highlight_elements[i].name;
+	// element not found
+	string supported_options;
+	for (idx_t i = 0; highlight_elements[i].name; i++) {
+		if (!supported_options.empty()) {
+			supported_options += ", ";
 		}
-		state.Print(PrintOutput::STDERR, duckdb::StringUtil::Format("Unknown element '%s', supported options: %s\n",
-		                                                            element_type, supported_options.c_str()));
+		supported_options += highlight_elements[i].name;
+	}
+	error_msg =
+	    StringUtil::Format("Unknown element '%s', supported options: %s\n", element_type, supported_options.c_str());
+	return HighlightElementType::NONE;
+}
+
+bool ShellHighlight::SetColor(const char *element_type, const char *color, const char *intensity) {
+	string error_msg;
+	auto element = TryGetHighlightElement(element_type, error_msg);
+	if (element == HighlightElementType::NONE && !error_msg.empty()) {
+		state.Print(PrintOutput::STDERR, error_msg);
 		return false;
 	}
 
 	// found the element - parse the color
 	PrintColor print_color;
-	string error_msg;
 	if (!TryGetPrintColor(color, print_color, error_msg)) {
 		state.PrintDatabaseError(error_msg);
 		return false;
 	}
+	idx_t i = static_cast<idx_t>(element);
 	highlight_elements[i].color = print_color;
 	highlight_elements[i].intensity = PrintIntensity::STANDARD;
 	if (intensity) {

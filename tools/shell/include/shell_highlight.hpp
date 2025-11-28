@@ -50,6 +50,7 @@ enum class HighlightElementType : uint32_t {
 	TABLE_LAYOUT,
 	VIEW_LAYOUT,
 	PRIMARY_KEY_COLUMN,
+	PROMPT,
 	NONE
 };
 
@@ -89,6 +90,7 @@ struct ShellHighlight {
 	//! Enable or disable highlighting
 	static void SetHighlighting(bool enabled);
 
+	static HighlightElementType TryGetHighlightElement(const char *element_type, string &error_msg);
 	static const HighlightElement &GetHighlightElement(HighlightElementType type);
 
 public:

@@ -3343,8 +3343,7 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt =
-	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
@@ -3538,17 +3537,28 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
+			ShellHighlight highlight(data);
 #ifdef HAVE_LINENOISE
 			if (data.stdout_is_console && data.stderr_is_console) {
 				// detect terminal colors
 				auto terminal_color = linenoiseGetTerminalColorMode();
 				if (terminal_color == LINENOISE_DARK_MODE) {
+					highlight.SetColor("keyword", "deepskyblue1", "bold");
+					highlight.SetColor("string_constant", "lightgoldenrod4", "standard");
+					highlight.SetColor("numeric_constant", "lightgoldenrod4", "standard");
+					highlight.SetColor("continuation_selected", "deepskyblue1", "standard");
 				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+					highlight.SetColor("keyword", "deepskyblue6", "bold");
+					highlight.SetColor("string_constant", "orange5", "standard");
+					highlight.SetColor("numeric_constant", "orange5", "standard");
+					highlight.SetColor("continuation_selected", "deepskyblue6", "standard");
+					highlight.SetColor("prompt", "darkorange4", "bold");
+					highlight.SetColor("database_name", "darkorange4", "standard");
+					highlight.SetColor("schema_name", "deepskyblue6", "standard");
 				}
 			}
 #endif
 
-			ShellHighlight highlight(data);
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());
 			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {
