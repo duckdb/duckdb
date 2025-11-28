@@ -89,6 +89,7 @@ private:
 };
 
 class Allocator {
+public:
 	// 281TB ought to be enough for anybody
 	static constexpr const idx_t MAXIMUM_ALLOC_SIZE = 281474976710656ULL;
 

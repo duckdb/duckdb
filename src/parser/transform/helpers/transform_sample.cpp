@@ -47,6 +47,10 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(optional_ptr<duckd
 		if (rows < 0) {
 			throw ParserException("Sample rows %lld out of range, must be bigger than or equal to 0", rows);
 		}
+		if (rows >= Allocator::MAXIMUM_ALLOC_SIZE) {
+			throw ParserException("Cannot sample over %d rows. Please use percentage instead",
+			                      Allocator::MAXIMUM_ALLOC_SIZE);
+		}
 		result->sample_size = Value::BIGINT(rows);
 		result->method = SampleMethod::RESERVOIR_SAMPLE;
 	}

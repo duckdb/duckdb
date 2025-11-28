@@ -1,0 +1,19 @@
+# name: test/sql/sample/test_sample_too_big.test
+# description: Test SAMPLE keyword
+# group: [sample]
+
+statement ok
+CREATE TABLE t1(a INT);
+
+statement ok
+INSERT INTO t1 VALUES(1), (2), (3), (3), (5);
+
+statement error
+SELECT * FROM t1 TABLESAMPLE RESERVOIR(1222222220022220);
+----
+<REGEX>:.*Cannot sample over.*
+
+statement error
+SELECT * FROM t1 WHERE a IN (SELECT * FROM t1 TABLESAMPLE RESERVOIR(1222222220022220));
+----
+<REGEX>:.*Cannot sample over.*
