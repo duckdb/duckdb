@@ -1371,7 +1371,7 @@ void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) 
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
 
-	if (config.profiler_print_format != ProfilerPrintFormat::NO_OUTPUT) {
+	if (!parameter.empty() && config.profiler_print_format != ProfilerPrintFormat::NO_OUTPUT) {
 		auto &file_system = FileSystem::GetFileSystem(context);
 		const auto file_type = file_system.ExtractExtension(parameter);
 		if (file_type != "txt") {
