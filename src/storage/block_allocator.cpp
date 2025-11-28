@@ -11,6 +11,9 @@
 #else
 #include <sys/mman.h>
 #endif
+#ifdef __MVS__
+#include <zos-tls.h>
+#endif
 
 namespace duckdb {
 
@@ -67,6 +70,9 @@ static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 	success = VirtualFree(pointer, size, MEM_DECOMMIT);
 #elif defined(__APPLE__)
 	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
+#elif defined(__MVS__)
+	// the madvice functionality is not available on z/OS in any form
+	success = true;
 #else
 	success = madvise(pointer, size, MADV_DONTNEED) == 0;
 #endif
@@ -187,9 +193,17 @@ private:
 };
 
 BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAllocator &block_allocator) {
+#ifdef __MVS__
+	auto allocator_state = BlockAllocatorThreadLocalState(block_allocator);
+	static __tlssim<BlockAllocatorThreadLocalState> local_state_impl(allocator_state);
+	auto *local_state = local_state_impl.access();
+	(*local_state).TryInitialize(block_allocator);
+	return *local_state;
+#else
 	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
 	local_state.TryInitialize(block_allocator);
 	return local_state;
+#endif
 }
 
 //===--------------------------------------------------------------------===//
