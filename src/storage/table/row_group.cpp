@@ -1334,17 +1334,19 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	explicit DuckDBPartitionRowGroup(const RowGroup &row_group_p, bool is_exact_p)
+	    : row_group(row_group_p), is_exact(is_exact_p) {
 	}
 
-	RowGroup &row_group;
+	const RowGroup &row_group;
+	const bool is_exact;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
 		return row_group.GetStatistics(column_id);
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &stats) override {
-		if (row_group.HasChanges()) {
+		if (!is_exact) {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
@@ -1365,11 +1367,12 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 	if (HasUnloadedDeletes() || version_info.load().get()) {
 		// we have version info - approx count
 		result.count_type = CountType::COUNT_APPROXIMATE;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, false);
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, true);
 	}
 
-	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this);
 	return result;
 }
 
