@@ -51,7 +51,7 @@ public:
 	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
 	void PushAttach(AttachedDatabase &db);
 
-	void SetReadWrite() override;
+	void SetModifications(DatabaseModificationType type) override;
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,

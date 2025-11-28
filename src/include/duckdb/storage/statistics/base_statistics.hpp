@@ -88,7 +88,7 @@ public:
 	}
 
 	void Set(StatsInfo info);
-	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
+	void CombineValidity(const BaseStatistics &left, const BaseStatistics &right);
 	void CopyValidity(BaseStatistics &stats);
 	//! Set that the CURRENT level can have null values
 	//! Note that this is not correct for nested types unless this information is propagated in a different manner

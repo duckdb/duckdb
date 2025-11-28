@@ -130,6 +130,7 @@ public:
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
+	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	unique_ptr<BlockingSample> GetSample();

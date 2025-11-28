@@ -423,7 +423,7 @@ public:
 		}
 	}
 
-	void AddString(const string_t &string) {
+	void AddStringInternal(const string_t &string) {
 		if (!tuple_count) {
 			InitializeVector();
 		}
@@ -437,7 +437,10 @@ public:
 			// Reached the end of this vector
 			FlushVector();
 		}
+	}
 
+	void AddString(const string_t &string) {
+		AddStringInternal(string);
 		UncompressedStringStorage::UpdateStringStats(segment->stats, string);
 	}
 
@@ -555,7 +558,8 @@ public:
 	}
 
 	void AddNull() {
-		AddString("");
+		segment->stats.statistics.SetHasNullFast();
+		AddStringInternal("");
 	}
 
 public:

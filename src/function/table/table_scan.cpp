@@ -215,6 +215,12 @@ public:
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
 				if (output.size() == 0) {
+					if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+						// We can avoid looping, and just return as appropriate
+						data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+						return;
+					}
+
 					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
 					continue;
 				}
@@ -303,9 +309,6 @@ public:
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
 		do {
-			if (context.interrupted) {
-				throw InterruptException();
-			}
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output,
 				                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
@@ -321,8 +324,22 @@ public:
 			}
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
+			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+				// We can avoid looping, and just return as appropriate
+				if (!next) {
+					data_p.async_result = AsyncResultType::FINISHED;
+				} else {
+					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+				}
+				return;
+			}
 			if (!next) {
 				return;
+			}
+
+			// Before looping back, check if we are interrupted
+			if (context.interrupted) {
+				throw InterruptException();
 			}
 		} while (true);
 	}

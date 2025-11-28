@@ -331,6 +331,7 @@ public:
 	}
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
+		global_stats->Merge(*validity_state->GetStatistics());
 		for (idx_t i = 0; i < child_states.size(); i++) {
 			StructStats::SetChildStats(*global_stats, i, child_states[i]->GetStatistics());
 		}

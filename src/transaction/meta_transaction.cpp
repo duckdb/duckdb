@@ -226,7 +226,7 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	return db_ref;
 }
 
-void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
+void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
 	if (IsReadOnly()) {
 		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
 		                           db.GetName());
@@ -235,6 +235,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	if (transaction.IsReadOnly()) {
 		transaction.SetReadWrite();
 	}
+	transaction.SetModifications(modification);
 	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases
 		return;
