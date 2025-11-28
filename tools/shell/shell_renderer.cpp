@@ -1229,7 +1229,30 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 
 void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
-	shell_highlight.PrintText("Warning:\n", PrintOutput::STDOUT, HighlightElementType::WARNING);
+	HighlightElementType element_type;
+	switch (level) {
+	case (duckdb::LogLevel::LOG_TRACE):
+		element_type = HighlightElementType::LOG_TRACE;
+		break;
+	case (duckdb::LogLevel::LOG_DEBUG):
+		element_type = HighlightElementType::LOG_DEBUG;
+		break;
+	case (duckdb::LogLevel::LOG_INFO):
+		element_type = HighlightElementType::LOG_INFO;
+		break;
+	case (duckdb::LogLevel::LOG_WARNING):
+		element_type = HighlightElementType::LOG_WARNING;
+		break;
+	case (duckdb::LogLevel::LOG_ERROR):
+	case (duckdb::LogLevel::LOG_FATAL):
+		element_type = HighlightElementType::ERROR_TOKEN;
+		break;
+	default:
+		throw std::runtime_error("Unsupported log level for WriteLogEntry");
+	}
+
+	const auto log_level = duckdb::EnumUtil::ToString(level);
+	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
 	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, HighlightElementType::NONE);
 }
 

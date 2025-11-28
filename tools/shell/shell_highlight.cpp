@@ -42,8 +42,10 @@ static HighlightElement highlight_elements[] = {
     {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
-    {"warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
-    {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
+    {"log_trace", PrintColor::BLUE, PrintIntensity::BOLD},
+    {"log_debug", PrintColor::YELLOW, PrintIntensity::BOLD},
+    {"log_info", PrintColor::GREEN, PrintIntensity::BOLD},
+    {"log_warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
     {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD},
 };
 

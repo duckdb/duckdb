@@ -22,7 +22,7 @@ enum class LogLevel : uint8_t {
 	LOG_TRACE = 10,
 	LOG_DEBUG = 20,
 	LOG_INFO = 30,
-	LOG_WARN = 40,
+	LOG_WARNING = 40,
 	LOG_ERROR = 50,
 	LOG_FATAL = 60
 };

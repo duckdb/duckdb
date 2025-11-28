@@ -31,7 +31,6 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release. \n"
 	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior. \n"
 	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
-	DUCKDB_LOG_WARN(context, msg);
 
 	BindResult lambda_bind_result;
 	ErrorData error;
@@ -50,16 +49,20 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 
 	if (!lambda_bind_result.HasError()) {
 		if (!invalid_syntax) {
+			DUCKDB_LOG_WARNING(context, msg);
 			return lambda_bind_result;
 		}
+		DUCKDB_LOG_WARNING(context, msg);
 		return BindResult(msg);
 	}
 	if (StringUtil::Contains(lambda_bind_result.error.RawMessage(), "Deprecated lambda arrow (->) detected.")) {
+		DUCKDB_LOG_WARNING(context, msg);
 		return lambda_bind_result;
 	}
 
 	auto json_bind_result = BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	if (!json_bind_result.HasError()) {
+		DUCKDB_LOG_WARNING(context, msg);
 		return json_bind_result;
 	}
 
