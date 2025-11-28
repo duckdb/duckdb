@@ -146,6 +146,15 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
+      - name: Clean up the disk space
+        shell: bash
+        run: |
+          echo "Disk usage before clean up:"
+          df -h
+          rm -rf /opt/hostedtoolcache/CodeQL Java* Pypy Ruby go node
+          echo "Disk usage after clean up:"
+          df -h
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -179,7 +188,7 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - name: Clean up the disc space
+      - name: Clean up the disk space
         shell: bash
         run: |
           echo "Disk usage before clean up:"
