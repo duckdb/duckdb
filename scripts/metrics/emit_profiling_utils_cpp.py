@@ -8,21 +8,6 @@ from .model import MetricIndex
 from .paths import PROFILING_HPP_TEMPLATE, PROFILING_CPP_TEMPLATE
 from .writer import IndentedFileWriter, write_warning
 
-HPP_HEADER = """#pragma once
-
-#include "duckdb/common/enums/metric_type.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/profiling_node.hpp"
-
-namespace duckdb_yyjson {
-struct yyjson_mut_doc;
-struct yyjson_mut_val;
-} // namespace duckdb_yyjson
-
-namespace duckdb {
-
-"""
-
 CPP_HEADER = """
 #include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/common/enum_util.hpp"

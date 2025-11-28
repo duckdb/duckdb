@@ -8,8 +8,9 @@
 #pragma once
 
 #include "duckdb/common/enums/metric_type.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/common/profiler.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
