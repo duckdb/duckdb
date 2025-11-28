@@ -10,6 +10,10 @@
 #include <thread>
 #include <mutex>
 
+namespace {
+constexpr idx_t TEST_BUFFER_SIZE = 200;
+} // namespace
+
 namespace duckdb {
 
 // RAII wrapper for test file creation and cleanup
@@ -135,19 +139,19 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 
 		// First read
 		auto handle1 = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
-		string buffer1(200, '\0');
+		string buffer1(TEST_BUFFER_SIZE, '\0');
 		handle1->Read(QueryContext(), &buffer1[0], test_content.size(), /*location=*/0);
 		handle1.reset();
 
 		// Second read of the same location
 		auto handle2 = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
-		string buffer2(200, '\0');
+		string buffer2(TEST_BUFFER_SIZE, '\0');
 		handle2->Read(QueryContext(), &buffer2[0], test_content.size(), /*location=*/0);
 		handle2.reset();
 
 		// Third read of the same location
 		auto handle3 = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
-		string buffer3(200, '\0');
+		string buffer3(TEST_BUFFER_SIZE, '\0');
 		handle3->Read(QueryContext(), &buffer3[0], test_content.size(), /*location=*/0);
 		handle3.reset();
 
@@ -176,18 +180,18 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 
 		const idx_t chunk_size = 20;
 		auto handle1 = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
-		string buffer1(200, '\0');
+		string buffer1(TEST_BUFFER_SIZE, '\0');
 		handle1->Read(QueryContext(), &buffer1[0], chunk_size, /*location=*/0);
 		handle1.reset();
 
 		auto handle2 = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
-		string buffer2(200, '\0');
+		string buffer2(TEST_BUFFER_SIZE, '\0');
 		handle2->Read(QueryContext(), &buffer2[0], chunk_size, chunk_size);
 		handle2.reset();
 
 		// Read first chunk again - should use cache
 		auto handle3 = caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
-		string buffer3(200, '\0');
+		string buffer3(TEST_BUFFER_SIZE, '\0');
 		handle3->Read(QueryContext(), &buffer3[0], chunk_size, /*location=*/0);
 		handle3.reset();
 
@@ -212,7 +216,7 @@ TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]")
 		tracking_fs_ptr->Reset();
 
 		auto handle = caching_wrapper.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
-		string buffer(200, '\0');
+		string buffer(TEST_BUFFER_SIZE, '\0');
 
 		// First read from position 0
 		handle->Read(QueryContext(), &buffer[0], /*nr_bytes=*/10, /*location=*/0);
@@ -357,27 +361,34 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
 
-	const string test_content = "Test content for parallel read access.";
+	const string test_content =
+	    "Test content for parallel read access. This is a longer string to allow multiple reads.";
 	TestFileGuard test_file("test_caching_parallel.txt", test_content);
 	constexpr idx_t THREAD_COUNT = 2;
 
-	// Open file with parallel access flag
+	// Open file with parallel access flag - single handle shared by all threads
 	OpenFileInfo file_info(test_file.GetPath());
 	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+	auto shared_handle =
+	    caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS);
 
-	// Use two threads to read from the file in parallel.
+	// Use two threads to read from the same file handle in parallel using pread semantics
 	vector<std::thread> threads;
+	std::mutex results_mutex;
 	vector<bool> results(THREAD_COUNT, false);
 
+	const idx_t chunk_size = 20;
 	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
 		threads.emplace_back([&, idx]() {
-			auto handle =
-			    caching_wrapper.OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS);
-			string buffer(200, '\0');
-			handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
-			results[idx] = (buffer.substr(0, test_content.size()) == test_content);
-			handle.reset();
+			const idx_t read_location = idx * chunk_size;
+			string buffer(TEST_BUFFER_SIZE, '\0');
+			shared_handle->Read(QueryContext(), &buffer[0], chunk_size, read_location);
+			bool result = (buffer.substr(0, chunk_size) == test_content.substr(read_location, chunk_size));
+			{
+				std::lock_guard<std::mutex> lock(results_mutex);
+				results[idx] = result;
+			}
 		});
 	}
 	for (auto &thd : threads) {
@@ -385,9 +396,11 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 		thd.join();
 	}
 
-	// Verify both threads read correctly
+	// Verify both threads read correctly from the same handle
 	REQUIRE(results[0]);
 	REQUIRE(results[1]);
+
+	shared_handle.reset();
 }
 
 } // namespace duckdb
