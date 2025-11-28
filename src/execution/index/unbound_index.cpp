@@ -9,10 +9,6 @@
 
 namespace duckdb {
 
-BufferedReplayRange::BufferedReplayRange(BufferedIndexReplay replay_type, idx_t start_p, idx_t end_p)
-    : type(replay_type), start(start_p), end(end_p) {
-}
-
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
     : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
@@ -68,15 +64,23 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	if (buffer == nullptr) {
 		buffer = make_uniq<ColumnDataCollection>(allocator, types);
 	}
+	// The starting index of the buffer range is the size of the buffer.
 	idx_t start = buffer->Count();
 	idx_t end = start + combined_chunk.size() - 1;
 	auto &ranges = buffered_replays.ranges;
-	if (ranges.empty() || ranges.back().type != replay_type) {
+
+	if (ranges.empty() || ranges.back().type != replay_type || replay_type == BufferedIndexReplay::DEL_ENTRY) {
+		// If there are no buffer ranges, or the replay types don't match, or we are buffering deletes,
+		// append a new range interval.
+		// FIXME: Merging deletes if possible?
 		ranges.emplace_back(replay_type, start, end);
-	} else {
-		ranges.back().end = end;
+		buffer->Append(combined_chunk);
+		return;
 	}
+	// Otherwise extend the range.
+	ranges.back().end = end;
 	buffer->Append(combined_chunk);
+
 }
 
 } // namespace duckdb
