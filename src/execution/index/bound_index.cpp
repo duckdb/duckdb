@@ -201,7 +201,9 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 			}
 
 			auto offset_in_chunk = current_row - state.scan_state.current_row_index;
-			auto rows_to_process = state.current_chunk.size() - offset_in_chunk ;
+			auto available_in_chunk = state.current_chunk.size() - offset_in_chunk;
+			auto range_remaining = replay_range.end - current_row + 1;
+			auto rows_to_process = MinValue<idx_t>(available_in_chunk, range_remaining);
 
 			SelectionVector sel(offset_in_chunk, rows_to_process);
 
@@ -214,17 +216,16 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 
 			Vector row_ids(state.current_chunk.data.back(), sel, rows_to_process);
 
-			// Apply the replay operation
 			if (replay_range.type == BufferedIndexReplay::INSERT_ENTRY) {
 				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
 				auto error = Append(table_chunk, row_ids, append_info);
 				if (error.HasError()) {
 					throw InternalException("error while applying buffered appends: " + error.Message());
 				}
-			} else {
-				Delete(table_chunk, row_ids);
+				current_row += rows_to_process;
+				continue;
 			}
-
+			Delete(table_chunk, row_ids);
 			current_row += rows_to_process;
 		}
 	}

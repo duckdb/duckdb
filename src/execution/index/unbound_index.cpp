@@ -69,10 +69,8 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	idx_t end = start + combined_chunk.size() - 1;
 	auto &ranges = buffered_replays.ranges;
 
-	if (ranges.empty() || ranges.back().type != replay_type || replay_type == BufferedIndexReplay::DEL_ENTRY) {
-		// If there are no buffer ranges, or the replay types don't match, or we are buffering deletes,
-		// append a new range interval.
-		// FIXME: Merging deletes if possible?
+	if (ranges.empty() || ranges.back().type != replay_type) {
+		// If there are no buffer ranges, or the replay types don't match, append a new range interval.
 		ranges.emplace_back(replay_type, start, end);
 		buffer->Append(combined_chunk);
 		return;
@@ -80,7 +78,6 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	// Otherwise extend the range.
 	ranges.back().end = end;
 	buffer->Append(combined_chunk);
-
 }
 
 } // namespace duckdb
