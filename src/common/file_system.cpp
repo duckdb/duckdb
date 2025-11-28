@@ -192,11 +192,14 @@ string FileSystem::GetEnvVariable(const string &env) {
 }
 
 static bool StartsWithSingleBackslash(const string &path) {
-	if (path.size() < 2) {
+	if (path.empty()) {
 		return false;
 	}
 	if (path[0] != '/' && path[0] != '\\') {
 		return false;
+	}
+	if (path.size() == 1) {
+		return true;
 	}
 	if (path[1] == '/' || path[1] == '\\') {
 		return false;
@@ -329,23 +332,30 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 		auto parts = StringUtil::Split(path, separator);
 
 		string drive_prefix;
-		idx_t part_start = 0;
-		if (is_absolute && !parts.empty() && parts[0].find(':') != string::npos) {
-			// Preserve drive designator on Windows (e.g., "C:")
-			drive_prefix = parts[0];
-			part_start = 1;
+		if (!parts.empty()) {
+			auto colon_pos = parts[0].find(':');
+			if (colon_pos == 1 && StringUtil::CharacterIsAlpha(parts[0][0])) {
+				// Preserve drive designator on Windows (e.g., "C:")
+				drive_prefix = parts[0].substr(0, colon_pos + 1);
+				auto remainder = parts[0].substr(colon_pos + 1);
+				if (remainder.empty()) {
+					parts.erase(parts.begin());
+				} else {
+					parts[0] = remainder;
+				}
+			}
 		}
 
+		bool clamp_to_root = is_absolute || !drive_prefix.empty();
 		vector<string> stack;
-		for (idx_t i = part_start; i < parts.size(); i++) {
-			const auto &part = parts[i];
+		for (auto &part : parts) {
 			if (part.empty() || part == ".") {
 				continue;
 			}
 			if (part == "..") {
 				if (!stack.empty() && stack.back() != "..") {
 					stack.pop_back();
-				} else if (!is_absolute) {
+				} else if (!clamp_to_root) {
 					stack.push_back(part);
 				}
 				continue;
@@ -355,22 +365,28 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 
 		string result;
 		if (is_absolute) {
-			if (!drive_prefix.empty()) {
-				result = drive_prefix + separator;
-			} else {
-				result = separator;
-			}
+			result = drive_prefix.empty() ? separator : drive_prefix + separator;
+		} else if (!drive_prefix.empty()) {
+			result = drive_prefix;
 		}
 
 		for (idx_t i = 0; i < stack.size(); i++) {
-			if (!result.empty() && result.back() != separator[0]) {
+			bool need_separator = !result.empty() && result.back() != separator[0];
+			if (!is_absolute && !drive_prefix.empty() && result == drive_prefix) {
+				// drive-relative path keeps the drive prefix without an extra separator
+				need_separator = false;
+			}
+			if (need_separator) {
 				result += separator;
 			}
 			result += stack[i];
 		}
 
 		if (result.empty() && !drive_prefix.empty()) {
-			result = drive_prefix + separator;
+			result = drive_prefix;
+			if (is_absolute) {
+				result += separator;
+			}
 		}
 		return result.empty() ? path : result;
 	};
@@ -391,16 +407,18 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 
 	auto lhs = ConvertSeparators(a);
 	auto rhs = ConvertSeparators(b);
+	auto lhs_absolute = IsPathAbsolute(lhs);
+	auto rhs_absolute = IsPathAbsolute(rhs);
 
 	if (lhs.empty()) {
-		return normalize_segments(rhs, separator, IsPathAbsolute(rhs));
+		return normalize_segments(rhs, separator, rhs_absolute);
 	}
 	if (rhs.empty()) {
-		return normalize_segments(lhs, separator, IsPathAbsolute(lhs));
+		return normalize_segments(lhs, separator, lhs_absolute);
 	}
 
 	// if rhs is an absolute path, prefer it
-	if (IsPathAbsolute(rhs)) {
+	if (rhs_absolute) {
 		return normalize_segments(rhs, PathSeparator(rhs), true);
 	}
 
@@ -408,7 +426,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	trim_leading_separators(rhs, separator_char);
 
 	auto combined = lhs + separator + rhs;
-	return normalize_segments(combined, separator, IsPathAbsolute(lhs));
+	return normalize_segments(combined, separator, lhs_absolute);
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
