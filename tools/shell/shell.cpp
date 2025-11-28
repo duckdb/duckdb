@@ -3538,6 +3538,15 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
+#ifdef HAVE_LINENOISE
+			if (data.stdout_is_console && data.stderr_is_console) {
+				// detect terminal colors
+				auto terminal_color = linenoiseGetTerminalColorMode();
+				if (terminal_color == LINENOISE_DARK_MODE) {
+				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+				}
+			}
+#endif
 
 			ShellHighlight highlight(data);
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
