@@ -16,9 +16,12 @@ namespace duckdb {
 
 class DatabaseInstance;
 class QueryContext;
+class CachingFileSystemWrapper;
 
 //! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API
 class CachingFileHandleWrapper : public FileHandle {
+	friend class CachingFileSystemWrapper;
+
 public:
 	DUCKDB_API CachingFileHandleWrapper(CachingFileSystemWrapper &file_system, unique_ptr<CachingFileHandle> handle);
 	DUCKDB_API ~CachingFileHandleWrapper() override;
@@ -48,7 +51,7 @@ public:
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                           optional_ptr<FileOpener> opener = nullptr) override;
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
-	                                          optional_ptr<FileOpener> opener = nullptr) override;
+	                                          optional_ptr<FileOpener> opener = nullptr);
 
 	DUCKDB_API void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	DUCKDB_API void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -71,10 +74,6 @@ public:
 
 	DUCKDB_API bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	                         FileOpener *opener = nullptr) override;
-	DUCKDB_API bool ListFilesExtended(const string &directory,
-	                                 const std::function<void(OpenFileInfo &info)> &callback,
-	                                 optional_ptr<FileOpener> opener) override;
-	DUCKDB_API bool SupportsListFilesExtended() const override;
 
 	DUCKDB_API void MoveFile(const string &source, const string &target,
 	                        optional_ptr<FileOpener> opener = nullptr) override;
@@ -114,6 +113,10 @@ protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
 	                                                          optional_ptr<FileOpener> opener) override;
 	DUCKDB_API virtual bool SupportsOpenFileExtended() const override;
+	DUCKDB_API virtual bool ListFilesExtended(const string &directory,
+	                                         const std::function<void(OpenFileInfo &info)> &callback,
+	                                         optional_ptr<FileOpener> opener) override;
+	DUCKDB_API virtual bool SupportsListFilesExtended() const override;
 
 private:
 	CachingFileSystem caching_file_system;

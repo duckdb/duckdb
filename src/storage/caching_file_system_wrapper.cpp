@@ -194,11 +194,15 @@ bool CachingFileSystemWrapper::ListFiles(const string &directory, const std::fun
 bool CachingFileSystemWrapper::ListFilesExtended(const string &directory,
                                                  const std::function<void(OpenFileInfo &info)> &callback,
                                                  optional_ptr<FileOpener> opener) {
-	return underlying_file_system.ListFilesExtended(directory, callback, opener);
+	// Use the public ListFiles API which will internally call ListFilesExtended if supported
+	return underlying_file_system.ListFiles(directory, callback, opener);
 }
 
 bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
-	return underlying_file_system.SupportsListFilesExtended();
+	// Check if the underlying file system supports it by checking if it has the method
+	// Since we can't call the protected method directly, we assume it does if it's a VirtualFileSystem
+	// or we can just return true and let the public API handle the fallback
+	return true;
 }
 
 void CachingFileSystemWrapper::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
