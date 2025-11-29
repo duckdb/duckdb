@@ -201,6 +201,8 @@ public:
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	//! If the following flag is set, then command execution stops at an error
 	bool bail_on_error = false;
+	//! Table name when rendering a DESCRIBE statement
+	string describe_table_name;
 
 	/*
 	** Treat stdin as an interactive input if the following variable
@@ -328,7 +330,6 @@ public:
 	unique_ptr<ShellRenderer> GetRenderer(RenderMode mode);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
-	SuccessState RenderDescribe(duckdb::QueryResult &res);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
@@ -424,9 +425,6 @@ public:
 private:
 	ShellState();
 	~ShellState();
-
-private:
-	string describe_table_name;
 };
 
 struct PagerState {

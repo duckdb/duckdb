@@ -1171,6 +1171,43 @@ SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, Rendering
 }
 
 //===--------------------------------------------------------------------===//
+// Describe Renderer
+//===--------------------------------------------------------------------===//
+
+class ModeDescribeRenderer : public ShellRenderer {
+public:
+	explicit ModeDescribeRenderer(ShellState &state) : ShellRenderer(state) {
+	}
+
+	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+};
+
+SuccessState ModeDescribeRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &res) {
+	vector<ShellTableInfo> result;
+	ShellTableInfo table;
+	table.table_name = state.describe_table_name;
+	for (auto &row : res.result) {
+		ShellColumnInfo column;
+		column.column_name = row.GetValue<string>(0);
+		column.column_type = row.GetValue<string>(1);
+		if (!row.IsNull(2)) {
+			column.is_not_null = row.GetValue<string>(2) == "NO";
+		}
+		if (!row.IsNull(3)) {
+			column.is_primary_key = row.GetValue<string>(3) == "PRI";
+			column.is_unique = row.GetValue<string>(3) == "UNI";
+		}
+		if (!row.IsNull(4)) {
+			column.default_value = row.GetValue<string>(4);
+		}
+		table.columns.push_back(std::move(column));
+	}
+	result.push_back(std::move(table));
+	state.RenderTableMetadata(result);
+	return SuccessState::SUCCESS;
+}
+
+//===--------------------------------------------------------------------===//
 // Get Renderer
 //===--------------------------------------------------------------------===//
 unique_ptr<ShellRenderer> ShellState::GetRenderer() {
@@ -1217,6 +1254,8 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 		return make_uniq<ModeLatexRenderer>(*this);
 	case RenderMode::DUCKBOX:
 		return make_uniq<ModeDuckBoxRenderer>(*this);
+	case RenderMode::DESCRIBE:
+		return make_uniq<ModeDescribeRenderer>(*this);
 	default:
 		throw std::runtime_error("Unsupported mode for GetRenderer");
 	}

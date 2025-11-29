@@ -1294,10 +1294,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// we should use a pager
 		pager_setup = SetupPager();
 	}
-	if (cMode == RenderMode::DESCRIBE) {
-		RenderDescribe(res);
-		return SuccessState::SUCCESS;
-	}
 	// render the query result
 	auto renderer = GetRenderer();
 	RenderingQueryResult render_result(res, *renderer);
@@ -2451,31 +2447,6 @@ void ShellState::ShowConfiguration() {
 	}
 	PrintF("\n");
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
-}
-
-SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
-	vector<ShellTableInfo> result;
-	ShellTableInfo table;
-	table.table_name = describe_table_name;
-	for (auto &row : res) {
-		ShellColumnInfo column;
-		column.column_name = row.GetValue<string>(0);
-		column.column_type = row.GetValue<string>(1);
-		if (!row.IsNull(2)) {
-			column.is_not_null = row.GetValue<string>(2) == "NO";
-		}
-		if (!row.IsNull(3)) {
-			column.is_primary_key = row.GetValue<string>(3) == "PRI";
-			column.is_unique = row.GetValue<string>(3) == "UNI";
-		}
-		if (!row.IsNull(4)) {
-			column.default_value = row.GetValue<string>(4);
-		}
-		table.columns.push_back(std::move(column));
-	}
-	result.push_back(std::move(table));
-	RenderTableMetadata(result);
-	return SuccessState::SUCCESS;
 }
 
 MetadataResult ShellState::DisplayTables(const vector<string> &args) {
