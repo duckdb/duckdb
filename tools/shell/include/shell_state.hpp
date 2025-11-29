@@ -264,8 +264,6 @@ public:
 	string pager_command;
 	// In automatic mode, only show a pager when this row count is exceeded
 	idx_t pager_min_rows = 50;
-	// In automatic mode, only show a pager when this column count is exceeded
-	idx_t pager_min_columns = 5;
 	//! Whether or not the pager is currently active
 	bool pager_is_active = false;
 	//! Shell highlighting mode
