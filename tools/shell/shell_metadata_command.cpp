@@ -713,24 +713,25 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 		}
 		state.PrintF("Pager mode: %s\n", mode_str);
 		if (state.pager_mode == PagerMode::PAGER_AUTOMATIC) {
-			state.PrintF("Trigger pager when rows exceed %d or columns exceed %d\n", state.pager_min_rows,
-			             state.pager_min_columns);
+			string page_mode = StringUtil::Format("Trigger pager when rows exceed %d", state.pager_min_rows);
+			if (state.max_width == 0) {
+				page_mode += " or result set is wider than terminal";
+			} else {
+				page_mode += StringUtil::Format(" or result set is wider than %d characters", state.max_width);
+			}
+			state.Print(page_mode);
 		}
 		if (state.pager_mode != PagerMode::PAGER_OFF || !state.pager_command.empty()) {
 			state.PrintF("Pager command: %s\n", state.pager_command);
 		}
 		return MetadataResult::SUCCESS;
 	}
-	if (args[1] == "set_row_threshold" || args[1] == "set_column_threshold") {
+	if (args[1] == "set_row_threshold") {
 		if (args.size() != 3) {
 			return MetadataResult::PRINT_USAGE;
 		}
 		idx_t limit = (idx_t)state.StringToInt(args[2]);
-		if (args[1] == "set_row_threshold") {
-			state.pager_min_rows = limit;
-		} else {
-			state.pager_min_columns = limit;
-		}
+		state.pager_min_rows = limit;
 		return MetadataResult::SUCCESS;
 	}
 	if (args.size() != 2) {

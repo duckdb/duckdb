@@ -428,11 +428,16 @@ void RenderLineDisplay(ShellHighlight &highlight, string &text, idx_t total_rend
 	highlight.PrintText(middle_line, PrintOutput::STDOUT, element_type);
 }
 
-void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
+idx_t ShellState::GetMaxRenderWidth() const {
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
 	if (max_render_width < 80) {
 		max_render_width = 80;
 	}
+	return max_render_width;
+}
+
+void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
+	idx_t max_render_width = GetMaxRenderWidth();
 	duckdb::BoxRendererConfig config;
 	// figure out the render width of each table
 	vector<ShellTableRenderInfo> table_list;
