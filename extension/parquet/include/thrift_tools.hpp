@@ -14,6 +14,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
 
@@ -50,6 +51,19 @@ struct ReadHeadComparator {
 
 		return a_start < b_start && a_end < b_start;
 	}
+};
+
+class ReadIntoBufferAsyncTask : public AsyncTask {
+public:
+	explicit ReadIntoBufferAsyncTask(ReadHead &head, CachingFileHandle &handle) : read_head(head), file_handle(handle) {
+	}
+	void Execute() override {
+		read_head.buffer_handle = file_handle.Read(read_head.buffer_ptr, read_head.size, read_head.location);
+		D_ASSERT(read_head.buffer_handle.IsValid());
+		read_head.data_isset = true;
+	}
+	ReadHead &read_head;
+	CachingFileHandle &file_handle;
 };
 
 // Two-step read ahead buffer
@@ -111,15 +125,19 @@ struct ReadAheadBuffer {
 	}
 
 	// Prefetch all read heads
-	void Prefetch() {
+	AsyncResult Prefetch() {
+		vector<unique_ptr<AsyncTask>> tasks;
 		for (auto &read_head : read_heads) {
 			if (read_head.GetEnd() > file_handle.GetFileSize()) {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
-			read_head.buffer_handle = file_handle.Read(read_head.buffer_ptr, read_head.size, read_head.location);
-			D_ASSERT(read_head.buffer_handle.IsValid());
-			read_head.data_isset = true;
+			tasks.push_back(make_uniq<ReadIntoBufferAsyncTask>(read_head, file_handle));
 		}
+
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 };
 
@@ -146,7 +164,9 @@ public:
 			D_ASSERT(prefetch_buffer->buffer_handle.IsValid());
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
-			Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_handle.GetFileSize() - location));
+			auto res = Prefetch(location,
+			                    MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_handle.GetFileSize() - location));
+			res.ExecuteTasksSynchronously();
 			auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 			D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
 			memcpy(buf, prefetch_buffer_fallback->buffer_ptr + location - prefetch_buffer_fallback->location, len);
@@ -160,10 +180,10 @@ public:
 	}
 
 	// Prefetch a single buffer
-	void Prefetch(idx_t pos, uint64_t len) {
+	AsyncResult Prefetch(idx_t pos, uint64_t len) {
 		RegisterPrefetch(pos, len, false);
 		FinalizeRegistration();
-		PrefetchRegistered();
+		return PrefetchRegistered();
 	}
 
 	// Register a buffer for prefixing
@@ -177,8 +197,8 @@ public:
 	}
 
 	// Prefetch all previously registered ranges
-	void PrefetchRegistered() {
-		ra_buffer.Prefetch();
+	AsyncResult PrefetchRegistered() {
+		return ra_buffer.Prefetch();
 	}
 
 	void ClearPrefetch() {
