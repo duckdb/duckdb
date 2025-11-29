@@ -46,6 +46,7 @@ struct Prompt;
 struct ShellProgressBar;
 struct PagerState;
 struct ShellTableInfo;
+enum class HighlightElementType : uint32_t;
 
 using idx_t = uint64_t;
 
@@ -98,6 +99,7 @@ enum class ReadLineVersion { LINENOISE, FALLBACK };
 enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
+enum class HighlightMode : uint32_t { AUTOMATIC, MIXED_MODE, DARK_MODE, LIGHT_MODE };
 
 enum class ExecuteSQLSingleValueResult {
 	SUCCESS,
@@ -244,6 +246,8 @@ public:
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
+	//! User-configured highlight elements
+	duckdb::unordered_set<HighlightElementType> user_configured_elements;
 
 #ifdef HAVE_LINENOISE
 	ReadLineVersion rl_version = ReadLineVersion::LINENOISE;
@@ -261,6 +265,8 @@ public:
 	idx_t pager_min_columns = 5;
 	//! Whether or not the pager is currently active
 	bool pager_is_active = false;
+	//! Shell highlighting mode
+	HighlightMode highlight_mode = HighlightMode::AUTOMATIC;
 
 #if defined(_WIN32) || defined(WIN32)
 	//! When enabled, sets the console page to UTF8 and renders using that code page

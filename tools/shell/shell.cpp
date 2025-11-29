@@ -3343,8 +3343,7 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt =
-	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
@@ -3538,8 +3537,19 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-
 			ShellHighlight highlight(data);
+#ifdef HAVE_LINENOISE
+			if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
+				// detect terminal colors
+				auto terminal_color = linenoiseGetTerminalColorMode();
+				if (terminal_color == LINENOISE_DARK_MODE) {
+					highlight.ToggleMode(HighlightMode::DARK_MODE);
+				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+					highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+				}
+			}
+#endif
+
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());
 			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {

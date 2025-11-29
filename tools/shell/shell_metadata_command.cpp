@@ -186,6 +186,23 @@ MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &arg
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult ToggleHighlightMode(ShellState &state, const vector<string> &args) {
+	if (args[1] == "mixed") {
+		state.highlight_mode = HighlightMode::MIXED_MODE;
+	} else if (args[1] == "dark") {
+		state.highlight_mode = HighlightMode::DARK_MODE;
+	} else if (args[1] == "light") {
+		state.highlight_mode = HighlightMode::LIGHT_MODE;
+	} else if (args[1] == "auto") {
+		state.highlight_mode = HighlightMode::AUTOMATIC;
+	} else {
+		return MetadataResult::PRINT_USAGE;
+	}
+	ShellHighlight highlight(state);
+	highlight.ToggleMode(state.highlight_mode);
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &args) {
 	state.highlight_results = state.StringToBool(args[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
@@ -781,6 +798,8 @@ static const MetadataCommand metadata_commands[] = {
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
+    {"highlight_mode", 2, ToggleHighlightMode, "mixed|dark|light", "Toggle the highlight mode to dark or light mode", 0,
+     ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
      "Options:\n\t--csv\tImport data from CSV (read_csv)\n\t--json\tImport data from JSON "
