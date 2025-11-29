@@ -8,19 +8,6 @@
 
 namespace duckdb_shell {
 
-bool ShellRenderer::IsColumnar(RenderMode mode) {
-	switch (mode) {
-	case RenderMode::COLUMN:
-	case RenderMode::TABLE:
-	case RenderMode::BOX:
-	case RenderMode::MARKDOWN:
-	case RenderMode::LATEX:
-		return true;
-	default:
-		return false;
-	}
-}
-
 ShellRenderer::ShellRenderer(ShellState &state)
     : state(state), show_header(state.showHeader), col_sep(state.colSeparator), row_sep(state.rowSeparator) {
 }
@@ -1127,8 +1114,16 @@ private:
 	bool highlight = true;
 };
 
-ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
-}
+class ModeDuckBoxRenderer : public ShellRenderer {
+public:
+	explicit ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
+	}
+
+	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+	bool RequireMaterializedResult() const override {
+		return true;
+	}
+};
 
 SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
 	DuckBoxRenderer result_renderer(state, state.HighlightResults());
@@ -1173,13 +1168,15 @@ SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, Rendering
 //===--------------------------------------------------------------------===//
 // Describe Renderer
 //===--------------------------------------------------------------------===//
-
 class ModeDescribeRenderer : public ShellRenderer {
 public:
 	explicit ModeDescribeRenderer(ShellState &state) : ShellRenderer(state) {
 	}
 
 	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+	bool RequireMaterializedResult() const override {
+		return true;
+	}
 };
 
 SuccessState ModeDescribeRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &res) {
@@ -1206,6 +1203,22 @@ SuccessState ModeDescribeRenderer::RenderQueryResult(ShellState &state, Renderin
 	state.RenderTableMetadata(result);
 	return SuccessState::SUCCESS;
 }
+
+//===--------------------------------------------------------------------===//
+// Trash Renderer
+//===--------------------------------------------------------------------===//
+class ModeTrashRenderer : public ShellRenderer {
+public:
+	explicit ModeTrashRenderer(ShellState &state) : ShellRenderer(state) {
+	}
+
+	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override {
+		return SuccessState::SUCCESS;
+	}
+	bool RequireMaterializedResult() const override {
+		return true;
+	}
+};
 
 //===--------------------------------------------------------------------===//
 // Get Renderer
@@ -1256,6 +1269,8 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 		return make_uniq<ModeDuckBoxRenderer>(*this);
 	case RenderMode::DESCRIBE:
 		return make_uniq<ModeDescribeRenderer>(*this);
+	case RenderMode::TRASH:
+		return make_uniq<ModeTrashRenderer>(*this);
 	default:
 		throw std::runtime_error("Unsupported mode for GetRenderer");
 	}

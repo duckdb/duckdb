@@ -1250,16 +1250,17 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &con = *conn;
+	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX &&
-	    cMode != RenderMode::DESCRIBE) {
-		// for row-wise rendering we can use streaming results
-		result = con.SendQuery(std::move(statement));
-	} else {
+	if (renderer->RequireMaterializedResult()) {
+		// we need to materialize the result prior to rendering
 		duckdb::QueryParameters parameters;
 		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
 		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
 		result = con.SendQuery(std::move(statement), parameters);
+	} else {
+		// for row-wise rendering we can use streaming results
+		result = con.SendQuery(std::move(statement));
 	}
 	auto &res = *result;
 	if (res.HasError()) {
@@ -1285,17 +1286,12 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
-	if (cMode == RenderMode::TRASH) {
-		// execute the query but don't render anything
-		return SuccessState::SUCCESS;
-	}
 	unique_ptr<PagerState> pager_setup;
 	if (ShouldUsePager(res)) {
 		// we should use a pager
 		pager_setup = SetupPager();
 	}
 	// render the query result
-	auto renderer = GetRenderer();
 	RenderingQueryResult render_result(res, *renderer);
 
 	renderer->Analyze(render_result);
@@ -1696,6 +1692,9 @@ bool ShellState::ShouldUsePager(idx_t line_count) {
 }
 
 bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+	if (cMode == RenderMode::TRASH) {
+		return false;
+	}
 	if (!ShouldUsePager()) {
 		return false;
 	}

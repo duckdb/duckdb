@@ -68,8 +68,8 @@ public:
 	virtual void RenderHeader(ResultMetadata &result);
 	virtual void RenderRow(ResultMetadata &result, RowData &row);
 	virtual void RenderFooter(ResultMetadata &result);
-	static bool IsColumnar(RenderMode mode);
 	virtual string NullValue();
+	virtual bool RequireMaterializedResult() const = 0;
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -85,6 +85,9 @@ public:
 	virtual const char *GetRowStart() {
 		return nullptr;
 	}
+	bool RequireMaterializedResult() const override {
+		return true;
+	}
 
 	void RenderAlignedValue(ResultMetadata &result, idx_t c);
 
@@ -99,13 +102,9 @@ public:
 
 public:
 	virtual void RenderHeader(ResultMetadata &result) override;
-};
-
-class ModeDuckBoxRenderer : public ShellRenderer {
-public:
-	explicit ModeDuckBoxRenderer(ShellState &state);
-
-	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+	bool RequireMaterializedResult() const override {
+		return false;
+	}
 };
 
 } // namespace duckdb_shell
