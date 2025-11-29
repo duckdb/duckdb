@@ -534,7 +534,7 @@ struct ToMicrosecondsFun {
 struct ToMillenniaFun {
 	static constexpr const char *Name = "to_millennia";
 	static constexpr const char *Parameters = "integer";
-	static constexpr const char *Description = "Construct a millenium interval";
+	static constexpr const char *Description = "Construct a millennium interval";
 	static constexpr const char *Example = "to_millennia(1)";
 	static constexpr const char *Categories = "";
 

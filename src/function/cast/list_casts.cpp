@@ -165,7 +165,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 
 		auto ldata = ConstantVector::GetData<list_entry_t>(source)[0];
 		if (!ConstantVector::IsNull(source) && ldata.length != array_size) {
-			// Cant cast to array, list size mismatch
+			// Can't cast to array, list size mismatch
 			auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u", ldata.length,
 			                              array_size);
 			HandleCastError::AssignError(msg, parameters);
@@ -259,7 +259,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 
 		for (idx_t i = 0; i < count; i++) {
 			if (FlatVector::IsNull(result, i)) {
-				// We've already failed to cast this list above (e.g. length mismatch), so theres nothing to do here.
+				// We've already failed to cast this list above (e.g. length mismatch), so there's nothing to do here.
 				continue;
 			} else {
 				auto &list_cast_input = cast_chunk.data[0];

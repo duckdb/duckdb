@@ -65,7 +65,7 @@ int split_work(int tnum, ds_key_t *pkFirstRow, ds_key_t *pkRowCount) {
 	nChild = get_int("CHILD");
 
 	/*
-	 * 1. small tables aren't paralelized
+	 * 1. small tables aren't parallelized
 	 * 2. nothing is parallelized unless a command line arg is supplied
 	 */
 	*pkFirstRow = 1;

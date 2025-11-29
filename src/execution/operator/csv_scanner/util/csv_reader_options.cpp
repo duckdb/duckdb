@@ -298,7 +298,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			force_not_null = ParseColumnList(value, expected_names, loption);
 		} else {
 			if (value.IsNull()) {
-				throw BinderException("Invalid value for 'force_not_null' paramenter");
+				throw BinderException("Invalid value for 'force_not_null' parameter");
 			}
 			// Get the list of columns to use as a recovery key
 			auto &children = ListValue::GetChildren(value);

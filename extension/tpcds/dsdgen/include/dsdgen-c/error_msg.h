@@ -88,7 +88,7 @@ typedef struct ERR_MSG_T {
 	const char *prompt;
 } err_msg_t;
 
-/*  Flag determine formating */
+/*  Flag determine formatting */
 #define EFLG_NO_ARG   0x0000
 #define EFLG_STR_ARG  0x0001
 #define EFLG_ARG_MASK 0x0001

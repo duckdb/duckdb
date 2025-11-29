@@ -15,7 +15,7 @@
  * Systems Inc.  By accepting transfer of this copy, Recipient agrees
  * to retain this software in confidence, to prevent disclosure to others, and
  * to make no use of this software other than that for which it was delivered.
- * This is an unpublished copyright work Gradient Systems, Inc.  Execpt as
+ * This is an unpublished copyright work Gradient Systems, Inc.  Except as
  * permitted by federal law, 17 USC 117, copying is strictly prohibited.
  *
  * Gradient Systems Inc. CONFIDENTIAL - (Gradient Systems Inc. Confidential
@@ -95,7 +95,7 @@ NextRand64(DSS_HUGE nSeed) {
 
 	DSS_HUGE a = (unsigned DSS_HUGE)RNG_A;
 	DSS_HUGE c = (unsigned DSS_HUGE)RNG_C;
-	nSeed = (nSeed * a + c); /* implicitely truncated to 64bits */
+	nSeed = (nSeed * a + c); /* implicitly truncated to 64bits */
 
 	return (nSeed);
 }
@@ -112,7 +112,7 @@ DSS_HUGE AdvanceRand64(DSS_HUGE nSeed, DSS_HUGE nCount) {
 
 	/* Recursively compute X(n) = A * X(n-1) + C */
 	/* */
-	/* explicitely: */
+	/* explicitly: */
 	/* X(n) = A^n * X(0) + { A^(n-1) + A^(n-2) + ... A + 1 } * C */
 	/* */
 	/* we write this as: */

@@ -58,7 +58,7 @@ TEST_CASE("Test replacement scans in C API", "[capi]") {
 	REQUIRE(result->Fetch<int64_t>(0, 2) == 2);
 
 	// not a number
-	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistant"));
+	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistent"));
 }
 
 void error_replacement_scan(duckdb_replacement_scan_info info, const char *table_name, void *data) {
@@ -77,5 +77,5 @@ TEST_CASE("Test error replacement scan", "[capi]") {
 	duckdb_add_replacement_scan(tester.database, error_replacement_scan, NULL, NULL);
 
 	// error
-	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistant"));
+	REQUIRE_FAIL(tester.Query("SELECT * FROM nonexistent"));
 }

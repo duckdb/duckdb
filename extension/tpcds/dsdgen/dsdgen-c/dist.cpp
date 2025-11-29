@@ -312,7 +312,7 @@ static int load_dist(d_idx_t *di) {
 				//					exit(3);
 				//				}
 				*(*(d->weight_sets + i) + j) = ntohl(temp);
-				/* calculate the maximum weight and convert sets to cummulative
+				/* calculate the maximum weight and convert sets to cumulative
 				 */
 				d->maximums[i] += d->weight_sets[i][j];
 				d->weight_sets[i][j] = d->maximums[i];

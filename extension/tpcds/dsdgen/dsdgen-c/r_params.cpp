@@ -462,7 +462,7 @@ int usage(const char *param_name, const char *msg) {
 		printf("\nERROR: %s\n\n", msg);
 
 	printf("\n\nUSAGE: %s [options]\n", get_str("PROG"));
-	printf("\nNote: When defined in a parameter file (using -p), parmeters "
+	printf("\nNote: When defined in a parameter file (using -p), parameters "
 	       "should\n");
 	printf("use the form below. Each option can also be set from the command\n");
 	printf("line, using a form of '%cparam [optional argument]'\n", OPTION_START);

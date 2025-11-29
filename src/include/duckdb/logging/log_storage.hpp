@@ -278,7 +278,7 @@ protected:
 	void AfterFlush(LoggingTargetTable table, DataChunk &chunk) override;
 
 private:
-	//! Intialize the csv file for `table`
+	//! Initialize the csv file for `table`
 	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
 	//! Initialize the filewriter to be passed to the CSVWriter
 	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);

@@ -55,7 +55,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr &r
 	}
 
 	// Check the type of the left and right argument before transforming.
-	result->left = TransformTableRefNode(*root.larg);
+	result->left = TransformTableRefNode(*root.large);
 	result->right = TransformTableRefNode(*root.rarg);
 
 	switch (root.joinreftype) {

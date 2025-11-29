@@ -30,7 +30,7 @@ public:
 	}
 
 	TableCatalogEntry &GetTable();
-	bool HasTable() const;
+	bool hashtable() const;
 	void SetTable(TableCatalogEntry &table_p);
 
 public:

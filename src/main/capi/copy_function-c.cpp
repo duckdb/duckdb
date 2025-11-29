@@ -418,7 +418,7 @@ namespace duckdb {
 namespace {
 
 unique_ptr<LocalFunctionData> CCopyToLocalInit(ExecutionContext &context, FunctionData &bind_data) {
-	// This isnt exposed to the C-API yet, so we just return empty local function data
+	// This isn't exposed to the C-API yet, so we just return empty local function data
 	return make_uniq<LocalFunctionData>();
 }
 
@@ -533,7 +533,7 @@ namespace {
 
 void CCopyToCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                     LocalFunctionData &lstate) {
-	// Do nothing for now (this isnt exposed to the C-API yet)
+	// Do nothing for now (this isn't exposed to the C-API yet)
 }
 
 } // namespace
@@ -685,7 +685,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 			}
 		}
 
-		// Assing the option as a named parameter
+		// Assign the option as a named parameter
 		named_parameters[opt.first] = param_value;
 	}
 

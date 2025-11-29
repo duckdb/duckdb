@@ -1,4 +1,4 @@
-SELECT asceding.rnk,
+SELECT ascending.rnk,
        i1.i_product_name best_performing,
        i2.i_product_name worst_performing
 FROM
@@ -19,7 +19,7 @@ FROM
             WHERE ss_store_sk = 4
               AND ss_addr_sk IS NULL
             GROUP BY ss_store_sk))V1)V11
-   WHERE rnk < 11) asceding,
+   WHERE rnk < 11) ascending,
   (SELECT *
    FROM
      (SELECT item_sk,
@@ -40,9 +40,9 @@ FROM
    WHERE rnk < 11) descending,
      item i1,
      item i2
-WHERE asceding.rnk = descending.rnk
-  AND i1.i_item_sk=asceding.item_sk
+WHERE ascending.rnk = descending.rnk
+  AND i1.i_item_sk=ascending.item_sk
   AND i2.i_item_sk=descending.item_sk
-ORDER BY asceding.rnk
+ORDER BY ascending.rnk
 LIMIT 100;
 

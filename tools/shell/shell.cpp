@@ -874,7 +874,7 @@ void ShellState::OutputQuotedString(const char *z) {
 
 /*
 ** Output the given string as a quoted string using SQL quoting conventions.
-** Additionallly , escape the "\n" and "\r" characters so that they do not
+** Additionally , escape the "\n" and "\r" characters so that they do not
 ** get corrupted by end-of-line translation facilities in some operating
 ** systems.
 **
@@ -3433,7 +3433,7 @@ int wmain(int argc, wchar_t **wargv) {
 			if (data.zDbFilename.empty()) {
 				data.zDbFilename = z;
 			} else {
-				/* Excesss arguments are interpreted as SQL (or dot-commands) and
+				/* Excess arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				data.readStdin = false;
 				data.stdin_is_interactive = false;

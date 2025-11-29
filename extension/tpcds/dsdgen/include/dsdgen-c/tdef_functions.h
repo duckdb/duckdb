@@ -41,7 +41,7 @@
 * table functions.
 * NOTE: This table contains the function declarations in the table descriptions;
 it must be kept in sync with the
-*    declararions of assocaited constants, found in tdefs.h
+*    declararions of associated constants, found in tdefs.h
 
 */
 typedef struct TABLE_FUNC_T {

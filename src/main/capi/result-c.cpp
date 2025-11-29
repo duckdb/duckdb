@@ -611,7 +611,7 @@ duckdb_statement_type duckdb_result_statement_type(duckdb_result result) {
 	if (!result.internal_data || duckdb_result_error(&result) != nullptr) {
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
-	auto &pres = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+	auto &press = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
 
-	return StatementTypeToC(pres.result->statement_type);
+	return StatementTypeToC(press.result->statement_type);
 }

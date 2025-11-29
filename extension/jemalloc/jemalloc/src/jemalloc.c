@@ -2742,7 +2742,7 @@ malloc_default(size_t size) {
 	dynamic_opts_t dopts;
 
 	/*
-	 * This variant has logging hook on exit but not on entry.  It's callled
+	 * This variant has logging hook on exit but not on entry.  It's called
 	 * only by je_malloc, below, which emits the entry one for us (and, if
 	 * it calls us, does so only via tail call).
 	 */

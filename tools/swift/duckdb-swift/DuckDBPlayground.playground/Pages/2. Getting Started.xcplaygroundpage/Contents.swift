@@ -149,7 +149,7 @@ fileprivate extension Column {
  
  You've learnt how to create a database, connect to it, and issue queries.
  
- Next-up, we'll see how we can use DuckDB to create incredible visulizations
+ Next-up, we'll see how we can use DuckDB to create incredible visualizations
  using SwiftUI, TabularData and SwiftCharts. See you there.
  
  [Next Playground](@next)

@@ -287,7 +287,7 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { VisitExpression(&expr); });
 }
 
-// these are all default methods that can be overriden
+// these are all default methods that can be overridden
 // we don't care about coverage here
 // LCOV_EXCL_START
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,

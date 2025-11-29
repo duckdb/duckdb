@@ -218,7 +218,7 @@ public:
 		                             std::move(varargs));
 	}
 
-	//------------------------------------- Aggreate Functions ----------------------------------------//
+	//------------------------------------- Aggregate Functions ----------------------------------------//
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	void CreateAggregateFunction(const string &name) {
 		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name);

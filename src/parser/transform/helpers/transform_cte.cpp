@@ -136,7 +136,7 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 			auto with_clause = PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause);
 			TransformCTE(*with_clause, result.cte_map);
 		}
-		result.left = TransformSelectNode(*stmt.larg);
+		result.left = TransformSelectNode(*stmt.large);
 		result.right = TransformSelectNode(*stmt.rarg);
 		result.aliases = info.aliases;
 		for (auto &key : info.key_targets) {

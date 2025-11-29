@@ -154,7 +154,7 @@ void agg_str PROTO((distribution * set, long count, seed_t *seed, char *dest, DB
 void read_dist PROTO((const char *path, const char *name, distribution *target));
 void embed_str PROTO((distribution * d, int min, int max, int stream, char *dest));
 #ifndef STDLIB_HAS_GETOPT
-int getopt PROTO((int arg_cnt, char **arg_vect, char *oprions));
+int getopt PROTO((int arg_cnt, char **arg_vect, char *options));
 #endif /* STDLIB_HAS_GETOPT */
 DSS_HUGE set_state PROTO((int t, long scale, long procs, long step, DSS_HUGE *e, DBGenContext *ctx));
 
@@ -203,7 +203,7 @@ EXTERN distribution adverbs;
 EXTERN distribution prepositions;
 EXTERN distribution verbs;
 EXTERN distribution terminators;
-EXTERN distribution auxillaries;
+EXTERN distribution auxiliaries;
 EXTERN distribution np;
 EXTERN distribution vp;
 EXTERN distribution grammar;
@@ -381,7 +381,7 @@ EXTERN int delete_segment;
 
 /******* output macros ********/
 #ifndef SEPARATOR
-#define SEPARATOR '|' /* field spearator for generated flat files */
+#define SEPARATOR '|' /* field separator for generated flat files */
 #endif
 /* Data type flags for a single print routine */
 #define DT_STR 0

@@ -54,7 +54,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				c++;
 			}
 			if (c == start_pos) {
-				throw InternalException("Failed to parse grammar - expected an alpha-numeric rule name (pos %d)", c);
+				throw InternalException("Failed to parse grammar - expected an alphanumeric rule name (pos %d)", c);
 			}
 			rule_name = string_t(grammar + start_pos, c - start_pos);
 			rule.Clear();

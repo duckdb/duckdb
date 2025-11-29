@@ -42,7 +42,7 @@
 
 #ifdef DECLARER
 
-option_t options[] = {{"ABREVIATION", OPT_STR, 0, "build table with abreviation <s>", NULL, ""},
+option_t options[] = {{"ABBREVIATION", OPT_STR, 0, "build table with abbreviation <s>", NULL, ""},
                       {"DELIMITER", OPT_STR | OPT_ADV, 1, "use <s> as output field separator", NULL, "|"},
                       {"DIR", OPT_STR, 2, "generate tables in directory <s>", NULL, "."},
                       {"DISTRIBUTIONS", OPT_STR | OPT_ADV, 3, "read distributions from file <s>", NULL, "NONE"},

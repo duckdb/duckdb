@@ -43,7 +43,7 @@
 #define LINES_PER_ORDER 16           /* max number of lineitems per order for all channels */
 
 /***
-*** C_xxx Cutomer Defines
+*** C_xxx Customer Defines
 ***/
 #define C_PREFERRED_PCT 50
 

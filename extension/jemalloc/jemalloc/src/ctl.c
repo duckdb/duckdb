@@ -416,7 +416,7 @@ static const ctl_named_node_t	thread_prof_node[] = {
 static const ctl_named_node_t	thread_node[] = {
 	{NAME("arena"),		CTL(thread_arena)},
 	{NAME("allocated"),	CTL(thread_allocated)},
-	{NAME("allocatedp"),	CTL(thread_allocatedp)},
+	{NAME("allocated"),	CTL(thread_allocatedp)},
 	{NAME("deallocated"),	CTL(thread_deallocated)},
 	{NAME("deallocatedp"),	CTL(thread_deallocatedp)},
 	{NAME("tcache"),	CHILD(named, thread_tcache)},

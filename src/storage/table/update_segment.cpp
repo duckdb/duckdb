@@ -771,11 +771,11 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 // Merge update info
 //===--------------------------------------------------------------------===//
 template <class F1, class F2, class F3>
-static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a, F3 pick_b,
+static idx_t MergeLoop(row_t a[], sel_t b[], idx_t account, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a, F3 pick_b,
                        const SelectionVector &asel) {
 	idx_t aidx = 0, bidx = 0;
 	idx_t count = 0;
-	while (aidx < acount && bidx < bcount) {
+	while (aidx < account && bidx < bcount) {
 		auto a_index = asel.get_index(aidx);
 		auto a_id = UnsafeNumericCast<idx_t>(a[a_index]) - aoffset;
 		auto b_id = b[bidx];
@@ -794,7 +794,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 			count++;
 		}
 	}
-	for (; aidx < acount; aidx++) {
+	for (; aidx < account; aidx++) {
 		auto a_index = asel.get_index(aidx);
 		pick_a(UnsafeNumericCast<idx_t>(a[a_index]) - aoffset, a_index, count);
 		count++;

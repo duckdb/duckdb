@@ -135,7 +135,7 @@ StreamExecutionResult BatchedBufferedData::ExecuteTaskInternal(StreamQueryResult
 		// The buffer isn't empty yet, just return
 		return StreamExecutionResult::CHUNK_READY;
 	}
-	// Unblock any pending sinks if the buffer isnt full
+	// Unblock any pending sinks if the buffer isn't full
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);

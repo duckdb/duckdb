@@ -74,9 +74,9 @@ bool Transformer::SetOperationsMatch(duckdb_libpgquery::PGSelectStmt &root, duck
 }
 
 void Transformer::TransformSetOperationChildren(duckdb_libpgquery::PGSelectStmt &stmt, SetOperationNode &result) {
-	D_ASSERT(stmt.larg && stmt.rarg);
+	D_ASSERT(stmt.large && stmt.rarg);
 	vector<reference<duckdb_libpgquery::PGNode>> set_operations;
-	set_operations.push_back(*stmt.larg);
+	set_operations.push_back(*stmt.large);
 	set_operations.push_back(*stmt.rarg);
 
 	for (idx_t i = 0; i < set_operations.size(); i++) {
@@ -89,7 +89,7 @@ void Transformer::TransformSetOperationChildren(duckdb_libpgquery::PGSelectStmt 
 			// it can - recurse into children
 			// note that we must process the children in a specific order - so we need to expand the children in-place
 			auto &select = PGCast<duckdb_libpgquery::PGSelectStmt>(node);
-			set_operations[i] = *select.larg;
+			set_operations[i] = *select.large;
 			set_operations.insert(set_operations.begin() + static_cast<int64_t>(i + 1), *select.rarg);
 			i--;
 		}

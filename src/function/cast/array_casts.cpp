@@ -42,7 +42,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto source_array_size = ArrayType::GetSize(source.GetType());
 	auto target_array_size = ArrayType::GetSize(result.GetType());
 	if (source_array_size != target_array_size) {
-		// Cant cast between arrays of different sizes
+		// Can't cast between arrays of different sizes
 		auto msg = StringUtil::Format("Cannot cast array of size %u to array of size %u", source_array_size,
 		                              target_array_size);
 		HandleCastError::AssignError(msg, parameters);

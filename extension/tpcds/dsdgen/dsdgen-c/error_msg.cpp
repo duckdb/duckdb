@@ -61,7 +61,7 @@ err_msg_t Errors[MAX_ERROR + 2] = {{
                                    {EFLG_NO_ARG, "Query Template must be unique within a query class"},
                                    {EFLG_STR_ARG | EFLG_SYSTEM, "Open failed on '%s'"},
                                    {EFLG_STR_ARG, "%s  not yet implemented"}, /* QERR_NOT_IMPLEMENTED */
-                                   {EFLG_STR_ARG, "string trucated to '%s'"},
+                                   {EFLG_STR_ARG, "string truncated to '%s'"},
                                    {EFLG_NO_ARG, "Non-terminated string"},
                                    {EFLG_STR_ARG, "failed to write to '%s'"},
                                    {EFLG_NO_ARG, "No type vector defined for distribution"},

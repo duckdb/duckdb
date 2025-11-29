@@ -1,0 +1,7 @@
+[codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+skip = .git*,*.svg,i18n,.codespellrc,*.benchmark,*.csv,*.tsv,third_party,*.test*,cases,*.parquet,*.sha256,*.signature,*.jsonl
+check-hidden = true
+ignore-regex = \bNome\b|^// Available.*
+# Some variable choices etc
+ignore-words-list = ans,inout,ser,clen,nd

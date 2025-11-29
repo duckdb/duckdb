@@ -155,7 +155,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			} break;
 			case ReadFileBindData::FILE_LAST_MODIFIED_COLUMN: {
 				auto &last_modified_vector = output.data[col_idx];
-				// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
+				// This can sometimes fail (e.g. httpfs file system can't always parse the last modified time
 				// correctly)
 				try {
 					auto timestamp_seconds = file_handle->GetLastModifiedTime();

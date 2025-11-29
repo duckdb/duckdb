@@ -1891,10 +1891,10 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 	}
 
 	if (TypeVisitor::Contains(type, LogicalTypeId::ARRAY)) {
-		// Special case: we cant handle arrays yet, so we need to replace them with lists when gathering
+		// Special case: we can't handle arrays yet, so we need to replace them with lists when gathering
 		const auto new_type = ArrayType::ConvertToList(type);
 		TupleDataGatherFunction result;
-		// Theres only two cases: Either the array is within a struct, or it is within a list (or has now become a list)
+		// There's only two cases: Either the array is within a struct, or it is within a list (or has now become a list)
 		switch (new_type.InternalType()) {
 		case PhysicalType::LIST:
 			result.function = TupleDataCastToArrayListGather;
