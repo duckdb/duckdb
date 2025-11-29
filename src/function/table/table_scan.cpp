@@ -62,7 +62,11 @@ static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
 	for (auto &child_id : column_id.GetChildIndexes()) {
 		result.push_back(TransformStorageIndex(child_id));
 	}
-	return StorageIndex(column_id.GetPrimaryIndex(), column_id.GetType(), std::move(result));
+	auto storage_index = StorageIndex(column_id.GetPrimaryIndex(), column_id.GetType(), std::move(result));
+	if (column_id.IsPushdownExtract()) {
+		storage_index.SetPushdownExtract();
+	}
+	return storage_index;
 }
 
 static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {

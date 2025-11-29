@@ -36,8 +36,11 @@ public:
 	    : index(index), type(type), index_type(ColumnIndexType::DIRECT_READ) {
 	}
 	ColumnIndex(idx_t index, const LogicalType &type, vector<ColumnIndex> child_indexes_p)
-	    : index(index), type(type), index_type(ColumnIndexType::OPTIONAL_PRUNE_HINT),
+	    : index(index), type(type), index_type(ColumnIndexType::DIRECT_READ),
 	      child_indexes(std::move(child_indexes_p)) {
+		if (!child_indexes.empty()) {
+			index_type = ColumnIndexType::OPTIONAL_PRUNE_HINT;
+		}
 	}
 
 	inline bool operator==(const ColumnIndex &rhs) const {
@@ -74,6 +77,16 @@ public:
 	}
 	vector<ColumnIndex> &GetChildIndexesMutable() {
 		return child_indexes;
+	}
+
+	bool IsPushdownExtract() const {
+		return index_type == ColumnIndexType::PUSHDOWN_EXTRACT;
+	}
+	void SetPushdownExtractType() {
+		//! TODO: this probably has to be discussed with the storage scan first, to determine if it's supported
+		//! We can upgrade the optional prune hint to a PUSHDOWN_EXTRACT, which is no longer optional
+		D_ASSERT(index_type == ColumnIndexType::OPTIONAL_PRUNE_HINT);
+		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 	}
 	const LogicalType &GetType() const {
 		return type;

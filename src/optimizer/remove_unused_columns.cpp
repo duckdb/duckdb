@@ -348,9 +348,22 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
-		ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), LogicalType::INVALID,
-		                      entry->second.child_columns);
-		new_column_ids.emplace_back(new_index);
+		//! TODO: construct the correct logical type, create a new column id PER referenced child
+		//! set the created indexes to the PUSHDOWN_EXTRACT index type
+		if (entry->second.child_columns.empty()) {
+			//! The entire struct is referenced, don't set OPTIONAL_PRUNE_HINT
+			auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+			ColumnIndex new_index(logical_column_index, get.types[logical_column_index], {});
+			new_column_ids.emplace_back(new_index);
+		} else {
+			for (auto &child : entry->second.child_columns) {
+				ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(),
+				                      LogicalType::STRUCT({{"child", child.GetType()}}), {child});
+				////! Upgrade the optional prune hint to a mandatory pushdown of the extract
+				// new_index.SetPushdownExtractType();
+				new_column_ids.emplace_back(new_index);
+			}
+		}
 	}
 	if (new_column_ids.empty()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
@@ -422,11 +435,11 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	D_ASSERT(!indexes.empty());
 	// construct the ColumnIndex and determine the field's type
 	reference<const LogicalType> type(colref->return_type);
-	ColumnIndex index = ColumnIndex(indexes[0]);
 	type = StructType::GetChildTypes(type.get())[indexes[0]].second;
+	ColumnIndex index = ColumnIndex(indexes[0], type);
 	for (idx_t i = 1; i < indexes.size(); i++) {
-		ColumnIndex new_index(indexes[i]);
 		type = StructType::GetChildTypes(type.get())[indexes[i]].second;
+		ColumnIndex new_index(indexes[i], type);
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
 	}

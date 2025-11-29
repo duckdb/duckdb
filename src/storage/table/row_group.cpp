@@ -121,8 +121,8 @@ void RowGroup::LoadRowIdColumnData() const {
 
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	auto &res = GetColumn(c.GetPrimaryIndex());
-	auto &children = c.GetChildIndexes();
-	if (!children.empty()) {
+	if (c.IsPushdownExtract()) {
+		auto &children = c.GetChildIndexes();
 		D_ASSERT(children.size() == 1);
 		return res.GetChildColumn(children[0]);
 	}
@@ -188,12 +188,15 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 	}
 }
 
-void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
-                                 const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const StorageIndex &column_id,
+                                 optional_ptr<TableScanOptions> options) {
+	auto &children = column_id.GetChildIndexes();
+	auto &type = column_id.GetType();
 	// Register the options in the state
 	scan_options = options;
 	context = context_p;
 
+	D_ASSERT(type.id() != LogicalTypeId::INVALID);
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		// validity - nothing to initialize
 		return;
@@ -227,9 +230,8 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 			for (idx_t i = 0; i < children.size(); i++) {
 				auto &child = children[i];
 				auto index = child.GetPrimaryIndex();
-				auto &child_indexes = child.GetChildIndexes();
 				scan_child_column[index] = true;
-				child_states[index + 1].Initialize(context, struct_children[index].second, child_indexes, options);
+				child_states[index + 1].Initialize(context, child, options);
 			}
 		}
 		child_states[0].scan_options = options;
@@ -256,11 +258,11 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 
 void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
                                  optional_ptr<TableScanOptions> options) {
-	vector<StorageIndex> children;
-	Initialize(context_p, type, children, options);
+	auto column_id = StorageIndex(0, type);
+	Initialize(context_p, column_id, options);
 }
 
-void CollectionScanState::Initialize(const QueryContext &context, RowGroupCollection &collection) {
+void CollectionScanState::Initialize(const QueryContext &context) {
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_scans.size());
@@ -271,8 +273,7 @@ void CollectionScanState::Initialize(const QueryContext &context, RowGroupCollec
 		if (column_ids[i].IsRowIdColumn()) {
 			continue;
 		}
-		auto &type = collection.GetType(column_ids[i]);
-		column_scans[i].Initialize(context, type, column_ids[i].GetChildIndexes(), &GetOptions());
+		column_scans[i].Initialize(context, column_ids[i], &GetOptions());
 	}
 }
 

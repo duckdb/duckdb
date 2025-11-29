@@ -25,8 +25,11 @@ public:
 	    : index(index), type(type), index_type(StorageIndexType::DIRECT_READ) {
 	}
 	StorageIndex(idx_t index, const LogicalType &type, vector<StorageIndex> child_indexes_p)
-	    : index(index), type(type), index_type(StorageIndexType::OPTIONAL_PRUNE_HINT),
+	    : index(index), type(type), index_type(StorageIndexType::DIRECT_READ),
 	      child_indexes(std::move(child_indexes_p)) {
+		if (!child_indexes.empty()) {
+			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
+		}
 	}
 
 	inline bool operator==(const StorageIndex &rhs) const {
@@ -45,6 +48,9 @@ public:
 	}
 	PhysicalIndex ToPhysical() const {
 		return PhysicalIndex(index);
+	}
+	const LogicalType &GetType() const {
+		return type;
 	}
 	bool HasChildren() const {
 		return !child_indexes.empty();
@@ -66,6 +72,14 @@ public:
 		if (index_type == StorageIndexType::DIRECT_READ) {
 			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
 		}
+	}
+	void SetPushdownExtract() {
+		D_ASSERT(!IsPushdownExtract());
+		D_ASSERT(index_type == StorageIndexType::OPTIONAL_PRUNE_HINT);
+		index_type = StorageIndexType::PUSHDOWN_EXTRACT;
+	}
+	bool IsPushdownExtract() const {
+		return index_type == StorageIndexType::PUSHDOWN_EXTRACT;
 	}
 	void SetIndex(idx_t new_index) {
 		index = new_index;

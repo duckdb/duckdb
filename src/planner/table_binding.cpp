@@ -232,7 +232,7 @@ const vector<ColumnIndex> &TableBinding::GetBoundColumnIds() const {
 	return bound_column_ids;
 }
 
-ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
+ColumnBinding TableBinding::GetColumnBinding(column_t column_index, const LogicalType &type) {
 	auto &column_ids = bound_column_ids;
 	ColumnBinding binding;
 
@@ -241,13 +241,14 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 	for (idx_t i = 0; i < column_ids.size(); ++i) {
 		auto &col_id = column_ids[i];
 		if (col_id.GetPrimaryIndex() == column_index) {
+			D_ASSERT(col_id.GetType().id() == LogicalTypeId::INVALID || col_id.GetType() == type);
 			binding.column_index = i;
 			break;
 		}
 	}
 	// If it wasn't found, add it
 	if (binding.column_index == column_ids.size()) {
-		column_ids.emplace_back(column_index);
+		column_ids.emplace_back(column_index, type);
 	}
 
 	binding.table_index = index;
@@ -285,7 +286,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 			colref.SetAlias(names[column_index]);
 		}
 	}
-	ColumnBinding binding = GetColumnBinding(column_index);
+	ColumnBinding binding = GetColumnBinding(column_index, col_type);
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 

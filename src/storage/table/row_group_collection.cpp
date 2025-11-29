@@ -75,27 +75,27 @@ idx_t RowGroupCollection::GetTotalRows() const {
 	return total_rows.load();
 }
 
-static const LogicalType &GetFieldTypeRecursive(const LogicalType &struct_type,
-                                                const vector<StorageIndex> &child_indices) {
-	D_ASSERT(child_indices.size() == 1);
-	auto &struct_children = StructType::GetChildTypes(struct_type);
-	auto &child_index = child_indices[0];
-	auto &child_type = struct_children[child_index.GetPrimaryIndex()].second;
-	if (child_type.id() == LogicalTypeId::STRUCT && !child_index.GetChildIndexes().empty()) {
-		return GetFieldTypeRecursive(child_type, child_index.GetChildIndexes());
-	}
-	return child_type;
-}
+// static const LogicalType &GetFieldTypeRecursive(const LogicalType &struct_type,
+//                                                const vector<StorageIndex> &child_indices) {
+//	D_ASSERT(child_indices.size() == 1);
+//	auto &struct_children = StructType::GetChildTypes(struct_type);
+//	auto &child_index = child_indices[0];
+//	auto &child_type = struct_children[child_index.GetPrimaryIndex()].second;
+//	if (child_type.id() == LogicalTypeId::STRUCT && !child_index.GetChildIndexes().empty()) {
+//		return GetFieldTypeRecursive(child_type, child_index.GetChildIndexes());
+//	}
+//	return child_type;
+//}
 
-const LogicalType &RowGroupCollection::GetType(const StorageIndex &index) const {
-	auto idx = index.GetPrimaryIndex();
-	auto &type = types[idx];
-	if (type.id() == LogicalTypeId::STRUCT && !index.GetChildIndexes().empty()) {
-		//! TODO: introduce something to the StorageIndex to indicate intent for this behavior
-		return GetFieldTypeRecursive(type, index.GetChildIndexes());
-	}
-	return types[idx];
-}
+// const LogicalType &RowGroupCollection::GetType(const StorageIndex &index) const {
+//	auto idx = index.GetPrimaryIndex();
+//	auto &type = types[idx];
+//	if (type.id() == LogicalTypeId::STRUCT && !index.GetChildIndexes().empty()) {
+//		//! TODO: introduce something to the StorageIndex to indicate intent for this behavior
+//		return GetFieldTypeRecursive(type, index.GetChildIndexes());
+//	}
+//	return types[idx];
+//}
 
 const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 	return types;
@@ -217,7 +217,7 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	auto row_group = state.GetRootSegment();
 	D_ASSERT(row_group);
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
-	state.Initialize(context, *this);
+	state.Initialize(context);
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
 		row_group = state.GetNextRowGroup(*row_group);
 	}
@@ -235,7 +235,7 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 	auto row_group = state.row_groups->GetSegment(start_row);
 	D_ASSERT(row_group);
 	state.max_row = end_row;
-	state.Initialize(context, *this);
+	state.Initialize(context);
 	idx_t start_vector = (start_row - row_group->GetRowStart()) / STANDARD_VECTOR_SIZE;
 	if (!row_group->GetNode().InitializeScanWithOffset(state, *row_group, start_vector)) {
 		throw InternalException("Failed to initialize row group scan with offset");
@@ -249,7 +249,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, C
 	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
-		state.Initialize(context, collection);
+		state.Initialize(context);
 	}
 	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
 }
@@ -824,7 +824,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_start;
 
 		// Fetch the current vector into fetch_chunk.
-		state.table_state.Initialize(context, *this);
+		state.table_state.Initialize(context);
 		current_row_group.InitializeScanWithOffset(state.table_state, *row_group, row_group_vector_idx);
 		current_row_group.ScanCommitted(state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		fetch_chunk.Verify();
@@ -1035,7 +1035,7 @@ public:
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
-		scan_state.table_state.Initialize(QueryContext(), collection);
+		scan_state.table_state.Initialize(QueryContext());
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
@@ -1653,7 +1653,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
-	scan_state.table_state.Initialize(context, *this);
+	scan_state.table_state.Initialize(context);
 	scan_state.table_state.max_row = row_groups->GetBaseRowId() + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually

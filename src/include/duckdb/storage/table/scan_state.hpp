@@ -114,7 +114,7 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const QueryContext &context_p, const LogicalType &type, const vector<StorageIndex> &children,
+	void Initialize(const QueryContext &context_p, const StorageIndex &column_id,
 	                optional_ptr<TableScanOptions> options);
 	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
@@ -220,7 +220,7 @@ public:
 	unique_ptr<RowGroupReorderer> reorderer;
 
 public:
-	void Initialize(const QueryContext &context, RowGroupCollection &collection);
+	void Initialize(const QueryContext &context);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();

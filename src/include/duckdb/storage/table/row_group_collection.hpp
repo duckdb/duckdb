@@ -122,7 +122,7 @@ public:
 	vector<PartitionStatistics> GetPartitionStats() const;
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 	const vector<LogicalType> &GetTypes() const;
-	const LogicalType &GetType(const StorageIndex &index) const;
+	// const LogicalType &GetType(const StorageIndex &index) const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
 	                                         ExpressionExecutor &default_executor);
