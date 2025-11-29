@@ -1,5 +1,5 @@
 # name: test/sql/function/string/path_join.test
-# group: [function]
+# group: [string]
 
 query I
 SELECT replace(path_join('dir//subdir/', './file'), '\\', '/');
