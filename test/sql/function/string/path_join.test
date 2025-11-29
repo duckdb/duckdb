@@ -2,42 +2,42 @@
 # group: [string]
 
 query I
-SELECT replace(path_join('dir//subdir/', './file'), '\\', '/');
+SELECT regexp_replace(path_join('dir//subdir/', './file'), '\\\\', '/', 'g');
 ----
 dir/subdir/file
 
 query I
-SELECT replace(path_join('dir/subdir', '../sibling'), '\\', '/');
+SELECT regexp_replace(path_join('dir/subdir', '../sibling'), '\\\\', '/', 'g');
 ----
 dir/sibling
 
 query I
-SELECT replace(path_join('dir', '/abs/path'), '\\', '/');
+SELECT regexp_replace(path_join('dir', '/abs/path'), '\\\\', '/', 'g');
 ----
 /abs/path
 
 query I
-SELECT replace(path_join('dir///', 'nested///child'), '\\', '/');
+SELECT regexp_replace(path_join('dir///', 'nested///child'), '\\\\', '/', 'g');
 ----
 dir/nested/child
 
 query I
-SELECT replace(path_join('dir', 'subdir', 'file.txt'), '\\', '/');
+SELECT regexp_replace(path_join('dir', 'subdir', 'file.txt'), '\\\\', '/', 'g');
 ----
 dir/subdir/file.txt
 
 query I
-SELECT replace(path_join('dir/..', '../..'), '\\', '/');
+SELECT regexp_replace(path_join('dir/..', '../..'), '\\\\', '/', 'g');
 ----
 ../..
 
 query I
-SELECT replace(path_join('/usr/local', '../..'), '\\', '/');
+SELECT regexp_replace(path_join('/usr/local', '../..'), '\\\\', '/', 'g');
 ----
 /
 
 query I
-SELECT replace(path_join('/', 'usr/local'), '\\', '/');
+SELECT regexp_replace(path_join('/', 'usr/local'), '\\\\', '/', 'g');
 ----
 /usr/local
 
