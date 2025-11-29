@@ -3,6 +3,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
@@ -141,6 +142,105 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs->FileExists(fname_in_dir));
 	REQUIRE(!fs->FileExists(fname_in_dir2));
 }
+
+TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto sep = fs->PathSeparator("dummy");
+	auto collapse = [&](const string &path) {
+		return StringUtil::Replace(path, "/", sep);
+	};
+
+	auto normalized = fs->JoinPath("dir//subdir/", "./file");
+	REQUIRE(normalized == collapse("dir/subdir/file"));
+
+	auto parent = fs->JoinPath("dir/subdir", "../sibling");
+	REQUIRE(parent == collapse("dir/sibling"));
+
+	auto abs_override = fs->JoinPath("dir", "/abs/path");
+	REQUIRE(abs_override == fs->ConvertSeparators("/abs/path"));
+
+	auto dedup = fs->JoinPath("dir///", "nested///child");
+	REQUIRE(dedup == collapse("dir/nested/child"));
+}
+
+TEST_CASE("JoinPath handles edge cases", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto sep = fs->PathSeparator("dummy");
+	auto collapse = [&](const string &path) {
+		return StringUtil::Replace(path, "/", sep);
+	};
+
+	auto lhs_parent = fs->JoinPath("dir/subdir/..", "sibling");
+	REQUIRE(lhs_parent == collapse("dir/sibling"));
+
+	auto mixed_dots = fs->JoinPath("./dir/./subdir/./..", "./sibling/.");
+	REQUIRE(mixed_dots == collapse("dir/sibling"));
+
+	auto overflowing_rel = fs->JoinPath("dir/..", "../..");
+	REQUIRE(overflowing_rel == fs->ConvertSeparators("../.."));
+
+	auto walk_up_absolute = fs->JoinPath("/usr/local", "../..");
+	REQUIRE(walk_up_absolute == fs->ConvertSeparators("/"));
+
+	auto root_child = fs->JoinPath("/", "usr/local");
+	REQUIRE(root_child == fs->ConvertSeparators("/usr/local"));
+
+	auto past_root = fs->JoinPath("/usr/local", "../../..");
+	REQUIRE(past_root == fs->ConvertSeparators("/"));
+
+	auto uri_join = fs->JoinPath("file:/usr/local", "../bin");
+	REQUIRE(uri_join == "file:/usr/local/../bin");
+
+#ifdef _WIN32
+	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
+	REQUIRE(clamp_drive_root == fs->ConvertSeparators("C:/"));
+
+	auto clamp_drive_root_twice = fs->JoinPath(R"(C:\)", R"(..\..)");
+	REQUIRE(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
+
+	auto drive_relative = fs->JoinPath("C:", "system32");
+	REQUIRE(drive_relative == fs->ConvertSeparators("C:/system32"));
+
+	auto drive_absolute_child = fs->JoinPath(R"(C:\)", "system32");
+	REQUIRE(drive_absolute_child == fs->ConvertSeparators("C:/system32"));
+
+	auto drive_relative_child = fs->JoinPath("C:drive_relative_path", "path");
+	REQUIRE(drive_relative_child == fs->ConvertSeparators("C:drive_relative_path/path"));
+
+	auto drive_relative_parent = fs->JoinPath("C:drive_relative_path", R"(..\path)");
+	REQUIRE(drive_relative_parent == "C:path");
+#endif
+}
+
+#ifdef _WIN32
+TEST_CASE("Glob handles absolute drive paths", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+	auto base_dir = fs->NormalizeAbsolutePath(TestCreatePath("glob_drive"));
+	if (fs->DirectoryExists(base_dir)) {
+		fs->RemoveDirectory(base_dir);
+	}
+	fs->CreateDirectory(base_dir);
+
+	auto nested_dir = fs->JoinPath(base_dir, "nested");
+	fs->CreateDirectory(nested_dir);
+	auto fname = fs->JoinPath(nested_dir, "file.csv");
+	create_dummy_file(fname);
+
+	auto pattern = fs->JoinPath(base_dir, "*.csv");
+	auto deep_pattern = fs->JoinPath(fs->JoinPath(base_dir, "*"), "*.csv");
+
+	auto entries_shallow = fs->Glob(pattern);
+	auto entries_deep = fs->Glob(deep_pattern);
+
+	REQUIRE(entries_shallow.size() == 0); // file is nested, so shallow glob should not see it
+	REQUIRE(entries_deep.size() == 1);
+	REQUIRE(fs->ConvertSeparators(entries_deep[0].path) == fs->ConvertSeparators(fname));
+
+	fs->RemoveFile(fname);
+	fs->RemoveDirectory(nested_dir);
+	fs->RemoveDirectory(base_dir);
+}
+#endif
 
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
 // this is required for the Direct-IO as on Windows Direct-IO can only write multiples of sector sizes
