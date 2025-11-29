@@ -1,0 +1,47 @@
+# name: test/sql/function/string/path_join.test
+# group: [function]
+
+query I
+SELECT replace(path_join('dir//subdir/', './file'), '\\', '/');
+----
+dir/subdir/file
+
+query I
+SELECT replace(path_join('dir/subdir', '../sibling'), '\\', '/');
+----
+dir/sibling
+
+query I
+SELECT replace(path_join('dir', '/abs/path'), '\\', '/');
+----
+/abs/path
+
+query I
+SELECT replace(path_join('dir///', 'nested///child'), '\\', '/');
+----
+dir/nested/child
+
+query I
+SELECT replace(path_join('dir', 'subdir', 'file.txt'), '\\', '/');
+----
+dir/subdir/file.txt
+
+query I
+SELECT replace(path_join('dir/..', '../..'), '\\', '/');
+----
+../..
+
+query I
+SELECT replace(path_join('/usr/local', '../..'), '\\', '/');
+----
+/
+
+query I
+SELECT replace(path_join('/', 'usr/local'), '\\', '/');
+----
+/usr/local
+
+query I
+SELECT path_join('file:/usr/local', '../bin');
+----
+file:/usr/local/../bin
