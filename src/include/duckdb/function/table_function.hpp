@@ -468,6 +468,8 @@ public:
 	bool late_materialization;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+	//! Whether or not the in-out function is order dependent
+	bool in_out_function_order_dependent = false;
 
 	//! When to call init_global
 	//! By default init_global is called when the pipeline is ready for execution
