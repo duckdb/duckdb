@@ -60,9 +60,18 @@ public:
 	explicit PrintStream(ShellState &state);
 	virtual ~PrintStream() = default;
 
-	virtual void Print(const string &str) = 0;
-	virtual void SetBinaryMode() = 0;
-	virtual void SetTextMode() = 0;
+	virtual void Print(const string &str) {
+		state.Print(str);
+	}
+	virtual void SetBinaryMode() {
+		state.SetBinaryMode();
+	}
+	virtual void SetTextMode() {
+		state.SetTextMode();
+	}
+	virtual bool SupportsHighlight() {
+		return true;
+	}
 
 	void RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
 	void PrintDashes(idx_t N);
@@ -84,7 +93,7 @@ public:
 	string row_sep;
 
 public:
-	virtual SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result);
+	virtual SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result);
 	virtual void Analyze(RenderingQueryResult &result);
 	virtual void RenderHeader(PrintStream &out, ResultMetadata &result);
 	virtual void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row);

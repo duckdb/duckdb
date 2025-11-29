@@ -47,22 +47,6 @@ void PrintStream::OutputQuotedString(const string &str) {
 	Print(StringUtil::Format("%s", SQLString(str)));
 }
 
-struct StandardPrintStream : public PrintStream {
-public:
-	explicit StandardPrintStream(ShellState &state) : PrintStream(state) {
-	}
-
-	void Print(const string &str) override {
-		state.Print(str);
-	}
-	void SetBinaryMode() override {
-		state.SetBinaryMode();
-	}
-	void SetTextMode() override {
-		state.SetTextMode();
-	}
-};
-
 //===--------------------------------------------------------------------===//
 // ShellRenderer
 //===--------------------------------------------------------------------===//
@@ -179,11 +163,11 @@ SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::Quer
 	RenderingQueryResult result(query_result, renderer);
 
 	renderer.Analyze(result);
-	return renderer.RenderQueryResult(*this, result);
+	PrintStream print_stream(*this);
+	return renderer.RenderQueryResult(print_stream, *this, result);
 }
 
-SuccessState ShellRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
-	StandardPrintStream out(state);
+SuccessState ShellRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) {
 	RenderHeader(out, result.metadata);
 	for (auto &row_data : result) {
 		if (state.seenInterrupt) {
@@ -643,6 +627,40 @@ RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 void RowRenderer::RenderHeader(PrintStream &out, ResultMetadata &result) {
 }
 
+struct WidthMeasuringStream : public PrintStream {
+public:
+	explicit WidthMeasuringStream(ShellState &state) : PrintStream(state) {
+	}
+
+	void Print(const string &str) override {
+		for (auto c : str) {
+			if (c == '\r') {
+				continue;
+			}
+			if (c == '\n') {
+				// newline - compute the render width of the current line and reset
+				auto render_width = state.RenderLength(output);
+				if (render_width > max_width) {
+					max_width = render_width;
+				}
+				output = string();
+				continue;
+			}
+			output += c;
+		}
+	}
+	void SetBinaryMode() override {
+	}
+	void SetTextMode() override {
+	}
+	bool SupportsHighlight() override {
+		return false;
+	}
+
+	string output;
+	idx_t max_width = 0;
+};
+
 bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) {
 	if (global_mode == PagerMode::PAGER_ON) {
 		return true;
@@ -654,8 +672,16 @@ bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_
 		// rows exceed min rows
 		return true;
 	}
-	// FIXME: look at actual to-be-rendered stuff to determine this
-	if (result.result.ColumnCount() >= state.pager_min_columns) {
+	D_ASSERT(result.exhausted_result);
+	// figure out how wide the result would be when rendered
+	WidthMeasuringStream stream(state);
+	// make a copy of the result to avoid consuming it
+	auto result_copy = result.data;
+	RenderQueryResult(stream, state, result);
+	result.data = std::move(result_copy);
+
+	idx_t max_render_width = state.GetMaxRenderWidth();
+	if (stream.max_width > max_render_width) {
 		return true;
 	}
 	return false;
@@ -1324,8 +1350,8 @@ public:
 //===--------------------------------------------------------------------===//
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
 public:
-	DuckBoxRenderer(ShellState &state, bool highlight)
-	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
+	DuckBoxRenderer(PrintStream &out, ShellState &state, bool highlight)
+	    : out(out), shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
 	}
 
 	void RenderLayout(const string &text) override {
@@ -1366,11 +1392,12 @@ public:
 		if (highlight) {
 			shell_highlight.PrintText(text, output, element_type);
 		} else {
-			shell_highlight.state.Print(text);
+			out.Print(text);
 		}
 	}
 
 private:
+	PrintStream &out;
 	ShellHighlight shell_highlight;
 	PrintOutput output;
 	bool highlight = true;
@@ -1381,7 +1408,7 @@ public:
 	explicit ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
 	}
 
-	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override;
 	bool RequireMaterializedResult() const override {
 		return true;
 	}
@@ -1394,12 +1421,13 @@ public:
 		if (state.max_rows < state.pager_min_rows && state.max_width == 0) {
 			return false;
 		}
+		// FIXME: actually look at row count / render width?
 		return true;
 	}
 };
 
-SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
-	DuckBoxRenderer result_renderer(state, state.HighlightResults());
+SuccessState ModeDuckBoxRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) {
+	DuckBoxRenderer result_renderer(out, state, state.HighlightResults() && out.SupportsHighlight());
 	try {
 		duckdb::BoxRendererConfig config;
 		config.max_rows = state.max_rows;
@@ -1446,7 +1474,7 @@ public:
 	explicit ModeDescribeRenderer(ShellState &state) : ShellRenderer(state) {
 	}
 
-	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override;
 	bool RequireMaterializedResult() const override {
 		return true;
 	}
@@ -1456,7 +1484,7 @@ public:
 	}
 };
 
-SuccessState ModeDescribeRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &res) {
+SuccessState ModeDescribeRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &res) {
 	vector<ShellTableInfo> result;
 	ShellTableInfo table;
 	table.table_name = state.describe_table_name;
@@ -1489,7 +1517,7 @@ public:
 	explicit ModeTrashRenderer(ShellState &state) : ShellRenderer(state) {
 	}
 
-	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override {
+	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override {
 		return SuccessState::SUCCESS;
 	}
 	bool RequireMaterializedResult() const override {

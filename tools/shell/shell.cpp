@@ -1003,7 +1003,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		pager_setup = SetupPager();
 	}
 	// render the query result
-	return renderer->RenderQueryResult(*this, render_result);
+	PrintStream print_stream(*this);
+	return renderer->RenderQueryResult(print_stream, *this, render_result);
 }
 
 /*
