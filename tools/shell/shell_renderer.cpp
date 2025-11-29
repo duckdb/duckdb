@@ -88,42 +88,24 @@ public:
 		row_data.data.resize(nCol, string());
 		row_data.is_null.resize(nCol, false);
 		row_data.row_index = 0;
-		if (!result->exhausted_result) {
-			result_iterator = query_result.begin();
+		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
+			result->TryConvertChunk();
 		}
 		AssignData();
 	}
 
 	optional_ptr<RenderingQueryResult> result;
-	duckdb::QueryResult::iterator result_iterator;
 	RowData row_data;
 
 public:
 	void AssignData() {
 		auto &query_result = result->result;
-		auto nCol = query_result.ColumnCount();
 		if (row_data.row_index >= result->data.size()) {
-			if (result->exhausted_result || result_iterator == query_result.end()) {
-				// exhausted
-				result = nullptr;
-				return;
-			}
-			// read from the query result
-			auto &row = *result_iterator;
-			// convert the result
-			for (idx_t c = 0; c < nCol; c++) {
-				if (row.IsNull(c)) {
-					row_data.is_null[c] = true;
-					row_data.data[c] = result->renderer.NullValue();
-				} else {
-					row_data.is_null[c] = false;
-					row_data.data[c] = row.GetValue<string>(c);
-				}
-			}
-		} else {
-			// read from the materialized rows
-			row_data.data = std::move(result->data[row_data.row_index]);
+			result = nullptr;
+			return;
 		}
+		// read from the materialized rows
+		row_data.data = std::move(result->data[row_data.row_index]);
 	}
 
 	void Next() {
@@ -131,10 +113,11 @@ public:
 			return;
 		}
 		// iterate to next position
-		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
-			++result_iterator;
-		}
 		row_data.row_index++;
+		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
+			// convert the next chunk (if we have any)
+			result->TryConvertChunk();
+		}
 		// read data from this position
 		AssignData();
 	}
@@ -243,7 +226,7 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-bool RenderingQueryResult::TryConvertChunk(ShellRenderer &renderer) {
+bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
 	}
@@ -269,7 +252,7 @@ void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 		column_name = ConvertValue(column_name.c_str());
 	}
 	// materialize the query result
-	while (result.TryConvertChunk(*this)) {
+	while (result.TryConvertChunk()) {
 		if (state.seenInterrupt) {
 			state.PrintF("Interrupt\n");
 			return;
@@ -666,7 +649,7 @@ bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_
 		return true;
 	}
 	// fetch data until we have either fetched more than the pager min, or we have exhausted the data
-	while (result.data.size() < state.pager_min_rows && result.TryConvertChunk(*this)) {
+	while (result.data.size() < state.pager_min_rows && result.TryConvertChunk()) {
 	}
 	if (result.data.size() >= state.pager_min_rows) {
 		// rows exceed min rows

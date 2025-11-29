@@ -46,7 +46,7 @@ struct RenderingQueryResult {
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();
 	}
-	bool TryConvertChunk(ShellRenderer &renderer);
+	bool TryConvertChunk();
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API

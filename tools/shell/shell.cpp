@@ -996,6 +996,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	// analyze the query result so we know how long/wide the result will be
 	RenderingQueryResult render_result(res, *renderer);
 	renderer->Analyze(render_result);
+	if (seenInterrupt) {
+		return SuccessState::FAILURE;
+	}
 
 	// check if we need to use the pager for the rendering
 	unique_ptr<PagerState> pager_setup;
