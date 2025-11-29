@@ -12,14 +12,46 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
 	auto &fs = FileSystem::GetFileSystem(context);
 
+	vector<UnifiedVectorFormat> inputs(col_count);
+	bool all_constant = true;
+	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
+		args.data[col_idx].ToUnifiedFormat(count, inputs[col_idx]);
+		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			all_constant = false;
+		}
+	}
+
+	if (all_constant && count > 0) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto &validity = ConstantVector::Validity(result);
+		auto result_data = ConstantVector::GetData<string_t>(result);
+
+		bool has_null = false;
+		string current;
+		for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
+			auto &vdata = inputs[col_idx];
+			auto idx = vdata.sel->get_index(0);
+			if (!vdata.validity.RowIsValid(idx)) {
+				validity.SetInvalid(0);
+				has_null = true;
+				break;
+			}
+			auto input_value = UnifiedVectorFormat::GetData<string_t>(vdata)[idx].GetString();
+			if (col_idx == 0) {
+				current = input_value;
+			} else {
+				current = fs.JoinPath(current, input_value);
+			}
+		}
+		if (!has_null) {
+			result_data[0] = StringVector::AddString(result, current);
+		}
+		return;
+	}
+
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &validity = FlatVector::Validity(result);
 	auto result_data = FlatVector::GetData<string_t>(result);
-
-	vector<UnifiedVectorFormat> inputs(col_count);
-	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
-		args.data[col_idx].ToUnifiedFormat(count, inputs[col_idx]);
-	}
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		bool has_null = false;
