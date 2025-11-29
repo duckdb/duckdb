@@ -16,9 +16,6 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
 	this->comment = info.comment;
 	this->tags = info.tags;
 	this->temporary = info.temporary;
-	if (catalog.IsTemporaryCatalog()) {
-		this->temporary = true;
-	}
 }
 
 CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &context) {
