@@ -68,7 +68,6 @@ ignored_files = [
     'tpch_constants.hpp',
     'tpcds_constants.hpp',
     '_generated',
-    'tpce_flat_input.hpp',
     'test_csv_header.hpp',
     'duckdb.cpp',
     'duckdb.hpp',

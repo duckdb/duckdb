@@ -91,7 +91,7 @@ import package_build
 # include paths for where to search for include files during amalgamation
 include_paths = [include_dir] + package_build.third_party_includes()
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir] + package_build.third_party_sources()
+compile_directories = [src_dir] + package_build.third_party_sources() + ['extension/loader']
 
 # files always excluded
 always_excluded = normalize_path(
