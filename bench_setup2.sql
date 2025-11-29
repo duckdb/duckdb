@@ -15,5 +15,4 @@ SELECT
     END AS v
 FROM range(0, 1000000) t(i);
 
---- every 1000 rows, there is a 0 and 1000000000, the rest are in the range [0, 63000]
-
+--- for every 1000 rows, there is a 0 and 1000000000, the rest are in the range [0, 63000]
