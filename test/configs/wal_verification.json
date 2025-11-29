@@ -37,7 +37,8 @@
     {
       "reason": "Empty WAL is necessary to trigger optimizer rule.",
       "paths": [
-        "test/sql/topn/top_n_pruning.test"
+        "test/sql/topn/top_n_pruning.test",
+        "test/optimizer/eager_aggregate_execution.test"
       ]
     },
     {
