@@ -121,11 +121,6 @@ void RowGroup::LoadRowIdColumnData() const {
 
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	auto &res = GetColumn(c.GetPrimaryIndex());
-	// if (c.IsPushdownExtract()) {
-	//	auto &children = c.GetChildIndexes();
-	//	D_ASSERT(children.size() == 1);
-	//	return res.GetChildColumn(children[0]);
-	//}
 	return res;
 }
 
@@ -226,13 +221,20 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const StorageInd
 				child_states[i + 1].Initialize(context, struct_children[i].second, options);
 			}
 		} else {
-			// only scan the specified subset of columns
-			scan_child_column.resize(struct_children.size(), false);
-			for (idx_t i = 0; i < children.size(); i++) {
-				auto &child = children[i];
-				auto index = child.GetPrimaryIndex();
-				scan_child_column[index] = true;
-				child_states[index + 1].Initialize(context, child, options);
+			if (storage_index.IsPushdownExtract()) {
+				scan_child_column.resize(1, true);
+				D_ASSERT(children.size() == 1);
+				auto &child = children[0];
+				child_states[1].Initialize(context, child, options);
+			} else {
+				// only scan the specified subset of columns
+				scan_child_column.resize(struct_children.size(), false);
+				for (idx_t i = 0; i < children.size(); i++) {
+					auto &child = children[i];
+					auto index = child.GetPrimaryIndex();
+					scan_child_column[index] = true;
+					child_states[index + 1].Initialize(context, child, options);
+				}
 			}
 		}
 		child_states[0].scan_options = options;

@@ -68,7 +68,7 @@ void StructColumnData::IterateFields(
 		auto child_index = child_storage_index.GetPrimaryIndex();
 		auto &sub_column = *sub_columns[child_index];
 		auto &field_state = state.child_states[1];
-		D_ASSERT(state.scan_child_column[child_index]);
+		D_ASSERT(state.scan_child_column[0]);
 		callback(sub_column, optional_idx(), field_state, true);
 	} else {
 		for (idx_t i = 0; i < sub_columns.size(); i++) {

@@ -88,6 +88,12 @@ public:
 		D_ASSERT(index_type == ColumnIndexType::OPTIONAL_PRUNE_HINT);
 		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 	}
+	const LogicalType &GetScanType() const {
+		if (IsPushdownExtract()) {
+			return child_indexes[0].GetScanType();
+		}
+		return type;
+	}
 	const LogicalType &GetType() const {
 		return type;
 	}

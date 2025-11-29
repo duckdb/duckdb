@@ -342,27 +342,41 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	vector<ColumnIndex> new_column_ids;
+	vector<idx_t> original_ids;
 	new_column_ids.reserve(col_sel.size());
 	for (auto col_sel_idx : col_sel) {
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
-		//! TODO: construct the correct logical type, create a new column id PER referenced child
-		//! set the created indexes to the PUSHDOWN_EXTRACT index type
 		if (entry->second.child_columns.empty()) {
-			//! The entire struct is referenced, don't set OPTIONAL_PRUNE_HINT
 			auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
 			ColumnIndex new_index(logical_column_index, get.types[logical_column_index], {});
 			new_column_ids.emplace_back(new_index);
+			original_ids.emplace_back(col_sel_idx);
 		} else {
-			for (auto &child : entry->second.child_columns) {
+			D_ASSERT(entry->second.child_columns.size() == entry->second.bindings.size());
+//! Only a subset of the struct's fields are referenced
+#ifdef DUCKDB_ENABLE_PUSHDOWN_EXTRACT
+			//! Pushdown Extract is supported, emit a column for every field
+			for (idx_t i = 0; i < entry->second.child_columns.size(); i++) {
+				auto &child = entry->second.child_columns[i];
+				auto &colref = entry->second.bindings[i];
+				colref.get().binding.column_index += i;
 				ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(),
 				                      LogicalType::STRUCT({{"child", child.GetType()}}), {child});
 				//! Upgrade the optional prune hint to a mandatory pushdown of the extract
 				new_index.SetPushdownExtractType();
 				new_column_ids.emplace_back(new_index);
+				original_ids.emplace_back(col_sel_idx);
 			}
+#else
+			auto &old_column_id = old_column_ids[col_sel_idx];
+			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), old_column_id.GetType(),
+			                      entry->second.child_columns);
+			new_column_ids.emplace_back(new_index);
+			original_ids.emplace_back(col_sel_idx);
+#endif
 		}
 	}
 	if (new_column_ids.empty()) {
@@ -370,6 +384,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 		// need to read any of the columns
 		new_column_ids.emplace_back(get.GetAnyColumn());
+		original_ids.emplace_back(new_column_ids.back().GetPrimaryIndex());
 	}
 	get.SetColumnIds(std::move(new_column_ids));
 
@@ -380,11 +395,21 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// with the "selection vector" that includes filter columns
 	idx_t col_idx = 0;
 	get.projection_ids.clear();
+	vector<idx_t> filtered_original_ids;
+	//! Find matching indices between the proj_sel and the col_sel
 	for (auto proj_sel_idx : proj_sel) {
 		for (; col_idx < col_sel.size(); col_idx++) {
 			if (proj_sel_idx == col_sel[col_idx]) {
-				get.projection_ids.push_back(col_idx);
+				filtered_original_ids.push_back(col_idx);
 				break;
+			}
+		}
+	}
+	idx_t original_id_index = 0;
+	for (auto &col : filtered_original_ids) {
+		for (; original_id_index < original_ids.size(); original_id_index++) {
+			if (original_ids[original_id_index] == col) {
+				get.projection_ids.push_back(original_id_index);
 			}
 		}
 	}

@@ -119,18 +119,6 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	return result;
 }
 
-static const LogicalType &GetChildTypeRecursive(const ColumnIndex &column_index) {
-	auto &children = column_index.GetChildIndexes();
-	D_ASSERT(children.size() == 1);
-	auto &child = children[0];
-	auto &child_type = child.GetType();
-	if (!child.IsPushdownExtract()) {
-		return child_type;
-	}
-	D_ASSERT(children.size() == 1);
-	return GetChildTypeRecursive(child);
-}
-
 const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 	optional_ptr<const LogicalType> res_p;
 	if (index.IsVirtualColumn()) {
@@ -144,16 +132,7 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 	}
 	D_ASSERT(res_p);
 	auto &res = *res_p;
-
-	if (res.id() != LogicalTypeId::STRUCT) {
-		return res;
-	}
-	auto &children = index.GetChildIndexes();
-	if (!index.IsPushdownExtract()) {
-		return res;
-	}
-	D_ASSERT(children.size() == 1);
-	return GetChildTypeRecursive(index);
+	return index.GetScanType();
 }
 
 const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
