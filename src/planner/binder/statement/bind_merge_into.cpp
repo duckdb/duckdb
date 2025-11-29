@@ -15,6 +15,8 @@
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/expression_binder/projection_binder.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -32,12 +34,21 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 	return result;
 }
 
-unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-                                                         LogicalGet &get, idx_t proj_index,
-                                                         vector<unique_ptr<Expression>> &expressions,
-                                                         unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
-                                                         const vector<BindingAlias> &source_aliases,
-                                                         const vector<string> &source_names) {
+// Extract column names from the target table that are referenced in the expression
+void ExtractTargetColumnNames(const ParsedExpression &root_expr, const string &table_name,
+                              case_insensitive_set_t &result) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr, [&](const ColumnRefExpression &colref) {
+		if (colref.IsQualified() && colref.GetTableName() == table_name) {
+			result.insert(colref.GetColumnName());
+		}
+	});
+}
+
+unique_ptr<BoundMergeIntoAction>
+Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, idx_t proj_index,
+                        vector<unique_ptr<Expression>> &expressions, unique_ptr<LogicalOperator> &root,
+                        MergeIntoAction &action, const vector<BindingAlias> &source_aliases,
+                        const vector<string> &source_names, const case_insensitive_set_t &join_column_names) {
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
@@ -63,19 +74,30 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 			action.update_info = make_uniq<UpdateSetInfo>();
 			if (action.column_order == InsertColumnOrder::INSERT_BY_NAME) {
 				// UPDATE BY NAME - get the name list from the source binder
-				action.update_info->columns = source_names;
+				// we need to exclude columns that are used in the join
+				// condition (ON clause), as those columns are already used for matching rows
+				for (idx_t i = 0; i < source_names.size(); i++) {
+					auto &name = source_names[i];
+					// Skip columns that are in the join condition
+					if (join_column_names.count(name)) {
+						continue;
+					}
+					action.update_info->columns.push_back(name);
+					action.update_info->expressions.push_back(bind_context.CreateColumnReference(
+					    source_aliases[i], name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
+				}
 			} else {
 				// UPDATE BY POSITION - get the name list from the table
 				for (auto &col : table.GetColumns().Physical()) {
 					action.update_info->columns.push_back(col.Name());
 				}
+				if (source_names.size() != action.update_info->columns.size()) {
+					throw BinderException(
+					    "Data provided for UPDATE did not match column count in table - expected %d columns but got %d",
+					    action.update_info->columns.size(), source_names.size());
+				}
+				action.update_info->expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 			}
-			if (source_names.size() != action.update_info->columns.size()) {
-				throw BinderException(
-				    "Data provided for UPDATE did not match column count in table - expected %d columns but got %d",
-				    action.update_info->columns.size(), source_names.size());
-			}
-			action.update_info->expressions = GenerateColumnReferences(*this, source_aliases, source_names);
 		}
 		BindUpdateSet(proj_index, root, *action.update_info, table, result->columns, result->expressions, expressions);
 
@@ -240,6 +262,19 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		}
 	}
 
+	// Extract column names used in the join condition (e.g., primary key columns)
+	// For INSERT OR REPLACE BY NAME, these columns should be excluded from the UPDATE SET clause
+	// because they are already used for row matching
+	case_insensitive_set_t join_column_names;
+	if (stmt.join_condition) {
+		ExtractTargetColumnNames(*stmt.join_condition, table_alias, join_column_names);
+	} else if (!stmt.using_columns.empty()) {
+		// If using USING clause, the columns are the same in both source and target
+		for (auto &col : stmt.using_columns) {
+			join_column_names.insert(col);
+		}
+	}
+
 	// bind the join between the source and target
 	// our conditions determine the join type we need
 	// if we have WHEN NOT MATCHED BY SOURCE we need all source rows -> RIGHT join
@@ -303,7 +338,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		for (auto &action : entry.second) {
 			CheckMergeAction(entry.first, action->action_type);
 			bound_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index, projection_expressions, root,
-			                                        *action, source_aliases, source_names));
+			                                        *action, source_aliases, source_names, join_column_names));
 		}
 		merge_into->actions.emplace(entry.first, std::move(bound_actions));
 	}
