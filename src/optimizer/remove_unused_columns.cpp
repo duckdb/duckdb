@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -20,6 +22,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include <utility>
 
 namespace duckdb {
 
@@ -31,6 +34,9 @@ void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBindi
 			D_ASSERT(colref.binding == current_binding);
 			colref.binding = new_binding;
 		}
+		auto record = std::move(colrefs->second);
+		column_references.erase(current_binding);
+		column_references.insert(make_pair(new_binding, std::move(record)));
 	}
 }
 
@@ -205,6 +211,19 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// in this case we only need to project a single constant
 				proj.expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 			}
+			RemoveUnusedColumns remove(binder, context);
+			auto tmp_deliver = remove.deliver_child;
+			for (idx_t idx = 0; idx < proj.expressions.size(); idx++) {
+				auto &expr = proj.expressions[idx];
+				auto record = column_references.find(ColumnBinding(proj.table_index, idx));
+				if (record != column_references.end() && !record->second.child_columns.empty()) {
+					remove.deliver_child = record->second.child_columns;
+				}
+				remove.VisitExpression(&expr);
+				remove.deliver_child = tmp_deliver;
+			}
+			remove.VisitOperator(*op.children[0]);
+			return;
 		}
 		// then recurse into the children of this projection
 		RemoveUnusedColumns remove(binder, context);
@@ -340,8 +359,9 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	vector<ColumnIndex> column_ids;
 	column_ids.reserve(col_sel.size());
-	for (auto col_sel_idx : col_sel) {
-		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
+	for (idx_t idx = 0; idx < col_sel.size(); idx++) {
+		auto col_sel_idx = col_sel[idx];
+		auto entry = column_references.find(ColumnBinding(get.table_index, idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
@@ -426,6 +446,14 @@ bool BaseColumnPruner::HandleStructExtract(Expression &expr) {
 	return true;
 }
 
+bool BaseColumnPruner::HandleStructPack(Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	return function.function.name == "struct_pack";
+}
+
 void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
 	if (current_child_columns.empty()) {
 		// there's already a reference to the full column - we can't extract only a subfield
@@ -490,6 +518,13 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 		// already handled
 		return;
 	}
+	if (HandleStructPack(expr)) {
+		auto tmp_deliver = deliver_child;
+		deliver_child = vector<ColumnIndex>();
+		LogicalOperatorVisitor::VisitExpression(expression);
+		deliver_child = tmp_deliver;
+		return;
+	}
 	// recurse
 	LogicalOperatorVisitor::VisitExpression(expression);
 }
@@ -497,7 +532,14 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
                                                       unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
-	AddBinding(expr);
+	if (deliver_child.empty()) {
+		AddBinding(expr);
+	} else {
+		for (auto &child_idx : deliver_child) {
+			AddBinding(expr, child_idx);
+		}
+	}
+
 	return nullptr;
 }
 
