@@ -54,8 +54,6 @@ enum class HighlightElementType : uint32_t {
 	NONE
 };
 
-enum class HighlightMode { STANDARD_MODE, DARK_MODE, LIGHT_MODE };
-
 struct HighlightColorInfo {
 	const char *color_name;
 	uint8_t code;

@@ -99,6 +99,7 @@ enum class ReadLineVersion { LINENOISE, FALLBACK };
 enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
+enum class HighlightMode : uint32_t { AUTOMATIC, MIXED_MODE, DARK_MODE, LIGHT_MODE };
 
 enum class ExecuteSQLSingleValueResult {
 	SUCCESS,
@@ -264,6 +265,8 @@ public:
 	idx_t pager_min_columns = 5;
 	//! Whether or not the pager is currently active
 	bool pager_is_active = false;
+	//! Shell highlighting mode
+	HighlightMode highlight_mode = HighlightMode::AUTOMATIC;
 
 #if defined(_WIN32) || defined(WIN32)
 	//! When enabled, sets the console page to UTF8 and renders using that code page

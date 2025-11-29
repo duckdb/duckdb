@@ -3539,7 +3539,7 @@ int wmain(int argc, wchar_t **wargv) {
 			const char *zHistory;
 			ShellHighlight highlight(data);
 #ifdef HAVE_LINENOISE
-			if (data.stdout_is_console && data.stderr_is_console) {
+			if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
 				// detect terminal colors
 				auto terminal_color = linenoiseGetTerminalColorMode();
 				if (terminal_color == LINENOISE_DARK_MODE) {

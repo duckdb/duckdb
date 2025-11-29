@@ -237,23 +237,41 @@ HighlightElementType ShellHighlight::TryGetHighlightElement(const char *element_
 }
 
 void ShellHighlight::ToggleMode(HighlightMode mode) {
+	bool user_configured = false;
+	if (mode == HighlightMode::MIXED_MODE) {
+		SetColor(HighlightElementType::KEYWORD, PrintColor::GREEN, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::YELLOW, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::YELLOW, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::GREEN, PrintIntensity::STANDARD,
+		         user_configured);
+		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::ORANGE3, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD,
+		         user_configured);
+	}
+
 	if (mode == HighlightMode::DARK_MODE) {
-		SetColor(HighlightElementType::KEYWORD, PrintColor::CORNFLOWERBLUE, PrintIntensity::BOLD, false);
-		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::LIGHTGOLDENROD4, PrintIntensity::STANDARD, false);
-		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::LIGHTGOLDENROD4, PrintIntensity::STANDARD, false);
+		SetColor(HighlightElementType::KEYWORD, PrintColor::CORNFLOWERBLUE, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::LIGHTGOLDENROD4, PrintIntensity::STANDARD,
+		         user_configured);
+		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::LIGHTGOLDENROD4, PrintIntensity::STANDARD,
+		         user_configured);
 		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::CORNFLOWERBLUE, PrintIntensity::STANDARD,
-		         false);
+		         user_configured);
 	}
 
 	if (mode == HighlightMode::LIGHT_MODE) {
-		SetColor(HighlightElementType::KEYWORD, PrintColor::DEEPSKYBLUE6, PrintIntensity::BOLD, false);
-		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::ORANGE5, PrintIntensity::STANDARD, false);
-		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::ORANGE5, PrintIntensity::STANDARD, false);
+		SetColor(HighlightElementType::KEYWORD, PrintColor::DEEPSKYBLUE6, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::ORANGE5, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::ORANGE5, PrintIntensity::STANDARD,
+		         user_configured);
 		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::DEEPSKYBLUE6, PrintIntensity::STANDARD,
-		         false);
-		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE4, PrintIntensity::BOLD, false);
-		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::DARKORANGE4, PrintIntensity::STANDARD, false);
-		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE6, PrintIntensity::STANDARD, false);
+		         user_configured);
+		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE4, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::DARKORANGE4, PrintIntensity::STANDARD,
+		         user_configured);
+		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE6, PrintIntensity::STANDARD,
+		         user_configured);
 	}
 }
 
