@@ -37,9 +37,6 @@ public:
 	bool in_memory;
 
 public:
-	static inline uint8_t Count(const ART &art) {
-		return art.prefix_count;
-	}
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
