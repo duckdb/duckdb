@@ -1,16 +1,19 @@
 # name: test/sql/types/struct/struct_projection_pushdown_in_storage.test
 # group: [struct]
 
+#statement ok
+#pragma disable_optimizer;
+
 statement ok
-CREATE TABLE test_structs(i STRUCT(a integer, b bool));
+CREATE TABLE test_structs(i STRUCT(a integer, b bool, c VARCHAR));
 
 statement ok
 INSERT INTO test_structs VALUES
-	({'a': 1, 'b': true}),
-	({'a': 2, 'b': false}),
+	({'a': 1, 'b': true, 'c': 'test'}),
+	({'a': 2, 'b': false, 'c': 'hello'}),
 	(NULL),
-	({'a': 3, 'b': true}),
-	({'a': NULL, 'b': NULL});
+	({'a': 3, 'b': true, 'c': 'this is a long string'}),
+	({'a': NULL, 'b': NULL, 'c': NULL});
 
 query I
 SELECT i.a FROM test_structs;
@@ -20,3 +23,22 @@ SELECT i.a FROM test_structs;
 NULL
 3
 NULL
+
+statement ok
+pragma explain_output = optimized_only
+
+# The 'struct_extract' expression is entirely removed
+query II
+EXPLAIN SELECT i.a FROM test_structs;
+----
+logical_opt	<!REGEX>:.*struct_extract.*
+
+# TODO: fix an issue in the binder/optimizer to support this
+#query II
+#SELECT i.a, i.c FROM test_structs;
+#----
+#1	test
+#2	hello
+#NULL	NULL
+#3	this is a long string
+#NULL	NULL

@@ -48,22 +48,6 @@ idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
-void StructColumnData::VerifyScanState(ColumnScanState &scan_state) const {
-	auto &index_children = scan_state.storage_index.GetChildIndexes();
-	D_ASSERT(scan_state.child_states.size() == index_children.size() + 1);
-	if (scan_state.storage_index.IsPushdownExtract()) {
-		//! For every child in the index, a child state is created
-		//! We should have at least as many sub_columns as we do children
-		D_ASSERT(sub_columns.size() >= index_children.size());
-		for (idx_t i = 0; i < index_children.size(); i++) {
-			D_ASSERT(index_children[i].GetPrimaryIndex() < sub_columns.size());
-		}
-	} else {
-		D_ASSERT(sub_columns.size() == index_children.size());
-		D_ASSERT(scan_state.child_states.size() == sub_columns.size() + 1);
-	}
-}
-
 // ColumnData &StructColumnData::GetChildColumn(const StorageIndex &storage_index) {
 //	auto index = storage_index.GetPrimaryIndex();
 //	auto &children = storage_index.GetChildIndexes();
@@ -107,7 +91,6 @@ void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnS
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
-	VerifyScanState(state);
 	state.offset_in_column = 0;
 	state.current = nullptr;
 
@@ -125,7 +108,6 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	VerifyScanState(state);
 	D_ASSERT(row_idx < count);
 	state.offset_in_column = row_idx;
 	state.current = nullptr;
