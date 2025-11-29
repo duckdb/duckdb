@@ -259,6 +259,8 @@
 #define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
 #define LG_PAGE 16 // PowerPC architectures often use 64KB page size
+#elif defined(__loongarch__)
+#define LG_PAGE 14 // LoongArch architectures uses a 16KB page size
 #elif defined(__sparc__)
 #define LG_PAGE 13 // SPARC architectures usually have an 8KB page size
 #elif defined(__aarch64__) || defined(__ARM_ARCH)
