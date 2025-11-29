@@ -1,0 +1,317 @@
+# name: test/sql/catalog/test_temporary_schema.test
+# description: Test temporary schemas and search path shadowing
+# group: [catalog]
+
+require noforcestorage
+
+# =============================================================================
+# Part 1: Create temp schemas and objects
+# =============================================================================
+
+# Create a schema in the temp catalog
+statement ok
+CREATE SCHEMA temp.my_schema
+
+# Create a temp table in the new schema
+statement ok
+CREATE TEMPORARY TABLE temp.my_schema.test_table(i INTEGER)
+
+# Verify the table is accessible with full path
+statement ok
+INSERT INTO temp.my_schema.test_table VALUES (42)
+
+query I
+SELECT * FROM temp.my_schema.test_table
+----
+42
+
+# Create other objects in the temp schema
+statement ok
+CREATE TEMPORARY VIEW temp.my_schema.test_view AS SELECT 100 AS val
+
+query I
+SELECT * FROM temp.my_schema.test_view
+----
+100
+
+statement ok
+CREATE TEMPORARY SEQUENCE temp.my_schema.test_seq
+
+query I
+SELECT nextval('temp.my_schema.test_seq')
+----
+1
+
+statement ok
+CREATE TEMPORARY MACRO temp.my_schema.test_macro(x) AS x * 2
+
+query I
+SELECT temp.my_schema.test_macro(21)
+----
+42
+
+# Test: temporary objects automatically route to temp catalog even with schema-only qualification
+statement ok
+CREATE SCHEMA temp.auto_route
+
+# This should automatically go to temp.auto_route (not memory.auto_route)
+statement ok
+CREATE TEMPORARY TABLE auto_route.auto_table(i INTEGER)
+
+# Note: to access the table, we need full path or search_path since temp.auto_route isn't auto-added
+statement ok
+INSERT INTO temp.auto_route.auto_table VALUES (999)
+
+# Verify it's in the temp catalog
+query I
+SELECT * FROM temp.auto_route.auto_table
+----
+999
+
+# Also works for views - CREATE routes automatically to temp catalog
+statement ok
+CREATE TEMPORARY VIEW auto_route.auto_view AS SELECT 888 AS val
+
+query I
+SELECT * FROM temp.auto_route.auto_view
+----
+888
+
+# With search path set, we can access without full qualification
+statement ok
+SET SEARCH_PATH = 'temp.auto_route'
+
+statement ok
+INSERT INTO auto_table VALUES (111)
+
+query I
+SELECT * FROM auto_table ORDER BY i
+----
+111
+999
+
+# Reset search path for next tests
+statement ok
+SET SEARCH_PATH = ''
+
+# =============================================================================
+# Negative test cases
+# =============================================================================
+
+# NEGATIVE: Cannot create temp table in non-existent temp schema
+statement error
+CREATE TEMPORARY TABLE nonexistent_schema.fail_table(i INTEGER)
+----
+<REGEX>:.*Catalog Error.*Schema with name.*nonexistent_schema.*does not exist.*
+
+# NEGATIVE: Cannot create non-temporary table in temp catalog
+statement error
+CREATE TABLE temp.my_schema.not_temp(i INTEGER)
+----
+<REGEX>:.*Parser Error.*Only TEMPORARY.*
+
+# NEGATIVE: Cannot create temp table with explicit non-temp catalog
+statement error
+CREATE TEMPORARY TABLE memory.some_schema.fail_table(i INTEGER)
+----
+<REGEX>:.*Parser Error.*TEMPORARY table names can \*only\* use the "temp" catalog.*
+
+# NEGATIVE: Cannot use SET SCHEMA with temp catalog (only SET SEARCH_PATH works)
+statement error
+SET SCHEMA = 'temp.my_schema'
+----
+<REGEX>:.*Catalog Error.*SET schema cannot be set to internal schema.*
+
+# NEGATIVE: Cannot drop non-existent temp schema
+statement error
+DROP SCHEMA temp.does_not_exist
+----
+<REGEX>:.*Catalog Error.*Schema with name.*does_not_exist.*does not exist.*
+
+# NEGATIVE: Schema in temp catalog not visible without temp prefix when not in search path
+statement error
+SELECT * FROM my_schema.test_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+# =============================================================================
+# Part 2: Search path with temp schemas
+# =============================================================================
+
+# Create another temp schema for search path testing
+statement ok
+CREATE SCHEMA temp.search_test
+
+statement ok
+CREATE TEMPORARY TABLE temp.search_test.path_table(val VARCHAR)
+
+statement ok
+INSERT INTO temp.search_test.path_table VALUES ('from temp schema')
+
+# Set search path to include temp schema
+statement ok
+SET SEARCH_PATH = 'temp.search_test'
+
+# Verify current_schemas reflects the temp schema
+query I
+SELECT current_schemas(false)
+----
+[search_test]
+
+# Access the table without full qualification
+query I
+SELECT * FROM path_table
+----
+from temp schema
+
+# Reset search path
+statement ok
+SET SEARCH_PATH = ''
+
+# =============================================================================
+# Part 3: Shadowing behavior - KEY TEST CASES
+# =============================================================================
+
+# Create a regular schema with a table
+statement ok
+CREATE SCHEMA other_schema
+
+statement ok
+CREATE TABLE other_schema.shadowed_table(source VARCHAR)
+
+statement ok
+INSERT INTO other_schema.shadowed_table VALUES ('from persistent')
+
+# Verify the persistent table works
+query I
+SELECT * FROM other_schema.shadowed_table
+----
+from persistent
+
+# Create a temp schema with the SAME NAME and a table with the SAME NAME
+statement ok
+CREATE SCHEMA temp.other_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.other_schema.shadowed_table(source VARCHAR)
+
+statement ok
+INSERT INTO temp.other_schema.shadowed_table VALUES ('from temp')
+
+# Now set search path to have temp schema first, then regular schema
+statement ok
+SET SEARCH_PATH = 'temp.other_schema,other_schema'
+
+# KEY TEST: Unqualified access should return the temp table (shadowing)
+query I
+SELECT * FROM shadowed_table
+----
+from temp
+
+# KEY TEST: Schema-qualified access should also shadow (temp.other_schema comes first)
+query I
+SELECT * FROM other_schema.shadowed_table
+----
+from temp
+
+# KEY TEST: Explicit catalog bypasses shadowing - get the persistent table
+query I
+SELECT * FROM memory.other_schema.shadowed_table
+----
+from persistent
+
+# Also verify we can still explicitly access the temp version
+query I
+SELECT * FROM temp.other_schema.shadowed_table
+----
+from temp
+
+# Test with reversed search path order - persistent should win (must be explicit about catalog)
+statement ok
+SET SEARCH_PATH = 'memory.other_schema,temp.other_schema'
+
+query I
+SELECT * FROM shadowed_table
+----
+from persistent
+
+query I
+SELECT * FROM other_schema.shadowed_table
+----
+from persistent
+
+# Reset search path
+statement ok
+SET SEARCH_PATH = ''
+
+# =============================================================================
+# Part 4: Connection isolation
+# =============================================================================
+
+# Temp schema should not be visible to other connections
+statement error con2
+SELECT * FROM temp.my_schema.test_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+statement error con2
+SELECT * FROM temp.other_schema.shadowed_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+# con2 can still access the persistent schema
+query I con2
+SELECT * FROM memory.other_schema.shadowed_table
+----
+from persistent
+
+# =============================================================================
+# Part 5: Transaction behavior
+# =============================================================================
+
+# Temp schema created in transaction survives COMMIT
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE SCHEMA temp.tx_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.tx_schema.tx_table(i INTEGER)
+
+statement ok
+INSERT INTO temp.tx_schema.tx_table VALUES (123)
+
+statement ok
+COMMIT
+
+query I
+SELECT * FROM temp.tx_schema.tx_table
+----
+123
+
+# Temp schema created in transaction does NOT survive ROLLBACK
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE SCHEMA temp.rollback_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.rollback_schema.rb_table(i INTEGER)
+
+statement ok
+INSERT INTO temp.rollback_schema.rb_table VALUES (456)
+
+query I
+SELECT * FROM temp.rollback_schema.rb_table
+----
+456
+
+statement ok
+ROLLBACK
+
+statement error
+SELECT * FROM temp.rollback_schema.rb_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*

@@ -161,3 +161,30 @@ statement error con2
 INSERT INTO integers VALUES (42)
 ----
 <REGEX>:.*Catalog Error.*does not exist.*
+
+# test creating schemas in the temp catalog
+statement ok
+CREATE SCHEMA temp.my_schema
+
+# create a temp table in the new schema
+statement ok
+CREATE TEMPORARY TABLE temp.my_schema.test_table(i INTEGER)
+
+# verify the table is accessible
+statement ok
+INSERT INTO temp.my_schema.test_table VALUES (42)
+
+query I
+SELECT * FROM temp.my_schema.test_table
+----
+42
+
+# schema is not visible to other connections
+statement error con2
+SELECT * FROM temp.my_schema.test_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+# drop the schema
+statement ok
+DROP SCHEMA temp.my_schema CASCADE
