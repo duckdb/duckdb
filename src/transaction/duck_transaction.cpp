@@ -215,13 +215,11 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 
 		auto &profiler = *context.client_data->profiler;
 
-		profiler.StartTimer(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY);
+		auto commit_timer = profiler.StartTimer(MetricType::COMMIT_LOCAL_STORAGE_LATENCY);
 		storage->Commit(commit_state.get());
-		profiler.EndTimer(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY);
 
-		profiler.StartTimer(MetricsType::WRITE_TO_WAL_LATENCY);
+		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
-		profiler.EndTimer(MetricsType::WRITE_TO_WAL_LATENCY);
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks

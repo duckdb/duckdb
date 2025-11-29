@@ -368,7 +368,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
-	profiler.StartPhase(MetricsType::PLANNER);
+	profiler.StartPhase(MetricType::PLANNER);
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
 		auto &parameter_values = *parameters.parameters;
@@ -394,7 +394,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	logical_plan->Verify(*this);
 #endif
 	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
-		profiler.StartPhase(MetricsType::ALL_OPTIMIZERS);
+		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*logical_planner.binder, *this);
 		logical_plan = optimizer.Optimize(std::move(logical_plan));
 		D_ASSERT(logical_plan);
@@ -406,7 +406,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	}
 
 	// Convert the logical query plan into a physical query plan.
-	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
+	profiler.StartPhase(MetricType::PHYSICAL_PLANNER);
 	PhysicalPlanGenerator physical_planner(*this);
 	result->physical_plan = physical_planner.Plan(std::move(logical_plan));
 	profiler.EndPhase();

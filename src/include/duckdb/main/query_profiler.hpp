@@ -21,10 +21,8 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/profiling_node.hpp"
-
-#include <stack>
+#include "duckdb/main/profiling_utils.hpp"
 
 namespace duckdb {
 
@@ -33,6 +31,7 @@ class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
+struct ActiveTimer;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
@@ -112,54 +111,6 @@ private:
 	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
 };
 
-//! Top level query metrics.
-struct QueryMetrics {
-	QueryMetrics() : total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0) {};
-
-	//! Reset the query metrics.
-	void Reset() {
-		query = "";
-		latency.Reset();
-		waiting_to_attach_latency.Reset();
-		attach_load_storage_latency.Reset();
-		attach_replay_wal_latency.Reset();
-		checkpoint_latency.Reset();
-		commit_local_storage_latency.Reset();
-		write_to_wal_latency.Reset();
-		wal_replay_entry_count = 0;
-		total_bytes_read = 0;
-		total_bytes_written = 0;
-		total_memory_allocated = 0;
-	}
-
-	ProfilingInfo query_global_info;
-
-	//! The SQL string of the query.
-	string query;
-	//! The timer of the execution of the entire query.
-	Profiler latency;
-	//! The timer of the delay when waiting to ATTACH a file.
-	Profiler waiting_to_attach_latency;
-	//! The timer for loading from storage.
-	Profiler attach_load_storage_latency;
-	//! The timer for replaying the WAL file.
-	Profiler attach_replay_wal_latency;
-	//! The timer for running checkpoints.
-	Profiler checkpoint_latency;
-	//! The timer for committing the transaction-local storage.
-	Profiler commit_local_storage_latency;
-	//! The timer for the WAL writes.
-	Profiler write_to_wal_latency;
-	//! The total number of entries to replay in the WAL.
-	atomic<idx_t> wal_replay_entry_count;
-	//! The total bytes read by the file system.
-	atomic<idx_t> total_bytes_read;
-	//! The total bytes written by the file system.
-	atomic<idx_t> total_bytes_written;
-	//! The total memory allocated by the buffer manager.
-	atomic<idx_t> total_memory_allocated;
-};
-
 //! QueryProfiler collects the profiling metrics of a query.
 class QueryProfiler {
 public:
@@ -183,11 +134,10 @@ public:
 	DUCKDB_API void EndQuery();
 
 	//! Adds amount to a specific metric type.
-	DUCKDB_API void AddToCounter(MetricsType type, const idx_t amount);
+	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
 
 	//! Start/End a timer for a specific metric type.
-	DUCKDB_API void StartTimer(MetricsType type);
-	DUCKDB_API void EndTimer(MetricsType type);
+	DUCKDB_API ActiveTimer StartTimer(MetricType type);
 
 	DUCKDB_API void StartExplainAnalyze();
 
@@ -196,7 +146,7 @@ public:
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
 
-	DUCKDB_API void StartPhase(MetricsType phase_metric);
+	DUCKDB_API void StartPhase(MetricType phase_metric);
 	DUCKDB_API void EndPhase();
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
@@ -275,11 +225,11 @@ private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	using PhaseTimingStorage = unordered_map<MetricsType, double, MetricsTypeHashFunction>;
+	using PhaseTimingStorage = unordered_map<MetricType, double, MetricTypeHashFunction>;
 	PhaseTimingStorage phase_timings;
 	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
-	vector<MetricsType> phase_stack;
+	vector<MetricType> phase_stack;
 
 private:
 	void MoveOptimizerPhasesToRoot();
