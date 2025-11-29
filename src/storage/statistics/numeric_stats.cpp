@@ -505,7 +505,7 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 		g_imprint_less_than_checks++;
 
 		// set all bits to 1 from [0, bin_index]
-		uint64_t less_than_mask = (bin_index == 0) ? 0 : ((uint64_t(1) << (bin_index + 1)) - 1);
+		uint64_t less_than_mask = (bin_index == 63) ? UINT64_MAX : ((uint64_t(1) << (bin_index + 1)) - 1);
 
 		// if no matching bins, prune
 		if ((bitmap & less_than_mask) == 0) {

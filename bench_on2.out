@@ -242,7 +242,7 @@
 │         metric          │ imprint_stats('imprint_pruned_segments') │
 │         varchar         │                  int64                   │
 ├─────────────────────────┼──────────────────────────────────────────┤
-│ imprint_pruned_segments │                                        9 │
+│ imprint_pruned_segments │                                        0 │
 └─────────────────────────┴──────────────────────────────────────────┘
 ┌─────────────────────────┬──────────────────────────────────────────┐
 │         metric          │ imprint_stats('imprint_equality_checks') │
@@ -266,13 +266,13 @@
 │         metric         │ imprint_stats('total_segments_checked') │
 │        varchar         │                  int64                  │
 ├────────────────────────┼─────────────────────────────────────────┤
-│ total_segments_checked │                                     464 │
+│ total_segments_checked │                                     489 │
 └────────────────────────┴─────────────────────────────────────────┘
 ┌────────────────────────┬─────────────────────────────────────────┐
 │         metric         │ imprint_stats('total_segments_skipped') │
 │        varchar         │                  int64                  │
 ├────────────────────────┼─────────────────────────────────────────┤
-│ total_segments_skipped │                                       9 │
+│ total_segments_skipped │                                       0 │
 └────────────────────────┴─────────────────────────────────────────┘
 ┌────────────────────────┐
 │ imprint_stats('reset') │
@@ -284,7 +284,7 @@
 │                        case                        │  cnt  │
 │                      varchar                       │ int64 │
 ├────────────────────────────────────────────────────┼───────┤
-│ ON / fact_imprint_demo / v BETWEEN 60000 AND 62000 │ 43611 │
+│ ON / fact_imprint_demo / v BETWEEN 60000 AND 62000 │ 46875 │
 └────────────────────────────────────────────────────┴───────┘
 ┌──────────────────────┬───────────────────────────────────────┐
 │        metric        │ imprint_stats('imprint_checks_total') │
@@ -296,7 +296,7 @@
 │         metric          │ imprint_stats('imprint_pruned_segments') │
 │         varchar         │                  int64                   │
 ├─────────────────────────┼──────────────────────────────────────────┤
-│ imprint_pruned_segments │                                        9 │
+│ imprint_pruned_segments │                                        0 │
 └─────────────────────────┴──────────────────────────────────────────┘
 ┌─────────────────────────┬──────────────────────────────────────────┐
 │         metric          │ imprint_stats('imprint_equality_checks') │
@@ -320,11 +320,11 @@
 │         metric         │ imprint_stats('total_segments_checked') │
 │        varchar         │                  int64                  │
 ├────────────────────────┼─────────────────────────────────────────┤
-│ total_segments_checked │                                     464 │
+│ total_segments_checked │                                     489 │
 └────────────────────────┴─────────────────────────────────────────┘
 ┌────────────────────────┬─────────────────────────────────────────┐
 │         metric         │ imprint_stats('total_segments_skipped') │
 │        varchar         │                  int64                  │
 ├────────────────────────┼─────────────────────────────────────────┤
-│ total_segments_skipped │                                       9 │
+│ total_segments_skipped │                                       0 │
 └────────────────────────┴─────────────────────────────────────────┘
