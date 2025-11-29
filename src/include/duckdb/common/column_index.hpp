@@ -75,6 +75,9 @@ public:
 	vector<ColumnIndex> &GetChildIndexesMutable() {
 		return child_indexes;
 	}
+	const LogicalType &GetType() const {
+		return type;
+	}
 	void AddChildIndex(ColumnIndex new_index) {
 		this->child_indexes.push_back(std::move(new_index));
 		if (index_type == ColumnIndexType::DIRECT_READ) {

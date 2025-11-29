@@ -49,7 +49,7 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> 
 		auto &id = columns_to_fetch_p[i];
 		D_ASSERT(id < insert_types.size());
 		types_to_fetch[i] = insert_types[id];
-		columns_to_fetch.emplace_back(id);
+		columns_to_fetch.emplace_back(id, insert_types[id]);
 	}
 }
 

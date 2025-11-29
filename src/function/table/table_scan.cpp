@@ -62,12 +62,12 @@ static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
 	for (auto &child_id : column_id.GetChildIndexes()) {
 		result.push_back(TransformStorageIndex(child_id));
 	}
-	return StorageIndex(column_id.GetPrimaryIndex(), std::move(result));
+	return StorageIndex(column_id.GetPrimaryIndex(), column_id.GetType(), std::move(result));
 }
 
 static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
 	if (column_id.IsRowIdColumn()) {
-		return StorageIndex();
+		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID, LogicalType::ROW_TYPE);
 	}
 
 	// The index of the base ColumnIndex is equal to the physical column index in the table

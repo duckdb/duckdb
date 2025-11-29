@@ -1065,10 +1065,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 
 	vector<StorageIndex> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
-		storage_oids.emplace_back(columns.LogicalToPhysical(bound_columns[i]).index);
+		auto &logical_index = bound_columns[i];
+		auto &column = columns.GetColumn(bound_columns[i]);
+		storage_oids.emplace_back(columns.LogicalToPhysical(logical_index).index, column.GetType());
 	}
 	if (storage_oids.empty()) {
-		storage_oids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		storage_oids.emplace_back(COLUMN_IDENTIFIER_ROW_ID, LogicalType::ROW_TYPE);
 	}
 
 	auto new_storage =

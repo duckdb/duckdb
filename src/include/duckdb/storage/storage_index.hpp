@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -17,12 +18,15 @@ enum class StorageIndexType : uint8_t { DIRECT_READ, OPTIONAL_PRUNE_HINT, PUSHDO
 
 struct StorageIndex {
 public:
-	StorageIndex() : index(COLUMN_IDENTIFIER_ROW_ID) {
+	StorageIndex()
+	    : index(COLUMN_IDENTIFIER_ROW_ID), type(LogicalType::ROW_TYPE), index_type(StorageIndexType::DIRECT_READ) {
 	}
-	explicit StorageIndex(idx_t index) : index(index) {
+	explicit StorageIndex(idx_t index, const LogicalType &type)
+	    : index(index), type(type), index_type(StorageIndexType::DIRECT_READ) {
 	}
-	StorageIndex(idx_t index, vector<StorageIndex> child_indexes_p)
-	    : index(index), child_indexes(std::move(child_indexes_p)) {
+	StorageIndex(idx_t index, const LogicalType &type, vector<StorageIndex> child_indexes_p)
+	    : index(index), type(type), index_type(StorageIndexType::OPTIONAL_PRUNE_HINT),
+	      child_indexes(std::move(child_indexes_p)) {
 	}
 
 	inline bool operator==(const StorageIndex &rhs) const {
@@ -59,6 +63,9 @@ public:
 	}
 	void AddChildIndex(StorageIndex new_index) {
 		this->child_indexes.push_back(std::move(new_index));
+		if (index_type == StorageIndexType::DIRECT_READ) {
+			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
+		}
 	}
 	void SetIndex(idx_t new_index) {
 		index = new_index;
@@ -69,6 +76,8 @@ public:
 
 private:
 	idx_t index;
+	LogicalType type;
+	StorageIndexType index_type;
 	vector<StorageIndex> child_indexes;
 };
 

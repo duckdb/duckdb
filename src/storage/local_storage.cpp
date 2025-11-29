@@ -176,7 +176,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	auto indexed_columns = index_list.GetRequiredColumns();
 	vector<StorageIndex> mapped_column_ids;
 	for (auto &col : indexed_columns) {
-		mapped_column_ids.emplace_back(col);
+		mapped_column_ids.emplace_back(col, table_types[col]);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
 

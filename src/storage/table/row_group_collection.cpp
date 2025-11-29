@@ -352,7 +352,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
-		column_ids.emplace_back(i);
+		column_ids.emplace_back(i, types[i]);
 	}
 	return Scan(transaction, column_ids, fun);
 }
@@ -778,7 +778,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
 	vector<StorageIndex> column_ids;
 	for (auto &col : indexed_column_id_set) {
-		column_ids.emplace_back(col);
+		column_ids.emplace_back(col, types[col]);
 	}
 	sort(column_ids.begin(), column_ids.end());
 
@@ -1024,7 +1024,7 @@ public:
 
 		vector<StorageIndex> column_ids;
 		for (idx_t c = 0; c < types.size(); c++) {
-			column_ids.emplace_back(c);
+			column_ids.emplace_back(c, types[c]);
 		}
 
 		idx_t current_append_idx = 0;
@@ -1688,7 +1688,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
 	vector<StorageIndex> column_ids;
-	column_ids.emplace_back(physical_index);
+	column_ids.emplace_back(physical_index, types[physical_index]);
 
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
