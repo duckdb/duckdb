@@ -21,6 +21,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
 	}
+	current_binder.get().can_contain_nulls = true;
 	BoundStatement result;
 	// now we bind the node
 	switch (node.type) {

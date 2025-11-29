@@ -348,7 +348,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
-		ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
+		ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), LogicalType::INVALID,
+		                      entry->second.child_columns);
 		new_column_ids.emplace_back(new_index);
 	}
 	if (new_column_ids.empty()) {

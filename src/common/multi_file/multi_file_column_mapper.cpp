@@ -309,7 +309,7 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
 		                                                          std::move(default_expressions), std::move(bind_data));
 	}
-	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), std::move(child_indexes));
+	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), local_column.type, std::move(child_indexes));
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -422,9 +422,9 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 		                                                          std::move(default_expressions), std::move(bind_data));
 	}
 	vector<ColumnIndex> map_indexes;
-	map_indexes.emplace_back(0, std::move(child_indexes));
+	map_indexes.emplace_back(0, ListType::GetChildType(local_column.type), std::move(child_indexes));
 
-	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), std::move(map_indexes));
+	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), local_column.type, std::move(map_indexes));
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -515,7 +515,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
 		                                                          std::move(default_expressions), std::move(bind_data));
 	}
-	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), std::move(child_indexes));
+	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), local_column.type, std::move(child_indexes));
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -707,7 +707,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				reader.cast_map[local_id.GetId()] = global_type;
 			} else {
 				// if types are equivalent we can push the parent ColumnIndex mapping
-				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+				local_index = ColumnIndex(local_id.GetId(), local_type, global_id.GetChildIndexes());
 			}
 			reader_data.expressions.push_back(std::move(expr));
 

@@ -10,16 +10,34 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
+enum class ColumnIndexType : uint8_t {
+	INVALID,
+	//! Regular column index
+	DIRECT_READ,
+	//! Hint to scans that unreferenced fields *can* be pruned.
+	OPTIONAL_PRUNE_HINT,
+	//! This index references a struct/variant field that MUST be extracted by the scan and emitted directly
+	PUSHDOWN_EXTRACT
+};
+
 struct ColumnIndex {
-	ColumnIndex() : index(DConstants::INVALID_INDEX) {
+public:
+	//! FIXME: this initializes the index to COLUMN_IDENTIFIER_ROW_ID (same numeric representation as INVALID_INDEX)
+	ColumnIndex() : index(DConstants::INVALID_INDEX), index_type(ColumnIndexType::INVALID) {
 	}
-	explicit ColumnIndex(idx_t index) : index(index) {
+	explicit ColumnIndex(idx_t index)
+	    : index(index), type(LogicalType::INVALID), index_type(ColumnIndexType::DIRECT_READ) {
 	}
-	ColumnIndex(idx_t index, vector<ColumnIndex> child_indexes_p)
-	    : index(index), child_indexes(std::move(child_indexes_p)) {
+	ColumnIndex(idx_t index, const LogicalType &type)
+	    : index(index), type(type), index_type(ColumnIndexType::DIRECT_READ) {
+	}
+	ColumnIndex(idx_t index, const LogicalType &type, vector<ColumnIndex> child_indexes_p)
+	    : index(index), type(type), index_type(ColumnIndexType::OPTIONAL_PRUNE_HINT),
+	      child_indexes(std::move(child_indexes_p)) {
 	}
 
 	inline bool operator==(const ColumnIndex &rhs) const {
@@ -31,6 +49,8 @@ struct ColumnIndex {
 	inline bool operator<(const ColumnIndex &rhs) const {
 		return index < rhs.index;
 	}
+
+public:
 	idx_t GetPrimaryIndex() const {
 		return index;
 	}
@@ -57,6 +77,9 @@ struct ColumnIndex {
 	}
 	void AddChildIndex(ColumnIndex new_index) {
 		this->child_indexes.push_back(std::move(new_index));
+		if (index_type == ColumnIndexType::DIRECT_READ) {
+			index_type = ColumnIndexType::OPTIONAL_PRUNE_HINT;
+		}
 	}
 	bool IsRowIdColumn() const {
 		return index == COLUMN_IDENTIFIER_ROW_ID;
@@ -67,11 +90,17 @@ struct ColumnIndex {
 	bool IsVirtualColumn() const {
 		return index >= VIRTUAL_COLUMN_START;
 	}
+
+public:
 	void Serialize(Serializer &serializer) const;
 	static ColumnIndex Deserialize(Deserializer &deserializer);
 
 private:
 	idx_t index;
+	//! The logical type of the column this references
+	LogicalType type;
+	//! The type of index, controlling how it's interpreted
+	ColumnIndexType index_type;
 	vector<ColumnIndex> child_indexes;
 };
 

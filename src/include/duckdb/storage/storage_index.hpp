@@ -13,8 +13,11 @@
 
 namespace duckdb {
 
+enum class StorageIndexType : uint8_t { DIRECT_READ, OPTIONAL_PRUNE_HINT, PUSHDOWN_EXTRACT };
+
 struct StorageIndex {
-	StorageIndex() : index(DConstants::INVALID_INDEX) {
+public:
+	StorageIndex() : index(COLUMN_IDENTIFIER_ROW_ID) {
 	}
 	explicit StorageIndex(idx_t index) : index(index) {
 	}
@@ -31,6 +34,8 @@ struct StorageIndex {
 	inline bool operator<(const StorageIndex &rhs) const {
 		return index < rhs.index;
 	}
+
+public:
 	idx_t GetPrimaryIndex() const {
 		return index;
 	}
