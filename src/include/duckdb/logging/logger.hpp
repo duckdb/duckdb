@@ -40,7 +40,8 @@ struct FileHandle;
 #define DUCKDB_LOG_DEBUG(SOURCE, ...)                                                                                  \
 	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_DEBUG, __VA_ARGS__)
 #define DUCKDB_LOG_INFO(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_INFO, __VA_ARGS__)
-#define DUCKDB_LOG_WARN(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_WARN, __VA_ARGS__)
+#define DUCKDB_LOG_WARNING(SOURCE, ...)                                                                                \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_WARNING, __VA_ARGS__)
 #define DUCKDB_LOG_ERROR(SOURCE, ...)                                                                                  \
 	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_ERROR, __VA_ARGS__)
 #define DUCKDB_LOG_FATAL(SOURCE, ...)                                                                                  \

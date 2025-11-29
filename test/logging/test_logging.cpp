@@ -64,7 +64,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARNING, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *db.instance, DatabaseInstance);
 
@@ -72,7 +72,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *con.context, ClientContext);
-	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARNING, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *con.context, ClientContext);
 
