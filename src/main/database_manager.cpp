@@ -213,6 +213,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 
 	attached_db->OnDetach(context);
+
+	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
+	AttachedDatabase::InvokeCloseIfLastReference(std::move(attached_db));
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
@@ -398,10 +401,10 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 	return result;
 }
 
-void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
-	auto databases = GetDatabases();
-	for (auto &entry : databases) {
-		entry->Close();
+void DatabaseManager::ResetDatabases() {
+	auto shared_db_pointers = GetDatabases();
+	for (auto &entry : shared_db_pointers) {
+		entry->Close(DatabaseCloseAction::TRY_CHECKPOINT);
 		entry.reset();
 	}
 }
