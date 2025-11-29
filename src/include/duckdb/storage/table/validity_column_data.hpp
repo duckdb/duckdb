@@ -23,6 +23,8 @@ public:
 public:
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void UpdateWithBase(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	                    row_t *row_ids, idx_t update_count, ColumnData &base);
 };
 
 } // namespace duckdb

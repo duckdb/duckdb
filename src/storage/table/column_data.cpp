@@ -588,7 +588,6 @@ void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_
 	Vector base_vector(type);
 	ColumnScanState state;
 	FetchUpdateData(state, row_ids, base_vector);
-
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
