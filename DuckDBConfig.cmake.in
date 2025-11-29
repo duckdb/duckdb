@@ -3,10 +3,13 @@
 #
 #  DuckDB_INCLUDE_DIRS - include directories for DuckDB
 #  DuckDB_LIBRARIES    - libraries to link against
+#  DuckDB_EXTENSIONS   - names of extensions included in this installation
+
+set(DuckDB_EXTENSIONS "@DUCKDB_EXTENSION_NAMES@")
 
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
-if(NOT @WITH_INTERNAL_ICU@)
+if("icu" IN_LIST DuckDB_EXTENSIONS AND NOT @WITH_INTERNAL_ICU@)
     find_dependency(ICU COMPONENTS i18n uc data)
 endif()
 
