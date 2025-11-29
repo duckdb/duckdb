@@ -71,6 +71,15 @@ void PhysicalTableInOutFunction::SetOrdinality(DataChunk &chunk, const optional_
 	}
 }
 
+bool PhysicalTableInOutFunction::ParallelOperator() const {
+	auto &gstate = op_state->Cast<TableInOutGlobalState>();
+	if (!gstate.global_state) {
+		return true;
+	}
+
+	return gstate.global_state->MaxThreads() > 1;
+}
+
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                        GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
