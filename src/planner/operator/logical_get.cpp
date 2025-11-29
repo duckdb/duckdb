@@ -119,17 +119,16 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	return result;
 }
 
-static const LogicalType &GetChildTypeRecursive(const LogicalType &type, const ColumnIndex &column_index) {
-	auto index = column_index.GetPrimaryIndex();
-	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(index < child_types.size());
-	auto &child_type = child_types[index].second;
+static const LogicalType &GetChildTypeRecursive(const ColumnIndex &column_index) {
 	auto &children = column_index.GetChildIndexes();
-	if (child_type.id() == LogicalTypeId::STRUCT && !children.empty()) {
-		D_ASSERT(children.size() == 1);
-		return GetChildTypeRecursive(child_type, children[0]);
+	D_ASSERT(children.size() == 1);
+	auto &child = children[0];
+	auto &child_type = child.GetType();
+	if (!child.IsPushdownExtract()) {
+		return child_type;
 	}
-	return child_type;
+	D_ASSERT(children.size() == 1);
+	return GetChildTypeRecursive(child);
 }
 
 const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
@@ -150,12 +149,11 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 		return res;
 	}
 	auto &children = index.GetChildIndexes();
-	if (children.empty()) {
+	if (!index.IsPushdownExtract()) {
 		return res;
 	}
-
 	D_ASSERT(children.size() == 1);
-	return GetChildTypeRecursive(res, children[0]);
+	return GetChildTypeRecursive(index);
 }
 
 const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {

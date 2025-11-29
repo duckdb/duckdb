@@ -359,8 +359,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			for (auto &child : entry->second.child_columns) {
 				ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(),
 				                      LogicalType::STRUCT({{"child", child.GetType()}}), {child});
-				////! Upgrade the optional prune hint to a mandatory pushdown of the extract
-				// new_index.SetPushdownExtractType();
+				//! Upgrade the optional prune hint to a mandatory pushdown of the extract
+				new_index.SetPushdownExtractType();
 				new_column_ids.emplace_back(new_index);
 			}
 		}
