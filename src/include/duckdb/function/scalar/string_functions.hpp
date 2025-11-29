@@ -375,6 +375,16 @@ struct RegexpEscapeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct PathJoinFun {
+	static constexpr const char *Name = "path_join";
+	static constexpr const char *Parameters = "path,...";
+	static constexpr const char *Description = "Joins path components using the platform separator, normalizing duplicate separators and dot segments. An absolute RHS overrides previous components.";
+	static constexpr const char *Example = "path_join('dir', 'subdir', 'file')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunction GetFunction();
+};
+
 struct LikeFun {
 	static constexpr const char *Name = "~~";
 	static constexpr const char *Parameters = "";
@@ -401,18 +411,6 @@ struct GlobPatternFun {
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
-};
-
-struct PathJoinFun {
-	static constexpr const char *Name = "path_join";
-	static constexpr const char *Parameters = "path,...";
-	static constexpr const char *Description =
-	    "Joins path components using the platform separator, normalizing duplicate separators and dot segments. An "
-	    "absolute RHS overrides previous components.";
-	static constexpr const char *Example = "path_join('dir', 'subdir', 'file')";
-	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };

@@ -143,6 +143,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(NotLikeEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OctetLengthFun),
 	DUCKDB_SCALAR_FUNCTION(ParseLogMessage),
+	DUCKDB_SCALAR_FUNCTION(PathJoinFun),
 	DUCKDB_SCALAR_FUNCTION(PrefixFun),
 	DUCKDB_SCALAR_FUNCTION(RegexpEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpExtractFun),
@@ -195,7 +196,6 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(LikeFun),
 	DUCKDB_SCALAR_FUNCTION(ILikeFun),
 	DUCKDB_SCALAR_FUNCTION(GlobPatternFun),
-	DUCKDB_SCALAR_FUNCTION(PathJoinFun),
 	FINAL_FUNCTION
 };
 
