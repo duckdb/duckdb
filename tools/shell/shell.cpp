@@ -1286,15 +1286,16 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
+	// analyze the query result so we know how long/wide the result will be
+	RenderingQueryResult render_result(res, *renderer);
+	renderer->Analyze(render_result);
+
+	// check if we need to use the pager for the rendering
 	unique_ptr<PagerState> pager_setup;
-	if (ShouldUsePager(res)) {
-		// we should use a pager
+	if (ShouldUsePager(*renderer, render_result)) {
 		pager_setup = SetupPager();
 	}
 	// render the query result
-	RenderingQueryResult render_result(res, *renderer);
-
-	renderer->Analyze(render_result);
 	return renderer->RenderQueryResult(*this, render_result);
 }
 
@@ -1691,47 +1692,27 @@ bool ShellState::ShouldUsePager(idx_t line_count) {
 	return true;
 }
 
-bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
-	if (cMode == RenderMode::TRASH) {
-		return false;
-	}
+bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result) {
 	if (!ShouldUsePager()) {
 		return false;
 	}
-	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
-		// in automatic mode we only use a pager when the output is large enough
-		if (cMode == RenderMode::DUCKBOX) {
-			// in duckbox mode the output is automatically truncated to "max_rows"
-			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
-			if (max_rows < pager_min_rows && max_width == 0) {
-				return false;
-			}
-		}
-		if (cMode == RenderMode::EXPLAIN) {
-			auto &materialized = result.Cast<MaterializedQueryResult>();
-			idx_t row_count = 0;
-			for (auto &row : materialized.Collection().Rows()) {
-				for (auto c : row.GetValue(1).GetValue<string>()) {
-					if (c == '\n') {
-						row_count++;
-					}
-				}
-			}
-			return row_count >= pager_min_rows;
-		}
-		// otherwise we check the size of the result set
-		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
-		if (result.ColumnCount() < pager_min_columns && !result.MoreRowsThan(pager_min_rows)) {
-			return false;
-		}
-	}
-	return true;
+	return renderer.ShouldUsePager(result, pager_mode);
+}
+
+extern "C" {
+
+void HandlePagerExit(int sig) {
+	// Pager is gone; interrupt the process to stop printing
+	auto &state = ShellState::Get();
+	++state.seenInterrupt;
+}
 }
 
 void ShellState::StartPagerDisplay() {
 #if !defined(_WIN32) && !defined(WIN32)
-	// disable sigpipe trap while displaying the pager
-	signal(SIGPIPE, SIG_IGN);
+	// turn sigpipe trap into an interrupt while displaying the pager
+	// this allows us to interrupt display after the pager is exited by the user
+	signal(SIGPIPE, HandlePagerExit);
 #endif
 }
 

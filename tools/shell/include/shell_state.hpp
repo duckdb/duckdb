@@ -46,6 +46,7 @@ struct Prompt;
 struct ShellProgressBar;
 struct PagerState;
 struct ShellTableInfo;
+struct RenderingQueryResult;
 enum class HighlightElementType : uint32_t;
 
 using idx_t = uint64_t;
@@ -355,9 +356,10 @@ public:
 		shellFlgs &= ~static_cast<uint32_t>(flag);
 	}
 	void ResetOutput();
-	bool ShouldUsePager(duckdb::QueryResult &result);
+	bool ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result);
 	bool ShouldUsePager();
 	bool ShouldUsePager(idx_t line_count);
+	idx_t GetMaxRenderWidth() const;
 	string GetSystemPager();
 	unique_ptr<PagerState> SetupPager();
 	static void StartPagerDisplay();

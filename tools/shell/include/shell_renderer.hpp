@@ -34,18 +34,19 @@ struct RowData {
 
 struct RenderingQueryResult {
 	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
-	    : result(result), renderer(renderer), metadata(result), is_converted(false) {
+	    : result(result), renderer(renderer), metadata(result) {
 	}
 
 	duckdb::QueryResult &result;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
 	vector<vector<string>> data;
-	bool is_converted = false;
+	bool exhausted_result = false;
 
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();
 	}
+	bool TryConvertChunk(ShellRenderer &renderer);
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
@@ -70,6 +71,8 @@ public:
 	virtual void RenderFooter(ResultMetadata &result);
 	virtual string NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
+	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
+	virtual string ConvertValue(const char *value);
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -77,7 +80,6 @@ public:
 	explicit ColumnRenderer(ShellState &state);
 
 	void Analyze(RenderingQueryResult &result) override;
-	virtual string ConvertValue(const char *value);
 	void RenderRow(ResultMetadata &result, RowData &row) override;
 
 	virtual const char *GetColumnSeparator() = 0;
@@ -88,6 +90,7 @@ public:
 	bool RequireMaterializedResult() const override {
 		return true;
 	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 
 	void RenderAlignedValue(ResultMetadata &result, idx_t c);
 
@@ -105,6 +108,7 @@ public:
 	bool RequireMaterializedResult() const override {
 		return false;
 	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 };
 
 } // namespace duckdb_shell

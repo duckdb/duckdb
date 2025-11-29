@@ -25,6 +25,10 @@ string ShellRenderer::NullValue() {
 	return state.nullValue;
 }
 
+string ShellRenderer::ConvertValue(const char *value) {
+	return value ? value : state.nullValue;
+}
+
 void ShellRenderer::Analyze(RenderingQueryResult &result) {
 }
 
@@ -42,7 +46,7 @@ public:
 		row_data.data.resize(nCol, string());
 		row_data.is_null.resize(nCol, false);
 		row_data.row_index = 0;
-		if (!result->is_converted) {
+		if (!result->exhausted_result) {
 			result_iterator = query_result.begin();
 		}
 		AssignData();
@@ -56,13 +60,13 @@ public:
 	void AssignData() {
 		auto &query_result = result->result;
 		auto nCol = query_result.ColumnCount();
-		if (!result->is_converted) {
-			// result is not converted - read from query result
-			if (result_iterator == query_result.end()) {
+		if (row_data.row_index >= result->data.size()) {
+			if (result->exhausted_result || result_iterator == query_result.end()) {
 				// exhausted
 				result = nullptr;
 				return;
 			}
+			// read from the query result
 			auto &row = *result_iterator;
 			// convert the result
 			for (idx_t c = 0; c < nCol; c++) {
@@ -74,14 +78,10 @@ public:
 					row_data.data[c] = row.GetValue<string>(c);
 				}
 			}
-			return;
+		} else {
+			// read from the materialized rows
+			row_data.data = std::move(result->data[row_data.row_index]);
 		}
-		// result is already converted - just copy it over
-		if (row_data.row_index >= result->data.size()) {
-			result = nullptr;
-			return;
-		}
-		row_data.data = std::move(result->data[row_data.row_index]);
 	}
 
 	void Next() {
@@ -89,10 +89,10 @@ public:
 			return;
 		}
 		// iterate to next position
-		row_data.row_index++;
-		if (!result->is_converted) {
+		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
 			++result_iterator;
 		}
+		row_data.row_index++;
 		// read data from this position
 		AssignData();
 	}
@@ -200,10 +200,6 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-string ColumnRenderer::ConvertValue(const char *value) {
-	return value ? value : state.nullValue;
-}
-
 void ColumnRenderer::RenderAlignedValue(ResultMetadata &result, idx_t c) {
 	auto &header_value = result.column_names[c];
 	idx_t w = column_width[c];
@@ -215,26 +211,38 @@ void ColumnRenderer::RenderAlignedValue(ResultMetadata &result, idx_t c) {
 	state.Print(string(rspace, ' '));
 }
 
+bool RenderingQueryResult::TryConvertChunk(ShellRenderer &renderer) {
+	if (exhausted_result) {
+		return false;
+	}
+	auto chunk = result.Fetch();
+	if (!chunk) {
+		exhausted_result = true;
+		return false;
+	}
+	for (idx_t r = 0; r < chunk->size(); r++) {
+		vector<string> row_data;
+		for (idx_t c = 0; c < result.ColumnCount(); c++) {
+			auto str_val = chunk->data[c].GetValue(r).GetValue<string>();
+			row_data.push_back(renderer.ConvertValue(str_val.c_str()));
+		}
+		data.push_back(std::move(row_data));
+	}
+	return true;
+}
+
 void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 	auto &state = ShellState::Get();
 	for (auto &column_name : result.metadata.column_names) {
 		column_name = ConvertValue(column_name.c_str());
 	}
-	auto &query_result = result.result;
 	// materialize the query result
-	for (auto &row : query_result) {
+	while (result.TryConvertChunk(*this)) {
 		if (state.seenInterrupt) {
 			state.PrintF("Interrupt\n");
 			return;
 		}
-		vector<string> row_data;
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			auto str_val = row.GetValue<string>(c);
-			row_data.push_back(ConvertValue(str_val.c_str()));
-		}
-		result.data.push_back(std::move(row_data));
 	}
-	result.is_converted = true;
 
 	// compute the column widths
 	for (idx_t c = 0; c < result.ColumnCount(); c++) {
@@ -260,6 +268,25 @@ void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 			}
 		}
 	}
+}
+
+bool ColumnRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) {
+	if (global_mode == PagerMode::PAGER_ON) {
+		return true;
+	}
+	if (result.data.size() >= state.pager_min_rows) {
+		// rows exceed min rows
+		return true;
+	}
+	idx_t max_render_width = state.GetMaxRenderWidth();
+	idx_t total_width = 0;
+	for (auto w : column_width) {
+		total_width += w + 2;
+	}
+	if (total_width > max_render_width) {
+		return true;
+	}
+	return false;
 }
 
 void ColumnRenderer::RenderRow(ResultMetadata &result, RowData &row) {
@@ -538,6 +565,24 @@ RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 void RowRenderer::RenderHeader(ResultMetadata &result) {
 }
 
+bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) {
+	if (global_mode == PagerMode::PAGER_ON) {
+		return true;
+	}
+	// fetch data until we have either fetched more than the pager min, or we have exhausted the data
+	while (result.data.size() < state.pager_min_rows && result.TryConvertChunk(*this)) {
+	}
+	if (result.data.size() >= state.pager_min_rows) {
+		// rows exceed min rows
+		return true;
+	}
+	// FIXME: look at actual to-be-rendered stuff to determine this
+	if (result.result.ColumnCount() >= state.pager_min_columns) {
+		return true;
+	}
+	return false;
+}
+
 class ModeLineRenderer : public RowRenderer {
 public:
 	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {
@@ -601,6 +646,24 @@ public:
 			state.Print("└─────────────────────────────┘\n");
 		}
 		state.Print(data[1]);
+	}
+
+	bool RequireMaterializedResult() const override {
+		return true;
+	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		if (global_mode == PagerMode::PAGER_ON) {
+			return true;
+		}
+		idx_t row_count = 0;
+		for (auto &row : result.data) {
+			for (auto c : row[1]) {
+				if (c == '\n') {
+					row_count++;
+				}
+			}
+		}
+		return row_count >= state.pager_min_rows;
 	}
 };
 
@@ -1123,6 +1186,17 @@ public:
 	bool RequireMaterializedResult() const override {
 		return true;
 	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		if (global_mode == PagerMode::PAGER_ON) {
+			return true;
+		}
+		// in duckbox mode the output is automatically truncated to "max_rows"
+		// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
+		if (state.max_rows < state.pager_min_rows && state.max_width == 0) {
+			return false;
+		}
+		return true;
+	}
 };
 
 SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
@@ -1177,6 +1251,10 @@ public:
 	bool RequireMaterializedResult() const override {
 		return true;
 	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// pager gets handled separately (inside RenderTableMetadata)
+		return false;
+	}
 };
 
 SuccessState ModeDescribeRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &res) {
@@ -1217,6 +1295,10 @@ public:
 	}
 	bool RequireMaterializedResult() const override {
 		return true;
+	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode trash never uses the pager
+		return false;
 	}
 };
 
