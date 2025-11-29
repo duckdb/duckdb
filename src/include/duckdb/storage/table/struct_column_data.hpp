@@ -27,7 +27,7 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	ColumnData &GetChildColumn(const StorageIndex &index) override;
+	// ColumnData &GetChildColumn(const StorageIndex &index) override;
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
@@ -68,6 +68,9 @@ public:
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(idx_t i, shared_ptr<ColumnData> child_column_p);
+
+private:
+	void VerifyScanState(ColumnScanState &scan_state) const;
 
 protected:
 	//! The sub-columns of the struct

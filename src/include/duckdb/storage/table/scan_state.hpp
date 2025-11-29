@@ -95,6 +95,8 @@ struct ColumnScanState {
 	idx_t offset_in_column = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
 	idx_t internal_index = 0;
+	//! Storage index of the current column that's being scanned
+	StorageIndex storage_index;
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector

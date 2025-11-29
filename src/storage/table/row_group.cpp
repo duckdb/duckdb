@@ -121,11 +121,11 @@ void RowGroup::LoadRowIdColumnData() const {
 
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	auto &res = GetColumn(c.GetPrimaryIndex());
-	if (c.IsPushdownExtract()) {
-		auto &children = c.GetChildIndexes();
-		D_ASSERT(children.size() == 1);
-		return res.GetChildColumn(children[0]);
-	}
+	// if (c.IsPushdownExtract()) {
+	//	auto &children = c.GetChildIndexes();
+	//	D_ASSERT(children.size() == 1);
+	//	return res.GetChildColumn(children[0]);
+	//}
 	return res;
 }
 
@@ -195,6 +195,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const StorageInd
 	// Register the options in the state
 	scan_options = options;
 	context = context_p;
+	storage_index = column_id;
 
 	D_ASSERT(type.id() != LogicalTypeId::INVALID);
 	if (type.id() == LogicalTypeId::VALIDITY) {
