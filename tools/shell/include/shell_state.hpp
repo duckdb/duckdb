@@ -284,19 +284,9 @@ public:
 	void PushOutputMode();
 	void PopOutputMode();
 	void OutputCSV(const char *z, int bSep);
-	void PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth);
-	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<duckdb::LogicalType> &colTypes,
-	                            const vector<idx_t> &actualWidth);
-	void OutputCString(const char *z);
-	void OutputQuotedString(const char *z);
-	void OutputQuotedEscapedString(const char *z);
-	void OutputHexBlob(const void *pBlob, int nBlob);
-	void PrintSchemaLine(const char *z, const char *zTail);
-	void PrintSchemaLineN(char *z, int n, const char *zTail);
-	void PrintOptionallyQuotedIdentifier(const char *z);
-	void OutputJSONString(const char *z, int n);
-	void PrintDashes(idx_t N);
-	void UTF8WidthPrint(idx_t w, const string &str, bool right_align);
+	string EscapeCString(const string &z);
+	string GetSchemaLine(const string &str, const string &tail);
+	string GetSchemaLineN(const string &str, idx_t n, const string &tail);
 	bool SetOutputMode(const string &mode, const char *tbl_name);
 	bool ImportData(const vector<string> &args);
 	bool OpenDatabase(const vector<string> &args);

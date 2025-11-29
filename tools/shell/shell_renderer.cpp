@@ -8,17 +8,75 @@
 
 namespace duckdb_shell {
 
+//===--------------------------------------------------------------------===//
+// Print Stream
+//===--------------------------------------------------------------------===//
+PrintStream::PrintStream(ShellState &state) : state(state) {
+}
+
+void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment) {
+	idx_t w = width;
+	idx_t n = state.RenderLength(str);
+	idx_t space_count = w < n ? 0 : w - n;
+	if (alignment == TextAlignment::LEFT) {
+		Print(str);
+		Print(string(space_count, ' '));
+		return;
+	}
+	if (alignment == TextAlignment::RIGHT) {
+		Print(string(space_count, ' '));
+		Print(str);
+		return;
+	}
+	idx_t lspace = space_count / 2;
+	idx_t rspace = (space_count + 1) / 2;
+	Print(string(lspace, ' '));
+	Print(str);
+	Print(string(rspace, ' '));
+}
+
+void PrintStream::PrintDashes(idx_t N) {
+	Print(string(N, '-'));
+}
+
+void PrintStream::OutputQuotedIdentifier(const string &str) {
+	Print(StringUtil::Format("%s", SQLIdentifier(str)));
+}
+
+void PrintStream::OutputQuotedString(const string &str) {
+	Print(StringUtil::Format("%s", SQLString(str)));
+}
+
+struct StandardPrintStream : public PrintStream {
+public:
+	explicit StandardPrintStream(ShellState &state) : PrintStream(state) {
+	}
+
+	void Print(const string &str) override {
+		state.Print(str);
+	}
+	void SetBinaryMode() override {
+		state.SetBinaryMode();
+	}
+	void SetTextMode() override {
+		state.SetTextMode();
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// ShellRenderer
+//===--------------------------------------------------------------------===//
 ShellRenderer::ShellRenderer(ShellState &state)
     : state(state), show_header(state.showHeader), col_sep(state.colSeparator), row_sep(state.rowSeparator) {
 }
 
-void ShellRenderer::RenderHeader(ResultMetadata &result) {
+void ShellRenderer::RenderHeader(PrintStream &out, ResultMetadata &result) {
 }
 
-void ShellRenderer::RenderRow(ResultMetadata &result, RowData &row) {
+void ShellRenderer::RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) {
 }
 
-void ShellRenderer::RenderFooter(ResultMetadata &result) {
+void ShellRenderer::RenderFooter(PrintStream &out, ResultMetadata &result) {
 }
 
 string ShellRenderer::NullValue() {
@@ -125,15 +183,16 @@ SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::Quer
 }
 
 SuccessState ShellRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
-	RenderHeader(result.metadata);
+	StandardPrintStream out(state);
+	RenderHeader(out, result.metadata);
 	for (auto &row_data : result) {
 		if (state.seenInterrupt) {
 			state.PrintF("Interrupt\n");
 			return SuccessState::FAILURE;
 		}
-		RenderRow(result.metadata, row_data);
+		RenderRow(out, result.metadata, row_data);
 	}
-	RenderFooter(result.metadata);
+	RenderFooter(out, result.metadata);
 	return SuccessState::SUCCESS;
 }
 
@@ -198,17 +257,6 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 // Column Renderers
 //===--------------------------------------------------------------------===//
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
-}
-
-void ColumnRenderer::RenderAlignedValue(ResultMetadata &result, idx_t c) {
-	auto &header_value = result.column_names[c];
-	idx_t w = column_width[c];
-	idx_t n = state.RenderLength(header_value);
-	idx_t lspace = (w - n) / 2;
-	idx_t rspace = (w - n + 1) / 2;
-	state.Print(string(lspace, ' '));
-	state.Print(header_value);
-	state.Print(string(rspace, ' '));
 }
 
 bool RenderingQueryResult::TryConvertChunk(ShellRenderer &renderer) {
@@ -289,23 +337,21 @@ bool ColumnRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode glob
 	return false;
 }
 
-void ColumnRenderer::RenderRow(ResultMetadata &result, RowData &row) {
-	auto &state = ShellState::Get();
+void ColumnRenderer::RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) {
 	auto colSep = GetColumnSeparator();
 	auto rowSep = GetRowSeparator();
 	auto row_start = GetRowStart();
 	if (row_start) {
-		state.Print(row_start);
+		out.Print(row_start);
 	}
 	for (idx_t c = 0; c < row.data.size(); c++) {
 		if (c > 0) {
-			state.Print(colSep);
+			out.Print(colSep);
 		}
-		idx_t w = column_width[c];
-		bool is_right_aligned = right_align[c];
-		state.UTF8WidthPrint(w, row.data[c], is_right_aligned);
+		TextAlignment alignment = right_align[c] ? TextAlignment::RIGHT : TextAlignment::LEFT;
+		out.RenderAlignedValue(row.data[c], column_width[c], alignment);
 	}
-	state.Print(rowSep);
+	out.Print(rowSep);
 }
 
 class ModeColumnRenderer : public ColumnRenderer {
@@ -313,18 +359,19 @@ public:
 	explicit ModeColumnRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
 		auto column_count = result.ColumnCount();
 		for (idx_t c = 0; c < column_count; c++) {
-			state.UTF8WidthPrint(column_width[c], result.column_names[c], right_align[c]);
-			state.Print(c == column_count - 1 ? "\n" : "  ");
+			TextAlignment alignment = right_align[c] ? TextAlignment::RIGHT : TextAlignment::LEFT;
+			out.RenderAlignedValue(result.column_names[c], column_width[c], alignment);
+			out.Print(c == column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < column_count; i++) {
-			state.PrintDashes(column_width[i]);
-			state.Print(i == column_count - 1 ? "\n" : "  ");
+			out.PrintDashes(column_width[i]);
+			out.Print(i == column_count - 1 ? "\n" : "  ");
 		}
 	}
 
@@ -341,20 +388,33 @@ public:
 	explicit ModeTableRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		auto column_count = result.ColumnCount();
-		state.PrintRowSeparator(column_count, "+", column_width);
-		state.Print("| ");
+		PrintRowSeparator(out, column_count, "+", column_width);
+		out.Print("| ");
 		for (idx_t c = 0; c < column_count; c++) {
-			RenderAlignedValue(result, c);
-			state.Print(c == column_count - 1 ? " |\n" : " | ");
+			out.RenderAlignedValue(result.column_names[c], column_width[c]);
+			out.Print(c == column_count - 1 ? " |\n" : " | ");
 		}
-		state.PrintRowSeparator(column_count, "+", column_width);
+		PrintRowSeparator(out, column_count, "+", column_width);
 	}
 
-	void RenderFooter(ResultMetadata &result) override {
+	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
 		auto column_count = result.ColumnCount();
-		state.PrintRowSeparator(column_count, "+", column_width);
+		PrintRowSeparator(out, column_count, "+", column_width);
+	}
+
+	void PrintRowSeparator(PrintStream &out, idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth) {
+		if (nArg > 0) {
+			out.Print(zSep);
+			out.PrintDashes(actualWidth[0] + 2);
+			for (idx_t i = 1; i < nArg; i++) {
+				out.Print(zSep);
+				out.PrintDashes(actualWidth[i] + 2);
+			}
+			out.Print(zSep);
+		}
+		out.Print("\n");
 	}
 
 	const char *GetColumnSeparator() override {
@@ -379,17 +439,35 @@ public:
 		return StringUtil::Replace(result, "|", "\\|");
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		auto column_count = result.ColumnCount();
-		state.Print(GetRowStart());
+		out.Print(GetRowStart());
 		for (idx_t c = 0; c < column_count; c++) {
 			if (c > 0) {
-				state.Print(GetColumnSeparator());
+				out.Print(GetColumnSeparator());
 			}
-			RenderAlignedValue(result, c);
+			out.RenderAlignedValue(result.column_names[c], column_width[c]);
 		}
-		state.Print(GetRowSeparator());
-		state.PrintMarkdownSeparator(column_count, "|", result.types, column_width);
+		out.Print(GetRowSeparator());
+		PrintMarkdownSeparator(out, column_count, "|", result.types, column_width);
+	}
+
+	void PrintMarkdownSeparator(PrintStream &out, idx_t nArg, const char *zSep,
+	                            const vector<duckdb::LogicalType> &colTypes, const vector<idx_t> &actualWidth) {
+		if (nArg > 0) {
+			for (idx_t i = 0; i < nArg; i++) {
+				out.Print(zSep);
+				if (colTypes[i].IsNumeric()) {
+					// right-align numerics in tables
+					out.PrintDashes(actualWidth[i] + 1);
+					out.Print(":");
+				} else {
+					out.PrintDashes(actualWidth[i] + 2);
+				}
+			}
+			out.Print(zSep);
+		}
+		out.Print("\n");
 	}
 
 	const char *GetColumnSeparator() override {
@@ -461,20 +539,20 @@ public:
 		return result;
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		auto column_count = result.ColumnCount();
-		print_box_row_separator(column_count, BOX_23, BOX_234, BOX_34, column_width);
-		state.Print(BOX_13 " ");
+		PrintBoxRowSeparator(out, column_count, BOX_23, BOX_234, BOX_34, column_width);
+		out.Print(BOX_13 " ");
 		for (idx_t c = 0; c < column_count; c++) {
-			RenderAlignedValue(result, c);
-			state.Print(c == column_count - 1 ? " " BOX_13 "\n" : " " BOX_13 " ");
+			out.RenderAlignedValue(result.column_names[c], column_width[c]);
+			out.Print(c == column_count - 1 ? " " BOX_13 "\n" : " " BOX_13 " ");
 		}
-		print_box_row_separator(column_count, BOX_123, BOX_1234, BOX_134, column_width);
+		PrintBoxRowSeparator(out, column_count, BOX_123, BOX_1234, BOX_134, column_width);
 	}
 
-	void RenderFooter(ResultMetadata &result) override {
+	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
 		auto column_count = result.ColumnCount();
-		print_box_row_separator(column_count, BOX_12, BOX_124, BOX_14, column_width);
+		PrintBoxRowSeparator(out, column_count, BOX_12, BOX_124, BOX_14, column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -491,30 +569,30 @@ private:
 	/* Draw horizontal line N characters long using unicode box
 	** characters
 	*/
-	void print_box_line(idx_t N) {
+	void PrintBoxLine(PrintStream &out, idx_t N) {
 		string box_line;
 		for (idx_t i = 0; i < N; i++) {
 			box_line += BOX_24;
 		}
-		state.Print(box_line);
+		out.Print(box_line);
 	}
 
 	/*
 	** Draw a horizontal separator for a RenderMode::Box table.
 	*/
-	void print_box_row_separator(int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
-	                             const vector<idx_t> &actualWidth) {
+	void PrintBoxRowSeparator(PrintStream &out, int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
+	                          const vector<idx_t> &actualWidth) {
 		int i;
 		if (nArg > 0) {
-			state.Print(zSep1);
-			print_box_line(actualWidth[0] + 2);
+			out.Print(zSep1);
+			PrintBoxLine(out, actualWidth[0] + 2);
 			for (i = 1; i < nArg; i++) {
-				state.Print(zSep2);
-				print_box_line(actualWidth[i] + 2);
+				out.Print(zSep2);
+				PrintBoxLine(out, actualWidth[i] + 2);
 			}
-			state.Print(zSep3);
+			out.Print(zSep3);
 		}
-		state.Print("\n");
+		out.Print("\n");
 	}
 };
 
@@ -523,29 +601,29 @@ public:
 	explicit ModeLatexRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		auto column_count = result.ColumnCount();
 
-		state.Print("\\begin{tabular}{|");
+		out.Print("\\begin{tabular}{|");
 		for (idx_t i = 0; i < column_count; i++) {
 			if (state.ColumnTypeIsInteger(result.type_names[i].c_str())) {
-				state.Print("r");
+				out.Print("r");
 			} else {
-				state.Print("l");
+				out.Print("l");
 			}
 		}
-		state.Print("|}\n");
-		state.Print("\\hline\n");
-		for (idx_t i = 0; i < column_count; i++) {
-			RenderAlignedValue(result, i);
-			state.Print(i == column_count - 1 ? GetRowSeparator() : GetColumnSeparator());
+		out.Print("|}\n");
+		out.Print("\\hline\n");
+		for (idx_t c = 0; c < column_count; c++) {
+			out.RenderAlignedValue(result.column_names[c], column_width[c]);
+			out.Print(c == column_count - 1 ? GetRowSeparator() : GetColumnSeparator());
 		}
-		state.Print("\\hline\n");
+		out.Print("\\hline\n");
 	}
 
-	void RenderFooter(ResultMetadata &) override {
-		state.Print("\\hline\n");
-		state.Print("\\end{tabular}\n");
+	void RenderFooter(PrintStream &out, ResultMetadata &) override {
+		out.Print("\\hline\n");
+		out.Print("\\end{tabular}\n");
 	}
 
 	const char *GetColumnSeparator() override {
@@ -562,7 +640,7 @@ public:
 RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-void RowRenderer::RenderHeader(ResultMetadata &result) {
+void RowRenderer::RenderHeader(PrintStream &out, ResultMetadata &result) {
 }
 
 bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) {
@@ -588,7 +666,7 @@ public:
 	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		auto &col_names = result.column_names;
 		// determine the render width by going over the column names
 		header_width = 5;
@@ -600,21 +678,21 @@ public:
 		}
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		if (row.row_index > 0) {
-			state.Print(state.rowSeparator);
+			out.Print(state.rowSeparator);
 		}
 		auto &data = row.data;
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < data.size(); i++) {
 			idx_t space_count = header_width - col_names[i].size();
 			if (space_count > 0) {
-				state.Print(string(space_count, ' '));
+				out.Print(string(space_count, ' '));
 			}
-			state.Print(col_names[i]);
-			state.Print(" = ");
-			state.Print(data[i]);
-			state.Print(state.rowSeparator);
+			out.Print(col_names[i]);
+			out.Print(" = ");
+			out.Print(data[i]);
+			out.Print(state.rowSeparator);
 		}
 	}
 
@@ -626,26 +704,26 @@ public:
 	explicit ModeExplainRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		if (data.size() != 2) {
 			return;
 		}
 		if (duckdb::StringUtil::Equals(data[0], "logical_plan") || duckdb::StringUtil::Equals(data[0], "logical_opt") ||
 		    duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-			state.Print("\n┌─────────────────────────────┐\n");
-			state.Print("│┌───────────────────────────┐│\n");
+			out.Print("\n┌─────────────────────────────┐\n");
+			out.Print("│┌───────────────────────────┐│\n");
 			if (duckdb::StringUtil::Equals(data[0], "logical_plan")) {
-				state.Print("││ Unoptimized Logical Plan  ││\n");
+				out.Print("││ Unoptimized Logical Plan  ││\n");
 			} else if (duckdb::StringUtil::Equals(data[0], "logical_opt")) {
-				state.Print("││  Optimized Logical Plan   ││\n");
+				out.Print("││  Optimized Logical Plan   ││\n");
 			} else if (duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-				state.Print("││       Physical Plan       ││\n");
+				out.Print("││       Physical Plan       ││\n");
 			}
-			state.Print("│└───────────────────────────┘│\n");
-			state.Print("└─────────────────────────────┘\n");
+			out.Print("│└───────────────────────────┘│\n");
+			out.Print("└─────────────────────────────┘\n");
 		}
-		state.Print(data[1]);
+		out.Print(data[1]);
 	}
 
 	bool RequireMaterializedResult() const override {
@@ -672,29 +750,29 @@ public:
 	explicit ModeListRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.Print(col_names[i]);
+			out.Print(col_names[i]);
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.Print(data[i]);
+			out.Print(data[i]);
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 };
 
@@ -703,36 +781,36 @@ public:
 	explicit ModeHtmlRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
-		state.Print("<tr>");
+		out.Print("<tr>");
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			state.Print("<th>");
-			output_html_string(col_names[i]);
-			state.Print("</th>\n");
+			out.Print("<th>");
+			OutputHTMLString(out, col_names[i]);
+			out.Print("</th>\n");
 		}
-		state.Print("</tr>\n");
+		out.Print("</tr>\n");
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
-		state.Print("<tr>");
+		out.Print("<tr>");
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.Print("<td>");
-			output_html_string(data[i]);
-			state.Print("</td>\n");
+			out.Print("<td>");
+			OutputHTMLString(out, data[i]);
+			out.Print("</td>\n");
 		}
-		state.Print("</tr>\n");
+		out.Print("</tr>\n");
 	}
 
 	/*
 	** Output the given string with characters that are special to
 	** HTML escaped.
 	*/
-	void output_html_string(const string &z) {
+	void OutputHTMLString(PrintStream &out, const string &z) {
 		string escaped;
 		for (auto c : z) {
 			switch (c) {
@@ -755,7 +833,7 @@ public:
 				escaped += c;
 			}
 		}
-		state.Print(escaped);
+		out.Print(escaped);
 	}
 };
 
@@ -764,29 +842,29 @@ public:
 	explicit ModeTclRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.OutputCString(col_names[i].c_str());
+			out.Print(state.EscapeCString(col_names[i].c_str()));
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.OutputCString(data[i].c_str());
+			out.Print(state.EscapeCString(data[i].c_str()));
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 };
 
@@ -795,27 +873,65 @@ public:
 	explicit ModeCsvRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
-		state.SetBinaryMode();
+		out.SetBinaryMode();
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			state.OutputCSV(col_names[i].c_str(), i < col_names.size() - 1);
+			out.Print(EscapeCSV(col_names[i], i < col_names.size() - 1));
 		}
-		state.Print(row_sep);
-		state.SetTextMode();
+		out.Print(row_sep);
+		out.SetTextMode();
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
-		state.SetBinaryMode();
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
+		out.SetBinaryMode();
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.OutputCSV(data[i].c_str(), i < data.size() - 1);
+			out.Print(EscapeCSV(data[i].c_str(), i < data.size() - 1));
 		}
-		state.Print(row_sep);
-		state.SetTextMode();
+		out.Print(row_sep);
+		out.SetTextMode();
+	}
+
+	bool CharacterNeedsQuote(unsigned char c) {
+		if (c <= 31) {
+			// non-printable - needs quote
+			return true;
+		}
+		if (c == '"') {
+			return true;
+		}
+		if (c >= 123) {
+			return true;
+		}
+		return false;
+	}
+
+	string EscapeCSV(const string &str, bool print_sep) {
+		string result;
+		bool needs_quote = false;
+		for (idx_t idx = 0; idx < str.size(); idx++) {
+			if (CharacterNeedsQuote((unsigned char)str[idx])) {
+				needs_quote = true;
+				break;
+			}
+		}
+		if (!needs_quote && StringUtil::Contains(str, state.colSeparator)) {
+			needs_quote = true;
+		}
+		if (needs_quote) {
+			auto zQuoted = StringUtil::Format("%s", SQLIdentifier(str));
+			result += zQuoted;
+		} else {
+			result += str;
+		}
+		if (print_sep) {
+			result += state.colSeparator;
+		}
+		return result;
 	}
 };
 
@@ -826,29 +942,29 @@ public:
 		row_sep = "\n";
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.Print(col_names[i]);
+			out.Print(col_names[i]);
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.Print(data[i]);
+			out.Print(data[i]);
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 };
 
@@ -857,35 +973,35 @@ public:
 	explicit ModeQuoteRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
-			state.OutputQuotedString(col_names[i].c_str());
+			out.OutputQuotedString(col_names[i].c_str());
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		auto &types = result.types;
 		auto &is_null = row.is_null;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
-				state.Print(col_sep);
+				out.Print(col_sep);
 			}
 			if (types[i].IsNumeric() || is_null[i]) {
-				state.Print(data[i]);
+				out.Print(data[i]);
 			} else {
-				state.OutputQuotedString(data[i].c_str());
+				out.OutputQuotedString(data[i].c_str());
 			}
 		}
-		state.Print(row_sep);
+		out.Print(row_sep);
 	}
 
 	string NullValue() override {
@@ -898,21 +1014,21 @@ public:
 	explicit ModeJsonRenderer(ShellState &state, bool json_array) : RowRenderer(state), json_array(json_array) {
 	}
 
-	void RenderHeader(ResultMetadata &result) override {
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
 		if (json_array) {
 			// wrap all JSON objects in an array
-			state.Print("[");
+			out.Print("[");
 		}
-		state.Print("{");
+		out.Print("{");
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		if (row.row_index > 0) {
 			if (json_array) {
 				// wrap all JSON objects in an array
-				state.Print(",");
+				out.Print(",");
 			}
-			state.Print("\n{");
+			out.Print("\n{");
 		}
 		auto &data = row.data;
 		auto &types = result.types;
@@ -920,39 +1036,71 @@ public:
 		auto &is_null = row.is_null;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
-				state.Print(",");
+				out.Print(",");
 			}
-			state.OutputJSONString(col_names[i].c_str(), -1);
-			state.Print(":");
+			out.Print(EscapeJSONString(col_names[i]));
+			out.Print(":");
 			if (is_null[i]) {
-				state.Print(data[i]);
+				out.Print(data[i]);
 			} else if (types[i].id() == duckdb::LogicalTypeId::FLOAT ||
 			           types[i].id() == duckdb::LogicalTypeId::DOUBLE) {
 				if (duckdb::StringUtil::Equals(data[i], "inf")) {
-					state.Print("1e999");
+					out.Print("1e999");
 				} else if (duckdb::StringUtil::Equals(data[i], "-inf")) {
-					state.Print("-1e999");
+					out.Print("-1e999");
 				} else if (duckdb::StringUtil::Equals(data[i], "nan")) {
-					state.Print("null");
+					out.Print("null");
 				} else if (duckdb::StringUtil::Equals(data[i], "-nan")) {
-					state.Print("null");
+					out.Print("null");
 				} else {
-					state.Print(data[i]);
+					out.Print(data[i]);
 				}
 			} else if (types[i].IsNumeric() || types[i].IsJSONType()) {
-				state.Print(data[i]);
+				out.Print(data[i]);
 			} else {
-				state.OutputJSONString(data[i].c_str(), data[i].size());
+				out.Print(EscapeJSONString(data[i]));
 			}
 		}
-		state.Print("}");
+		out.Print("}");
 	}
 
-	void RenderFooter(ResultMetadata &result) override {
+	string EscapeJSONString(const string &str) {
+		string result = "\"";
+		for (auto c : str) {
+			if (c == '\\' || c == '"') {
+				// escape \ and "
+				result += "\\";
+				result += c;
+			} else if (c <= 0x1f) {
+				result += "\\";
+				if (c == '\b') {
+					result += "b";
+				} else if (c == '\f') {
+					result += "f";
+				} else if (c == '\n') {
+					result += "n";
+				} else if (c == '\r') {
+					result += "r";
+				} else if (c == '\t') {
+					result += "t";
+				} else {
+					char buf[10];
+					snprintf(buf, 10, "u%04x", c);
+					result += buf;
+				}
+			} else {
+				result += c;
+			}
+		}
+		result += "\"";
+		return result;
+	}
+
+	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
 		if (json_array) {
-			state.Print("]\n");
+			out.Print("]\n");
 		} else {
-			state.Print("\n");
+			out.Print("\n");
 		}
 	}
 
@@ -968,37 +1116,88 @@ public:
 	explicit ModeInsertRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
 		auto &is_null = row.is_null;
 
-		state.Print("INSERT INTO ");
-		state.Print(state.zDestTable);
+		out.Print("INSERT INTO ");
+		out.Print(state.zDestTable);
 		if (show_header) {
-			state.Print("(");
+			out.Print("(");
 			for (idx_t i = 0; i < col_names.size(); i++) {
 				if (i > 0) {
-					state.Print(",");
+					out.Print(",");
 				}
-				state.PrintOptionallyQuotedIdentifier(col_names[i].c_str());
+				out.OutputQuotedIdentifier(col_names[i]);
 			}
-			state.Print(")");
+			out.Print(")");
 		}
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.Print(i > 0 ? "," : " VALUES(");
+			out.Print(i > 0 ? "," : " VALUES(");
 			if (is_null[i]) {
-				state.Print("NULL");
+				out.Print("NULL");
 			} else if (types[i].IsNumeric()) {
-				state.Print(data[i]);
+				out.Print(data[i]);
 			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
-				state.OutputQuotedString(data[i].c_str());
+				out.OutputQuotedString(data[i]);
 			} else {
-				state.OutputQuotedEscapedString(data[i].c_str());
+				out.OutputQuotedString(EscapeNewlines(data[i]));
 			}
 		}
-		state.Print(");\n");
+		out.Print(");\n");
+	}
+
+	string EscapeNewlines(const string &str) {
+		bool needs_quoting = false;
+		bool needs_concat = false;
+		for (auto c : str) {
+			if (c == '\n' || c == '\r') {
+				needs_quoting = true;
+				needs_concat = true;
+				break;
+			}
+			if (c == '\'') {
+				needs_quoting = true;
+			}
+		}
+		if (!needs_quoting) {
+			return str;
+		}
+		string res;
+		if (needs_concat) {
+			res = "concat('";
+		} else {
+			res = "'";
+		}
+		for (auto c : str) {
+			switch (c) {
+			case '\n':
+			case '\r':
+				// newline - finish the current string literal and write the newline with a chr function
+				res += "', chr(";
+				if (c == '\n') {
+					res += "10";
+				} else {
+					res += "13";
+				}
+				res += "), '";
+				break;
+			case '\'':
+				// escape the quote
+				res += "''";
+				break;
+			default:
+				res += c;
+				break;
+			}
+		}
+		res += "'";
+		if (needs_concat) {
+			res += ")";
+		}
+		return res;
 	}
 };
 
@@ -1007,9 +1206,9 @@ public:
 	explicit ModeSemiRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		/* .schema and .fullschema output */
-		state.PrintSchemaLine(row.data[0].c_str(), "\n");
+		out.Print(state.GetSchemaLine(row.data[0], "\n"));
 	}
 };
 
@@ -1022,7 +1221,7 @@ public:
 		return duckdb::StringUtil::CharacterIsSpace(c);
 	}
 
-	void RenderRow(ResultMetadata &result, RowData &row) override {
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		/* .schema and .fullschema with --indent */
 		if (data.size() != 1) {
@@ -1035,8 +1234,8 @@ public:
 		int nLine = 0;
 		if (duckdb::StringUtil::StartsWith(data[0], "CREATE VIEW") ||
 		    duckdb::StringUtil::StartsWith(data[0], "CREATE TRIG")) {
-			state.Print(data[0]);
-			state.Print(";\n");
+			out.Print(data[0]);
+			out.Print(";\n");
 			return;
 		}
 		auto zStr = data[0];
@@ -1077,7 +1276,7 @@ public:
 				} else if (c == ')') {
 					nParen--;
 					if (nLine > 0 && nParen == 0 && j > 0) {
-						state.PrintSchemaLineN(z, j, "\n");
+						out.Print(state.GetSchemaLineN(z, j, "\n"));
 						j = 0;
 					}
 				}
@@ -1085,7 +1284,7 @@ public:
 				if (nParen == 1 && cEnd == 0 && (c == '(' || c == '\n' || (c == ',' && !wsToEol(z + i + 1)))) {
 					if (c == '\n')
 						j--;
-					state.PrintSchemaLineN(z, j, "\n  ");
+					out.Print(state.GetSchemaLineN(z, j, "\n  "));
 					j = 0;
 					nLine++;
 					while (IsSpace(z[i + 1])) {
@@ -1095,7 +1294,7 @@ public:
 			}
 			z[j] = 0;
 		}
-		state.PrintSchemaLine(z, ";\n");
+		out.Print(state.GetSchemaLine(z, ";\n"));
 	}
 
 	/*

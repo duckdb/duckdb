@@ -53,6 +53,26 @@ public:
 	RenderingResultIterator end();   // NOLINT: match stl API
 };
 
+enum class TextAlignment { CENTER, LEFT, RIGHT };
+
+struct PrintStream {
+public:
+	explicit PrintStream(ShellState &state);
+	virtual ~PrintStream() = default;
+
+	virtual void Print(const string &str) = 0;
+	virtual void SetBinaryMode() = 0;
+	virtual void SetTextMode() = 0;
+
+	void RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
+	void PrintDashes(idx_t N);
+	void OutputQuotedIdentifier(const string &str);
+	void OutputQuotedString(const string &str);
+
+public:
+	ShellState &state;
+};
+
 class ShellRenderer {
 public:
 	explicit ShellRenderer(ShellState &state);
@@ -66,9 +86,9 @@ public:
 public:
 	virtual SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result);
 	virtual void Analyze(RenderingQueryResult &result);
-	virtual void RenderHeader(ResultMetadata &result);
-	virtual void RenderRow(ResultMetadata &result, RowData &row);
-	virtual void RenderFooter(ResultMetadata &result);
+	virtual void RenderHeader(PrintStream &out, ResultMetadata &result);
+	virtual void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row);
+	virtual void RenderFooter(PrintStream &out, ResultMetadata &result);
 	virtual string NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
@@ -80,7 +100,7 @@ public:
 	explicit ColumnRenderer(ShellState &state);
 
 	void Analyze(RenderingQueryResult &result) override;
-	void RenderRow(ResultMetadata &result, RowData &row) override;
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override;
 
 	virtual const char *GetColumnSeparator() = 0;
 	virtual const char *GetRowSeparator() = 0;
@@ -92,8 +112,6 @@ public:
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 
-	void RenderAlignedValue(ResultMetadata &result, idx_t c);
-
 protected:
 	vector<idx_t> column_width;
 	vector<bool> right_align;
@@ -104,7 +122,7 @@ public:
 	explicit RowRenderer(ShellState &state);
 
 public:
-	virtual void RenderHeader(ResultMetadata &result) override;
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override;
 	bool RequireMaterializedResult() const override {
 		return false;
 	}
