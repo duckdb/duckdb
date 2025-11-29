@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -82,6 +83,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
+	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
@@ -185,6 +187,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
+	    "extension_directories",
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
