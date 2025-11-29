@@ -21,7 +21,7 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_
 		return make_uniq<NopLogger>(*this);
 	}
 	if (!thread_safe) {
-		// TODO: implement ThreadLocalLogger and return it here
+		return make_uniq<ThreadLocalLogger>(config, registered_logging_context, *this);
 	}
 	return make_uniq<ThreadSafeLogger>(config, registered_logging_context, *this);
 }
