@@ -305,7 +305,6 @@ bool ShellHighlight::SetColor(const char *element_type, const char *color, const
 		return false;
 	}
 	PrintIntensity print_intensity = PrintIntensity::STANDARD;
-	;
 	if (intensity) {
 		if (duckdb::StringUtil::CIEquals(intensity, "standard")) {
 			print_intensity = PrintIntensity::STANDARD;
