@@ -5,12 +5,9 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "fmt/format.h"
 
 namespace duckdb {
-
-BufferedIndexData::BufferedIndexData(BufferedIndexReplay replay_type, unique_ptr<ColumnDataCollection> data_p)
-    : type(replay_type), data(std::move(data_p)) {
-}
 
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
@@ -47,8 +44,6 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 
 	auto &allocator = Allocator::Get(db);
 
-	BufferedIndexData buffered_data(replay_type, make_uniq<ColumnDataCollection>(allocator, types));
-
 	//! First time we are buffering data, canonical column_id mapping is stored.
 	//! This should be a sorted list of all the physical offsets of Indexed columns on this table.
 	if (mapped_column_ids.empty()) {
@@ -56,7 +51,7 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	}
 	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
 
-	// Combined chunk has all the indexed columns and rowids.
+	// combined_chunk has all the indexed columns according to mapped_column_ids ordering, as well as a rowid column.
 	DataChunk combined_chunk;
 	combined_chunk.InitializeEmpty(types);
 	for (idx_t i = 0; i < index_column_chunk.ColumnCount(); i++) {
@@ -64,8 +59,25 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	}
 	combined_chunk.data.back().Reference(row_ids);
 	combined_chunk.SetCardinality(index_column_chunk.size());
-	buffered_data.data->Append(combined_chunk);
-	buffered_replays.emplace_back(std::move(buffered_data));
+
+	auto &buffer = buffered_replays.GetBuffer(replay_type);
+	if (buffer == nullptr) {
+		buffer = make_uniq<ColumnDataCollection>(allocator, types);
+	}
+	// The starting index of the buffer range is the size of the buffer.
+	idx_t start = buffer->Count();
+	idx_t end = start + combined_chunk.size() - 1;
+	auto &ranges = buffered_replays.ranges;
+
+	if (ranges.empty() || ranges.back().type != replay_type) {
+		// If there are no buffer ranges, or the replay types don't match, append a new range interval.
+		ranges.emplace_back(replay_type, start, end);
+		buffer->Append(combined_chunk);
+		return;
+	}
+	// Otherwise merge the range with the previous one.
+	ranges.back().end = end;
+	buffer->Append(combined_chunk);
 }
 
 } // namespace duckdb
