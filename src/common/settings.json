@@ -512,6 +512,13 @@
         "scope": "global"
     },
     {
+        "name": "external_file_cache_read_policy",
+        "description": "The read policy to use when caching external files. Options are 'default' or 'aligned'.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
