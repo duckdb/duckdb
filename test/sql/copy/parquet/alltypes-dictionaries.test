@@ -3,6 +3,9 @@
 
 require parquet
 
+#
+# do tests with IMPLICIT parquet_version, (default is v1)
+#
 
 foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
 
@@ -12,7 +15,7 @@ copy (select (r1.range * 10)::${type} r from range(10) r1, range(1000) r2) to '_
 query I
 select first(encodings) from parquet_metadata('__TEST_DIR__/dict-${type}.parquet') group by encodings;
 ----
-RLE_DICTIONARY
+PLAIN_DICTIONARY
 
 query I
 SELECT COUNT(*) from '__TEST_DIR__/dict-${type}.parquet' WHERE r='20'
@@ -26,6 +29,68 @@ select column_id, BOOL_AND(bloom_filter_offset > 4), BOOL_AND(bloom_filter_lengt
 
 #query I
 #SELECT bloom_filter_excludes FROM parquet_bloom_probe('__TEST_DIR__/dict-${type}.parquet', 'r', '11');
+#----
+#true
+
+endloop
+
+#
+# same tests with EXPLICIT parquet_version v1
+#
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
+
+statement ok
+copy (select (r1.range * 10)::${type} r from range(10) r1, range(1000) r2) to '__TEST_DIR__/dict-${type}-v1.parquet' (row_group_size 2048, parquet_version v1);
+
+query I
+select first(encodings) from parquet_metadata('__TEST_DIR__/dict-${type}-v1.parquet') group by encodings;
+----
+PLAIN_DICTIONARY
+
+query I
+SELECT COUNT(*) from '__TEST_DIR__/dict-${type}-v1.parquet' WHERE r='20'
+----
+1000
+
+query III
+select column_id, BOOL_AND(bloom_filter_offset > 4), BOOL_AND(bloom_filter_length > 1)  from parquet_metadata('__TEST_DIR__/dict-${type}-v1.parquet') group by column_id order by column_id;
+----
+0	true	true
+
+#query I
+#SELECT bloom_filter_excludes FROM parquet_bloom_probe('__TEST_DIR__/dict-${type}-v1.parquet', 'r', '11');
+#----
+#true
+
+endloop
+
+#
+# same tests with EXPLICIT parquet_version v2
+#
+
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT FLOAT DOUBLE VARCHAR
+
+statement ok
+copy (select (r1.range * 10)::${type} r from range(10) r1, range(1000) r2) to '__TEST_DIR__/dict-${type}-v2.parquet' (row_group_size 2048, parquet_version v2);
+
+query I
+select first(encodings) from parquet_metadata('__TEST_DIR__/dict-${type}-v2.parquet') group by encodings;
+----
+RLE_DICTIONARY
+
+query I
+SELECT COUNT(*) from '__TEST_DIR__/dict-${type}-v2.parquet' WHERE r='20'
+----
+1000
+
+query III
+select column_id, BOOL_AND(bloom_filter_offset > 4), BOOL_AND(bloom_filter_length > 1)  from parquet_metadata('__TEST_DIR__/dict-${type}-v2.parquet') group by column_id order by column_id;
+----
+0	true	true
+
+#query I
+#SELECT bloom_filter_excludes FROM parquet_bloom_probe('__TEST_DIR__/dict-${type}-v1.parquet', 'r', '11');
 #----
 #true
 

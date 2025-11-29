@@ -1,5 +1,5 @@
-# name: test/sql/copy/parquet/writer/parquet_write_strings.test
-# description: Strings tests with Parquet v2 format.
+# name: test/sql/copy/parquet/writer/parquet_write_strings_v1.test
+# description: Strings tests with Parquet v1 format. Other than that, same as test/sql/copy/parquet/writer/parquet_write_strings.test.
 # group: [writer]
 
 require parquet
@@ -21,12 +21,12 @@ INSERT INTO strings VALUES
     ('happy'), ('happy'), ('joy'), ('joy'), ('surprise');
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET, PARQUET_VERSION v2);
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
 
 query I
 SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-RLE_DICTIONARY
+PLAIN_DICTIONARY
 
 query I
 SELECT * FROM '__TEST_DIR__/strings.parquet'
