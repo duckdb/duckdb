@@ -75,14 +75,35 @@ void StructColumnData::VerifyScanState(ColumnScanState &scan_state) const {
 //	return child;
 //}
 
+void StructColumnData::IterateFields(
+    ColumnScanState &state, std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> callback) {
+	if (state.storage_index.IsPushdownExtract()) {
+		auto &index_children = state.storage_index.GetChildIndexes();
+		D_ASSERT(index_children.size() == 1);
+		auto &child_storage_index = index_children[0];
+		auto child_index = child_storage_index.GetPrimaryIndex();
+		auto &sub_column = *sub_columns[child_index];
+		auto &field_state = state.child_states[1];
+		D_ASSERT(state.scan_child_column[child_index]);
+		callback(sub_column, optional_idx(), field_state, true);
+	} else {
+		for (idx_t i = 0; i < sub_columns.size(); i++) {
+			auto &sub_column = *sub_columns[i];
+			auto &field_state = state.child_states[1 + i];
+			callback(sub_column, i, field_state, state.scan_child_column[i]);
+		}
+	}
+}
+
 void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		if (!scan_state.scan_child_column[i]) {
-			continue;
+	IterateFields(scan_state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state,
+	                              bool should_scan) {
+		if (!should_scan) {
+			return;
 		}
-		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
-	}
+		field.InitializePrefetch(prefetch_state, field_state, rows);
+	});
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
@@ -94,16 +115,13 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 	validity->InitializeScan(state.child_states[0]);
 
 	// initialize the sub-columns
-	auto &index_children = state.storage_index.GetChildIndexes();
-	for (idx_t i = 0; i < index_children.size(); i++) {
-		auto &child_storage_index = index_children[i];
-		auto child_index = child_storage_index.GetPrimaryIndex();
-		auto &sub_column = *sub_columns[child_index];
-		if (!state.scan_child_column[child_index]) {
-			continue;
-		}
-		sub_columns[i]->InitializeScan(state.child_states[i + 1]);
-	}
+	IterateFields(
+	    state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state, bool should_scan) {
+		    if (!should_scan) {
+			    return;
+		    }
+		    field.InitializeScan(field_state);
+	    });
 }
 
 void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -116,66 +134,72 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 	validity->InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// initialize the sub-columns
-	auto &index_children = state.storage_index.GetChildIndexes();
-	for (idx_t i = 0; i < index_children.size(); i++) {
-		auto &child_storage_index = index_children[i];
-		auto child_index = child_storage_index.GetPrimaryIndex();
-		auto &sub_column = *sub_columns[child_index];
-		if (!state.scan_child_column[child_index]) {
-			continue;
-		}
-		sub_column.InitializeScanWithOffset(state.child_states[1 + child_index], row_idx);
+	IterateFields(
+	    state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state, bool should_scan) {
+		    if (!should_scan) {
+			    return;
+		    }
+		    field.InitializeScanWithOffset(field_state, row_idx);
+	    });
+}
+
+static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
+	if (!field_index.IsValid()) {
+		//! Scan is of type PUSHDOWN_EXTRACT, target_vector for the scan is directly to the result
+		return result;
 	}
+	auto index = field_index.GetIndex();
+	auto &children = StructVector::GetEntries(result);
+	return *children[index];
 }
 
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
-	auto &child_entries = StructVector::GetEntries(result);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		auto &target_vector = *child_entries[i];
-		if (!state.scan_child_column[i]) {
-			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
-			continue;
-		}
-		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], target_vector, target_count);
-	}
+	IterateFields(
+	    state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state, bool should_scan) {
+		    auto &target_vector = GetFieldVectorForScan(result, field_vector_index);
+		    if (!should_scan) {
+			    // if we are not scanning this vector - set it to NULL
+			    target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			    ConstantVector::SetNull(target_vector, true);
+			    return;
+		    }
+		    field.Scan(transaction, vector_index, field_state, target_vector, target_count);
+	    });
 	return scan_count;
 }
 
 idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                       idx_t target_count) {
 	auto scan_count = validity->ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
-	auto &child_entries = StructVector::GetEntries(result);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		auto &target_vector = *child_entries[i];
-		if (!state.scan_child_column[i]) {
-			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
-			continue;
-		}
-		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], target_vector, allow_updates,
-		                              target_count);
-	}
+	IterateFields(
+	    state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state, bool should_scan) {
+		    auto &target_vector = GetFieldVectorForScan(result, field_vector_index);
+		    if (!should_scan) {
+			    // if we are not scanning this vector - set it to NULL
+			    target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			    ConstantVector::SetNull(target_vector, true);
+			    return;
+		    }
+		    field.ScanCommitted(vector_index, field_state, target_vector, allow_updates, target_count);
+	    });
 	return scan_count;
 }
 
 idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto scan_count = validity->ScanCount(state.child_states[0], result, count);
-	auto &child_entries = StructVector::GetEntries(result);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		auto &target_vector = *child_entries[i];
-		if (!state.scan_child_column[i]) {
-			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
-			continue;
-		}
-		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count, result_offset);
-	}
+	IterateFields(
+	    state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state, bool should_scan) {
+		    auto &target_vector = GetFieldVectorForScan(result, field_vector_index);
+		    if (!should_scan) {
+			    // if we are not scanning this vector - set it to NULL
+			    target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			    ConstantVector::SetNull(target_vector, true);
+			    return;
+		    }
+		    field.ScanCount(field_state, target_vector, count, result_offset);
+	    });
 	return scan_count;
 }
 
@@ -183,12 +207,13 @@ void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
 	validity->Skip(state.child_states[0], count);
 
 	// skip inside the sub-columns
-	for (idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
-		if (!state.scan_child_column[child_idx]) {
-			continue;
-		}
-		sub_columns[child_idx]->Skip(state.child_states[child_idx + 1], count);
-	}
+	IterateFields(
+	    state, [&](ColumnData &field, optional_idx field_vector_index, ColumnScanState &field_state, bool should_scan) {
+		    if (!should_scan) {
+			    return;
+		    }
+		    field.Skip(field_state, count);
+	    });
 }
 
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {

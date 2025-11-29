@@ -29,6 +29,9 @@ public:
 
 	// ColumnData &GetChildColumn(const StorageIndex &index) override;
 
+	void IterateFields(ColumnScanState &state,
+	                   std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> callback);
+
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
