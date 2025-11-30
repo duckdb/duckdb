@@ -14,9 +14,9 @@ namespace duckdb_shell {
 PrintStream::PrintStream(ShellState &state) : state(state) {
 }
 
-void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment) {
+void PrintStream::RenderAlignedValue(const char *str, idx_t str_len, idx_t width, TextAlignment alignment) {
 	idx_t w = width;
-	idx_t n = state.RenderLength(str);
+	idx_t n = state.RenderLength(str, str_len);
 	idx_t space_count = w < n ? 0 : w - n;
 	if (alignment == TextAlignment::LEFT) {
 		Print(str);
@@ -31,10 +31,16 @@ void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignme
 	idx_t lspace = space_count / 2;
 	idx_t rspace = (space_count + 1) / 2;
 	Print(string(lspace, ' '));
-	Print(str);
+	Print(duckdb::string_t(str, str_len));
 	Print(string(rspace, ' '));
 }
 
+void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment) {
+	RenderAlignedValue(str.c_str(), str.size(), width, alignment);
+}
+void PrintStream::RenderAlignedValue(duckdb::string_t str, idx_t width, TextAlignment alignment) {
+	RenderAlignedValue(str.GetData(), str.GetSize(), width, alignment);
+}
 void PrintStream::PrintDashes(idx_t N) {
 	Print(string(N, '-'));
 }
@@ -105,7 +111,13 @@ public:
 			return;
 		}
 		// read from the materialized rows
-		row_data.data = std::move(result->data[row_data.row_index]);
+		auto &row_strings = result->data[row_data.row_index];
+		if (row_data.data.size() != row_strings.size()) {
+			row_data.data.resize(row_strings.size());
+		}
+		for (idx_t r = 0; r < row_strings.size(); r++) {
+			row_data.data[r] = duckdb::string_t(row_strings[r].c_str(), row_strings[r].size());
+		}
 	}
 
 	void Next() {
@@ -815,7 +827,7 @@ public:
 		out.Print("<tr>");
 		for (idx_t i = 0; i < data.size(); i++) {
 			out.Print("<td>");
-			OutputHTMLString(out, data[i]);
+			OutputHTMLString(out, data[i].GetString());
 			out.Print("</td>\n");
 		}
 		out.Print("</tr>\n");
@@ -866,7 +878,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			out.Print(state.EscapeCString(col_names[i].c_str()));
+			out.Print(state.EscapeCString(col_names[i]));
 		}
 		out.Print(row_sep);
 	}
@@ -877,7 +889,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			out.Print(state.EscapeCString(data[i].c_str()));
+			out.Print(state.EscapeCString(data[i].GetString()));
 		}
 		out.Print(row_sep);
 	}
@@ -905,7 +917,7 @@ public:
 		out.SetBinaryMode();
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			out.Print(EscapeCSV(data[i].c_str(), i < data.size() - 1));
+			out.Print(EscapeCSV(data[i].GetString(), i < data.size() - 1));
 		}
 		out.Print(row_sep);
 		out.SetTextMode();
@@ -997,7 +1009,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			out.OutputQuotedString(col_names[i].c_str());
+			out.OutputQuotedString(col_names[i]);
 		}
 		out.Print(row_sep);
 	}
@@ -1013,7 +1025,7 @@ public:
 			if (types[i].IsNumeric() || is_null[i]) {
 				out.Print(data[i]);
 			} else {
-				out.OutputQuotedString(data[i].c_str());
+				out.OutputQuotedString(data[i].GetString());
 			}
 		}
 		out.Print(row_sep);
@@ -1073,7 +1085,7 @@ public:
 			} else if (types[i].IsNumeric() || types[i].IsJSONType()) {
 				out.Print(data[i]);
 			} else {
-				out.Print(EscapeJSONString(data[i]));
+				out.Print(EscapeJSONString(data[i].GetString()));
 			}
 		}
 		out.Print("}");
@@ -1156,9 +1168,9 @@ public:
 			} else if (types[i].IsNumeric()) {
 				out.Print(data[i]);
 			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
-				out.OutputQuotedString(data[i]);
+				out.OutputQuotedString(data[i].GetString());
 			} else {
-				out.OutputQuotedString(EscapeNewlines(data[i]));
+				out.OutputQuotedString(EscapeNewlines(data[i].GetString()));
 			}
 		}
 		out.Print(");\n");
@@ -1223,7 +1235,7 @@ public:
 
 	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		/* .schema and .fullschema output */
-		out.Print(state.GetSchemaLine(row.data[0], "\n"));
+		out.Print(state.GetSchemaLine(row.data[0].GetString(), "\n"));
 	}
 };
 
@@ -1247,13 +1259,13 @@ public:
 		char cEnd = 0;
 		char c;
 		int nLine = 0;
-		if (duckdb::StringUtil::StartsWith(data[0], "CREATE VIEW") ||
-		    duckdb::StringUtil::StartsWith(data[0], "CREATE TRIG")) {
+		if (duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE VIEW") ||
+		    duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE TRIG")) {
 			out.Print(data[0]);
 			out.Print(";\n");
 			return;
 		}
-		auto zStr = data[0];
+		auto zStr = data[0].GetString();
 		auto z = (char *)zStr.data();
 		j = 0;
 		idx_t i;

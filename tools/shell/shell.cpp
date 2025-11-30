@@ -482,7 +482,7 @@ idx_t ShellState::RenderLength(const char *str, idx_t str_len) {
 	return linenoiseComputeRenderWidth(str, str_len);
 #else
 	idx_t n = 0;
-	for(idx_t i = 0; i < str_len; i++) {
+	for (idx_t i = 0; i < str_len; i++) {
 		if (IsCharacter(str[i])) {
 			n++;
 		}
@@ -490,7 +490,6 @@ idx_t ShellState::RenderLength(const char *str, idx_t str_len) {
 	return n;
 #endif
 }
-
 
 idx_t ShellState::RenderLength(duckdb::string_t str) {
 	return RenderLength(str.GetData(), str.GetSize());

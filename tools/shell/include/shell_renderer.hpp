@@ -27,7 +27,7 @@ struct ResultMetadata {
 };
 
 struct RowData {
-	vector<string> data;
+	vector<duckdb::string_t> data;
 	vector<bool> is_null;
 	idx_t row_index = 0;
 };
@@ -63,6 +63,12 @@ public:
 	virtual void Print(const string &str) {
 		state.Print(str);
 	}
+	virtual void Print(duckdb::string_t str) {
+		state.Print(str);
+	}
+	virtual void Print(const char *str) {
+		state.Print(str);
+	}
 	virtual void SetBinaryMode() {
 		state.SetBinaryMode();
 	}
@@ -74,6 +80,9 @@ public:
 	}
 
 	void RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
+	void RenderAlignedValue(const char *str, idx_t str_len, idx_t width,
+	                        TextAlignment alignment = TextAlignment::CENTER);
+	void RenderAlignedValue(duckdb::string_t str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
 	void PrintDashes(idx_t N);
 	void OutputQuotedIdentifier(const string &str);
 	void OutputQuotedString(const string &str);
