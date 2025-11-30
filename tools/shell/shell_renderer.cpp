@@ -77,10 +77,6 @@ string ShellRenderer::NullValue() {
 	return state.nullValue;
 }
 
-string ShellRenderer::ConvertValue(const char *value, idx_t str_len) {
-	return string(value, str_len);
-}
-
 void ShellRenderer::Analyze(RenderingQueryResult &result) {
 }
 
@@ -266,6 +262,10 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
+string ColumnRenderer::ConvertValue(const char *value, idx_t str_len) {
+	return string(value, str_len);
+}
+
 bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
@@ -372,7 +372,12 @@ void ColumnRenderer::RenderRow(PrintStream &out, ResultMetadata &result, RowData
 			out.Print(colSep);
 		}
 		TextAlignment alignment = right_align[c] ? TextAlignment::RIGHT : TextAlignment::LEFT;
-		out.RenderAlignedValue(row.data[c], column_width[c], alignment);
+		if (HasConvertValue()) {
+			auto str = ConvertValue(row.data[c].GetData(), row.data[c].GetSize());
+			out.RenderAlignedValue(str, column_width[c], alignment);
+		} else {
+			out.RenderAlignedValue(row.data[c], column_width[c], alignment);
+		}
 	}
 	out.Print(rowSep);
 }
@@ -467,6 +472,10 @@ public:
 			result += c;
 		}
 		return result;
+	}
+
+	bool HasConvertValue() override {
+		return true;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
@@ -565,6 +574,10 @@ public:
 			result += "...";
 		}
 		return result;
+	}
+
+	bool HasConvertValue() override {
+		return true;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {

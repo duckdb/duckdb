@@ -109,7 +109,6 @@ public:
 	virtual string NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
-	virtual string ConvertValue(const char *value, idx_t str_len);
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -128,6 +127,10 @@ public:
 		return true;
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
+	virtual string ConvertValue(const char *value, idx_t str_len);
+	virtual bool HasConvertValue() {
+		return false;
+	}
 
 protected:
 	vector<idx_t> column_width;
