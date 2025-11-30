@@ -73,8 +73,8 @@ string ShellRenderer::NullValue() {
 	return state.nullValue;
 }
 
-string ShellRenderer::ConvertValue(const char *value) {
-	return value ? value : state.nullValue;
+string ShellRenderer::ConvertValue(const char *value, idx_t str_len) {
+	return string(value, str_len);
 }
 
 void ShellRenderer::Analyze(RenderingQueryResult &result) {
@@ -266,10 +266,10 @@ bool RenderingQueryResult::TryConvertChunk() {
 		vector<string> row_data;
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			if (duckdb::FlatVector::IsNull(varchar_chunk.data[c], r)) {
-				row_data.push_back(renderer.ConvertValue(nullptr));
+				row_data.push_back(state.nullValue);
 			} else {
 				auto str = duckdb::FlatVector::GetData<duckdb::string_t>(varchar_chunk.data[c])[r];
-				row_data.push_back(renderer.ConvertValue(str.GetString().c_str()));
+				row_data.push_back(renderer.ConvertValue(str.GetData(), str.GetSize()));
 			}
 		}
 		data.push_back(std::move(row_data));
@@ -280,7 +280,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 	auto &state = ShellState::Get();
 	for (auto &column_name : result.metadata.column_names) {
-		column_name = ConvertValue(column_name.c_str());
+		column_name = ConvertValue(column_name.c_str(), column_name.size());
 	}
 	// materialize the query result
 	while (result.TryConvertChunk()) {
@@ -431,10 +431,17 @@ public:
 	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	string ConvertValue(const char *value) override {
+	string ConvertValue(const char *value, idx_t str_len) override {
 		// when rendering for markdown we need to escape pipes
-		string result = ColumnRenderer::ConvertValue(value);
-		return StringUtil::Replace(result, "|", "\\|");
+		string result;
+		for (idx_t idx = 0; idx < str_len; idx++) {
+			auto c = value[idx];
+			if (c == '|') {
+				result += '\\';
+			}
+			result += c;
+		}
+		return result;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
@@ -509,24 +516,22 @@ public:
 	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	string ConvertValue(const char *value) override {
+	string ConvertValue(const char *value, idx_t str_len) override {
 		// for MODE_Box truncate large values
-		if (!value) {
-			return ColumnRenderer::ConvertValue(value);
-		}
 		static constexpr idx_t MAX_SIZE = 80;
 		string result;
 		idx_t count = 0;
 		bool interrupted = false;
-		for (const char *s = value; *s; s++) {
-			if (*s == '\n') {
+		for (idx_t idx = 0; idx < str_len; idx++) {
+			auto c = value[idx];
+			if (c == '\n') {
 				result += "\\";
 				result += "n";
 			} else {
-				result += *s;
+				result += c;
 			}
 			count++;
-			if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
+			if (count >= MAX_SIZE && ShellState::IsCharacter(c)) {
 				interrupted = true;
 				break;
 			}
@@ -578,7 +583,7 @@ private:
 	/*
 	** Draw a horizontal separator for a RenderMode::Box table.
 	*/
-	void PrintBoxRowSeparator(PrintStream &out, int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
+	void PrintBoxRowSeparator(PrintStream &out, idx_t nArg, const char *zSep1, const char *zSep2, const char *zSep3,
 	                          const vector<idx_t> &actualWidth) {
 		int i;
 		if (nArg > 0) {
@@ -920,7 +925,10 @@ public:
 		out.SetBinaryMode();
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			out.Print(EscapeCSV(col_names[i], i < col_names.size() - 1));
+			if (i > 0) {
+				out.Print(state.colSeparator);
+			}
+			PrintEscapedCSV(out, col_names[i].c_str(), col_names[i].size());
 		}
 		out.Print(row_sep);
 		out.SetTextMode();
@@ -930,7 +938,10 @@ public:
 		out.SetBinaryMode();
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			out.Print(EscapeCSV(data[i].GetString(), i < data.size() - 1));
+			if (i > 0) {
+				out.Print(state.colSeparator);
+			}
+			PrintEscapedCSV(out, data[i].GetData(), data[i].GetSize());
 		}
 		out.Print(row_sep);
 		out.SetTextMode();
@@ -950,28 +961,27 @@ public:
 		return false;
 	}
 
-	string EscapeCSV(const string &str, bool print_sep) {
-		string result;
+	void PrintEscapedCSV(PrintStream &out, const char *str, idx_t str_len) {
 		bool needs_quote = false;
-		for (idx_t idx = 0; idx < str.size(); idx++) {
+		idx_t col_sep_size = state.colSeparator.size();
+		for (idx_t idx = 0; idx < str_len; idx++) {
 			if (CharacterNeedsQuote((unsigned char)str[idx])) {
 				needs_quote = true;
 				break;
 			}
+			if (idx + col_sep_size <= str_len) {
+				if (memcmp((const void *)(str + idx), (const void *)state.colSeparator.c_str(), col_sep_size) == 0) {
+					needs_quote = true;
+					break;
+				}
+			}
 		}
-		if (!needs_quote && StringUtil::Contains(str, state.colSeparator)) {
-			needs_quote = true;
+		if (!needs_quote) {
+			out.Print(duckdb::string_t(str, str_len));
+			return;
 		}
-		if (needs_quote) {
-			auto zQuoted = StringUtil::Format("%s", SQLIdentifier(str));
-			result += zQuoted;
-		} else {
-			result += str;
-		}
-		if (print_sep) {
-			result += state.colSeparator;
-		}
-		return result;
+		auto result = StringUtil::Format("%s", SQLIdentifier(str));
+		out.Print(result);
 	}
 };
 

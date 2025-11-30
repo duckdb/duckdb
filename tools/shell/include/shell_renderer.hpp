@@ -111,7 +111,7 @@ public:
 	virtual string NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
-	virtual string ConvertValue(const char *value);
+	virtual string ConvertValue(const char *value, idx_t str_len);
 };
 
 class ColumnRenderer : public ShellRenderer {
