@@ -694,6 +694,8 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			duckdb_destroy_error_data(&res);
 		}
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
+			auto error_data = duckdb_appender_error_data(appender.Get());
+			SetError(error, duckdb_error_data_message(error_data));
 			return ADBC_STATUS_INTERNAL;
 		}
 		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
