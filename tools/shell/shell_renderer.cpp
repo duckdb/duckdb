@@ -247,16 +247,29 @@ bool RenderingQueryResult::TryConvertChunk() {
 		exhausted_result = true;
 		return false;
 	}
+	if (varchar_chunk.ColumnCount() == 0) {
+		vector<duckdb::LogicalType> all_varchar;
+		for (idx_t c = 0; c < result.ColumnCount(); c++) {
+			all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
+		}
+		varchar_chunk.Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
+	} else {
+		varchar_chunk.Reset();
+	}
+	auto &state = ShellState::Get();
+	// cast to the varchar chunk
+	for (idx_t c = 0; c < result.ColumnCount(); c++) {
+		duckdb::VectorOperations::Cast(*state.conn->context, chunk->data[c], varchar_chunk.data[c], chunk->size());
+	}
+	// extract the actual values
 	for (idx_t r = 0; r < chunk->size(); r++) {
 		vector<string> row_data;
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			auto val = chunk->data[c].GetValue(r);
-			if (val.IsNull()) {
-				auto str_val = val.GetValue<string>();
+			if (duckdb::FlatVector::IsNull(varchar_chunk.data[c], r)) {
 				row_data.push_back(renderer.ConvertValue(nullptr));
 			} else {
-				auto str_val = val.GetValue<string>();
-				row_data.push_back(renderer.ConvertValue(str_val.c_str()));
+				auto str = duckdb::FlatVector::GetData<duckdb::string_t>(varchar_chunk.data[c])[r];
+				row_data.push_back(renderer.ConvertValue(str.GetString().c_str()));
 			}
 		}
 		data.push_back(std::move(row_data));

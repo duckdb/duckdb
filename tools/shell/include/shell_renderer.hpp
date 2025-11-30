@@ -38,6 +38,7 @@ struct RenderingQueryResult {
 	}
 
 	duckdb::QueryResult &result;
+	duckdb::DataChunk varchar_chunk;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
 	vector<vector<string>> data;
