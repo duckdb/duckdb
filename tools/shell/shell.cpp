@@ -477,13 +477,13 @@ bool ShellState::IsCharacter(char c) {
 	return (c & 0xc0) != 0x80;
 }
 
-idx_t ShellState::RenderLength(const char *z) {
+idx_t ShellState::RenderLength(const char *str, idx_t str_len) {
 #ifdef HAVE_LINENOISE
-	return linenoiseComputeRenderWidth(z, strlen(z));
+	return linenoiseComputeRenderWidth(str, str_len);
 #else
-	int n = 0;
-	for (; *z; z++) {
-		if (IsCharacter(*z)) {
+	idx_t n = 0;
+	for(idx_t i = 0; i < str_len; i++) {
+		if (IsCharacter(str[i])) {
 			n++;
 		}
 	}
@@ -491,8 +491,13 @@ idx_t ShellState::RenderLength(const char *z) {
 #endif
 }
 
+
+idx_t ShellState::RenderLength(duckdb::string_t str) {
+	return RenderLength(str.GetData(), str.GetSize());
+}
+
 idx_t ShellState::RenderLength(const string &str) {
-	return RenderLength(str.c_str());
+	return RenderLength(str.c_str(), str.size());
 }
 
 int ShellState::RunInitialCommand(const char *sql, bool bail) {

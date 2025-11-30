@@ -295,7 +295,8 @@ public:
 	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
 
-	static idx_t RenderLength(const char *z);
+	static idx_t RenderLength(const char *str, idx_t str_len);
+	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
 	static bool IsCharacter(char c);
 	void SetBinaryMode();
