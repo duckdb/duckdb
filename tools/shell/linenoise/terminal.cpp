@@ -419,7 +419,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	int ofd = STDOUT_FILENO;
 
 	if (Terminal::EnableRawMode() == -1) {
-		return -1;
+		return false;
 	}
 
 	bool success = false;
