@@ -18,21 +18,25 @@ void PrintStream::RenderAlignedValue(const char *str, idx_t str_len, idx_t width
 	idx_t w = width;
 	idx_t n = state.RenderLength(str, str_len);
 	idx_t space_count = w < n ? 0 : w - n;
+	idx_t lspace;
+	idx_t rspace;
 	if (alignment == TextAlignment::LEFT) {
-		Print(str);
-		Print(string(space_count, ' '));
-		return;
+		lspace = 0;
+		rspace = space_count;
+	} else if (alignment == TextAlignment::RIGHT) {
+		lspace = space_count;
+		rspace = 0;
+	} else {
+		lspace = space_count / 2;
+		rspace = (space_count + 1) / 2;
 	}
-	if (alignment == TextAlignment::RIGHT) {
-		Print(string(space_count, ' '));
-		Print(str);
-		return;
+	if (lspace > 0) {
+		Print(string(lspace, ' '));
 	}
-	idx_t lspace = space_count / 2;
-	idx_t rspace = (space_count + 1) / 2;
-	Print(string(lspace, ' '));
 	Print(duckdb::string_t(str, str_len));
-	Print(string(rspace, ' '));
+	if (rspace > 0) {
+		Print(string(rspace, ' '));
+	}
 }
 
 void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment) {
@@ -94,7 +98,10 @@ public:
 		row_data.data.resize(nCol, string());
 		row_data.is_null.resize(nCol, false);
 		row_data.row_index = 0;
-		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
+		chunk_idx = 0;
+		row_in_chunk = 0;
+
+		if (!result->exhausted_result && Finished()) {
 			result->TryConvertChunk();
 		}
 		AssignData();
@@ -102,21 +109,32 @@ public:
 
 	optional_ptr<RenderingQueryResult> result;
 	RowData row_data;
+	idx_t chunk_idx;
+	idx_t row_in_chunk;
 
 public:
+	bool Finished() {
+		return row_data.row_index >= result->loaded_row_count;
+	}
+
 	void AssignData() {
-		auto &query_result = result->result;
-		if (row_data.row_index >= result->data.size()) {
+		if (Finished()) {
 			result = nullptr;
 			return;
 		}
 		// read from the materialized rows
-		auto &row_strings = result->data[row_data.row_index];
-		if (row_data.data.size() != row_strings.size()) {
-			row_data.data.resize(row_strings.size());
+		auto &chunk = *result->chunks[chunk_idx];
+		idx_t column_count = chunk.ColumnCount();
+		if (row_data.data.size() != column_count) {
+			row_data.data.resize(column_count);
 		}
-		for (idx_t r = 0; r < row_strings.size(); r++) {
-			row_data.data[r] = duckdb::string_t(row_strings[r].c_str(), row_strings[r].size());
+		for (idx_t c = 0; c < column_count; c++) {
+			auto &vector = chunk.data[c];
+			if (duckdb::FlatVector::IsNull(vector, row_in_chunk)) {
+				row_data.data[c] = duckdb::string_t(result->renderer.state.nullValue);
+			} else {
+				row_data.data[c] = duckdb::FlatVector::GetData<duckdb::string_t>(chunk.data[c])[row_in_chunk];
+			}
 		}
 	}
 
@@ -126,7 +144,13 @@ public:
 		}
 		// iterate to next position
 		row_data.row_index++;
-		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
+		row_in_chunk++;
+		auto &chunk = *result->chunks[chunk_idx];
+		if (row_in_chunk >= chunk.size()) {
+			row_in_chunk = 0;
+			chunk_idx++;
+		}
+		if (!result->exhausted_result && Finished()) {
 			// convert the next chunk (if we have any)
 			result->TryConvertChunk();
 		}
@@ -145,6 +169,10 @@ public:
 		return row_data;
 	}
 };
+
+RenderingQueryResult::RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
+    : result(result), renderer(renderer), metadata(result) {
+}
 
 RenderingResultIterator RenderingQueryResult::begin() {
 	return RenderingResultIterator(*this);
@@ -247,33 +275,21 @@ bool RenderingQueryResult::TryConvertChunk() {
 		exhausted_result = true;
 		return false;
 	}
-	if (varchar_chunk.ColumnCount() == 0) {
-		vector<duckdb::LogicalType> all_varchar;
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
-		}
-		varchar_chunk.Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
-	} else {
-		varchar_chunk.Reset();
+	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
+	vector<duckdb::LogicalType> all_varchar;
+	for (idx_t c = 0; c < result.ColumnCount(); c++) {
+		all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
 	}
+	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
+
 	auto &state = ShellState::Get();
 	// cast to the varchar chunk
 	for (idx_t c = 0; c < result.ColumnCount(); c++) {
-		duckdb::VectorOperations::Cast(*state.conn->context, chunk->data[c], varchar_chunk.data[c], chunk->size());
+		duckdb::VectorOperations::Cast(*state.conn->context, chunk->data[c], varchar_chunk->data[c], chunk->size());
 	}
-	// extract the actual values
-	for (idx_t r = 0; r < chunk->size(); r++) {
-		vector<string> row_data;
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			if (duckdb::FlatVector::IsNull(varchar_chunk.data[c], r)) {
-				row_data.push_back(state.nullValue);
-			} else {
-				auto str = duckdb::FlatVector::GetData<duckdb::string_t>(varchar_chunk.data[c])[r];
-				row_data.push_back(renderer.ConvertValue(str.GetData(), str.GetSize()));
-			}
-		}
-		data.push_back(std::move(row_data));
-	}
+	varchar_chunk->SetCardinality(chunk->size());
+	loaded_row_count += chunk->size();
+	chunks.push_back(std::move(varchar_chunk));
 	return true;
 }
 
@@ -306,11 +322,20 @@ void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 		}
 		column_width.push_back(render_width);
 	}
-	for (auto &row : result.data) {
-		for (idx_t column_idx = 0; column_idx < row.size(); column_idx++) {
-			idx_t width = state.RenderLength(row[column_idx]);
-			if (width > column_width[column_idx]) {
-				column_width[column_idx] = width;
+	for (idx_t column_idx = 0; column_idx < result.ColumnCount(); column_idx++) {
+		for (auto &chunk : result.chunks) {
+			auto &vector = chunk->data[column_idx];
+			auto string_data = duckdb::FlatVector::GetData<duckdb::string_t>(vector);
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				idx_t width;
+				if (duckdb::FlatVector::IsNull(vector, r)) {
+					width = state.RenderLength(state.nullValue);
+				} else {
+					width = state.RenderLength(string_data[r]);
+				}
+				if (width > column_width[column_idx]) {
+					column_width[column_idx] = width;
+				}
 			}
 		}
 	}
@@ -320,7 +345,7 @@ bool ColumnRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode glob
 	if (global_mode == PagerMode::PAGER_ON) {
 		return true;
 	}
-	if (result.data.size() >= state.pager_min_rows) {
+	if (result.loaded_row_count >= state.pager_min_rows) {
 		// rows exceed min rows
 		return true;
 	}
@@ -685,9 +710,9 @@ bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_
 		return true;
 	}
 	// fetch data until we have either fetched more than the pager min, or we have exhausted the data
-	while (result.data.size() < state.pager_min_rows && result.TryConvertChunk()) {
+	while (result.loaded_row_count < state.pager_min_rows && result.TryConvertChunk()) {
 	}
-	if (result.data.size() >= state.pager_min_rows) {
+	if (result.loaded_row_count >= state.pager_min_rows) {
 		// rows exceed min rows
 		return true;
 	}
@@ -695,9 +720,7 @@ bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_
 	// figure out how wide the result would be when rendered
 	WidthMeasuringStream stream(state);
 	// make a copy of the result to avoid consuming it
-	auto result_copy = result.data;
 	RenderQueryResult(stream, state, result);
-	result.data = std::move(result_copy);
 
 	idx_t max_render_width = state.GetMaxRenderWidth();
 	if (stream.max_width > max_render_width) {
@@ -779,10 +802,18 @@ public:
 			return true;
 		}
 		idx_t row_count = 0;
-		for (auto &row : result.data) {
-			for (auto c : row[1]) {
-				if (c == '\n') {
-					row_count++;
+		for (auto &chunk : result.chunks) {
+			auto &plan_vector = chunk->data[1];
+			auto string_data = duckdb::FlatVector::GetData<duckdb::string_t>(plan_vector);
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				if (duckdb::FlatVector::IsNull(plan_vector, r)) {
+					continue;
+				}
+				for (idx_t s_idx = 0; s_idx < string_data[r].GetSize(); s_idx++) {
+					auto c = string_data[r].GetData()[s_idx];
+					if (c == '\n') {
+						row_count++;
+					}
 				}
 			}
 		}
@@ -980,7 +1011,7 @@ public:
 			out.Print(duckdb::string_t(str, str_len));
 			return;
 		}
-		auto result = StringUtil::Format("%s", SQLIdentifier(str));
+		auto result = StringUtil::Format("%s", SQLIdentifier(string(str, str_len)));
 		out.Print(result);
 	}
 };

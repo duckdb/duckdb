@@ -33,16 +33,14 @@ struct RowData {
 };
 
 struct RenderingQueryResult {
-	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
-	    : result(result), renderer(renderer), metadata(result) {
-	}
+	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer);
 
 	duckdb::QueryResult &result;
-	duckdb::DataChunk varchar_chunk;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
-	vector<vector<string>> data;
+	vector<unique_ptr<duckdb::DataChunk>> chunks;
 	bool exhausted_result = false;
+	idx_t loaded_row_count = 0;
 
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();
