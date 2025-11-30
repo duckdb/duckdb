@@ -238,8 +238,14 @@ bool RenderingQueryResult::TryConvertChunk() {
 	for (idx_t r = 0; r < chunk->size(); r++) {
 		vector<string> row_data;
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			auto str_val = chunk->data[c].GetValue(r).GetValue<string>();
-			row_data.push_back(renderer.ConvertValue(str_val.c_str()));
+			auto val = chunk->data[c].GetValue(r);
+			if (val.IsNull()) {
+				auto str_val = val.GetValue<string>();
+				row_data.push_back(renderer.ConvertValue(nullptr));
+			} else {
+				auto str_val = val.GetValue<string>();
+				row_data.push_back(renderer.ConvertValue(str_val.c_str()));
+			}
 		}
 		data.push_back(std::move(row_data));
 	}
