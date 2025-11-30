@@ -1,0 +1,25 @@
+.timer on;
+SET enable_column_imprint = true;
+
+-- Warm-up
+SELECT 1;
+
+-- INT128
+SELECT COUNT(*) FROM bench_int128 WHERE v = 424242::HUGEINT;
+SELECT COUNT(*) FROM bench_int128 WHERE v > 500000::HUGEINT;
+SELECT COUNT(*) FROM bench_int128 WHERE v >= 750000::HUGEINT;
+
+-- UINT128
+SELECT COUNT(*) FROM bench_uint128 WHERE v = 424242::UHUGEINT;
+SELECT COUNT(*) FROM bench_uint128 WHERE v > 500000::UHUGEINT;
+SELECT COUNT(*) FROM bench_uint128 WHERE v >= 750000::UHUGEINT;
+
+-- FLOAT
+SELECT COUNT(*) FROM bench_float WHERE v = 42.5::FLOAT;
+SELECT COUNT(*) FROM bench_float WHERE v > 500.5::FLOAT;
+SELECT COUNT(*) FROM bench_float WHERE v >= 750.75::FLOAT;
+
+-- DOUBLE
+SELECT COUNT(*) FROM bench_double WHERE v = 42.5::DOUBLE;
+SELECT COUNT(*) FROM bench_double WHERE v > 500.5::DOUBLE;
+SELECT COUNT(*) FROM bench_double WHERE v >= 750.75::DOUBLE;
