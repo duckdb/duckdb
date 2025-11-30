@@ -61,6 +61,9 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 #endif
 #if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
 	arch = "arm64";
+// referenced from https://github.com/loongson-community/discussions/issues/50#issuecomment-2017450170
+#elif defined(__loongarch__) || defined(__loongarch_lp64)
+	arch = "loongarch64";
 #endif
 
 #if defined(__MUSL__)
