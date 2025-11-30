@@ -302,8 +302,12 @@ public:
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
+	void Print(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str);
+	void Print(PrintOutput output, duckdb::string_t str);
 	void Print(PrintOutput output, const string &str);
+	void Print(const char *str, idx_t len);
+	void Print(duckdb::string_t str);
 	void Print(const char *str);
 	void Print(const string &str);
 	template <typename... ARGS>
