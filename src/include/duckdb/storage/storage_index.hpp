@@ -12,9 +12,9 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types.hpp"
 
-#ifndef DUCKDB_ENABLE_PUSHDOWN_EXTRACT
-#define DUCKDB_ENABLE_PUSHDOWN_EXTRACT
-#endif
+//#ifndef DUCKDB_ENABLE_PUSHDOWN_EXTRACT
+//#define DUCKDB_ENABLE_PUSHDOWN_EXTRACT
+//#endif
 
 namespace duckdb {
 

@@ -351,7 +351,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		}
 		if (entry->second.child_columns.empty()) {
 			auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
-			ColumnIndex new_index(logical_column_index, get.types[logical_column_index], {});
+			ColumnIndex new_index(logical_column_index, get.types[col_sel_idx], {});
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
 		} else {
@@ -374,6 +374,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 				auto &struct_extract = entry->second.struct_extracts[i];
 				auto &colref = entry->second.bindings[struct_extract.bindings_idx];
 				auto colref_copy = colref.get().Copy();
+				colref_copy->return_type = struct_extract.expr->return_type;
 				struct_extract.expr = std::move(colref_copy);
 			}
 #else
@@ -473,8 +474,6 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
 	}
-
-	colref->return_type = type;
 	AddBinding(*colref, std::move(index), *expression);
 	return true;
 }
