@@ -10,6 +10,7 @@
 #include "duckdb/original/std/sstream.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <algorithm>
 #include <cctype>
