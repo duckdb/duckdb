@@ -106,7 +106,7 @@ public:
 	virtual void RenderHeader(PrintStream &out, ResultMetadata &result);
 	virtual void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row);
 	virtual void RenderFooter(PrintStream &out, ResultMetadata &result);
-	virtual string NullValue();
+	virtual const char *NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
 	virtual bool HasConvertValue() {

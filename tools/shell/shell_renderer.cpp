@@ -73,8 +73,8 @@ void ShellRenderer::RenderRow(PrintStream &out, ResultMetadata &result, RowData 
 void ShellRenderer::RenderFooter(PrintStream &out, ResultMetadata &result) {
 }
 
-string ShellRenderer::NullValue() {
-	return state.nullValue;
+const char *ShellRenderer::NullValue() {
+	return state.nullValue.c_str();
 }
 
 string ShellRenderer::ConvertValue(const char *value, idx_t str_len) {
@@ -131,7 +131,7 @@ public:
 		for (idx_t c = 0; c < column_count; c++) {
 			auto &vector = chunk.data[c];
 			if (duckdb::FlatVector::IsNull(vector, row_in_chunk)) {
-				row_data.data[c] = duckdb::string_t(result->renderer.state.nullValue);
+				row_data.data[c] = duckdb::string_t(result->renderer.NullValue());
 			} else {
 				row_data.data[c] = duckdb::FlatVector::GetData<duckdb::string_t>(chunk.data[c])[row_in_chunk];
 			}
@@ -703,21 +703,38 @@ public:
 	explicit WidthMeasuringStream(ShellState &state) : PrintStream(state) {
 	}
 
+	void ProcessCharacter(char c) {
+		if (c == '\r') {
+			return;
+		}
+		if (c == '\n') {
+			// newline - compute the render width of the current line and reset
+			auto render_width = state.RenderLength(output);
+			if (render_width > max_width) {
+				max_width = render_width;
+			}
+			output = string();
+			return;
+		}
+		output += c;
+	}
+
+	void MeasureText(const char *str, idx_t str_len) {
+		for (idx_t i = 0; i < str_len; i++) {
+			auto c = str[i];
+			ProcessCharacter(c);
+		}
+	}
 	void Print(const string &str) override {
-		for (auto c : str) {
-			if (c == '\r') {
-				continue;
-			}
-			if (c == '\n') {
-				// newline - compute the render width of the current line and reset
-				auto render_width = state.RenderLength(output);
-				if (render_width > max_width) {
-					max_width = render_width;
-				}
-				output = string();
-				continue;
-			}
-			output += c;
+		MeasureText(str.c_str(), str.size());
+	}
+	void Print(duckdb::string_t str) override {
+		MeasureText(str.GetData(), str.GetSize());
+	}
+	void Print(const char *str) override {
+		for (idx_t i = 0; str[i]; i++) {
+			auto c = str[i];
+			ProcessCharacter(c);
 		}
 	}
 	void SetBinaryMode() override {
@@ -1112,7 +1129,7 @@ public:
 		out.Print(row_sep);
 	}
 
-	string NullValue() override {
+	const char *NullValue() override {
 		return "NULL";
 	}
 };
@@ -1212,7 +1229,7 @@ public:
 		}
 	}
 
-	string NullValue() override {
+	const char *NullValue() override {
 		return "null";
 	}
 

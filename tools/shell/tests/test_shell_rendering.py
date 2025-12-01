@@ -79,3 +79,13 @@ def test_mode_markdown_pipe(shell):
 
     result = test.run()
     result.check_stdout("\\|\\|")
+
+def test_mode_json_null(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("select NULL as my_val;")
+    )
+
+    result = test.run()
+    result.check_stdout("null")
