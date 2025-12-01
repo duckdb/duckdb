@@ -1,0 +1,93 @@
+# name: test/sql/parser/switch_case.test
+# description: Test the SWTICH case as an alternative for CASE WHEN/THEN
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS FROM values(1), (4), (8), (0) i(x);
+
+query I
+SELECT switch (x, 1 THEN 'yes', 0 THEN 'no' ELSE 'maybe') FROM tbl;
+----
+yes
+maybe
+maybe
+no
+
+statement ok
+CREATE TABLE nums AS FROM range(5) tbl(i);
+
+query I
+SELECT SWITCH(i % 2, 0 THEN 'even', 1 THEN 'odd' ELSE 'error') FROM nums ORDER BY i;
+----
+even
+odd
+even
+odd
+even
+
+query T
+SELECT
+    CASE (i % 2)
+        WHEN 0 THEN 'even'
+        WHEN 1 THEN 'odd'
+        ELSE 'error'
+    END
+FROM nums
+ORDER BY i;
+----
+even
+odd
+even
+odd
+even
+
+query I
+SELECT switch(i, 1 THEN 100, 3 THEN 300) FROM nums ORDER BY i;
+----
+NULL
+100
+NULL
+300
+NULL
+
+query I
+SELECT
+    CASE i
+        WHEN 1 THEN 100
+        WHEN 3 THEN 300
+    END
+FROM nums
+ORDER BY i;
+----
+NULL
+100
+NULL
+300
+NULL
+
+statement ok
+CREATE TABLE null_test AS FROM VALUES (1), (NULL), (2) i(val);
+
+query I
+SELECT switch(val, 1 THEN 'one', NULL THEN 'is_null' ELSE 'other') FROM null_test ORDER BY val;
+----
+one
+other
+other
+
+query I
+SELECT
+    CASE val
+        WHEN 1 THEN 'one'
+        WHEN NULL THEN 'is_null'
+        ELSE 'other'
+    END
+FROM null_test
+ORDER BY val;
+----
+one
+other
+other
