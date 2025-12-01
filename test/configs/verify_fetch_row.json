@@ -1,7 +1,7 @@
 {
   "description": "Run on persistent databases as storage with row verification enabled.",
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__verify_fetch_row.db",
-  "on_init": "PRAGMA verify_fetch_row;",
+  "on_init": "PRAGMA enable_verification;PRAGMA verify_fetch_row;",
   "skip_compiled": "true",
   "skip_tests": [
     {
