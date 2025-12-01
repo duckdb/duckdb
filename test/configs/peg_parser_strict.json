@@ -70,6 +70,12 @@
       ]
     },
     {
+      "reason": "Implement transform sample",
+      "paths": [
+        "test/sql/index/art/scan/test_random_uuid.test"
+      ]
+    },
+    {
       "reason": "Conversion Error",
       "paths": [
         "test/sql/storage/types/struct/wal_struct_storage.test",
