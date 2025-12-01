@@ -36,7 +36,7 @@ void UnboundIndex::CommitDrop() {
 }
 
 void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
-                               const vector<StorageIndex> &mapped_column_ids_p, BufferedIndexReplay replay_type) {
+                               const vector<StorageIndex> &mapped_column_ids_p, const BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
 	auto types = index_column_chunk.GetTypes(); // column types
 	types.push_back(LogicalType::ROW_TYPE);
@@ -64,8 +64,8 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 		buffer = make_uniq<ColumnDataCollection>(allocator, types);
 	}
 	// The starting index of the buffer range is the size of the buffer.
-	idx_t start = buffer->Count();
-	idx_t end = start + combined_chunk.size() - 1;
+	const idx_t start = buffer->Count();
+	const idx_t end = start + combined_chunk.size();
 	auto &ranges = buffered_replays.ranges;
 
 	if (ranges.empty() || ranges.back().type != replay_type) {

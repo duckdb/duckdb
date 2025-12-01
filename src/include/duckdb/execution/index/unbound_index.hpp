@@ -24,6 +24,8 @@ inline idx_t GetReplayTypeIndex(BufferedIndexReplay type) {
 
 struct ReplayRange {
 	BufferedIndexReplay type;
+	// [start, end) - start is inclusive, end is exclusive for the range within the ColumnDataCollection
+	// buffer for operations to replay for this range.
 	idx_t start;
 	idx_t end;
 	explicit ReplayRange(BufferedIndexReplay replay_type, idx_t start_p, idx_t end_p)
@@ -35,10 +37,10 @@ struct ReplayRange {
 // Since the inserts and deletes may be interleaved, however, ranges stores the ordering of operations
 // and their offsets in the respective buffer.
 // Simple example:
-// ranges[0] - INSERT_ENTRY, [0,6]
-// ranges[1] - DEL_ENTRY,    [0,3]
-// ranges[2] - INSERT_ENTRY  [7,12]
-// So even though the buffered_inserts has all the insert data from [0,12], ranges gives us the intervals for
+// ranges[0] - INSERT_ENTRY, [0,6)
+// ranges[1] - DEL_ENTRY,    [0,3)
+// ranges[2] - INSERT_ENTRY  [6,12)
+// So even though the buffered_inserts has all the insert data from [0,12), ranges gives us the intervals for
 // replaying the index operations in the right order.
 struct BufferedIndexReplays {
 	vector<ReplayRange> ranges;
