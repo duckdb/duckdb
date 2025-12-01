@@ -9,7 +9,7 @@
 #include "keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "tokenizer.hpp"
+#include "include/parser/tokenizer/base_tokenizer.hpp"
 #include "parser/peg_parser.hpp"
 #include "transformer/parse_result.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE

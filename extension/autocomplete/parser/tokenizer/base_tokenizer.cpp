@@ -1,7 +1,5 @@
-#include "tokenizer.hpp"
-
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "parser/tokenizer/base_tokenizer.hpp"
 
 namespace duckdb {
 
