@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "parquet_types.h"
 #include "parquet_column_schema.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 class MemoryStream;
@@ -63,13 +64,32 @@ public:
 	}
 };
 
+struct ParquetAnalyzeSchemaState {
+public:
+	ParquetAnalyzeSchemaState() {
+	}
+	virtual ~ParquetAnalyzeSchemaState() {
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 class ColumnWriter {
 protected:
 	static constexpr uint16_t PARQUET_DEFINE_VALID = UINT16_C(65535);
 
 public:
-	ColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path,
-	             bool can_have_nulls);
+	ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path);
 	virtual ~ColumnWriter();
 
 public:
@@ -79,8 +99,12 @@ public:
 	const ParquetColumnSchema &Schema() const {
 		return column_schema;
 	}
+	ParquetColumnSchema &Schema() {
+		return column_schema;
+	}
 	inline idx_t SchemaIndex() const {
-		return column_schema.schema_index;
+		D_ASSERT(column_schema.schema_index.IsValid());
+		return column_schema.schema_index.GetIndex();
 	}
 	inline idx_t MaxDefine() const {
 		return column_schema.max_define;
@@ -88,18 +112,49 @@ public:
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
 	}
+	virtual bool HasTransform() {
+		for (auto &child_writer : child_writers) {
+			if (child_writer->HasTransform()) {
+				throw NotImplementedException("ColumnWriter of type '%s' requires a transform, but is not a root "
+				                              "column, this isn't supported currently",
+				                              child_writer->Type());
+			}
+		}
+		return false;
+	}
+	virtual LogicalType TransformedType() {
+		throw NotImplementedException("Writer does not have a transformed type");
+	}
+	virtual unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) {
+		throw NotImplementedException("Writer does not have a transform expression");
+	}
 
-	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
-	                                             const LogicalType &type, const string &name, bool allow_geometry,
-	                                             optional_ptr<const ChildFieldIDs> field_ids,
-	                                             optional_ptr<const ShreddingType> shredding_types,
-	                                             idx_t max_repeat = 0, idx_t max_define = 1,
-	                                             bool can_have_nulls = true);
+	virtual unique_ptr<ParquetAnalyzeSchemaState> AnalyzeSchemaInit() {
+		return nullptr;
+	}
+
+	const vector<unique_ptr<ColumnWriter>> &ChildWriters() const {
+		return child_writers;
+	}
+
+	virtual void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) {
+		throw NotImplementedException("Writer doesn't require an AnalyzeSchema pass");
+	}
+
+	virtual void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) {
+		throw NotImplementedException("Writer doesn't require an AnalyzeSchemaFinalize pass");
+	}
+
+	virtual void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
+
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
-	                                                      const vector<duckdb_parquet::SchemaElement> &parquet_schemas,
-	                                                      const ParquetColumnSchema &schema,
-	                                                      vector<string> path_in_schema);
+	                                                      vector<string> path_in_schema, const LogicalType &type,
+	                                                      const string &name, bool allow_geometry,
+	                                                      optional_ptr<const ChildFieldIDs> field_ids,
+	                                                      optional_ptr<const ShreddingType> shredding_types,
+	                                                      idx_t max_repeat = 0, idx_t max_define = 1,
+	                                                      bool can_have_nulls = true);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) = 0;
 
@@ -134,7 +189,7 @@ protected:
 
 public:
 	ParquetWriter &writer;
-	const ParquetColumnSchema &column_schema;
+	ParquetColumnSchema column_schema;
 	vector<string> schema_path;
 	bool can_have_nulls;
 

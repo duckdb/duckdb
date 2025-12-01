@@ -114,7 +114,7 @@ private:
 
 //! Top level query metrics.
 struct QueryMetrics {
-	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
+	QueryMetrics() : total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0) {};
 
 	//! Reset the query metrics.
 	void Reset() {
@@ -129,6 +129,7 @@ struct QueryMetrics {
 		wal_replay_entry_count = 0;
 		total_bytes_read = 0;
 		total_bytes_written = 0;
+		total_memory_allocated = 0;
 	}
 
 	ProfilingInfo query_global_info;
@@ -155,6 +156,8 @@ struct QueryMetrics {
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system.
 	atomic<idx_t> total_bytes_written;
+	//! The total memory allocated by the buffer manager.
+	atomic<idx_t> total_memory_allocated;
 };
 
 //! QueryProfiler collects the profiling metrics of a query.

@@ -62,9 +62,9 @@ public:
 	//! Expression representing a filter, only used for aggregates
 	unique_ptr<ParsedExpression> filter_expr;
 	//! True to ignore NULL values
-	bool ignore_nulls;
+	bool ignore_nulls = false;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
-	bool distinct;
+	bool distinct = false;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
