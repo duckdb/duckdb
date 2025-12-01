@@ -1012,12 +1012,7 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
-	if (!info->indexes.Empty()) {
-		// if we have indexes then disallow appending without the checkpoint lock (for now)
-		transaction.SetModifications(DatabaseModificationType::INSERT_DATA_WITH_INDEX);
-	} else {
-		state.table_lock = transaction.SharedLockTable(*info);
-	}
+	state.table_lock = transaction.SharedLockTable(*info);
 	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
 	state.current_row = state.row_start;
 	auto &transaction_manager = transaction.GetTransactionManager();
