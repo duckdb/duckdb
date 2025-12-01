@@ -89,3 +89,13 @@ def test_mode_json_null(shell):
 
     result = test.run()
     result.check_stdout("null")
+
+def test_mode_json_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode jsonlines")
+        .statement("select 'test' as name, [4, 5, 6] a, {'key': 7} s;")
+    )
+
+    result = test.run()
+    result.check_stdout('{"name":"test","a":[4,5,6],"s":{"key":7}}')

@@ -266,6 +266,21 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
+unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chunk) {
+	// cast to the varchar chunk
+	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
+	vector<duckdb::LogicalType> all_varchar;
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
+	}
+	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
+
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
+	}
+	return varchar_chunk;
+}
+
 bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
@@ -275,18 +290,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 		exhausted_result = true;
 		return false;
 	}
-	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
-	vector<duckdb::LogicalType> all_varchar;
-	for (idx_t c = 0; c < result.ColumnCount(); c++) {
-		all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
-	}
-	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
-
-	auto &state = ShellState::Get();
-	// cast to the varchar chunk
-	for (idx_t c = 0; c < result.ColumnCount(); c++) {
-		duckdb::VectorOperations::Cast(*state.conn->context, chunk->data[c], varchar_chunk->data[c], chunk->size());
-	}
+	auto varchar_chunk = renderer.ConvertChunk(*chunk);
 	varchar_chunk->SetCardinality(chunk->size());
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
@@ -1158,32 +1162,18 @@ public:
 		auto &data = row.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
-		auto &is_null = row.is_null;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
 				out.Print(",");
 			}
 			out.Print(EscapeJSONString(col_names[i]));
 			out.Print(":");
-			if (is_null[i]) {
-				out.Print(data[i]);
-			} else if (types[i].id() == duckdb::LogicalTypeId::FLOAT ||
-			           types[i].id() == duckdb::LogicalTypeId::DOUBLE) {
-				if (duckdb::StringUtil::Equals(data[i], "inf")) {
-					out.Print("1e999");
-				} else if (duckdb::StringUtil::Equals(data[i], "-inf")) {
-					out.Print("-1e999");
-				} else if (duckdb::StringUtil::Equals(data[i], "nan")) {
-					out.Print("null");
-				} else if (duckdb::StringUtil::Equals(data[i], "-nan")) {
-					out.Print("null");
-				} else {
-					out.Print(data[i]);
-				}
-			} else if (types[i].IsNumeric() || types[i].IsJSONType()) {
-				out.Print(data[i]);
-			} else {
+			if (result.types[i].id() == duckdb::LogicalTypeId::VARCHAR) {
+				// VARCHAR - need to escape here
 				out.Print(EscapeJSONString(data[i].GetString()));
+			} else {
+				// non-VARCHAR has already been converted to the correct JSON format
+				out.Print(data[i]);
 			}
 		}
 		out.Print("}");
@@ -1219,6 +1209,27 @@ public:
 		}
 		result += "\"";
 		return result;
+	}
+
+	unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk) override {
+		// first convert everything to JSON
+		duckdb::DataChunk json_chunk;
+		vector<duckdb::LogicalType> all_json;
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			if (chunk.data[c].GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
+				// avoid casting VARCHAR - otherwise we interpret it as JSON
+				all_json.emplace_back(duckdb::LogicalType::VARCHAR);
+			} else {
+				all_json.emplace_back(duckdb::LogicalType::JSON());
+			}
+		}
+		json_chunk.Initialize(duckdb::Allocator::DefaultAllocator(), all_json);
+
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
+		}
+		// now convert the JSON chunk to VARCHAR
+		return ShellRenderer::ConvertChunk(json_chunk);
 	}
 
 	void RenderFooter(PrintStream &out, ResultMetadata &result) override {

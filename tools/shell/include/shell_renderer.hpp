@@ -109,6 +109,7 @@ public:
 	virtual const char *NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
+	virtual unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk);
 	virtual bool HasConvertValue() {
 		return false;
 	}
