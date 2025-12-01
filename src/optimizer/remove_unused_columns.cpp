@@ -370,6 +370,12 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 				new_column_ids.emplace_back(new_index);
 				original_ids.emplace_back(col_sel_idx);
 			}
+			for (idx_t i = 0; i < entry->second.struct_extracts.size(); i++) {
+				auto &struct_extract = entry->second.struct_extracts[i];
+				auto &colref = entry->second.bindings[struct_extract.bindings_idx];
+				auto colref_copy = colref.get().Copy();
+				struct_extract.expr = std::move(colref_copy);
+			}
 #else
 			auto &old_column_id = old_column_ids[col_sel_idx];
 			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), old_column_id.GetType(),
@@ -414,7 +420,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	}
 }
 
-bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, unique_ptr<BoundColumnRefExpression> &colref,
+bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
                                                     vector<idx_t> &indexes) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
@@ -440,7 +446,7 @@ bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, unique_ptr
 		if (ref.return_type.id() != LogicalTypeId::STRUCT) {
 			return false;
 		}
-		colref = unique_ptr_cast<Expression, BoundColumnRefExpression>(std::move(child));
+		colref = &ref;
 		return true;
 	}
 	// not a column reference - try to handle this recursively
@@ -451,7 +457,7 @@ bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, unique_ptr
 }
 
 bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
-	unique_ptr<BoundColumnRefExpression> colref;
+	optional_ptr<BoundColumnRefExpression> colref;
 	vector<idx_t> indexes;
 	if (!HandleStructExtractRecursive(**expression, colref, indexes)) {
 		return false;
@@ -469,8 +475,7 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	}
 
 	colref->return_type = type;
-	AddBinding(*colref, std::move(index));
-	*expression = std::move(colref);
+	AddBinding(*colref, std::move(index), *expression);
 	return true;
 }
 
@@ -517,6 +522,19 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 
 		MergeChildColumns(column.child_columns, child_column);
 	}
+}
+
+void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
+                                  unique_ptr<Expression> &parent) {
+	AddBinding(col, std::move(child_column));
+	auto entry = column_references.find(col.binding);
+	if (entry == column_references.end()) {
+		throw InternalException("ColumnBinding for the col was somehow not added by the previous step?");
+	}
+	auto &referenced_column = entry->second;
+	//! Save a reference to the top-level struct extract, so we can potentially replace it later
+	D_ASSERT(!referenced_column.bindings.empty());
+	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1);
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {

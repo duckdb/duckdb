@@ -18,8 +18,23 @@ class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 
+struct ReferencedStructExtract {
+public:
+	ReferencedStructExtract(unique_ptr<Expression> &struct_extract, idx_t bindings_idx)
+	    : bindings_idx(bindings_idx), expr(struct_extract) {
+	}
+
+public:
+	//! The index into the 'bindings' of the ReferencedColumn that is the child of this struct_extract
+	idx_t bindings_idx;
+	//! The struct_extract expression to potentially replace
+	unique_ptr<Expression> &expr;
+};
+
 struct ReferencedColumn {
+	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
 	vector<reference<BoundColumnRefExpression>> bindings;
+	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
 };
 
@@ -39,13 +54,15 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col);
 	//! Add a reference to a sub-section of the column
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
+	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
+	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column, unique_ptr<Expression> &parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
 	bool HandleStructExtract(unique_ptr<Expression> *expression);
 
-	bool HandleStructExtractRecursive(Expression &expr, unique_ptr<BoundColumnRefExpression> &colref,
+	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes);
 };
 
