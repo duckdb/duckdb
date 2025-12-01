@@ -385,6 +385,11 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformExcludeNameList);
 	REGISTER_TRANSFORM(TransformExcludeNameSingle);
 	REGISTER_TRANSFORM(TransformExcludeName);
+	REGISTER_TRANSFORM(TransformReplaceList);
+	REGISTER_TRANSFORM(TransformReplaceEntries);
+	REGISTER_TRANSFORM(TransformReplaceEntrySingle);
+	REGISTER_TRANSFORM(TransformReplaceEntryList);
+	REGISTER_TRANSFORM(TransformReplaceEntry);
 
 	REGISTER_TRANSFORM(TransformOverClause);
 	REGISTER_TRANSFORM(TransformWindowFrame);

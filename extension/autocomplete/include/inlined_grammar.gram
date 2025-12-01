@@ -567,7 +567,10 @@ ExcludeList <- 'EXCLUDE' ExcludeNameList / ExcludeNameSingle
 ExcludeNameList <- Parens(List(ExcludeName))
 ExcludeNameSingle <- ExcludeName
 ExcludeName <- DottedIdentifier / ColIdOrString
-ReplaceList <- 'REPLACE' (Parens(List(ReplaceEntry)) / ReplaceEntry)
+ReplaceList <- 'REPLACE' ReplaceEntries
+ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
+ReplaceEntrySingle <- ReplaceEntry
+ReplaceEntryList <- Parens(List(ReplaceEntry))
 ReplaceEntry <- Expression 'AS' ColumnReference
 RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
 RenameEntry <- ColumnReference 'AS' Identifier
