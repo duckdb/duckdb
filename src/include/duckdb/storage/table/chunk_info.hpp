@@ -49,6 +49,7 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) const = 0;
 	virtual bool Cleanup(transaction_t lowest_transaction) const;
+	virtual string ToString(idx_t max_count) const = 0;
 
 	virtual bool HasDeletes() const = 0;
 
@@ -92,6 +93,7 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
 	bool Cleanup(transaction_t lowest_transaction) const override;
+	string ToString(idx_t max_count) const override;
 
 	bool HasDeletes() const override;
 
@@ -123,6 +125,7 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	bool Cleanup(transaction_t lowest_transaction) const override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
+	string ToString(idx_t max_count) const override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 

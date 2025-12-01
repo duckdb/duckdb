@@ -134,6 +134,18 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
 	return std::move(info);
 }
 
+string ChunkConstantInfo::ToString(idx_t max_count) const {
+	string result;
+	result += "Constant [Count: " + to_string(max_count);
+	result += ", ";
+	result += "Insert Id: " + to_string(insert_id);
+	if (delete_id != NOT_DELETED_ID) {
+		result += ", Delete Id: " + to_string(delete_id);
+	}
+	result += "]";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Vector info
 //===--------------------------------------------------------------------===//
@@ -233,14 +245,14 @@ idx_t ChunkVectorInfo::GetCheckpointRowCount(TransactionData transaction, idx_t 
 
 	idx_t count = 0;
 	for (idx_t i = 0; i < max_count; i++) {
-		if (TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
-		                                                   inserted[i])) {
-			if (i != count) {
-				throw InternalException(
-				    "Error in ChunkVectorInfo::GetCheckpointRowCount - insertions are not sequential");
-			}
-			count++;
+		if (!TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
+		                                                    inserted[i])) {
+			continue;
 		}
+		if (i != count) {
+			throw InternalException("Error in ChunkVectorInfo::GetCheckpointRowCount - insertions are not sequential");
+		}
+		count++;
 	}
 	return count;
 }
@@ -416,6 +428,29 @@ bool ChunkVectorInfo::AnyDeleted() const {
 
 bool ChunkVectorInfo::HasConstantInsertionId() const {
 	return !inserted_data.HasMetadata();
+}
+
+string ChunkVectorInfo::ToString(idx_t max_count) const {
+	string result;
+	result += "Vector [Count: " + to_string(max_count);
+	result += ", ";
+	if (HasConstantInsertionId()) {
+		result += "Insert Id: " + to_string(constant_insert_id);
+	} else {
+		result += "Insert Ids: [";
+		auto segment = allocator.GetHandle(GetInsertedPointer());
+		auto inserted = segment.GetPtr<transaction_t>();
+
+		for (idx_t idx = 0; idx < max_count; idx++) {
+			if (idx > 0) {
+				result += ", ";
+			}
+			result += to_string(inserted[idx]);
+		}
+		result += "]";
+	}
+	result += "]";
+	return result;
 }
 
 transaction_t ChunkVectorInfo::ConstantInsertId() const {

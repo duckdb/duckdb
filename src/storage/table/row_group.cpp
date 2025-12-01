@@ -788,18 +788,7 @@ optional_idx RowGroup::GetCheckpointRowCount(TransactionData transaction) const 
 	if (!vinfo) {
 		return optional_idx();
 	}
-	idx_t total_count = 0;
-	for (idx_t read_count = 0, vector_idx = 0; read_count < count; read_count += STANDARD_VECTOR_SIZE, vector_idx++) {
-		idx_t max_count = MinValue<idx_t>(count - read_count, STANDARD_VECTOR_SIZE);
-		auto checkpoint_count = vinfo->GetCheckpointRowCount(transaction, vector_idx, max_count);
-		if (checkpoint_count > 0) {
-			if (total_count != read_count) {
-				throw InternalException("Error in RowGroup::GetCheckpointRowCount - insertions are not sequential");
-			}
-			total_count += checkpoint_count;
-		}
-	}
-	return total_count == count ? optional_idx() : total_count;
+	return vinfo->GetCheckpointRowCount(transaction, count);
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,

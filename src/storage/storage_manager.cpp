@@ -142,6 +142,8 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	// any new commits made will be written to the next wal
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 	options.transaction_id = transaction_manager.GetNewCheckpointId();
+
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
 	if (!wal) {
 		return false;
 	}
@@ -196,6 +198,8 @@ void StorageManager::WALFinishCheckpoint() {
 	// open what is now the main WAL again
 	wal = make_uniq<WriteAheadLog>(*this, wal_path);
 	wal->Initialize();
+
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
 }
 
 unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {

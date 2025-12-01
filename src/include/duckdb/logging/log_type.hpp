@@ -142,4 +142,18 @@ private:
 	                        vector<Value> map_values);
 };
 
+class TransactionLogType : public LogType {
+public:
+	static constexpr const char *NAME = "Transaction";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	TransactionLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
+	                                  transaction_t transaction_id = MAX_TRANSACTION_ID);
+};
+
 } // namespace duckdb

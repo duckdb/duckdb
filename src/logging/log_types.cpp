@@ -222,4 +222,30 @@ string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTa
 	return CreateLog(db, table, "checkpoint", std::move(map_keys), std::move(map_values));
 }
 
+//===--------------------------------------------------------------------===//
+// TransactionLogType
+//===--------------------------------------------------------------------===//
+TransactionLogType::TransactionLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType TransactionLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"database", LogicalType::VARCHAR},
+	    {"type", LogicalType::VARCHAR},
+	    {"transaction_id", LogicalType::UBIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
+                                               transaction_t transaction_id) {
+	child_list_t<Value> child_list = {
+	    {"database", db.name},
+	    {"type", log_type},
+	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
+	};
+
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
 } // namespace duckdb

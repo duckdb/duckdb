@@ -256,9 +256,7 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryGetCheckpointLock() {
 }
 
 transaction_t DuckTransactionManager::GetCommitTimestamp() {
-	auto commit_ts = current_start_timestamp++;
-	last_commit = commit_ts;
-	return commit_ts;
+	return current_start_timestamp++;
 }
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
@@ -307,12 +305,15 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();
+
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
 		error = transaction.Commit(db, commit_id, std::move(commit_state));
 	}
 
 	if (error.HasError()) {
+		DUCKDB_LOG(context, TransactionLogType, db, "Rollback (after failed commit)", commit_id);
+
 		// COMMIT not successful: ROLLBACK.
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
@@ -324,6 +325,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			    error.Message(), rollback_error.Message());
 		}
 	} else {
+		DUCKDB_LOG(context, TransactionLogType, db, "Commit", commit_id);
+		last_commit = commit_id;
+
 		// check if catalog changes were made
 		if (transaction.catalog_version >= TRANSACTION_ID_START) {
 			transaction.catalog_version = ++last_committed_version;
@@ -351,6 +355,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// We do not need to hold the transaction lock during cleanup of transactions,
 	// as they (1) have been removed, or (2) enter cleanup_info.
 	t_lock.unlock();
+	held_wal_lock.reset();
 
 	{
 		lock_guard<mutex> c_lock(cleanup_lock);
@@ -389,6 +394,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
+
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Rollback", transaction.transaction_id);
 
 	ErrorData error;
 	{
@@ -437,6 +444,7 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 	idx_t t_index = active_transactions.size();
 	auto lowest_start_time = TRANSACTION_ID_START;
 	auto lowest_transaction_id = MAX_TRANSACTION_ID;
+	auto active_checkpoint_id = active_checkpoint.load();
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
@@ -444,6 +452,9 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 		}
 		lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
+	}
+	if (active_checkpoint_id != MAX_TRANSACTION_ID && active_checkpoint_id < lowest_start_time) {
+		lowest_start_time = active_checkpoint_id;
 	}
 	lowest_active_start = lowest_start_time;
 	lowest_active_id = lowest_transaction_id;
