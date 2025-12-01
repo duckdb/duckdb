@@ -1255,7 +1255,7 @@ void IEJoinGlobalSourceState::Initialize() {
 	total_tasks = stage_begin.back();
 
 	// Ready for action
-	stage = IEJoinSourceStage(0);
+	stage = IEJoinSourceStage(1);
 }
 
 bool IEJoinGlobalSourceState::TryPrepareNextStage() {
