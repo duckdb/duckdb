@@ -300,6 +300,8 @@ typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(co
 
 typedef bool (*table_function_supports_pushdown_type_t)(const FunctionData &bind_data, idx_t col_idx);
 
+typedef bool (*table_function_supports_pushdown_extract_t)(const FunctionData &bind_data, idx_t col_idx);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
@@ -437,6 +439,8 @@ public:
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
 	table_function_supports_pushdown_type_t supports_pushdown_type;
+	//! (Optional) If this scanner supports projection pushdown of struct extracts
+	table_function_supports_pushdown_extract_t supports_pushdown_extract;
 	//! Get partition info of the table
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table

@@ -12,10 +12,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types.hpp"
 
-//#ifndef DUCKDB_ENABLE_PUSHDOWN_EXTRACT
-//#define DUCKDB_ENABLE_PUSHDOWN_EXTRACT
-//#endif
-
 namespace duckdb {
 
 enum class StorageIndexType : uint8_t { DIRECT_READ, OPTIONAL_PRUNE_HINT, PUSHDOWN_EXTRACT };

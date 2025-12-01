@@ -299,6 +299,13 @@ static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t f
 	return static_cast<idx_t>(std::distance(column_ids.begin(), it));
 }
 
+static bool SupportsPushdownExtract(LogicalGet &get, idx_t column_idx) {
+	if (!get.function.supports_pushdown_extract) {
+		return false;
+	}
+	return get.function.supports_pushdown_extract(*get.bind_data, column_idx);
+}
+
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	if (everything_referenced) {
 		return;
@@ -354,36 +361,40 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			ColumnIndex new_index(logical_column_index, get.types[col_sel_idx], {});
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
-		} else {
-			D_ASSERT(entry->second.child_columns.size() == entry->second.bindings.size());
-//! Only a subset of the struct's fields are referenced
-#ifdef DUCKDB_ENABLE_PUSHDOWN_EXTRACT
-			//! Pushdown Extract is supported, emit a column for every field
-			for (idx_t i = 0; i < entry->second.child_columns.size(); i++) {
-				auto &child = entry->second.child_columns[i];
-				auto &colref = entry->second.bindings[i];
-				colref.get().binding.column_index += i;
-				ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(),
-				                      LogicalType::STRUCT({{"child", child.GetType()}}), {child});
-				//! Upgrade the optional prune hint to a mandatory pushdown of the extract
-				new_index.SetPushdownExtractType();
-				new_column_ids.emplace_back(new_index);
-				original_ids.emplace_back(col_sel_idx);
-			}
-			for (idx_t i = 0; i < entry->second.struct_extracts.size(); i++) {
-				auto &struct_extract = entry->second.struct_extracts[i];
-				auto &colref = entry->second.bindings[struct_extract.bindings_idx];
-				auto colref_copy = colref.get().Copy();
-				colref_copy->return_type = struct_extract.expr->return_type;
-				struct_extract.expr = std::move(colref_copy);
-			}
-#else
+			continue;
+		}
+		//! Only a subset of the struct's fields are referenced
+		D_ASSERT(entry->second.child_columns.size() == entry->second.bindings.size());
+		auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+		if (!SupportsPushdownExtract(get, logical_column_index)) {
+			//! Scan doesn't support pushdown the extract down to the storage
+			//! Only add the child indexes to function as a prune hint that the other indices aren't referenced by the
+			//! query.
 			auto &old_column_id = old_column_ids[col_sel_idx];
 			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), old_column_id.GetType(),
 			                      entry->second.child_columns);
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
-#endif
+			continue;
+		}
+		//! Pushdown Extract is supported, emit a column for every field
+		for (idx_t i = 0; i < entry->second.child_columns.size(); i++) {
+			auto &child = entry->second.child_columns[i];
+			auto &colref = entry->second.bindings[i];
+			colref.get().binding.column_index += i;
+			ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(),
+			                      LogicalType::STRUCT({{"child", child.GetType()}}), {child});
+			//! Upgrade the optional prune hint to a mandatory pushdown of the extract
+			new_index.SetPushdownExtractType();
+			new_column_ids.emplace_back(new_index);
+			original_ids.emplace_back(col_sel_idx);
+		}
+		for (idx_t i = 0; i < entry->second.struct_extracts.size(); i++) {
+			auto &struct_extract = entry->second.struct_extracts[i];
+			auto &colref = entry->second.bindings[struct_extract.bindings_idx];
+			auto colref_copy = colref.get().Copy();
+			colref_copy->return_type = struct_extract.expr->return_type;
+			struct_extract.expr = std::move(colref_copy);
 		}
 	}
 	if (new_column_ids.empty()) {

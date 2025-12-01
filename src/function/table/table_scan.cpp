@@ -786,6 +786,21 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
+static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, idx_t column_idx) {
+	auto &bind_data = bind_data_ref.Cast<TableScanBindData>();
+	auto types = bind_data.table.GetTypes();
+	if (column_idx > types.size()) {
+		throw InternalException("Column index out of range in TableSupportsPushdownExtract");
+	}
+	auto &column_type = types[column_idx];
+	if (column_type.id() != LogicalTypeId::STRUCT) {
+		throw InternalException(
+		    "Expected column_idx to be of type STRUCT in TableSupportsPushdownExtract, but received %s",
+		    column_type.ToString());
+	}
+	return true;
+}
+
 bool TableScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
 	return true;
 }
@@ -830,6 +845,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	scan_function.set_scan_order = SetScanOrder;
+	scan_function.supports_pushdown_extract = TableSupportsPushdownExtract;
 	return scan_function;
 }
 
