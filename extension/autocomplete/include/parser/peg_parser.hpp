@@ -5,7 +5,7 @@
 
 namespace duckdb {
 enum class PEGRuleType {
-	LITERAL,   // literal rule ('Keyword'i)
+	LITERAL,   // literal rule ('Keyword')
 	REFERENCE, // reference to another rule (Rule)
 	OPTIONAL,  // optional rule (Rule?)
 	OR,        // or rule (Rule1 / Rule2)
@@ -13,7 +13,7 @@ enum class PEGRuleType {
 };
 
 enum class PEGTokenType {
-	LITERAL,       // literal token ('Keyword'i)
+	LITERAL,       // literal token ('Keyword')
 	REFERENCE,     // reference token (Rule)
 	OPERATOR,      // operator token (/ or )
 	FUNCTION_CALL, // start of function call (i.e. Function(...))
