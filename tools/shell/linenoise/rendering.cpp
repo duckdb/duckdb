@@ -877,14 +877,14 @@ void Linenoise::RefreshMultiLine() {
 	 * going to the last row. */
 	AppendBuffer append_buffer;
 	if (old_rows - old_cursor_rows > 0) {
-		Linenoise::Log("go down %d", old_rows - old_cursor_rows);
+		Linenoise::Log("go down %d\n", old_rows - old_cursor_rows);
 		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
 		append_buffer.Append(seq);
 	}
 
 	/* Now for every row clear it, go up. */
 	for (int j = 0; j < old_rows - 1; j++) {
-		Linenoise::Log("clear+up");
+		Linenoise::Log("clear+up\n");
 		append_buffer.Append("\r\x1b[0K\x1b[1A");
 	}
 
@@ -900,11 +900,11 @@ void Linenoise::RefreshMultiLine() {
 
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
-	Linenoise::Log("pos > 0 %d", pos > 0 ? 1 : 0);
-	Linenoise::Log("pos == len %d", pos == len ? 1 : 0);
-	Linenoise::Log("new_cursor_x == cols %d", new_cursor_x == ws.ws_col ? 1 : 0);
+	Linenoise::Log("pos > 0 %d\n", pos > 0 ? 1 : 0);
+	Linenoise::Log("pos == len %d\n", pos == len ? 1 : 0);
+	Linenoise::Log("new_cursor_x == cols %d\n", new_cursor_x == ws.ws_col ? 1 : 0);
 	if (pos > 0 && pos == len && new_cursor_x == ws.ws_col) {
-		Linenoise::Log("<newline>", 0);
+		Linenoise::Log("<newline>\n");
 		append_buffer.Append("\n");
 		append_buffer.Append("\r");
 		rows++;
@@ -1055,31 +1055,36 @@ void Linenoise::RefreshMultiLine() {
 
 		rendered_completion_lines = completion_rows;
 		rows += static_cast<int>(rendered_completion_lines);
-		maxrows += rendered_completion_lines;
+		if (rows > (int)maxrows) {
+			maxrows = rows;
+		}
+		Linenoise::Log("auto-complete lines %d\n", int(rendered_completion_lines));
 	} else {
 		rendered_completion_lines = 0;
 	}
 
-	Linenoise::Log("render %d rows (old rows %d)", rows, old_rows);
+	Linenoise::Log("render %d rows (old rows %d)\n", rows, old_rows);
 
 	/* Move cursor to right position. */
-	Linenoise::Log("new_cursor_row %d", new_cursor_row);
-	Linenoise::Log("new_cursor_x %d", new_cursor_x);
-	Linenoise::Log("len %d", len);
-	Linenoise::Log("old_cursor_rows %d", old_cursor_rows);
-	Linenoise::Log("pos %d", pos);
-	Linenoise::Log("max cols %d", ws.ws_col);
+	Linenoise::Log("new_cursor_row %d\n", new_cursor_row);
+	Linenoise::Log("new_cursor_x %d\n", new_cursor_x);
+	Linenoise::Log("len %d\n", len);
+	Linenoise::Log("old_cursor_rows %d\n", old_cursor_rows);
+	Linenoise::Log("pos %d\n", pos);
+	Linenoise::Log("max cols %d\n", ws.ws_col);
+	Linenoise::Log("rows %d\n", int(rows));
+	Linenoise::Log("max rows %d\n", int(maxrows));
 
 	/* Go up till we reach the expected position. */
 	if (rows - new_cursor_row > 0) {
-		Linenoise::Log("go-up %d", rows - new_cursor_row);
+		Linenoise::Log("go-up %d\n", rows - new_cursor_row);
 		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
 		append_buffer.Append(seq);
 	}
 
 	/* Set column. */
 	col = new_cursor_x;
-	Linenoise::Log("set col %d", 1 + col);
+	Linenoise::Log("set col %d\n", 1 + col);
 	if (col) {
 		snprintf(seq, 64, "\r\x1b[%dC", col);
 	} else {
