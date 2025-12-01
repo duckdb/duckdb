@@ -5,7 +5,6 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "fmt/format.h"
 
 namespace duckdb {
 
