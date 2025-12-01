@@ -1363,8 +1363,10 @@ public:
 			out.Print(";\n");
 			return;
 		}
-		auto zStr = data[0].GetString();
-		auto z = (char *)zStr.data();
+		auto zStr = unique_ptr<char[]>(new char[data[0].GetSize() + 1]);
+		memcpy(zStr.get(), data[0].GetData(), data[0].GetSize());
+		zStr[data[0].GetSize()] = '\0';
+		auto z = zStr.get();
 		j = 0;
 		idx_t i;
 		for (i = 0; IsSpace(z[i]); i++) {

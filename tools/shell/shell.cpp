@@ -850,8 +850,8 @@ string ShellState::GetSchemaLine(const string &str, const string &tail) {
 }
 
 string ShellState::GetSchemaLineN(const string &str, idx_t n, const string &tail) {
-	if (str.size() < n) {
-		return GetSchemaLine(str.substr(n), tail);
+	if (str.size() > n) {
+		return GetSchemaLine(str.substr(0, n), tail);
 	}
 	return GetSchemaLine(str, tail);
 }

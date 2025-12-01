@@ -403,7 +403,7 @@ def test_schema_indent(shell):
         .statement(".schema -indent")
     )
     result = test.run()
-    result.check_stdout("CREATE TABLE test(")
+    result.check_stdout("CREATE TABLE test(\n")
 
 def test_tables(shell):
     test = (
