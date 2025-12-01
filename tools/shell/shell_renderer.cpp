@@ -1198,7 +1198,7 @@ public:
 			out.Print(":");
 			if (is_null[i]) {
 				out.Print("null");
-			} else if (types[i].IsNested()) {
+			} else if (types[i].IsNested() || types[i].IsJSONType()) {
 				// nested types have already been converted to the correct JSON format
 				out.Print(data[i]);
 			} else if (!RequiresQuotes(types[i])) {
@@ -1244,12 +1244,24 @@ public:
 		return result;
 	}
 
+	static bool RequiresJSONCast(const duckdb::LogicalType &type) {
+		if (type.IsNested()) {
+			// cast nested types to JSON to preserve structure
+			return true;
+		}
+		if (type.IsFloating()) {
+			// cast floating point numbers to JSON to correctly deal with inf / nan
+			return true;
+		}
+		return false;
+	}
+
 	unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk) override {
 		// convert all nested types to JSON directly
 		duckdb::DataChunk json_chunk;
 		vector<duckdb::LogicalType> all_json;
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-			if (!chunk.data[c].GetType().IsNested()) {
+			if (!RequiresJSONCast(chunk.data[c].GetType())) {
 				all_json.emplace_back(duckdb::LogicalType::VARCHAR);
 			} else {
 				all_json.emplace_back(duckdb::LogicalType::JSON());
