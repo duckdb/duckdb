@@ -225,6 +225,8 @@ string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTa
 //===--------------------------------------------------------------------===//
 // TransactionLogType
 //===--------------------------------------------------------------------===//
+constexpr LogLevel TransactionLogType::LEVEL;
+
 TransactionLogType::TransactionLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
 
