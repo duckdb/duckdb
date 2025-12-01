@@ -242,6 +242,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 }
 
+unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ExpressionExecutor &executor) {
+	//TODO:  perform an update on the newly written column, executing the default expression here
+	DataChunk dummy_chunk;
+	// executor.ExecuteExpression();
+
+}
+
 void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 	D_ASSERT(info.type == AlterType::ALTER_TABLE);
@@ -364,7 +371,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
-	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
+
+	Expression &default_value = *bound_defaults.back();
+	auto default_executor = make_uniq<ExpressionExecutor>(context);
+	default_executor->AddExpression(default_value);
+	info.default_executor = std::move(default_executor);
+
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, info.default_executor);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
