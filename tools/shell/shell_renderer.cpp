@@ -307,6 +307,9 @@ bool RenderingQueryResult::TryConvertChunk() {
 			auto &str_vec = varchar_chunk->data[c];
 			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
+				if (duckdb::FlatVector::IsNull(str_vec, r)) {
+					continue;
+				}
 				auto val = strings[r].GetData();
 				auto str_len = strings[r].GetSize();
 				if (!renderer.ShouldConvertValue(val, str_len)) {
@@ -1134,7 +1137,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			if (types[i].IsNumeric() || is_null[i]) {
+			if (types[i].IsNumeric() || is_null[i] || types[i].id() == duckdb::LogicalTypeId::BOOLEAN) {
 				out.Print(data[i]);
 			} else {
 				out.OutputQuotedString(data[i].GetString());
@@ -1161,6 +1164,20 @@ public:
 		out.Print("{");
 	}
 
+	bool RequiresQuotes(const duckdb::LogicalType &type) {
+		if (!type.IsNumeric()) {
+			return true;
+		}
+		switch (type.id()) {
+		case duckdb::LogicalTypeId::UBIGINT:
+		case duckdb::LogicalTypeId::HUGEINT:
+		case duckdb::LogicalTypeId::UHUGEINT:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		if (row.row_index > 0) {
 			if (json_array) {
@@ -1181,12 +1198,15 @@ public:
 			out.Print(":");
 			if (is_null[i]) {
 				out.Print("null");
-			} else if (types[i].id() == duckdb::LogicalTypeId::VARCHAR) {
-				// VARCHAR - need to escape here
-				out.Print(EscapeJSONString(data[i].GetString()));
-			} else {
-				// non-VARCHAR has already been converted to the correct JSON format
+			} else if (types[i].IsNested()) {
+				// nested types have already been converted to the correct JSON format
 				out.Print(data[i]);
+			} else if (!RequiresQuotes(types[i])) {
+				// for numeric types emit the data directly without quoting
+				out.Print(data[i]);
+			} else {
+				// not a nested type - escape here
+				out.Print(EscapeJSONString(data[i].GetString()));
 			}
 		}
 		out.Print("}");
@@ -1225,12 +1245,11 @@ public:
 	}
 
 	unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk) override {
-		// first convert everything to JSON
+		// convert all nested types to JSON directly
 		duckdb::DataChunk json_chunk;
 		vector<duckdb::LogicalType> all_json;
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-			if (chunk.data[c].GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
-				// avoid casting VARCHAR - otherwise we interpret it as JSON
+			if (!chunk.data[c].GetType().IsNested()) {
 				all_json.emplace_back(duckdb::LogicalType::VARCHAR);
 			} else {
 				all_json.emplace_back(duckdb::LogicalType::JSON());
