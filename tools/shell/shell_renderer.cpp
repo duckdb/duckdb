@@ -77,6 +77,10 @@ string ShellRenderer::NullValue() {
 	return state.nullValue;
 }
 
+string ShellRenderer::ConvertValue(const char *value, idx_t str_len) {
+	return string(value, str_len);
+}
+
 void ShellRenderer::Analyze(RenderingQueryResult &result) {
 }
 
@@ -262,10 +266,6 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-string ColumnRenderer::ConvertValue(const char *value, idx_t str_len) {
-	return string(value, str_len);
-}
-
 bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
@@ -288,6 +288,20 @@ bool RenderingQueryResult::TryConvertChunk() {
 		duckdb::VectorOperations::Cast(*state.conn->context, chunk->data[c], varchar_chunk->data[c], chunk->size());
 	}
 	varchar_chunk->SetCardinality(chunk->size());
+	if (renderer.HasConvertValue()) {
+		for (idx_t c = 0; c < result.ColumnCount(); c++) {
+			auto &str_vec = varchar_chunk->data[c];
+			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
+				auto val = strings[r].GetData();
+				auto str_len = strings[r].GetSize();
+				if (!renderer.ShouldConvertValue(val, str_len)) {
+					continue;
+				}
+				strings[r] = duckdb::StringVector::AddStringOrBlob(str_vec, renderer.ConvertValue(val, str_len));
+			}
+		}
+	}
 	loaded_row_count += chunk->size();
 	chunks.push_back(std::move(varchar_chunk));
 	return true;
@@ -372,12 +386,7 @@ void ColumnRenderer::RenderRow(PrintStream &out, ResultMetadata &result, RowData
 			out.Print(colSep);
 		}
 		TextAlignment alignment = right_align[c] ? TextAlignment::RIGHT : TextAlignment::LEFT;
-		if (HasConvertValue()) {
-			auto str = ConvertValue(row.data[c].GetData(), row.data[c].GetSize());
-			out.RenderAlignedValue(str, column_width[c], alignment);
-		} else {
-			out.RenderAlignedValue(row.data[c], column_width[c], alignment);
-		}
+		out.RenderAlignedValue(row.data[c], column_width[c], alignment);
 	}
 	out.Print(rowSep);
 }
@@ -461,6 +470,19 @@ public:
 	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
+	bool HasConvertValue() override {
+		return true;
+	}
+
+	bool ShouldConvertValue(const char *value, idx_t str_len) override {
+		for (idx_t i = 0; i < str_len; i++) {
+			if (value[i] == '|') {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	string ConvertValue(const char *value, idx_t str_len) override {
 		// when rendering for markdown we need to escape pipes
 		string result;
@@ -472,10 +494,6 @@ public:
 			result += c;
 		}
 		return result;
-	}
-
-	bool HasConvertValue() override {
-		return true;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
@@ -550,34 +568,30 @@ public:
 	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
+	bool HasConvertValue() override {
+		return true;
+	}
+
+	bool ShouldConvertValue(const char *value, idx_t str_len) override {
+		for (idx_t i = 0; i < str_len; i++) {
+			if (value[i] == '\n') {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	string ConvertValue(const char *value, idx_t str_len) override {
-		// for MODE_Box truncate large values
-		static constexpr idx_t MAX_SIZE = 80;
 		string result;
-		idx_t count = 0;
-		bool interrupted = false;
-		for (idx_t idx = 0; idx < str_len; idx++) {
-			auto c = value[idx];
+		for (idx_t i = 0; i < str_len; i++) {
+			auto c = value[i];
 			if (c == '\n') {
-				result += "\\";
-				result += "n";
+				result += "\\n";
 			} else {
 				result += c;
 			}
-			count++;
-			if (count >= MAX_SIZE && ShellState::IsCharacter(c)) {
-				interrupted = true;
-				break;
-			}
-		}
-		if (interrupted) {
-			result += "...";
 		}
 		return result;
-	}
-
-	bool HasConvertValue() override {
-		return true;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {

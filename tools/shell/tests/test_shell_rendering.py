@@ -59,3 +59,23 @@ def test_mode_insert_table(shell):
 
     result = test.run()
     result.check_stderr("TABLE argument can only be used with .mode insert")
+
+def test_mode_box_newline(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode box")
+        .statement("select '\n' c;")
+    )
+
+    result = test.run()
+    result.check_stdout("\\n")
+
+def test_mode_markdown_pipe(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode markdown")
+        .statement("select 'val || other_val' c;")
+    )
+
+    result = test.run()
+    result.check_stdout("\\|\\|")
