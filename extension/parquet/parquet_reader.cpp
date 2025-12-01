@@ -88,6 +88,19 @@ static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t
 	}
 }
 
+void GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
+	if (encryption_algorithm.__isset.AES_GCM_V1) {
+		if (!encryption_algorithm.AES_GCM_V1.aad_file_unique.empty()) {
+			throw InvalidInputException("File is encrypted but not compatible with DuckDB Parquet Encryption");
+		};
+	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		throw InvalidInputException("File is encrypted but AES_GCM_CTR_V1 is not supported");
+		// return encryption_algorithm.AES_GCM_CTR_V1.aad_file_unique;
+	} else {
+		throw InternalException("File is encrypted but no encryption algorithm is set");
+	}
+}
+
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
@@ -159,6 +172,10 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
+
+		// Check if the encrypted file is written by Arrow
+		GetFileAAD(crypto_metadata->encryption_algorithm);
+
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
