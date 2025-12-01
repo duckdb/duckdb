@@ -43,6 +43,7 @@ static const TestConfigOption test_config_options[] = {
     {"test_env", "The test variables",
      LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})),
      nullptr},
+    {"inherit_skip_tests", "Path of config to inherit 'skip_tests' from", LogicalType::VARCHAR},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -352,6 +353,20 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	auto json_values = json->Flatten();
 	for (auto &entry : json_values) {
 		ParseOption(entry.first, Value(entry.second));
+	}
+
+	auto inherit_entry = options.find("inherit_skip_tests");
+	if (inherit_entry != options.end()) {
+		auto path_value = inherit_entry->second;
+		D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
+		D_ASSERT(!path_value.IsNull());
+		auto cwd = TestGetCurrentDirectory();
+		auto path = TestJoinPath(cwd, path_value.ToString());
+		TestConfiguration inherit_config;
+		inherit_config.LoadConfig(path);
+
+		tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
+		                           inherit_config.tests_to_be_skipped.end());
 	}
 
 	// Convert to unordered_set<string> the list of tests to be skipped
