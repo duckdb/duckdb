@@ -193,7 +193,8 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 
 		idx_t current_row = replay_range.start;
 		while (current_row <= replay_range.end) {
-			// The next row index to start replaying from is in the next chunk of the ColumnDataCollection, fetch it.
+			// Scan the next DataChunk from the ColumnDataCollection buffer if the current row is on or after
+			// that chunk's starting row index.
 			if (current_row >= state.scan_state.next_row_index) {
 				if (!state.buffer->Scan(state.scan_state, state.current_chunk)) {
 					throw InternalException("Buffered index data exhausted during replay");
