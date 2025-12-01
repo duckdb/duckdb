@@ -54,7 +54,15 @@ void PrintStream::OutputQuotedIdentifier(const string &str) {
 }
 
 void PrintStream::OutputQuotedString(const string &str) {
-	Print(StringUtil::Format("%s", SQLString(str)));
+	string result = "'";
+	for (auto c : str) {
+		if (c == '\'') {
+			result += c;
+		}
+		result += c;
+	}
+	result += "'";
+	Print(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -132,8 +140,10 @@ public:
 			auto &vector = chunk.data[c];
 			if (duckdb::FlatVector::IsNull(vector, row_in_chunk)) {
 				row_data.data[c] = duckdb::string_t(result->renderer.NullValue());
+				row_data.is_null[c] = true;
 			} else {
 				row_data.data[c] = duckdb::FlatVector::GetData<duckdb::string_t>(chunk.data[c])[row_in_chunk];
+				row_data.is_null[c] = false;
 			}
 		}
 	}
@@ -1031,10 +1041,10 @@ public:
 			// non-printable - needs quote
 			return true;
 		}
-		if (c == '"') {
+		if (c == '"' || c == '\'') {
 			return true;
 		}
-		if (c >= 123) {
+		if (c >= 127) {
 			return true;
 		}
 		return false;
@@ -1160,6 +1170,7 @@ public:
 			out.Print("\n{");
 		}
 		auto &data = row.data;
+		auto &is_null = row.is_null;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
@@ -1168,7 +1179,9 @@ public:
 			}
 			out.Print(EscapeJSONString(col_names[i]));
 			out.Print(":");
-			if (result.types[i].id() == duckdb::LogicalTypeId::VARCHAR) {
+			if (is_null[i]) {
+				out.Print("null");
+			} else if (types[i].id() == duckdb::LogicalTypeId::VARCHAR) {
 				// VARCHAR - need to escape here
 				out.Print(EscapeJSONString(data[i].GetString()));
 			} else {
@@ -1279,27 +1292,19 @@ public:
 			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
 				out.OutputQuotedString(data[i].GetString());
 			} else {
-				out.OutputQuotedString(EscapeNewlines(data[i].GetString()));
+				out.Print(EscapeNewlines(data[i].GetString()));
 			}
 		}
 		out.Print(");\n");
 	}
 
 	string EscapeNewlines(const string &str) {
-		bool needs_quoting = false;
 		bool needs_concat = false;
 		for (auto c : str) {
-			if (c == '\n' || c == '\r') {
-				needs_quoting = true;
+			if (c == '\n' || c == '\r' || c == '\0') {
 				needs_concat = true;
 				break;
 			}
-			if (c == '\'') {
-				needs_quoting = true;
-			}
-		}
-		if (!needs_quoting) {
-			return str;
 		}
 		string res;
 		if (needs_concat) {
@@ -1311,12 +1316,19 @@ public:
 			switch (c) {
 			case '\n':
 			case '\r':
+			case '\0':
 				// newline - finish the current string literal and write the newline with a chr function
 				res += "', chr(";
-				if (c == '\n') {
+				switch (c) {
+				case '\n':
 					res += "10";
-				} else {
+					break;
+				case '\r':
 					res += "13";
+					break;
+				case '\0':
+					res += "0";
+					break;
 				}
 				res += "), '";
 				break;
