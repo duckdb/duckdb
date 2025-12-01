@@ -1509,25 +1509,33 @@ PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &tran
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(list_comp_children));
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformReplaceList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	return transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
+	    list_pr.Child<ListParseResult>(1));
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformReplaceEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
+	    list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceEntrySingle(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformReplaceEntrySingle(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto replace_entry = transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
+	auto replace_entry =
+	    transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> entry_map;
 	entry_map.insert(std::move(replace_entry));
 	return entry_map;
 }
 
-case_insensitive_map_t<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceEntryList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformReplaceEntryList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto entry_list = ExtractParseResultsFromList(extract_parens);
@@ -1539,7 +1547,8 @@ case_insensitive_map_t<unique_ptr<ParsedExpression>> PEGTransformerFactory::Tran
 	return entry_map;
 }
 
-pair<string, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto column_reference = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));

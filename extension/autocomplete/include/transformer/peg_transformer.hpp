@@ -682,11 +682,16 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 	static QualifiedColumnName TransformExcludeName(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntrySingle(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntryList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static pair<string, unique_ptr<ParsedExpression>> TransformReplaceEntry(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceEntrySingle(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformReplaceEntryList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<ParsedExpression>> TransformReplaceEntry(PEGTransformer &transformer,
+	                                                                        optional_ptr<ParseResult> parse_result);
 
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
