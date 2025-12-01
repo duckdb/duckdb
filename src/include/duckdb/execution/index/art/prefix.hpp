@@ -30,7 +30,7 @@ public:
 public:
 	Prefix() = delete;
 	Prefix(const ART &art, const Node ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
-	Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_p, const idx_t count);
+	Prefix(FixedSizeAllocator &allocator, const Node ptr_p, const idx_t count);
 
 	data_ptr_t data;
 	Node *ptr;
@@ -61,7 +61,7 @@ public:
 	//! Traverses and verifies the node and its subtree
 	static void Verify(ART &art, const Node &node);
 	//! Transform the child of the node.
-	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
+	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 	//! Returns the string representation of the node at indentation level.
 	static string ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate = false,
@@ -80,7 +80,7 @@ private:
 
 	Prefix Append(ART &art, const uint8_t byte);
 	void Append(ART &art, Node other);
-	Prefix TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator, uint8_t byte);
+	Prefix TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, uint8_t byte);
 
 private:
 	template <class F, class NODE>

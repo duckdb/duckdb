@@ -27,7 +27,7 @@ public:
 public:
 	PrefixHandle() = delete;
 	PrefixHandle(const ART &art, const Node node);
-	PrefixHandle(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node node, const uint8_t count);
+	PrefixHandle(FixedSizeAllocator &allocator, const Node node, const uint8_t count);
 	PrefixHandle(const PrefixHandle &) = delete;
 	PrefixHandle(PrefixHandle &&other) noexcept;
 	PrefixHandle &operator=(PrefixHandle &&other) noexcept;
@@ -37,13 +37,12 @@ public:
 
 public:
 	//! Create a new deprecated prefix node and return a handle to it.
-	static PrefixHandle NewDeprecated(unsafe_unique_ptr<FixedSizeAllocator> &allocator, Node &node);
+	static PrefixHandle NewDeprecated(FixedSizeAllocator &allocator, Node &node);
 
-	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
+	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 private:
-	PrefixHandle TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator,
-	                                         const uint8_t byte);
+	PrefixHandle TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte);
 
 private:
 	unique_ptr<SegmentHandle> segment_handle;

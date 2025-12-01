@@ -896,15 +896,17 @@ void ART::TransformToDeprecated() {
 	auto idx = Node::GetAllocatorIdx(NType::PREFIX);
 	auto &block_manager = (*allocators)[idx]->block_manager;
 	unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator;
+	TransformToDeprecatedState state;
 
 	if (prefix_count != Prefix::DEPRECATED_COUNT) {
 		auto prefix_size = NumericCast<idx_t>(Prefix::DEPRECATED_COUNT) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
 		deprecated_allocator = make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager);
+		state = TransformToDeprecatedState(*deprecated_allocator);
 	}
 
 	// Transform all leaves, and possibly the prefixes.
 	if (tree.HasMetadata()) {
-		Node::TransformToDeprecated(*this, tree, deprecated_allocator);
+		Node::TransformToDeprecated(*this, tree, state);
 	}
 
 	// Replace the prefix allocator with the deprecated allocator.

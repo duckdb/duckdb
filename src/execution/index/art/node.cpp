@@ -359,8 +359,7 @@ bool Node::IsAnyLeaf() const {
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
-void Node::TransformToDeprecated(ART &art, Node &node,
-                                 unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator) {
+void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
 	D_ASSERT(node.HasMetadata());
 
 	if (node.GetGateStatus() == GateStatus::GATE_SET) {
@@ -371,19 +370,19 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 	auto type = node.GetType();
 	switch (type) {
 	case NType::PREFIX:
-		return PrefixHandle::TransformToDeprecated(art, node, deprecated_prefix_allocator);
+		return PrefixHandle::TransformToDeprecated(art, node, state);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
 		return;
 	case NType::NODE_4:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), state);
 	case NType::NODE_16:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), state);
 	case NType::NODE_48:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), state);
 	case NType::NODE_256:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), state);
 	default:
 		throw InternalException("invalid node type for TransformToDeprecated: %d", type);
 	}

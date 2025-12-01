@@ -12,6 +12,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 
@@ -38,6 +39,36 @@ enum class GateStatus : uint8_t {
 class ART;
 class Prefix;
 class ARTKey;
+class FixedSizeAllocator;
+
+//! State for TransformToDeprecated operations.
+//! Makes it explicit whether transformation is needed and contains the deprecated allocator.
+struct TransformToDeprecatedState {
+	//! True if we need to create new nodes in deprecated format.
+	bool needs_transformation;
+	//! Allocator for creating deprecated nodes. Only valid when needs_transformation is true.
+	FixedSizeAllocator *allocator;
+
+	//! Constructor for when transformation is needed.
+	explicit TransformToDeprecatedState(FixedSizeAllocator &alloc) : needs_transformation(true), allocator(&alloc) {
+		D_ASSERT(allocator != nullptr);
+	}
+
+	//! Constructor for when transformation is not needed.
+	TransformToDeprecatedState() : needs_transformation(false), allocator(nullptr) {
+	}
+
+	//! Helper to check if allocator is available.
+	bool HasAllocator() const {
+		return needs_transformation && allocator != nullptr;
+	}
+
+	//! Get reference to allocator. Only valid when HasAllocator() is true.
+	FixedSizeAllocator &GetAllocator() const {
+		D_ASSERT(HasAllocator());
+		return *allocator;
+	}
+};
 
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
@@ -103,8 +134,7 @@ public:
 	static NType GetNodeType(const idx_t count);
 
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, Node &node,
-	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
+	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 	//! Returns the string representation of the node at indentation level.
 	string ToString(ART &art, idx_t indent_level, bool inside_gate = false, bool display_ascii = false) const;
@@ -155,9 +185,9 @@ public:
 private:
 	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
-	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+	                                          TransformToDeprecatedState &state) {
 		if (ptr) {
-			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, allocator); });
+			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, state); });
 		}
 	}
 };
