@@ -14,7 +14,7 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file
 		auto &logical_type = format_template.first;
 		best_format_candidates[logical_type].clear();
 	}
-	// Initialize max columns found to either 0 or however many were set
+	// Initialize max columns found to either 0, or however many were set
 	max_columns_found = set_columns.Size();
 	error_handler = make_shared_ptr<CSVErrorHandler>(options.ignore_errors.GetValue());
 	detection_error_handler = make_shared_ptr<CSVErrorHandler>(true);
