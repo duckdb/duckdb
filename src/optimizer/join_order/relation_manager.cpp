@@ -53,12 +53,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
-	bool is_unnest_or_get_with_unnest = op.type == LogicalOperatorType::LOGICAL_UNNEST;
+	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		auto &get = op.Cast<LogicalGet>();
-		if (get.function.name == "unnest") {
-			is_unnest_or_get_with_unnest = true;
-		}
+		get_all_child_bindings = !op.children.empty();
 	}
 	if (table_indexes.empty()) {
 		// relation represents a non-reorderable relation, most likely a join relation
@@ -71,9 +68,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
 		}
-	} else if (is_unnest_or_get_with_unnest) {
-		// logical unnest has a logical_unnest index, but other bindings can refer to
-		// columns that are not unnested.
+	} else if (get_all_child_bindings) {
+		// logical get has a logical_get index, but if a function is present other bindings can refer to
+		// columns that are not unnested, and from the child of the logical get.
 		auto bindings = op.GetColumnBindings();
 		for (auto &binding : bindings) {
 			relation_mapping[binding.table_index] = relation_id;
@@ -188,10 +185,10 @@ static void ModifyStatsIfLimit(optional_ptr<LogicalOperator> limit_op, RelationS
 	}
 }
 
-void RelationManager::AddUnnestRelation(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
-                                        optional_ptr<LogicalOperator> parent, RelationStats &child_stats,
-                                        optional_ptr<LogicalOperator> limit_op,
-                                        vector<reference<LogicalOperator>> &datasource_filters) {
+void RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op,
+                                              LogicalOperator &input_op, optional_ptr<LogicalOperator> parent,
+                                              RelationStats &child_stats, optional_ptr<LogicalOperator> limit_op,
+                                              vector<reference<LogicalOperator>> &datasource_filters) {
 	D_ASSERT(!op.children.empty());
 	auto child_optimizer = optimizer.CreateChildOptimizer();
 	op.children[0] = child_optimizer.Optimize(std::move(op.children[0]), &child_stats);
@@ -300,7 +297,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		// optimize children of unnest
 		RelationStats child_stats;
-		AddUnnestRelation(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
+		AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -358,9 +355,12 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_GET: {
 		// TODO: Get stats from a logical GET
 		auto &get = op->Cast<LogicalGet>();
-		if (get.function.name == "unnest" && !op->children.empty()) {
+		// this is a get that *most likely* has a function (like unnest or json_each).
+		// there are new bindings for output of the function, but child bindings also exist, and can
+		// be used in joins
+		if (!op->children.empty()) {
 			RelationStats child_stats;
-			AddUnnestRelation(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
+			AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
 			return true;
 		}
 		auto stats = RelationStatisticsHelper::ExtractGetStats(get, context);

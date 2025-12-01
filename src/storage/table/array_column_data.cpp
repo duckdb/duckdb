@@ -319,12 +319,13 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
+		stats.Merge(*validity_state->GetStatistics());
 		ArrayStats::SetChildStats(stats, child_state->GetStatistics());
 		return stats.ToUnique();
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		PersistentColumnData data(PhysicalType::ARRAY);
+		PersistentColumnData data(original_column.type);
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		data.child_columns.push_back(child_state->ToPersistentData());
 		return data;
@@ -354,7 +355,7 @@ bool ArrayColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData ArrayColumnData::Serialize() {
-	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity->Serialize());
 	persistent_data.child_columns.push_back(child_column->Serialize());
 	return persistent_data;

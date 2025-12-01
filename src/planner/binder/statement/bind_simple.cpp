@@ -81,7 +81,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (stmt.info->type == AlterType::ALTER_DATABASE) {
 		auto &properties = GetStatementProperties();
 		properties.return_type = StatementReturnType::NOTHING;
-		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context);
+		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context, DatabaseModificationType::ALTER_TABLE);
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}
@@ -114,7 +114,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	}
 	if (!entry->temporary) {
 		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context);
+		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
 	stmt.info->catalog = catalog.GetName();
 	stmt.info->schema = entry->ParentSchema().name;
