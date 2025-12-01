@@ -19,6 +19,13 @@ public:
 	TableInOutGlobalState() {
 	}
 
+	idx_t MaxThreads(idx_t source_max_threads) override {
+		if (!global_state) {
+			return source_max_threads;
+		}
+		return global_state->MaxThreads();
+	}
+
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
@@ -69,15 +76,6 @@ void PhysicalTableInOutFunction::SetOrdinality(DataChunk &chunk, const optional_
 		constexpr idx_t step = 1;
 		chunk.data[ordinality_column_idx.GetIndex()].Sequence(static_cast<int64_t>(ordinality_idx), step, ordinality);
 	}
-}
-
-bool PhysicalTableInOutFunction::ParallelOperator() const {
-	auto &gstate = op_state->Cast<TableInOutGlobalState>();
-	if (!gstate.global_state) {
-		return true;
-	}
-
-	return gstate.global_state->MaxThreads() > 1;
 }
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
