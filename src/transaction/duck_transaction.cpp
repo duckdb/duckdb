@@ -300,6 +300,7 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 		return;
 	}
 	bool require_write_lock = false;
+	require_write_lock = require_write_lock || type.InsertDataWithIndex();
 	require_write_lock = require_write_lock || type.DeleteData();
 	require_write_lock = require_write_lock || type.UpdateData();
 	require_write_lock = require_write_lock || type.AlterTable();
