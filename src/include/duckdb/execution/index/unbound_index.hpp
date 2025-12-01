@@ -18,17 +18,13 @@ class ColumnDataCollection;
 
 enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 
-inline idx_t GetReplayTypeIndex(BufferedIndexReplay type) {
-	return static_cast<idx_t>(type);
-}
-
 struct ReplayRange {
 	BufferedIndexReplay type;
 	// [start, end) - start is inclusive, end is exclusive for the range within the ColumnDataCollection
 	// buffer for operations to replay for this range.
 	idx_t start;
 	idx_t end;
-	explicit ReplayRange(BufferedIndexReplay replay_type, idx_t start_p, idx_t end_p)
+	explicit ReplayRange(const BufferedIndexReplay replay_type, const idx_t start_p, const idx_t end_p)
 	    : type(replay_type), start(start_p), end(end_p) {
 	}
 };
@@ -49,7 +45,7 @@ struct BufferedIndexReplays {
 
 	BufferedIndexReplays() = default;
 
-	unique_ptr<ColumnDataCollection> &GetBuffer(BufferedIndexReplay replay_type) {
+	unique_ptr<ColumnDataCollection> &GetBuffer(const BufferedIndexReplay replay_type) {
 		if (replay_type == BufferedIndexReplay::INSERT_ENTRY) {
 			return buffered_inserts;
 		}
