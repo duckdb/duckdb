@@ -146,18 +146,11 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		auto &rec = op.Cast<LogicalRecursiveCTE>();
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
-		for (auto &expr : rec.key_targets) {
-			VisitExpression(&expr);
-		}
-		for (auto &expr : rec.payload_aggregates) {
-			VisitExpression(&expr);
-		}
-		for (auto &expr : rec.payload_aggregate_dest_map) {
-			VisitExpression(&expr.second);
-		}
+
+		types.clear();
+		VisitOperatorExpressions(op);
 		types = op.types;
 		return;
 	}
