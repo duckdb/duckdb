@@ -405,11 +405,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			}
 		}
 	}
-	idx_t original_id_index = 0;
-	for (auto &col : filtered_original_ids) {
-		for (; original_id_index < original_ids.size(); original_id_index++) {
-			if (original_ids[original_id_index] == col) {
-				get.projection_ids.push_back(original_id_index);
+	for (auto col : filtered_original_ids) {
+		for (idx_t i = 0; i < original_ids.size(); i++) {
+			if (original_ids[i] == col) {
+				get.projection_ids.push_back(i);
 			}
 		}
 	}

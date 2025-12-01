@@ -13,6 +13,7 @@
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
@@ -172,6 +173,7 @@
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
@@ -998,6 +1000,26 @@ const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties
 template<>
 ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const char *value) {
 	return static_cast<ColumnDataScanProperties>(StringUtil::StringToEnum(GetColumnDataScanPropertiesValues(), 3, "ColumnDataScanProperties", value));
+}
+
+const StringUtil::EnumStringLiteral *GetColumnIndexTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ColumnIndexType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ColumnIndexType::DIRECT_READ), "DIRECT_READ" },
+		{ static_cast<uint32_t>(ColumnIndexType::OPTIONAL_PRUNE_HINT), "OPTIONAL_PRUNE_HINT" },
+		{ static_cast<uint32_t>(ColumnIndexType::PUSHDOWN_EXTRACT), "PUSHDOWN_EXTRACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value) {
+	return StringUtil::EnumToString(GetColumnIndexTypeValues(), 4, "ColumnIndexType", static_cast<uint32_t>(value));
+}
+
+template<>
+ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value) {
+	return static_cast<ColumnIndexType>(StringUtil::StringToEnum(GetColumnIndexTypeValues(), 4, "ColumnIndexType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentTypeValues() {
@@ -4438,6 +4460,25 @@ const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value) 
 template<>
 StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *value) {
 	return static_cast<StorageBlockPrefetch>(StringUtil::StringToEnum(GetStorageBlockPrefetchValues(), 4, "StorageBlockPrefetch", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStorageIndexTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StorageIndexType::DIRECT_READ), "DIRECT_READ" },
+		{ static_cast<uint32_t>(StorageIndexType::OPTIONAL_PRUNE_HINT), "OPTIONAL_PRUNE_HINT" },
+		{ static_cast<uint32_t>(StorageIndexType::PUSHDOWN_EXTRACT), "PUSHDOWN_EXTRACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value) {
+	return StringUtil::EnumToString(GetStorageIndexTypeValues(), 3, "StorageIndexType", static_cast<uint32_t>(value));
+}
+
+template<>
+StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value) {
+	return static_cast<StorageIndexType>(StringUtil::StringToEnum(GetStorageIndexTypeValues(), 3, "StorageIndexType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {
