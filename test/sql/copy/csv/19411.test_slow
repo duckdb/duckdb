@@ -18,6 +18,6 @@ query I nosort alltypes
 FROM read_csv('__TEST_DIR__/fails.csv');
 ----
 
-query I nosort
+query I nosort alltypes
 FROM read_csv('__TEST_DIR__/fails.csv', strict_mode = false);
 ----
