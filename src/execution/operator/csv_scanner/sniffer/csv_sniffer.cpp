@@ -193,7 +193,8 @@ SnifferResult CSVSniffer::SniffCSV(const bool force_match) {
 		buffer_manager->ResetBufferManager();
 	}
 	buffer_manager->sniffing = false;
-	if (best_candidate->error_handler->AnyErrors() && !options.ignore_errors.GetValue()) {
+	if (best_candidate->error_handler->AnyErrors() && !options.ignore_errors.GetValue() &&
+	    best_candidate->state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
 		best_candidate->error_handler->ErrorIfTypeExists(MAXIMUM_LINE_SIZE);
 	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
