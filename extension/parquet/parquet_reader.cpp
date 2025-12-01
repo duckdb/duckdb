@@ -30,6 +30,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -85,19 +86,6 @@ static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t
 	footer_len = Load<uint32_t>(buffer);
 	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_path);
-	}
-}
-
-void GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
-	if (encryption_algorithm.__isset.AES_GCM_V1) {
-		if (!encryption_algorithm.AES_GCM_V1.aad_file_unique.empty()) {
-			throw InvalidInputException("File is encrypted but not compatible with DuckDB Parquet Encryption");
-		};
-	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-		throw InvalidInputException("File is encrypted but AES_GCM_CTR_V1 is not supported");
-		// return encryption_algorithm.AES_GCM_CTR_V1.aad_file_unique;
-	} else {
-		throw InternalException("File is encrypted but no encryption algorithm is set");
 	}
 }
 
@@ -169,18 +157,33 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
-	if (footer_encrypted) {
-		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
-		crypto_metadata->read(file_proto.get());
+	auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 
-		// Check if the encrypted file is written by Arrow
-		GetFileAAD(crypto_metadata->encryption_algorithm);
+	if (footer_encrypted) {
+		crypto_metadata->read(file_proto.get());
 
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
 		}
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
+		// get the unique file ID
+		// for now we only support GCM
+		auto file_aad = crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique;
+		int8_t type_ordinal_bytes[1];
+		type_ordinal_bytes[0] = ParquetCrypto::Footer;
+
+		std::string type_ordinal_bytes_str(reinterpret_cast<char const *>(type_ordinal_bytes), 1);
+
+		// this is the AAD string for the footer
+		string result_aad = file_aad + type_ordinal_bytes_str;
+		bool is_arrow = false;
+
+		if (file_aad.size() == 0) {
+			// do not use aad (duckdb parquet encryption)
+			result_aad = "";
+		}
+
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util, result_aad);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -188,7 +191,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	                                                 footer_len);
+	                                                 std::move(crypto_metadata), footer_len);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
@@ -932,20 +935,116 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData 
 	return ReadStatisticsInternal(*union_data.metadata->metadata, *union_data.root_schema, union_data.options,
 	                              file_col_idx);
 }
+// Helper: store 16-bit value as little-endian into dest[0..1]
+inline void store_le16(uint8_t *dest, uint16_t v) {
+	dest[0] = static_cast<uint8_t>(v & 0xFF);
+	dest[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+}
 
-uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+string make_aad(const std::string &file_aad, uint8_t module_type, uint16_t row_group_ordinal, uint16_t column_ordinal,
+                uint16_t page_ordinal) {
+	static_assert(sizeof(uint16_t) == 2, "Requires 16-bit uint16_t");
+
+	uint32_t total_size = 1;
+
+	std::array<uint8_t, 7> ordinal_bytes {};
+	ordinal_bytes.fill(0);
+	ordinal_bytes[0] = module_type;
+
+	if (module_type != ParquetCrypto::Footer) {
+		store_le16(&ordinal_bytes[1], row_group_ordinal);
+		store_le16(&ordinal_bytes[3], column_ordinal);
+		total_size += sizeof(uint16_t) * 2;
+	}
+
+	if (page_ordinal != -1 && page_ordinal != 65535) {
+		store_le16(&ordinal_bytes[5], page_ordinal);
+		total_size += sizeof(uint16_t);
+	}
+
+	// append raw bytes (std::string can hold embedded NULs)
+	return file_aad + std::string(reinterpret_cast<const char *>(ordinal_bytes.data()), total_size);
+}
+
+string ParquetReader::GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
+	if (encryption_algorithm.__isset.AES_GCM_V1) {
+		return encryption_algorithm.AES_GCM_V1.aad_file_unique;
+	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		return encryption_algorithm.AES_GCM_CTR_V1.aad_file_unique;
+	} else {
+		throw InternalException("File is encrypted but no encryption algorithm is set");
+	}
+}
+
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t col_idx, int8_t module,
+                             uint16_t page_ordinal) {
 	if (parquet_options.encryption_config) {
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util);
+		// rg ordinal = state.group_idx_list[state.current_group]
+		// column ordinal:
+		// aad = unique suffix + data page header id + 0 + 0 + 0
+		auto file_aad = GetFileAAD(metadata->crypto_metadata->encryption_algorithm);
+
+		// type_id (1b) + row group ordinal (2b) + col ordinal (2b) + page ordinal (2b)
+		// how to get the rowgroupordinal?
+		// uint16_t row_group_ordinal = state.group_idx_list[state.current_group];
+		uint16_t row_group_ordinal = 0;
+
+		auto result_aad = make_aad(file_aad, module, row_group_ordinal, col_idx, page_ordinal);
+		if (file_aad.size() == 0) {
+			// do not use aad (duckdb parquet encryption)
+			result_aad = "";
+		}
+		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
+		                           result_aad);
 	} else {
 		return object.read(&iprot);
 	}
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-                                 const uint32_t buffer_size) {
+                                 const uint32_t buffer_size, uint16_t col_idx, int8_t module, uint16_t page_ordinal) {
 	if (parquet_options.encryption_config) {
+		// data is encrypted, so the buffer size is a bit less
+		// does compressed data work different at arrow?
+		// I think it does?
+		// I think they include the nonce + tag + length?
+		// Maybe just remove the buffer_size, and just get the transport stuff that is left?
+		auto file_aad = GetFileAAD(metadata->crypto_metadata->encryption_algorithm);
+
+		// type_id (1b) + row group ordinal (2b) + col ordinal (2b) + page ordinal (2b)
+		uint32_t total_size = 5;
+
+		uint16_t row_group_ordinal = 0;
+		uint16_t column_ordinal = col_idx;
+
+		int8_t ordinal_bytes[7];
+		ordinal_bytes[0] = module;
+
+		// Little-endian encoding
+		ordinal_bytes[1] = static_cast<int8_t>(row_group_ordinal & 0xFF);
+		ordinal_bytes[2] = static_cast<int8_t>((row_group_ordinal >> 8) & 0xFF);
+		ordinal_bytes[3] = static_cast<int8_t>(column_ordinal & 0xFF);
+		ordinal_bytes[4] = static_cast<int8_t>((column_ordinal >> 8) & 0xFF);
+
+		if (page_ordinal != -1 && page_ordinal != 65535) {
+			ordinal_bytes[5] = static_cast<int8_t>(page_ordinal & 0xFF);
+			ordinal_bytes[6] = static_cast<int8_t>((page_ordinal >> 8) & 0xFF);
+			total_size += sizeof(uint16_t);
+		}
+
+		// ✅ Construct string from all bytes
+		std::string type_ordinal_bytes_str(reinterpret_cast<const char *>(ordinal_bytes), total_size);
+
+		// this is the AAD string for the footer
+		std::string result_aad = file_aad + type_ordinal_bytes_str;
+
+		if (file_aad.size() == 0) {
+			// do not use aad (duckdb parquet encryption)
+			result_aad = "";
+		}
+
 		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
-		                               *encryption_util);
+		                               *encryption_util, result_aad);
 	} else {
 		return iprot.getTransport()->read(buffer, buffer_size);
 	}
@@ -1292,6 +1391,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
 					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+					// TODO store somewhere global
+					auto row_group_ordinal = GetGroup(state).ordinal;
 
 					bool has_filter = false;
 					if (filters) {

@@ -85,16 +85,22 @@ public:
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
-	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p);
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p,
+	                     string aad = "");
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
-	                         const EncryptionUtil &encryption_util_p);
+	                         const EncryptionUtil &encryption_util_p, string aad = "");
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
 	                          const string &key, const EncryptionUtil &encryption_util_p);
+	// Create Additional Authenticated Data for each module
+	uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal = -1,
+	                         int16_t column_ordinal = -1, int16_t page_ordinal = -1);
+	// Create Additional Authenticated Data for the footer
+	uint8_t *CreateFooterAad(const std::string &aad_prefix_bytes);
 
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);

@@ -27,7 +27,7 @@ public:
 
 class EncryptionState {
 public:
-	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len);
+	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len, string aad = "");
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
@@ -42,6 +42,7 @@ public:
 protected:
 	EncryptionTypes::CipherType cipher;
 	idx_t key_len;
+	string additional_authenticated_data;
 };
 
 class EncryptionUtil {
@@ -49,9 +50,9 @@ public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
 public:
-	virtual shared_ptr<EncryptionState> CreateEncryptionState(EncryptionTypes::CipherType cipher_p,
-	                                                          idx_t key_len = 0) const {
-		return make_shared_ptr<EncryptionState>(cipher_p, key_len);
+	virtual shared_ptr<EncryptionState> CreateEncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len = 0,
+	                                                          string aad = "") const {
+		return make_shared_ptr<EncryptionState>(cipher_p, key_len, aad);
 	}
 
 	virtual ~EncryptionUtil() {

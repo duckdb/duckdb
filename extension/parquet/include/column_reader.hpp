@@ -93,6 +93,9 @@ public:
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
 	}
+	uint16_t RowGroupOrdinal() const {
+		return row_group_ordinal;
+	}
 
 	virtual idx_t FileOffset() const;
 	virtual uint64_t TotalCompressedSize();
@@ -291,10 +294,11 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state);
-	void PreparePage(PageHeader &page_hdr);
+	void PrepareRead(int8_t page_ordinal, optional_ptr<const TableFilter> filter,
+	                 optional_ptr<TableFilterState> filter_state);
+	void PreparePage(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1);
 	void PrepareDataPage(PageHeader &page_hdr);
-	void PreparePageV2(PageHeader &page_hdr);
+	void PreparePageV2(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
@@ -303,6 +307,8 @@ private:
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
+	idx_t column_ordinal;
+	uint16_t row_group_ordinal;
 
 	shared_ptr<ResizeableBuffer> block;
 

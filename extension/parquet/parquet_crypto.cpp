@@ -171,11 +171,11 @@ private:
 //! Decryption wrapper for a transport protocol
 class DecryptionTransport : public TTransport {
 public:
-	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p, string aad = "")
 	    : prot(prot_p), trans(*prot.getTransport()),
 	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
 	      read_buffer_offset(0) {
-		Initialize(key);
+		Initialize(key, aad);
 	}
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
@@ -223,8 +223,16 @@ public:
 		return result;
 	}
 
+	idx_t GetTotalBytes() {
+		return total_bytes;
+	}
+
+	idx_t GetRemainingTransport() {
+		return transport_remaining;
+	}
+
 private:
-	void Initialize(const string &key) {
+	void Initialize(const string &key, string aad) {
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
 		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
@@ -234,7 +242,7 @@ private:
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
 		// check whether context is initialized
 		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-		                          key.size());
+		                          key.size(), reinterpret_cast<const_data_ptr_t>(aad.data()), aad.size());
 	}
 
 	void ReadBlock(uint8_t *buf) {
@@ -297,10 +305,10 @@ private:
 };
 
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
-                             const EncryptionUtil &encryption_util_p) {
+                             const EncryptionUtil &encryption_util_p, string aad) {
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot =
-	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	auto dprot = tproto_factory.getProtocol(
+	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
@@ -331,14 +339,17 @@ uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const strin
 }
 
 uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size,
-                                 const string &key, const EncryptionUtil &encryption_util_p) {
+                                 const string &key, const EncryptionUtil &encryption_util_p, string aad) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot =
-	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	auto dprot = tproto_factory.getProtocol(
+	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
+	// auto buf_size = dtrans.GetRemainingTransport() - ParquetCrypto::TAG_BYTES;
+	// dtrans.read(buffer, buffer_size);
+	// maybe here is a problem
 	dtrans.read(buffer, buffer_size);
 
 	// Verify AES tag and read length
