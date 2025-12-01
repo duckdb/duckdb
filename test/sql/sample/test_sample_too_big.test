@@ -17,3 +17,17 @@ statement error
 SELECT * FROM t1 WHERE a IN (SELECT * FROM t1 TABLESAMPLE RESERVOIR(1222222220022220));
 ----
 <REGEX>:.*Sample rows.*out of range.*
+
+statement error
+SELECT * FROM t1 WHERE a IN (SELECT * FROM t1 TABLESAMPLE RESERVOIR(1000000001));
+----
+<REGEX>:.*Sample rows.*out of range.*
+
+query I
+SELECT * FROM t1 WHERE a IN (SELECT * FROM t1 TABLESAMPLE RESERVOIR(1000000000)) order by all
+----
+1
+2
+3
+3
+5
