@@ -24,8 +24,6 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
-#include "duckdb/transaction/wal_write_state.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -193,19 +191,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 	case AlterTableType::ADD_COLUMN: {
 		auto &add_info = table_info.Cast<AddColumnInfo>();
-		auto new_entry = AddColumn(context, add_info);
-		auto &new_table_entry = new_entry->Cast<DuckTableEntry>();
-		auto &new_data_table = new_table_entry.GetStorage();
-		auto &attached_database = new_data_table.GetAttached();
-		auto wal_p = StorageManager::Get(attached_database).GetWAL();
-		if (!wal_p) {
-			return new_entry;
-		}
-		auto &wal = *wal_p;
-		//! TODO: scan all the data from the new column we just created into a DataChunk (or multiple ?)
-		//! then perform the WriteUpdate with this new data
-		//! wal.WriteUpdate(...);
-		return new_entry;
+		return AddColumn(context, add_info);
 	}
 	case AlterTableType::ADD_FIELD: {
 		auto &add_info = table_info.Cast<AddFieldInfo>();
@@ -372,7 +358,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	binder->BindLogicalType(info.new_column.TypeMutable(), &catalog, schema.name);
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
-	auto col = info.new_column.Copy(); // duplicate column to have a replica, we don't want to mess w the existing data
+	auto col = info.new_column.Copy();
 
 	create_info->columns.AddColumn(std::move(col));
 
