@@ -69,6 +69,7 @@ public:
 
 	//! Gets the size of the WAL, or zero, if there is no WAL.
 	idx_t GetWALSize();
+	bool HasWAL() const;
 	void AddWALSize(idx_t size);
 	void SetWALSize(idx_t size);
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.

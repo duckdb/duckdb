@@ -128,6 +128,13 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	return wal.get();
 }
 
+bool StorageManager::HasWAL() const {
+	if (InMemory() || read_only || !load_complete) {
+		return false;
+	}
+	return true;
+}
+
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
 	lock_guard<mutex> guard(wal_lock);
 	// while holding the WAL lock - get the last committed transaction from the transaction manager

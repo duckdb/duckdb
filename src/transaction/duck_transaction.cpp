@@ -201,8 +201,7 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	auto log = storage_manager.GetWAL();
-	if (!log) {
+	if (!storage_manager.HasWAL()) {
 		return false;
 	}
 	return true;
