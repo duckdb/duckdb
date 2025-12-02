@@ -56,11 +56,11 @@ bool RowVersionManager::ShouldCheckpointRowGroup(transaction_t checkpoint_id, id
 		if (total_count != read_count) {
 			string chunk_info_text;
 			for (idx_t i = 0; i <= vector_idx; i++) {
-				auto chunk_info = GetChunkInfo(i);
+				auto current_info = GetChunkInfo(i);
 				chunk_info_text += "\n";
 				chunk_info_text += to_string(i) + ": ";
-				if (chunk_info) {
-					chunk_info_text += chunk_info->ToString(max_count);
+				if (current_info) {
+					chunk_info_text += current_info->ToString(max_count);
 				} else {
 					chunk_info_text += "(empty)";
 				}

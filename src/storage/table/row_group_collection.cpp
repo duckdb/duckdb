@@ -1106,6 +1106,12 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
+		auto should_checkpoint = row_group.ShouldCheckpointRowGroup(options.transaction_id);
+		if (!should_checkpoint) {
+			// cannot checkpoint if there are any rows that should not be written as part of this checkpoint
+			state.can_vacuum_deletes = false;
+			return;
+		}
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (row_group_count == 0) {
 			// empty row group - we can drop it entirely
