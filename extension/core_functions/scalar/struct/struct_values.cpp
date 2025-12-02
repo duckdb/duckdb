@@ -53,9 +53,9 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 // Ensure input is a STRUCT, set return type to an unnamed STRUCT with same child types
 static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("struct_values() expects a STRUCT argument");
-	}
+	// Since the type of the argument we declared of in `GetFunction` doesn't contain the inner STRUCT type,
+	// we should take it from the arguments
+	bound_function.arguments[0] = arguments[0]->return_type;
 
 	// Build unnamed children list using only types, with empty names
 	child_list_t<LogicalType> unnamed_children;
@@ -69,7 +69,7 @@ static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarF
 }
 
 ScalarFunction StructValuesFun::GetFunction() {
-	ScalarFunction func({LogicalType::ANY}, LogicalTypeId::STRUCT, StructValuesFunction, StructValuesBind);
+	ScalarFunction func({LogicalTypeId::STRUCT}, LogicalTypeId::STRUCT, StructValuesFunction, StructValuesBind);
 	return func;
 }
 
