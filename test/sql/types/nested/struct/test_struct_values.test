@@ -79,9 +79,9 @@ select struct_values((10, 'hello'));
 statement error
 select struct_values(42);
 ----
-struct_values() expects a STRUCT argument
+Binder Error: No function matches the given name and argument types 'struct_values(INTEGER_LITERAL)'. You might need to add explicit type casts.
 
 statement error
 select struct_values(['a', 'b']);
 ----
-struct_values() expects a STRUCT argument
+Binder Error: No function matches the given name and argument types 'struct_values(VARCHAR[])'. You might need to add explicit type casts.
