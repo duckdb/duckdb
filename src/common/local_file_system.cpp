@@ -1304,7 +1304,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	auto source_unicode = NormalizePathAndConvertToUnicode(source);
 	auto target_unicode = NormalizePathAndConvertToUnicode(target);
 
-	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
+	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), MOVEFILE_REPLACE_EXISTING)) {
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
