@@ -29,8 +29,9 @@ constexpr uint64_t WAL_VERSION_NUMBER = 2;
 constexpr uint64_t WAL_ENCRYPTED_VERSION_NUMBER = 3;
 
 WriteAheadLog::WriteAheadLog(StorageManager &storage_manager, const string &wal_path, idx_t wal_size,
-                             WALInitState init_state)
-    : storage_manager(storage_manager), wal_path(wal_path), init_state(init_state) {
+                             WALInitState init_state, optional_idx checkpoint_iteration)
+    : storage_manager(storage_manager), wal_path(wal_path), init_state(init_state),
+      checkpoint_iteration(checkpoint_iteration) {
 	storage_manager.SetWALSize(wal_size);
 }
 
@@ -250,8 +251,13 @@ void WriteAheadLog::WriteHeader() {
 		auto db_identifier = single_file_block_manager.GetDBIdentifier();
 		serializer.WriteList(102, "db_identifier", MainHeader::DB_IDENTIFIER_LEN,
 		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(db_identifier[i]); });
-		auto checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
-		serializer.WriteProperty(103, "checkpoint_iteration", checkpoint_iteration);
+		idx_t current_checkpoint_iteration;
+		if (checkpoint_iteration.IsValid()) {
+			current_checkpoint_iteration = checkpoint_iteration.GetIndex();
+		} else {
+			current_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration();
+		}
+		serializer.WriteProperty(103, "checkpoint_iteration", current_checkpoint_iteration);
 	}
 
 	serializer.End();

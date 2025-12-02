@@ -49,7 +49,8 @@ class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
 	explicit WriteAheadLog(StorageManager &storage_manager, const string &wal_path, idx_t wal_size = 0ULL,
-	                       WALInitState state = WALInitState::NO_WAL);
+	                       WALInitState state = WALInitState::NO_WAL,
+	                       optional_idx checkpoint_iteration = optional_idx());
 	virtual ~WriteAheadLog();
 
 public:
@@ -133,6 +134,7 @@ protected:
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
 	atomic<WALInitState> init_state;
+	optional_idx checkpoint_iteration;
 };
 
 } // namespace duckdb

@@ -166,7 +166,13 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 
 	// replace the WAL with a new WAL (.checkpoint.wal) that transactions can write to while the checkpoint is happening
 	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
-	wal = make_uniq<WriteAheadLog>(*this, GetCheckpointWALPath());
+	// the checkpoint WAL belongs to the NEXT checkpoint - when we are done we will overwrite the current WAL with it
+	// as such override the checkpoint iteration number to the next one
+	auto &single_file_block_manager = GetBlockManager().Cast<SingleFileBlockManager>();
+	auto next_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration() + 1;
+
+	wal =
+	    make_uniq<WriteAheadLog>(*this, GetCheckpointWALPath(), 0ULL, WALInitState::NO_WAL, next_checkpoint_iteration);
 	return true;
 }
 
