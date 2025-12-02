@@ -842,9 +842,15 @@ public:
 
 		left_blocks = left_table.BlockCount();
 		left_ranges = (left_blocks + left_per_thread - 1) / left_per_thread;
+		if (left_table.found_match) {
+			left_outers = left_blocks;
+		}
 
 		right_blocks = right_table.BlockCount();
 		right_ranges = (right_blocks + right_per_thread - 1) / right_per_thread;
+		if (right_table.found_match) {
+			right_outers = right_blocks;
+		}
 
 		pair_count = left_ranges * right_ranges;
 	}
@@ -1215,22 +1221,6 @@ void IEJoinGlobalSourceState::Initialize() {
 	auto guard = Lock();
 	if (stage != IEJoinSourceStage::INIT) {
 		return;
-	}
-
-	// Compute the starting row for each block
-	auto &left_table = *gsink.tables[0];
-	const auto left_blocks = left_table.BlockCount();
-
-	auto &right_table = *gsink.tables[1];
-	const auto right_blocks = right_table.BlockCount();
-
-	// Outer join block counts
-	if (left_table.found_match) {
-		left_outers = left_blocks;
-	}
-
-	if (right_table.found_match) {
-		right_outers = right_blocks;
 	}
 
 	//	INIT
