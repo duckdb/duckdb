@@ -75,6 +75,30 @@ select struct_values((10, 'hello'));
 ----
 (10, hello)
 
+# struct with a null value field
+query I
+select struct_values({a: NULL, b: 'not null'});
+----
+(NULL, not null)
+
+# struct with a nested struct field
+query I
+select struct_values({a: 1, b: {x: 'nested', y: 2}});
+----
+(1, {'x': nested, 'y': 2})
+
+# nested struct_value calls
+query I
+select struct_values(struct_values({a: 1, b: {x: 'deep', y: 3}}));
+----
+(1, {'x': deep, 'y': 3})
+
+# nested struct_values_calls inside of a struct
+query I
+select struct_values({a: struct_values({x: 7, y: 'inside'}), b: 'outer'});
+----
+((7, inside), outer)
+
 # prepared parameter as input
 statement ok
 PREPARE stmt as SELECT struct_values(?);
