@@ -57,10 +57,10 @@ CREATE TABLE filtered_struct_values (
 
 statement ok
 INSERT INTO filtered_struct_values VALUES
-    (ROW(1, 'x')::STRUCT(a INT, b VARCHAR), 0),
-    (ROW(2, 'y')::STRUCT(a INT, b VARCHAR), 1),
-    (NULL::STRUCT(a INT, b VARCHAR), 3),
-    (ROW(4, 'q')::STRUCT(a INT, b VARCHAR), 2);
+    ((1, 'x'), 0),
+    ((2, 'y'), 1),
+    (NULL, 3),
+    ((4, 'q'), 2);
 
 # Expecting to get the results respectively to the filtration & ordering
 query I
@@ -71,7 +71,7 @@ NULL
 
 # Unnamed struct as input is allowed and should return the same row
 query I
-select struct_values(ROW(10, 'hello'));
+select struct_values((10, 'hello'));
 ----
 (10, hello)
 
