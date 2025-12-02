@@ -14,11 +14,17 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &result_children = StructVector::GetEntries(result);
 	D_ASSERT(result_children.size() == input_children.size());
 
-	// We would use result.Reference(input) here, but that function asserts that the logical types are the same
 	// UnnamedStruct vector and Struct vector are actually the same underneath, so we can just reference the children
-	for (idx_t i = 0; i < input_children.size(); i++) {
-		result_children[i]->Reference(*input_children[i]);
+	if (StructType::IsUnnamed(input.GetType())) {
+		result.Reference(input);
+	} else {
+		// We would use result.Reference(input) also for this case,
+		// but that function asserts that the logical types are the same
+		for (idx_t i = 0; i < input_children.size(); i++) {
+			result_children[i]->Reference(*input_children[i]);
+		}
 	}
+
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
