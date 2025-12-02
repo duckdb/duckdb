@@ -335,7 +335,11 @@ bool BaseTokenizer::TokenizeInput() {
 			// keyword - check if this is still a keyword
 			if (!CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
-				PushToken(last_pos, i, TokenType::KEYWORD);
+				if (KeywordHelper::IsKeyword(sql.substr(last_pos, i - last_pos))) {
+					PushToken(last_pos, i, TokenType::KEYWORD);
+				} else {
+					PushToken(last_pos, i, TokenType::IDENTIFIER);
+				}
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -359,7 +363,7 @@ bool BaseTokenizer::TokenizeInput() {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
+					PushToken(last_pos, i + 1, TokenType::IDENTIFIER);
 					last_pos = i + 1;
 					state = TokenizeState::STANDARD;
 				}

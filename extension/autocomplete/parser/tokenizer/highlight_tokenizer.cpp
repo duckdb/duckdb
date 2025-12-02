@@ -6,6 +6,7 @@ HighlightTokenizer::HighlightTokenizer(const string &sql) : BaseTokenizer(sql, t
 }
 
 void HighlightTokenizer::OnStatementEnd(idx_t pos) {
+	tokens.emplace_back(";", pos, TokenType::IDENTIFIER);
 }
 void HighlightTokenizer::OnLastToken(TokenType type, string last_word, idx_t last_pos) {
 	tokens.emplace_back(std::move(last_word), last_pos, TokenType::IDENTIFIER);
