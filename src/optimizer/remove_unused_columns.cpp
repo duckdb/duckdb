@@ -306,16 +306,6 @@ static bool SupportsPushdownExtract(LogicalGet &get, idx_t column_idx) {
 	return get.function.supports_pushdown_extract(*get.bind_data, column_idx);
 }
 
-// void RemoveUnusedColumns::AdjustFilters(vector<unique_ptr<Expression>> &expressions, map<idx_t,
-// unique_ptr<TableFilter>> &filters) { 	D_ASSERT(expressions.size() == filters.size()); 	auto expr_it =
-//expressions.begin(); 	auto filter_it = filters.begin(); 	for (idx_t i = 0; i < expressions.size(); i++) { 		auto &expr =
-//**expr_it; 		if (expr.)
-
-//		expr_it++;
-//		filter_it++;
-//	}
-//}
-
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	if (everything_referenced) {
 		return;
@@ -340,6 +330,9 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	vector<unique_ptr<Expression>> filter_expressions;
 	// for every table filter, push a column binding into the column references map to prevent the column from
 	// being projected out
+	//! FIXME: pushdown extract is disabled when a struct field is referenced by a filter,
+	//! because that would involve rewriting the existing TableFilterSet
+	SetMode(BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT);
 	for (auto &filter : get.table_filters.filters) {
 		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
 		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
@@ -377,7 +370,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		//! Only a subset of the struct's fields are referenced
 		D_ASSERT(entry->second.child_columns.size() == entry->second.bindings.size());
 		auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
-		if (!SupportsPushdownExtract(get, logical_column_index)) {
+		if (!entry->second.supports_pushdown_extract || !SupportsPushdownExtract(get, logical_column_index)) {
 			//! Scan doesn't support pushdown the extract down to the storage
 			//! Only add the child indexes to function as a prune hint that the other indices aren't referenced by the
 			//! query.
@@ -448,6 +441,14 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	}
 }
 
+void BaseColumnPruner::SetMode(BaseColumnPrunerMode mode) {
+	this->mode = mode;
+}
+
+BaseColumnPrunerMode BaseColumnPruner::GetMode() const {
+	return mode;
+}
+
 bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
                                                     vector<idx_t> &indexes) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
@@ -505,7 +506,7 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	return true;
 }
 
-void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
+void BaseColumnPruner::MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
 	if (current_child_columns.empty()) {
 		// there's already a reference to the full column - we can't extract only a subfield
 		// skip struct projection pushdown
@@ -540,13 +541,17 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 		ReferencedColumn column;
 		column.bindings.push_back(col);
 		column.child_columns.push_back(std::move(child_column));
-		column_references.insert(make_pair(col.binding, std::move(column)));
+		entry = column_references.emplace(make_pair(col.binding, std::move(column))).first;
 	} else {
 		// column reference already exists - check add the binding
 		auto &column = entry->second;
 		column.bindings.push_back(col);
 
 		MergeChildColumns(column.child_columns, child_column);
+	}
+	if (mode == BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT) {
+		//! Any child referenced after this mode is set disables PUSHDOWN_EXTRACT
+		entry->second.supports_pushdown_extract = false;
 	}
 }
 

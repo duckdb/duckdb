@@ -31,18 +31,23 @@ public:
 	optional_ptr<unique_ptr<Expression>> expr;
 };
 
-struct ReferencedColumn {
+class ReferencedColumn {
+public:
 	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
 	vector<reference<BoundColumnRefExpression>> bindings;
 	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
+	//! Whether we can create a pushdown extract for the children of this column (if any)
+	bool supports_pushdown_extract = true;
+};
+
+enum class BaseColumnPrunerMode : uint8_t {
+	DEFAULT,
+	//! Any child reference disables PUSHDOWN_EXTRACT for the parent column
+	DISABLE_PUSHDOWN_EXTRACT
 };
 
 class BaseColumnPruner : public LogicalOperatorVisitor {
-protected:
-	//! The map of column references
-	column_binding_map_t<ReferencedColumn> column_references;
-
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
@@ -65,6 +70,19 @@ protected:
 
 	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes);
+	void SetMode(BaseColumnPrunerMode mode);
+	BaseColumnPrunerMode GetMode() const;
+
+private:
+	void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column);
+
+protected:
+	//! The map of column references
+	column_binding_map_t<ReferencedColumn> column_references;
+
+private:
+	//! The current mode of the pruner, enables/disables certain behaviors
+	BaseColumnPrunerMode mode = BaseColumnPrunerMode::DEFAULT;
 };
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
@@ -87,6 +105,5 @@ private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get);
-	void AdjustFilters(vector<unique_ptr<Expression>> &expressions, map<idx_t, unique_ptr<TableFilter>> &filters);
 };
 } // namespace duckdb
