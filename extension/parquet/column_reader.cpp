@@ -234,79 +234,65 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
-void ColumnReader::PreparePageDecryption(uint8_t &module, uint16_t &page_ordinal) {
-	// NOTE: there is at most one dict, index page and bloom filter page per col chunk
-	if (chunk->meta_data.__isset.dictionary_page_offset) {
-		if (page_ordinal == 0) {
-			// set page_ordinal to -1, because it is not used for the first dict header
-			module = ParquetCrypto::DictionaryPageHeader;
-			page_ordinal = -1;
-		} else {
-			page_ordinal -= 1;
+uint8_t ColumnReader::GetModule(uint8_t module) const {
+	// FIXME: Add missing ParquetCrypto Modules
+	switch (module) {
+	case ParquetCrypto::DataPageHeader:
+		if (chunk->meta_data.__isset.dictionary_page_offset) {
+			return ParquetCrypto::DictionaryPageHeader;
+		} else if (chunk->meta_data.__isset.index_page_offset) {
+			return ParquetCrypto::OffsetIndex;
+		} else if (chunk->meta_data.__isset.bloom_filter_offset) {
+			return ParquetCrypto::BloomFilterHeader;
 		}
-	} else if (chunk->meta_data.__isset.index_page_offset) {
-		if (page_ordinal == 0) {
-			module = ParquetCrypto::OffsetIndex;
-			page_ordinal = -1;
-		} else {
-			page_ordinal -= 1;
+		return ParquetCrypto::DataPageHeader;
+	case ParquetCrypto::DataPage:
+		if (chunk->meta_data.__isset.dictionary_page_offset) {
+			return ParquetCrypto::DictionaryPage;
+		} else if (chunk->meta_data.__isset.bloom_filter_offset) {
+			return ParquetCrypto::BloomFilterBitset;
 		}
-	} else if (chunk->meta_data.__isset.bloom_filter_offset) {
-		if (page_ordinal == 0) {
-			module = ParquetCrypto::BloomFilterHeader;
-			page_ordinal = -1;
-		} else {
-			page_ordinal -= 1;
-		}
+		return ParquetCrypto::DataPage;
+	default:
+		throw InvalidInputException("Module not found");
 	}
 }
 
-void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal, uint16_t row_group_ordinal) {
-	// default module
-	uint8_t module = ParquetCrypto::DataPageHeader;
-	uint16_t page_ordinal_set = page_ordinal;
-
-	PreparePageDecryption(module, page_ordinal_set);
-	reader.ReadEncrypted(object, *protocol, row_group_ordinal, ColumnIndex(), module, page_ordinal_set);
-}
-
-void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer,
-								 const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx, uint16_t page_ordinal) {
-
-	// default module
-	int8_t module = ParquetCrypto::DataPageHeader;
-
-	// NOTE: there is at most one dict, index page and bloom filter page per col chunk
-	if (chunk->meta_data.__isset.dictionary_page_offset) {
-		if (page_ordinal == 0) {
-			// set page_ordinal to -1, because it is not used for the first dict header
-			module = ParquetCrypto::DictionaryPageHeader;
-			page_ordinal = -1;
-		} else {
-			page_ordinal -= 1;
-		}
-	} else if (chunk->meta_data.__isset.index_page_offset) {
-		if (page_ordinal == 0) {
-			module = ParquetCrypto::OffsetIndex;
-			page_ordinal = -1;
-		} else {
-			page_ordinal -= 1;
-		}
-	} else if (chunk->meta_data.__isset.bloom_filter_offset) {
-		if (page_ordinal == 0) {
-			module = ParquetCrypto::BloomFilterHeader;
-			page_ordinal = -1;
-		} else {
-			page_ordinal -= 1;
-		}
+uint16_t ColumnReader::GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal) {
+	switch (module) {
+	case ParquetCrypto::DataPageHeader:
+		// The header should always be the first and thus 0
+		D_ASSERT(page_ordinal == 0);
+		return page_ordinal;
+		break;
+	case ParquetCrypto::DataPage:
+		// is this correct? let's test!
+		// I think data page starts at 0 again
+		page_ordinal -= 1;
+		return page_ordinal;
+		break;
+	default:
+		// All modules except DataPage(Header) are -1
+		return -1;
 	}
-
-	PreparePageDecryption(module, page_ordinal_set);
-	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, row_group_ordinal, ColumnIndex(), module, page_ordinal_set);
 }
 
-void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
-                               optional_ptr<TableFilterState> filter_state) {
+void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal,
+                                 uint16_t row_group_ordinal) {
+	uint8_t module = GetModule(ParquetCrypto::DataPageHeader);
+	uint16_t page_ordinal_ = GetFinalPageOrdinal(module, page_ordinal);
+	reader.ReadEncrypted(object, *protocol, row_group_ordinal, ColumnIndex(), module, page_ordinal_);
+}
+
+void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, uint16_t row_group_ordinal,
+                                     uint16_t col_idx, uint16_t page_ordinal) {
+	int8_t module = GetModule(ParquetCrypto::DataPage);
+	uint16_t page_ordinal_ = GetFinalPageOrdinal(module, page_ordinal);
+	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, row_group_ordinal, ColumnIndex(), module, page_ordinal_);
+}
+
+void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal,
+                               optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
@@ -390,7 +376,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t 
 	if (uncompressed) {
 		if (reader.parquet_options.encryption_config) {
 			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, row_group_ordinal, ColumnIndex(),
-						page_ordinal);
+			                  page_ordinal);
 		} else {
 			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		}
@@ -408,8 +394,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t 
 	}
 
 	if (reader.parquet_options.encryption_config) {
-		ReadDataEncrypted(block->ptr, uncompressed_bytes, row_group_ordinal, ColumnIndex(),
-					page_ordinal);
+		ReadDataEncrypted(block->ptr, uncompressed_bytes, row_group_ordinal, ColumnIndex(), page_ordinal);
 	} else {
 		reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
 	}
@@ -420,10 +405,9 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t 
 		ResizeableBuffer compressed_buffer;
 		compressed_buffer.resize(GetAllocator(), compressed_bytes);
 		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(compressed_buffer.ptr, compressed_bytes, row_group_ordinal, ColumnIndex(),
-						page_ordinal);
+			ReadDataEncrypted(compressed_buffer.ptr, compressed_bytes, row_group_ordinal, ColumnIndex(), page_ordinal);
 		} else {
-			reader.ReadData(*protocol,  compressed_buffer.ptr, compressed_bytes);
+			reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 		}
 
 		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
@@ -439,27 +423,32 @@ void ColumnReader::AllocateBlock(idx_t size) {
 	}
 }
 
-void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal, uint16_t row_group_ordinal) {
+void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal,
+                               uint16_t row_group_ordinal) {
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+
+	bool is_arrow = false;
+	auto const file_aad = reader.GetFileAAD(reader.metadata->crypto_metadata->encryption_algorithm);
+	if (!file_aad.empty()) {
+		is_arrow = true;
+	}
+
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
 		if (reader.parquet_options.encryption_config) {
+			// also force module here
 			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, row_group_ordinal, ColumnIndex(),
-						page_ordinal);
+			                  page_ordinal);
 		} else {
-			reader.ReadData(*protocol,  block->ptr, page_hdr.compressed_page_size);
+			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		}
 		return;
 	}
 
-	// TODO: DETERMINE WHEN WRITTEN WITH ARROW
-	bool is_arrow = true;
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
-
 	if (is_arrow && chunk->__isset.crypto_metadata) {
-		// for GCM, but make this dynamic
 		compressed_page_size -= (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
 		if (page_hdr.type == PageType::DATA_PAGE_V2) {
 			module = ParquetCrypto::DataPage;
@@ -476,10 +465,9 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t pa
 	ResizeableBuffer compressed_buffer;
 	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
 	if (reader.parquet_options.encryption_config) {
-		ReadDataEncrypted(compressed_buffer.ptr, compressed_page_size, row_group_ordinal, ColumnIndex(),
-					page_ordinal);
+		ReadDataEncrypted(compressed_buffer.ptr, compressed_page_size, row_group_ordinal, ColumnIndex(), page_ordinal);
 	} else {
-		reader.ReadData(*protocol,  compressed_buffer.ptr, compressed_page_size);
+		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_page_size);
 	}
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,

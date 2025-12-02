@@ -179,10 +179,10 @@ protected:
 	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
 	                  const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal);
 	void ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal, uint16_t row_group_ordinal);
-	void ReadDataEncrypted(const data_ptr_t buffer,
-								 const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
-								 uint16_t page_ordinal);
-	void PreparePageDecryption(uint8_t &module, uint16_t &page_ordinal);
+	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, uint16_t row_group_ordinal,
+	                       uint16_t col_idx, uint16_t page_ordinal);
+	uint16_t GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal);
+	uint8_t GetModule(uint8_t module) const;
 
 private:
 	//! Check if a previous table filter has filtered out this page

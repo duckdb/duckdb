@@ -996,24 +996,25 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 	return object.read(&iprot);
 }
 
-uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t row_group_ordinal,
-							 uint16_t col_idx, uint8_t module, uint16_t page_ordinal) {
-		auto result_aad = CreateAAD(module, row_group_ordinal, col_idx, page_ordinal);
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
-								   std::move(result_aad));
+uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
+                                      uint16_t row_group_ordinal, uint16_t col_idx, uint8_t module,
+                                      uint16_t page_ordinal) {
+	auto result_aad = CreateAAD(module, row_group_ordinal, col_idx, page_ordinal);
+	return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
+	                           std::move(result_aad));
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                  const uint32_t buffer_size) {
-		return iprot.getTransport()->read(buffer, buffer_size);
+	return iprot.getTransport()->read(buffer, buffer_size);
 }
 
 uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-								 const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
-								 uint8_t module, uint16_t page_ordinal) {
-		auto result_aad = CreateAAD(module, row_group_ordinal, col_idx, page_ordinal);
-		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
-									   *encryption_util, std::move(result_aad));
+                                          const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
+                                          uint8_t module, uint16_t page_ordinal) {
+	auto result_aad = CreateAAD(module, row_group_ordinal, col_idx, page_ordinal);
+	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
+	                               *encryption_util, std::move(result_aad));
 }
 
 static idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {

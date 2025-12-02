@@ -183,12 +183,12 @@ public:
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
 	uint32_t ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t row_group_ordinal = 0,
-	      uint16_t col_idx = 0, uint8_t module = 0, uint16_t page_ordinal = -1);
+	                       uint16_t col_idx = 0, uint8_t module = 0, uint16_t page_ordinal = -1);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
 	                  const uint32_t buffer_size);
 	uint32_t ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-		  const uint32_t buffer_size, uint16_t row_group_ordinal = 0, uint16_t col_idx = 0,
-		  uint8_t module = 0, uint16_t page_ordinal = -1);
+	                           const uint32_t buffer_size, uint16_t row_group_ordinal = 0, uint16_t col_idx = 0,
+	                           uint8_t module = 0, uint16_t page_ordinal = -1);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 
