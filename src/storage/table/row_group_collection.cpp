@@ -1483,6 +1483,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	}
 	l.Release();
 
+	if (skipped_row_groups) {
+		// if we skipped any rows groups we cannot override the base stats
+		// because the stats reflect only the *checkpointed* row groups
+		// the stats of the extra (not checkpointed) row groups is not included
+		// hence the stats do not correctly reflect the current in-memory state of the table
+		writer.SetCannotOverrideStats();
+	}
+
 	// flush any partial blocks BEFORE updating the row group pointer
 	// flushing partial blocks updates where data lives
 	// this cannot be done after other threads start scanning the row groups

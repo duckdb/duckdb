@@ -23,9 +23,16 @@ concurrentloop threadid 0 20
 
 loop x 0 10
 
-#onlyif threadid<>10
+onlyif threadid<>10
 statement ok
 INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(${threadid} * 100, (${threadid} + 1) * 100);
+
+onlyif threadid<>10
+query I
+SELECT CASE WHEN MAX(i) <= ANY_VALUE(regexp_extract(s, 'Max: (\d+)', 1)::INT) THEN NULL ELSE CONCAT('Stats ', ANY_VALUE(s), ' but got value ', MAX(i)) END
+FROM (SELECT stats(i) s, i FROM concurrent_checkpoint_wal.integers)
+----
+NULL
 
 endloop
 
@@ -38,7 +45,7 @@ endloop
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers
 ----
-20000	19990000
+19000	18940500
 
 statement ok
 DETACH concurrent_checkpoint_wal
@@ -49,7 +56,7 @@ ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}.db' AS concurrent_ch
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers
 ----
-20000	19990000
+19000	18940500
 
 statement ok
 DETACH concurrent_checkpoint_wal
