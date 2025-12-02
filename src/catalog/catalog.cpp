@@ -917,9 +917,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		if (!IsInvalidSchema(schema_name)) {
 			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
 			string relation_name = schema_name + "." + lookup_info.GetEntryName();
-			auto except = CatalogException(schema_lookup.GetErrorContext(),
-			                                "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
-			                                relation_name, schema_name);
+			auto except =
+			    CatalogException(schema_lookup.GetErrorContext(),
+			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
+			                     relation_name, schema_name);
 			return {nullptr, nullptr, ErrorData(except)};
 		}
 	}
