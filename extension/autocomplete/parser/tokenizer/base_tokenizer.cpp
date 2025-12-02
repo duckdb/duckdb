@@ -135,12 +135,12 @@ bool BaseTokenizer::CharacterIsOperator(char c) {
 	return StringUtil::CharacterIsOperator(c);
 }
 
-void BaseTokenizer::PushToken(idx_t start, idx_t end) {
+void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
 	if (start >= end) {
 		return;
 	}
 	string last_token = sql.substr(start, end - start);
-	tokens.emplace_back(std::move(last_token), start);
+	tokens.emplace_back(std::move(last_token), start, type);
 }
 
 bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
@@ -234,14 +234,14 @@ bool BaseTokenizer::TokenizeInput() {
 			idx_t op_len;
 			if (IsSpecialOperator(i, op_len)) {
 				// special operator - push the special operator
-				tokens.emplace_back(sql.substr(i, op_len), last_pos);
+				tokens.emplace_back(sql.substr(i, op_len), last_pos, TokenType::OPERATOR);
 				i += op_len - 1;
 				last_pos = i + 1;
 				break;
 			}
 			if (IsSingleByteOperator(c)) {
 				// single-byte operator - directly push the token
-				tokens.emplace_back(string(1, c), last_pos);
+				tokens.emplace_back(string(1, c), last_pos, TokenType::OPERATOR);
 				last_pos = i + 1;
 				break;
 			}
@@ -287,7 +287,7 @@ bool BaseTokenizer::TokenizeInput() {
 			while (!CharacterIsInitialNumber(sql[i - 1])) {
 				i--;
 			}
-			PushToken(last_pos, i);
+			PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
 			state = TokenizeState::STANDARD;
 			last_pos = i;
 			i--;
@@ -296,7 +296,8 @@ bool BaseTokenizer::TokenizeInput() {
 			// operator literal - check if this is still an operator
 			if (!CharacterIsOperator(c)) {
 				// not an operator - return to standard state
-				PushToken(last_pos, i);
+				// TODO(Dtenwolde) Check what the state here is and give that token type
+				PushToken(last_pos, i, TokenType::OPERATOR);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -306,7 +307,7 @@ bool BaseTokenizer::TokenizeInput() {
 			// keyword - check if this is still a keyword
 			if (!CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
-				PushToken(last_pos, i);
+				PushToken(last_pos, i, TokenType::KEYWORD);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -318,7 +319,7 @@ bool BaseTokenizer::TokenizeInput() {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1);
+					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
 					last_pos = i + 1;
 					state = TokenizeState::STANDARD;
 				}
@@ -330,7 +331,7 @@ bool BaseTokenizer::TokenizeInput() {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1);
+					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
 					last_pos = i + 1;
 					state = TokenizeState::STANDARD;
 				}

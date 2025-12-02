@@ -30,7 +30,7 @@ public:
 	virtual ~BaseTokenizer() = default;
 
 public:
-	void PushToken(idx_t start, idx_t end);
+	void PushToken(idx_t start, idx_t end, TokenType type);
 
 	bool TokenizeInput();
 

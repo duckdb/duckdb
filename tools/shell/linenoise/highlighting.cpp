@@ -1,9 +1,12 @@
 #include "linenoise.hpp"
 #include "linenoise.h"
 #include "highlighting.hpp"
+
+#include "matcher.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
+#include "parser/tokenizer/parser_tokenizer.hpp"
 
 namespace duckdb {
 
@@ -11,19 +14,20 @@ bool Highlighting::IsEnabled() {
 	return duckdb_shell::ShellHighlight::IsEnabled();
 }
 
-static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
+static tokenType convertToken(TokenType token_type) {
 	switch (token_type) {
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+	case TokenType::IDENTIFIER:
+	case TokenType::WORD:
 		return tokenType::TOKEN_IDENTIFIER;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+	case TokenType::NUMBER_LITERAL:
 		return tokenType::TOKEN_NUMERIC_CONSTANT;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+	case TokenType::STRING_LITERAL:
 		return tokenType::TOKEN_STRING_CONSTANT;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+	case TokenType::OPERATOR:
 		return tokenType::TOKEN_OPERATOR;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+	case TokenType::KEYWORD:
 		return tokenType::TOKEN_KEYWORD;
-	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+	case TokenType::COMMENT:
 		return tokenType::TOKEN_COMMENT;
 	default:
 		throw duckdb::InternalException("Unrecognized token type");
@@ -32,13 +36,18 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
-	auto parseTokens = duckdb::Parser::Tokenize(sql);
+	vector<MatcherToken> root_tokens;
+
+	ParserTokenizer tokenizer(sql, root_tokens);
+	tokenizer.TokenizeInput();
+	vector<SimplifiedToken> result;
+	result.reserve(root_tokens.size());
 
 	vector<highlightToken> tokens;
-	for (auto &token : parseTokens) {
+	for (auto &token : root_tokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
-		new_token.start = token.start;
+		new_token.start = token.offset;
 		tokens.push_back(new_token);
 	}
 
