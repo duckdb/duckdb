@@ -2,6 +2,7 @@
 
 import pytest
 from conftest import ShellTest
+import re
 
 lineitem_source = "lineitem"
 all_types_source = "all_types"
@@ -38,7 +39,7 @@ def test_mode_regression(shell, mode, source):
     )
 
     result = test.run()
-    lines = [x.strip() for x in get_expected_output(source, mode).split('\n')]
+    lines = [x.strip() for x in re.split('[\n,]', get_expected_output(source, mode))]
     for line in lines:
         if len(line) == 0:
             continue
