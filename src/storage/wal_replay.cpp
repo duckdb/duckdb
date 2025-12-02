@@ -47,6 +47,8 @@ public:
 	optional_ptr<TableCatalogEntry> current_table;
 	MetaBlockPointer checkpoint_id;
 	idx_t wal_version = 1;
+	optional_idx current_position;
+	optional_idx checkpoint_position;
 	optional_idx expected_checkpoint_id;
 
 	struct ReplayIndexInfo {
@@ -76,8 +78,8 @@ public:
 		deserializer.Set<Catalog &>(catalog);
 	}
 
-	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
-	                                      bool deserialize_only = false) {
+	static WriteAheadLogDeserializer GetEntryDeserializer(ReplayState &state_p, BufferedFileReader &stream,
+	                                                      bool deserialize_only = false) {
 		if (state_p.wal_version == 1) {
 			// old WAL versions do not have checksums
 			return WriteAheadLogDeserializer(state_p, stream, deserialize_only);
@@ -257,8 +259,9 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, FileSystem &fs, StorageManager &storage_manager,
+unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageManager &storage_manager,
                                                 const string &wal_path) {
+	auto &fs = FileSystem::Get(storage_manager.GetAttached());
 	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		// WAL does not exist - instantiate an empty WAL
@@ -277,9 +280,21 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, FileSystem
 	return make_uniq<WriteAheadLog>(storage_manager, wal_path);
 }
 
-// QueryContext is passed for metric collection purposes only!!
+static void CopyOverWAL(QueryContext context, BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer,
+                        idx_t buffer_size, idx_t copy_end) {
+	while (!reader.Finished()) {
+		idx_t read_count = MinValue<idx_t>(buffer_size, copy_end - reader.CurrentOffset());
+		if (read_count == 0) {
+			break;
+		}
+		reader.ReadData(context, buffer, read_count);
+
+		target.Write(buffer, read_count);
+	}
+}
+
 unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, StorageManager &storage_manager,
-                                                        unique_ptr<FileHandle> handle) {
+                                                        unique_ptr<FileHandle> handle, WALReplayState replay_state) {
 	auto &database = storage_manager.GetAttached();
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
@@ -301,7 +316,8 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 		while (true) {
 			replay_entry_count++;
 			// read the current entry (deserialize only)
-			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
+			checkpoint_state.current_position = reader.CurrentOffset();
+			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_state, reader, true);
 			if (deserializer.ReplayEntry()) {
 				// check if the file is exhausted
 				if (reader.Finished()) {
@@ -322,13 +338,101 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} // LCOV_EXCL_STOP
+	unique_ptr<FileHandle> checkpoint_handle;
 	if (checkpoint_state.checkpoint_id.IsValid()) {
-		// there is a checkpoint flag: check if we need to deserialize the WAL
+		if (replay_state == WALReplayState::CHECKPOINT_WAL) {
+			throw InvalidInputException(
+			    "Failure while replaying checkpoint WAL file \"%s\": checkpoint WAL cannot contain a checkpoint marker",
+			    wal_path);
+		}
+		// there is a checkpoint flag
+		// this means a checkpoint was on-going when we crashed
+		// we need to reconcile this with what is in the data file
+		// first check if there is a checkpoint WAL
 		auto &manager = database.GetStorageManager();
-		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
-			// the contents of the WAL have already been checkpointed
-			// we can safely truncate the WAL and ignore its contents
-			return nullptr;
+		auto &fs = FileSystem::Get(storage_manager.GetAttached());
+		auto checkpoint_wal = manager.GetCheckpointWALPath();
+		checkpoint_handle =
+		    fs.OpenFile(checkpoint_wal, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		bool checkpoint_was_successful = manager.IsCheckpointClean(checkpoint_state.checkpoint_id);
+		if (!checkpoint_handle) {
+			// no checkpoint WAL - either we just need to replay this WAL, or we are done
+			if (checkpoint_was_successful) {
+				// the contents of the WAL have already been checkpointed and there is no checkpoint WAL - we are done
+				return nullptr;
+			}
+		} else {
+			// we have a checkpoint WAL
+			if (checkpoint_was_successful) {
+				// the checkpoint was successful
+				// the main WAL is no longer needed, we only need to replay the checkpoint WAL
+				// if this is a read-only connection then replay the checkpoint WAL directly
+				if (storage_manager.GetAttached().IsReadOnly()) {
+					return ReplayInternal(context, storage_manager, std::move(checkpoint_handle),
+					                      WALReplayState::CHECKPOINT_WAL);
+				}
+				// if this is not a read-only connection we need to finish the checkpoint
+				// overwrite the current WAL with the checkpoint WAL
+				checkpoint_handle.reset();
+
+				fs.MoveFile(checkpoint_wal, wal_path);
+
+				// now open the handle again and replay the checkpoint WAL
+				checkpoint_handle =
+				    fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+				return ReplayInternal(context, storage_manager, std::move(checkpoint_handle),
+				                      WALReplayState::CHECKPOINT_WAL);
+			}
+			// the checkpoint was unsuccessful
+			// this means we need to replay both this WAL and the checkpoint WAL
+			// if this is a read-only connection - replay both WAL files
+			if (!storage_manager.GetAttached().IsReadOnly()) {
+				// if this is not a read-only connection, then merge the two WALs and replay the merged WAL
+				// we merge into the recovery WAL path
+				auto recovery_path = manager.GetRecoveryWALPath();
+				auto recovery_handle =
+				    fs.OpenFile(recovery_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+
+				static constexpr const idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
+				auto buffer = make_uniq_array<data_t>(BATCH_SIZE);
+
+				// first copy over the main WAL contents
+				auto copy_end = checkpoint_state.checkpoint_position.GetIndex();
+				reader.Reset();
+				CopyOverWAL(context, reader, *recovery_handle, buffer.get(), BATCH_SIZE, copy_end);
+
+				// now copy over the checkpoint WAL
+				{
+					BufferedFileReader checkpoint_reader(FileSystem::Get(database), std::move(checkpoint_handle));
+
+					// skip over the version entry
+					ReplayState checkpoint_replay_state(database, *con.context);
+					auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_replay_state,
+					                                                                    checkpoint_reader, true);
+					deserializer.ReplayEntry();
+
+					if (checkpoint_replay_state.wal_version != checkpoint_state.wal_version) {
+						throw InvalidInputException("Failure while replaying checkpoint WAL file \"%s\": checkpoint "
+						                            "WAL version is different from main WAL version",
+						                            wal_path);
+					}
+
+					CopyOverWAL(context, checkpoint_reader, *recovery_handle, buffer.get(), BATCH_SIZE,
+					            checkpoint_reader.FileSize());
+				}
+
+				// move over the recovery WAL over the main WAL
+				recovery_handle->Sync();
+				recovery_handle.reset();
+				fs.MoveFile(recovery_path, wal_path);
+
+				// delete the checkpoint WAL
+				fs.RemoveFile(checkpoint_wal);
+
+				// replay the (combined) recovery WAL
+				auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
+				return ReplayInternal(context, storage_manager, std::move(main_handle), WALReplayState::CHECKPOINT_WAL);
+			}
 		}
 	}
 	if (checkpoint_state.expected_checkpoint_id.IsValid()) {
@@ -351,7 +455,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 	try {
 		while (true) {
 			// read the current entry
-			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
+			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
 
@@ -387,6 +491,12 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 		con.Query("ROLLBACK");
 		throw;
 	} // LCOV_EXCL_STOP
+	if (all_succeeded && checkpoint_handle) {
+		// we have successfully replayed the main WAL - but there is still a checkpoint WAL remaining
+		// this can only happen in read-only mode
+		// replay the checkpoint WAL and return
+		return ReplayInternal(context, storage_manager, std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
+	}
 	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
 	return make_uniq<WriteAheadLog>(storage_manager, wal_path, successful_offset, init_state);
 }
@@ -999,6 +1109,7 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
 	state.checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block");
+	state.checkpoint_position = state.current_position;
 }
 
 } // namespace duckdb

@@ -45,6 +45,7 @@ overrides = {
         "DEBUG_ABORT_BEFORE_TRUNCATE": "BEFORE_TRUNCATE",
         "DEBUG_ABORT_BEFORE_HEADER": "BEFORE_HEADER",
         "DEBUG_ABORT_AFTER_FREE_LIST_WRITE": "AFTER_FREE_LIST_WRITE",
+        "DEBUG_ABORT_BEFORE_WAL_FINISH": "BEFORE_WAL_FINISH",
     },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},

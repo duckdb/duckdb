@@ -482,9 +482,6 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (context.is_parallel) {
 		throw std::runtime_error("Cannot restart database in parallel");
 	}
-	if (runner.dbpath.empty()) {
-		throw std::runtime_error("cannot restart an in-memory database, did you forget to call \"load\"?");
-	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
 	auto client_config = runner.con->context->config;

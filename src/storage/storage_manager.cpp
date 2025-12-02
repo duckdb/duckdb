@@ -166,7 +166,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 
 	// replace the WAL with a new WAL (.checkpoint.wal) that transactions can write to while the checkpoint is happening
 	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
-	wal = make_uniq<WriteAheadLog>(*this, GetWALPath(".checkpoint.wal"));
+	wal = make_uniq<WriteAheadLog>(*this, GetCheckpointWALPath());
 	return true;
 }
 
@@ -220,6 +220,14 @@ string StorageManager::GetWALPath(const string &suffix) {
 		result += suffix;
 	}
 	return result;
+}
+
+string StorageManager::GetCheckpointWALPath() {
+	return GetWALPath(".checkpoint.wal");
+}
+
+string StorageManager::GetRecoveryWALPath() {
+	return GetWALPath(".recovery.wal");
 }
 
 bool StorageManager::InMemory() const {
@@ -438,7 +446,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 		// Replay the WAL.
 		wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(context, fs, *this, wal_path);
+		wal = WriteAheadLog::Replay(context, *this, wal_path);
 
 		// End timing the WAL replay step.
 		if (client_context) {

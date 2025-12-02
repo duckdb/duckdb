@@ -258,6 +258,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// truncate the file
 	block_manager.Truncate();
 
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FINISH) {
+		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+	}
+
 	// truncate the WAL
 	if (has_wal) {
 		storage_manager.WALFinishCheckpoint();

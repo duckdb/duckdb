@@ -39,6 +39,7 @@ class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
 
 enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
+enum class WALReplayState { MAIN_WAL, CHECKPOINT_WAL };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -53,7 +54,7 @@ public:
 
 public:
 	//! Replay and initialize the WAL, QueryContext is passed for metric collection purposes only!!
-	static unique_ptr<WriteAheadLog> Replay(QueryContext context, FileSystem &fs, StorageManager &storage_manager,
+	static unique_ptr<WriteAheadLog> Replay(QueryContext context, StorageManager &storage_manager,
 	                                        const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
@@ -123,7 +124,8 @@ public:
 protected:
 	//! Internally replay all WAL entries. QueryContext is passed for metric collection purposes only!!
 	static unique_ptr<WriteAheadLog> ReplayInternal(QueryContext context, StorageManager &storage_manager,
-	                                                unique_ptr<FileHandle> handle);
+	                                                unique_ptr<FileHandle> handle,
+	                                                WALReplayState replay_state = WALReplayState::MAIN_WAL);
 
 protected:
 	StorageManager &storage_manager;

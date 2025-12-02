@@ -90,6 +90,10 @@ public:
 	}
 	//! The path to the WAL, derived from the database file path
 	string GetWALPath(const string &suffix = ".wal");
+	//! The path to the WAL that is used while a checkpoint is running
+	string GetCheckpointWALPath();
+	//! The path to the WAL that is used while recovering from a crash involving the checkpoint WAL
+	string GetRecoveryWALPath();
 	bool InMemory() const;
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
