@@ -1044,7 +1044,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
 		auto &col = this->column_definitions[i];
-		column_ids.emplace_back(i, col.GetType());
+		column_ids.emplace_back(i);
 		types.push_back(col.Type());
 	}
 	DataChunk chunk;
@@ -1325,7 +1325,7 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 	if (result->has_delete_constraints) {
 		// initialize the chunk if there are any constraints to verify
 		for (idx_t i = 0; i < column_definitions.size(); i++) {
-			result->col_ids.emplace_back(column_definitions[i].StorageOid(), column_definitions[i].GetType());
+			result->col_ids.emplace_back(column_definitions[i].StorageOid());
 			types.emplace_back(column_definitions[i].Type());
 		}
 		result->verify_chunk.Initialize(Allocator::Get(context), types);

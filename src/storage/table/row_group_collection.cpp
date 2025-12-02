@@ -217,7 +217,7 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	auto row_group = state.GetRootSegment();
 	D_ASSERT(row_group);
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
-	state.Initialize(context);
+	state.Initialize(context, *this);
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
 		row_group = state.GetNextRowGroup(*row_group);
 	}
@@ -235,7 +235,7 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 	auto row_group = state.row_groups->GetSegment(start_row);
 	D_ASSERT(row_group);
 	state.max_row = end_row;
-	state.Initialize(context);
+	state.Initialize(context, *this);
 	idx_t start_vector = (start_row - row_group->GetRowStart()) / STANDARD_VECTOR_SIZE;
 	if (!row_group->GetNode().InitializeScanWithOffset(state, *row_group, start_vector)) {
 		throw InternalException("Failed to initialize row group scan with offset");
@@ -249,7 +249,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, C
 	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
-		state.Initialize(context);
+		state.Initialize(context, collection);
 	}
 	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
 }
@@ -352,7 +352,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
-		column_ids.emplace_back(i, types[i]);
+		column_ids.emplace_back(i);
 	}
 	return Scan(transaction, column_ids, fun);
 }
@@ -778,7 +778,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
 	vector<StorageIndex> column_ids;
 	for (auto &col : indexed_column_id_set) {
-		column_ids.emplace_back(col, types[col]);
+		column_ids.emplace_back(col);
 	}
 	sort(column_ids.begin(), column_ids.end());
 
@@ -824,7 +824,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_start;
 
 		// Fetch the current vector into fetch_chunk.
-		state.table_state.Initialize(context);
+		state.table_state.Initialize(context, *this);
 		current_row_group.InitializeScanWithOffset(state.table_state, *row_group, row_group_vector_idx);
 		current_row_group.ScanCommitted(state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		fetch_chunk.Verify();
@@ -1024,7 +1024,7 @@ public:
 
 		vector<StorageIndex> column_ids;
 		for (idx_t c = 0; c < types.size(); c++) {
-			column_ids.emplace_back(c, types[c]);
+			column_ids.emplace_back(c);
 		}
 
 		idx_t current_append_idx = 0;
@@ -1035,7 +1035,7 @@ public:
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
-		scan_state.table_state.Initialize(QueryContext());
+		scan_state.table_state.Initialize(QueryContext(), collection);
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
@@ -1653,7 +1653,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
-	scan_state.table_state.Initialize(context);
+	scan_state.table_state.Initialize(context, *this);
 	scan_state.table_state.max_row = row_groups->GetBaseRowId() + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
@@ -1688,7 +1688,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
 	vector<StorageIndex> column_ids;
-	column_ids.emplace_back(physical_index, types[physical_index]);
+	column_ids.emplace_back(physical_index);
 
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;

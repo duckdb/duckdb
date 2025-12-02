@@ -352,13 +352,14 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	vector<idx_t> original_ids;
 	new_column_ids.reserve(col_sel.size());
 	for (auto col_sel_idx : col_sel) {
+		auto &column_type = get.types[col_sel_idx];
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
 		if (entry->second.child_columns.empty()) {
 			auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
-			ColumnIndex new_index(logical_column_index, get.types[col_sel_idx], {});
+			ColumnIndex new_index(logical_column_index, {});
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
 			continue;
@@ -371,38 +372,43 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			//! Only add the child indexes to function as a prune hint that the other indices aren't referenced by the
 			//! query.
 			auto &old_column_id = old_column_ids[col_sel_idx];
-			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), old_column_id.GetType(),
-			                      entry->second.child_columns);
+			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), entry->second.child_columns);
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
 			continue;
 		}
 		//! Pushdown Extract is supported, emit a column for every field
+		//! TODO: make this work recursively
+		D_ASSERT(entry->second.child_columns.size() == entry->second.struct_extracts.size());
 		for (idx_t i = 0; i < entry->second.child_columns.size(); i++) {
 			auto &child = entry->second.child_columns[i];
 			auto &colref = entry->second.bindings[i];
 			colref.get().binding.column_index += i;
-			ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(),
-			                      LogicalType::STRUCT({{"child", child.GetType()}}), {child});
+			ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), {child});
 			//! Upgrade the optional prune hint to a mandatory pushdown of the extract
-			new_index.SetPushdownExtractType();
+			//! TODO: also set the types on the child indices (recursively)
+			new_index.SetPushdownExtractType(column_type);
+			auto scan_type = new_index.GetScanType();
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
-		}
-		for (idx_t i = 0; i < entry->second.struct_extracts.size(); i++) {
+
+			//! Replace the top-level struct extract with a BoundColumnRefExpression, referencing the new ColumnBinding
+			//! we just created
 			auto &struct_extract = entry->second.struct_extracts[i];
-			auto &colref = entry->second.bindings[struct_extract.bindings_idx];
-			auto colref_copy = colref.get().Copy();
-			colref_copy->return_type = struct_extract.expr->return_type;
-			struct_extract.expr = std::move(colref_copy);
+			if (*struct_extract.expr) {
+				auto colref_copy = colref.get().Copy();
+				*struct_extract.expr = std::move(colref_copy);
+				(*struct_extract.expr)->return_type = scan_type;
+			}
 		}
 	}
 	if (new_column_ids.empty()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
 		// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 		// need to read any of the columns
-		new_column_ids.emplace_back(get.GetAnyColumn());
-		original_ids.emplace_back(new_column_ids.back().GetPrimaryIndex());
+		auto any_column = get.GetAnyColumn();
+		new_column_ids.emplace_back(any_column);
+		original_ids.emplace_back(any_column);
 	}
 	get.SetColumnIds(std::move(new_column_ids));
 
@@ -478,10 +484,12 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	// construct the ColumnIndex and determine the field's type
 	reference<const LogicalType> type(colref->return_type);
 	type = StructType::GetChildTypes(type.get())[indexes[0]].second;
-	ColumnIndex index = ColumnIndex(indexes[0], type);
+	ColumnIndex index = ColumnIndex(indexes[0]);
+	index.SetType(type);
 	for (idx_t i = 1; i < indexes.size(); i++) {
 		type = StructType::GetChildTypes(type.get())[indexes[i]].second;
-		ColumnIndex new_index(indexes[i], type);
+		ColumnIndex new_index(indexes[i]);
+		new_index.SetType(type);
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
 	}
@@ -535,7 +543,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-                                  unique_ptr<Expression> &parent) {
+                                  optional_ptr<unique_ptr<Expression>> parent) {
 	AddBinding(col, std::move(child_column));
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {

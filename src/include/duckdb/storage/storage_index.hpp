@@ -18,15 +18,12 @@ enum class StorageIndexType : uint8_t { DIRECT_READ, OPTIONAL_PRUNE_HINT, PUSHDO
 
 struct StorageIndex {
 public:
-	StorageIndex()
-	    : index(COLUMN_IDENTIFIER_ROW_ID), type(LogicalType::ROW_TYPE), index_type(StorageIndexType::DIRECT_READ) {
+	StorageIndex() : index(COLUMN_IDENTIFIER_ROW_ID), index_type(StorageIndexType::DIRECT_READ) {
 	}
-	explicit StorageIndex(idx_t index, const LogicalType &type)
-	    : index(index), type(type), index_type(StorageIndexType::DIRECT_READ) {
+	explicit StorageIndex(idx_t index) : index(index), index_type(StorageIndexType::DIRECT_READ) {
 	}
-	StorageIndex(idx_t index, const LogicalType &type, vector<StorageIndex> child_indexes_p)
-	    : index(index), type(type), index_type(StorageIndexType::DIRECT_READ),
-	      child_indexes(std::move(child_indexes_p)) {
+	StorageIndex(idx_t index, vector<StorageIndex> child_indexes_p)
+	    : index(index), index_type(StorageIndexType::DIRECT_READ), child_indexes(std::move(child_indexes_p)) {
 		if (!child_indexes.empty()) {
 			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
 		}
@@ -73,6 +70,9 @@ public:
 			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
 		}
 	}
+	void SetType(const LogicalType &type_information) {
+		type = type_information;
+	}
 	void SetPushdownExtract() {
 		D_ASSERT(!IsPushdownExtract());
 		D_ASSERT(index_type == StorageIndexType::OPTIONAL_PRUNE_HINT);
@@ -90,7 +90,7 @@ public:
 
 private:
 	idx_t index;
-	LogicalType type;
+	LogicalType type = LogicalType::INVALID;
 	StorageIndexType index_type;
 	vector<StorageIndex> child_indexes;
 };

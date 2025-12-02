@@ -84,7 +84,7 @@ public:
 
 			vector<StorageIndex> column_ids;
 			for (idx_t i = 0; i < types.size(); i++) {
-				column_ids.emplace_back(i, types[i]);
+				column_ids.emplace_back(i);
 			}
 			for (idx_t i = 1; i < collection_indexes.size(); i++) {
 				auto &collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);

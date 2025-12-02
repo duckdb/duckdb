@@ -20,7 +20,7 @@ class ClientContext;
 
 struct ReferencedStructExtract {
 public:
-	ReferencedStructExtract(unique_ptr<Expression> &struct_extract, idx_t bindings_idx)
+	ReferencedStructExtract(optional_ptr<unique_ptr<Expression>> struct_extract, idx_t bindings_idx)
 	    : bindings_idx(bindings_idx), expr(struct_extract) {
 	}
 
@@ -28,7 +28,7 @@ public:
 	//! The index into the 'bindings' of the ReferencedColumn that is the child of this struct_extract
 	idx_t bindings_idx;
 	//! The struct_extract expression to potentially replace
-	unique_ptr<Expression> &expr;
+	optional_ptr<unique_ptr<Expression>> expr;
 };
 
 struct ReferencedColumn {
@@ -55,7 +55,8 @@ protected:
 	//! Add a reference to a sub-section of the column
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
-	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column, unique_ptr<Expression> &parent);
+	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
+	                optional_ptr<unique_ptr<Expression>> parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);

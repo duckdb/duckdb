@@ -265,7 +265,7 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 	// buffering WAL index operations during replay (see notes in unbound_index.hpp).
 	// First sort mapped_column_ids, then populate index_types according to the sorted order.
 	for (auto &col : indexed_columns) {
-		mapped_column_ids.emplace_back(col, table_types[col]);
+		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
 

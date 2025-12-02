@@ -182,7 +182,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		vector<StorageIndex> column_ids;
 		auto table_types = table.GetTypes();
 		for (idx_t i = 0; i < table.ColumnCount(); i++) {
-			column_ids.emplace_back(i, table_types[i]);
+			column_ids.emplace_back(i);
 		};
 		// We need to fetch the previous index keys to add them to the delete index.
 		auto fetch_state = ColumnFetchState();

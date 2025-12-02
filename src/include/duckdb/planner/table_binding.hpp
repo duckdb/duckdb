@@ -132,7 +132,7 @@ public:
 	const vector<ColumnIndex> &GetBoundColumnIds() const;
 
 protected:
-	ColumnBinding GetColumnBinding(column_t column_index, const LogicalType &type);
+	ColumnBinding GetColumnBinding(column_t column_index);
 };
 
 //! DummyBinding is like the Binding, except the alias and index are set by default.

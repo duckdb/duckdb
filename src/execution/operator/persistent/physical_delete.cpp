@@ -81,7 +81,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		// Fetch all columns.
 		column_types = types;
 		for (idx_t i = 0; i < table.ColumnCount(); i++) {
-			column_ids.emplace_back(i, types[i]);
+			column_ids.emplace_back(i);
 		}
 
 	} else {
@@ -98,7 +98,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			return false;
 		});
 		for (auto &col : indexed_column_id_set) {
-			column_ids.emplace_back(col, types[col]);
+			column_ids.emplace_back(col);
 		}
 		sort(column_ids.begin(), column_ids.end());
 		for (auto &col : column_ids) {
