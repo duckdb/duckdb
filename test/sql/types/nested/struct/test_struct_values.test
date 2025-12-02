@@ -75,6 +75,15 @@ select struct_values((10, 'hello'));
 ----
 (10, hello)
 
+# prepared parameter as input
+statement ok
+PREPARE stmt as SELECT struct_values(?);
+
+query I
+EXECUTE stmt({x: 5, y: 'test'});
+----
+(5, test)
+
 # Error cases: non-STRUCT inputs should fail
 statement error
 select struct_values(42);
