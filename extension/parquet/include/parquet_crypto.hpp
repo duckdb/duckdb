@@ -70,16 +70,16 @@ public:
 	static constexpr idx_t BLOCK_SIZE = 16;
 
 	// Module types for encryption
-	static constexpr int8_t Footer = 0;
-	static constexpr int8_t ColumnMetaData = 1;
-	static constexpr int8_t DataPage = 2;
-	static constexpr int8_t DictionaryPage = 3;
-	static constexpr int8_t DataPageHeader = 4;
-	static constexpr int8_t DictionaryPageHeader = 5;
-	static constexpr int8_t ColumnIndex = 6;
-	static constexpr int8_t OffsetIndex = 7;
-	static constexpr int8_t BloomFilterHeader = 8;
-	static constexpr int8_t BloomFilterBitset = 9;
+	static constexpr uint8_t Footer = 0;
+	static constexpr uint8_t ColumnMetaData = 1;
+	static constexpr uint8_t DataPage = 2;
+	static constexpr uint8_t DictionaryPage = 3;
+	static constexpr uint8_t DataPageHeader = 4;
+	static constexpr uint8_t DictionaryPageHeader = 5;
+	static constexpr uint8_t ColumnIndex = 6;
+	static constexpr uint8_t OffsetIndex = 7;
+	static constexpr uint8_t BloomFilterHeader = 8;
+	static constexpr uint8_t BloomFilterBitset = 9;
 
 	// Standard AAD length for file
 	static constexpr int32_t AADFileIDLength = 8;

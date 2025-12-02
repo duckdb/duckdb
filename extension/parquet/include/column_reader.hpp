@@ -178,6 +178,11 @@ protected:
 	                  idx_t &approved_tuple_count, uint16_t row_group_ordinal);
 	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
 	                  const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal);
+	void ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal, uint16_t row_group_ordinal);
+	void ReadDataEncrypted(const data_ptr_t buffer,
+								 const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
+								 uint16_t page_ordinal);
+	void PreparePageDecryption(uint8_t &module, uint16_t &page_ordinal);
 
 private:
 	//! Check if a previous table filter has filtered out this page
@@ -293,12 +298,12 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void PrepareRead(int8_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
+	void PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
 	                 optional_ptr<TableFilterState> filter_state);
-	void PreparePage(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1,
+	void PreparePage(PageHeader &page_hdr, uint8_t module = -1, uint16_t page_ordinal = -1,
 	                 uint16_t row_group_ordinal = -1);
 	void PrepareDataPage(PageHeader &page_hdr);
-	void PreparePageV2(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1,
+	void PreparePageV2(PageHeader &page_hdr, uint8_t module = -1, uint16_t page_ordinal = -1,
 	                   uint16_t row_group_ordinal = -1);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);

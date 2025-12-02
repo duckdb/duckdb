@@ -234,14 +234,45 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
-void ColumnReader::PrepareRead(int8_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
-                               optional_ptr<TableFilterState> filter_state) {
-	encoding = ColumnEncoding::INVALID;
-	defined_decoder.reset();
-	page_is_filtered_out = false;
-	block.reset();
-	PageHeader page_hdr;
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+void ColumnReader::PreparePageDecryption(uint8_t &module, uint16_t &page_ordinal) {
+	// NOTE: there is at most one dict, index page and bloom filter page per col chunk
+	if (chunk->meta_data.__isset.dictionary_page_offset) {
+		if (page_ordinal == 0) {
+			// set page_ordinal to -1, because it is not used for the first dict header
+			module = ParquetCrypto::DictionaryPageHeader;
+			page_ordinal = -1;
+		} else {
+			page_ordinal -= 1;
+		}
+	} else if (chunk->meta_data.__isset.index_page_offset) {
+		if (page_ordinal == 0) {
+			module = ParquetCrypto::OffsetIndex;
+			page_ordinal = -1;
+		} else {
+			page_ordinal -= 1;
+		}
+	} else if (chunk->meta_data.__isset.bloom_filter_offset) {
+		if (page_ordinal == 0) {
+			module = ParquetCrypto::BloomFilterHeader;
+			page_ordinal = -1;
+		} else {
+			page_ordinal -= 1;
+		}
+	}
+}
+
+void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal, uint16_t row_group_ordinal) {
+	// default module
+	uint8_t module = ParquetCrypto::DataPageHeader;
+	uint16_t page_ordinal_set = page_ordinal;
+
+	PreparePageDecryption(module, page_ordinal_set);
+	reader.ReadEncrypted(object, *protocol, row_group_ordinal, ColumnIndex(), module, page_ordinal_set);
+}
+
+void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer,
+								 const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx, uint16_t page_ordinal) {
+
 	// default module
 	int8_t module = ParquetCrypto::DataPageHeader;
 
@@ -269,18 +300,38 @@ void ColumnReader::PrepareRead(int8_t page_ordinal, uint16_t row_group_ordinal, 
 			page_ordinal -= 1;
 		}
 	}
+
+	PreparePageDecryption(module, page_ordinal_set);
+	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, row_group_ordinal, ColumnIndex(), module, page_ordinal_set);
+}
+
+void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
+                               optional_ptr<TableFilterState> filter_state) {
+	encoding = ColumnEncoding::INVALID;
+	defined_decoder.reset();
+	page_is_filtered_out = false;
+	block.reset();
+	PageHeader page_hdr;
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+
 	if (trans.HasPrefetch()) {
 		// Already has some data prefetched, let's not mess with it
-		reader.Read(page_hdr, *protocol, ColumnIndex(), module, page_ordinal);
+		if (reader.parquet_options.encryption_config) {
+			ReadEncrypted(page_hdr, page_ordinal, row_group_ordinal);
+		} else {
+			reader.Read(page_hdr, *protocol);
+		}
 	} else {
 		// No prefetch yet, prefetch the full header in one go (so thrift won't read byte-by-byte from storage)
 		// 256 bytes should cover almost all headers (unless it's a V2 header with really LONG string statistics)
 		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
 		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
 		trans.Prefetch(trans.GetLocation(), prefetch_size);
-		// We only read a header
-		// TODO! also give the row group ordinal
-		reader.Read(page_hdr, *protocol, row_group_ordinal, ColumnIndex(), module, page_ordinal);
+		if (reader.parquet_options.encryption_config) {
+			ReadEncrypted(page_hdr, page_ordinal, row_group_ordinal);
+		} else {
+			reader.Read(page_hdr, *protocol);
+		}
 		trans.ClearPrefetch();
 	}
 	// some basic sanity check
@@ -303,7 +354,7 @@ void ColumnReader::PrepareRead(int8_t page_ordinal, uint16_t row_group_ordinal, 
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE: {
-		PreparePage(page_hdr, ParquetCrypto::DictionaryPage, -1, row_group_ordinal);
+		PreparePage(page_hdr, ParquetCrypto::DictionaryPage, page_ordinal, row_group_ordinal);
 		auto dictionary_size = page_hdr.dictionary_page_header.num_values;
 		if (dictionary_size < 0) {
 			throw InvalidInputException("Failed to read file \"%s\": Invalid dictionary page header (num_values < 0)",
@@ -321,7 +372,7 @@ void ColumnReader::PrepareRead(int8_t page_ordinal, uint16_t row_group_ordinal, 
 void ColumnReader::ResetPage() {
 }
 
-void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, int16_t page_ordinal,
+void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal,
                                  uint16_t row_group_ordinal) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
@@ -337,8 +388,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, int16_t p
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size, row_group_ordinal, ColumnIndex(), module,
-		                page_ordinal);
+		if (reader.parquet_options.encryption_config) {
+			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, row_group_ordinal, ColumnIndex(),
+						page_ordinal);
+		} else {
+			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
+		}
 		return;
 	}
 
@@ -351,14 +406,25 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, int16_t p
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
-	reader.ReadData(*protocol, block->ptr, uncompressed_bytes, row_group_ordinal, ColumnIndex(), module, page_ordinal);
+
+	if (reader.parquet_options.encryption_config) {
+		ReadDataEncrypted(block->ptr, uncompressed_bytes, row_group_ordinal, ColumnIndex(),
+					page_ordinal);
+	} else {
+		reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
+	}
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
 		compressed_buffer.resize(GetAllocator(), compressed_bytes);
-		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
+		if (reader.parquet_options.encryption_config) {
+			ReadDataEncrypted(compressed_buffer.ptr, compressed_bytes, row_group_ordinal, ColumnIndex(),
+						page_ordinal);
+		} else {
+			reader.ReadData(*protocol,  compressed_buffer.ptr, compressed_bytes);
+		}
 
 		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
 		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
@@ -373,19 +439,23 @@ void ColumnReader::AllocateBlock(idx_t size) {
 	}
 }
 
-void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, int16_t page_ordinal, uint16_t row_group_ordinal) {
+void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal, uint16_t row_group_ordinal) {
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
-		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size, ColumnIndex(), module, page_ordinal);
+		if (reader.parquet_options.encryption_config) {
+			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, row_group_ordinal, ColumnIndex(),
+						page_ordinal);
+		} else {
+			reader.ReadData(*protocol,  block->ptr, page_hdr.compressed_page_size);
+		}
 		return;
 	}
 
 	// TODO: DETERMINE WHEN WRITTEN WITH ARROW
 	bool is_arrow = true;
-
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
 	if (is_arrow && chunk->__isset.crypto_metadata) {
@@ -405,10 +475,12 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, int16_t pag
 
 	ResizeableBuffer compressed_buffer;
 	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
-	// compressed_buffer.resize(GetAllocator(), page_hdr.compressed_page_size + 1);
-	reader.ReadData(*protocol, compressed_buffer.ptr, compressed_page_size, row_group_ordinal, ColumnIndex(), module,
-	                page_ordinal);
-	// reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size);
+	if (reader.parquet_options.encryption_config) {
+		ReadDataEncrypted(compressed_buffer.ptr, compressed_page_size, row_group_ordinal, ColumnIndex(),
+					page_ordinal);
+	} else {
+		reader.ReadData(*protocol,  compressed_buffer.ptr, compressed_page_size);
+	}
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);
