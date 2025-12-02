@@ -2,6 +2,7 @@
 # description: Test SAMPLE keyword
 # group: [sample]
 
+# sample max on windows 32 bit is 10000000, otherwise 1000000000
 require notwindows
 
 statement ok

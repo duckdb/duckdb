@@ -24,8 +24,13 @@ string SampleMethodToString(SampleMethod method);
 
 class SampleOptions {
 public:
+#ifdef WIN32
+	// 10 million on windows is enough
+	static constexpr idx_t MAX_SAMPLE_ROWS = 10000000;
+#else
 	// 1 billion rows should be enough.
 	static constexpr idx_t MAX_SAMPLE_ROWS = 1000000000;
+#endif
 
 public:
 	explicit SampleOptions(int64_t seed_ = -1);
