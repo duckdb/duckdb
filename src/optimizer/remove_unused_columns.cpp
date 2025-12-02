@@ -340,8 +340,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		if (filter_expr->IsScalar()) {
 			filter_expr = std::move(column_ref);
 		}
-		VisitExpression(&filter_expr);
 		filter_expressions.push_back(std::move(filter_expr));
+		VisitExpression(&filter_expressions.back());
 	}
 
 	// Clear unused ids, include filter columns that are projected out immediately
@@ -388,18 +388,16 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			//! Upgrade the optional prune hint to a mandatory pushdown of the extract
 			//! TODO: also set the types on the child indices (recursively)
 			new_index.SetPushdownExtractType(column_type);
-			auto scan_type = new_index.GetScanType();
 			new_column_ids.emplace_back(new_index);
 			original_ids.emplace_back(col_sel_idx);
 
 			//! Replace the top-level struct extract with a BoundColumnRefExpression, referencing the new ColumnBinding
 			//! we just created
 			auto &struct_extract = entry->second.struct_extracts[i];
-			if (*struct_extract.expr) {
-				auto colref_copy = colref.get().Copy();
-				*struct_extract.expr = std::move(colref_copy);
-				(*struct_extract.expr)->return_type = scan_type;
-			}
+			auto return_type = struct_extract.expr->get()->return_type;
+			auto colref_copy = colref.get().Copy();
+			*struct_extract.expr = std::move(colref_copy);
+			(*struct_extract.expr)->return_type = return_type;
 		}
 	}
 	if (new_column_ids.empty()) {
@@ -485,11 +483,9 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	reference<const LogicalType> type(colref->return_type);
 	type = StructType::GetChildTypes(type.get())[indexes[0]].second;
 	ColumnIndex index = ColumnIndex(indexes[0]);
-	index.SetType(type);
 	for (idx_t i = 1; i < indexes.size(); i++) {
 		type = StructType::GetChildTypes(type.get())[indexes[i]].second;
 		ColumnIndex new_index(indexes[i]);
-		new_index.SetType(type);
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
 	}
