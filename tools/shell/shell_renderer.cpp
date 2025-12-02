@@ -1214,11 +1214,12 @@ public:
 
 	string EscapeJSONString(const string &str) {
 		string result = "\"";
-		for (auto c : str) {
+		for (auto c_ : str) {
+			auto c = (unsigned char)c_;
 			if (c == '\\' || c == '"') {
 				// escape \ and "
 				result += "\\";
-				result += c;
+				result += c_;
 			} else if (c <= 0x1f) {
 				result += "\\";
 				if (c == '\b') {
@@ -1237,7 +1238,7 @@ public:
 					result += buf;
 				}
 			} else {
-				result += c;
+				result += c_;
 			}
 		}
 		result += "\"";
