@@ -407,7 +407,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	for (const auto &col_idx : input.column_indexes) {
 		if (col_idx.IsRowIdColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
-		} else if (col_idx.IsPushdownExtract()) {
+		} else if (col_idx.HasType()) {
 			g_state->scanned_types.push_back(col_idx.GetScanType());
 		} else {
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());

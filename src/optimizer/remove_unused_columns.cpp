@@ -306,6 +306,16 @@ static bool SupportsPushdownExtract(LogicalGet &get, idx_t column_idx) {
 	return get.function.supports_pushdown_extract(*get.bind_data, column_idx);
 }
 
+// void RemoveUnusedColumns::AdjustFilters(vector<unique_ptr<Expression>> &expressions, map<idx_t,
+// unique_ptr<TableFilter>> &filters) { 	D_ASSERT(expressions.size() == filters.size()); 	auto expr_it =
+//expressions.begin(); 	auto filter_it = filters.begin(); 	for (idx_t i = 0; i < expressions.size(); i++) { 		auto &expr =
+//**expr_it; 		if (expr.)
+
+//		expr_it++;
+//		filter_it++;
+//	}
+//}
+
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	if (everything_referenced) {
 		return;
@@ -382,8 +392,6 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		D_ASSERT(entry->second.child_columns.size() == entry->second.struct_extracts.size());
 		for (idx_t i = 0; i < entry->second.child_columns.size(); i++) {
 			auto &child = entry->second.child_columns[i];
-			auto &colref = entry->second.bindings[i];
-			colref.get().binding.column_index += i;
 			ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), {child});
 			//! Upgrade the optional prune hint to a mandatory pushdown of the extract
 			//! TODO: also set the types on the child indices (recursively)
@@ -395,8 +403,12 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			//! we just created
 			auto &struct_extract = entry->second.struct_extracts[i];
 			auto return_type = struct_extract.expr->get()->return_type;
+			auto &colref = entry->second.bindings[i];
 			auto colref_copy = colref.get().Copy();
 			*struct_extract.expr = std::move(colref_copy);
+			auto &new_expr = (*struct_extract.expr)->Cast<BoundColumnRefExpression>();
+			new_expr.return_type = return_type;
+			new_expr.binding.column_index += i;
 			(*struct_extract.expr)->return_type = return_type;
 		}
 	}

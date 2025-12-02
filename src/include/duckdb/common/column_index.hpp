@@ -89,15 +89,22 @@ public:
 		D_ASSERT(index_type == ColumnIndexType::OPTIONAL_PRUNE_HINT);
 		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 		type = type_information;
+		D_ASSERT(child_indexes.size() == 1);
+
+		auto &child = child_indexes[0];
+		auto &child_types = StructType::GetChildTypes(type);
+		if (child.child_indexes.empty()) {
+			child.SetType(child_types[child.GetPrimaryIndex()].second);
+		} else {
+			child.SetPushdownExtractType(child_types[child.GetPrimaryIndex()].second);
+		}
 	}
 	const LogicalType &GetScanType() const {
-		D_ASSERT(IsPushdownExtract());
-		auto &children = StructType::GetChildTypes(type);
-		auto &child_index = child_indexes[0];
-		if (child_index.IsPushdownExtract()) {
-			return child_index.GetScanType();
+		D_ASSERT(HasType());
+		if (IsPushdownExtract()) {
+			return child_indexes[0].GetScanType();
 		}
-		return children[child_index.GetPrimaryIndex()].second;
+		return GetType();
 	}
 	const LogicalType &GetType() const {
 		D_ASSERT(type.id() != LogicalTypeId::INVALID);
@@ -122,6 +129,15 @@ public:
 public:
 	void Serialize(Serializer &serializer) const;
 	static ColumnIndex Deserialize(Deserializer &deserializer);
+
+private:
+	void VerifySinglePath() const {
+		if (child_indexes.empty()) {
+			return;
+		}
+
+		child_indexes[0].VerifySinglePath();
+	}
 
 private:
 	idx_t index;

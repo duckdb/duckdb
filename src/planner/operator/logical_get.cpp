@@ -126,7 +126,7 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
 		}
 		return entry->second.type;
-	} else if (index.IsPushdownExtract()) {
+	} else if (index.HasType()) {
 		return index.GetScanType();
 	} else {
 		return returned_types[index.GetPrimaryIndex()];
