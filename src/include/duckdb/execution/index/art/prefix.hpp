@@ -68,7 +68,9 @@ public:
 
 	//! Returns the string representation of the node at indentation level.
 	static string ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate = false,
-	                       bool display_ascii = false);
+	                       bool display_ascii = false, optional_ptr<const ARTKey> key_path = nullptr,
+	                       idx_t key_depth = 0, idx_t depth_remaining = 0, bool print_deprecated_leaves = true,
+	                       bool structure_only = false);
 
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);

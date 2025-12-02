@@ -13,6 +13,7 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include <fstream>
 
 namespace duckdb {
 
@@ -466,7 +467,9 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 // Printing
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool display_ascii) const {
+string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool display_ascii,
+                      optional_ptr<const ARTKey> key_path, idx_t key_depth, idx_t depth_remaining,
+                      bool print_deprecated_leaves, bool structure_only) const {
 	auto indent = [](string &str, const idx_t n) {
 		for (idx_t i = 0; i < n; ++i) {
 			str += " ";
@@ -483,6 +486,8 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
 	bool propagate_gate = inside_gate || is_gate;
 
+	bool print_full_tree = propagate_gate || !key_path || depth_remaining == 0;
+
 	switch (type) {
 	case NType::LEAF_INLINED: {
 		string str = "";
@@ -490,9 +495,10 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 		return str + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
 	}
 	case NType::LEAF:
-		return Leaf::DeprecatedToString(art, *this);
+		return Leaf::DeprecatedToString(art, *this, indent_level, print_deprecated_leaves);
 	case NType::PREFIX: {
-		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii);
+		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii, key_path,
+		                              key_depth, depth_remaining, print_deprecated_leaves);
 		if (is_gate) {
 			string s = "";
 			indent(s, indent_level);
@@ -524,16 +530,65 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 		}
 		str += "\n";
 	} else {
-		auto child = GetNextChild(art, byte);
-		while (child) {
-			string c = child->ToString(art, indent_level + 2, propagate_gate, display_ascii);
-			indent(str, indent_level);
-			str = str + format_byte(byte) + ",\n" + c;
-			if (byte == NumericLimits<uint8_t>::Maximum()) {
-				break;
+		if (key_path && !print_full_tree && key_depth < key_path->len) {
+			// Only traverse the child matching the key at current depth
+			uint8_t expected_byte = (*key_path)[key_depth];
+			auto matching_child = GetChild(art, expected_byte);
+			
+			if (structure_only) {
+				// Structure only mode: only print the matching child, skip all others (don't print their bytes)
+				if (matching_child) {
+					idx_t next_key_depth = key_depth + 1;
+					idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
+					string c = matching_child->ToString(art, indent_level + 2, propagate_gate, display_ascii,
+					                                   key_path, next_key_depth, next_depth_remaining,
+					                                   print_deprecated_leaves, structure_only);
+					indent(str, indent_level);
+					str = str + format_byte(expected_byte) + ",\n" + c;
+				}
+			} else {
+				// Print all children, but only traverse the matching one
+				uint8_t byte = 0;
+				auto child = GetNextChild(art, byte);
+				while (child) {
+					if (byte == expected_byte && matching_child) {
+						// This is the child on the path - traverse it
+						idx_t next_key_depth = key_depth + 1;
+						idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
+						string c = matching_child->ToString(art, indent_level + 2, propagate_gate, display_ascii,
+						                                   key_path, next_key_depth, next_depth_remaining,
+						                                   print_deprecated_leaves, structure_only);
+						indent(str, indent_level);
+						str = str + format_byte(byte) + ",\n" + c;
+					} else {
+						// Not on path, print "not printed"
+						indent(str, indent_level);
+						str = str + format_byte(byte) + ", [not printed]\n";
+					}
+
+					if (byte == NumericLimits<uint8_t>::Maximum()) {
+						break;
+					}
+					byte++;
+					child = GetNextChild(art, byte);
+				}
 			}
-			byte++;
-			child = GetNextChild(art, byte);
+		} else {
+			uint8_t byte = 0;
+			auto child = GetNextChild(art, byte);
+			while (child) {
+				idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
+				string c = child->ToString(art, indent_level + 2, propagate_gate, display_ascii, key_path,
+				                           key_depth, next_depth_remaining, print_deprecated_leaves,
+				                           structure_only);
+				indent(str, indent_level);
+				str = str + format_byte(byte) + ",\n" + c;
+				if (byte == NumericLimits<uint8_t>::Maximum()) {
+					break;
+				}
+				byte++;
+				child = GetNextChild(art, byte);
+			}
 		}
 	}
 

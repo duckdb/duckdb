@@ -186,7 +186,9 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-string Prefix::ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate, bool display_ascii) {
+string Prefix::ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate, bool display_ascii,
+                        optional_ptr<const ARTKey> key_path, idx_t key_depth, idx_t depth_remaining,
+                        bool print_deprecated_leaves, bool structure_only) {
 	auto indent = [](string &str, const idx_t n) {
 		for (idx_t i = 0; i < n; ++i) {
 			str += " ";
@@ -201,14 +203,27 @@ string Prefix::ToString(ART &art, const Node &node, idx_t indent_level, bool ins
 	string str = "";
 	indent(str, indent_level);
 	reference<const Node> ref(node);
+	idx_t current_key_depth = key_depth;
 	Iterator(art, ref, true, false, [&](const Prefix &prefix) {
 		str += "Prefix: |";
-		for (idx_t i = 0; i < prefix.data[Count(art)]; i++) {
+		idx_t prefix_len = prefix.data[Count(art)];
+		for (idx_t i = 0; i < prefix_len; i++) {
 			str += format_byte(prefix.data[i]) + "|";
+			// Check if prefix matches key_path and update key_depth
+			if (key_path && current_key_depth < key_path->len) {
+				if (prefix.data[i] == (*key_path)[current_key_depth]) {
+					current_key_depth++;
+				} else {
+					// Prefix doesn't match key_path, this path won't be followed
+					// But we still print the prefix for visibility
+				}
+			}
 		}
 	});
 
-	auto child = ref.get().ToString(art, indent_level, inside_gate, display_ascii);
+	// Prefix nodes don't count toward depth_remaining, so pass it through unchanged
+	auto child = ref.get().ToString(art, indent_level, inside_gate, display_ascii, key_path, current_key_depth, depth_remaining,
+	                                 print_deprecated_leaves, structure_only);
 	return str + "\n" + child;
 }
 
