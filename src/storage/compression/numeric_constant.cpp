@@ -1,10 +1,12 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 namespace duckdb {
 
@@ -105,14 +107,16 @@ void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
-                       bool &filters_valid_values, TableFilterState &filter_state) {
+void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
+                                    bool &filters_valid_values, TableFilterState &filter_state) {
 	filters_nulls = false;
 	filters_valid_values = false;
 
 	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER:
-		break;
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &opt_filter = filter.Cast<OptionalFilter>();
+		return opt_filter.FiltersNullValues(type, filters_nulls, filters_valid_values, filter_state);
+	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
@@ -160,6 +164,11 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 		filters_valid_values = false;
 		break;
 	}
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bf = filter.Cast<BFTableFilter>();
+		filters_nulls = bf.FiltersNullValues();
+		break;
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection in validity select");
 	}
@@ -170,7 +179,7 @@ void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_
                             TableFilterState &filter_state) {
 	// check what effect the filter has on NULL values
 	bool filters_nulls, filters_valid_values;
-	FiltersNullValues(result.GetType(), filter, filters_nulls, filters_valid_values, filter_state);
+	ConstantFun::FiltersNullValues(result.GetType(), filter, filters_nulls, filters_valid_values, filter_state);
 
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
