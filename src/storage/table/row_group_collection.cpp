@@ -1307,6 +1307,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
+	bool skipped_row_groups = false;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
 		if (!entry) {
@@ -1336,11 +1337,18 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// row group was unchanged - emit previous row group
 			new_row_group = entry->ReferenceNode();
 		}
-		// check if we should write this row group to the persistent storage
 		RowGroupPointer pointer_copy;
 		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-		if (!row_group_write_data.statistics.empty()) {
+
+		// check if we should write this row group to the persistent storage
+		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
+		if (row_group_write_data.should_checkpoint) {
+			if (skipped_row_groups) {
+				throw InternalException("Checkpoint failure - we are writing a row group AFTER we skipped writing a "
+				                        "row group due to concurrent insertions. This will change the row-ids of the "
+				                        "written row groups which can cause subtle issues later.");
+			}
 			auto pointer =
 			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
 
@@ -1350,6 +1358,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		} else {
 			debug_verify_blocks = false;
+			skipped_row_groups = true;
 		}
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;

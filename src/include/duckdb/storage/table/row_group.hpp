@@ -80,6 +80,7 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
+	bool should_checkpoint = true;
 	vector<idx_t> existing_extra_metadata_blocks;
 	optional_idx write_count;
 };
@@ -142,9 +143,8 @@ public:
 	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
 
-	//! The number of rows to checkpoint from this row group given the specified transaction id, or
-	// optional_idx() if it is the entire row group
-	optional_idx GetCheckpointRowCount(TransactionData transaction) const;
+	//! Whether or not this RowGroup should be
+	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
 	                            SelectionVector &sel_vector, idx_t max_count);

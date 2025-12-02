@@ -790,13 +790,17 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfoIfLoaded() const {
 	return nullptr;
 }
 
-optional_idx RowGroup::GetCheckpointRowCount(TransactionData transaction) const {
+bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
+	if (checkpoint_id == MAX_TRANSACTION_ID) {
+		// no id specified - checkpoint all committed data
+		return true;
+	}
 	// gets the maximum row count to read from this row group given the specified transaction identifier
 	auto vinfo = GetVersionInfoIfLoaded();
 	if (!vinfo) {
-		return optional_idx();
+		return true;
 	}
-	return vinfo->GetCheckpointRowCount(transaction, count);
+	return vinfo->ShouldCheckpointRowGroup(checkpoint_id, count);
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
@@ -1022,16 +1026,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
-		if (info.options.transaction_id != MAX_TRANSACTION_ID) {
-			// a transaction id is specified - we might only have to checkpoint a part of this row group
-			// figure out how many rows of this row group we need to checkpoint
-			TransactionData checkpoint_transaction(info.options.transaction_id, info.options.transaction_id);
-			write_data.write_count = row_group.get().GetCheckpointRowCount(checkpoint_transaction);
-			if (write_data.write_count.IsValid() && write_data.write_count.GetIndex() != 0) {
-				throw InternalException("GetCheckpointRowCount returned a non-zero valid value, this means we need to "
-				                        "checkpoint a partial row group - this is not possible");
-			}
-		}
+		// check if we should checkpoint this row group
+		write_data.should_checkpoint = row_group.get().ShouldCheckpointRowGroup(info.options.transaction_id);
 		result.push_back(std::move(write_data));
 	}
 
@@ -1054,8 +1050,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
-			if (row_group_write_data.write_count.IsValid() && row_group_write_data.write_count.GetIndex() == 0) {
-				// this row group is empty for this transaction - skip it
+			if (!row_group_write_data.should_checkpoint) {
+				// row group should not be checkpointed - skip
 				continue;
 			}
 			auto &column = row_group.GetColumn(column_idx);
@@ -1078,8 +1074,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 		auto &row_group_write_data = result[row_group_idx];
 		auto &row_group = row_groups[row_group_idx].get();
-		if (row_group_write_data.write_count.IsValid() && row_group_write_data.write_count.GetIndex() == 0) {
-			// this row group is empty for this transaction - leave it empty
+		if (!row_group_write_data.should_checkpoint) {
+			// row group should not be checkpointed - skip
 			continue;
 		}
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
