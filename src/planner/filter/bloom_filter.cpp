@@ -134,8 +134,62 @@ bool BFTableFilter::FilterValue(const Value &value) const {
 	return filter.LookupOne(hash);
 }
 
-FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
+template <class T>
+static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, const BaseStatistics &stats) {
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto min = NumericStats::GetMin<T>(stats);
+	const auto max = NumericStats::GetMax<T>(stats);
+
+	if (min > max) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
+	}
+	if (max - min > 2048) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Too wide of a range
+	}
+	const auto range = NumericCast<idx_t>(max - min);
+
+	idx_t hits = 0;
+	for (idx_t i = 0; i <= range; i++) {
+		hits += bf.LookupOne(Hash(min + static_cast<T>(i)));
+	}
+
+	if (hits == 0) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (hits == range + 1) {
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
+	switch (stats.GetType().InternalType()) {
+	case PhysicalType::UINT8:
+		return TemplatedCheckStatistics<uint8_t>(filter, stats);
+	case PhysicalType::UINT16:
+		return TemplatedCheckStatistics<uint16_t>(filter, stats);
+	case PhysicalType::UINT32:
+		return TemplatedCheckStatistics<uint32_t>(filter, stats);
+	case PhysicalType::UINT64:
+		return TemplatedCheckStatistics<uint64_t>(filter, stats);
+	case PhysicalType::UINT128:
+		return TemplatedCheckStatistics<uhugeint_t>(filter, stats);
+	case PhysicalType::INT8:
+		return TemplatedCheckStatistics<int8_t>(filter, stats);
+	case PhysicalType::INT16:
+		return TemplatedCheckStatistics<int16_t>(filter, stats);
+	case PhysicalType::INT32:
+		return TemplatedCheckStatistics<int32_t>(filter, stats);
+	case PhysicalType::INT64:
+		return TemplatedCheckStatistics<int64_t>(filter, stats);
+	case PhysicalType::INT128:
+		return TemplatedCheckStatistics<hugeint_t>(filter, stats);
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 }
 
 bool BFTableFilter::Equals(const TableFilter &other) const {
