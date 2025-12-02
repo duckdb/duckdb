@@ -585,8 +585,10 @@ FilterPropagateResult CheckImprintTemplated(const BaseStatistics &stats, Express
 
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			auto prunes = imprint_prune_counter.fetch_add(1) + 1;
+			/*
 			IMPRINT_LOG(StringUtil::Format("[imprint-prune] total=%llu constant=%s",
 			                               static_cast<long long unsigned>(prunes), constant_value.ToString()));
+			*/
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	}
@@ -649,9 +651,11 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		return zonemap_result;
 	}
 
+	/*
 	IMPRINT_LOG(StringUtil::Format("[imprint-check-enter] type=%s bitmap=0x%016llx bins=%d", stats.GetType().ToString(),
 	                               NumericStats::GetImprintBitmapUnsafe(stats),
 	                               NumericStats::GetImprintBinsUnsafe(stats)));
+	*/
 
 	switch (internal_type) {
 	case PhysicalType::INT8:

@@ -480,6 +480,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
 
+		/*
 		// get current segment stats for logging
 		auto &column_scan_state = state.column_scans[column_idx];
 		auto current_segment = column_scan_state.current;
@@ -536,6 +537,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 				        min_str.c_str(), max_str.c_str());
 			}
 		}
+		*/
 
 		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
 
@@ -547,8 +549,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		}
 
 		// check zone map segment.
-		// auto &column_scan_state = state.column_scans[column_idx];
-		// auto current_segment = column_scan_state.current;
+		auto &column_scan_state = state.column_scans[column_idx];
+		auto current_segment = column_scan_state.current;
 		if (!current_segment) {
 			// no segment to skip
 			continue;
