@@ -1,0 +1,60 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_read_policy_behavior.test
+# description: Test that different read policies work correctly with actual file reads
+# group: [external_file_cache]
+
+require parquet
+
+# Test with DEFAULT read policy
+statement ok
+SET external_file_cache_read_policy = 'DEFAULT';
+
+# Create a test parquet file with unique sequential IDs
+statement ok
+COPY (SELECT range as id, range * 2 as value FROM range(10000)) TO '__TEST_DIR__/test_default_policy.parquet' (FORMAT PARQUET);
+
+# Read with DEFAULT policy
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/test_default_policy.parquet' WHERE id < 1000;
+----
+1000
+
+query I
+SELECT SUM(value) FROM '__TEST_DIR__/test_default_policy.parquet' WHERE id < 100;
+----
+9900
+
+# Test with ALIGNED read policy
+statement ok
+SET external_file_cache_read_policy = 'ALIGNED';
+
+# Create a test parquet file with unique sequential IDs
+statement ok
+COPY (SELECT range as id, range * 2 as value FROM range(10000)) TO '__TEST_DIR__/test_aligned_policy.parquet' (FORMAT PARQUET);
+
+# Read with ALIGNED policy
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/test_aligned_policy.parquet' WHERE id < 1000;
+----
+1000
+
+query I
+SELECT SUM(value) FROM '__TEST_DIR__/test_aligned_policy.parquet' WHERE id < 100;
+----
+9900
+
+# Verify both policies produce correct results for full scans
+statement ok
+SET external_file_cache_read_policy = 'DEFAULT';
+
+query I
+SELECT SUM(id) FROM '__TEST_DIR__/test_default_policy.parquet';
+----
+49995000
+
+statement ok
+SET external_file_cache_read_policy = 'ALIGNED';
+
+query I
+SELECT SUM(id) FROM '__TEST_DIR__/test_aligned_policy.parquet';
+----
+49995000

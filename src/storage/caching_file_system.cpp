@@ -4,14 +4,18 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/read_policy.hpp"
+#include "duckdb/storage/read_policy_registry.hpp"
 
 namespace duckdb {
 
-CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)) {
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db_p)), db(db_p) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
@@ -37,6 +41,12 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), validate(true),
       cached_file(cached_file_p), position(0) {
+	// Create the appropriate read policy based on the current setting
+	auto &config = DBConfig::GetConfig(caching_file_system_p.db);
+	auto &registry = ReadPolicyRegistry::Get(caching_file_system_p.db);
+	const auto &policy_name = config.options.external_file_cache_read_policy_name;
+	read_policy = registry.CreatePolicy(policy_name);
+
 	if (path.extended_info) {
 		const auto &open_options = path.extended_info->options;
 		const auto validate_entry = open_options.find("validate_external_file_cache");
@@ -82,21 +92,6 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	return *file_handle;
 }
 
-static bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
-	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
-
-	if (added_length > MAX_BOUND_TO_BE_ADDED_LENGTH) {
-		// Absolute value of what would be needed to added is too high
-		return false;
-	}
-	if (added_length > current_length) {
-		// Relative value of what would be needed to added is too high
-		return false;
-	}
-
-	return true;
-}
-
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
 	if (!external_file_cache.IsEnabled()) {
@@ -114,36 +109,47 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		return result; // Success
 	}
 
-	idx_t new_nr_bytes = nr_bytes;
-	if (start_location_of_next_range.IsValid()) {
-		const idx_t nr_bytes_to_be_added = start_location_of_next_range.GetIndex() - location - nr_bytes;
-		if (ShouldExpandToFillGap(nr_bytes, nr_bytes_to_be_added)) {
-			// Grow the range from location to start_location_of_next_range, so that to fill gaps in the cached ranges
-			new_nr_bytes = nr_bytes + nr_bytes_to_be_added;
-		}
-	}
+	// Use the read policy to calculate how many bytes to read and cache
+	const idx_t file_size = GetFileSize();
+	const ReadPolicyResult policy_result =
+	    read_policy->CalculateBytesToRead(nr_bytes, location, file_size, start_location_of_next_range);
+	const idx_t actual_read_location = policy_result.read_location;
+	const idx_t actual_read_bytes = policy_result.read_bytes;
 
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
-	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_nr_bytes);
+	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, actual_read_bytes);
 	auto new_file_range =
-	    make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), new_nr_bytes, location, version_tag);
+	    make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), actual_read_bytes, actual_read_location, version_tag);
 	buffer = result.Ptr();
+
+	// Calculate the offset into the buffer for the requested location
+	// If the read location was aligned down, we need to adjust the buffer pointer
+	const idx_t buffer_offset = location - actual_read_location;
+	data_ptr_t read_buffer = buffer + buffer_offset;
 
 	// Interleave reading and copying from cached buffers
 	if (OnDiskFile()) {
 		// On-disk file: prefer interleaving reading and copying from cached buffers
-		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, true);
+		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, actual_read_bytes, actual_read_location,
+		                       true);
 	} else {
 		// Remote file: prefer interleaving reading and copying from cached buffers only if reduces number of real
 		// reads
-		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, false) <= 1) {
-			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, true);
+		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, actual_read_bytes, actual_read_location,
+		                           false) <= 1) {
+			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, actual_read_bytes, actual_read_location,
+			                       true);
 		} else {
-			GetFileHandle().Read(context, buffer, new_nr_bytes, location);
+			GetFileHandle().Read(context, buffer, actual_read_bytes, actual_read_location);
 		}
 	}
 
-	return TryInsertFileRange(result, buffer, new_nr_bytes, location, new_file_range);
+	// Set the buffer pointer to the requested location within the allocated buffer
+	buffer = read_buffer;
+
+	// TryInsertFileRange needs the original location and nr_bytes for overlap checking,
+	// but the new_file_range already has the actual read location and bytes
+	return TryInsertFileRange(result, buffer, nr_bytes, location, new_file_range);
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {

@@ -54,6 +54,7 @@
 #include "duckdb/common/enums/preserve_order.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
+#include "duckdb/common/enums/read_policy_type.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -3771,6 +3772,24 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 4, "QueryResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetReadPolicyTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ReadPolicyType::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ReadPolicyType::ALIGNED), "ALIGNED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ReadPolicyType>(ReadPolicyType value) {
+	return StringUtil::EnumToString(GetReadPolicyTypeValues(), 2, "ReadPolicyType", static_cast<uint32_t>(value));
+}
+
+template<>
+ReadPolicyType EnumUtil::FromString<ReadPolicyType>(const char *value) {
+	return static_cast<ReadPolicyType>(StringUtil::StringToEnum(GetReadPolicyTypeValues(), 2, "ReadPolicyType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {
