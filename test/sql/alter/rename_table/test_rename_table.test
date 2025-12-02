@@ -125,3 +125,31 @@ CREATE TABLE tbl3(i INTEGER);
 statement ok
 CREATE TABLE tbl4(i INTEGER);
 
+# test temporary table rename preserves temporary flag
+statement ok
+CREATE TEMPORARY TABLE temp_tbl(i INTEGER);
+
+statement ok
+INSERT INTO temp_tbl VALUES (42);
+
+# verify temporary flag before rename
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_tbl'
+----
+temp_tbl	temp	true
+
+statement ok
+ALTER TABLE temp.temp_tbl RENAME TO temp_tbl_renamed
+
+# verify data preserved
+query I
+SELECT * FROM temp_tbl_renamed
+----
+42
+
+# verify temporary flag preserved after rename
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_tbl_renamed'
+----
+temp_tbl_renamed	temp	true
+
