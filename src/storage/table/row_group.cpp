@@ -795,7 +795,7 @@ bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
 		// no id specified - checkpoint all committed data
 		return true;
 	}
-	// gets the maximum row count to read from this row group given the specified transaction identifier
+	// check if this row group was committed as of the current checkpoint id
 	auto vinfo = GetVersionInfoIfLoaded();
 	if (!vinfo) {
 		return true;
@@ -1026,13 +1026,11 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
-		// check if we should checkpoint this row group
 		write_data.should_checkpoint = row_group.get().ShouldCheckpointRowGroup(info.options.transaction_id);
 		result.push_back(std::move(write_data));
 	}
 
 	// Checkpoint the row groups
-	// for each row group we need to figure out which rows we should write
 
 	// In order to co-locate columns across different row groups, we write column-at-a-time
 	// i.e. we first write column #0 of all row groups, then column #1, ...
@@ -1154,8 +1152,6 @@ const vector<MetaBlockPointer> &RowGroup::GetColumnStartPointers() const {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	// FIXME: "HasChanges()" is a global check - in the future we might want to check if this row group has changes
-	// for the checkpoint transaction that we are going to write
 	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
 	    !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
