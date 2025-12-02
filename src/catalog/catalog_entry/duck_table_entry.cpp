@@ -1,10 +1,14 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
@@ -22,8 +26,11 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -242,11 +249,70 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ExpressionExecutor &executor) {
-	//TODO:  perform an update on the newly written column, executing the default expression here
-	DataChunk dummy_chunk;
-	// executor.ExecuteExpression();
+unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(CatalogTransaction transaction, ExpressionExecutor &executor) {
+	// If there's no context, we can't perform the update (e.g., during WAL replay without context)
+	if (!transaction.HasContext()) {
+		return nullptr;
+	}
 
+	auto &context = transaction.GetContext();
+	auto &duck_transaction = DuckTransaction::Get(context, catalog);
+
+	// The newly added column is the last logical column
+	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1);
+	auto new_column_physical_idx = columns.LogicalToPhysical(new_column_logical_idx);
+
+	// Set up scan to read all row IDs
+	TableScanState scan_state;
+	vector<StorageIndex> column_ids;
+	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID); // We only need row IDs
+
+	storage->InitializeScan(context, duck_transaction, scan_state, column_ids, nullptr);
+
+	// Bind constraints for update
+	auto binder = Binder::CreateBinder(context);
+	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
+
+	// Initialize update state
+	auto update_state = storage->InitializeUpdate(*this, context, bound_constraints);
+
+	// Prepare update column list (only the new column)
+	vector<PhysicalIndex> update_columns;
+	update_columns.push_back(new_column_physical_idx);
+
+	// Scan and update in batches
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::Get(context), {LogicalType::ROW_TYPE});
+
+	DataChunk update_chunk;
+	update_chunk.Initialize(Allocator::Get(context), {columns.GetColumn(new_column_logical_idx).Type()});
+
+	while (true) {
+		scan_chunk.Reset();
+		storage->Scan(duck_transaction, scan_chunk, scan_state);
+
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+
+		// Extract row IDs from the scan chunk
+		auto &row_ids = scan_chunk.data[0];
+
+		// Prepare update chunk with the default values
+		update_chunk.Reset();
+		update_chunk.SetCardinality(scan_chunk.size());
+
+		// Set the chunk on the executor (needed for size information)
+		executor.SetChunk(&update_chunk);
+
+		// Execute the default expression for each row (expression index is 0)
+		executor.ExecuteExpression(0, update_chunk.data[0]);
+
+		// Update the newly added column with the default values
+		storage->Update(*update_state, context, row_ids, update_columns, update_chunk);
+	}
+
+	return nullptr;
 }
 
 void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
@@ -371,11 +437,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
-	Expression &default_value = *bound_defaults.back();
-	// initialize the executor stored on the AlterInfo
-	printf("\nset AlterInfo.default_executor");
+
+	// Store the expression in AlterInfo to keep it alive (the executor only stores a pointer)
+	info.default_expression = std::move(bound_defaults.back());
+
 	info.default_executor.reset(new ExpressionExecutor(context));
-	info.default_executor->AddExpression(default_value);
+	info.default_executor->AddExpression(*info.default_expression);
+
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }

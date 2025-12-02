@@ -369,14 +369,9 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		// in that case we are able to just directly destroy the child (if there is any)
 		entry_to_destroy = new_entry->TakeChild();
 	}
-	//TODO: Add new_entry->FinalizeAlterEntry(...) call, do an update with the timestamp we need. Should be passed an ExpressionExecutor
-	// Concerns:
-	//	- This code is executed before we set default_executor in DuckTableEntry::AddColumn(), should we just skip the finalize in that case? Is that ok?
+	// Finalize the alter by updating existing rows with default values for newly added columns
 	if (alter_info.default_executor != nullptr) {
-		printf("\ndefault_executor : %s", name.c_str());
-		new_entry->FinalizeAlterEntry(*alter_info.default_executor);
-	} else {
-		printf("\nnullptr : %s", name.c_str());
+		new_entry->FinalizeAlterEntry(transaction, *alter_info.default_executor);
 	}
 	read_lock.unlock();
 	write_lock.unlock();

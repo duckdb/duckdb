@@ -23,12 +23,6 @@ statement ok
 ATTACH '__TEST_DIR__/foo.db';
 
 query I
-select d from foo.t
-UNION ALL
-select d from original;
+SELECT COUNT(*) != 0 FROM foo.t JOIN original ON foo.t.d = original.d;
 ----
-
-# query I
-# SELECT COUNT(*) != 0 FROM foo.t JOIN original ON foo.t.d = original.d;
-# ----
-# True
+true

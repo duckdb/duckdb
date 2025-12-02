@@ -14,6 +14,7 @@
 
 namespace duckdb {
 
+class Expression;
 class ExpressionExecutor;
 struct ExpressionExecutorDeleter {
 	void operator()(ExpressionExecutor *ptr) const;
@@ -50,6 +51,7 @@ struct AlterInfo : public ParseInfo {
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 	unique_ptr<ExpressionExecutor, ExpressionExecutorDeleter> default_executor;
+	unique_ptr<Expression> default_expression;
 
 public:
 	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
