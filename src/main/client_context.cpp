@@ -53,6 +53,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 
+#include <duckdb/common/wait_events.hpp>
+
 namespace duckdb {
 
 struct ActiveQueryContext {
@@ -365,6 +367,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
                                                                                  PendingQueryParameters parameters) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
+
+	// notify wait events that a new query is starting (for TLS query id propagation)
+	WaitEvents::OnQueryStart(*this);
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
@@ -889,6 +894,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
+
+	// notify wait events that a new query is starting (for TLS query id propagation)
+	WaitEvents::OnQueryStart(*this);
 
 	// Start the profiler.
 	auto &profiler = QueryProfiler::Get(*this);

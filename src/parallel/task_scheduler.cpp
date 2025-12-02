@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/common/wait_events.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
@@ -279,7 +280,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	while (*marker) {
 		if (!block_allocator.SupportsFlush()) {
 			// allocator can't flush, just start an untimed wait
-			queue->semaphore.wait();
+			{
+				WaitEventScope wes(WaitEventType::SCHEDULER_IDLE);
+				queue->semaphore.wait();
+			}
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
 			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
 			block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
@@ -287,14 +291,20 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			auto decay_delay = Allocator::DecayDelay();
 			if (!decay_delay.IsValid()) {
 				// no decay delay specified - just wait
-				queue->semaphore.wait();
+				{
+					WaitEventScope wes(WaitEventType::SCHEDULER_IDLE);
+					queue->semaphore.wait();
+				}
 			} else {
 				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
 				                           INITIAL_FLUSH_WAIT)) {
 					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
 					// mark it as idle and start an untimed wait
 					Allocator::ThreadIdle();
-					queue->semaphore.wait();
+					{
+						WaitEventScope wes(WaitEventType::SCHEDULER_IDLE);
+						queue->semaphore.wait();
+					}
 				}
 			}
 		}
