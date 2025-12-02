@@ -393,7 +393,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 				auto recovery_handle =
 				    fs.OpenFile(recovery_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 
-				static constexpr const idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
+				static constexpr idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
 				auto buffer = make_uniq_array<data_t>(BATCH_SIZE);
 
 				// first copy over the main WAL contents
@@ -421,10 +421,24 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 					            checkpoint_reader.FileSize());
 				}
 
+				auto debug_checkpoint_abort =
+				    DBConfig::GetSetting<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
+
 				// move over the recovery WAL over the main WAL
 				recovery_handle->Sync();
 				recovery_handle.reset();
+
+				if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
+					throw FatalException(
+					    "Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
+				}
+
 				fs.MoveFile(recovery_path, wal_path);
+
+				if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL) {
+					throw FatalException(
+					    "Checkpoint aborted before deleting checkpoint file because of PRAGMA checkpoint_abort flag");
+				}
 
 				// delete the checkpoint WAL
 				fs.RemoveFile(checkpoint_wal);
