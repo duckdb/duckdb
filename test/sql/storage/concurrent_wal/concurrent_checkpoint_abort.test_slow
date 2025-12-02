@@ -58,6 +58,28 @@ Checkpoint aborted
 endloop
 
 restart
+# we can attach in read-only mode
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db (READ_ONLY)
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db (READ_ONLY)
+
+# verify all data was correctly written
+query I
+SELECT CASE WHEN max_i + 1 >= max_end THEN NULL ELSE CONCAT('Found min ', min_i, ', max ', max_i, ' which does not fall within range ', begin_range, ' - ', max_end, ' (all ranges: ', (SELECT LIST(r ORDER BY begin_range) FROM other_db.ranges r)::VARCHAR, ')') END
+FROM (SELECT MIN(i) min_i, MAX(i) max_i FROM main_db.integers), (SELECT MIN(begin_range) begin_range, MAX(end_range) max_end FROM other_db.ranges)
+----
+NULL
+
+# neither checkpoint WAL nor WAL is cleared when attaching in read-only mode
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/concurrent_abort.db.*wal')
+----
+2
+
+restart
 
 # failure while replaying
 statement ok
@@ -79,7 +101,7 @@ ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
 statement ok
 ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db
 
-#
+# verify all data was correctly written
 query I
 SELECT CASE WHEN max_i + 1 >= max_end THEN NULL ELSE CONCAT('Found min ', min_i, ', max ', max_i, ' which does not fall within range ', begin_range, ' - ', max_end, ' (all ranges: ', (SELECT LIST(r ORDER BY begin_range) FROM other_db.ranges r)::VARCHAR, ')') END
 FROM (SELECT MIN(i) min_i, MAX(i) max_i FROM main_db.integers), (SELECT MIN(begin_range) begin_range, MAX(end_range) max_end FROM other_db.ranges)
