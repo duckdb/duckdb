@@ -422,40 +422,38 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
                                                               const vector<ColumnIndex> &indexes,
-                                                              const ParquetColumnSchema &schema,
-                                                              uint16_t row_group_ordinal) {
+                                                              const ParquetColumnSchema &schema) {
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
-		return make_uniq<RowNumberColumnReader>(*this, schema, row_group_ordinal);
+		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::GEOMETRY: {
-		return GeometryColumnReader::Create(*this, schema, context, row_group_ordinal);
+		return GeometryColumnReader::Create(*this, schema, context);
 	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
-			return ColumnReader::CreateReader(*this, schema, row_group_ordinal);
+			return ColumnReader::CreateReader(*this, schema);
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 		if (indexes.empty()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] =
-				    CreateReaderRecursive(context, indexes, schema.children[child_index], row_group_ordinal);
+				children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
 			}
 		} else {
 			for (idx_t i = 0; i < indexes.size(); i++) {
 				auto child_index = indexes[i].GetPrimaryIndex();
-				children[child_index] = CreateReaderRecursive(context, indexes[i].GetChildIndexes(),
-				                                              schema.children[child_index], row_group_ordinal);
+				children[child_index] =
+				    CreateReaderRecursive(context, indexes[i].GetChildIndexes(), schema.children[child_index]);
 			}
 		}
 		switch (schema.type.id()) {
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
-			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]), row_group_ordinal);
+			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
 		case LogicalTypeId::STRUCT:
-			return make_uniq<StructColumnReader>(*this, schema, std::move(children), row_group_ordinal);
+			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -467,18 +465,17 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-			children[child_index] =
-			    CreateReaderRecursive(context, indexes, schema.children[child_index], row_group_ordinal);
+			children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
 		}
-		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), row_group_ordinal);
+		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
 	}
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context, uint16_t row_group_ordinal) {
-	auto ret = CreateReaderRecursive(context, column_indexes, *root_schema, row_group_ordinal);
+unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
+	auto ret = CreateReaderRecursive(context, column_indexes, *root_schema);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
@@ -491,7 +488,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context, uin
 		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
 		    child_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION));
 		auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_reader), expression->Copy(),
-		                                                     std::move(expr_schema), row_group_ordinal);
+		                                                     std::move(expr_schema));
 		root_struct_reader.child_readers[column_id] = std::move(expr_reader);
 	}
 	return ret;
@@ -1294,8 +1291,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
-	// uint16_t row_group_ordinal = GetGroup(state).ordinal;
-	state.root_reader = CreateReader(context, 9);
+	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }

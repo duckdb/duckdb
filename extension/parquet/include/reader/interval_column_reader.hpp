@@ -58,8 +58,8 @@ struct IntervalValueConversion {
 
 class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalValueConversion> {
 public:
-	IntervalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal)
-	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, schema, row_group_ordinal) {
+	IntervalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, schema) {
 	}
 };
 

@@ -27,10 +27,10 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	CallbackColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal)
+	CallbackColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>>(
-	          reader, schema, row_group_ordinal) {
+	          reader, schema) {
 	}
 
 protected:

@@ -7,9 +7,8 @@ namespace duckdb {
 // Expression Column Reader
 //===--------------------------------------------------------------------===//
 ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader_p,
-                                               unique_ptr<Expression> expr_p, const ParquetColumnSchema &schema_p,
-                                               uint16_t row_group_ordinal_p)
-    : ColumnReader(child_reader_p->Reader(), schema_p, row_group_ordinal_p), child_reader(std::move(child_reader_p)),
+                                               unique_ptr<Expression> expr_p, const ParquetColumnSchema &schema_p)
+    : ColumnReader(child_reader_p->Reader(), schema_p), child_reader(std::move(child_reader_p)),
       expr(std::move(expr_p)), executor(context, expr.get()) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
@@ -17,11 +16,9 @@ ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_pt
 
 ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader_p,
                                                unique_ptr<Expression> expr_p,
-                                               unique_ptr<ParquetColumnSchema> owned_schema_p,
-                                               uint16_t row_group_ordinal_p)
-    : ColumnReader(child_reader_p->Reader(), *owned_schema_p, row_group_ordinal_p),
-      child_reader(std::move(child_reader_p)), expr(std::move(expr_p)), executor(context, expr.get()),
-      owned_schema(std::move(owned_schema_p)) {
+                                               unique_ptr<ParquetColumnSchema> owned_schema_p)
+    : ColumnReader(child_reader_p->Reader(), *owned_schema_p), child_reader(std::move(child_reader_p)),
+      expr(std::move(expr_p)), executor(context, expr.get()), owned_schema(std::move(owned_schema_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }

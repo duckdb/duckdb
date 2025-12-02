@@ -7,9 +7,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader
 //===--------------------------------------------------------------------===//
-RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-                                             uint16_t row_group_ordinal)
-    : ColumnReader(reader, schema, row_group_ordinal) {
+RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+    : ColumnReader(reader, schema) {
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,

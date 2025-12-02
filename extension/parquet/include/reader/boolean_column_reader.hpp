@@ -20,8 +20,8 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::BOOL;
 
 public:
-	BooleanColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal)
-	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, schema, row_group_ordinal), byte_pos(0) {
+	BooleanColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, schema), byte_pos(0) {
 	}
 
 	uint8_t byte_pos;

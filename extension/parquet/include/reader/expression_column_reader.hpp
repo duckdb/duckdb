@@ -20,9 +20,9 @@ public:
 
 public:
 	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       const ParquetColumnSchema &schema, uint16_t row_group_ordinal_p);
+	                       const ParquetColumnSchema &schema);
 	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       unique_ptr<ParquetColumnSchema> owned_schema, uint16_t row_group_ordinal_p);
+	                       unique_ptr<ParquetColumnSchema> owned_schema);
 
 	unique_ptr<ColumnReader> child_reader;
 	DataChunk intermediate_chunk;

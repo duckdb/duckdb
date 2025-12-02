@@ -31,7 +31,7 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
 public:
-	StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal);
+	StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 	idx_t fixed_width_string_length;
 	const StringColumnType string_column_type;
 

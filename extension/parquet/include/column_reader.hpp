@@ -60,12 +60,11 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p, uint16_t row_group_ordinal_p);
+	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                                             uint16_t row_group_ordinal);
+	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	                   uint16_t row_group_ordinal);

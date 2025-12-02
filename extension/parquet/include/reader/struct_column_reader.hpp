@@ -19,7 +19,7 @@ public:
 
 public:
 	StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                   vector<unique_ptr<ColumnReader>> child_readers_p, uint16_t row_group_ordinal_p);
+	                   vector<unique_ptr<ColumnReader>> child_readers_p);
 
 	vector<unique_ptr<ColumnReader>> child_readers;
 

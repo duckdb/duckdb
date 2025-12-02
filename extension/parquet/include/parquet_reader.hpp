@@ -218,10 +218,10 @@ private:
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
 	                                         idx_t &next_file_idx, ClientContext &context);
 
-	unique_ptr<ColumnReader> CreateReader(ClientContext &context, uint16_t row_group_ordinal);
+	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
-	                                               const ParquetColumnSchema &schema, uint16_t row_group_ordinal);
+	                                               const ParquetColumnSchema &schema);
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);

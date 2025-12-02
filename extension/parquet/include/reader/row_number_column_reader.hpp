@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INT64;
 
 public:
-	RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal_p);
+	RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 
 public:
 	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
