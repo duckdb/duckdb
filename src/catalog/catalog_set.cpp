@@ -369,8 +369,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		// in that case we are able to just directly destroy the child (if there is any)
 		entry_to_destroy = new_entry->TakeChild();
 	}
-	//TODO: Add new_entry->FinalizeAlterEntry(...) call, do an update with the timestamp we need. Should be passed an ExpressionExecutor
-	// new_entry->FinalizeAlterEntry(*alter_info.default_executor);
 
 	read_lock.unlock();
 	write_lock.unlock();

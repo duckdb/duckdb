@@ -26,7 +26,6 @@ class Deserializer;
 class SchemaCatalogEntry;
 class Serializer;
 class Value;
-class ExpressionExecutor;
 
 struct AlterInfo;
 struct CatalogTransaction;
@@ -69,7 +68,6 @@ private:
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
 	virtual unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info);
-	virtual unique_ptr<CatalogEntry> FinalizeAlterEntry(ExpressionExecutor &exec);
 	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
 	virtual void Rollback(CatalogEntry &prev_entry);
 	virtual void OnDrop();

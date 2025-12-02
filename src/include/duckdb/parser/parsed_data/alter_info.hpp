@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -45,7 +44,7 @@ struct AlterEntryData {
 struct AlterInfo : public ParseInfo {
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
-	unique_ptr<ExpressionExecutor> default_executor = nullptr;
+
 public:
 	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
