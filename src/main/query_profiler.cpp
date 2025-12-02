@@ -260,16 +260,16 @@ void QueryProfiler::EndQuery() {
 
 void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
 	if (IsEnabled()) {
-		query_metrics.AddToCounter(type, amount);
+		query_metrics.UpdateMetric(type, amount);
 	}
 }
 
 idx_t QueryProfiler::GetBytesRead() const {
-	return query_metrics.total_bytes_read;
+	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_READ);
 }
 
 idx_t QueryProfiler::GetBytesWritten() const {
-	return query_metrics.total_bytes_written;
+	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_WRITTEN);
 }
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
@@ -658,7 +658,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	constexpr idx_t TOTAL_BOX_WIDTH = 50;
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.latency);
+	string total_time = "Total Time: " + RenderTiming(query_metrics.GetMetricInSeconds(MetricType::LATENCY));
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";

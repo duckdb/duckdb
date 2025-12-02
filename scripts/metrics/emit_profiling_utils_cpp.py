@@ -87,14 +87,14 @@ def _generate_collection_methods(
         for m in metric_index.metrics_per_collection(c):
             cpp_f.write_indented(1, f"case MetricType::{m}:")
             if c == "timer":
-                cpp_f.write_indented(2, f"metric = Value::DOUBLE(query_metrics.{m.lower()});")
+                cpp_f.write_indented(2, f"metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::{m}));")
             elif c == "child":
                 cpp_f.write_indented(2, f"metric = child_info.metrics[MetricType::{metric_index.metric_child(m)}];")
             elif c == "cumulative_operators":
                 cpp_f.write_indented(2, f"metric = GetCumulativeOptimizers(node);")
             elif c == "query_metric":
                 if metric_index.metric_type(m) == "uint64_t":
-                    cpp_f.write_indented(2, f"metric = Value::UBIGINT(query_metrics.{m.lower()});")
+                    cpp_f.write_indented(2, f"metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::{m}));")
                 elif metric_index.metric_type(m) == "string":
                     cpp_f.write_indented(2, f"metric = query_metrics.{m.lower()};")
             elif c == "cumulative":
@@ -133,76 +133,27 @@ def _write_query_metric_functions(
 
 
 def _generate_query_metrics(hpp_f: IndentedFileWriter, metric_index: MetricIndex) -> None:
-    query_metric_types: list[tuple[str, str, str]] = []
+    query_metric_types: list[str] = []
 
     # if the collection method is timer or query_metric then add to query_metrics
     for c in metric_index.collection_index():
         for m in metric_index.metrics_per_collection(c):
-            if c == "timer" or c == "query_metric":
-                t = metric_index.metric_type(m)
-                if t == "uint64_t":
-                    t = "atomic<idx_t>"
-                elif t == "double":
-                    t = "atomic<double>"
-                query_metric_types.append((m, t, metric_index.metric_description(m)))
-                if m == "LATENCY":
-                    query_metric_types.append(("LATENCY_TIMER", "unique_ptr<ActiveTimer>", ""))
+            if m.lower() != "query_name" and (c == "timer" or c == "query_metric"):
+                query_metric_types.append(m)
 
-    # Move query_name to the front
-    query_name_items = [item for item in query_metric_types if item[0] == "QUERY_NAME"]
-    other_items = [item for item in query_metric_types if item[0] != "QUERY_NAME"]
-    query_metric_types = query_name_items + other_items
-
-    hpp_f.write_indented(0, "//! Top level query metrics.")
-    hpp_f.write_indented(0, "struct QueryMetrics {")
-
-    query_metric_constructor = "QueryMetrics() : "
-    for m, t, d in query_metric_types:
-        if t == "string":
-            query_metric_constructor += f"{m.lower()}(\"\"), "
-        elif t == "unique_ptr<ActiveTimer>":
-            continue
-        else:
-            query_metric_constructor += f"{m.lower()}(0), "
-    # remove trailing comma
-    query_metric_constructor = query_metric_constructor[:-2]
-    query_metric_constructor += " {};\n"
-    hpp_f.write_indented(1, query_metric_constructor)
-
-    hpp_f.write_indented(1, "//! Reset the query metrics")
-    hpp_f.write_indented(1, "void Reset() {")
-    for m, t, d in query_metric_types:
-        if t == "string":
-            hpp_f.write_indented(2, f"{m.lower()} = \"\";")
-        elif t == "unique_ptr<ActiveTimer>":
-            hpp_f.write_indented(2, f"{m.lower()} = nullptr;")
-        else:
-            hpp_f.write_indented(2, f"{m.lower()} = 0;")
-    hpp_f.write_indented(1, "}\n")
-
-    _write_query_metric_functions(
-        hpp_f,
-        query_metric_types,
-        "AddTiming(const MetricType type, const double amount)",
-        "atomic<double>",
-        "GEN_FROM_METRIC",
+    hpp_f.write_indented(1, "static idx_t GetMetricsIndex(MetricType type) {")
+    hpp_f.write_indented(2, "switch(type) {")
+    for i, m in enumerate(query_metric_types):
+        hpp_f.write_indented(2, f"case MetricType::{m}: return {i};")
+    hpp_f.write_indented(2, "default:")
+    hpp_f.write_indented(
+        3, "throw InternalException(\"MetricType %s is not actively tracked.\", EnumUtil::ToString(type));"
     )
-    _write_query_metric_functions(
-        hpp_f,
-        query_metric_types,
-        "AddToCounter(const MetricType type, const idx_t amount)",
-        "atomic<idx_t>",
-        " += amount",
-    )
+    hpp_f.write_indented(2, "}")
+    hpp_f.write_indented(1, "}")
 
-    hpp_f.write_indented(1, "ProfilingInfo query_global_info;\n")
-
-    for m, t, d in query_metric_types:
-        if len(d) > 0:
-            hpp_f.write_indented(1, f"//! {d}")
-        hpp_f.write_indented(1, f"{t} {m.lower()};")
-
-    hpp_f.write_indented(0, "};")
+    hpp_f.write_indented(0, "\nprivate:")
+    hpp_f.write_indented(1, f"static constexpr const idx_t ACTIVELY_TRACKED_METRICS = {len(query_metric_types)};")
 
 
 def generate_profiling_utils(

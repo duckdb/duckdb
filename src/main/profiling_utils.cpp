@@ -163,40 +163,40 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		GetCumulativeMetric<uint64_t>(node, MetricType::CUMULATIVE_ROWS_SCANNED, MetricType::OPERATOR_ROWS_SCANNED);
 		break;
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-		metric = Value::DOUBLE(query_metrics.attach_load_storage_latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
 		break;
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-		metric = Value::DOUBLE(query_metrics.attach_replay_wal_latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::ATTACH_REPLAY_WAL_LATENCY));
 		break;
 	case MetricType::CHECKPOINT_LATENCY:
-		metric = Value::DOUBLE(query_metrics.checkpoint_latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::CHECKPOINT_LATENCY));
 		break;
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-		metric = Value::DOUBLE(query_metrics.commit_local_storage_latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::COMMIT_LOCAL_STORAGE_LATENCY));
 		break;
 	case MetricType::LATENCY:
-		metric = Value::DOUBLE(query_metrics.latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::LATENCY));
 		break;
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
-		metric = Value::DOUBLE(query_metrics.waiting_to_attach_latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::WAITING_TO_ATTACH_LATENCY));
 		break;
 	case MetricType::WRITE_TO_WAL_LATENCY:
-		metric = Value::DOUBLE(query_metrics.write_to_wal_latency);
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::WRITE_TO_WAL_LATENCY));
 		break;
 	case MetricType::QUERY_NAME:
 		metric = query_metrics.query_name;
 		break;
 	case MetricType::TOTAL_BYTES_READ:
-		metric = Value::UBIGINT(query_metrics.total_bytes_read);
+		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ));
 		break;
 	case MetricType::TOTAL_BYTES_WRITTEN:
-		metric = Value::UBIGINT(query_metrics.total_bytes_written);
+		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN));
 		break;
 	case MetricType::TOTAL_MEMORY_ALLOCATED:
-		metric = Value::UBIGINT(query_metrics.total_memory_allocated);
+		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_MEMORY_ALLOCATED));
 		break;
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-		metric = Value::UBIGINT(query_metrics.wal_replay_entry_count);
+		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::WAL_REPLAY_ENTRY_COUNT));
 		break;
 	case MetricType::RESULT_SET_SIZE:
 		metric = child_info.metrics[MetricType::RESULT_SET_SIZE];

@@ -24,103 +24,66 @@ namespace duckdb {
 
 struct ActiveTimer;
 
-//! Top level query metrics.
+// Top level query metrics
 struct QueryMetrics {
-	QueryMetrics() : query_name(""), attach_load_storage_latency(0), attach_replay_wal_latency(0), checkpoint_latency(0), commit_local_storage_latency(0), latency(0), waiting_to_attach_latency(0), write_to_wal_latency(0), total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0), wal_replay_entry_count(0) {};
-
-	//! Reset the query metrics
-	void Reset() {
-		query_name = "";
-		attach_load_storage_latency = 0;
-		attach_replay_wal_latency = 0;
-		checkpoint_latency = 0;
-		commit_local_storage_latency = 0;
-		latency = 0;
-		latency_timer = nullptr;
-		waiting_to_attach_latency = 0;
-		write_to_wal_latency = 0;
-		total_bytes_read = 0;
-		total_bytes_written = 0;
-		total_memory_allocated = 0;
-		wal_replay_entry_count = 0;
-	}
-
-	void AddTiming(const MetricType type, const double amount) {
-		switch(type) {
-		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-			attach_load_storage_latency.store(attach_load_storage_latency.load() + amount);
-			break;
-		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-			attach_replay_wal_latency.store(attach_replay_wal_latency.load() + amount);
-			break;
-		case MetricType::CHECKPOINT_LATENCY:
-			checkpoint_latency.store(checkpoint_latency.load() + amount);
-			break;
-		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-			commit_local_storage_latency.store(commit_local_storage_latency.load() + amount);
-			break;
-		case MetricType::LATENCY:
-			latency.store(latency.load() + amount);
-			break;
-		case MetricType::WAITING_TO_ATTACH_LATENCY:
-			waiting_to_attach_latency.store(waiting_to_attach_latency.load() + amount);
-			break;
-		case MetricType::WRITE_TO_WAL_LATENCY:
-			write_to_wal_latency.store(write_to_wal_latency.load() + amount);
-			break;
-		default:
-			return;
-		};
-	}
-
-	void AddToCounter(const MetricType type, const idx_t amount) {
-		switch(type) {
-		case MetricType::TOTAL_BYTES_READ:
-			total_bytes_read += amount;
-			break;
-		case MetricType::TOTAL_BYTES_WRITTEN:
-			total_bytes_written += amount;
-			break;
-		case MetricType::TOTAL_MEMORY_ALLOCATED:
-			total_memory_allocated += amount;
-			break;
-		case MetricType::WAL_REPLAY_ENTRY_COUNT:
-			wal_replay_entry_count += amount;
-			break;
-		default:
-			return;
-		};
-	}
+public:
+    QueryMetrics() {
+        Reset();
+    }
 
 	ProfilingInfo query_global_info;
 
-	//! The SQL string of the query
-	string query_name;
-	//! Time spent loading from storage.
-	atomic<double> attach_load_storage_latency;
-	//! Time spent replaying the WAL file.
-	atomic<double> attach_replay_wal_latency;
-	//! Time spent running checkpoints
-	atomic<double> checkpoint_latency;
-	//! Time spent committing the transaction-local storage.
-	atomic<double> commit_local_storage_latency;
-	//! Time spent executing the entire query
-	atomic<double> latency;
+	std::string query_name;
 	unique_ptr<ActiveTimer> latency_timer;
-	//! Time spent waiting to ATTACH a file.
-	atomic<double> waiting_to_attach_latency;
-	//! Time spent writing to the WAL.
-	atomic<double> write_to_wal_latency;
-	//! The total bytes read by the file system.
-	atomic<idx_t> total_bytes_read;
-	//! The total bytes written by the file system.
-	atomic<idx_t> total_bytes_written;
-	//! The total memory allocated by the buffer manager.
-	atomic<idx_t> total_memory_allocated;
-	//! The total number of entries to replay in the WAL.
-	atomic<idx_t> wal_replay_entry_count;
-};
 
+public:
+    void UpdateMetric(const MetricType metric, idx_t addition) {
+        active_metrics[GetMetricsIndex(metric)] += addition;
+    }
+
+    idx_t GetMetricValue(const MetricType metric) const {
+        return active_metrics[GetMetricsIndex(metric)];
+    }
+
+    double GetMetricInSeconds(const MetricType metric) const {
+        return static_cast<double>(active_metrics[GetMetricsIndex(metric)]) / 1e9;
+    }
+
+    void Reset() {
+        for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
+            active_metrics[i] = 0;
+        }
+    }
+
+    void Merge(const QueryMetrics &other) {
+        for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
+            active_metrics[i] += other.active_metrics[i];
+        }
+    }
+
+	static idx_t GetMetricsIndex(MetricType type) {
+		switch(type) {
+		case MetricType::ATTACH_LOAD_STORAGE_LATENCY: return 0;
+		case MetricType::ATTACH_REPLAY_WAL_LATENCY: return 1;
+		case MetricType::CHECKPOINT_LATENCY: return 2;
+		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY: return 3;
+		case MetricType::LATENCY: return 4;
+		case MetricType::WAITING_TO_ATTACH_LATENCY: return 5;
+		case MetricType::WRITE_TO_WAL_LATENCY: return 6;
+		case MetricType::TOTAL_BYTES_READ: return 7;
+		case MetricType::TOTAL_BYTES_WRITTEN: return 8;
+		case MetricType::TOTAL_MEMORY_ALLOCATED: return 9;
+		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 10;
+		default:
+			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
+		}
+	}
+
+private:
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 11;
+
+	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
+};
 
 class ProfilingUtils {
 public:
@@ -154,7 +117,7 @@ public:
 		// stop profiling and report
 		is_active = false;
 		profiler.End();
-		query_metrics.AddTiming(metric, profiler.Elapsed());
+		query_metrics.UpdateMetric(metric, profiler.ElapsedNanos());
 	}
 
 	void Reset() {
