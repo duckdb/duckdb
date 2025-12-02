@@ -1172,6 +1172,7 @@ public:
 		case duckdb::LogicalTypeId::UBIGINT:
 		case duckdb::LogicalTypeId::HUGEINT:
 		case duckdb::LogicalTypeId::UHUGEINT:
+		case duckdb::LogicalTypeId::DECIMAL:
 			return true;
 		default:
 			return false;
