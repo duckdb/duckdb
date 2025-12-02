@@ -152,4 +152,3 @@ query TTI
 SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_tbl_renamed'
 ----
 temp_tbl_renamed	temp	true
-
