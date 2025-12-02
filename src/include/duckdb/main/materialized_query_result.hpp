@@ -44,7 +44,6 @@ public:
 		return (T)value.GetValue<int64_t>();
 	}
 
-	DUCKDB_API bool MoreRowsThan(idx_t row_count) override;
 	DUCKDB_API idx_t RowCount() const;
 
 	//! Returns a reference to the underlying column data collection

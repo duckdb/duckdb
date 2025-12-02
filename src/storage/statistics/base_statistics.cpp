@@ -113,7 +113,7 @@ void BaseStatistics::InitializeUnknown() {
 
 void BaseStatistics::InitializeEmpty() {
 	has_null = false;
-	has_no_null = true;
+	has_no_null = false;
 }
 
 bool BaseStatistics::CanHaveNull() const {
@@ -331,7 +331,7 @@ void BaseStatistics::SetHasNoNull() {
 	}
 }
 
-void BaseStatistics::CombineValidity(BaseStatistics &left, BaseStatistics &right) {
+void BaseStatistics::CombineValidity(const BaseStatistics &left, const BaseStatistics &right) {
 	has_null = left.has_null || right.has_null;
 	has_no_null = left.has_no_null || right.has_no_null;
 }
