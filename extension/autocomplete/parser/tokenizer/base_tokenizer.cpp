@@ -111,31 +111,6 @@ bool BaseTokenizer::CharacterIsControlFlow(char c) {
 	}
 }
 
-string TokenizeStateToString(TokenizeState state) {
-	switch (state) {
-	case TokenizeState::STANDARD:
-		return "STANDARD";
-	case TokenizeState::SINGLE_LINE_COMMENT:
-		return "SINGLE_LINE_COMMENT";
-	case TokenizeState::MULTI_LINE_COMMENT:
-		return "MULTI_LINE_COMMENT";
-	case TokenizeState::QUOTED_IDENTIFIER:
-		return "QUOTED_IDENTIFIER";
-	case TokenizeState::STRING_LITERAL:
-		return "STRING_LITERAL";
-	case TokenizeState::KEYWORD:
-		return "KEYWORD";
-	case TokenizeState::NUMERIC:
-		return "NUMERIC";
-	case TokenizeState::OPERATOR:
-		return "OPERATOR";
-	case TokenizeState::DOLLAR_QUOTED_STRING:
-		return "DOLLAR_QUOTED_STRING";
-	}
-	throw InternalException("Invalid TokenizeState");
-};
-
-
 bool BaseTokenizer::CharacterIsKeyword(char c) {
 	if (IsSingleByteOperator(c)) {
 		return false;
@@ -315,7 +290,6 @@ bool BaseTokenizer::TokenizeInput() {
 				i--;
 			}
 			PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
-			Printer::Print(TokenizeStateToString(state));
 			state = TokenizeState::STANDARD;
 			last_pos = i;
 			i--;
