@@ -3,6 +3,6 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG 97e3c89a0887ecc3f16e5735fe661bc76a8cf00f
+            GIT_TAG ecb76de715dfe0b5bba52f4fc8bde87186dd486f
             )
 endif()
