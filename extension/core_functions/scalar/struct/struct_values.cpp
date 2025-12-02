@@ -62,7 +62,6 @@ static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarF
 
 ScalarFunction StructValuesFun::GetFunction() {
 	ScalarFunction func({LogicalType::ANY}, LogicalTypeId::STRUCT, StructValuesFunction, StructValuesBind);
-	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
 }
 

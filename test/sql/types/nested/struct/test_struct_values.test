@@ -20,14 +20,8 @@ select struct_values(NULL);
 NULL
 
 # Constant vector as input (same result for every row)
-statement ok
-CREATE TABLE t_struct_values_constant(x INTEGER);
-
-statement ok
-INSERT INTO t_struct_values_constant VALUES (1), (2), (3);
-
 query I
-SELECT struct_values({a: 1, b: 'y'}) FROM t_struct_values_constant;
+SELECT struct_values({a: 1, b: 'y'}) FROM range(3);
 ----
 (1, y)
 (1, y)
@@ -39,11 +33,11 @@ CREATE TABLE t_struct_values_flat(col STRUCT(a INT, b VARCHAR), idx INTEGER);
 
 statement ok
 INSERT INTO t_struct_values_flat VALUES
-	(ROW(1, 'x')::STRUCT(a INT, b VARCHAR), 0),
-	(ROW(2, 'y')::STRUCT(a INT, b VARCHAR), 1),
-	(ROW(3, 'z')::STRUCT(a INT, b VARCHAR), 2),
-	(NULL::STRUCT(a INT, b VARCHAR), 3),
-	(ROW(4, 'q')::STRUCT(a INT, b VARCHAR), 4);
+	((1, 'x'), 0),
+	((2, 'y'), 1),
+	((3, 'z'), 2),
+	(NULL, 3),
+	((4, 'q'), 4);
 
 query I
 SELECT struct_values(col) FROM t_struct_values_flat;
