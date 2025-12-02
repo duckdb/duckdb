@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "parser/tokenizer/base_tokenizer.hpp"
 
+#include "keyword_helper.hpp"
 #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
@@ -162,6 +163,7 @@ bool BaseTokenizer::TokenizeInput() {
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
+	idx_t dollar_marker_start = 0;
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -213,8 +215,8 @@ bool BaseTokenizer::TokenizeInput() {
 				i = next_dollar;
 				if (i < sql.size()) {
 					// Found a complete marker, store it.
-					idx_t marker_start = last_pos + 1;
-					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
+					dollar_marker_start = last_pos + 1;
+					dollar_quote_marker = string(sql.begin() + dollar_marker_start, sql.begin() + i);
 				}
 				break;
 			}
@@ -309,7 +311,8 @@ bool BaseTokenizer::TokenizeInput() {
 			// keyword - check if this is still a keyword
 			if (!CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
-				if (KeywordHelper::IsKeyword(sql.substr(last_pos, i - last_pos))) {
+				auto &peg_keyword = PEGKeywordHelper::Instance();
+				if (peg_keyword.IsKeyword(sql.substr(last_pos, i - last_pos))) {
 					PushToken(last_pos, i, TokenType::KEYWORD);
 				} else {
 					PushToken(last_pos, i, TokenType::IDENTIFIER);
@@ -387,7 +390,7 @@ bool BaseTokenizer::TokenizeInput() {
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
 			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
-			tokens.emplace_back(quoted, full_marker_len, TokenType::STRING_LITERAL);
+			tokens.emplace_back(quoted, dollar_marker_start - 1, TokenType::STRING_LITERAL);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
