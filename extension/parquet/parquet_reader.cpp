@@ -176,7 +176,6 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 		// this is the AAD string for the footer
 		string result_aad = file_aad + type_ordinal_bytes_str;
-		bool is_arrow = false;
 
 		if (file_aad.size() == 0) {
 			// do not use aad (duckdb parquet encryption)
@@ -423,38 +422,40 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
                                                               const vector<ColumnIndex> &indexes,
-                                                              const ParquetColumnSchema &schema) {
+                                                              const ParquetColumnSchema &schema,
+                                                              uint16_t row_group_ordinal) {
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
-		return make_uniq<RowNumberColumnReader>(*this, schema);
+		return make_uniq<RowNumberColumnReader>(*this, schema, row_group_ordinal);
 	case ParquetColumnSchemaType::GEOMETRY: {
-		return GeometryColumnReader::Create(*this, schema, context);
+		return GeometryColumnReader::Create(*this, schema, context, row_group_ordinal);
 	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
-			return ColumnReader::CreateReader(*this, schema);
+			return ColumnReader::CreateReader(*this, schema, row_group_ordinal);
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 		if (indexes.empty()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
+				children[child_index] =
+				    CreateReaderRecursive(context, indexes, schema.children[child_index], row_group_ordinal);
 			}
 		} else {
 			for (idx_t i = 0; i < indexes.size(); i++) {
 				auto child_index = indexes[i].GetPrimaryIndex();
-				children[child_index] =
-				    CreateReaderRecursive(context, indexes[i].GetChildIndexes(), schema.children[child_index]);
+				children[child_index] = CreateReaderRecursive(context, indexes[i].GetChildIndexes(),
+				                                              schema.children[child_index], row_group_ordinal);
 			}
 		}
 		switch (schema.type.id()) {
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
-			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
+			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]), row_group_ordinal);
 		case LogicalTypeId::STRUCT:
-			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
+			return make_uniq<StructColumnReader>(*this, schema, std::move(children), row_group_ordinal);
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -466,17 +467,18 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-			children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
+			children[child_index] =
+			    CreateReaderRecursive(context, indexes, schema.children[child_index], row_group_ordinal);
 		}
-		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
+		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), row_group_ordinal);
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
 	}
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
-	auto ret = CreateReaderRecursive(context, column_indexes, *root_schema);
+unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context, uint16_t row_group_ordinal) {
+	auto ret = CreateReaderRecursive(context, column_indexes, *root_schema, row_group_ordinal);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
@@ -489,7 +491,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
 		    child_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION));
 		auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_reader), expression->Copy(),
-		                                                     std::move(expr_schema));
+		                                                     std::move(expr_schema), row_group_ordinal);
 		root_struct_reader.child_readers[column_id] = std::move(expr_reader);
 	}
 	return ret;
@@ -957,7 +959,7 @@ string make_aad(const std::string &file_aad, uint8_t module_type, uint16_t row_g
 		total_size += sizeof(uint16_t) * 2;
 	}
 
-	if (page_ordinal != -1 && page_ordinal != 65535) {
+	if (page_ordinal != 65535) {
 		store_le16(&ordinal_bytes[5], page_ordinal);
 		total_size += sizeof(uint16_t);
 	}
@@ -976,19 +978,12 @@ string ParquetReader::GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encr
 	}
 }
 
-uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t col_idx, int8_t module,
-                             uint16_t page_ordinal) {
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t row_group_ordinal,
+                             uint16_t col_idx, int8_t module, uint16_t page_ordinal) {
 	if (parquet_options.encryption_config) {
-		// rg ordinal = state.group_idx_list[state.current_group]
-		// column ordinal:
-		// aad = unique suffix + data page header id + 0 + 0 + 0
+		// aad = unique suffix + data page header id + row group ordinal (2bytes)
+		// + column ordinal (2bytes) + page ordinal (2bytes)
 		auto file_aad = GetFileAAD(metadata->crypto_metadata->encryption_algorithm);
-
-		// type_id (1b) + row group ordinal (2b) + col ordinal (2b) + page ordinal (2b)
-		// how to get the rowgroupordinal?
-		// uint16_t row_group_ordinal = state.group_idx_list[state.current_group];
-		uint16_t row_group_ordinal = 0;
-
 		auto result_aad = make_aad(file_aad, module, row_group_ordinal, col_idx, page_ordinal);
 		if (file_aad.size() == 0) {
 			// do not use aad (duckdb parquet encryption)
@@ -1002,7 +997,8 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-                                 const uint32_t buffer_size, uint16_t col_idx, int8_t module, uint16_t page_ordinal) {
+                                 const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
+                                 int8_t module, uint16_t page_ordinal) {
 	if (parquet_options.encryption_config) {
 		// data is encrypted, so the buffer size is a bit less
 		// does compressed data work different at arrow?
@@ -1013,33 +1009,35 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 
 		// type_id (1b) + row group ordinal (2b) + col ordinal (2b) + page ordinal (2b)
 		uint32_t total_size = 5;
-
-		uint16_t row_group_ordinal = 0;
 		uint16_t column_ordinal = col_idx;
 
 		int8_t ordinal_bytes[7];
 		ordinal_bytes[0] = module;
 
-		// Little-endian encoding
-		ordinal_bytes[1] = static_cast<int8_t>(row_group_ordinal & 0xFF);
-		ordinal_bytes[2] = static_cast<int8_t>((row_group_ordinal >> 8) & 0xFF);
-		ordinal_bytes[3] = static_cast<int8_t>(column_ordinal & 0xFF);
-		ordinal_bytes[4] = static_cast<int8_t>((column_ordinal >> 8) & 0xFF);
+		Store<uint16_t>(row_group_ordinal, reinterpret_cast<data_ptr_t>(&ordinal_bytes[1]));
+		Store<uint16_t>(column_ordinal, reinterpret_cast<data_ptr_t>(&ordinal_bytes[3]));
 
-		if (page_ordinal != -1 && page_ordinal != 65535) {
-			ordinal_bytes[5] = static_cast<int8_t>(page_ordinal & 0xFF);
-			ordinal_bytes[6] = static_cast<int8_t>((page_ordinal >> 8) & 0xFF);
+		// Little-endian encoding
+		// ordinal_bytes[1] = static_cast<int8_t>(row_group_ordinal & 0xFF);
+		// ordinal_bytes[2] = static_cast<int8_t>((row_group_ordinal >> 8) & 0xFF);
+		// ordinal_bytes[3] = static_cast<int8_t>(column_ordinal & 0xFF);
+		// ordinal_bytes[4] = static_cast<int8_t>((column_ordinal >> 8) & 0xFF);
+
+		if (page_ordinal != 65535) {
+			Store<uint16_t>(page_ordinal, reinterpret_cast<data_ptr_t>(&ordinal_bytes[5]));
+			// ordinal_bytes[5] = static_cast<int8_t>(page_ordinal & 0xFF);
+			// ordinal_bytes[6] = static_cast<int8_t>((page_ordinal >> 8) & 0xFF);
 			total_size += sizeof(uint16_t);
 		}
 
-		// ✅ Construct string from all bytes
+		// construct aad
 		std::string type_ordinal_bytes_str(reinterpret_cast<const char *>(ordinal_bytes), total_size);
 
 		// this is the AAD string for the footer
 		std::string result_aad = file_aad + type_ordinal_bytes_str;
 
 		if (file_aad.size() == 0) {
-			// do not use aad (duckdb parquet encryption)
+			// do not use aad (duckdb parquet encryption v1)
 			result_aad = "";
 		}
 
@@ -1296,7 +1294,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
-	state.root_reader = CreateReader(context);
+	// uint16_t row_group_ordinal = GetGroup(state).ordinal;
+	state.root_reader = CreateReader(context, 9);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
@@ -1391,8 +1390,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
 					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
-					// TODO store somewhere global
-					auto row_group_ordinal = GetGroup(state).ordinal;
+					// auto row_group_ordinal = GetGroup(state).ordinal;
 
 					bool has_filter = false;
 					if (filters) {
@@ -1463,8 +1461,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = root_reader.GetChildReader(column_id);
+				auto row_group_ordinal = GetGroup(state).ordinal;
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
+				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter,
+				                    row_group_ordinal);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
@@ -1484,7 +1484,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			}
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
+			auto row_group_ordinal = GetGroup(state).ordinal;
+			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count,
+			                    row_group_ordinal);
 		}
 		if (scan_count != filter_count) {
 			result.Slice(state.sel, filter_count);
@@ -1495,7 +1497,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto file_col_idx = column_ids[col_idx];
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
+			auto row_group_ordinal = GetGroup(state).ordinal;
+			// Here add row_GROUP_ordinal!!
+			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector, row_group_ordinal);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
 				                            file_col_idx, scan_count, rows_read);

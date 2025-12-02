@@ -286,12 +286,12 @@ const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::G
 }
 
 unique_ptr<ColumnReader> GeometryColumnReader::Create(ParquetReader &reader, const ParquetColumnSchema &schema,
-                                                      ClientContext &context) {
+                                                      ClientContext &context, uint16_t row_group_ordinal) {
 	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
 	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);
 
 	// Make a string reader for the underlying WKB data
-	auto string_reader = make_uniq<StringColumnReader>(reader, schema.children[0]);
+	auto string_reader = make_uniq<StringColumnReader>(reader, schema.children[0], row_group_ordinal);
 
 	// Wrap the string reader in a geometry reader
 	auto args = vector<unique_ptr<Expression>>();
@@ -302,7 +302,8 @@ unique_ptr<ColumnReader> GeometryColumnReader::Create(ParquetReader &reader, con
 	auto func = StGeomfromwkbFun::GetFunction();
 	func.name = "ST_GeomFromWKB";
 	auto expr = make_uniq_base<Expression, BoundFunctionExpression>(schema.type, func, std::move(args), nullptr);
-	return make_uniq<ExpressionColumnReader>(context, std::move(string_reader), std::move(expr), schema);
+	return make_uniq<ExpressionColumnReader>(context, std::move(string_reader), std::move(expr), schema,
+	                                         row_group_ordinal);
 }
 
 } // namespace duckdb

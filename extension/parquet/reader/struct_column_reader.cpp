@@ -6,8 +6,8 @@ namespace duckdb {
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
 StructColumnReader::StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-                                       vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
+                                       vector<unique_ptr<ColumnReader>> child_readers_p, uint16_t row_group_ordinal)
+    : ColumnReader(reader, schema, row_group_ordinal), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 }
 
@@ -28,7 +28,8 @@ void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Colu
 	}
 }
 
-idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                               uint16_t row_group_ordinal) {
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
@@ -50,7 +51,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 			ConstantVector::SetNull(target_vector, true);
 			continue;
 		}
-		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector);
+		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector, row_group_ordinal);
 		if (!read_count.IsValid()) {
 			read_count = child_num_values;
 		} else if (read_count.GetIndex() != child_num_values) {

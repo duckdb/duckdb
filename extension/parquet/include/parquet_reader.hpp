@@ -180,10 +180,11 @@ public:
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
 	string GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
-	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t col_idx = 0, int8_t module = 0,
-	              uint16_t page_ordinal = -1);
+	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t row_group_ordinal = 0,
+	              uint16_t col_idx = 0, int8_t module = 0, uint16_t page_ordinal = -1);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-	                  const uint32_t buffer_size, uint16_t col_idx = 0, int8_t module = 0, uint16_t page_ordinal = -1);
+	                  const uint32_t buffer_size, uint16_t row_group_ordinal = 0, uint16_t col_idx = 0,
+	                  int8_t module = 0, uint16_t page_ordinal = -1);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 
@@ -217,10 +218,10 @@ private:
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
 	                                         idx_t &next_file_idx, ClientContext &context);
 
-	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
+	unique_ptr<ColumnReader> CreateReader(ClientContext &context, uint16_t row_group_ordinal);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
-	                                               const ParquetColumnSchema &schema);
+	                                               const ParquetColumnSchema &schema, uint16_t row_group_ordinal);
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);

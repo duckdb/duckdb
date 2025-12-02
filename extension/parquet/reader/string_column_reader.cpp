@@ -8,8 +8,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // String Column Reader
 //===--------------------------------------------------------------------===//
-StringColumnReader::StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
-    : ColumnReader(reader, schema), string_column_type(GetStringColumnType(Type())) {
+StringColumnReader::StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+                                       uint16_t row_group_ordinal_p)
+    : ColumnReader(reader, schema, row_group_ordinal_p), string_column_type(GetStringColumnType(Type())) {
 	fixed_width_string_length = 0;
 	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
 		fixed_width_string_length = schema.type_length;

@@ -3,18 +3,19 @@
 namespace duckdb {
 
 template <bool FIXED>
-static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const ParquetColumnSchema &schema,
+                                                            uint16_t row_group_ordinal) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
-		return make_uniq<DecimalColumnReader<int16_t, FIXED>>(reader, schema);
+		return make_uniq<DecimalColumnReader<int16_t, FIXED>>(reader, schema, row_group_ordinal);
 	case PhysicalType::INT32:
-		return make_uniq<DecimalColumnReader<int32_t, FIXED>>(reader, schema);
+		return make_uniq<DecimalColumnReader<int32_t, FIXED>>(reader, schema, row_group_ordinal);
 	case PhysicalType::INT64:
-		return make_uniq<DecimalColumnReader<int64_t, FIXED>>(reader, schema);
+		return make_uniq<DecimalColumnReader<int64_t, FIXED>>(reader, schema, row_group_ordinal);
 	case PhysicalType::INT128:
-		return make_uniq<DecimalColumnReader<hugeint_t, FIXED>>(reader, schema);
+		return make_uniq<DecimalColumnReader<hugeint_t, FIXED>>(reader, schema, row_group_ordinal);
 	case PhysicalType::DOUBLE:
-		return make_uniq<DecimalColumnReader<double, FIXED>>(reader, schema);
+		return make_uniq<DecimalColumnReader<double, FIXED>>(reader, schema, row_group_ordinal);
 	default:
 		throw InternalException("Unrecognized type for Decimal");
 	}
@@ -45,11 +46,12 @@ double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t siz
 	return res;
 }
 
-unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+                                                           uint16_t row_group_ordinal) {
 	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
-		return CreateDecimalReaderInternal<true>(reader, schema);
+		return CreateDecimalReaderInternal<true>(reader, schema, row_group_ordinal);
 	} else {
-		return CreateDecimalReaderInternal<false>(reader, schema);
+		return CreateDecimalReaderInternal<false>(reader, schema, row_group_ordinal);
 	}
 }
 

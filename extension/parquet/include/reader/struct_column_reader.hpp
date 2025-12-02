@@ -19,7 +19,7 @@ public:
 
 public:
 	StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                   vector<unique_ptr<ColumnReader>> child_readers_p);
+	                   vector<unique_ptr<ColumnReader>> child_readers_p, uint16_t row_group_ordinal_p);
 
 	vector<unique_ptr<ColumnReader>> child_readers;
 
@@ -28,7 +28,8 @@ public:
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
-	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+	           uint16_t row_group_ordinal) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;

@@ -56,9 +56,10 @@ class DecimalColumnReader
 	    TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>;
 
 public:
-	DecimalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+	DecimalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
-	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(reader, schema) {
+	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(reader, schema,
+	                                                                                               row_group_ordinal) {
 	}
 };
 

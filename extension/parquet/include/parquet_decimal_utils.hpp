@@ -46,7 +46,8 @@ public:
 		return res;
 	}
 
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                             uint16_t row_group_ordinal);
 };
 
 template <>

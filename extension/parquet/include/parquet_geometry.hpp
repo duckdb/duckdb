@@ -24,7 +24,7 @@ class ClientContext;
 
 struct GeometryColumnReader {
 	static unique_ptr<ColumnReader> Create(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                                       ClientContext &context);
+	                                       ClientContext &context, uint16_t row_group_ordinal);
 };
 
 enum class GeoParquetColumnEncoding : uint8_t {

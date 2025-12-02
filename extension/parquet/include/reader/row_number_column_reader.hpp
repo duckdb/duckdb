@@ -20,13 +20,14 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INT64;
 
 public:
-	RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, uint16_t row_group_ordinal_p);
 
 public:
-	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+	           uint16_t row_group_ordinal) override;
 	void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	            const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	            idx_t &approved_tuple_count, bool is_first_filter) override;
+	            idx_t &approved_tuple_count, bool is_first_filter, uint16_t row_group_ordinal) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 

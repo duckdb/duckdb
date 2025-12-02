@@ -14,12 +14,6 @@ statement ok
 PRAGMA add_parquet_key('arrow_key', '0123456789012345')
 
 # file is from apache/parquet-testing repo
-# statement error
-# SELECT flba_field FROM read_parquet('test/sql/copy/parquet/encryption/uniform_encryption.parquet.encrypted', encryption_config={footer_key: 'arrow_key'}) LIMIT 1;
-# ----
-# Invalid Input Error: File is encrypted but not compatible with DuckDB Parquet Encryption
-
-# file is from apache/parquet-testing repo
 query I
 SELECT flba_field FROM read_parquet('test/sql/copy/parquet/encryption/uniform_encryption.parquet.encrypted', encryption_config={footer_key: 'arrow_key'}) LIMIT 1;
 ----

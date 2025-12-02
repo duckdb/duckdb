@@ -60,18 +60,20 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p);
+	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p, uint16_t row_group_ordinal_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                             uint16_t row_group_ordinal);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
+	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+	                   uint16_t row_group_ordinal);
 	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const SelectionVector &sel, idx_t approved_tuple_count);
+	                    const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal);
 	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	                    const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, bool is_first_filter);
+	                    idx_t &approved_tuple_count, bool is_first_filter, uint16_t row_group_ordinal);
 	static void ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
@@ -92,9 +94,6 @@ public:
 	}
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
-	}
-	uint16_t RowGroupOrdinal() const {
-		return row_group_ordinal;
 	}
 
 	virtual idx_t FileOffset() const;
@@ -177,18 +176,19 @@ protected:
 	}
 	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	                  const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                  idx_t &approved_tuple_count);
+	                  idx_t &approved_tuple_count, uint16_t row_group_ordinal);
 	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-	                  const SelectionVector &sel, idx_t approved_tuple_count);
+	                  const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal);
 
 private:
 	//! Check if a previous table filter has filtered out this page
 	bool PageIsFilteredOut(PageHeader &page_hdr);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
-	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
+	idx_t ReadPageHeaders(idx_t max_read, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter = nullptr,
 	                      optional_ptr<TableFilterState> filter_state = nullptr);
-	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
+	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+	                   uint16_t row_group_ordinal);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
 	//! Returns whether all values are valid (i.e., not NULL)
 	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
@@ -294,11 +294,13 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void PrepareRead(int8_t page_ordinal, optional_ptr<const TableFilter> filter,
+	void PrepareRead(int8_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
 	                 optional_ptr<TableFilterState> filter_state);
-	void PreparePage(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1);
+	void PreparePage(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1,
+	                 uint16_t row_group_ordinal = -1);
 	void PrepareDataPage(PageHeader &page_hdr);
-	void PreparePageV2(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1);
+	void PreparePageV2(PageHeader &page_hdr, uint8_t module = -1, int16_t page_ordinal = -1,
+	                   uint16_t row_group_ordinal = -1);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
@@ -308,7 +310,6 @@ private:
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
 	idx_t column_ordinal;
-	uint16_t row_group_ordinal;
 
 	shared_ptr<ResizeableBuffer> block;
 

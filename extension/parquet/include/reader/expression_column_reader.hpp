@@ -20,9 +20,9 @@ public:
 
 public:
 	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       const ParquetColumnSchema &schema);
+	                       const ParquetColumnSchema &schema, uint16_t row_group_ordinal_p);
 	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       unique_ptr<ParquetColumnSchema> owned_schema);
+	                       unique_ptr<ParquetColumnSchema> owned_schema, uint16_t row_group_ordinal_p);
 
 	unique_ptr<ColumnReader> child_reader;
 	DataChunk intermediate_chunk;
@@ -35,7 +35,8 @@ public:
 public:
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
-	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+	           uint16_t row_group_ordinal) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
