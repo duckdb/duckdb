@@ -10,6 +10,7 @@
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 using std::thread;

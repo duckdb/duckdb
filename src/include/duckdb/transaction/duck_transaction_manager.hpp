@@ -30,7 +30,7 @@ struct DuckCleanupInfo {
 };
 
 struct ActiveCheckpointWrapper {
-	ActiveCheckpointWrapper(DuckTransactionManager &manager);
+	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
 	~ActiveCheckpointWrapper();
 
 	DuckTransactionManager &manager;
