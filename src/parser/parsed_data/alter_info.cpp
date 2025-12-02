@@ -1,9 +1,14 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 
 namespace duckdb {
+
+void ExpressionExecutorDeleter::operator()(ExpressionExecutor *ptr) const {
+	delete ptr;
+}
 
 AlterInfo::AlterInfo(AlterType type, string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
     : ParseInfo(TYPE), type(type), if_not_found(if_not_found), catalog(std::move(catalog_p)),
