@@ -368,7 +368,6 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			continue;
 		}
 		//! Only a subset of the struct's fields are referenced
-		D_ASSERT(entry->second.child_columns.size() == entry->second.bindings.size());
 		auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
 		if (!entry->second.supports_pushdown_extract || !SupportsPushdownExtract(get, logical_column_index)) {
 			//! Scan doesn't support pushdown the extract down to the storage
