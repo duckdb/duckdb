@@ -1098,7 +1098,10 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	lock.unlock();
 	metadata_manager.Flush();
 
+	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
+	lock.unlock();
+
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
