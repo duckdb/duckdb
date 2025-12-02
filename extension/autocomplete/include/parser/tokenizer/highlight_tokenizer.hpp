@@ -4,15 +4,15 @@
 namespace duckdb {
 struct MatcherToken;
 
-class ParserTokenizer : public BaseTokenizer {
+class HighlightTokenizer : public BaseTokenizer {
 public:
-	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens);
-	~ParserTokenizer() override = default;
+	HighlightTokenizer(const string &sql);
+	~HighlightTokenizer() override = default;
 
 	void OnStatementEnd(idx_t pos) override;
 	void OnLastToken(TokenType type, string last_word, idx_t last_pos) override;
 
-	vector<vector<MatcherToken>> statements;
+	vector<MatcherToken> tokens;
 };
 
 } // namespace duckdb

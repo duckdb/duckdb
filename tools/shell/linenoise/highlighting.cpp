@@ -6,6 +6,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
+#include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "parser/tokenizer/parser_tokenizer.hpp"
 
 namespace duckdb {
@@ -17,7 +18,6 @@ bool Highlighting::IsEnabled() {
 static tokenType convertToken(TokenType token_type) {
 	switch (token_type) {
 	case TokenType::IDENTIFIER:
-	case TokenType::WORD:
 		return tokenType::TOKEN_IDENTIFIER;
 	case TokenType::NUMBER_LITERAL:
 		return tokenType::TOKEN_NUMERIC_CONSTANT;
@@ -38,13 +38,13 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	vector<MatcherToken> root_tokens;
 
-	ParserTokenizer tokenizer(sql, root_tokens);
+	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
 	vector<SimplifiedToken> result;
 	result.reserve(root_tokens.size());
 
 	vector<highlightToken> tokens;
-	for (auto &token : root_tokens) {
+	for (auto &token : tokenizer.tokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
 		new_token.start = token.offset;

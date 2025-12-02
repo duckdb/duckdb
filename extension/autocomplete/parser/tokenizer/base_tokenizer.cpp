@@ -1,6 +1,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "parser/tokenizer/base_tokenizer.hpp"
 
+#include "duckdb/common/printer.hpp"
+
 namespace duckdb {
 
 BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
@@ -108,6 +110,31 @@ bool BaseTokenizer::CharacterIsControlFlow(char c) {
 		return false;
 	}
 }
+
+string TokenizeStateToString(TokenizeState state) {
+	switch (state) {
+	case TokenizeState::STANDARD:
+		return "STANDARD";
+	case TokenizeState::SINGLE_LINE_COMMENT:
+		return "SINGLE_LINE_COMMENT";
+	case TokenizeState::MULTI_LINE_COMMENT:
+		return "MULTI_LINE_COMMENT";
+	case TokenizeState::QUOTED_IDENTIFIER:
+		return "QUOTED_IDENTIFIER";
+	case TokenizeState::STRING_LITERAL:
+		return "STRING_LITERAL";
+	case TokenizeState::KEYWORD:
+		return "KEYWORD";
+	case TokenizeState::NUMERIC:
+		return "NUMERIC";
+	case TokenizeState::OPERATOR:
+		return "OPERATOR";
+	case TokenizeState::DOLLAR_QUOTED_STRING:
+		return "DOLLAR_QUOTED_STRING";
+	}
+	throw InternalException("Invalid TokenizeState");
+};
+
 
 bool BaseTokenizer::CharacterIsKeyword(char c) {
 	if (IsSingleByteOperator(c)) {
@@ -288,6 +315,7 @@ bool BaseTokenizer::TokenizeInput() {
 				i--;
 			}
 			PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
+			Printer::Print(TokenizeStateToString(state));
 			state = TokenizeState::STANDARD;
 			last_pos = i;
 			i--;
@@ -381,7 +409,7 @@ bool BaseTokenizer::TokenizeInput() {
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
 			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
-			tokens.emplace_back(quoted, full_marker_len);
+			tokens.emplace_back(quoted, full_marker_len, TokenType::STRING_LITERAL);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
@@ -406,7 +434,7 @@ bool BaseTokenizer::TokenizeInput() {
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	OnLastToken(state, std::move(last_word), last_pos);
+	OnLastToken(TokenType::IDENTIFIER, std::move(last_word), last_pos);
 	return true;
 }
 

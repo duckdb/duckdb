@@ -35,7 +35,7 @@ public:
 	bool TokenizeInput();
 
 	virtual void OnStatementEnd(idx_t pos);
-	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos) = 0;
+	virtual void OnLastToken(TokenType type, string last_word, idx_t last_pos) = 0;
 
 	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);

@@ -412,8 +412,8 @@ public:
 		last_pos = 0;
 	}
 
-	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
-		if (state == TokenizeState::STRING_LITERAL) {
+	void OnLastToken(TokenType type, string last_word_p, idx_t last_pos_p) override {
+		if (type == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
 		last_word = std::move(last_word_p);
@@ -727,7 +727,6 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	output.SetCardinality(count);
 }
-
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {

@@ -81,11 +81,12 @@ enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
-enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT, WORD};
+enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT };
 
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p, idx_t offset_p, TokenType type_p = TokenType::WORD) : text(std::move(text_p)), offset(offset_p), type(type_p) {
+	MatcherToken(string text_p, idx_t offset_p, TokenType type_p)
+	    : text(std::move(text_p)), offset(offset_p), type(type_p) {
 		length = text.length();
 	}
 
