@@ -2,6 +2,8 @@
 # description: Test SAMPLE keyword
 # group: [sample]
 
+require notwindows
+
 statement ok
 CREATE TABLE t1(a INT);
 
