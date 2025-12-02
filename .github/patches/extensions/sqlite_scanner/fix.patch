@@ -103,7 +103,7 @@ index cfead5b..f49b4ea 100644
  	chunk.SetCardinality(1);
  	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.update_count));
 diff --git a/test/sql/storage/attach_detach.test b/test/sql/storage/attach_detach.test
-index 830d587..1f739a7 100644
+index 830d587..24dc51b 100644
 --- a/test/sql/storage/attach_detach.test
 +++ b/test/sql/storage/attach_detach.test
 @@ -19,7 +19,7 @@ DETACH s1
@@ -111,7 +111,7 @@ index 830d587..1f739a7 100644
  SELECT * FROM s1.test
  ----
 -Catalog Error: Table with name test does not exist!
-+Catalog Error: Table with name "x.a" does not exist because schema "x" does not exist.
++Catalog Error: Table with name "s1.test" does not exist because schema "s1" does not exist.
  
  statement ok
  ATTACH '__TEST_DIR__/attach_detach.db' AS s1 (TYPE SQLITE)
