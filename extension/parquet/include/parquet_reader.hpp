@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
@@ -178,7 +179,7 @@ public:
 	idx_t NumRowGroups() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
-	string GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
+	string static GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t row_group_ordinal = 0,
 	              uint16_t col_idx = 0, int8_t module = 0, uint16_t page_ordinal = -1);
@@ -206,6 +207,7 @@ public:
 	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result);
 	static bool MetadataCacheEnabled(ClientContext &context);
 	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
+	static unique_ptr<AdditionalAuthenticatedData> GetFooterAdditionalAuthenticatedData(string aad_prefix);
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
@@ -234,6 +236,8 @@ private:
 
 	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
 	                                                ParquetColumnSchema &element);
+	unique_ptr<AdditionalAuthenticatedData> CreateAAD(uint8_t module_type, uint16_t row_group_ordinal,
+	                                                  uint16_t column_ordinal, uint16_t page_ordinal) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;

@@ -30,6 +30,28 @@ idx_t EncryptionNonce::size() const {
 	return MainHeader::AES_NONCE_LEN;
 }
 
+AdditionalAuthenticatedData::AdditionalAuthenticatedData(idx_t prefix_size, idx_t suffix_size)
+    : additional_authenticated_data(new data_t[prefix_size + suffix_size]),
+      additional_authenticated_data_prefix_size(prefix_size),
+      additional_authenticated_data_total_size(prefix_size + suffix_size) {
+}
+
+data_ptr_t AdditionalAuthenticatedData::data() const {
+	return additional_authenticated_data.get();
+}
+
+idx_t AdditionalAuthenticatedData::size() const {
+	return additional_authenticated_data_total_size;
+}
+
+idx_t AdditionalAuthenticatedData::GetPrefixSize() const {
+	return additional_authenticated_data_prefix_size;
+}
+
+void AdditionalAuthenticatedData::SetTotalSize(idx_t size) {
+	additional_authenticated_data_total_size = size;
+}
+
 EncryptionEngine::EncryptionEngine() {
 }
 

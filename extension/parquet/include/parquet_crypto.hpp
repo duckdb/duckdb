@@ -10,6 +10,7 @@
 
 #include "parquet_types.h"
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
@@ -82,17 +83,20 @@ public:
 
 	// Standard AAD length for file
 	static constexpr int32_t AADFileIDLength = 8;
+	// Maximum Parquet AAD suffix bytes
+	static constexpr int32_t AADMaxSuffixBytes = 7;
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
 	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p,
-	                     string aad = "");
+	                     unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
-	                         const EncryptionUtil &encryption_util_p, string aad = "");
+	                         const EncryptionUtil &encryption_util_p,
+	                         unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
 	                          const string &key, const EncryptionUtil &encryption_util_p);

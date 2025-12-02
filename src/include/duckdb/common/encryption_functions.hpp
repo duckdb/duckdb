@@ -26,6 +26,19 @@ private:
 	unique_ptr<data_t[]> nonce;
 };
 
+struct AdditionalAuthenticatedData {
+	AdditionalAuthenticatedData(idx_t prefix_size, idx_t size);
+	data_ptr_t data() const;
+	idx_t size() const;
+	idx_t GetPrefixSize() const;
+	void SetTotalSize(idx_t size);
+
+private:
+	unique_ptr<data_t[]> additional_authenticated_data;
+	idx_t additional_authenticated_data_prefix_size = 0;
+	idx_t additional_authenticated_data_total_size = 0;
+};
+
 class EncryptionEngine {
 public:
 	EncryptionEngine();

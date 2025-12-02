@@ -18,3 +18,5 @@ query I
 SELECT flba_field FROM read_parquet('test/sql/copy/parquet/encryption/uniform_encryption.parquet.encrypted', encryption_config={footer_key: 'arrow_key'}) LIMIT 1;
 ----
 \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+
+# file also should be backwards compatible with DuckDB file < V1.5
