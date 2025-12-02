@@ -642,6 +642,9 @@ static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count,
 	uint8_t src_bit = false;
 
 	if (ALL_VALID) {
+		if (UPDATE_STATS) {
+			statistics->SetHasNoNullFast();
+		}
 		for (idx_t i = 0; i < count; i++) {
 			src_bit = src[i];
 
@@ -671,7 +674,12 @@ static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count,
 			last_bit_value = src_bit;
 
 			if (UPDATE_STATS) {
-				statistics->UpdateNumericStats<bool>(src_bit);
+				if (valid) {
+					statistics->UpdateNumericStats<bool>(src_bit);
+					statistics->SetHasNoNullFast();
+				} else {
+					statistics->SetHasNullFast();
+				}
 			}
 
 			// flush

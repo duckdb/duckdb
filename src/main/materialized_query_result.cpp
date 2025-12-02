@@ -62,10 +62,6 @@ idx_t MaterializedQueryResult::RowCount() const {
 	return collection ? collection->Count() : 0;
 }
 
-bool MaterializedQueryResult::MoreRowsThan(idx_t row_count) {
-	return RowCount() >= row_count;
-}
-
 ColumnDataCollection &MaterializedQueryResult::Collection() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",

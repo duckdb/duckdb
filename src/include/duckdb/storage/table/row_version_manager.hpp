@@ -46,11 +46,14 @@ public:
 	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
+	bool HasUnserializedChanges();
+	vector<MetaBlockPointer> GetStoragePointers();
+
 private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkInfo>> vector_info;
-	bool has_changes;
+	bool has_unserialized_changes;
 	vector<MetaBlockPointer> storage_pointers;
 
 private:

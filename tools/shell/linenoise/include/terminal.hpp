@@ -98,6 +98,12 @@ struct TerminalSize {
 	int ws_row = 0;
 };
 
+struct TerminalColor {
+	uint8_t r = 0;
+	uint8_t g = 0;
+	uint8_t b = 0;
+};
+
 struct KeyPress {
 	KeyPress() {
 	}
@@ -131,6 +137,7 @@ public:
 	static bool IsAtty();
 	static int HasMoreData(int fd);
 	static TerminalSize GetTerminalSize();
+	static bool TryGetBackgroundColor(TerminalColor &color);
 
 	static char *EditNoTTY();
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);

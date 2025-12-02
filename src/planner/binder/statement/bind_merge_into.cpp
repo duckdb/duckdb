@@ -224,7 +224,26 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		// modification type depends on actions
+		DatabaseModificationType modification;
+		for (auto &action_condition : stmt.actions) {
+			for (auto &action : action_condition.second) {
+				switch (action->action_type) {
+				case MergeActionType::MERGE_UPDATE:
+					modification |= DatabaseModificationType::UPDATE_DATA;
+					break;
+				case MergeActionType::MERGE_DELETE:
+					modification |= DatabaseModificationType::DELETE_DATA;
+					break;
+				case MergeActionType::MERGE_INSERT:
+					modification |= DatabaseModificationType::INSERT_DATA;
+					break;
+				default:
+					break;
+				}
+			}
+		}
+		properties.RegisterDBModify(table.catalog, context, modification);
 	}
 
 	// bind the source
