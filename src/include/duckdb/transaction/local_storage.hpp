@@ -36,8 +36,7 @@ public:
 	//! Create a LocalTableStorage from a DROP COLUMN.
 	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
 	// Create a LocalTableStorage from an ADD COLUMN
-	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
-	                  ExpressionExecutor &default_executor);
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column);
 	~LocalTableStorage();
 
 	QueryContext context;
@@ -175,8 +174,7 @@ public:
 	idx_t AddedRows(DataTable &table);
 	vector<PartitionStatistics> GetPartitionStats(DataTable &table) const;
 
-	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
-	               ExpressionExecutor &default_executor);
+	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);

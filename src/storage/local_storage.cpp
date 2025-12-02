@@ -92,12 +92,12 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
-                                     ColumnDefinition &new_column, ExpressionExecutor &default_executor)
+                                     ColumnDefinition &new_column)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_dt, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 	auto &parent_collection = *parent.row_groups->collection;
-	auto new_collection = parent_collection.AddColumn(context, new_column, default_executor);
+	auto new_collection = parent_collection.AddColumn(context, new_column);
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
 	append_indexes.Move(parent.append_indexes);
@@ -697,14 +697,13 @@ void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
-                             ExpressionExecutor &default_executor) {
+void LocalStorage::AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column) {
 	// check if there are any pending appends for the old version of the table
 	auto storage = table_manager.MoveEntry(old_dt);
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, new_column, default_executor);
+	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, new_column);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

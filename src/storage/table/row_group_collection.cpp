@@ -1551,8 +1551,7 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryCo
 //===--------------------------------------------------------------------===//
 // Alter
 //===--------------------------------------------------------------------===//
-shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
-                                                             ExpressionExecutor &default_executor) {
+shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	auto row_groups = GetRowGroups();
@@ -1571,7 +1570,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, default_vector);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_vector);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 

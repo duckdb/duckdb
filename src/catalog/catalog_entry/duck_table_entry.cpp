@@ -371,14 +371,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
-
 	Expression &default_value = *bound_defaults.back();
-	// initialize the executor stored on the AlterInfo with the correct deleter type
+	// initialize the executor stored on the AlterInfo
+	printf("\nset AlterInfo.default_executor");
 	info.default_executor.reset(new ExpressionExecutor(context));
 	info.default_executor->AddExpression(default_value);
-
-	auto new_storage =
-	    make_shared_ptr<DataTable>(context, *storage, info.new_column, std::move(info.default_executor));
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 

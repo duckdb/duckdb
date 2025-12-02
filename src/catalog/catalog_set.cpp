@@ -348,7 +348,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 			return false;
 		}
 	}
-	auto new_entry = value.get();
+	CatalogEntry *new_entry = value.get();
 	map.UpdateEntry(std::move(value));
 
 	// push the old entry in the undo buffer for this transaction
@@ -370,8 +370,14 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		entry_to_destroy = new_entry->TakeChild();
 	}
 	//TODO: Add new_entry->FinalizeAlterEntry(...) call, do an update with the timestamp we need. Should be passed an ExpressionExecutor
-	// new_entry->FinalizeAlterEntry(*alter_info.default_executor);
-
+	// Concerns:
+	//	- This code is executed before we set default_executor in DuckTableEntry::AddColumn(), should we just skip the finalize in that case? Is that ok?
+	if (alter_info.default_executor != nullptr) {
+		printf("\ndefault_executor : %s", name.c_str());
+		new_entry->FinalizeAlterEntry(*alter_info.default_executor);
+	} else {
+		printf("\nnullptr : %s", name.c_str());
+	}
 	read_lock.unlock();
 	write_lock.unlock();
 
