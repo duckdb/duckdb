@@ -4565,19 +4565,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 10, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 11, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 10, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 11, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {

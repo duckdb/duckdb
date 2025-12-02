@@ -321,7 +321,8 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	if (config.storage_extensions.find(options.db_type) != config.storage_extensions.end()) {
+	auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+	if (config.storage_extensions.find(extension_name) != config.storage_extensions.end()) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
