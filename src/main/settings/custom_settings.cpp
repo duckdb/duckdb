@@ -695,6 +695,8 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
 			config.AddAllowedPath(path + ".wal");
+			config.AddAllowedPath(path + ".checkpoint.wal");
+			config.AddAllowedPath(path + ".recovery.wal");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
