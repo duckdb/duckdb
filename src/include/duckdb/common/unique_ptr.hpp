@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "duckdb/common/exception.hpp"

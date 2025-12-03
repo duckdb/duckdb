@@ -197,7 +197,7 @@ template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalTy
 unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
-	function.function = GET_FUNCTION(function.arguments[0], return_type);
+	function.SetFunctionCallback(GET_FUNCTION(function.arguments[0], return_type));
 	return nullptr;
 }
 
@@ -226,8 +226,8 @@ ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_typ
 ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralCompressFunctionName(result_type), {input_type, input_type}, result_type,
 	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
-	result.serialize = CMIntegralSerialize;
-	result.deserialize = CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>;
+	result.SetSerializeCallback(CMIntegralSerialize);
+	result.SetDeserializeCallback(CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>);
 #if defined(D_ASSERT_IS_ENABLED)
 	result.SetFallible(); // Can only throw runtime error when assertions are enabled
 #else
@@ -239,8 +239,8 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
 	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
-	result.serialize = CMIntegralSerialize;
-	result.deserialize = CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>;
+	result.SetSerializeCallback(CMIntegralSerialize);
+	result.SetDeserializeCallback(CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>);
 	return result;
 }
 

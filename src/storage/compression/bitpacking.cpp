@@ -71,7 +71,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = Load<BitpackingMode>(data_ptr_cast(metadata_encoded) + 3);
+	metadata.mode = static_cast<BitpackingMode>((*metadata_encoded >> 24) & 0xFF);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
 	return metadata;
 }
@@ -125,6 +125,9 @@ public:
 	bool all_valid;
 	bool all_invalid;
 
+	bool has_valid;
+	bool has_invalid;
+
 	bool can_do_delta;
 	bool can_do_for;
 
@@ -140,6 +143,8 @@ public:
 		delta_offset = 0;
 		all_valid = true;
 		all_invalid = true;
+		has_valid = false;
+		has_invalid = false;
 		can_do_delta = false;
 		can_do_for = false;
 		compression_buffer_idx = 0;
@@ -300,6 +305,8 @@ public:
 	template <class OP = EmptyBitpackingWriter>
 	bool Update(T value, bool is_valid) {
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
+		has_valid = has_valid || is_valid;
+		has_invalid = has_invalid || !is_valid;
 		all_valid = all_valid && is_valid;
 		all_invalid = all_invalid && !is_valid;
 
@@ -482,9 +489,18 @@ public:
 		static void UpdateStats(BitpackingCompressionState<T, WRITE_STATISTICS> *state, idx_t count) {
 			state->current_segment->count += count;
 
-			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+			if (WRITE_STATISTICS) {
+				if (state->state.has_valid) {
+					state->current_segment->stats.statistics.SetHasNoNullFast();
+				}
+				if (state->state.has_invalid) {
+					state->current_segment->stats.statistics.SetHasNullFast();
+				}
+
+				if (!state->state.all_invalid) {
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+				}
 			}
 		}
 	};

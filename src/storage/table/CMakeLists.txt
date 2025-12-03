@@ -1,3 +1,5 @@
+add_subdirectory(variant)
+
 add_library_unity(
   duckdb_storage_table
   OBJECT
@@ -14,12 +16,14 @@ add_library_unity(
   row_id_column_data.cpp
   row_group.cpp
   row_group_collection.cpp
+  row_group_reorderer.cpp
   row_version_manager.cpp
   scan_state.cpp
   standard_column_data.cpp
   struct_column_data.cpp
   table_statistics.cpp
-  validity_column_data.cpp)
+  validity_column_data.cpp
+  variant_column_data.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_table>
     PARENT_SCOPE)

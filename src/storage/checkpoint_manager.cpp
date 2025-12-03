@@ -222,20 +222,20 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		}
 		for (auto &entry_ref : catalog_entries) {
 			auto &entry = entry_ref.get();
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				auto &table = entry.Cast<DuckTableEntry>();
-				auto &storage = table.GetStorage();
-				auto segment_info = storage.GetColumnSegmentInfo(context);
-				for (auto &segment : segment_info) {
-					verify_block_usage_count[segment.block_id]++;
-					if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
-						auto overflow_blocks =
-						    StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
-						auto splits = StringUtil::Split(overflow_blocks, ", ");
-						for (auto &split : splits) {
-							auto overflow_block_id = std::stoll(split);
-							verify_block_usage_count[overflow_block_id]++;
-						}
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				continue;
+			}
+			auto &table = entry.Cast<DuckTableEntry>();
+			auto &storage = table.GetStorage();
+			auto segment_info = storage.GetColumnSegmentInfo(context);
+			for (auto &segment : segment_info) {
+				verify_block_usage_count[segment.block_id]++;
+				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
+					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+					auto splits = StringUtil::Split(overflow_blocks, ", ");
+					for (auto &split : splits) {
+						auto overflow_block_id = std::stoll(split);
+						verify_block_usage_count[overflow_block_id]++;
 					}
 				}
 			}
@@ -540,12 +540,10 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
-	if (auto writer = GetTableDataWriter(table)) {
+	auto writer = GetTableDataWriter(table);
+	if (writer) {
 		writer->WriteTableData(serializer);
 	}
-	// flush any partial blocks BEFORE releasing the table lock
-	// flushing partial blocks updates where data lives and is not thread-safe
-	partial_block_manager.FlushPartialBlocks();
 }
 
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {

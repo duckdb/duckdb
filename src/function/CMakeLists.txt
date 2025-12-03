@@ -4,6 +4,7 @@ add_subdirectory(pragma)
 add_subdirectory(scalar)
 add_subdirectory(table)
 add_subdirectory(window)
+add_subdirectory(variant)
 
 if(GENERATE_EXTENSION_ENTRIES)
   add_definitions(-DGENERATE_EXTENSION_ENTRIES)

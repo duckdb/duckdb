@@ -1,4 +1,5 @@
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -310,8 +311,7 @@ void BoxRendererImplementation::Render() {
 	RenderFooter(row_count, column_count);
 }
 
-string BoxRendererImplementation::TruncateValue(const string &value, idx_t column_width, idx_t &pos,
-                                                idx_t &current_render_width) {
+string BoxRenderer::TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width) {
 	idx_t start_pos = pos;
 	while (pos < value.size()) {
 		if (value[pos] == '\n') {
@@ -322,7 +322,7 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 		}
 		// check if this character fits...
 		auto char_size = Utf8Proc::RenderWidth(value.c_str(), value.size(), pos);
-		if (current_render_width + char_size >= column_width) {
+		if (current_render_width + char_size > column_width) {
 			// it doesn't! stop
 			break;
 		}
@@ -331,6 +331,11 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 		pos = Utf8Proc::NextGraphemeCluster(value.c_str(), value.size(), pos);
 	}
 	return value.substr(start_pos, pos - start_pos);
+}
+
+string BoxRendererImplementation::TruncateValue(const string &value, idx_t column_width, idx_t &pos,
+                                                idx_t &current_render_width) {
+	return BoxRenderer::TruncateValue(value, column_width, pos, current_render_width);
 }
 
 void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
@@ -459,7 +464,7 @@ ValueRenderAlignment BoxRendererImplementation::TypeAlignment(const LogicalType 
 	}
 }
 
-string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
+string BoxRenderer::TryFormatLargeNumber(const string &numeric, char decimal_sep) {
 	// we only return a readable rendering if the number is > 1 million
 	if (numeric.size() <= 5) {
 		// number too small for sure
@@ -520,11 +525,15 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 		result += "-";
 	}
 	result += decimal_str.substr(0, decimal_str.size() - 2);
-	result += config.decimal_separator == '\0' ? '.' : config.decimal_separator;
+	result += decimal_sep == '\0' ? '.' : decimal_sep;
 	result += decimal_str.substr(decimal_str.size() - 2, 2);
 	result += " ";
 	result += unit;
 	return result;
+}
+
+string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
+	return BoxRenderer::TryFormatLargeNumber(numeric, config.decimal_separator);
 }
 
 list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
@@ -558,6 +567,9 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	idx_t chunk_idx = 0;
 	idx_t row_idx = 0;
 	while (row_idx < top_rows) {
+		if (context.IsInterrupted()) {
+			break;
+		}
 		fetch_result.Reset();
 		insert_result.Reset();
 		// fetch the next chunk
@@ -615,6 +627,9 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	row_idx = 0;
 	chunk_idx = result.ChunkCount() - 1;
 	while (row_idx < bottom_rows) {
+		if (context.IsInterrupted()) {
+			break;
+		}
 		fetch_result.Reset();
 		insert_result.Reset();
 		// fetch the next chunk
@@ -678,6 +693,9 @@ list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<Colu
 		row_chunk.SetValue(current_index++, row_index, RenderType(result_types[c]));
 		for (auto &collection : input) {
 			for (auto &chunk : collection.Chunks(column_ids)) {
+				if (context.IsInterrupted()) {
+					break;
+				}
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					row_chunk.SetValue(current_index++, row_index, chunk.GetValue(0, r));
 				}
@@ -1094,23 +1112,40 @@ protected:
 		JSONFormattingResult format_result = JSONFormattingResult::SUCCESS;
 	};
 
-	bool LiteralFits(FormatState &format_state, const string &text) {
+	bool LiteralFits(FormatState &format_state, idx_t render_width) {
 		auto &line_length = format_state.line_length;
-		idx_t render_width = Utf8Proc::RenderWidth(text);
 		if (line_length + render_width > format_state.max_width) {
 			return false;
 		}
 		return true;
 	}
 
-	void AddLiteral(FormatState &format_state, const string &text) {
+	bool LiteralFits(FormatState &format_state, const string &text) {
+		idx_t render_width = Utf8Proc::RenderWidth(text);
+		return LiteralFits(format_state, render_width);
+	}
+
+	void AddLiteral(FormatState &format_state, const string &text, bool skip_adding_if_does_not_fit = false) {
 		auto &result = format_state.result;
 		auto &line_length = format_state.line_length;
+		idx_t render_width = Utf8Proc::RenderWidth(text);
+		if (!LiteralFits(format_state, render_width)) {
+			if (skip_adding_if_does_not_fit) {
+				return;
+			}
+			AddNewline(format_state);
+			if (format_state.format_result != JSONFormattingResult::SUCCESS) {
+				return;
+			}
+		}
 		result += text;
-		line_length += Utf8Proc::RenderWidth(text);
+		line_length += render_width;
 		if (line_length > format_state.max_width) {
 			format_state.format_result = JSONFormattingResult::TOO_WIDE;
 		}
+	}
+	void AddSpace(FormatState &format_state) {
+		AddLiteral(format_state, " ", true);
 	}
 	void AddNewline(FormatState &format_state) {
 		auto &result = format_state.result;
@@ -1118,34 +1153,36 @@ protected:
 		auto &row_count = format_state.row_count;
 		auto &line_length = format_state.line_length;
 		result += '\n';
-		result += string(format_state.indentation_size * depth, ' ');
+		result += string(depth, ' ');
 		row_count++;
 		if (row_count > format_state.max_rows) {
 			format_state.format_result = JSONFormattingResult::TOO_MANY_ROWS;
 			return;
 		}
-		line_length = format_state.indentation_size * depth;
+		line_length = depth;
 		if (line_length > format_state.max_width) {
 			format_state.format_result = JSONFormattingResult::TOO_WIDE;
 		}
 	}
 
-	void FormatComponent(FormatState &format_state, JSONComponent &component, bool inlined) {
+	enum class InlineMode { STANDARD, INLINED_SINGLE_LINE, INLINED_MULTI_LINE };
+
+	void FormatComponent(FormatState &format_state, JSONComponent &component, InlineMode inline_mode) {
 		auto &depth = format_state.depth;
 		auto &line_length = format_state.line_length;
 		auto &max_width = format_state.max_width;
 		auto &c = format_state.component_idx;
 		switch (component.type) {
 		case JSONComponentType::BRACKET_OPEN: {
-			depth++;
+			depth += component.text == "{" ? format_state.indentation_size : 1;
 			AddLiteral(format_state, component.text);
-			if (!inlined) {
+			if (inline_mode == InlineMode::STANDARD) {
 				// not inlined
 				// look forward until the corresponding bracket open - can we inline and not exceed the column width?
 				idx_t peek_depth = 0;
 				idx_t render_size = line_length;
 				idx_t peek_idx;
-				bool inline_bracket = false;
+				InlineMode inline_child_mode = InlineMode::STANDARD;
 				for (peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
 					auto &peek_component = components[peek_idx];
 					if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
@@ -1153,7 +1190,10 @@ protected:
 					} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
 						if (peek_depth == 0) {
 							// close!
-							inline_bracket = render_size + 1 < max_width;
+							if (render_size + 1 < max_width) {
+								// fits within a single line - inline on a single line
+								inline_child_mode = InlineMode::INLINED_SINGLE_LINE;
+							}
 							break;
 						}
 						peek_depth--;
@@ -1164,11 +1204,42 @@ protected:
 						render_size++;
 					}
 				}
-				if (inline_bracket) {
+				if (component.text == "[") {
+					// for arrays - we always inline them UNLESS there are complex objects INSIDE of the bracket
+					// scan forward until the end of the array to figure out if this is true or not
+					for (peek_idx = c + 1; peek_idx < components.size(); peek_idx++) {
+						auto &peek_component = components[peek_idx];
+						peek_depth = 0;
+						if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
+							if (peek_component.text == "{") {
+								// nested structure within the array
+								break;
+							}
+							peek_depth++;
+						}
+						if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
+							if (peek_depth == 0) {
+								inline_child_mode = InlineMode::INLINED_MULTI_LINE;
+								break;
+							}
+							peek_depth--;
+						}
+					}
+				}
+				if (inline_child_mode != InlineMode::STANDARD) {
 					// we can inline! do it
 					for (idx_t inline_idx = c + 1; inline_idx <= peek_idx; inline_idx++) {
 						auto &inline_component = components[inline_idx];
-						FormatComponent(format_state, inline_component, true);
+						if (inline_child_mode == InlineMode::INLINED_MULTI_LINE && inline_idx + 1 <= peek_idx) {
+							auto &next_component = components[inline_idx + 1];
+							if (next_component.type == JSONComponentType::COMMA ||
+							    next_component.type == JSONComponentType::BRACKET_CLOSE) {
+								if (!LiteralFits(format_state, inline_component.text + next_component.text)) {
+									AddNewline(format_state);
+								}
+							}
+						}
+						FormatComponent(format_state, inline_component, inline_child_mode);
 					}
 					c = peek_idx;
 					return;
@@ -1184,21 +1255,22 @@ protected:
 			}
 			break;
 		}
-		case JSONComponentType::BRACKET_CLOSE:
-			depth--;
-			if (!inlined) {
+		case JSONComponentType::BRACKET_CLOSE: {
+			idx_t depth_diff = component.text == "}" ? format_state.indentation_size : 1;
+			if (depth < depth_diff) {
+				// shouldn't happen - but guard against underflows
+				depth = 0;
+			} else {
+				depth -= depth_diff;
+			}
+			if (inline_mode == InlineMode::STANDARD) {
 				AddNewline(format_state);
 			}
 			AddLiteral(format_state, component.text);
 			break;
+		}
 		case JSONComponentType::COMMA:
 		case JSONComponentType::COLON:
-			if (format_state.mode != JSONFormattingMode::STANDARD) {
-				// add a newline if the comma does not fit
-				if (!LiteralFits(format_state, component.text)) {
-					AddNewline(format_state);
-				}
-			}
 			AddLiteral(format_state, component.text);
 			bool always_inline;
 			if (format_state.mode == JSONFormattingMode::COMPACT_HORIZONTAL) {
@@ -1208,8 +1280,8 @@ protected:
 				// in normal processing we always inline colons
 				always_inline = component.type == JSONComponentType::COLON;
 			}
-			if (inlined || always_inline) {
-				AddLiteral(format_state, " ");
+			if (inline_mode != InlineMode::STANDARD || always_inline) {
+				AddSpace(format_state);
 			} else {
 				if (format_state.mode != JSONFormattingMode::STANDARD) {
 					// if we are not inlining in compact mode, try to inline until the next comma
@@ -1241,10 +1313,10 @@ protected:
 					}
 					if (inline_comma) {
 						// we can inline until the next comma! do it
-						AddLiteral(format_state, " ");
+						AddSpace(format_state);
 						for (idx_t inline_idx = c + 1; inline_idx < peek_idx; inline_idx++) {
 							auto &inline_component = components[inline_idx];
-							FormatComponent(format_state, inline_component, true);
+							FormatComponent(format_state, inline_component, InlineMode::INLINED_SINGLE_LINE);
 						}
 						c = peek_idx - 1;
 						return;
@@ -1273,7 +1345,7 @@ protected:
 		                                     format_state.format_result == JSONFormattingResult::SUCCESS;
 		     format_state.component_idx++) {
 			auto &component = components[format_state.component_idx];
-			FormatComponent(format_state, component, false);
+			FormatComponent(format_state, component, InlineMode::STANDARD);
 		}
 
 		if (format_state.format_result != JSONFormattingResult::SUCCESS) {
@@ -1695,7 +1767,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						}
 						rows_left--;
 					}
-					bool can_add_extra_row = rows_left > min_leftover_rows;
+					bool can_add_extra_row = current_row + 1 < extra_rows.size() || rows_left > min_leftover_rows;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row

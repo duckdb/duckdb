@@ -156,6 +156,17 @@
         "scope": "global"
     },
     {
+        "name": "block_allocator_memory",
+        "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",
@@ -495,6 +506,13 @@
         "internal_setting": "explain_output_type"
     },
     {
+        "name": "extension_directories",
+        "description": "Set the directories to store extensions in",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
@@ -529,6 +547,14 @@
         "description": "DEBUG SETTING: forces a specific compression method to be used",
         "type": "VARCHAR",
         "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "force_variant_shredding",
+        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "ForceVariantShredding",
         "custom_implementation": true
     },
     {
@@ -924,6 +950,14 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "variant_minimum_shredding_size",
+        "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "30000",
+        "struct": "VariantMinimumShreddingSize"
     },
     {
         "name": "write_buffer_row_group_count",

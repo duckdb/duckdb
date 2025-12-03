@@ -14,6 +14,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -110,20 +111,6 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
-};
-
-struct RowGroupOrderOptions {
-	RowGroupOrderOptions(column_t column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
-	                     OrderByColumnType column_type_p, optional_idx row_limit_p = optional_idx())
-	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p),
-	      row_limit(row_limit_p) {
-	}
-
-	const column_t column_idx;
-	const OrderByStatistics order_by;
-	const RowGroupOrderType order_type;
-	const OrderByColumnType column_type;
-	const optional_idx row_limit;
 };
 
 struct TableFunctionInitInput {
@@ -370,6 +357,28 @@ public:
 	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 
+	bool HasBindCallback() const {
+		return bind != nullptr;
+	}
+	table_function_bind_t GetBindCallback() const {
+		return bind;
+	}
+	bool HasSerializationCallbacks() const {
+		return serialize != nullptr && deserialize != nullptr;
+	}
+	void SetSerializeCallback(table_function_serialize_t callback) {
+		serialize = callback;
+	}
+	void SetDeserializeCallback(table_function_deserialize_t callback) {
+		deserialize = callback;
+	}
+	table_function_serialize_t GetSerializeCallback() const {
+		return serialize;
+	}
+	table_function_deserialize_t GetDeserializeCallback() const {
+		return deserialize;
+	}
+
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
@@ -466,6 +475,8 @@ public:
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
+	DUCKDB_API bool operator==(const TableFunction &rhs) const;
+	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
 };
 
 } // namespace duckdb

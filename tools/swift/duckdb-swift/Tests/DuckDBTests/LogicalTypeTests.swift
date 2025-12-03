@@ -321,23 +321,26 @@ final class LogicalTypeTests: XCTestCase {
   struct NumStrStruct: Equatable, Decodable {
     let num: Int32
     let str: String
+    let bool: Bool
   }
 
   func test_struct() throws {
     let connection = try Database(store: .inMemory).connect()
-    try connection.execute("CREATE TABLE t1(num INTEGER, str VARCHAR);")
-    let result = try connection.query("SELECT {'num': num, 'str': str} as struct_column FROM t1;")
+    try connection.execute("CREATE TABLE t1(num INTEGER, str VARCHAR, bool BOOLEAN);")
+    let result = try connection.query("SELECT {'num': num, 'str': str, 'bool': bool} as struct_column FROM t1;")
     let logicalType = result[0].cast(to: NumStrStruct.self).underlyingLogicalType
 
     XCTAssertEqual(logicalType.dataType, .struct)
     XCTAssertEqual(logicalType.underlyingDataType, .struct)
 
     let properties = logicalType.structMemberProperties!
-    XCTAssertEqual(properties.count, 2)
+    XCTAssertEqual(properties.count, 3)
     XCTAssertEqual(properties[0].name, "num")
     XCTAssertEqual(properties[0].type.dataType, .integer)
     XCTAssertEqual(properties[1].name, "str")
     XCTAssertEqual(properties[1].type.dataType, .varchar)
+    XCTAssertEqual(properties[2].name, "bool")
+    XCTAssertEqual(properties[2].type.dataType, .boolean)
   }
 
   func test_map() throws {
