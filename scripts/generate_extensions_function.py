@@ -371,7 +371,7 @@ def transform_parameter(parameter) -> LogicalType:
 
 
 def transform_parameters(parameters) -> FunctionOverload:
-    parameters = [x.strip("'") for x in parameters.lstrip('[').rstrip(']').split(', ') if len(x) > 0]
+    parameters = [x for x in parameters.lstrip('[').rstrip(']').split(', ') if len(x) > 0]
     return tuple(transform_parameter(param) for param in parameters)
 
 
