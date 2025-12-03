@@ -239,8 +239,8 @@ private:
 
 	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
 	                                                ParquetColumnSchema &element);
-	unique_ptr<AdditionalAuthenticatedData> CreateAAD(uint8_t module_type, uint16_t row_group_ordinal,
-	                                                  uint16_t column_ordinal, uint16_t page_ordinal) const;
+	unique_ptr<AdditionalAuthenticatedData> GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
+	                                                    uint16_t column_ordinal, uint16_t page_ordinal) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;

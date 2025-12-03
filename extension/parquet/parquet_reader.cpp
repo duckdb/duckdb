@@ -948,10 +948,12 @@ string ParquetReader::GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encr
 	}
 }
 
-unique_ptr<AdditionalAuthenticatedData> ParquetReader::CreateAAD(uint8_t module_type, uint16_t row_group_ordinal,
-                                                                 uint16_t column_ordinal, uint16_t page_ordinal) const {
+unique_ptr<AdditionalAuthenticatedData> ParquetReader::GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
+                                                                   uint16_t column_ordinal,
+                                                                   uint16_t page_ordinal) const {
 	// For the Parquet Encryption Spec, Additional Authenticated Data (AAD) consists of:
-	// a unique suffix (file aad, usually 8 bytes) + data page header id (1 byte)
+	// a unique prefix, consists of: an optional aad-prefix (arbitrary length) + a file identifier (default 8 bytes)
+	// + module type (1 byte)
 	// + row group ordinal (2 bytes, optionally)
 	// + column ordinal (2 bytes, optionally)
 	// + page ordinal (2 bytes, optionally)
@@ -999,7 +1001,7 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
                                       uint16_t row_group_ordinal, uint16_t col_idx, uint8_t module,
                                       uint16_t page_ordinal) {
-	auto result_aad = CreateAAD(module, row_group_ordinal, col_idx, page_ordinal);
+	auto result_aad = GenerateAAD(module, row_group_ordinal, col_idx, page_ordinal);
 	return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
 	                           std::move(result_aad));
 }
@@ -1012,7 +1014,7 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                           const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
                                           uint8_t module, uint16_t page_ordinal) {
-	auto result_aad = CreateAAD(module, row_group_ordinal, col_idx, page_ordinal);
+	auto result_aad = GenerateAAD(module, row_group_ordinal, col_idx, page_ordinal);
 	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
 	                               *encryption_util, std::move(result_aad));
 }

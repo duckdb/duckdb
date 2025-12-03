@@ -177,7 +177,11 @@ public:
 	    : prot(prot_p), trans(*prot.getTransport()),
 	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
 	      read_buffer_offset(0) {
-		Initialize(key, std::move(aad));
+		if (aad) {
+			Initialize(key, std::move(aad));
+		} else {
+			Initialize(key);
+		}
 	}
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
@@ -234,7 +238,7 @@ public:
 	}
 
 private:
-	void Initialize(const string &key, unique_ptr<AdditionalAuthenticatedData> aad) {
+	void Initialize(const string &key, unique_ptr<AdditionalAuthenticatedData> aad = nullptr) {
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
 		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
@@ -243,8 +247,13 @@ private:
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
 		// check whether context is initialized
-		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-		                          key.size(), aad->data(), aad->size());
+		if (aad) {
+			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+			                          key.size(), aad->data(), aad->size());
+		} else {
+			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+			                          key.size());
+		}
 	}
 
 	void ReadBlock(uint8_t *buf) {
