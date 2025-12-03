@@ -175,6 +175,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			continue;
 		}
 		if (!replace) {
+			new_col_idx++;
 			continue;
 		}
 		bool should_replace = false;
@@ -188,6 +189,8 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			// column is used but the ColumnBinding has changed because of removed columns
 			auto created_bindings = ReplaceBinding(current_binding, ColumnBinding(table_idx, new_col_idx));
 			new_col_idx += created_bindings;
+		} else {
+			new_col_idx++;
 		}
 	}
 }
