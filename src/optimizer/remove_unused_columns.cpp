@@ -390,8 +390,6 @@ static ColumnIndex PathToIndex(const vector<idx_t> &path) {
 	ColumnIndex index = ColumnIndex(path[0]);
 	reference<ColumnIndex> current(index);
 	for (idx_t i = 1; i < path.size(); i++) {
-		ColumnIndex new_index(path[i]);
-		new_index.AddChildIndex(std::move(index));
 		current.get().AddChildIndex(ColumnIndex(path[i]));
 		current = current.get().GetChildIndex(0);
 	}
