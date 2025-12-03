@@ -1008,6 +1008,8 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 			column_info.block_offset = segment.GetBlockOffset();
 		} else {
 			column_info.persistent = false;
+			column_info.block_id = INVALID_BLOCK;
+			column_info.block_offset = 0;
 		}
 		auto &compression_function = segment.GetCompressionFunction();
 		auto segment_state = segment.GetSegmentState();

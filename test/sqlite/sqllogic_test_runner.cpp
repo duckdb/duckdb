@@ -103,21 +103,16 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 }
 
 void SQLLogicTestRunner::EndLoop() {
-	try {
-		// finish a loop: pop it from the active_loop queue
-		if (active_loops.empty()) {
-			throw std::runtime_error("endloop without active loop!");
-		}
-		active_loops.pop_back();
-		if (active_loops.empty()) {
-			// not in a loop
-			ExecuteContext context;
-			top_level_loop->Execute(context);
-			top_level_loop.reset();
-		}
-	} catch (std::exception &ex) {
-		ErrorData err(ex);
-		FAIL(err.Message());
+	// finish a loop: pop it from the active_loop queue
+	if (active_loops.empty()) {
+		throw std::runtime_error("endloop without active loop!");
+	}
+	active_loops.pop_back();
+	if (active_loops.empty()) {
+		// not in a loop
+		ExecuteContext context;
+		top_level_loop->Execute(context);
+		top_level_loop.reset();
 	}
 }
 
