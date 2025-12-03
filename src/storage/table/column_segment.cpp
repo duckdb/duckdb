@@ -276,12 +276,12 @@ DataPointer ColumnSegment::GetDataPointer(idx_t row_start) {
 //===--------------------------------------------------------------------===//
 // Drop Segment
 //===--------------------------------------------------------------------===//
-void ColumnSegment::CommitDropSegment() {
+void ColumnSegment::VisitBlockIds(BlockIdVisitor &visitor) const {
 	if (block_id != INVALID_BLOCK) {
-		GetBlockManager().MarkBlockAsModified(block_id);
+		visitor.Visit(block_id);
 	}
-	if (function.get().cleanup_state) {
-		function.get().cleanup_state(*this);
+	if (function.get().visit_block_ids) {
+		function.get().visit_block_ids(*this, visitor);
 	}
 }
 

@@ -98,7 +98,7 @@ struct ZSTDStorage {
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnSegment &segment);
+	static void VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor);
 };
 
 //===--------------------------------------------------------------------===//
@@ -455,7 +455,8 @@ public:
 
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = block_manager.GetFreeBlockId();
+		auto new_id = partial_block_manager.GetFreeBlockId();
+
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
@@ -1041,11 +1042,10 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 	return std::move(result);
 }
 
-void ZSTDStorage::CleanupState(ColumnSegment &segment) {
+void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManager();
 	for (auto &block_id : state.on_disk_blocks) {
-		block_manager.MarkBlockAsModified(block_id);
+		visitor.Visit(block_id);
 	}
 }
 
@@ -1062,7 +1062,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
 	zstd.deserialize_state = ZSTDStorage::DeserializeState;
-	zstd.cleanup_state = ZSTDStorage::CleanupState;
+	zstd.visit_block_ids = ZSTDStorage::VisitBlockIds;
 	return zstd;
 }
 

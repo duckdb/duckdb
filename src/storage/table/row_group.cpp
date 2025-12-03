@@ -434,9 +434,21 @@ void RowGroup::CommitDrop() {
 	}
 }
 
+struct BlockIdDropper : public BlockIdVisitor {
+	explicit BlockIdDropper(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockAsModified(block_id);
+	}
+
+	BlockManager &manager;
+};
+
 void RowGroup::CommitDropColumn(const idx_t column_index) {
 	auto &column = GetColumn(column_index);
-	column.CommitDropColumn();
+	BlockIdDropper dropper(GetBlockManager());
+	column.VisitBlockIds(dropper);
 }
 
 void RowGroup::NextVector(CollectionScanState &state) {
