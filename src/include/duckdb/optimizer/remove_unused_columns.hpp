@@ -21,15 +21,16 @@ class ClientContext;
 
 struct ReferencedStructExtract {
 public:
-	ReferencedStructExtract(optional_ptr<unique_ptr<Expression>> struct_extract, idx_t bindings_idx, ColumnIndex path)
-	    : bindings_idx(bindings_idx), expr(struct_extract), extract_path(std::move(path)) {
+	ReferencedStructExtract(vector<reference<unique_ptr<Expression>>> expressions, idx_t bindings_idx, ColumnIndex path)
+	    : bindings_idx(bindings_idx), expr(expressions), extract_path(std::move(path)) {
 	}
 
 public:
 	//! The index into the 'bindings' of the ReferencedColumn that is the child of this struct_extract
 	idx_t bindings_idx;
-	//! The struct_extract expression to potentially replace
-	optional_ptr<unique_ptr<Expression>> expr;
+	//! The struct extract expressions, from deepest (most nested) to the root (i.e:
+	//! s.my_field.my_nested_field.my_even_deeper_nested_field is index 0)
+	vector<reference<unique_ptr<Expression>>> expr;
 	//! The ColumnIndex with a path that matches this struct extract
 	ColumnIndex extract_path;
 };
@@ -69,7 +70,7 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-	                optional_ptr<unique_ptr<Expression>> parent);
+	                vector<reference<unique_ptr<Expression>>> parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	//! ret: The amount of bindings created
@@ -77,8 +78,8 @@ protected:
 
 	bool HandleStructExtract(unique_ptr<Expression> *expression);
 
-	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
-	                                  vector<idx_t> &indexes);
+	bool HandleStructExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	                                  vector<idx_t> &indexes, vector<reference<unique_ptr<Expression>>> &expressions);
 	void SetMode(BaseColumnPrunerMode mode);
 	BaseColumnPrunerMode GetMode() const;
 
