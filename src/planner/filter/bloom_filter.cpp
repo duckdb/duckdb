@@ -1,5 +1,6 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -142,18 +143,20 @@ static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, con
 
 	const auto min = NumericStats::GetMin<T>(stats);
 	const auto max = NumericStats::GetMax<T>(stats);
-
 	if (min > max) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
 	}
-	if (max - min > 2048) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Too wide of a range
+	T range_typed;
+	if (!TrySubtractOperator::Operation(max, min, range_typed) || range_typed < 2048) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
 	}
-	const auto range = NumericCast<idx_t>(max - min);
+	const auto range = NumericCast<idx_t>(range_typed);
 
+	T val = min;
 	idx_t hits = 0;
 	for (idx_t i = 0; i <= range; i++) {
-		hits += bf.LookupOne(Hash(min + static_cast<T>(i)));
+		hits += bf.LookupOne(Hash(val));
+		val += i < range; // Avoids potential signed integer overflow on the last iteration
 	}
 
 	if (hits == 0) {
