@@ -808,10 +808,23 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		return;
 	}
 	// Check for multi-free
-	// TODO: Fix the bug that causes this assert to fire, then uncomment it.
-	// D_ASSERT(modified_blocks.find(block_id) == modified_blocks.end());
-	D_ASSERT(free_list.find(block_id) == free_list.end());
-	modified_blocks.insert(block_id);
+	if (modified_blocks.find(block_id) != modified_blocks.end()) {
+		throw InternalException("MarkBlockAsModified called with already modified block id %d", block_id);
+	}
+	if (free_list.find(block_id) != free_list.end()) {
+		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
+	}
+	auto newly_used_entry = newly_used_blocks.find(block_id);
+	if (newly_used_entry != newly_used_blocks.end()) {
+		// this block was newly used - and now we are labeling it as no longer being required
+		// we can directly add it back to the free list
+		newly_used_blocks.erase(block_id);
+		free_list.insert(block_id);
+	} else {
+		// this block was used in storage, we cannot directly re-use it
+		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		modified_blocks.insert(block_id);
+	}
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t block_id) {
