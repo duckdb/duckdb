@@ -691,23 +691,16 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {
-			if (!left_has_correlation) {
+			if (!left_has_correlation && right_has_correlation) {
 				// found a MARK join where the left side has no correlation
 
 				ColumnBinding right_binding;
 
 				// there may still be correlation on the right side that we have to deal with
 				// push into the right side if necessary or decorrelate it independently otherwise
-				if (right_has_correlation) {
-					plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
-					                                                  parent_propagate_null_values, lateral_depth);
-					right_binding = this->base_binding;
-				} else {
-					CorrelatedColumns correlated;
-					FlattenDependentJoins flatten(binder, correlated);
-					plan->children[1] = flatten.Decorrelate(std::move(plan->children[1]));
-					right_binding = flatten.base_binding;
-				}
+				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
+				                                                  parent_propagate_null_values, lateral_depth);
+				right_binding = this->base_binding;
 
 				// now push into the left side of the MARK join even though it has no correlation
 				// this is necessary to add the correlated columns to the column bindings and allow
