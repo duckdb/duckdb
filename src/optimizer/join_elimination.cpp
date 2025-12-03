@@ -244,12 +244,16 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 		}
 	}
 
-	for (auto &distinct : left_child->pipe_info.distinct_groups) {
-		pipe_info.distinct_groups[distinct.first] = distinct.second;
+	if (inner_idx == 1) {
+		for (auto &distinct : right_child->pipe_info.distinct_groups) {
+			pipe_info.distinct_groups[distinct.first] = distinct.second;
+		}
+	} else {
+		for (auto &distinct : left_child->pipe_info.distinct_groups) {
+			pipe_info.distinct_groups[distinct.first] = distinct.second;
+		}
 	}
-	for (auto &distinct : right_child->pipe_info.distinct_groups) {
-		pipe_info.distinct_groups[distinct.first] = distinct.second;
-	}
+
 	if (pipe_info.distinct_groups.empty()) {
 		return std::move(pipe_info.root);
 	}
