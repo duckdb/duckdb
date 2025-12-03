@@ -435,6 +435,10 @@ public:
 		last_pos = last_pos_p;
 	}
 
+	void OnStatementEnd(idx_t pos) override {
+		tokens.clear();
+	}
+
 	vector<MatcherSuggestion> &suggestions;
 	string last_word;
 	idx_t last_pos;
