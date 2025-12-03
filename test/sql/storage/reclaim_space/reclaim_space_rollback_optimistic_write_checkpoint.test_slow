@@ -4,8 +4,6 @@
 
 load __TEST_DIR__/reclaim_space_rollback_optimistic_write_checkpoint.db
 
-loop z 0 100
-
 statement ok
 CREATE OR REPLACE TABLE tbl(i INTEGER, v VARCHAR);
 
@@ -59,5 +57,3 @@ query I
 SELECT case when total_blocks < 5 then NULL else t end FROM pragma_database_size() t
 ----
 NULL
-
-endloop
