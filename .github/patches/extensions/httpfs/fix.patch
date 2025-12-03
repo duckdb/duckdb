@@ -1,10 +1,3 @@
-diff --git a/duckdb b/duckdb
-index 68d7555..aa20dc2 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 68d7555f68bd25c1a251ccca2e6338949c33986a
-+Subproject commit aa20dc2c485c489ddb78382220d0650a812ef8f3
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
 index a11af95..672a4c7 100644
 --- a/src/httpfs.cpp
