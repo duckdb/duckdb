@@ -697,7 +697,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
-                                                      column_t column_id) {
+                                                      const ColumnIndex &column_id) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
@@ -706,7 +706,16 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 	if (local_storage.Find(duck_table.GetStorage())) {
 		return nullptr;
 	}
-	return duck_table.GetStatistics(context, column_id);
+
+	if (column_id.IsRowIdColumn()) {
+		return nullptr;
+	}
+	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));
+	if (column.Generated()) {
+		return nullptr;
+	}
+	auto storage_index = TransformStorageIndex(column_id);
+	return duck_table.GetStatistics(context, storage_index);
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -830,7 +839,7 @@ TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
 	scan_function.init_global = TableScanInitGlobal;
-	scan_function.statistics = TableScanStatistics;
+	scan_function.statistics_extended = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
 	scan_function.pushdown_complex_filter = nullptr;

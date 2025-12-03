@@ -286,6 +286,8 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
                                                                            GlobalTableFunctionState *global_state);
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
+typedef unique_ptr<BaseStatistics> (*table_statistics_extended_t)(ClientContext &context, const FunctionData *bind_data,
+                                                                  const ColumnIndex &column_index);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
@@ -412,6 +414,9 @@ public:
 	//! (Optional) statistics function
 	//! Returns the statistics of a specified column
 	table_statistics_t statistics;
+	//! (Optional) statistics function fed a ColumnIndex instead of a column_t
+	//! Returns the statistics of a specified column
+	table_statistics_extended_t statistics_extended;
 	//! (Optional) dependency function
 	//! Sets up which catalog entries this table function depend on
 	table_function_dependency_t dependency;

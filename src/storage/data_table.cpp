@@ -1567,8 +1567,8 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 //===--------------------------------------------------------------------===//
 // Statistics
 //===--------------------------------------------------------------------===//
-unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {
-	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, const StorageIndex &column_id) {
+	if (column_id.IsRowIdColumn()) {
 		return nullptr;
 	}
 	return row_groups->CopyStats(column_id);

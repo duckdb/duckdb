@@ -423,6 +423,7 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 		auto colref_copy = colref.get().Copy();
 		expr.get() = std::move(colref_copy);
 		auto &new_expr = expr.get()->Cast<BoundColumnRefExpression>();
+		//! FIxME: TAKE APRENT EXPRESSIBON TYPR
 		new_expr.return_type = return_type;
 
 		ColumnIndex new_index(struct_column_index, {entry->first});

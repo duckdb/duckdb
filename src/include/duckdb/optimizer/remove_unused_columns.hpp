@@ -47,6 +47,8 @@ public:
 	//! Whether we can create a pushdown extract for the children of this column (if any)
 	bool supports_pushdown_extract = true;
 	//! Map from extract path to the binding created for it (if pushdown extract)
+	//! FIXME: it might be more sane to use vector<idx_t> as the key, and transform this to ColumnIndex only when
+	//! required
 	column_index_map<idx_t> unique_paths;
 };
 

@@ -46,7 +46,7 @@ public:
 	void SetStats(TableStatistics &other);
 	void CopyStats(TableStatistics &other);
 	void CopyStats(TableStatisticsLock &lock, TableStatistics &other);
-	unique_ptr<BaseStatistics> CopyStats(idx_t i);
+	unique_ptr<BaseStatistics> CopyStats(const StorageIndex &i);
 	//! Get a reference to the stats - this requires us to hold the lock.
 	//! The reference can only be safely accessed while the lock is held
 	ColumnStatistics &GetStats(TableStatisticsLock &lock, idx_t i);
