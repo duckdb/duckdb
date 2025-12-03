@@ -760,7 +760,7 @@ static unique_ptr<FunctionData> SQLTokenizeBind(ClientContext &context, TableFun
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
 
-	names.emplace_back("offset");
+	names.emplace_back("start");
 	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("token_type");
@@ -903,7 +903,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
-	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind, SQLTokenizeInit);
+	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
+	                           SQLTokenizeInit);
 	loader.RegisterFunction(tokenize_fun);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	config.parser_extensions.push_back(PEGParserExtension());

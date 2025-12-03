@@ -1,0 +1,18 @@
+# name: test/sql/function/autocomplete/select.test
+# description: Test sql_tokenize
+# group: [autocomplete]
+
+require autocomplete
+
+query III
+select start, token_type, word from sql_tokenize($$select a$$);
+----
+0	KEYWORD	select
+7	IDENTIFIER	a
+
+query III
+select start, token_type, word from sql_tokenize($$select a;$$);
+----
+0	KEYWORD	select
+7	IDENTIFIER	a
+8	IDENTIFIER	;
