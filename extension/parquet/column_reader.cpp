@@ -239,13 +239,11 @@ uint8_t ColumnReader::GetModuleHeader(uint16_t page_ordinal) const {
 		// always return data page header if ordinal > 0
 		return ParquetCrypto::DataPageHeader;
 	}
-
 	// FIXME: Add missing ParquetCrypto Modules
 	// There is at maximum 1 dict, index or bf filter page header per column
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
 		return ParquetCrypto::DictionaryPageHeader;
 	} else if (chunk->meta_data.__isset.index_page_offset) {
-		// TODO; check if this is correct
 		return ParquetCrypto::OffsetIndex;
 	} else if (chunk->meta_data.__isset.bloom_filter_offset) {
 		return ParquetCrypto::BloomFilterHeader;
@@ -254,7 +252,12 @@ uint8_t ColumnReader::GetModuleHeader(uint16_t page_ordinal) const {
 	return ParquetCrypto::DataPageHeader;
 }
 
-uint8_t ColumnReader::GetModule(PageType::type page_type) const {
+uint8_t ColumnReader::GetModule(PageType::type page_type, uint16_t page_ordinal) const {
+	if (chunk->meta_data.__isset.bloom_filter_offset && page_ordinal == 0) {
+		// return bitset if it is the first page ordinal
+		return ParquetCrypto::BloomFilterBitset;
+	}
+
 	switch (page_type) {
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2:
@@ -262,9 +265,10 @@ uint8_t ColumnReader::GetModule(PageType::type page_type) const {
 	case PageType::DICTIONARY_PAGE:
 		return ParquetCrypto::DictionaryPage;
 	case PageType::INDEX_PAGE:
-		// We can also return here column index?
-		// return ParquetCrypto::ColumnIndex
-		return ParquetCrypto::OffsetIndex;
+		if (chunk->meta_data.__isset.index_page_offset) {
+			return ParquetCrypto::OffsetIndex;
+		}
+		return ParquetCrypto::ColumnIndex;
 	default:
 		throw InvalidInputException("Module not found");
 	}
@@ -300,7 +304,7 @@ void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t 
 
 void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module,
                                      uint16_t row_group_ordinal, uint16_t col_idx, uint16_t page_ordinal) {
-	int8_t module_ = GetModule(module);
+	int8_t module_ = GetModule(module, page_ordinal);
 	uint16_t page_ordinal_ = GetFinalPageOrdinal(module_, page_ordinal);
 	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, row_group_ordinal, ColumnIndex(), module_, page_ordinal_);
 }

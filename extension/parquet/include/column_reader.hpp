@@ -182,7 +182,7 @@ protected:
 	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module,
 	                       uint16_t row_group_ordinal, uint16_t col_idx, uint16_t page_ordinal);
 	uint16_t GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal);
-	uint8_t GetModule(PageType::type page_type) const;
+	uint8_t GetModule(PageType::type page_type, uint16_t page_ordinal) const;
 	uint8_t GetModuleHeader(uint16_t page_ordinal) const;
 
 private:
