@@ -102,13 +102,14 @@ echo "Column Imprints build time: ${DURATION:0:-6}ms" | tee -a "$RESULTS_DIR/$OU
 # Run TPC-H benchmark
 echo "Running TPC-H benchmark" | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 
-echo "Loop 1: Column Imprints OFF first, then ON"  | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
+echo "Loop 1: Column Imprints OFF first, then ON" | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 for i in $(seq 1 22); do
     for j in $(seq 1 $LOOPS); do
         START_TIME=$(date +%s%N)
         START_READABLE=$(date '+%Y-%m-%d %H:%M:%S.%N')
 
-        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=false;" -c "PRAGMA tpch(${i});"
+        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=false;" -c "PRAGMA tpch(${i});" \
+            | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 
         EXIT_CODE=$?
         END_TIME=$(date +%s%N)
@@ -123,7 +124,8 @@ for i in $(seq 1 22); do
         START_TIME=$(date +%s%N)
         START_READABLE=$(date '+%Y-%m-%d %H:%M:%S.%N')
 
-        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=true;" -c "PRAGMA tpch(${i});"
+        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=true;" -c "PRAGMA tpch(${i});" \
+            | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 
         EXIT_CODE=$?
         END_TIME=$(date +%s%N)
@@ -138,13 +140,14 @@ for i in $(seq 1 22); do
 done
 
 
-echo "Loop 2: Column Imprints ON first, then OFF"
+echo "Loop 2: Column Imprints ON first, then OFF" | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 for i in $(seq 1 22); do
     for j in $(seq 1 $LOOPS); do
         START_TIME=$(date +%s%N)
         START_READABLE=$(date '+%Y-%m-%d %H:%M:%S.%N')
 
-        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=true;" -c "PRAGMA tpch(${i});"
+        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=true;" -c "PRAGMA tpch(${i});" \
+            | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 
         EXIT_CODE=$?
         END_TIME=$(date +%s%N)
@@ -159,7 +162,8 @@ for i in $(seq 1 22); do
         START_TIME=$(date +%s%N)
         START_READABLE=$(date '+%Y-%m-%d %H:%M:%S.%N')
 
-        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=false;" -c "PRAGMA tpch(${i});"
+        ./build/release/duckdb ${DB_NAME} -c ".timer on" -c "SET enable_column_imprint=false;" -c "PRAGMA tpch(${i});" \
+            | tee -a "$RESULTS_DIR/$OUTPUT_FILE"
 
         EXIT_CODE=$?
         END_TIME=$(date +%s%N)
