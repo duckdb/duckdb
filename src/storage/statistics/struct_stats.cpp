@@ -142,7 +142,7 @@ unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &st
 	auto &child_stats = GetChildStats(stats, index.GetPrimaryIndex());
 
 	auto &child_indexes = index.GetChildIndexes();
-	if (child_indexes.empty() || !child_indexes[0].IsPushdownExtract()) {
+	if (child_indexes.empty()) {
 		return child_stats.ToUnique();
 	} else {
 		D_ASSERT(child_indexes.size() == 1);
