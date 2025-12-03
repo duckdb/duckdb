@@ -2,7 +2,6 @@
 #include "linenoise.h"
 #include "highlighting.hpp"
 
-#include "matcher.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
