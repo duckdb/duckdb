@@ -27,6 +27,21 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
+struct DuckDBSettingsBindData : TableFunctionData {
+	bool in_bytes = false;
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto res = make_uniq<DuckDBSettingsBindData>();
+		res->in_bytes = in_bytes;
+		return move(res);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<const DuckDBSettingsBindData>();
+		return in_bytes == other.in_bytes;
+	}
+};
+
 static bool ExtractInBytesArgument(const TableFunctionBindInput &input) {
 	bool in_bytes = false;
 	auto it = input.named_parameters.find("in_bytes");
@@ -66,7 +81,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 		return_types.emplace_back(LogicalType::UBIGINT);
 	}
 
-	return nullptr;
+	auto bind_data = make_uniq<DuckDBSettingsBindData>();
+	bind_data->in_bytes = in_bytes;
+	return std::move(bind_data);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -144,14 +161,9 @@ static optional_idx TryParseBytes(const string &str) {
 
 void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBSettingsData>();
+	const auto &data_bind = data_p.bind_data->Cast<DuckDBSettingsBindData>();
 
-	// We can infer if we're in bytes-mode according to the number of columns
-	// This is covered in tests, so if someone adds another column / an option that changes column, they will have to
-	// update this implicit inferring logic
-	const auto in_bytes = output.ColumnCount() == 7;
-	if (in_bytes) {
-		D_ASSERT(output.data[6].GetType() == LogicalType::UBIGINT);
-	}
+	const auto in_bytes = data_bind.in_bytes;
 
 	if (data.offset >= data.settings.size()) {
 		// finished returning values

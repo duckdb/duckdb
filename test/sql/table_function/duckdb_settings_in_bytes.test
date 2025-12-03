@@ -105,12 +105,3 @@ statement error
 SELECT * FROM duckdb_settings(in_bytes=NULL);
 ----
 Binder Error: 'in_bytes' parameter cannot be NULL
-
-# When `in_bytes` is set to true, we should have exctly 7 columns
-query IIIIIII
-SELECT * FROM duckdb_settings(in_bytes=true) WHERE 1=0;
-----
-
-# When `in_bytes` is set to false, we should have exactly 6 columns
-query IIIIII
-SELECT * FROM duckdb_settings() WHERE 1=0;
