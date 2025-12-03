@@ -787,7 +787,6 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 		// block is already in use - increase reference count
 		IncreaseBlockReferenceCountInternal(block_id);
 	}
-	newly_used_blocks.erase(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
