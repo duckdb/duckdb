@@ -342,13 +342,16 @@ def get_extension_names() -> List[str]:
 def get_query(sql_query, load_query) -> list:
     # Optionally perform a LOAD of an extension
     # Then perform a SQL query, fetch the output
+    import json
+
     query = f'{DUCKDB_PATH} -json -unsigned -c "{load_query}{sql_query}" '
     query_result = os.popen(query).read()
-    result = [x for x in query_result[1:-2].split("\n") if x != '']
-    return result
+    return json.loads(query_result)
 
 
 def transform_parameter(parameter) -> LogicalType:
+    if parameter is None:
+        return LogicalType("INVALID")
     parameter = parameter.upper()
     if parameter.endswith('[]'):
         return LogicalType(transform_parameter(parameter[0 : len(parameter) - 2]).type + '[]')
@@ -358,7 +361,6 @@ def transform_parameter(parameter) -> LogicalType:
 
 
 def transform_parameters(parameters) -> FunctionOverload:
-    parameters = parameters[1:-1].split(', ')
     return tuple(transform_parameter(param) for param in parameters)
 
 
@@ -373,17 +375,15 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
-    results = set(get_query(GET_FUNCTIONS_QUERY, load))
+    results = get_query(GET_FUNCTIONS_QUERY, load)
 
     functions = set()
     function_overloads = {}
-    for x in results:
-        if x[-1] == ',':
-            # Remove the trailing comma
-            x = x[:-1]
-        function_name, function_type, parameter_types, return_type = [
-            x.lower() if x else "null" for x in json.loads(x).values()
-        ]
+    for func in results:
+        function_name = func["function_name"]
+        function_type = func["function_type"]
+        parameter_types = func["parameter_types"]
+        return_type = func["return_type"]
         function_parameters = transform_parameters(parameter_types)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
@@ -405,13 +405,10 @@ def get_settings(load="") -> Set[str]:
             name
         from duckdb_settings();
     """
-    settings = set(get_query(GET_SETTINGS_QUERY, load))
+    settings = get_query(GET_SETTINGS_QUERY, load)
     res = set()
-    for x in settings:
-        if x[-1] == ',':
-            # Remove the trailing comma
-            x = x[:-1]
-        name = json.loads(x)['name']
+    for setting in settings:
+        name = setting['name']
         res.add(name)
     return res
 
@@ -422,13 +419,10 @@ def get_secret_types(load="") -> Set[str]:
             type
         from duckdb_secret_types();
     """
-    secret_types = set(get_query(GET_SECRET_TYPES_QUERY, load))
+    secret_types = get_query(GET_SECRET_TYPES_QUERY, load)
     res = set()
-    for x in secret_types:
-        if x[-1] == ',':
-            # Remove the trailing comma
-            x = x[:-1]
-        type = json.loads(x)['type']
+    for secret_type in secret_types:
+        type = secret_type['type']
         res.add(type)
     return res
 
