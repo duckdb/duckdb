@@ -36,7 +36,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	Connection con(db);
 
 	duckdb::vector<Value> default_types = {"default", "default"};
-	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
@@ -124,7 +124,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 // - all log levels
 // - all combinations of log levels and having either enabled_log_types or disabled_log_types
 TEST_CASE("Test logging", "[logging][.]") {
-	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
 	for (const auto &level : log_levels) {
 		// Test in regular mode without explicitly enabled or disabled loggers
 		test_logging(level, "", "");

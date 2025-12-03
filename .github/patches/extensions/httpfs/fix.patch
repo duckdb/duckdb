@@ -1,5 +1,25 @@
+diff --git a/duckdb b/duckdb
+index 68d7555..aa20dc2 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 68d7555f68bd25c1a251ccca2e6338949c33986a
++Subproject commit aa20dc2c485c489ddb78382220d0650a812ef8f3
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index a11af95..672a4c7 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -535,7 +535,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 	// attempt to download the full file and retry.
+ 
+ 	if (handle.logger) {
+-		DUCKDB_LOG_WARN(handle.logger,
++		DUCKDB_LOG_WARNING(handle.logger,
+ 		                "Falling back to full file download for file '%s': the server does not support HTTP range "
+ 		                "requests. Performance and memory usage are potentially degraded.",
+ 		                handle.path);
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index 72eddc3..601ecba 100644
+index b4d6c74..480f9d7 100644
 --- a/src/s3fs.cpp
 +++ b/src/s3fs.cpp
 @@ -895,7 +895,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
@@ -27,7 +47,7 @@ index 72eddc3..601ecba 100644
 -		throw IOException("Could not remove file \"%s\": %s", {{"errno", "404"}}, path, "No such file or directory");
 +		throw IOException({{"errno", "404"}}, "Could not remove file \"%s\": %s", path, "No such file or directory");
  	}
-
+ 
  	auto &s3fh = handle->Cast<S3FileHandle>();
  	auto res = DeleteRequest(*handle, s3fh.path, {});
  	if (res->status != HTTPStatusCode::OK_200 && res->status != HTTPStatusCode::NoContent_204) {
