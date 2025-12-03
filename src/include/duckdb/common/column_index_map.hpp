@@ -12,7 +12,7 @@ struct ColumnIndexHashFunction {
 		std::queue<reference<const ColumnIndex>> to_hash;
 
 		hash_t result = 0;
-		to_hash.push(index);
+		to_hash.push(std::ref(index));
 		while (!to_hash.empty()) {
 			auto &current = to_hash.front();
 			auto &children = current.get().GetChildIndexes();
@@ -30,8 +30,8 @@ struct ColumnIndexEquality {
 	bool operator()(const ColumnIndex &a, const ColumnIndex &b) const {
 		std::queue<std::pair<reference<const ColumnIndex>, reference<const ColumnIndex>>> to_check;
 
-		to_check.push(std::make_pair(a, b));
-		while (to_check.empty()) {
+		to_check.push(std::make_pair(std::ref(a), std::ref(b)));
+		while (!to_check.empty()) {
 			auto &current = to_check.front();
 			auto &current_a = current.first;
 			auto &current_b = current.second;
@@ -45,7 +45,7 @@ struct ColumnIndexEquality {
 				return false;
 			}
 			for (idx_t i = 0; i < a_children.size(); i++) {
-				to_check.push(std::make_pair(a_children[i], b_children[i]));
+				to_check.push(std::make_pair(std::ref(a_children[i]), std::ref(b_children[i])));
 			}
 			to_check.pop();
 		}

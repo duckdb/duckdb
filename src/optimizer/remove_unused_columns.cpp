@@ -398,22 +398,20 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 		//! Otherwise there is a parent path that's referenced, so we don't push the extract into the storage all the
 		//! way
 
-		reference<const ColumnIndex> ref(struct_extract.extract_path);
+		auto &full_path = struct_extract.extract_path;
 		idx_t depth = 0;
 		column_index_map<idx_t>::iterator entry = col.unique_paths.end();
 		while (true) {
-			auto &current = ref.get();
-			auto copy = current;
-			copy.RemoveChildren();
+			bool reached_end;
+			auto copy = full_path.CreateSubset(depth, reached_end);
 			entry = col.unique_paths.find(copy);
 			if (entry != col.unique_paths.end()) {
 				//! Path found, we're done
 				break;
 			}
-			if (!current.HasChildren()) {
+			if (reached_end) {
 				throw InternalException("This path wasn't found in the registered paths for this expression at all!?");
 			}
-			ref = current.GetChildIndexes()[0];
 			depth++;
 		}
 		D_ASSERT(entry != col.unique_paths.end());
@@ -707,17 +705,16 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	path.VerifySinglePath();
 
 	//! Do not add the path if it is a child of an existing path
-	reference<const ColumnIndex> current(path);
-	while (current.get().HasChildren()) {
-		auto path_copy = current.get();
-		//! Strip the child from the copy, so we can check if the parent path already exists
-		path_copy.RemoveChildren();
+	idx_t depth = 0;
+	bool reached_end;
+	auto path_copy = path.CreateSubset(depth, reached_end);
+	while (!reached_end) {
+		//! Create a subset of the path up to an increasing depth, so we can check if the parent path already exists
+		path_copy = path.CreateSubset(depth++, reached_end);
 		if (unique_paths.count(path)) {
 			//! The parent path already exists, don't add the new path
 			return;
 		}
-		auto &child = current.get().GetChildIndexes()[0];
-		current = child;
 	}
 	//! No parent path exists, but child paths could already be added, remove them if they exist
 	auto it = unique_paths.begin();
@@ -746,6 +743,8 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	//! Save a reference to the top-level struct extract, so we can potentially replace it later
 	D_ASSERT(!referenced_column.bindings.empty());
 
+	//! NOTE: this path does not contain the column index of the root,
+	//! i.e 's.a' will just be a ColumnIndex with the index of 'a', without children
 	referenced_column.AddPath(child_column);
 	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1,
 	                                               std::move(child_column));
