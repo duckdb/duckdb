@@ -12,6 +12,7 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/column_index_map.hpp"
 
 namespace duckdb {
 class Binder;
@@ -41,8 +42,6 @@ public:
 	vector<ColumnIndex> child_columns;
 	//! Whether we can create a pushdown extract for the children of this column (if any)
 	bool supports_pushdown_extract = true;
-	//! The amount of bindings we're expecting to create for this column, used for verification (if pushdown extract)
-	optional_idx max_created_bindings;
 };
 
 enum class BaseColumnPrunerMode : uint8_t {
