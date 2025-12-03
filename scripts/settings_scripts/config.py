@@ -16,7 +16,13 @@ JSON_PATH = os.path.join(DUCKDB_DIR, "src/common", "settings.json")
 # define scope values
 VALID_SCOPE_VALUES = ["GLOBAL", "LOCAL", "GLOBAL_LOCAL"]
 INVALID_SCOPE_VALUE = "INVALID"
-SQL_TYPE_MAP = {"UBIGINT": "idx_t", "BIGINT": "int64_t", "BOOLEAN": "bool", "DOUBLE": "double", "VARCHAR": "string"}
+SQL_TYPE_MAP = {
+    "UBIGINT": "idx_t",
+    "BIGINT": "int64_t",
+    "BOOLEAN": "bool",
+    "DOUBLE": "double",
+    "VARCHAR": "string",
+}
 
 
 # global Setting structure
