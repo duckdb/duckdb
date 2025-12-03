@@ -89,17 +89,10 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 
 	auto &col = colrefs->second;
 	if (!col.child_columns.empty() && col.supports_pushdown_extract) {
+		D_ASSERT(!col.unique_paths.empty());
 		//! Pushdown extract is supported, so we are potentially creating multiple bindings, 1 for each unique extract
 		//! path
-		column_index_set unique_paths;
-		for (auto &extract : col.struct_extracts) {
-			unique_paths.insert(extract.extract_path);
-		}
-
-		//! Remove paths that have a parent path
-
-		col.max_created_bindings = unique_paths.size();
-		return unique_paths.size();
+		return col.unique_paths.size();
 	} else {
 		//! No pushdown extract, just rewrite the existing bindings
 		for (auto &colref_p : col.bindings) {
@@ -414,8 +407,7 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 		new_expr.binding.column_index = column_index;
 		(*struct_extract.expr)->return_type = return_type;
 	}
-	D_ASSERT(col.max_created_bindings.IsValid());
-	D_ASSERT(col.max_created_bindings.GetIndex() == state.BindingsCreatedForIndex(struct_column_index));
+	D_ASSERT(col.unique_paths.size() == state.BindingsCreatedForIndex(struct_column_index));
 }
 
 void RemoveUnusedColumns::CheckPushdownExtract(LogicalGet &get) {
@@ -675,6 +667,42 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	}
 }
 
+void ReferencedColumn::AddPath(const ColumnIndex &path) {
+	if (child_columns.empty()) {
+		//! Full field already referenced, won't use struct field projection pushdown at all
+		return;
+	}
+	path.VerifySinglePath();
+
+	//! Do not add the path if it is a child of an existing path
+	reference<const ColumnIndex> current(path);
+	while (current.get().HasChildren()) {
+		auto path_copy = current.get();
+		//! Strip the child from the copy, so we can check if the parent path already exists
+		path_copy.RemoveChildren();
+		if (unique_paths.count(path)) {
+			//! The parent path already exists, don't add the new path
+			return;
+		}
+		auto &child = current.get().GetChildIndexes()[0];
+		current = child;
+	}
+	//! No parent path exists, but child paths could already be added, remove them if they exist
+	auto it = unique_paths.begin();
+	for (; it != unique_paths.end();) {
+		auto &unique_path = it->first;
+		if (unique_path.IsChildPathOf(path)) {
+			auto current = it;
+			it++;
+			unique_paths.erase(current);
+		} else {
+			it++;
+		}
+	}
+	//! Finally add the new path to the map
+	unique_paths.emplace(path, DConstants::INVALID_INDEX);
+}
+
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
                                   optional_ptr<unique_ptr<Expression>> parent) {
 	AddBinding(col, child_column);
@@ -685,6 +713,8 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	auto &referenced_column = entry->second;
 	//! Save a reference to the top-level struct extract, so we can potentially replace it later
 	D_ASSERT(!referenced_column.bindings.empty());
+
+	referenced_column.AddPath(child_column);
 	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1,
 	                                               std::move(child_column));
 }

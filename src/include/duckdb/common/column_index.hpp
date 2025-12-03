@@ -77,6 +77,9 @@ public:
 	vector<ColumnIndex> &GetChildIndexesMutable() {
 		return child_indexes;
 	}
+	void RemoveChildren() {
+		child_indexes.clear();
+	}
 
 	bool IsPushdownExtract() const {
 		return index_type == ColumnIndexType::PUSHDOWN_EXTRACT;
@@ -125,19 +128,49 @@ public:
 	bool IsVirtualColumn() const {
 		return index >= VIRTUAL_COLUMN_START;
 	}
-
-public:
-	void Serialize(Serializer &serializer) const;
-	static ColumnIndex Deserialize(Deserializer &deserializer);
-
-private:
 	void VerifySinglePath() const {
 		if (child_indexes.empty()) {
 			return;
 		}
-
+		if (child_indexes.size() != 1) {
+			throw InternalException(
+			    "We were expecting to find a single path in the index, meaning 0 or 1 children, found: %d",
+			    child_indexes.size());
+		}
 		child_indexes[0].VerifySinglePath();
 	}
+	bool IsChildPathOf(const ColumnIndex &path) const {
+		VerifySinglePath();
+		path.VerifySinglePath();
+		reference<const ColumnIndex> a(*this);
+		reference<const ColumnIndex> b(path);
+
+		while (true) {
+			if (a.get().GetPrimaryIndex() != b.get().GetPrimaryIndex()) {
+				return false;
+			}
+			const bool a_has_children = a.get().HasChildren();
+			const bool b_has_children = b.get().HasChildren();
+			if (!a_has_children && !b_has_children) {
+				return false;
+			}
+			if (!a_has_children) {
+				//! a's path has stopped short of b's path
+				return false;
+			}
+			if (!b_has_children) {
+				//! b's path is a subset of a's path, so it's a parent path
+				return true;
+			}
+			a = a.get().GetChildIndexes()[0];
+			b = b.get().GetChildIndexes()[0];
+		}
+		return true;
+	}
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static ColumnIndex Deserialize(Deserializer &deserializer);
 
 private:
 	idx_t index;

@@ -36,12 +36,17 @@ public:
 
 class ReferencedColumn {
 public:
+	void AddPath(const ColumnIndex &path);
+
+public:
 	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
 	vector<reference<BoundColumnRefExpression>> bindings;
 	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
 	//! Whether we can create a pushdown extract for the children of this column (if any)
 	bool supports_pushdown_extract = true;
+	//! Map from extract path to the binding created for it (if pushdown extract)
+	column_index_map<idx_t> unique_paths;
 };
 
 enum class BaseColumnPrunerMode : uint8_t {
