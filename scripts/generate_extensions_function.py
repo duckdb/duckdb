@@ -345,7 +345,7 @@ def get_query(sql_query, load_query) -> list:
     import csv
     import io
 
-    query = f'{DUCKDB_PATH} -unsigned -c ".mode csv" -c "{load_query}{sql_query}" '
+    query = f'{DUCKDB_PATH} -unsigned -csv -c "{load_query}{sql_query}" '
     query_result = os.popen(query).read()
     f = io.StringIO(query_result)
     reader = csv.reader(f)
@@ -371,6 +371,7 @@ def transform_parameter(parameter) -> LogicalType:
 
 
 def transform_parameters(parameters) -> FunctionOverload:
+    parameters = [x.strip("'") for x in parameters.lstrip('[').rstrip(']').split(', ') if len(x) > 0]
     return tuple(transform_parameter(param) for param in parameters)
 
 
