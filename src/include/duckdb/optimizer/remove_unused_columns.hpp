@@ -19,9 +19,23 @@ class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 
+struct ColumnPathHashFunction {
+	uint64_t operator()(const vector<idx_t> &path) const {
+		auto hasher = std::hash<idx_t>();
+		hash_t result = 0;
+		for (auto &index : path) {
+			result ^= hasher(index);
+		}
+		return result;
+	}
+};
+
+using column_path_set = unordered_set<vector<idx_t>, ColumnPathHashFunction>;
+
 struct ReferencedStructExtract {
 public:
-	ReferencedStructExtract(vector<reference<unique_ptr<Expression>>> expressions, idx_t bindings_idx, ColumnIndex path)
+	ReferencedStructExtract(vector<reference<unique_ptr<Expression>>> expressions, idx_t bindings_idx,
+	                        const vector<idx_t> &path)
 	    : bindings_idx(bindings_idx), expr(expressions), extract_path(std::move(path)) {
 	}
 
@@ -32,12 +46,12 @@ public:
 	//! s.my_field.my_nested_field.my_even_deeper_nested_field is index 0)
 	vector<reference<unique_ptr<Expression>>> expr;
 	//! The ColumnIndex with a path that matches this struct extract
-	ColumnIndex extract_path;
+	vector<idx_t> extract_path;
 };
 
 class ReferencedColumn {
 public:
-	void AddPath(const ColumnIndex &path);
+	void AddPath(const vector<idx_t> &path);
 
 public:
 	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
@@ -49,7 +63,7 @@ public:
 	//! Map from extract path to the binding created for it (if pushdown extract)
 	//! FIXME: it might be more sane to use vector<idx_t> as the key, and transform this to ColumnIndex only when
 	//! required
-	column_index_map<idx_t> unique_paths;
+	column_path_set unique_paths;
 };
 
 enum class BaseColumnPrunerMode : uint8_t {
@@ -72,7 +86,7 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-	                vector<reference<unique_ptr<Expression>>> parent);
+	                vector<reference<unique_ptr<Expression>>> parent, const vector<idx_t> &path);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	//! ret: The amount of bindings created
