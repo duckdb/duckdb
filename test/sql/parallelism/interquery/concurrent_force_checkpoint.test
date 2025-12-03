@@ -2,8 +2,10 @@
 # description: Test concurrent force checkpoints with a mix of operations
 # group: [interquery]
 
+loop zz 0 100
+
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE OR REPLACE TABLE integers(i INTEGER)
 
 statement ok
 INSERT INTO integers SELECT * FROM range(10000);
@@ -70,3 +72,4 @@ SELECT COUNT(*), SUM(i) FROM integers
 ----
 11000	121494500
 
+endloop

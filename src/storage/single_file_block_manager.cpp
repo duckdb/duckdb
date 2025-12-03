@@ -877,9 +877,39 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 				missing_blocks += to_string(i);
 			}
 		}
+		string free_list_str;
+		for (auto &block : free_list) {
+			if (!free_list_str.empty()) {
+				free_list_str += ", ";
+			}
+			free_list_str += to_string(block);
+		}
+		string block_usage_str;
+		for (auto &entry : block_usage_count) {
+			if (!block_usage_str.empty()) {
+				block_usage_str += ", ";
+			}
+			block_usage_str += to_string(entry.first);
+		}
+		string multi_use_blocks_str;
+		for (auto &entry : multi_use_blocks) {
+			if (!multi_use_blocks_str.empty()) {
+				multi_use_blocks_str += ", ";
+			}
+			multi_use_blocks_str += to_string(entry.first);
+		}
+		string newly_used_blocks_str;
+		for (auto &block : newly_used_blocks) {
+			if (!newly_used_blocks_str.empty()) {
+				newly_used_blocks_str += ", ";
+			}
+			newly_used_blocks_str += to_string(block);
+		}
+
 		throw InternalException(
-		    "Blocks %s were neither present in the free list or in the block_usage_count (max block %lld)",
-		    missing_blocks, max_block);
+		    "Block verification failed - blocks \"%s\" were not found as being used OR marked as free\nMax block: "
+		    "%d\nBlock usage: %s\nFree list: %s\nMulti-use blocks: %s\nNewly used blocks: %s",
+		    missing_blocks, max_block, block_usage_str, free_list_str, multi_use_blocks_str, newly_used_blocks_str);
 	}
 }
 
