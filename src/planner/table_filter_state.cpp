@@ -1,6 +1,8 @@
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
@@ -11,9 +13,16 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER:
-		// optional filter is not executed - create an empty filter state
-		return make_uniq<TableFilterState>();
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bf = filter.Cast<BFTableFilter>();
+		return make_uniq<BFTableFilterState>(bf.GetKeyType());
+	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		// the optional filter may be executed if it is a SelectivityOptionalFilter
+		auto &optional_filter = filter.Cast<OptionalFilter>();
+		return optional_filter.InitializeState(context);
+	}
+
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		return Initialize(context, *struct_filter.child_filter);
