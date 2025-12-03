@@ -249,17 +249,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(CatalogTransaction transaction, ExpressionExecutor &executor) {
-	// If there's no context, we can't perform the update (e.g., during WAL replay without context)
-	if (!transaction.HasContext()) {
-		return nullptr;
-	}
-
-	auto &context = transaction.GetContext();
-	auto &duck_transaction = DuckTransaction::Get(context, catalog);
+unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
+	auto &duck_transaction = DuckTransaction::Get(context, catalog); // InCatalogEntry.catalog (Catalog&) // The catalog the entry belongs to
 
 	// The newly added column is the last logical column
-	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1);
+	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1); // TableCatalogEntry.columns (ColumnList) // A list of columns that are part of this table
 	auto new_column_physical_idx = columns.LogicalToPhysical(new_column_logical_idx);
 
 	// Set up scan to read all row IDs
@@ -267,10 +261,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(CatalogTransaction t
 	vector<StorageIndex> column_ids;
 	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID); // We only need row IDs
 
-	storage->InitializeScan(context, duck_transaction, scan_state, column_ids, nullptr);
+	storage->InitializeScan(context, duck_transaction, scan_state, column_ids, nullptr); // DuckTableEntry.storage (shared_ptr<DataTable>)// A reference to the underlying storage unit used for this table
 
 	// Bind constraints for update
 	auto binder = Binder::CreateBinder(context);
+	// TableCatalogEntry.constraints (vector<unique_ptr<Constraint>>) // A list of constraints that are part of this table
+	// CatalogEntry.name (string), In this case, the table name
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 
 	// Initialize update state
@@ -282,7 +278,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(CatalogTransaction t
 
 	// Scan and update in batches
 	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::Get(context), {LogicalType::ROW_TYPE});
+	scan_chunk.Initialize(Allocator::Get(context), {LogicalType::ROW_TYPE}); //TODO: Why ROW_TYPE? Does this mean not a columnar wise scan but row wise?
 
 	DataChunk update_chunk;
 	update_chunk.Initialize(Allocator::Get(context), {columns.GetColumn(new_column_logical_idx).Type()});

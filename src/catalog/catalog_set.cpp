@@ -371,7 +371,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	}
 	// Finalize the alter by updating existing rows with default values for newly added columns
 	if (alter_info.default_executor != nullptr) {
-		new_entry->FinalizeAlterEntry(transaction, *alter_info.default_executor);
+		new_entry->FinalizeAlterEntry(*transaction.context, *alter_info.default_executor);
 	}
 	read_lock.unlock();
 	write_lock.unlock();

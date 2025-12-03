@@ -193,7 +193,6 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
                                         optional_ptr<TableFilterSet> table_filters) {
 	state.row_groups = GetRowGroups();
 	auto row_group = state.GetRootSegment();
-	D_ASSERT(row_group);
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
