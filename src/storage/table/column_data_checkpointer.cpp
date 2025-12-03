@@ -363,7 +363,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 }
 
 bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
-	return col_data.HasChanges();
+	return col_data.HasAnyChanges();
 }
 
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
