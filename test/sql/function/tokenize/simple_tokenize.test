@@ -1,6 +1,6 @@
-# name: test/sql/function/autocomplete/select.test
+# name: test/sql/function/tokenize/simple_tokenize.test
 # description: Test sql_tokenize
-# group: [autocomplete]
+# group: [tokenize]
 
 require autocomplete
 

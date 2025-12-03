@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
+BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens)
+    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
