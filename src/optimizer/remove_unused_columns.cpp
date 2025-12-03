@@ -708,13 +708,15 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	//! Do not add the path if it is a child of an existing path
 	idx_t depth = 0;
 	bool reached_end;
-	auto path_copy = path.CreateSubset(depth, reached_end);
-	while (!reached_end) {
+	while (true) {
 		//! Create a subset of the path up to an increasing depth, so we can check if the parent path already exists
-		path_copy = path.CreateSubset(depth++, reached_end);
-		if (unique_paths.count(path)) {
+		auto path_copy = path.CreateSubset(depth++, reached_end);
+		if (unique_paths.count(path_copy)) {
 			//! The parent path already exists, don't add the new path
 			return;
+		}
+		if (reached_end) {
+			break;
 		}
 	}
 	//! No parent path exists, but child paths could already be added, remove them if they exist
