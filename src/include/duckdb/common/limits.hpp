@@ -24,7 +24,7 @@ namespace duckdb {
 template <class T>
 struct NumericLimits {
 	static constexpr T Minimum() {
-		return std::numeric_limits<T>::lowest();
+		return std::numeric_limits<T>::min();
 	}
 	static constexpr T Maximum() {
 		return std::numeric_limits<T>::max();
