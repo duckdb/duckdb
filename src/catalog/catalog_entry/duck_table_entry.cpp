@@ -250,10 +250,18 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
-	auto &duck_transaction = DuckTransaction::Get(context, catalog); // InCatalogEntry.catalog (Catalog&) // The catalog the entry belongs to
+	/* USES:
+	 * InCatalogEntry.catalog (Catalog&)
+	 *	The catalog the entry belongs to
+	 */
+	auto &duck_transaction = DuckTransaction::Get(context, catalog);
 
 	// The newly added column is the last logical column
-	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1); // TableCatalogEntry.columns (ColumnList) // A list of columns that are part of this table
+	/* USES:
+	 * TableCatalogEntry.columns (ColumnList)
+	 *	A list of columns that are part of this table
+	 */
+	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1);
 	auto new_column_physical_idx = columns.LogicalToPhysical(new_column_logical_idx);
 
 	// Set up scan to read all row IDs
@@ -261,12 +269,21 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &conte
 	vector<StorageIndex> column_ids;
 	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID); // We only need row IDs
 
-	storage->InitializeScan(context, duck_transaction, scan_state, column_ids, nullptr); // DuckTableEntry.storage (shared_ptr<DataTable>)// A reference to the underlying storage unit used for this table
-
+	/* USES:
+	 * DuckTableEntry.storage (shared_ptr<DataTable>)
+	 *	A reference to the underlying storage unit used for this table
+	 */
+	storage->InitializeScan(context, duck_transaction, scan_state, column_ids, nullptr);
 	// Bind constraints for update
 	auto binder = Binder::CreateBinder(context);
-	// TableCatalogEntry.constraints (vector<unique_ptr<Constraint>>) // A list of constraints that are part of this table
-	// CatalogEntry.name (string), In this case, the table name
+
+	/* USES:
+	 * TableCatalogEntry.constraints (vector<unique_ptr<Constraint>>)
+	 *	A list of constraints that are part of this table
+	 *
+	 * CatalogEntry.name (string)
+	 *	In this case, the table name
+	 */
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 
 	// Initialize update state
@@ -278,7 +295,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &conte
 
 	// Scan and update in batches
 	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::Get(context), {LogicalType::ROW_TYPE}); //TODO: Why ROW_TYPE? Does this mean not a columnar wise scan but row wise?
+	// TODO: Why ROW_TYPE? Does this mean not a columnar wise scan but row wise?
+	scan_chunk.Initialize(Allocator::Get(context), {LogicalType::ROW_TYPE});
 
 	DataChunk update_chunk;
 	update_chunk.Initialize(Allocator::Get(context), {columns.GetColumn(new_column_logical_idx).Type()});

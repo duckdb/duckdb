@@ -1,3 +1,6 @@
+# name: test/sql/storage/wal/wal_non_replayable_columns.test
+# group: [wal]
+
 statement ok
 PRAGMA disable_checkpoint_on_shutdown;
 

@@ -377,7 +377,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-Vector &result) {
+                                         Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -386,7 +386,6 @@ Vector &result) {
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
-
 		ColumnAppendState state;
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {

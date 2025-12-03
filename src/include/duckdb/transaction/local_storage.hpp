@@ -36,7 +36,8 @@ public:
 	//! Create a LocalTableStorage from a DROP COLUMN.
 	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
 	// Create a LocalTableStorage from an ADD COLUMN
-	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column);
+	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent,
+	                  ColumnDefinition &new_column);
 	~LocalTableStorage();
 
 	QueryContext context;
