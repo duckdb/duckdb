@@ -20,8 +20,8 @@ class ClientContext;
 
 struct ReferencedStructExtract {
 public:
-	ReferencedStructExtract(optional_ptr<unique_ptr<Expression>> struct_extract, idx_t bindings_idx)
-	    : bindings_idx(bindings_idx), expr(struct_extract) {
+	ReferencedStructExtract(optional_ptr<unique_ptr<Expression>> struct_extract, idx_t bindings_idx, ColumnIndex path)
+	    : bindings_idx(bindings_idx), expr(struct_extract), extract_path(std::move(path)) {
 	}
 
 public:
@@ -29,6 +29,8 @@ public:
 	idx_t bindings_idx;
 	//! The struct_extract expression to potentially replace
 	optional_ptr<unique_ptr<Expression>> expr;
+	//! The ColumnIndex with a path that matches this struct extract
+	ColumnIndex extract_path;
 };
 
 class ReferencedColumn {

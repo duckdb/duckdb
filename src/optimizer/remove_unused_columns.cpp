@@ -290,6 +290,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 }
 
 static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
+	// Find the index in the column_ids that contains the column referenced by the filter
 	auto it = std::find_if(column_ids.begin(), column_ids.end(), [&filter_idx](const ColumnIndex &column_index) {
 		return column_index.GetPrimaryIndex() == filter_idx;
 	});
@@ -306,6 +307,137 @@ static bool SupportsPushdownExtract(LogicalGet &get, idx_t column_idx) {
 	return get.function.supports_pushdown_extract(*get.bind_data, column_idx);
 }
 
+namespace {
+
+struct ColumnIndexHashFunction {
+	uint64_t operator()(const ColumnIndex &index) const {
+		auto hasher = std::hash<idx_t>();
+		std::queue<reference<const ColumnIndex>> to_hash;
+
+		hash_t result = 0;
+		to_hash.push(index);
+		while (!to_hash.empty()) {
+			auto &current = to_hash.front();
+			auto &children = current.get().GetChildIndexes();
+			for (auto &child : children) {
+				to_hash.push(child);
+			}
+			result ^= hasher(current.get().GetPrimaryIndex());
+			to_hash.pop();
+		}
+		return result;
+	}
+};
+
+struct ColumnIndexEquality {
+	bool operator()(const ColumnIndex &a, const ColumnIndex &b) const {
+		std::queue<std::pair<reference<const ColumnIndex>, reference<const ColumnIndex>>> to_check;
+
+		to_check.push(std::make_pair(a, b));
+		while (to_check.empty()) {
+			auto &current = to_check.front();
+			auto &current_a = current.first;
+			auto &current_b = current.second;
+
+			if (current_a.get().GetPrimaryIndex() != current_b.get().GetPrimaryIndex()) {
+				return false;
+			}
+			auto &a_children = current_a.get().GetChildIndexes();
+			auto &b_children = current_b.get().GetChildIndexes();
+			if (a_children.size() != b_children.size()) {
+				return false;
+			}
+			for (idx_t i = 0; i < a_children.size(); i++) {
+				to_check.push(std::make_pair(a_children[i], b_children[i]));
+			}
+			to_check.pop();
+		}
+		return true;
+	}
+};
+
+template <class T>
+using column_index_map = unordered_map<ColumnIndex, T, ColumnIndexHashFunction, ColumnIndexEquality>;
+
+struct BindingsRewriteState {
+public:
+	BindingsRewriteState() {
+	}
+
+public:
+	void AddColumn(idx_t original_id, ColumnIndex index) {
+		new_column_ids.emplace_back(std::move(index));
+		original_ids.emplace_back(original_id);
+	}
+	bool NoColumnsReferenced() const {
+		return new_column_ids.empty();
+	}
+	vector<ColumnIndex> MoveNewColumns() {
+		std::move(new_column_ids);
+	}
+	vector<idx_t> MoveOriginalIds() {
+		std::move(original_ids);
+	}
+
+public:
+	//! The existing column ids
+	vector<ColumnIndex> old_column_ids;
+
+private:
+	//! The newly written column ids (same size as 'original_ids')
+	vector<ColumnIndex> new_column_ids;
+	//! The old index that the new one is based on (same size as 'new_column_ids')
+	vector<idx_t> original_ids;
+	//! Map of column index to binding, for pushed down struct extracts
+	column_index_map<idx_t> child_map;
+};
+
+} // namespace
+
+static void WritePushDownExtractColumn(const idx_t original_id, const LogicalType &parent, BindingsRewriteState &state,
+                                       vector<idx_t> path, const ColumnIndex &index) {
+	path.push_back(index.GetPrimaryIndex());
+
+	auto &child_indexes = index.GetChildIndexes();
+	if (child_indexes.empty()) {
+		//! This is a leaf, create a binding for the child
+		ColumnIndex new_index(path.back());
+		for (int64_t i = path.size() - 2; i >= 0; i--) {
+			new_index = ColumnIndex(path[i], {std::move(new_index)});
+		}
+
+		//! TODO: lookup in 'child_map', create binding only if it doesn't exist yet
+		new_index.SetPushdownExtractType(parent);
+		state.AddColumn(original_id, std::move(new_index));
+	} else {
+		throw InternalException("TODO: Nested structs not supported yet");
+	}
+}
+
+////! Replace the top-level struct extract with a BoundColumnRefExpression
+// auto &struct_extract = col.struct_extracts[i];
+// auto return_type = struct_extract.expr->get()->return_type;
+// auto &colref = col.bindings[i];
+// auto colref_copy = colref.get().Copy();
+//*struct_extract.expr = std::move(colref_copy);
+// auto &new_expr = (*struct_extract.expr)->Cast<BoundColumnRefExpression>();
+// new_expr.return_type = return_type;
+////! FIXME: the 'column_index' should be retrieved with a lookup using the ColumnIndex
+// new_expr.binding.column_index += i;
+//(*struct_extract.expr)->return_type = return_type;
+
+static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType &column_type,
+                                        BindingsRewriteState &state, idx_t col_sel_idx) {
+	auto &old_column_ids = state.old_column_ids;
+
+	D_ASSERT(col.child_columns.size() == col.struct_extracts.size());
+	for (idx_t i = 0; i < col.child_columns.size(); i++) {
+		auto &child = col.child_columns[i];
+		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+		WritePushDownExtractColumn(col_sel_idx, column_type, state, {struct_column_index}, child);
+	}
+}
+
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	if (everything_referenced) {
 		return;
@@ -314,36 +446,45 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		return;
 	}
 
-	auto old_column_ids = get.GetColumnIds();
+	BindingsRewriteState state;
+	state.old_column_ids = get.GetColumnIds();
 
-	// Create "selection vector" of all column ids
+	// Create "selection vector" that contains all indices of the old 'column_ids' of the LogicalGet
+	//! i.e: This contains all the columns of the table
 	vector<idx_t> proj_sel;
-	for (idx_t col_idx = 0; col_idx < old_column_ids.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < state.old_column_ids.size(); col_idx++) {
 		proj_sel.push_back(col_idx);
 	}
-	// Create a copy that we can use to match ids later
+	// Create a copy so we can later check the difference between these two:
+	//! 1. The set of filtered ids containing only the columns referenced by the projection expressions (proj_sel)
+	//! 2. The set of filtered ids containing columns referenced by either the projection or the filter expressions
+	//! (col_sel)
 	auto col_sel = proj_sel;
 	// Clear unused ids, exclude filter columns that are projected out immediately
 	ClearUnusedExpressions(proj_sel, get.table_index, false);
 
-	//! NOTE: This vector is required to keep the referenced Expressions alive
-	vector<unique_ptr<Expression>> filter_expressions;
-	// for every table filter, push a column binding into the column references map to prevent the column from
-	// being projected out
 	//! FIXME: pushdown extract is disabled when a struct field is referenced by a filter,
 	//! because that would involve rewriting the existing TableFilterSet
 	SetMode(BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT);
+
+	// for every table filter, push a column binding into the column references map to prevent the column from
+	// being projected out
+
+	//! NOTE: This vector is required to keep the referenced Expressions alive
+	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &filter : get.table_filters.filters) {
-		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
+		auto index = GetColumnIdsIndexForFilter(state.old_column_ids, filter.first);
 		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
 
 		ColumnBinding filter_binding(get.table_index, index);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
+		//! Convert the filter to an expression, so we can visit it
 		auto filter_expr = filter.second->ToExpression(*column_ref);
 		if (filter_expr->IsScalar()) {
 			filter_expr = std::move(column_ref);
 		}
 		filter_expressions.push_back(std::move(filter_expr));
+		//! Now visit the filter to add to the 'column_references'
 		VisitExpression(&filter_expressions.back());
 	}
 
@@ -351,9 +492,6 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	ClearUnusedExpressions(col_sel, get.table_index);
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
-	vector<ColumnIndex> new_column_ids;
-	vector<idx_t> original_ids;
-	new_column_ids.reserve(col_sel.size());
 	for (auto col_sel_idx : col_sel) {
 		auto &column_type = get.types[col_sel_idx];
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
@@ -361,58 +499,34 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
 		if (entry->second.child_columns.empty()) {
-			auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+			auto logical_column_index = state.old_column_ids[col_sel_idx].GetPrimaryIndex();
 			ColumnIndex new_index(logical_column_index, {});
-			new_column_ids.emplace_back(new_index);
-			original_ids.emplace_back(col_sel_idx);
+			state.AddColumn(col_sel_idx, std::move(new_index));
 			continue;
 		}
 		//! Only a subset of the struct's fields are referenced
-		auto logical_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+		auto logical_column_index = state.old_column_ids[col_sel_idx].GetPrimaryIndex();
 		if (!entry->second.supports_pushdown_extract || !SupportsPushdownExtract(get, logical_column_index)) {
-			//! Scan doesn't support pushdown the extract down to the storage
+			//! Scan doesn't support pushing down the extract to the scan
 			//! Only add the child indexes to function as a prune hint that the other indices aren't referenced by the
 			//! query.
-			auto &old_column_id = old_column_ids[col_sel_idx];
+			auto &old_column_id = state.old_column_ids[col_sel_idx];
 			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), entry->second.child_columns);
-			new_column_ids.emplace_back(new_index);
-			original_ids.emplace_back(col_sel_idx);
+			state.AddColumn(col_sel_idx, std::move(new_index));
 			continue;
 		}
 		//! Pushdown Extract is supported, emit a column for every field
 		//! TODO: make this work recursively
-		D_ASSERT(entry->second.child_columns.size() == entry->second.struct_extracts.size());
-		for (idx_t i = 0; i < entry->second.child_columns.size(); i++) {
-			auto &child = entry->second.child_columns[i];
-			ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), {child});
-			//! Upgrade the optional prune hint to a mandatory pushdown of the extract
-			//! TODO: also set the types on the child indices (recursively)
-			new_index.SetPushdownExtractType(column_type);
-			new_column_ids.emplace_back(new_index);
-			original_ids.emplace_back(col_sel_idx);
-
-			//! Replace the top-level struct extract with a BoundColumnRefExpression, referencing the new ColumnBinding
-			//! we just created
-			auto &struct_extract = entry->second.struct_extracts[i];
-			auto return_type = struct_extract.expr->get()->return_type;
-			auto &colref = entry->second.bindings[i];
-			auto colref_copy = colref.get().Copy();
-			*struct_extract.expr = std::move(colref_copy);
-			auto &new_expr = (*struct_extract.expr)->Cast<BoundColumnRefExpression>();
-			new_expr.return_type = return_type;
-			new_expr.binding.column_index += i;
-			(*struct_extract.expr)->return_type = return_type;
-		}
+		WritePushdownExtractColumns(entry->second, state, col_sel_idx);
 	}
-	if (new_column_ids.empty()) {
+	if (state.NoColumnsReferenced()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
 		// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 		// need to read any of the columns
 		auto any_column = get.GetAnyColumn();
-		new_column_ids.emplace_back(any_column);
-		original_ids.emplace_back(any_column);
+		state.AddColumn(any_column, ColumnIndex(any_column));
 	}
-	get.SetColumnIds(std::move(new_column_ids));
+	get.SetColumnIds(state.MoveNewColumns());
 
 	if (!get.function.filter_prune) {
 		return;
@@ -431,6 +545,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			}
 		}
 	}
+	auto original_ids = state.MoveOriginalIds();
 	for (auto col : filtered_original_ids) {
 		for (idx_t i = 0; i < original_ids.size(); i++) {
 			if (original_ids[i] == col) {
@@ -556,7 +671,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
                                   optional_ptr<unique_ptr<Expression>> parent) {
-	AddBinding(col, std::move(child_column));
+	AddBinding(col, child_column);
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
 		throw InternalException("ColumnBinding for the col was somehow not added by the previous step?");
@@ -564,7 +679,8 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	auto &referenced_column = entry->second;
 	//! Save a reference to the top-level struct extract, so we can potentially replace it later
 	D_ASSERT(!referenced_column.bindings.empty());
-	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1);
+	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1,
+	                                               std::move(child_column));
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
