@@ -41,6 +41,8 @@ public:
 	vector<ColumnIndex> child_columns;
 	//! Whether we can create a pushdown extract for the children of this column (if any)
 	bool supports_pushdown_extract = true;
+	//! The amount of bindings we're expecting to create for this column, used for verification (if pushdown extract)
+	optional_idx max_created_bindings;
 };
 
 enum class BaseColumnPrunerMode : uint8_t {
@@ -66,7 +68,8 @@ protected:
 	                optional_ptr<unique_ptr<Expression>> parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
-	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
+	//! ret: The amount of bindings created
+	idx_t ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
 	bool HandleStructExtract(unique_ptr<Expression> *expression);
 
@@ -107,5 +110,6 @@ private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get);
+	void CheckPushdownExtract(LogicalGet &get);
 };
 } // namespace duckdb

@@ -23,22 +23,147 @@
 
 namespace duckdb {
 
-void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
-	auto colrefs = column_references.find(current_binding);
-	if (colrefs == column_references.end()) {
-		return;
+namespace {
+
+struct ColumnIndexHashFunction {
+	uint64_t operator()(const ColumnIndex &index) const {
+		auto hasher = std::hash<idx_t>();
+		std::queue<reference<const ColumnIndex>> to_hash;
+
+		hash_t result = 0;
+		to_hash.push(index);
+		while (!to_hash.empty()) {
+			auto &current = to_hash.front();
+			auto &children = current.get().GetChildIndexes();
+			for (auto &child : children) {
+				to_hash.push(child);
+			}
+			result ^= hasher(current.get().GetPrimaryIndex());
+			to_hash.pop();
+		}
+		return result;
+	}
+};
+
+struct ColumnIndexEquality {
+	bool operator()(const ColumnIndex &a, const ColumnIndex &b) const {
+		std::queue<std::pair<reference<const ColumnIndex>, reference<const ColumnIndex>>> to_check;
+
+		to_check.push(std::make_pair(a, b));
+		while (to_check.empty()) {
+			auto &current = to_check.front();
+			auto &current_a = current.first;
+			auto &current_b = current.second;
+
+			if (current_a.get().GetPrimaryIndex() != current_b.get().GetPrimaryIndex()) {
+				return false;
+			}
+			auto &a_children = current_a.get().GetChildIndexes();
+			auto &b_children = current_b.get().GetChildIndexes();
+			if (a_children.size() != b_children.size()) {
+				return false;
+			}
+			for (idx_t i = 0; i < a_children.size(); i++) {
+				to_check.push(std::make_pair(a_children[i], b_children[i]));
+			}
+			to_check.pop();
+		}
+		return true;
+	}
+};
+
+template <class T>
+using column_index_map = unordered_map<ColumnIndex, T, ColumnIndexHashFunction, ColumnIndexEquality>;
+
+using column_index_set = unordered_set<ColumnIndex, ColumnIndexHashFunction, ColumnIndexEquality>;
+
+struct BindingsRewriteState {
+public:
+	BindingsRewriteState() {
 	}
 
-	for (auto &colref_p : colrefs->second.bindings) {
-		auto &colref = colref_p.get();
-		D_ASSERT(colref.binding == current_binding);
-		colref.binding = new_binding;
+public:
+	void AddColumn(idx_t original_id, ColumnIndex index) {
+		new_column_ids.emplace_back(std::move(index));
+		original_ids.emplace_back(original_id);
+	}
+	//! Returns the 'ColumnBinding.column_index' for the path referenced by the struct extract
+	idx_t AddStructExtract(idx_t original_id, ColumnIndex index) {
+		D_ASSERT(index.HasChildren());
+
+		auto column_binding_index = new_column_ids.size();
+		auto entry = child_map.find(index);
+		if (entry == child_map.end()) {
+			//! Adds the binding for the child only if it doesn't exist yet
+			entry = child_map.emplace(index, column_binding_index).first;
+			created_bindings[index.GetPrimaryIndex()]++;
+
+			new_column_ids.emplace_back(std::move(index));
+			original_ids.emplace_back(original_id);
+		}
+		return entry->second;
+	}
+	bool NoColumnsReferenced() const {
+		return new_column_ids.empty();
+	}
+	vector<ColumnIndex> MoveNewColumns() {
+		return std::move(new_column_ids);
+	}
+	vector<idx_t> MoveOriginalIds() {
+		return std::move(original_ids);
+	}
+	idx_t BindingsCreatedForIndex(idx_t column_index) {
+		return created_bindings[column_index];
+	}
+
+public:
+	//! The existing column ids
+	vector<ColumnIndex> old_column_ids;
+
+private:
+	//! The newly written column ids (same size as 'original_ids')
+	vector<ColumnIndex> new_column_ids;
+	//! The old index that the new one is based on (same size as 'new_column_ids')
+	vector<idx_t> original_ids;
+	//! Map of column index to binding, for pushed down struct extracts
+	column_index_map<idx_t> child_map;
+	//! Created bindings per original_column (for pushdown extract verification)
+	unordered_map<idx_t, idx_t> created_bindings;
+};
+
+} // namespace
+
+idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
+	auto colrefs = column_references.find(current_binding);
+	if (colrefs == column_references.end()) {
+		return 1;
+	}
+
+	auto &col = colrefs->second;
+	if (!col.child_columns.empty() && col.supports_pushdown_extract) {
+		//! Pushdown extract is supported, so we are potentially creating multiple bindings, 1 for each unique extract
+		//! path
+		column_index_set unique_paths;
+		for (auto &extract : col.struct_extracts) {
+			unique_paths.insert(extract.extract_path);
+		}
+		col.max_created_bindings = unique_paths.size();
+		return unique_paths.size();
+	} else {
+		//! No pushdown extract, just rewrite the existing bindings
+		for (auto &colref_p : col.bindings) {
+			auto &colref = colref_p.get();
+			D_ASSERT(colref.binding == current_binding);
+			colref.binding = new_binding;
+		}
+		return 1;
 	}
 }
 
 template <class T>
 void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
 	idx_t offset = 0;
+	idx_t new_col_idx = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
 		auto entry = column_references.find(current_binding);
@@ -47,9 +172,22 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			list.erase_at(col_idx);
 			offset++;
 			col_idx--;
-		} else if (offset > 0 && replace) {
+			continue;
+		}
+		if (!replace) {
+			continue;
+		}
+		bool should_replace = false;
+		if (col_idx + offset != new_col_idx) {
+			should_replace = true;
+		}
+		if (!entry->second.child_columns.empty() && entry->second.supports_pushdown_extract) {
+			should_replace = true;
+		}
+		if (should_replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
-			ReplaceBinding(current_binding, ColumnBinding(table_idx, col_idx));
+			auto created_bindings = ReplaceBinding(current_binding, ColumnBinding(table_idx, new_col_idx));
+			new_col_idx += created_bindings;
 		}
 	}
 }
@@ -300,141 +438,53 @@ static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t f
 	return static_cast<idx_t>(std::distance(column_ids.begin(), it));
 }
 
-static bool SupportsPushdownExtract(LogicalGet &get, idx_t column_idx) {
-	if (!get.function.supports_pushdown_extract) {
-		return false;
-	}
-	return get.function.supports_pushdown_extract(*get.bind_data, column_idx);
-}
-
-namespace {
-
-struct ColumnIndexHashFunction {
-	uint64_t operator()(const ColumnIndex &index) const {
-		auto hasher = std::hash<idx_t>();
-		std::queue<reference<const ColumnIndex>> to_hash;
-
-		hash_t result = 0;
-		to_hash.push(index);
-		while (!to_hash.empty()) {
-			auto &current = to_hash.front();
-			auto &children = current.get().GetChildIndexes();
-			for (auto &child : children) {
-				to_hash.push(child);
-			}
-			result ^= hasher(current.get().GetPrimaryIndex());
-			to_hash.pop();
-		}
-		return result;
-	}
-};
-
-struct ColumnIndexEquality {
-	bool operator()(const ColumnIndex &a, const ColumnIndex &b) const {
-		std::queue<std::pair<reference<const ColumnIndex>, reference<const ColumnIndex>>> to_check;
-
-		to_check.push(std::make_pair(a, b));
-		while (to_check.empty()) {
-			auto &current = to_check.front();
-			auto &current_a = current.first;
-			auto &current_b = current.second;
-
-			if (current_a.get().GetPrimaryIndex() != current_b.get().GetPrimaryIndex()) {
-				return false;
-			}
-			auto &a_children = current_a.get().GetChildIndexes();
-			auto &b_children = current_b.get().GetChildIndexes();
-			if (a_children.size() != b_children.size()) {
-				return false;
-			}
-			for (idx_t i = 0; i < a_children.size(); i++) {
-				to_check.push(std::make_pair(a_children[i], b_children[i]));
-			}
-			to_check.pop();
-		}
-		return true;
-	}
-};
-
-template <class T>
-using column_index_map = unordered_map<ColumnIndex, T, ColumnIndexHashFunction, ColumnIndexEquality>;
-
-struct BindingsRewriteState {
-public:
-	BindingsRewriteState() {
-	}
-
-public:
-	void AddColumn(idx_t original_id, ColumnIndex index) {
-		new_column_ids.emplace_back(std::move(index));
-		original_ids.emplace_back(original_id);
-	}
-	bool NoColumnsReferenced() const {
-		return new_column_ids.empty();
-	}
-	vector<ColumnIndex> MoveNewColumns() {
-		std::move(new_column_ids);
-	}
-	vector<idx_t> MoveOriginalIds() {
-		std::move(original_ids);
-	}
-
-public:
-	//! The existing column ids
-	vector<ColumnIndex> old_column_ids;
-
-private:
-	//! The newly written column ids (same size as 'original_ids')
-	vector<ColumnIndex> new_column_ids;
-	//! The old index that the new one is based on (same size as 'new_column_ids')
-	vector<idx_t> original_ids;
-	//! Map of column index to binding, for pushed down struct extracts
-	column_index_map<idx_t> child_map;
-};
-
-} // namespace
-
-static void WritePushDownExtractColumn(const idx_t original_id, const LogicalType &parent, BindingsRewriteState &state,
-                                       vector<idx_t> path, const ColumnIndex &index) {
-	path.push_back(index.GetPrimaryIndex());
-
-	auto &child_indexes = index.GetChildIndexes();
-	if (child_indexes.empty()) {
-		//! This is a leaf, create a binding for the child
-		ColumnIndex new_index(path.back());
-		for (int64_t i = path.size() - 2; i >= 0; i--) {
-			new_index = ColumnIndex(path[i], {std::move(new_index)});
-		}
-
-		//! TODO: lookup in 'child_map', create binding only if it doesn't exist yet
-		new_index.SetPushdownExtractType(parent);
-		state.AddColumn(original_id, std::move(new_index));
-	} else {
-		throw InternalException("TODO: Nested structs not supported yet");
-	}
-}
-
-////! Replace the top-level struct extract with a BoundColumnRefExpression
-// auto &struct_extract = col.struct_extracts[i];
-// auto return_type = struct_extract.expr->get()->return_type;
-// auto &colref = col.bindings[i];
-// auto colref_copy = colref.get().Copy();
-//*struct_extract.expr = std::move(colref_copy);
-// auto &new_expr = (*struct_extract.expr)->Cast<BoundColumnRefExpression>();
-// new_expr.return_type = return_type;
-////! FIXME: the 'column_index' should be retrieved with a lookup using the ColumnIndex
-// new_expr.binding.column_index += i;
-//(*struct_extract.expr)->return_type = return_type;
-
 static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType &column_type,
                                         BindingsRewriteState &state, idx_t col_sel_idx) {
 	auto &old_column_ids = state.old_column_ids;
+	auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
 
-	D_ASSERT(col.child_columns.size() == col.struct_extracts.size());
-	for (idx_t i = 0; i < col.child_columns.size(); i++) {
-		auto &child = col.child_columns[i];
-		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
-		WritePushDownExtractColumn(col_sel_idx, column_type, state, {struct_column_index}, child);
+	//! For each struct extract, replace the expression with a BoundColumnRefExpression
+	//! The expression references a binding created for the extracted path, 1 per unique path
+	for (auto &struct_extract : col.struct_extracts) {
+		//! Replace the top-level struct extract with a BoundColumnRefExpression
+		auto return_type = struct_extract.expr->get()->return_type;
+		auto &colref = col.bindings[struct_extract.bindings_idx];
+		auto colref_copy = colref.get().Copy();
+		*struct_extract.expr = std::move(colref_copy);
+		auto &new_expr = (*struct_extract.expr)->Cast<BoundColumnRefExpression>();
+		new_expr.return_type = return_type;
+
+		ColumnIndex new_index(struct_column_index, {struct_extract.extract_path});
+		new_index.SetPushdownExtractType(column_type);
+		auto column_index = state.AddStructExtract(col_sel_idx, new_index);
+		new_expr.binding.column_index = column_index;
+		(*struct_extract.expr)->return_type = return_type;
+	}
+	D_ASSERT(col.max_created_bindings.IsValid());
+	D_ASSERT(col.max_created_bindings.GetIndex() == state.BindingsCreatedForIndex(struct_column_index));
+}
+
+void RemoveUnusedColumns::CheckPushdownExtract(LogicalGet &get) {
+	//! For all referenced struct fields, check if the scan supports pushing down the extract
+	auto &column_ids = get.GetColumnIds();
+	for (auto &entry : column_references) {
+		auto &binding = entry.first;
+		auto &col = entry.second;
+		if (col.child_columns.empty()) {
+			//! Either not a struct, or we're not using struct field projection pushdown - skip it
+			continue;
+		}
+		if (!col.supports_pushdown_extract) {
+			//! We're already not using pushdown extract for this column, no need to check with the scan
+			continue;
+		}
+		auto logical_column_index = column_ids[binding.column_index].GetPrimaryIndex();
+		if (!get.function.supports_pushdown_extract) {
+			col.supports_pushdown_extract = false;
+			continue;
+		}
+		D_ASSERT(get.bind_data);
+		col.supports_pushdown_extract = get.function.supports_pushdown_extract(*get.bind_data, logical_column_index);
 	}
 }
 
@@ -488,6 +538,9 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		VisitExpression(&filter_expressions.back());
 	}
 
+	//! Check with the LogicalGet whether pushdown-extract is supported
+	CheckPushdownExtract(get);
+
 	// Clear unused ids, include filter columns that are projected out immediately
 	ClearUnusedExpressions(col_sel, get.table_index);
 
@@ -506,7 +559,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		}
 		//! Only a subset of the struct's fields are referenced
 		auto logical_column_index = state.old_column_ids[col_sel_idx].GetPrimaryIndex();
-		if (!entry->second.supports_pushdown_extract || !SupportsPushdownExtract(get, logical_column_index)) {
+		if (!entry->second.supports_pushdown_extract) {
 			//! Scan doesn't support pushing down the extract to the scan
 			//! Only add the child indexes to function as a prune hint that the other indices aren't referenced by the
 			//! query.
@@ -516,8 +569,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			continue;
 		}
 		//! Pushdown Extract is supported, emit a column for every field
-		//! TODO: make this work recursively
-		WritePushdownExtractColumns(entry->second, state, col_sel_idx);
+		WritePushdownExtractColumns(entry->second, column_type, state, col_sel_idx);
 	}
 	if (state.NoColumnsReferenced()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
