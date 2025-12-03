@@ -2,12 +2,10 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-
-#include <numeric>
 
 namespace duckdb {
 
@@ -44,12 +42,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	// Process the window functions by sharing the partition/order definitions
 	unordered_map<idx_t, idx_t> projection_map;
 	vector<vector<idx_t>> window_expressions;
-	idx_t blocking_count = 0;
+	idx_t streaming_count = 0;
 	auto output_pos = input_width;
 	while (!blocking_windows.empty() || !streaming_windows.empty()) {
-		const bool process_streaming = blocking_windows.empty();
-		auto &remaining = process_streaming ? streaming_windows : blocking_windows;
-		blocking_count += process_streaming ? 0 : 1;
+		const bool process_blocking = streaming_windows.empty();
+		auto &remaining = process_blocking ? blocking_windows : streaming_windows;
+		streaming_count += process_blocking ? 0 : 1;
 
 		// Find all functions that share the partitioning of the first remaining expression
 		auto over_idx = remaining[0];
@@ -122,7 +120,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		}
 
 		// Chain the new window operator on top of the plan
-		if (i < blocking_count) {
+		if (i >= streaming_count) {
 			auto &window = Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
 			window.children.push_back(plan);
 			plan = window;
