@@ -147,7 +147,7 @@ static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, con
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
 	}
 	T range_typed;
-	if (!TrySubtractOperator::Operation(max, min, range_typed) || range_typed < 2048) {
+	if (!TrySubtractOperator::Operation(max, min, range_typed) || range_typed > 2048) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
 	}
 	const auto range = NumericCast<idx_t>(range_typed);
