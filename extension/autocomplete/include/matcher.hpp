@@ -105,7 +105,7 @@ inline string TokenTypeToString(TokenType type) {
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
 	MatcherToken(string text_p, idx_t offset_p, TokenType type_p)
-	    : text(std::move(text_p)), offset(offset_p), type(type_p) {
+		: type(type_p), text(std::move(text_p)), offset(offset_p) {
 		length = text.length();
 	}
 
