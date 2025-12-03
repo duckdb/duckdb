@@ -168,7 +168,7 @@ idx_t ListColumnReader::ReadInternal(uint16_t row_group_ordinal, uint64_t num_va
 
 idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
                              uint16_t row_group_ordinal) {
-	ApplyPendingSkips(define_out, repeat_out);
+	ApplyPendingSkips(define_out, repeat_out, row_group_ordinal);
 	return ReadInternal<TemplatedListReader>(row_group_ordinal, num_values, define_out, repeat_out, result_out);
 }
 
@@ -182,9 +182,10 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, const ParquetColumnSch
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 }
 
-void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
-	// maybe we need to fix this
-	ReadInternal<TemplatedListSkipper>(-1, pending_skips, nullptr, nullptr, nullptr);
+void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal) {
+	// TODO; pass here row-group ordinal
+
+	ReadInternal<TemplatedListSkipper>(row_group_ordinal, pending_skips, nullptr, nullptr, nullptr);
 	pending_skips = 0;
 }
 

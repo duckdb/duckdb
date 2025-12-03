@@ -24,7 +24,7 @@ public:
 	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	           uint16_t row_group_ordinal) override;
 
-	void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) override;
+	void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		child_column_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
