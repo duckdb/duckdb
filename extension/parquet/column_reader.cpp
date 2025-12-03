@@ -446,17 +446,17 @@ void ColumnReader::AllocateBlock(idx_t size) {
 void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal,
                                uint16_t row_group_ordinal) {
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
-
-	bool is_arrow = false;
-	auto const file_aad = reader.GetFileAAD(reader.metadata->crypto_metadata->encryption_algorithm);
-	if (!file_aad.empty()) {
-		is_arrow = true;
-	}
-
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
-	if (is_arrow && chunk->__isset.crypto_metadata) {
-		// Arrow adds these bytes to the compressed page size
-		compressed_page_size -= (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
+
+	if (chunk->__isset.crypto_metadata) {
+		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
+		if (!file_aad.empty()) {
+			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
+			// Arrow adds the bytes for encryption (len + nonce + tag)
+			// to the compressed page size
+			compressed_page_size -=
+			    (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
+		}
 	}
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
@@ -464,7 +464,6 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t pa
 			throw std::runtime_error("Page size mismatch");
 		}
 		if (reader.parquet_options.encryption_config) {
-			// check if change here is correct
 			ReadDataEncrypted(block->ptr, compressed_page_size, page_hdr.type, row_group_ordinal, ColumnIndex(),
 			                  page_ordinal);
 		} else {

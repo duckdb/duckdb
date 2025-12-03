@@ -938,11 +938,11 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData 
 	                              file_col_idx);
 }
 
-string ParquetReader::GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
+string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
 	if (encryption_algorithm.__isset.AES_GCM_V1) {
 		return encryption_algorithm.AES_GCM_V1.aad_file_unique;
 	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-		return encryption_algorithm.AES_GCM_CTR_V1.aad_file_unique;
+		throw InternalException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
 	} else {
 		throw InternalException("File is encrypted but no encryption algorithm is set");
 	}
@@ -958,7 +958,7 @@ unique_ptr<AdditionalAuthenticatedData> ParquetReader::GenerateAAD(uint8_t modul
 	// + column ordinal (2 bytes, optionally)
 	// + page ordinal (2 bytes, optionally)
 
-	auto file_aad = GetFileAAD(metadata->crypto_metadata->encryption_algorithm);
+	auto file_aad = GetUniqueFileIdentifier(metadata->crypto_metadata->encryption_algorithm);
 	idx_t prefix_size = file_aad.size();
 
 	if (prefix_size == 0) {

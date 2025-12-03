@@ -179,7 +179,7 @@ public:
 	idx_t NumRowGroups() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
-	string static GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
+	string static GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
 	uint32_t ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t row_group_ordinal = 0,
