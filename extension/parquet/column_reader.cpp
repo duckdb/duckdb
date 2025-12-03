@@ -449,22 +449,24 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t pa
 		is_arrow = true;
 	}
 
+	uint32_t compressed_page_size = page_hdr.compressed_page_size;
+	if (is_arrow && chunk->__isset.crypto_metadata) {
+		// Arrow adds these bytes to the compressed page size
+		compressed_page_size -= (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
+	}
+
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+		if (compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
 		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, page_hdr.type, row_group_ordinal,
-			                  ColumnIndex(), page_ordinal);
+			// check if change here is correct
+			ReadDataEncrypted(block->ptr, compressed_page_size, page_hdr.type, row_group_ordinal, ColumnIndex(),
+			                  page_ordinal);
 		} else {
 			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		}
 		return;
-	}
-
-	uint32_t compressed_page_size = page_hdr.compressed_page_size;
-	if (is_arrow && chunk->__isset.crypto_metadata) {
-		compressed_page_size -= (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
 	}
 
 	ResizeableBuffer compressed_buffer;

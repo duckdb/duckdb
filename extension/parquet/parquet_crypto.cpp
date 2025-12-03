@@ -351,7 +351,6 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 
 	// Read buffer
 	// auto buf_size = dtrans.GetRemainingTransport() - ParquetCrypto::TAG_BYTES;
-	// dtrans.read(buffer, buffer_size);
 	// maybe here is a problem
 	dtrans.read(buffer, buffer_size);
 

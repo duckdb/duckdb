@@ -183,8 +183,6 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, const ParquetColumnSch
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal) {
-	// TODO; pass here row-group ordinal
-
 	ReadInternal<TemplatedListSkipper>(row_group_ordinal, pending_skips, nullptr, nullptr, nullptr);
 	pending_skips = 0;
 }

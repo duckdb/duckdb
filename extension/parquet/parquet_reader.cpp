@@ -1358,7 +1358,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
 					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
-					// auto row_group_ordinal = GetGroup(state).ordinal;
 
 					bool has_filter = false;
 					if (filters) {
@@ -1466,7 +1465,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			auto row_group_ordinal = GetGroup(state).ordinal;
-			// Here add row_GROUP_ordinal!!
 			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector, row_group_ordinal);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

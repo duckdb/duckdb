@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-EncryptionState::EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len_p, string aad)
+EncryptionState::EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len_p)
     : cipher(cipher_p), key_len(key_len_p) {
 }
 
