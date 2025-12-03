@@ -15,7 +15,7 @@ select start, token_type, word from sql_tokenize($$select a;$$);
 ----
 0	KEYWORD	select
 7	IDENTIFIER	a
-8	IDENTIFIER	;
+8	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($$select 'a' - 1;$$);
@@ -24,21 +24,21 @@ select start, token_type, word from sql_tokenize($$select 'a' - 1;$$);
 7	STRING_LITERAL	'a'
 11	OPERATOR	-
 13	NUMBER_LITERAL	1
-14	IDENTIFIER	;
+14	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($TEST_TOKENIZER$select $$dollar$$;$TEST_TOKENIZER$);
 ----
 0	KEYWORD	select
 7	STRING_LITERAL	'dollar'
-17	IDENTIFIER	;
+17	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($$select $tag$val$ue$tag$;$$);
 ----
 0	KEYWORD	select
 7	STRING_LITERAL	'val$ue'
-23	IDENTIFIER	;
+23	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($$select "column name" from "Table";$$);
@@ -47,7 +47,7 @@ select start, token_type, word from sql_tokenize($$select "column name" from "Ta
 7	IDENTIFIER	"column name"
 21	KEYWORD	from
 26	IDENTIFIER	"Table"
-33	IDENTIFIER	;
+33	TERMINATOR	;
 
 query III
 select start, token_type, word from sql_tokenize($$select (a + b) * 2, c;$$);
@@ -62,119 +62,16 @@ select start, token_type, word from sql_tokenize($$select (a + b) * 2, c;$$);
 17	NUMBER_LITERAL	2
 18	OPERATOR	,
 20	IDENTIFIER	c
-21	IDENTIFIER	;
+21	TERMINATOR	;
 
-# ---------------------------------------------------------
-# Test: Comments (Single line and Inline)
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select 1; -- this is a comment$$);
-----
-0	KEYWORD		select
-7	NUMBER_LITERAL 1
-8	IDENTIFIER	 ;
-10	COMMENT		-- this is a comment
-
-# ---------------------------------------------------------
-# Test: Partial / Incomplete Queries (Typing context)
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select * fro$$);
-----
-0	KEYWORD	select
-7	OPERATOR	*
-9	IDENTIFIER fro
-
-query III
-select start, token_type, word from sql_tokenize($$crea tab$$);
-----
-0	IDENTIFIER crea
-5	IDENTIFIER tab
-
-# ---------------------------------------------------------
-# Test: Numeric Variations (Decimals, Scientific)
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select 1.5, 1e2$$);
-----
-0	KEYWORD	select
-7	NUMBER_LITERAL 1.5
-10	OPERATOR	,
-12	NUMBER_LITERAL 1e2
-
-# ---------------------------------------------------------
-# Test: Mixed Quotes and Escaping
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select 'O''Neil', "My ""Table""";$$);
-----
-0	KEYWORD	select
-7	STRING_LITERAL 'O''Neil'
-15	OPERATOR	,
-17	IDENTIFIER "My ""Table"""
-29	IDENTIFIER
-
-# ---------------------------------------------------------
-# Test: Dollar Quoted Strings (Standard and Tagged)
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select $$dollar$$;$$);
-----
-0	KEYWORD	select
-7	STRING_LITERAL	$$dollar$$
-15	IDENTIFIER	;
-
-query III
-select start, token_type, word from sql_tokenize($$select $tag$val$ue$tag$;$$);
-----
-0	KEYWORD	select
-7	STRING_LITERAL	$tag$val$ue$tag$
-21	IDENTIFIER	;
-
-# ---------------------------------------------------------
-# Test: Double Quoted Identifiers (Case Sensitivity)
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select "column name" from "Table";$$);
-----
-0	KEYWORD	select
-7	IDENTIFIER	"column name"
-21	KEYWORD	from
-26	IDENTIFIER	"Table"
-33	IDENTIFIER	;
-
-# ---------------------------------------------------------
-# Test: Brackets, Commas, and Arithmetic Operators
-# ---------------------------------------------------------
-query III
-select start, token_type, word from sql_tokenize($$select (a + b) * 2, c;$$);
-----
-0	KEYWORD	select
-7	OPERATOR	(
-8	IDENTIFIER	a
-10	OPERATOR	+
-12	IDENTIFIER	b
-13	OPERATOR	)
-15	OPERATOR	*
-17	NUMBER_LITERAL	2
-18	OPERATOR	,
-20	IDENTIFIER	c
-21	IDENTIFIER	;
-
-# ---------------------------------------------------------
-# Test: Comments (Single line and Inline)
-# ---------------------------------------------------------
 query III
 select start, token_type, word from sql_tokenize($$select 1; -- this is a comment$$);
 ----
 0	KEYWORD	select
 7	NUMBER_LITERAL	1
-8	IDENTIFIER	;
+8	TERMINATOR	;
 10	COMMENT	-- this is a comment
 
-# ---------------------------------------------------------
-# Test: Partial / Incomplete Queries (Typing context)
-# ---------------------------------------------------------
 query III
 select start, token_type, word from sql_tokenize($$select * fro$$);
 ----
@@ -188,9 +85,6 @@ select start, token_type, word from sql_tokenize($$crea tab$$);
 0	IDENTIFIER	crea
 5	IDENTIFIER	tab
 
-# ---------------------------------------------------------
-# Test: Numeric Variations (Decimals, Scientific)
-# ---------------------------------------------------------
 query III
 select start, token_type, word from sql_tokenize($$select 1.5, 1e2$$);
 ----
@@ -199,14 +93,11 @@ select start, token_type, word from sql_tokenize($$select 1.5, 1e2$$);
 10	OPERATOR	,
 12	NUMBER_LITERAL	1e2
 
-# ---------------------------------------------------------
-# Test: Mixed Quotes and Escaping
-# ---------------------------------------------------------
 query III
 select start, token_type, word from sql_tokenize($$select 'O''Neil', "My ""Table""";$$);
 ----
 0	KEYWORD	select
 7	STRING_LITERAL	'O''Neil'
-15	OPERATOR	,
-17	IDENTIFIER	"My ""Table"""
-29	IDENTIFIER	;;
+16	OPERATOR	,
+18	IDENTIFIER	"My ""Table"""
+32	TERMINATOR	;

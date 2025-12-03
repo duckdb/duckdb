@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
+BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -136,6 +136,31 @@ bool BaseTokenizer::CharacterIsOperator(char c) {
 		return false;
 	}
 	return StringUtil::CharacterIsOperator(c);
+}
+
+TokenType BaseTokenizer::TokenizeStateToType(TokenizeState state) {
+	switch (state) {
+	case TokenizeState::STANDARD:
+		return TokenType::IDENTIFIER;
+	case TokenizeState::SINGLE_LINE_COMMENT:
+		return TokenType::COMMENT;
+	case TokenizeState::MULTI_LINE_COMMENT:
+		return TokenType::COMMENT;
+	case TokenizeState::QUOTED_IDENTIFIER:
+		return TokenType::IDENTIFIER;
+	case TokenizeState::STRING_LITERAL:
+		return TokenType::STRING_LITERAL;
+	case TokenizeState::KEYWORD:
+		return TokenType::KEYWORD;
+	case TokenizeState::NUMERIC:
+		return TokenType::NUMBER_LITERAL;
+	case TokenizeState::OPERATOR:
+		return TokenType::OPERATOR;
+	case TokenizeState::DOLLAR_QUOTED_STRING:
+		return TokenType::STRING_LITERAL;
+	default:
+		throw InternalException("Unknown token type");
+	}
 }
 
 void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
@@ -290,7 +315,6 @@ bool BaseTokenizer::TokenizeInput() {
 
 			// --- End of number ---
 			// The character 'c' is not a valid part of the number.
-			// Stop tokenizing and backtrack as per your original logic.
 			while (!CharacterIsInitialNumber(sql[i - 1])) {
 				i--;
 			}
@@ -313,12 +337,9 @@ bool BaseTokenizer::TokenizeInput() {
 			// keyword - check if this is still a keyword
 			if (!CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
-				auto &peg_keyword = PEGKeywordHelper::Instance();
-				if (peg_keyword.IsKeyword(sql.substr(last_pos, i - last_pos))) {
-					PushToken(last_pos, i, TokenType::KEYWORD);
-				} else {
-					PushToken(last_pos, i, TokenType::IDENTIFIER);
-				}
+				auto word = sql.substr(last_pos, i - last_pos);
+				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
+				PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -419,7 +440,7 @@ bool BaseTokenizer::TokenizeInput() {
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	OnLastToken(TokenType::IDENTIFIER, std::move(last_word), last_pos);
+	OnLastToken(state, std::move(last_word), last_pos);
 	return true;
 }
 
@@ -427,11 +448,14 @@ void BaseTokenizer::OnStatementEnd(idx_t pos) {
 	// Default: Do nothing
 }
 
-void BaseTokenizer::OnLastToken(TokenType type, string last_word, idx_t last_pos) {
+void BaseTokenizer::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
 	if (last_word.empty()) {
 		return;
 	}
-	tokens.emplace_back(std::move(last_word), last_pos, type);
+	if (state == TokenizeState::KEYWORD) {
+		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+	}
+	tokens.emplace_back(std::move(last_word), last_pos, TokenizeStateToType(state));
 }
 
 } // namespace duckdb

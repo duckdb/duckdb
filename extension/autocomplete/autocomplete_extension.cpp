@@ -427,8 +427,8 @@ public:
 		last_pos = 0;
 	}
 
-	void OnLastToken(TokenType type, string last_word_p, idx_t last_pos_p) override {
-		if (type == TokenType::STRING_LITERAL) {
+	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
 		last_word = std::move(last_word_p);

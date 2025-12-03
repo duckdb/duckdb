@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "keyword_helper.hpp"
 #include "matcher.hpp"
 
 namespace duckdb {
@@ -34,7 +35,7 @@ public:
 
 	virtual void PushToken(idx_t start, idx_t end, TokenType type);
 	virtual void OnStatementEnd(idx_t pos);
-	virtual void OnLastToken(TokenType type, string last_word, idx_t last_pos);
+	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
 
 	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
@@ -45,10 +46,12 @@ public:
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);
 	bool IsValidDollarTagCharacter(char c);
+	TokenType TokenizeStateToType(TokenizeState state);
 
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
+	PEGKeywordHelper keyword_helper;
 };
 
 } // namespace duckdb
