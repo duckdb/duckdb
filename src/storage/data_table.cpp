@@ -1020,6 +1020,7 @@ void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState 
 	if (!state.append_lock) {
 		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
 	}
+	state.table_lock = transaction.SharedLockTable(*info);
 	row_groups->InitializeAppend(transaction, state);
 }
 
@@ -1132,6 +1133,7 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 
 void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
+	auto table_lock = transaction.SharedLockTable(*info);
 
 	// revert any appends to indexes
 	if (!info->indexes.Empty()) {
@@ -1591,7 +1593,6 @@ unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
 	if (!HasIndexes()) {
 		row_groups->SetAppendRequiresNewRowGroup();
@@ -1603,6 +1604,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
+	row_groups->SetStats(global_stats);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {

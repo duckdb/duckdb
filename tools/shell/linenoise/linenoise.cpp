@@ -183,6 +183,12 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				}
 				render_completion_suggestion = true;
 				break;
+			case CTRL_C:
+				// ctrl + c cancels auto-complete
+				next_key.action = KEY_NULL;
+				accept_completion = false;
+				stop = true;
+				break;
 			case ESC: { /* escape */
 				switch (key_press.sequence) {
 				case EscapeSequence::SHIFT_TAB:

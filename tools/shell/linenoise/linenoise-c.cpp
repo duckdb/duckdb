@@ -154,3 +154,21 @@ int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *
 void linenoiseClearScreen(void) {
 	Terminal::ClearScreen();
 }
+
+int linenoiseGetTerminalColorMode() {
+	duckdb::TerminalColor background_color;
+	if (!duckdb::Terminal::TryGetBackgroundColor(background_color)) {
+		return LINENOISE_UNKNOWN_MODE;
+	}
+	// calculate the brightness
+	double brightness = 0.2126 * background_color.r + 0.7152 * background_color.g + 0.0722 * background_color.b;
+	// determine light or dark mode based on the brightness
+	// if the value is too much in the middle we leave it as mixed
+	if (brightness <= 96) {
+		return LINENOISE_DARK_MODE;
+	}
+	if (brightness >= 160) {
+		return LINENOISE_LIGHT_MODE;
+	}
+	return LINENOISE_MIXED_MODE;
+}

@@ -23,7 +23,7 @@ statement ok
 checkpoint
 
 query I
-select count() from tbl WHERE col IS NOT NULL
+select count() from tbl WHERE col IS NOT NULL AND variant_typeof(col) != 'VARIANT_NULL'
 ----
 120000
 

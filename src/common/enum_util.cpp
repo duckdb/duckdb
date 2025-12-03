@@ -171,6 +171,7 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
@@ -4564,19 +4565,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 10, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 11, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 10, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 11, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
@@ -4983,6 +4985,26 @@ const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value) {
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value) {
 	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 35, "VariantLogicalType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVariantStatsShreddingStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VariantStatsShreddingState::UNINITIALIZED), "UNINITIALIZED" },
+		{ static_cast<uint32_t>(VariantStatsShreddingState::NOT_SHREDDED), "NOT_SHREDDED" },
+		{ static_cast<uint32_t>(VariantStatsShreddingState::SHREDDED), "SHREDDED" },
+		{ static_cast<uint32_t>(VariantStatsShreddingState::INCONSISTENT), "INCONSISTENT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value) {
+	return StringUtil::EnumToString(GetVariantStatsShreddingStateValues(), 4, "VariantStatsShreddingState", static_cast<uint32_t>(value));
+}
+
+template<>
+VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value) {
+	return static_cast<VariantStatsShreddingState>(StringUtil::StringToEnum(GetVariantStatsShreddingStateValues(), 4, "VariantStatsShreddingState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantValueTypeValues() {
