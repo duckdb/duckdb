@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include <shell_highlight.hpp>
-
 #include "shell_state.hpp"
+#include "shell_highlight.hpp"
 
 namespace duckdb_shell {
 struct ShellState;
