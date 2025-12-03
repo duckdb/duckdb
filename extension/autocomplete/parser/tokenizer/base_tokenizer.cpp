@@ -139,6 +139,9 @@ bool BaseTokenizer::CharacterIsOperator(char c) {
 }
 
 void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
+	if (type == TokenType::COMMENT) {
+		return;
+	}
 	if (start >= end) {
 		return;
 	}
@@ -181,6 +184,7 @@ bool BaseTokenizer::TokenizeInput() {
 			if (c == ';') {
 				// end of statement
 				OnStatementEnd(i);
+				last_pos = i + 1;
 				break;
 			}
 			if (c == '$') {
@@ -299,7 +303,6 @@ bool BaseTokenizer::TokenizeInput() {
 			// operator literal - check if this is still an operator
 			if (!CharacterIsOperator(c)) {
 				// not an operator - return to standard state
-				// TODO(Dtenwolde) Check what the state here is and give that token type
 				PushToken(last_pos, i, TokenType::OPERATOR);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
@@ -347,6 +350,7 @@ bool BaseTokenizer::TokenizeInput() {
 			break;
 		case TokenizeState::SINGLE_LINE_COMMENT:
 			if (c == '\n' || c == '\r') {
+				PushToken(last_pos, i + 1, TokenType::COMMENT);
 				last_pos = i + 1;
 				state = TokenizeState::STANDARD;
 			}
@@ -409,6 +413,7 @@ bool BaseTokenizer::TokenizeInput() {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		// no suggestions in comments
+		PushToken(last_pos, sql.size(), TokenType::COMMENT);
 		return false;
 	default:
 		break;
@@ -419,7 +424,14 @@ bool BaseTokenizer::TokenizeInput() {
 }
 
 void BaseTokenizer::OnStatementEnd(idx_t pos) {
-	tokens.clear();
+	// Default: Do nothing
+}
+
+void BaseTokenizer::OnLastToken(TokenType type, string last_word, idx_t last_pos) {
+	if (last_word.empty()) {
+		return;
+	}
+	tokens.emplace_back(std::move(last_word), last_pos, type);
 }
 
 } // namespace duckdb

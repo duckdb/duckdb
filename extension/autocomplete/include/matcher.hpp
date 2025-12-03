@@ -81,7 +81,7 @@ enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
-enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT };
+enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT, TERMINATOR };
 
 inline string TokenTypeToString(TokenType type) {
 	switch (type) {
@@ -97,6 +97,8 @@ inline string TokenTypeToString(TokenType type) {
 		return "IDENTIFIER";
 	case TokenType::COMMENT:
 		return "COMMENT";
+	case TokenType::TERMINATOR:
+		return "TERMINATOR";
 	default:
 		return "UNKNOWN";
 	}

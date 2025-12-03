@@ -24,6 +24,7 @@ static tokenType convertToken(TokenType token_type) {
 	case TokenType::STRING_LITERAL:
 		return tokenType::TOKEN_STRING_CONSTANT;
 	case TokenType::OPERATOR:
+	case TokenType::TERMINATOR: // FIXME(Dtenwolde): Should become a special token for highlighting
 		return tokenType::TOKEN_OPERATOR;
 	case TokenType::KEYWORD:
 		return tokenType::TOKEN_KEYWORD;

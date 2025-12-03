@@ -5,9 +5,15 @@ namespace duckdb {
 HighlightTokenizer::HighlightTokenizer(const string &sql) : BaseTokenizer(sql, tokens) {
 }
 
-void HighlightTokenizer::OnStatementEnd(idx_t pos) {
+void HighlightTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
+	if (start >= end) {
+		return;
+	}
+	string last_token = sql.substr(start, end - start);
+	tokens.emplace_back(std::move(last_token), start, type);
 }
-void HighlightTokenizer::OnLastToken(TokenType type, string last_word, idx_t last_pos) {
-	tokens.emplace_back(std::move(last_word), last_pos, TokenType::IDENTIFIER);
+
+void HighlightTokenizer::OnStatementEnd(idx_t pos) {
+	tokens.emplace_back(";", pos, TokenType::TERMINATOR);
 }
 } // namespace duckdb

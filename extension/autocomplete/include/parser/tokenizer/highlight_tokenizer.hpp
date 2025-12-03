@@ -9,8 +9,8 @@ public:
 	explicit HighlightTokenizer(const string &sql);
 	~HighlightTokenizer() override = default;
 
+	void PushToken(idx_t start, idx_t end, TokenType type) override;
 	void OnStatementEnd(idx_t pos) override;
-	void OnLastToken(TokenType type, string last_word, idx_t last_pos) override;
 
 	vector<MatcherToken> tokens;
 };
