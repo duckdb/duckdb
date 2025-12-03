@@ -637,10 +637,10 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	D_ASSERT(!indexes.empty());
 	// construct the ColumnIndex and determine the field's type
 	reference<const LogicalType> type(colref->return_type);
-	type = StructType::GetChildTypes(type.get())[indexes[0]].second;
+	type = StructType::GetChildTypes(type.get())[indexes.back()].second;
 	ColumnIndex index = ColumnIndex(indexes[0]);
 	for (idx_t i = 1; i < indexes.size(); i++) {
-		type = StructType::GetChildTypes(type.get())[indexes[i]].second;
+		type = StructType::GetChildTypes(type.get())[indexes[indexes.size() - 1 - i]].second;
 		ColumnIndex new_index(indexes[i]);
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
