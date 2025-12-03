@@ -342,11 +342,21 @@ def get_extension_names() -> List[str]:
 def get_query(sql_query, load_query) -> list:
     # Optionally perform a LOAD of an extension
     # Then perform a SQL query, fetch the output
-    import json
+    import csv
+    import io
 
-    query = f'{DUCKDB_PATH} -json -unsigned -c "{load_query}{sql_query}" '
+    query = f'{DUCKDB_PATH} -unsigned -c ".mode csv" -c "{load_query}{sql_query}" '
     query_result = os.popen(query).read()
-    return json.loads(query_result)
+    f = io.StringIO(query_result)
+    reader = csv.reader(f)
+    header = next(reader)
+    result = []
+    for line in reader:
+        result_obj = {}
+        for i in range(len(header)):
+            result_obj[header[i]] = line[i]
+        result.append(result_obj)
+    return result
 
 
 def transform_parameter(parameter) -> LogicalType:
