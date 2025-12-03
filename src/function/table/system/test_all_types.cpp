@@ -70,9 +70,9 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	// More complex numeric types.
 	result.emplace_back(LogicalType::FLOAT, "float", Value::FLOAT(std::numeric_limits<float>::lowest()),
-	                    Value::MaximumValue(LogicalType::FLOAT));
+	                    Value::FLOAT(std::numeric_limits<float>::max()));
 	result.emplace_back(LogicalType::DOUBLE, "double", Value::DOUBLE(std::numeric_limits<double>::lowest()),
-	                    Value::MaximumValue(LogicalType::DOUBLE));
+	                    Value::DOUBLE(std::numeric_limits<double>::max()));
 	result.emplace_back(LogicalType::DECIMAL(4, 1), "dec_4_1");
 	result.emplace_back(LogicalType::DECIMAL(9, 4), "dec_9_4");
 	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_6");
