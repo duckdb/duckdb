@@ -956,7 +956,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 		if (constraint->type == ConstraintType::NOT_NULL) {
 			auto &not_null = constraint->Cast<NotNullConstraint>();
 			if (not_null.index == not_null_idx) {
-				table_info.constraints.erase(table_info.constraints.begin() + i);
+				table_info.constraints.erase(table_info.constraints.begin() + static_cast<ptrdiff_t>(i));
 				break;
 			}
 		}
