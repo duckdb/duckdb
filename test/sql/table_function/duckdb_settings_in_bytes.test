@@ -42,14 +42,39 @@ SELECT memory_in_bytes FROM duckdb_settings(in_bytes=0) WHERE name IN ('wal_auto
 ----
 Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
 
-# Non-byte settings should be returned as null in the memory_in_bytes column
+# Non-byte settings
 statement ok
 SET default_collation='nfc';
 
+# The memory_in_bytes column should be NULL for non-byte settings (like default_collation)
 query I
 SELECT memory_in_bytes IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
 ----
 true
+
+# Another non-byte settings, should be returned as null in the memory_in_bytes column
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name='access_mode';
+----
+automatic
+
+# The memory_in_bytes column should be NULL for non-byte settings (like access_mode)
+query I
+SELECT memory_in_bytes IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='access_mode';
+----
+true
+
+# The original column should not change for non-byte settings
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
+----
+nfc
+
+# The original column should not change for byte settings
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name='wal_autocheckpoint';
+----
+1.0 KiB
 
 # We consider 1 as true
 query I
