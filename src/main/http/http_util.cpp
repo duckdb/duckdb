@@ -191,9 +191,6 @@ private:
 		for (auto &entry : header_map) {
 			headers.insert(entry);
 		}
-		for (auto &entry : params.extra_headers) {
-			headers.insert(entry);
-		}
 		return headers;
 	}
 
