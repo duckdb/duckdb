@@ -36,12 +36,11 @@ static tokenType convertToken(TokenType token_type) {
 
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
-	vector<MatcherToken> root_tokens;
 
 	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
 	vector<SimplifiedToken> result;
-	result.reserve(root_tokens.size());
+	result.reserve(tokenizer.tokens.size());
 
 	vector<highlightToken> tokens;
 	for (auto &token : tokenizer.tokens) {

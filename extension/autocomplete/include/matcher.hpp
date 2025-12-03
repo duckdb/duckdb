@@ -83,6 +83,25 @@ enum class SuggestionType { OPTIONAL, MANDATORY };
 
 enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT };
 
+inline string TokenTypeToString(TokenType type) {
+	switch (type) {
+	case TokenType::KEYWORD:
+		return "KEYWORD";
+	case TokenType::STRING_LITERAL:
+		return "STRING_LITERAL";
+	case TokenType::NUMBER_LITERAL:
+		return "NUMBER_LITERAL";
+	case TokenType::OPERATOR:
+		return "OPERATOR";
+	case TokenType::IDENTIFIER:
+		return "IDENTIFIER";
+	case TokenType::COMMENT:
+		return "COMMENT";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
 	MatcherToken(string text_p, idx_t offset_p, TokenType type_p)

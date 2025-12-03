@@ -18,10 +18,8 @@ public:
 	bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const;
 	void InitializeKeywordMaps();
 	bool IsKeyword(const string &text) {
-		if (reserved_keyword_map.count(text) != 0
-			|| unreserved_keyword_map.count(text) != 0
-			|| colname_keyword_map.count(text) != 0
-			|| typefunc_keyword_map.count(text) != 0) {
+		if (reserved_keyword_map.count(text) != 0 || unreserved_keyword_map.count(text) != 0 ||
+		    colname_keyword_map.count(text) != 0 || typefunc_keyword_map.count(text) != 0) {
 			return true;
 		}
 		return false;

@@ -19,9 +19,24 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "parser/tokenizer/parser_tokenizer.hpp"
 
 namespace duckdb {
+
+struct SQLTokenizeFunctionData : public TableFunctionData {
+	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
+	}
+
+	vector<MatcherToken> tokens;
+};
+
+struct SQLTokenizeData : public GlobalTableFunctionState {
+	SQLTokenizeData() : offset(0) {
+	}
+
+	idx_t offset;
+};
 
 struct SQLAutoCompleteFunctionData : public TableFunctionData {
 	explicit SQLAutoCompleteFunctionData(vector<AutoCompleteSuggestion> suggestions_p)
@@ -728,6 +743,62 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
+static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
+	HighlightTokenizer tokenizer(sql);
+	tokenizer.TokenizeInput();
+
+	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
+}
+
+unique_ptr<GlobalTableFunctionState> SQLTokenizeInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<SQLTokenizeData>();
+}
+
+static unique_ptr<FunctionData> SQLTokenizeBind(ClientContext &context, TableFunctionBindInput &input,
+                                                vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	}
+
+	names.emplace_back("offset");
+	return_types.emplace_back(LogicalType::INTEGER);
+
+	names.emplace_back("token_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("word");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	return GenerateTokens(context, StringValue::Get(input.inputs[0]));
+}
+
+void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = data_p.bind_data->Cast<SQLTokenizeFunctionData>();
+	auto &data = data_p.global_state->Cast<SQLTokenizeData>();
+	if (data.offset >= bind_data.tokens.size()) {
+		// finished returning values
+		return;
+	}
+
+	// start returning values
+	// either fill up the chunk or return all the remaining columns
+	idx_t count = 0;
+	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = bind_data.tokens[data.offset++];
+
+		// offset, INTEGER
+		output.SetValue(0, count, Value::INTEGER(NumericCast<int32_t>(entry.offset)));
+
+		// token_type, VARCHAR
+		output.SetValue(1, count, Value(TokenTypeToString(entry.type)));
+
+		// word, VARCHAR
+		output.SetValue(2, count, Value(entry.text));
+		count++;
+	}
+	output.SetCardinality(count);
+}
+
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs[0].IsNull()) {
@@ -832,6 +903,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
+	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind, SQLTokenizeInit);
+	loader.RegisterFunction(tokenize_fun);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	config.parser_extensions.push_back(PEGParserExtension());
 }
