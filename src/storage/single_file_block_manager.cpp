@@ -866,6 +866,9 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 	for (auto &free_block : free_list) {
 		referenced_blocks.insert(free_block);
 	}
+	for (auto &free_block : free_blocks_in_use) {
+		referenced_blocks.insert(free_block);
+	}
 	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
 		// not all blocks are accounted for
 		string missing_blocks;

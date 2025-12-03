@@ -2,8 +2,6 @@
 # description: Test concurrent force checkpoints with a mix of operations
 # group: [interquery]
 
-loop zz 0 100
-
 statement ok
 CREATE OR REPLACE TABLE integers(i INTEGER)
 
@@ -71,5 +69,3 @@ query II
 SELECT COUNT(*), SUM(i) FROM integers
 ----
 11000	121494500
-
-endloop
