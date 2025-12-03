@@ -1,11 +1,9 @@
 include_directories(include)
 
-if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
-  include_directories(../../extension/autocomplete/include)
-  set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
-                       ../../extension/autocomplete/autocomplete_extension.cpp)
-  add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
-endif()
+include_directories(../../extension/autocomplete/include)
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
+                     ../../extension/autocomplete/autocomplete_extension.cpp)
+add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
 
 add_subdirectory(linenoise)
 add_definitions(-DHAVE_LINENOISE=1)
