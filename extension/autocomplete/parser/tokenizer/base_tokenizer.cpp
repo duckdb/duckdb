@@ -181,7 +181,6 @@ bool BaseTokenizer::TokenizeInput() {
 			if (c == ';') {
 				// end of statement
 				OnStatementEnd(i);
-				last_pos = i + 1;
 				break;
 			}
 			if (c == '$') {
