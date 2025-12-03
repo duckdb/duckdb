@@ -6,7 +6,7 @@ struct MatcherToken;
 
 class HighlightTokenizer : public BaseTokenizer {
 public:
-	HighlightTokenizer(const string &sql);
+	explicit HighlightTokenizer(const string &sql);
 	~HighlightTokenizer() override = default;
 
 	void OnStatementEnd(idx_t pos) override;
