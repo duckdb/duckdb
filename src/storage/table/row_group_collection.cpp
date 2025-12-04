@@ -1143,7 +1143,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 				// multiple rows found here - skip
 				break;
 			}
-			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(segment_idx);
+			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(NumericCast<int64_t>(segment_idx));
 			auto &row_group = entry.GetNode();
 			D_ASSERT(entry.GetIndex() == segment_idx);
 			row_group.CommitDrop();
