@@ -289,17 +289,32 @@ void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
 	undo_buffer.Cleanup(lowest_active_transaction);
 }
 
-void DuckTransaction::SetReadWrite() {
-	Transaction::SetReadWrite();
-	// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
-	write_lock = transaction_manager.SharedCheckpointLock();
+void DuckTransaction::SetModifications(DatabaseModificationType type) {
+	if (write_lock) {
+		// already have a write lock
+		return;
+	}
+	bool require_write_lock = false;
+	require_write_lock = require_write_lock || type.DeleteData();
+	require_write_lock = require_write_lock || type.UpdateData();
+	require_write_lock = require_write_lock || type.AlterTable();
+	require_write_lock = require_write_lock || type.CreateCatalogEntry();
+	require_write_lock = require_write_lock || type.DropCatalogEntry();
+	require_write_lock = require_write_lock || type.Sequence();
+	require_write_lock = require_write_lock || type.CreateIndex();
+
+	if (require_write_lock) {
+		// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
+		write_lock = transaction_manager.SharedCheckpointLock();
+	}
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 	if (!write_lock) {
-		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
+		return transaction_manager.TryGetCheckpointLock();
+	} else {
+		return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
 	}
-	return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
 }
 
 shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info) {

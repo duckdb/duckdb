@@ -506,6 +506,13 @@
         "internal_setting": "explain_output_type"
     },
     {
+        "name": "extension_directories",
+        "description": "Set the directories to store extensions in",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",

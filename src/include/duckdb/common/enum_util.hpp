@@ -446,6 +446,8 @@ enum class VariantChildLookupMode : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
 
+enum class VariantStatsShreddingState : uint8_t;
+
 enum class VariantValueType : uint8_t;
 
 enum class VectorAuxiliaryDataType : uint8_t;
@@ -1091,6 +1093,9 @@ const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode val
 
 template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
+
+template<>
+const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
 
 template<>
 const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
@@ -1749,6 +1754,9 @@ VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
+
+template<>
+VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
 
 template<>
 VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);

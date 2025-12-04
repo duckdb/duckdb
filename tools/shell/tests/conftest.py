@@ -194,7 +194,12 @@ def is_needle_in_haystack(needle, haystack) -> bool:
     if needle == "" or haystack == "":
         return False
     if isinstance(haystack, str) and isinstance(needle, str):
-        return needle in haystack
+        if needle in haystack:
+            return True
+        if os.name == 'nt' and '\n' in needle:
+            # try with windows-style newlines
+            return needle.replace('\n', '\r\n') in haystack
+        return False
     elif isinstance(haystack, bytes) and isinstance(needle, bytes):
         return needle in haystack
     else:

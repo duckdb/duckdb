@@ -702,6 +702,16 @@ struct ExplainOutputSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ExtensionDirectoriesSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "extension_directories";
+	static constexpr const char *Description = "Set the directories to store extensions in";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ExtensionDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "extension_directory";

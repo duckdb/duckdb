@@ -1,6 +1,7 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
 #define STDIN_FILENO  0
@@ -228,7 +229,7 @@ int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 }
 
 // returns true if there is more data available to read in a particular stream
-int Terminal::HasMoreData(int fd) {
+int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 #if defined(_WIN32) || defined(WIN32)
 	return false;
 #else
@@ -239,7 +240,7 @@ int Terminal::HasMoreData(int fd) {
 	// no timeout: return immediately
 	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 0;
+	tv.tv_usec = NumericCast<int>(timeout_micros);
 	return select(1, &rfds, NULL, NULL, &tv);
 #endif
 }
@@ -350,6 +351,108 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 		/* Can't recover... */
 	}
 	return result;
+}
+
+bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
+	/* Parse it. */
+	// expected format is: rgb:1e1e/1e1e/1e1e
+	idx_t offset = 0;
+	// find "rgb:"
+	for (; offset + 4 < buflen; offset++) {
+		if (memcmp(buf + offset, (const void *)"rgb:", 4) == 0) {
+			break;
+		}
+	}
+	// now parse the actual r/g/b values
+	offset += 4;
+	if (offset >= buflen) {
+		return false;
+	}
+	uint8_t values[3];
+	memset(values, 0, sizeof(values));
+
+	for (idx_t k = 0; k < 3; k++) {
+		if (k > 0) {
+			// expected a "/"
+			if (offset >= buflen || buf[offset] != '/') {
+				return false;
+			}
+			offset++;
+		}
+		// parse the hexadecimal value
+		// note that these values are from 0...65535, not from 0...255
+		uint32_t value = 0;
+		idx_t end_pos = offset + 4;
+		for (; offset < end_pos; offset++) {
+			if (offset >= buflen) {
+				return false;
+			}
+			auto c = buf[offset];
+			if (c == '/') {
+				// found a slash early - done
+				break;
+			}
+			uint32_t current_value;
+			if (c >= 'A' && c <= 'F') {
+				current_value = 10 + (c - 'A');
+			} else if (c >= 'a' && c <= 'f') {
+				current_value = 10 + (c - 'a');
+			} else if (c >= '0' && c <= '9') {
+				current_value = c - '0';
+			} else {
+				// unsupported hex value
+				return false;
+			}
+			value = value * 16 + current_value;
+		}
+		// normalize from
+		values[k] = static_cast<uint8_t>(value >> 8);
+	}
+	// found the r/g/b
+	color.r = values[0];
+	color.g = values[1];
+	color.b = values[2];
+	return true;
+}
+
+bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+	int ifd = STDIN_FILENO;
+	int ofd = STDOUT_FILENO;
+
+	if (Terminal::EnableRawMode() == -1) {
+		return false;
+	}
+
+	bool success = false;
+	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
+		// Read the response: until \a or until we fill up our buffer
+		char buf[64];
+		idx_t i = 0;
+		while (i < sizeof(buf) - 1) {
+			// check if we have data to read
+			// wait up till 1ms
+			if (!HasMoreData(ifd, 10000)) {
+				// no more data available - done
+				break;
+			}
+			if (read(ifd, buf + i, 1) != 1) {
+				break;
+			}
+			if (buf[i] == '\a') {
+				break;
+			}
+			if (i > 2 && buf[i - 1] == '\e' && buf[i] == '\\') {
+				i--;
+				break;
+			}
+			i++;
+		}
+		buf[i] = '\0';
+
+		success = ParseTerminalColor(color, buf, i);
+	}
+	Terminal::DisableRawMode();
+	return success;
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80

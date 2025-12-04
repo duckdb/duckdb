@@ -1044,6 +1044,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, ve
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
                                 DataChunk &result) const {
+	D_ASSERT(result.GetTypes() == types);
 	result.Reset();
 
 	idx_t chunk_index;
@@ -1141,6 +1142,10 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
+	for (idx_t i = 0; i < state.column_ids.size(); i++) {
+		D_ASSERT(result.GetTypes()[i] == types[state.column_ids[i]]);
+	}
+
 	result.Reset();
 
 	idx_t chunk_index;
@@ -1225,6 +1230,7 @@ idx_t ColumnDataCollection::ChunkCount() const {
 }
 
 void ColumnDataCollection::FetchChunk(idx_t chunk_idx, DataChunk &result) const {
+	D_ASSERT(result.GetTypes() == types);
 	D_ASSERT(chunk_idx < ChunkCount());
 	for (auto &segment : segments) {
 		if (chunk_idx >= segment->ChunkCount()) {
