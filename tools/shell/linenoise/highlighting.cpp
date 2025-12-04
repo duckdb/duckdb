@@ -7,7 +7,6 @@
 #include "shell_highlight.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "parser/tokenizer/highlight_tokenizer.hpp"
-#include "parser/tokenizer/parser_tokenizer.hpp"
 #endif
 
 namespace duckdb {
@@ -16,6 +15,7 @@ bool Highlighting::IsEnabled() {
 	return duckdb_shell::ShellHighlight::IsEnabled();
 }
 
+#ifdef SHELL_INLINE_AUTOCOMPLETE
 static tokenType convertToken(TokenType token_type) {
 	switch (token_type) {
 	case TokenType::IDENTIFIER:
@@ -35,16 +35,47 @@ static tokenType convertToken(TokenType token_type) {
 		throw duckdb::InternalException("Unrecognized token type");
 	}
 }
+#endif
+#ifndef SHELL_INLINE_AUTOCOMPLETE
+static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
+	switch (token_type) {
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+		return tokenType::TOKEN_IDENTIFIER;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+		return tokenType::TOKEN_NUMERIC_CONSTANT;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+		return tokenType::TOKEN_STRING_CONSTANT;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+		return tokenType::TOKEN_OPERATOR;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+		return tokenType::TOKEN_KEYWORD;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+		return tokenType::TOKEN_COMMENT;
+	default:
+		throw duckdb::InternalException("Unrecognized token type");
+	}
+}
+#endif
 
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
-
+	vector<highlightToken> tokens;
+	#ifndef SHELL_INLINE_AUTOCOMPLETE
+	string sql(buf, len);
+	auto parseTokens = duckdb::Parser::Tokenize(sql);
+	for (auto &token : parseTokens) {
+		highlightToken new_token;
+		new_token.type = convertToken(token.type);
+		new_token.start = token.start;
+		tokens.push_back(new_token);
+	}
+	#endif
+	#ifdef SHELL_INLINE_AUTOCOMPLETE
 	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
 	vector<SimplifiedToken> result;
 	result.reserve(tokenizer.tokens.size());
-
-	vector<highlightToken> tokens;
+	#endif
 	for (auto &token : tokenizer.tokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
