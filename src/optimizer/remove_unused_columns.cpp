@@ -119,7 +119,6 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 			continue;
 		}
 		if (!replace) {
-			new_col_idx++;
 			continue;
 		}
 		bool should_replace = false;
