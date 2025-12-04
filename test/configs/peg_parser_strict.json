@@ -175,7 +175,8 @@
         "test/sql/catalog/test_quoted_column_name.test",
         "test/sql/catalog/function/query_function.test",
         "test/sql/json/issues/large_quoted_string_constant.test",
-        "test/sql/storage/types/variant/test_all_types_single_table.test"
+        "test/sql/storage/types/variant/test_all_types_single_table.test",
+        "test/sql/cast/string_to_struct_cast.test"
       ]
     },
     {

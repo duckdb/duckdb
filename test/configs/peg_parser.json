@@ -16,7 +16,8 @@
         "test/sql/keywords/escaped_quotes_expressions.test",
         "test/sql/catalog/test_quoted_column_name.test",
         "test/sql/json/issues/large_quoted_string_constant.test",
-        "test/sql/export/export_database.test"
+        "test/sql/export/export_database.test",
+        "test/sql/cast/string_to_struct_cast.test"
       ]
     },
     {
