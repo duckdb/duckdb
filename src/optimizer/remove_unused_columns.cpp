@@ -527,7 +527,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto col_sel_idx : col_sel) {
-		auto &column_type = get.types[col_sel_idx];
+		auto &column_type = get.GetColumnType(state.old_column_ids[col_sel_idx]);
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
