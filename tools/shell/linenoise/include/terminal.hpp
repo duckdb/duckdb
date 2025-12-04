@@ -135,7 +135,7 @@ public:
 	static void Beep();
 
 	static bool IsAtty();
-	static int HasMoreData(int fd);
+	static int HasMoreData(int fd, idx_t timeout_micros = 0);
 	static TerminalSize GetTerminalSize();
 	static bool TryGetBackgroundColor(TerminalColor &color);
 
