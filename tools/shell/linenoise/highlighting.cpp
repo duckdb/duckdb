@@ -5,8 +5,10 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
+#ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "parser/tokenizer/parser_tokenizer.hpp"
+#endif
 
 namespace duckdb {
 
