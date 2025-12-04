@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE tbl AS FROM values(1), (4), (8), (0) i(x);
 
 query I
-SELECT switch (x, 1 THEN 'yes', 0 THEN 'no' ELSE 'maybe') FROM tbl;
+SELECT SWITCH(x, MAP { 1: 'yes', 0: 'no'}, 'maybe') FROM tbl;
 ----
 yes
 maybe
@@ -20,7 +20,7 @@ statement ok
 CREATE TABLE nums AS FROM range(5) tbl(i);
 
 query I
-SELECT SWITCH(i % 2, 0 THEN 'even', 1 THEN 'odd' ELSE 'error') FROM nums ORDER BY i;
+SELECT SWITCH(i % 2, MAP { 0 : 'even', 1 : 'odd'}, 'error') FROM nums ORDER BY i;
 ----
 even
 odd
@@ -45,7 +45,7 @@ odd
 even
 
 query I
-SELECT switch(i, 1 THEN 100, 3 THEN 300) FROM nums ORDER BY i;
+SELECT switch(i, MAP {1 : 100, 3 :300}) FROM nums ORDER BY i;
 ----
 NULL
 100
@@ -72,7 +72,7 @@ statement ok
 CREATE TABLE null_test AS FROM VALUES (1), (NULL), (2) i(val);
 
 query I
-SELECT switch(val, 1 THEN 'one', NULL THEN 'is_null' ELSE 'other') FROM null_test ORDER BY val;
+SELECT switch(val, MAP { 1 : 'one', NULL : 'is_null'}, 'other') FROM null_test ORDER BY val;
 ----
 one
 other

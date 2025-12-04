@@ -41,6 +41,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformTypeCast(PGCast<duckdb_libpgquery::PGTypeCast>(node));
 	case duckdb_libpgquery::T_PGCaseExpr:
 		return TransformCase(PGCast<duckdb_libpgquery::PGCaseExpr>(node));
+	case duckdb_libpgquery::T_PGSwitchExpr:
+		return TransformSwitch(PGCast<duckdb_libpgquery::PGSwitchExpr>(node));
 	case duckdb_libpgquery::T_PGSubLink:
 		return TransformSubquery(PGCast<duckdb_libpgquery::PGSubLink>(node));
 	case duckdb_libpgquery::T_PGCoalesceExpr:

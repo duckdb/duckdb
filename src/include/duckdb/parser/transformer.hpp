@@ -225,6 +225,8 @@ private:
 	unique_ptr<ParsedExpression> TransformBoolExpr(duckdb_libpgquery::PGBoolExpr &root);
 	//! Transform a Postgres case expression into an Expression
 	unique_ptr<ParsedExpression> TransformCase(duckdb_libpgquery::PGCaseExpr &root);
+	//! Transform a Postgres switch expression into an Expression
+	unique_ptr<ParsedExpression> TransformSwitch(duckdb_libpgquery::PGSwitchExpr &root);
 	//! Transform a Postgres type cast into an Expression
 	unique_ptr<ParsedExpression> TransformTypeCast(duckdb_libpgquery::PGTypeCast &root);
 	//! Transform a Postgres coalesce into an Expression
