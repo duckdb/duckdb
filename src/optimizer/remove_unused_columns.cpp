@@ -407,21 +407,24 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 		//! Replace the struct extract expression at the right depth with a BoundColumnRefExpression
 
 		auto &full_path = struct_extract.extract_path;
-		D_ASSERT(!full_path.empty());
+
 		idx_t depth = 0;
-		auto end_iterator = ++full_path.begin();
-		auto entry = col.unique_paths.end();
+		column_index_set::iterator entry;
+		ColumnIndex copy(full_path.GetPrimaryIndex());
+		reference<const ColumnIndex> path_iter(full_path);
+		reference<ColumnIndex> copy_iter(copy);
 		while (true) {
-			vector<idx_t> copy(full_path.begin(), end_iterator);
 			entry = col.unique_paths.find(copy);
 			if (entry != col.unique_paths.end()) {
 				//! Path found, we're done
 				break;
 			}
-			if (end_iterator == full_path.end()) {
+			if (!path_iter.get().HasChildren()) {
 				throw InternalException("This path wasn't found in the registered paths for this expression at all!?");
 			}
-			end_iterator++;
+			path_iter = path_iter.get().GetChildIndex(0);
+			copy_iter.get().AddChildIndex(ColumnIndex(path_iter.get().GetPrimaryIndex()));
+			copy_iter = copy_iter.get().GetChildIndex(0);
 			depth++;
 		}
 		D_ASSERT(entry != col.unique_paths.end());
@@ -435,8 +438,7 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 		auto &new_expr = expr.get()->Cast<BoundColumnRefExpression>();
 		new_expr.return_type = return_type;
 
-		auto child_index = PathToIndex(*entry);
-		ColumnIndex new_index(struct_column_index, {child_index});
+		ColumnIndex new_index(struct_column_index, {*entry});
 		new_index.SetPushdownExtractType(column_type);
 		auto column_index = state.AddStructExtract(col_sel_idx, new_index);
 		new_expr.binding.column_index = column_index;
@@ -640,7 +642,7 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 		return false;
 	}
 	auto index = PathToIndex(indexes);
-	AddBinding(*colref, std::move(index), expressions, indexes);
+	AddBinding(*colref, std::move(index), expressions);
 	return true;
 }
 
@@ -693,40 +695,35 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	}
 }
 
-void ReferencedColumn::AddPath(const vector<idx_t> &path) {
+void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	if (child_columns.empty()) {
 		//! Full field already referenced, won't use struct field projection pushdown at all
 		return;
 	}
-	D_ASSERT(!path.empty());
+	path.VerifySinglePath();
 
 	//! Do not add the path if it is a child of an existing path
-	auto end_iterator = ++path.begin();
+	ColumnIndex copy(path.GetPrimaryIndex());
+	reference<const ColumnIndex> path_iter(path);
+	reference<ColumnIndex> copy_iter(copy);
 	while (true) {
 		//! Create a subset of the path up to an increasing depth, so we can check if the parent path already exists
-		vector<idx_t> path_copy(path.begin(), end_iterator);
-		if (unique_paths.count(path_copy)) {
+		if (unique_paths.count(copy)) {
 			//! The parent path already exists, don't add the new path
 			return;
 		}
-		if (end_iterator == path.end()) {
+		if (!path_iter.get().HasChildren()) {
 			break;
 		}
-		end_iterator++;
+		path_iter = path_iter.get().GetChildIndex(0);
+		copy_iter.get().AddChildIndex(ColumnIndex(path_iter.get().GetPrimaryIndex()));
+		copy_iter = copy_iter.get().GetChildIndex(0);
 	}
 	//! No parent path exists, but child paths could already be added, remove them if they exist
 	auto it = unique_paths.begin();
 	for (; it != unique_paths.end();) {
 		auto &unique_path = *it;
-		bool is_child_path = unique_path.size() > path.size();
-		if (is_child_path) {
-			for (idx_t i = 0; i < path.size() && is_child_path; i++) {
-				if (unique_path[i] != path[i]) {
-					is_child_path = false;
-				}
-			}
-		}
-		if (is_child_path) {
+		if (unique_path.IsChildPathOf(path)) {
 			auto current = it;
 			it++;
 			unique_paths.erase(current);
@@ -739,7 +736,7 @@ void ReferencedColumn::AddPath(const vector<idx_t> &path) {
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-                                  vector<reference<unique_ptr<Expression>>> parent, const vector<idx_t> &path) {
+                                  vector<reference<unique_ptr<Expression>>> parent) {
 	AddBinding(col, child_column);
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
@@ -751,8 +748,9 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 
 	//! NOTE: this path does not contain the column index of the root,
 	//! i.e 's.a' will just be a ColumnIndex with the index of 'a', without children
-	referenced_column.AddPath(path);
-	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1, path);
+	referenced_column.AddPath(child_column);
+	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1,
+	                                               std::move(child_column));
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
