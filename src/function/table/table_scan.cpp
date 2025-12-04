@@ -714,7 +714,13 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 	if (column.Generated()) {
 		return nullptr;
 	}
-	auto storage_index = TransformStorageIndex(column_id);
+
+	//! FIXME: there must be a better way to do this...
+	ColumnIndex index_copy(column.StorageOid(), column_id.GetChildIndexes());
+	if (column_id.IsPushdownExtract()) {
+		index_copy.SetPushdownExtractType(column_id.GetType());
+	}
+	auto storage_index = TransformStorageIndex(index_copy);
 	return duck_table.GetStatistics(context, storage_index);
 }
 
