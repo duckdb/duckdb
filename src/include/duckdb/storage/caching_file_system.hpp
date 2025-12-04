@@ -111,6 +111,7 @@ private:
 	friend struct CachingFileHandle;
 
 public:
+	// Notice, [filesystem] should be a raw, non-caching filesystem.
 	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystem();
 

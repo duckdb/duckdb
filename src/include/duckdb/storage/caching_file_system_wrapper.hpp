@@ -19,6 +19,15 @@ class DatabaseInstance;
 class ClientContext;
 class QueryContext;
 class CachingFileSystemWrapper;
+struct CachingFileHandle;
+
+//! Caching mode for CachingFileSystemWrapper.
+enum class CachingMode : uint8_t {
+	// Cache all files.
+	ALWAYS_CACHE,      
+	// Only cache remote files, bypass cache for local files.
+	CACHE_REMOTE_ONLY,
+};
 
 //! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API.
 class CachingFileHandleWrapper : public FileHandle {
@@ -42,10 +51,12 @@ private:
 //! NOTICE: Currently only read and seek operations are supported, write operations are disabled.
 class CachingFileSystemWrapper : public FileSystem {
 public:
-	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db);
+	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
+	                                   CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
 
-	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context);
+	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context,
+	                                               CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 
 	DUCKDB_API std::string GetName() const override;
 
@@ -119,8 +130,14 @@ protected:
 	DUCKDB_API bool SupportsListFilesExtended() const override;
 
 private:
+	bool ShouldUseCache(const string &path) const;
+
+	// Return an optional caching file handle, if certain filepath is cached.
+	CachingFileHandle *GetCachingHandleIfPossible(FileHandle &handle);
+
 	CachingFileSystem caching_file_system;
 	FileSystem &underlying_file_system;
+	CachingMode caching_mode;
 };
 
 } // namespace duckdb
