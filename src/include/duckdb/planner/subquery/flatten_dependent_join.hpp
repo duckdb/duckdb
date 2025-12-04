@@ -33,7 +33,7 @@ private:
 	                                 bool parent_is_dependent_join = false);
 
 	//! Mark entire subtree of Logical Operators as correlated by adding them to the has_correlated_expressions map.
-	bool MarkSubtreeCorrelated(LogicalOperator &op);
+	bool MarkSubtreeCorrelated(LogicalOperator &op, idx_t cte_index);
 
 	//! Push the dependent join down a LogicalOperator
 	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
