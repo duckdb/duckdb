@@ -740,7 +740,9 @@ block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 			newly_used_blocks.insert(block);
 		}
 	}
-	D_ASSERT(!BlockIsRegistered(block));
+	if (BlockIsRegistered(block)) {
+		throw InternalException("Free block %d is already registered", block);
+	}
 	return block;
 }
 
