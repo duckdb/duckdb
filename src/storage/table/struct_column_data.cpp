@@ -48,17 +48,6 @@ idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
-// ColumnData &StructColumnData::GetChildColumn(const StorageIndex &storage_index) {
-//	auto index = storage_index.GetPrimaryIndex();
-//	auto &children = storage_index.GetChildIndexes();
-//	D_ASSERT(index < sub_columns.size());
-//	auto &child = *sub_columns[index];
-//	if (!children.empty()) {
-//		return child.GetChildColumn(children[0]);
-//	}
-//	return child;
-//}
-
 void StructColumnData::IterateFields(
     ColumnScanState &state, std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> callback) {
 	if (state.storage_index.IsPushdownExtract()) {

@@ -75,28 +75,6 @@ idx_t RowGroupCollection::GetTotalRows() const {
 	return total_rows.load();
 }
 
-// static const LogicalType &GetFieldTypeRecursive(const LogicalType &struct_type,
-//                                                const vector<StorageIndex> &child_indices) {
-//	D_ASSERT(child_indices.size() == 1);
-//	auto &struct_children = StructType::GetChildTypes(struct_type);
-//	auto &child_index = child_indices[0];
-//	auto &child_type = struct_children[child_index.GetPrimaryIndex()].second;
-//	if (child_type.id() == LogicalTypeId::STRUCT && !child_index.GetChildIndexes().empty()) {
-//		return GetFieldTypeRecursive(child_type, child_index.GetChildIndexes());
-//	}
-//	return child_type;
-//}
-
-// const LogicalType &RowGroupCollection::GetType(const StorageIndex &index) const {
-//	auto idx = index.GetPrimaryIndex();
-//	auto &type = types[idx];
-//	if (type.id() == LogicalTypeId::STRUCT && !index.GetChildIndexes().empty()) {
-//		//! TODO: introduce something to the StorageIndex to indicate intent for this behavior
-//		return GetFieldTypeRecursive(type, index.GetChildIndexes());
-//	}
-//	return types[idx];
-//}
-
 const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 	return types;
 }

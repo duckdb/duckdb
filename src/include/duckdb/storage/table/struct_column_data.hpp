@@ -27,8 +27,6 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	// ColumnData &GetChildColumn(const StorageIndex &index) override;
-
 	void IterateFields(ColumnScanState &state,
 	                   std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> callback);
 

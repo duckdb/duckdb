@@ -404,10 +404,7 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
-		//! Replace the top-level struct extract with a BoundColumnRefExpression
-		//! FIXME: We can only replace the top-level struct if the path is in 'col.unique_paths'
-		//! Otherwise there is a parent path that's referenced, so we don't push the extract into the storage all the
-		//! way
+		//! Replace the struct extract expression at the right depth with a BoundColumnRefExpression
 
 		auto &full_path = struct_extract.extract_path;
 		D_ASSERT(!full_path.empty());
@@ -535,20 +532,9 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
-		if (entry->second.child_columns.empty()) {
-			auto logical_column_index = state.old_column_ids[col_sel_idx].GetPrimaryIndex();
-			ColumnIndex new_index(logical_column_index, {});
-			state.AddColumn(col_sel_idx, std::move(new_index));
-			continue;
-		}
-		//! Only a subset of the struct's fields are referenced
-		auto logical_column_index = state.old_column_ids[col_sel_idx].GetPrimaryIndex();
-		if (!entry->second.supports_pushdown_extract) {
-			//! Scan doesn't support pushing down the extract to the scan
-			//! Only add the child indexes to function as a prune hint that the other indices aren't referenced by the
-			//! query.
-			auto &old_column_id = state.old_column_ids[col_sel_idx];
-			ColumnIndex new_index(old_column_id.GetPrimaryIndex(), entry->second.child_columns);
+		if (entry->second.child_columns.empty() || !entry->second.supports_pushdown_extract) {
+			auto &logical_column_id = state.old_column_ids[col_sel_idx];
+			ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
 			state.AddColumn(col_sel_idx, std::move(new_index));
 			continue;
 		}
