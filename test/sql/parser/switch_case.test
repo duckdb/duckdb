@@ -101,3 +101,14 @@ statement error
 SELECT switch(val, MAP {}, 'other') FROM null_test ORDER BY val;
 ----
 Parser Error: No values provided for SWITCH expression
+
+statement ok
+CREATE TABLE map_expr(i map(integer, integer));
+
+statement ok
+INSERT INTO map_expr VALUES ({1 : 2});
+
+statement error
+SELECT SWITCH (1, i) FROM map_expr;
+----
+Parser Error: syntax error at or near "i"
