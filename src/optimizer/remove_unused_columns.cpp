@@ -88,7 +88,7 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 	}
 
 	auto &col = colrefs->second;
-	if (!col.child_columns.empty() && col.supports_pushdown_extract) {
+	if (!col.child_columns.empty() && col.supports_pushdown_extract == PushdownExtractSupport::ENABLED) {
 		D_ASSERT(!col.unique_paths.empty());
 		//! Pushdown extract is supported, so we are potentially creating multiple bindings, 1 for each unique extract
 		//! path
@@ -126,7 +126,8 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 		if (col_idx + offset != new_col_idx) {
 			should_replace = true;
 		}
-		if (!entry->second.child_columns.empty() && entry->second.supports_pushdown_extract) {
+		if (!entry->second.child_columns.empty() &&
+		    entry->second.supports_pushdown_extract == PushdownExtractSupport::ENABLED) {
 			should_replace = true;
 		}
 		if (should_replace) {
@@ -455,17 +456,21 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalGet &get) {
 			//! Either not a struct, or we're not using struct field projection pushdown - skip it
 			continue;
 		}
-		if (!col.supports_pushdown_extract) {
+		if (col.supports_pushdown_extract == PushdownExtractSupport::DISABLED) {
 			//! We're already not using pushdown extract for this column, no need to check with the scan
 			continue;
 		}
 		auto logical_column_index = column_ids[binding.column_index].GetPrimaryIndex();
 		if (!get.function.supports_pushdown_extract) {
-			col.supports_pushdown_extract = false;
+			col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
 			continue;
 		}
 		D_ASSERT(get.bind_data);
-		col.supports_pushdown_extract = get.function.supports_pushdown_extract(*get.bind_data, logical_column_index);
+		if (get.function.supports_pushdown_extract(*get.bind_data, logical_column_index)) {
+			col.supports_pushdown_extract = PushdownExtractSupport::ENABLED;
+		} else {
+			col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
+		}
 	}
 }
 
@@ -532,7 +537,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
-		if (entry->second.child_columns.empty() || !entry->second.supports_pushdown_extract) {
+		if (entry->second.child_columns.empty() ||
+		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
 			auto &logical_column_id = state.old_column_ids[col_sel_idx];
 			ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
 			state.AddColumn(col_sel_idx, std::move(new_index));
@@ -684,7 +690,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	}
 	if (mode == BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT) {
 		//! Any child referenced after this mode is set disables PUSHDOWN_EXTRACT
-		entry->second.supports_pushdown_extract = false;
+		entry->second.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
 	}
 }
 

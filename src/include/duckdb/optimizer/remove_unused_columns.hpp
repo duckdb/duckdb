@@ -49,6 +49,8 @@ public:
 	vector<idx_t> extract_path;
 };
 
+enum class PushdownExtractSupport : uint8_t { UNCHECKED, DISABLED, ENABLED };
+
 class ReferencedColumn {
 public:
 	void AddPath(const vector<idx_t> &path);
@@ -59,7 +61,7 @@ public:
 	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
 	//! Whether we can create a pushdown extract for the children of this column (if any)
-	bool supports_pushdown_extract = true;
+	PushdownExtractSupport supports_pushdown_extract = PushdownExtractSupport::UNCHECKED;
 	//! Map from extract path to the binding created for it (if pushdown extract)
 	column_path_set unique_paths;
 };
