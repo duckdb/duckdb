@@ -3715,6 +3715,25 @@ ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
 	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PushdownExtractSupport::UNCHECKED), "UNCHECKED" },
+		{ static_cast<uint32_t>(PushdownExtractSupport::DISABLED), "DISABLED" },
+		{ static_cast<uint32_t>(PushdownExtractSupport::ENABLED), "ENABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value) {
+	return StringUtil::EnumToString(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", static_cast<uint32_t>(value));
+}
+
+template<>
+PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value) {
+	return static_cast<PushdownExtractSupport>(StringUtil::StringToEnum(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", value));
+}
+
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(QuantileSerializationType::NON_DECIMAL), "NON_DECIMAL" },
