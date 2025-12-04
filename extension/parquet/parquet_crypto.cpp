@@ -359,8 +359,6 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
-	// auto buf_size = dtrans.GetRemainingTransport() - ParquetCrypto::TAG_BYTES;
-	// maybe here is a problem
 	dtrans.read(buffer, buffer_size);
 
 	// Verify AES tag and read length

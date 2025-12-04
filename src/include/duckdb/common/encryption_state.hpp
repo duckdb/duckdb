@@ -27,9 +27,6 @@ public:
 
 class EncryptionState {
 public:
-	static const std::string EMPTY_AAD;
-
-public:
 	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len);
 	DUCKDB_API virtual ~EncryptionState();
 

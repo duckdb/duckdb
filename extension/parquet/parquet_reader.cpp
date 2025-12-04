@@ -951,12 +951,14 @@ string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAl
 unique_ptr<AdditionalAuthenticatedData> ParquetReader::GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
                                                                    uint16_t column_ordinal,
                                                                    uint16_t page_ordinal) const {
-	// For the Parquet Encryption Spec, Additional Authenticated Data (AAD) consists of:
-	// a unique prefix, consists of: an optional aad-prefix (arbitrary length) + a file identifier (default 8 bytes)
+	// For the parquet encryption spec, additional authenticated data (AAD) consists of:
+	// (1) a unique prefix constructed by: an optional aad-prefix (arbitrary length, ignored for now)
+	// + a unique file identifier (default 8 bytes)
+	// (2) a suffix, which length varies according to the module type, consisting of:
 	// + module type (1 byte)
-	// + row group ordinal (2 bytes, optionally)
-	// + column ordinal (2 bytes, optionally)
-	// + page ordinal (2 bytes, optionally)
+	// + row group ordinal (2 bytes, optional)
+	// + column ordinal (2 bytes, optional)
+	// + page ordinal (2 bytes, optional)
 
 	auto file_aad = GetUniqueFileIdentifier(metadata->crypto_metadata->encryption_algorithm);
 	idx_t prefix_size = file_aad.size();

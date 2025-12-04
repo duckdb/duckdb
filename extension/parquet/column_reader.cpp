@@ -239,8 +239,7 @@ uint8_t ColumnReader::GetModuleHeader(uint16_t page_ordinal) const {
 		// always return data page header if ordinal > 0
 		return ParquetCrypto::DataPageHeader;
 	}
-	// FIXME: Add missing ParquetCrypto Modules
-	// There is at maximum 1 dict, index or bf filter page header per column
+	// There is at maximum 1 dictionary, index or bf filter page header per column chunk
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
 		return ParquetCrypto::DictionaryPageHeader;
 	} else if (chunk->meta_data.__isset.index_page_offset) {
@@ -278,8 +277,6 @@ uint16_t ColumnReader::GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal
 	switch (module) {
 	case ParquetCrypto::DataPageHeader:
 	case ParquetCrypto::DataPage:
-		// FIXME: Add missing ParquetCrypto Modules
-		// There is at maximum 1 dict, index or bf filter page header per column
 		if (chunk->meta_data.__isset.dictionary_page_offset) {
 			page_ordinal -= 1;
 		} else if (chunk->meta_data.__isset.index_page_offset) {
@@ -290,7 +287,7 @@ uint16_t ColumnReader::GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal
 
 		return page_ordinal;
 	default:
-		// All modules except DataPage(Header) are -1
+		// All modules except DataPage(Header) are -1 (absent)
 		return -1;
 	}
 }

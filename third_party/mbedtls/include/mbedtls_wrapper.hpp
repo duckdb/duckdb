@@ -66,7 +66,7 @@ public:
 
 class AESStateMBEDTLS : public duckdb::EncryptionState {
 	public:
-	DUCKDB_API explicit AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len);
+		DUCKDB_API explicit AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len);
 		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
