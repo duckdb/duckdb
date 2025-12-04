@@ -25,9 +25,9 @@ struct CachingFileHandle;
 //! By default only remote files will be cached, but it's also allowed to cache local for direct IO use case.
 enum class CachingMode : uint8_t {
 	// Cache all files.
-	ALWAYS_CACHE,
+	ALWAYS_CACHE = 0,
 	// Only cache remote files, bypass cache for local files.
-	CACHE_REMOTE_ONLY,
+	CACHE_REMOTE_ONLY = 1,
 };
 
 //! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API.
