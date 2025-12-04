@@ -75,13 +75,13 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	tokenizer.TokenizeInput();
 	vector<SimplifiedToken> result;
 	result.reserve(tokenizer.tokens.size());
-	#endif
 	for (auto &token : tokenizer.tokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
 		new_token.start = token.offset;
 		tokens.push_back(new_token);
 	}
+	#endif
 
 	if (!tokens.empty() && tokens[0].start > 0) {
 		highlightToken new_token;
