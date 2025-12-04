@@ -22,6 +22,7 @@ class CachingFileSystemWrapper;
 struct CachingFileHandle;
 
 //! Caching mode for CachingFileSystemWrapper.
+//! By default only remote files will be cached, but it's also allowed to cache local for direct IO use case.
 enum class CachingMode : uint8_t {
 	// Cache all files.
 	ALWAYS_CACHE,
@@ -44,8 +45,8 @@ private:
 	unique_ptr<CachingFileHandle> caching_handle;
 };
 
-//! [CachingFileSystemWrapper] wraps [CachingFileSystem] to conform to FileSystem API.
-//! Different from [CachingFileSystem], which returns a [BufferHandle] to achieve zero-copy on read, the wrapper class
+//! [CachingFileSystemWrapper] is an adapter class, which wraps [CachingFileSystem] to conform to FileSystem API.
+//! Different from [CachingFileSystem], which owns cache content and returns a [BufferHandle] to achieve zero-copy on read, the wrapper class
 //! always copies requested byted into the provided address.
 //!
 //! NOTICE: Currently only read and seek operations are supported, write operations are disabled.
