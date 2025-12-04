@@ -14,8 +14,10 @@
 
 namespace duckdb {
 
-RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns, bool rewrite_dependent_joins)
-    : table_index(table_index), correlated_columns(correlated_columns), rewrite_dependent_joins(rewrite_dependent_joins) {
+RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns,
+                               bool rewrite_dependent_joins)
+    : table_index(table_index), correlated_columns(correlated_columns),
+      rewrite_dependent_joins(rewrite_dependent_joins) {
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
