@@ -3856,22 +3856,6 @@ switch_expr: SWITCH '(' case_arg ',' map_expr switch_default ')'
                 }
         ;
 
-switch_list:
-            switch_clause                       { $$ = list_make1($1);  }
-            | switch_list ',' switch_clause     { $$ = lappend($1, $3); }
-            ;
-
-switch_clause:
-            a_expr THEN a_expr
-             {
-                  PGCaseWhen *w = makeNode(PGCaseWhen);
-                  w->expr = (PGExpr*) $1;
-                  w->result = (PGExpr*) $3;
-                  w->location = @1;
-                  $$ = (PGNode *)w;
-             }
-            ;
-
 columnrefList:
 			columnref								{ $$ = list_make1($1); }
 			| columnrefList ',' columnref				{ $$ = lappend($1, $3); }
