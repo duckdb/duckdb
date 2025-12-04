@@ -176,21 +176,25 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
+	try {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
-	auto ccontext = connection->context;
-	auto result = ccontext->Query(context.sql_query, parameters);
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result->Cast<StreamQueryResult>();
-		return stream_result.Materialize();
-	} else {
-		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-	}
+		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+		auto ccontext = connection->context;
+		auto result = ccontext->Query(context.sql_query, parameters);
+		if (result->type == QueryResultType::STREAM_RESULT) {
+			auto &stream_result = result->Cast<StreamQueryResult>();
+			return stream_result.Materialize();
+		} else {
+			D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+			return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+		}
 #else
-	auto res = connection->context->Query(context.sql_query, parameters);
-	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
+		auto res = connection->context->Query(context.sql_query, parameters);
+		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
 #endif
+	} catch (std::exception &ex) {
+		return make_uniq<MaterializedQueryResult>(ErrorData(ex));
+	}
 }
 
 bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &conditions) {
