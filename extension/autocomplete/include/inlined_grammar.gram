@@ -732,9 +732,9 @@ Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
 DotOperator <- '.' (FunctionExpression / ColLabel)
 SliceExpression <- '[' SliceBound ']'
-SliceBound <- Expression? EndSliceBound? StepSliceBound?
+SliceBOund <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
-StepSliceBound <- ':' Expression?
+StepSliceBOund <- ':' Expression?
 PostfixOperator <- '!'
 
 
