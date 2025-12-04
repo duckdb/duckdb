@@ -1,5 +1,4 @@
-import os
-from unittest import skipIf
+import pytest
 
 from conftest import ShellTest
 
@@ -31,6 +30,10 @@ def test_trace(shell, tmp_path):
 
 
 def test_info(shell):
+    probe = ShellTest(shell).statement("LOAD HTTP;").run()
+    if probe.status_code != 0:
+        pytest.skip("DuckDB HTTP extension not installed/available")
+
     test = (
         ShellTest(shell)
         .statement("CALL enable_logging(level = 'info', storage = 'shell_log_storage');")
