@@ -1,0 +1,80 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+# 82 values stored in the Array Container - with nulls
+statement ok
+INSERT INTO test SELECT
+case
+    when i%50=0 then false
+    when i%25=0 then true
+    else NULL
+end
+FROM range(0,10_000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE  segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+----
+
+query I
+select count(*) from test WHERE a IS NULL;
+----
+9600
+
+query I
+select count(*) from test WHERE a IS true;
+----
+200
+
+query I
+select count(*) from test WHERE a IS false;
+----
+200
+
+statement ok
+delete from test
+
+# 5 non-null values per Vector, uses uncompressed arrays - with nulls
+statement ok
+with intermediates as (
+    select i % 2048 as i
+    from range(0, 10_000) t(i)
+)
+insert into test select case
+    when i = 0 or i = 6 or i = 1000 then false
+    when i = 1500 or i = 2000 then true
+    else null
+end from intermediates;
+
+statement ok
+checkpoint;
+
+query I
+select count(*) from test WHERE a IS NULL;
+----
+9976
+
+query I
+select count(*) from test WHERE a IS false;
+----
+15
+
+query I
+select count(*) from test WHERE a IS true;
+----
+9
+
+statement ok
+DROP TABLE test;

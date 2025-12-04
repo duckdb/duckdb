@@ -80,7 +80,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -412,6 +411,10 @@ const string EVAL_SQL_NULL = "#NULL#";
 const string EVAL_SQL_EMPTY = "#EMPTY#";
 
 void ShellState::Print(PrintOutput output, const char *str) {
+	if (seenInterrupt) {
+		// no more printing after seeing an interrupt
+		return;
+	}
 	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
 }
 
@@ -425,10 +428,6 @@ void ShellState::Print(const char *str) {
 
 void ShellState::Print(const string &str) {
 	Print(PrintOutput::STDOUT, str.c_str());
-}
-
-void ShellState::PrintPadded(const char *str, idx_t len) {
-	utf8_printf(out, "%*s", int(len), str);
 }
 
 /* Indicate out-of-memory and exit. */
@@ -455,41 +454,6 @@ void ShellState::Destroy() {
 	db.reset();
 	conn.reset();
 	last_result.reset();
-}
-
-/*
-** Output string zUtf to stream pOut as w characters.  If w is negative,
-** then right-justify the text.  W is the width in UTF-8 characters, not
-** in bytes.  This is different from the %*.*s specification in printf
-** since with %*.*s the width is measured in bytes, not characters.
-*/
-void ShellState::UTF8WidthPrint(idx_t w, const string &str, bool right_align) {
-	auto zUtf = str.c_str();
-	int i;
-	int n;
-	int aw = w < 0 ? -w : w;
-#ifdef HAVE_LINENOISE
-	i = linenoiseGetRenderPosition(zUtf, strlen(zUtf), aw, &n);
-	if (i < 0)
-#endif
-		for (i = n = 0; zUtf[i]; i++) {
-			if ((zUtf[i] & 0xc0) != 0x80) {
-				n++;
-				if (n == aw) {
-					do {
-						i++;
-					} while ((zUtf[i] & 0xc0) == 0x80);
-					break;
-				}
-			}
-		}
-	if (n >= aw) {
-		utf8_printf(out, "%.*s", i, zUtf);
-	} else if (right_align) {
-		utf8_printf(out, "%*s%s", aw - n, "", zUtf);
-	} else {
-		utf8_printf(out, "%s%*s", zUtf, aw - n, "");
-	}
 }
 
 bool ShellState::IsSpace(char c) {
@@ -822,231 +786,32 @@ void ShellState::PopOutputMode() {
 }
 
 /*
-** Output the given string as a hex-encoded blob (eg. X'1234' )
-*/
-void ShellState::OutputHexBlob(const void *pBlob, int nBlob) {
-	int i;
-	char *zBlob = (char *)pBlob;
-	PrintF("X'");
-	for (i = 0; i < nBlob; i++) {
-		PrintF("%02x", zBlob[i] & 0xff);
-	}
-	PrintF("'");
-}
-
-/*
-** Output the given string as a quoted string using SQL quoting conventions.
-**
-** See also: output_quoted_escaped_string()
-*/
-void ShellState::OutputQuotedString(const char *z) {
-	int i;
-	char c;
-	SetBinaryMode();
-	for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
-	}
-	if (c == 0) {
-		PrintF("'%s'", z);
-	} else {
-		Print("'");
-		while (*z) {
-			for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
-			}
-			if (c == '\'') {
-				i++;
-			};
-			if (i) {
-				Print(string(z, i));
-				z += i;
-			}
-			if (c == '\'') {
-				Print("'");
-				continue;
-			}
-			if (c == 0) {
-				break;
-			}
-			z++;
-		}
-		Print("'");
-	}
-	SetTextMode();
-}
-
-/*
-** Output the given string as a quoted string using SQL quoting conventions.
-** Additionallly , escape the "\n" and "\r" characters so that they do not
-** get corrupted by end-of-line translation facilities in some operating
-** systems.
-**
-** This is like output_quoted_string() but with the addition of the \r\n
-** escape mechanism.
-*/
-void ShellState::OutputQuotedEscapedString(const char *z) {
-	bool needs_quoting = false;
-	bool needs_concat = false;
-	for (idx_t i = 0; z[i]; i++) {
-		if (z[i] == '\n' || z[i] == '\r') {
-			needs_quoting = true;
-			needs_concat = true;
-			break;
-		}
-		if (z[i] == '\'') {
-			needs_quoting = true;
-		}
-	}
-	if (!needs_quoting) {
-		PrintF("'%s'", z);
-		return;
-	}
-	string res;
-	if (needs_concat) {
-		res = "concat('";
-	} else {
-		res = "'";
-	}
-	for (idx_t i = 0; z[i]; i++) {
-		switch (z[i]) {
-		case '\n':
-		case '\r':
-			// newline - finish the current string literal and write the newline with a chr function
-			res += "', chr(";
-			if (z[i] == '\n') {
-				res += "10";
-			} else {
-				res += "13";
-			}
-			res += "), '";
-			break;
-		case '\'':
-			// escape the quote
-			res += "''";
-			break;
-		default:
-			res += z[i];
-			break;
-		}
-	}
-	res += "'";
-	if (needs_concat) {
-		res += ")";
-	}
-	PrintF("%s", res.c_str());
-}
-
-/*
 ** Output the given string as a quoted according to C or TCL quoting rules.
 */
-void ShellState::OutputCString(const char *z) {
-	unsigned int c;
-	fputc('"', out);
-	while ((c = *(z++)) != 0) {
+string ShellState::EscapeCString(const string &str) {
+	string result = "\"";
+	for (auto c : str) {
 		if (c == '\\') {
-			fputc(c, out);
-			fputc(c, out);
+			result += "\\\\";
 		} else if (c == '"') {
-			fputc('\\', out);
-			fputc('"', out);
+			result += "\\\"";
 		} else if (c == '\t') {
-			fputc('\\', out);
-			fputc('t', out);
+			result += "\\t";
 		} else if (c == '\n') {
-			fputc('\\', out);
-			fputc('n', out);
+			result += "\\n";
 		} else if (c == '\r') {
-			fputc('\\', out);
-			fputc('r', out);
+			result += "\\r";
 		} else if (!isprint(c & 0xff)) {
-			PrintF("\\%03o", c & 0xff);
+			result += "\\";
+			char buf[4];
+			snprintf(buf, 4, "%03o", c & 0xFF);
+			result += buf;
 		} else {
-			fputc(c, out);
+			result += c;
 		}
 	}
-	fputc('"', out);
-}
-
-/*
-** Output the given string as a quoted according to JSON quoting rules.
-*/
-void ShellState::OutputJSONString(const char *z, int n) {
-	unsigned int c;
-	if (n < 0)
-		n = (int)strlen(z);
-	fputc('"', out);
-	while (n--) {
-		c = *(z++);
-		if (c == '\\' || c == '"') {
-			fputc('\\', out);
-			fputc(c, out);
-		} else if (c <= 0x1f) {
-			fputc('\\', out);
-			if (c == '\b') {
-				fputc('b', out);
-			} else if (c == '\f') {
-				fputc('f', out);
-			} else if (c == '\n') {
-				fputc('n', out);
-			} else if (c == '\r') {
-				fputc('r', out);
-			} else if (c == '\t') {
-				fputc('t', out);
-			} else {
-				PrintF("u%04x", c);
-			}
-		} else {
-			fputc(c, out);
-		}
-	}
-	fputc('"', out);
-}
-
-/*
-** If a field contains any character identified by a 1 in the following
-** array, then the string must be quoted for CSV.
-*/
-static const char needCsvQuote[] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0,
-    0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-};
-
-void ShellState::PrintOptionallyQuotedIdentifier(const char *input) {
-	Print(StringUtil::Format("%s", SQLIdentifier(input)));
-}
-
-/*
-** Output a single term of CSV.  Actually, p->colSeparator is used for
-** the separator, which may or may not be a comma.  p->nullValue is
-** the null value.  Strings are quoted if necessary.  The separator
-** is only issued if bSep is true.
-*/
-void ShellState::OutputCSV(const char *z, int bSep) {
-	if (!z) {
-		Print(nullValue);
-	} else {
-		int i;
-		int nSep = colSeparator.size();
-		for (i = 0; z[i]; i++) {
-			if (needCsvQuote[((unsigned char *)z)[i]] ||
-			    (z[i] == colSeparator[0] && (nSep == 1 || memcmp(z, colSeparator.c_str(), nSep) == 0))) {
-				i = 0;
-				break;
-			}
-		}
-		if (i == 0) {
-			auto zQuoted = StringUtil::Format("%s", SQLIdentifier(z));
-			Print(zQuoted);
-		} else {
-			Print(z);
-		}
-	}
-	if (bSep) {
-		Print(colSeparator);
-	}
+	result += "\"";
+	return result;
 }
 
 /*
@@ -1078,74 +843,15 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 }
 #endif
 
-/*
-** Print a schema statement.  Part of RenderMode::Semi and RenderMode::Pretty output.
-**
-** This routine converts some CREATE TABLE statements for shadow tables
-** in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
-*/
-void ShellState::PrintSchemaLine(const char *z, const char *zTail) {
-	if (!z || !zTail) {
-		return;
-	}
-	if (StringGlob("CREATE TABLE ['\"]*", z)) {
-		PrintF("CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
-	} else {
-		PrintF("%s%s", z, zTail);
-	}
-}
-void ShellState::PrintSchemaLineN(char *z, int n, const char *zTail) {
-	char c = z[n];
-	z[n] = 0;
-	PrintSchemaLine(z, zTail);
-	z[n] = c;
+string ShellState::GetSchemaLine(const string &str, const string &tail) {
+	return str + tail;
 }
 
-/*
-** Print N dashes
-*/
-void ShellState::PrintDashes(idx_t N) {
-	const char zDash[] = "--------------------------------------------------";
-	const idx_t nDash = sizeof(zDash) - 1;
-	while (N > nDash) {
-		fputs(zDash, out);
-		N -= nDash;
+string ShellState::GetSchemaLineN(const string &str, idx_t n, const string &tail) {
+	if (str.size() < n) {
+		return GetSchemaLine(str.substr(n), tail);
 	}
-	utf8_printf(out, "%.*s", static_cast<int>(N), zDash);
-}
-
-/*
-** Print a markdown or table-style row separator using ascii-art
-*/
-void ShellState::PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth) {
-	if (nArg > 0) {
-		fputs(zSep, out);
-		PrintDashes(actualWidth[0] + 2);
-		for (idx_t i = 1; i < nArg; i++) {
-			fputs(zSep, out);
-			PrintDashes(actualWidth[i] + 2);
-		}
-		fputs(zSep, out);
-	}
-	fputs("\n", out);
-}
-
-void ShellState::PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<duckdb::LogicalType> &colTypes,
-                                        const vector<idx_t> &actualWidth) {
-	if (nArg > 0) {
-		for (idx_t i = 0; i < nArg; i++) {
-			Print(zSep);
-			if (colTypes[i].IsNumeric()) {
-				// right-align numerics in tables
-				PrintDashes(actualWidth[i] + 1);
-				Print(":");
-			} else {
-				PrintDashes(actualWidth[i] + 2);
-			}
-		}
-		Print(zSep);
-	}
-	Print("\n");
+	return GetSchemaLine(str, tail);
 }
 
 void ShellState::SetBinaryMode() {
@@ -1155,20 +861,8 @@ void ShellState::SetBinaryMode() {
 void ShellState::SetTextMode() {
 	setTextMode(out, 1);
 }
-/*
-** This is the callback routine that the shell
-** invokes for each row of a query result.
-*/
-int ShellState::RenderRow(RowRenderer &renderer, RowResult &result) {
-	auto &data = result.data;
-	if (data.empty()) {
-		return 0;
-	}
-	renderer.Render(result);
-	return 0;
-}
 
-SuccessState ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
+SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query) {
 	auto &con = *conn;
 	auto result = con.SendQuery(query);
 	if (result->HasError()) {
@@ -1251,213 +945,6 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
-string GetTypeName(duckdb::LogicalType &type) {
-	switch (type.id()) {
-	case duckdb::LogicalTypeId::BOOLEAN:
-		return "BOOLEAN";
-	case duckdb::LogicalTypeId::TINYINT:
-		return "TINYINT";
-	case duckdb::LogicalTypeId::SMALLINT:
-		return "SMALLINT";
-	case duckdb::LogicalTypeId::INTEGER:
-		return "INTEGER";
-	case duckdb::LogicalTypeId::BIGINT:
-		return "BIGINT";
-	case duckdb::LogicalTypeId::FLOAT:
-		return "FLOAT";
-	case duckdb::LogicalTypeId::DOUBLE:
-		return "DOUBLE";
-	case duckdb::LogicalTypeId::DECIMAL:
-		return "DECIMAL";
-	case duckdb::LogicalTypeId::DATE:
-		return "DATE";
-	case duckdb::LogicalTypeId::TIME:
-		return "TIME";
-	case duckdb::LogicalTypeId::TIMESTAMP:
-	case duckdb::LogicalTypeId::TIMESTAMP_NS:
-	case duckdb::LogicalTypeId::TIMESTAMP_MS:
-	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP";
-	case duckdb::LogicalTypeId::VARCHAR:
-		return "VARCHAR";
-	case duckdb::LogicalTypeId::LIST:
-		return "LIST";
-	case duckdb::LogicalTypeId::MAP:
-		return "MAP";
-	case duckdb::LogicalTypeId::STRUCT:
-		return "STRUCT";
-	case duckdb::LogicalTypeId::BLOB:
-		return "BLOB";
-	default:
-		return "NULL";
-	}
-}
-
-SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &query_result) {
-	RowResult result;
-	// initialize the result and the column names
-	idx_t nCol = query_result.ColumnCount();
-	result.column_names.reserve(nCol);
-	result.data.reserve(nCol);
-	result.types.reserve(nCol);
-	result.is_null.resize(nCol, false);
-	for (idx_t c = 0; c < nCol; c++) {
-		result.column_names.push_back(query_result.names[c]);
-		result.types.push_back(query_result.types[c]);
-	}
-	for (auto &row : query_result) {
-		if (seenInterrupt) {
-			PrintF("Interrupt\n");
-			return SuccessState::FAILURE;
-		}
-		result.is_null.clear();
-		result.is_null.resize(nCol, false);
-		result.data.clear();
-		for (idx_t c = 0; c < nCol; c++) {
-			if (row.IsNull(c)) {
-				result.is_null[c] = true;
-				result.data.push_back(renderer.NullValue());
-			} else {
-				result.data.push_back(row.GetValue<string>(c));
-			}
-		}
-		RenderRow(renderer, result);
-	}
-	renderer.RenderFooter(result);
-	return SuccessState::SUCCESS;
-}
-
-void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
-	// fetch the column count, column names and types
-	result.column_count = res.ColumnCount();
-	result.data.reserve(result.column_count * 4);
-	for (idx_t c = 0; c < result.column_count; c++) {
-		result.data.push_back(renderer.ConvertValue(res.names[c].c_str()));
-		result.types.push_back(res.types[c]);
-		result.type_names.push_back(GetTypeName(res.types[c]));
-	}
-
-	for (auto &row : res) {
-		for (idx_t c = 0; c < result.column_count; c++) {
-			auto str_val = row.GetValue<string>(c);
-			result.data.push_back(renderer.ConvertValue(str_val.c_str()));
-		}
-	}
-
-	// compute the column widths
-	for (idx_t i = 0; i < result.column_count; i++) {
-		int w = i < colWidth.size() ? colWidth[i] : 0;
-		if (w < 0) {
-			result.right_align.push_back(true);
-			w = -w;
-		} else {
-			result.right_align.push_back(false);
-		}
-		result.column_width.push_back(static_cast<idx_t>(w));
-	}
-	for (idx_t i = 0; i < result.data.size(); i++) {
-		idx_t width = RenderLength(result.data[i]);
-		idx_t column_idx = i % result.column_count;
-		if (width > result.column_width[column_idx]) {
-			result.column_width[column_idx] = width;
-		}
-	}
-}
-
-/*
-** Run a prepared statement and output the result in one of the
-** table-oriented formats: RenderMode::Column, RenderMode::Markdown, RenderMode::Table,
-** RenderMode::Box or RenderMode::DuckBox
-**
-** This is different from ordinary exec_prepared_stmt() in that
-** it has to run the entire query and gather the results into memory
-** first, in order to determine column widths, before providing
-** any output.
-*/
-void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
-	ColumnarResult result;
-	auto column_renderer = GetColumnRenderer();
-	ConvertColumnarResult(*column_renderer, res, result);
-
-	column_renderer->RenderHeader(result);
-	auto colSep = column_renderer->GetColumnSeparator();
-	auto rowSep = column_renderer->GetRowSeparator();
-	auto row_start = column_renderer->GetRowStart();
-
-	for (idx_t i = result.column_count, j = 0; i < result.data.size(); i++, j++) {
-		if (j == 0 && row_start) {
-			Print(row_start);
-		}
-		idx_t w = result.column_width[j];
-		bool right_align = result.right_align[j];
-		UTF8WidthPrint(w, result.data[i], right_align);
-		if (j == result.column_count - 1) {
-			Print(rowSep);
-			j = -1;
-			if (seenInterrupt) {
-				return;
-			}
-		} else {
-			Print(colSep);
-		}
-	}
-	column_renderer->RenderFooter(result);
-}
-
-class DuckBoxRenderer : public duckdb::BaseResultRenderer {
-public:
-	DuckBoxRenderer(ShellState &state, bool highlight)
-	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
-	}
-
-	void RenderLayout(const string &text) override {
-		PrintText(text, HighlightElementType::LAYOUT);
-	}
-
-	void RenderColumnName(const string &text) override {
-		PrintText(text, HighlightElementType::COLUMN_NAME);
-	}
-
-	void RenderType(const string &text) override {
-		PrintText(text, HighlightElementType::COLUMN_TYPE);
-	}
-
-	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
-		if (type.IsNumeric()) {
-			PrintText(text, HighlightElementType::NUMERIC_VALUE);
-		} else if (type.IsTemporal()) {
-			PrintText(text, HighlightElementType::TEMPORAL_VALUE);
-		} else {
-			PrintText(text, HighlightElementType::STRING_VALUE);
-		}
-	}
-
-	void RenderStringLiteral(const string &text, const duckdb::LogicalType &type) override {
-		PrintText(text, HighlightElementType::STRING_CONSTANT);
-	}
-
-	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
-		PrintText(text, HighlightElementType::NULL_VALUE);
-	}
-
-	void RenderFooter(const string &text) override {
-		PrintText(text, HighlightElementType::FOOTER);
-	}
-
-	void PrintText(const string &text, HighlightElementType element_type) {
-		if (highlight) {
-			shell_highlight.PrintText(text, output, element_type);
-		} else {
-			shell_highlight.state.Print(text);
-		}
-	}
-
-private:
-	ShellHighlight shell_highlight;
-	PrintOutput output;
-	bool highlight = true;
-};
-
 ShellState &ShellState::Get() {
 	static ShellState state;
 	return state;
@@ -1470,16 +957,17 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &con = *conn;
+	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX &&
-	    cMode != RenderMode::DESCRIBE) {
-		// for row-wise rendering we can use streaming results
-		result = con.SendQuery(std::move(statement));
-	} else {
+	if (renderer->RequireMaterializedResult()) {
+		// we need to materialize the result prior to rendering
 		duckdb::QueryParameters parameters;
 		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
 		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
 		result = con.SendQuery(std::move(statement), parameters);
+	} else {
+		// for row-wise rendering we can use streaming results
+		result = con.SendQuery(std::move(statement));
 	}
 	auto &res = *result;
 	if (res.HasError()) {
@@ -1505,66 +993,18 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
-	if (cMode == RenderMode::TRASH) {
-		// execute the query but don't render anything
-		return SuccessState::SUCCESS;
-	}
+	// analyze the query result so we know how long/wide the result will be
+	RenderingQueryResult render_result(res, *renderer);
+	renderer->Analyze(render_result);
+
+	// check if we need to use the pager for the rendering
 	unique_ptr<PagerState> pager_setup;
-	if (ShouldUsePager(res)) {
-		// we should use a pager
+	if (ShouldUsePager(*renderer, render_result)) {
 		pager_setup = SetupPager();
 	}
-	if (ShellRenderer::IsColumnar(cMode)) {
-		RenderColumnarResult(res);
-		return SuccessState::SUCCESS;
-	}
-	if (cMode == RenderMode::DESCRIBE) {
-		RenderDescribe(res);
-		return SuccessState::SUCCESS;
-	}
-	if (cMode == RenderMode::DUCKBOX) {
-		return RenderDuckBoxResult(res);
-	}
-	// row rendering
-	auto renderer = GetRowRenderer();
-	return RenderQueryResult(*renderer, res);
-}
-
-SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
-	DuckBoxRenderer result_renderer(*this, HighlightResults());
-	try {
-		duckdb::BoxRendererConfig config;
-		config.max_rows = max_rows;
-		config.max_width = max_width;
-		if (!outfile.empty() && outfile[0] != '|') {
-			config.max_rows = (size_t)-1;
-			config.max_width = (size_t)-1;
-		}
-		LargeNumberRendering large_rendering = large_number_rendering;
-		if (!stdout_is_console) {
-			config.max_width = (size_t)-1;
-		}
-		if (large_rendering == LargeNumberRendering::DEFAULT) {
-			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
-		}
-		config.null_value = nullValue;
-		if (columns) {
-			config.render_mode = duckdb::RenderMode::COLUMNS;
-		}
-		config.decimal_separator = decimal_separator;
-		config.thousand_separator = thousand_separator;
-		config.max_width = max_width;
-		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
-		duckdb::BoxRenderer renderer(config);
-		auto &materialized = res.Cast<duckdb::MaterializedQueryResult>();
-		auto &con = *conn;
-		renderer.Render(*con.context, res.names, materialized.Collection(), result_renderer);
-		return SuccessState::SUCCESS;
-	} catch (std::exception &ex) {
-		string error_str = duckdb::ErrorData(ex).Message() + "\n";
-		result_renderer.RenderLayout(error_str);
-		return SuccessState::FAILURE;
-	}
+	// render the query result
+	PrintStream print_stream(*this);
+	return renderer->RenderQueryResult(print_stream, *this, render_result);
 }
 
 /*
@@ -1685,7 +1125,7 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 		auto zSql = row.GetValue<string>(2);
 
 		// print sql
-		PrintSchemaLine(zSql.c_str(), ";\n");
+		Print(GetSchemaLine(zSql, ";\n"));
 		if (zType == "table") {
 			// dump table contents
 			string sSelect;
@@ -1960,44 +1400,27 @@ bool ShellState::ShouldUsePager(idx_t line_count) {
 	return true;
 }
 
-bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result) {
 	if (!ShouldUsePager()) {
 		return false;
 	}
-	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
-		// in automatic mode we only use a pager when the output is large enough
-		if (cMode == RenderMode::DUCKBOX) {
-			// in duckbox mode the output is automatically truncated to "max_rows"
-			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
-			if (max_rows < pager_min_rows) {
-				return false;
-			}
-		}
-		if (cMode == RenderMode::EXPLAIN) {
-			auto &materialized = result.Cast<MaterializedQueryResult>();
-			idx_t row_count = 0;
-			for (auto &row : materialized.Collection().Rows()) {
-				for (auto c : row.GetValue(1).GetValue<string>()) {
-					if (c == '\n') {
-						row_count++;
-					}
-				}
-			}
-			return row_count >= pager_min_rows;
-		}
-		// otherwise we check the size of the result set
-		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
-		if (result.ColumnCount() < pager_min_columns && !result.MoreRowsThan(pager_min_rows)) {
-			return false;
-		}
-	}
-	return true;
+	return renderer.ShouldUsePager(result, pager_mode);
+}
+
+extern "C" {
+
+void HandlePagerExit(int sig) {
+	// Pager is gone; interrupt the process to stop printing
+	auto &state = ShellState::Get();
+	++state.seenInterrupt;
+}
 }
 
 void ShellState::StartPagerDisplay() {
 #if !defined(_WIN32) && !defined(WIN32)
-	// disable sigpipe trap while displaying the pager
-	signal(SIGPIPE, SIG_IGN);
+	// turn sigpipe trap into an interrupt while displaying the pager
+	// this allows us to interrupt display after the pager is exited by the user
+	signal(SIGPIPE, HandlePagerExit);
 #endif
 }
 
@@ -2657,7 +2080,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 			return false;
 		}
 	}
-	auto renderer = GetRowRenderer(mode);
+	auto renderer = GetRenderer(mode);
 	renderer->show_header = false;
 
 	string sSelect;
@@ -2697,14 +2120,14 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "headers", showHeader ? "on" : "off");
 	PrintF("%12.12s: %s\n", "mode", ModeToString(mode));
 	PrintF("%12.12s: ", "nullvalue");
-	OutputCString(nullValue.c_str());
+	Print(EscapeCString(nullValue));
 	PrintF("\n");
 	PrintF("%12.12s: %s\n", "output", !outfile.empty() ? outfile.c_str() : "stdout");
 	PrintF("%12.12s: ", "colseparator");
-	OutputCString(colSeparator.c_str());
+	Print(EscapeCString(colSeparator));
 	PrintF("\n");
 	PrintF("%12.12s: ", "rowseparator");
-	OutputCString(rowSeparator.c_str());
+	Print(EscapeCString(rowSeparator));
 	PrintF("\n");
 	PrintF("%12.12s: ", "width");
 	for (auto w : colWidth) {
@@ -2712,31 +2135,6 @@ void ShellState::ShowConfiguration() {
 	}
 	PrintF("\n");
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
-}
-
-SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
-	vector<ShellTableInfo> result;
-	ShellTableInfo table;
-	table.table_name = describe_table_name;
-	for (auto &row : res) {
-		ShellColumnInfo column;
-		column.column_name = row.GetValue<string>(0);
-		column.column_type = row.GetValue<string>(1);
-		if (!row.IsNull(2)) {
-			column.is_not_null = row.GetValue<string>(2) == "NO";
-		}
-		if (!row.IsNull(3)) {
-			column.is_primary_key = row.GetValue<string>(3) == "PRI";
-			column.is_unique = row.GetValue<string>(3) == "UNI";
-		}
-		if (!row.IsNull(4)) {
-			column.default_value = row.GetValue<string>(4);
-		}
-		table.columns.push_back(std::move(column));
-	}
-	result.push_back(std::move(table));
-	RenderTableMetadata(result);
-	return SuccessState::SUCCESS;
 }
 
 MetadataResult ShellState::DisplayTables(const vector<string> &args) {
@@ -2969,10 +2367,26 @@ SuccessState ShellState::ChangeDirectory(const string &path) {
 SuccessState ShellState::ShowDatabases() {
 	OpenDB();
 
-	auto renderer = GetRowRenderer(RenderMode::LIST);
-	renderer->show_header = false;
-	renderer->col_sep = ": ";
-	return RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
+	auto &con = *conn;
+	auto query_result = con.Query("SELECT name, file FROM pragma_database_list");
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+		return SuccessState::FAILURE;
+	}
+	ShellTableInfo result;
+	result.table_name = "databases";
+	for (auto &row : *query_result) {
+		ShellColumnInfo column;
+		// database name
+		column.column_name = row.GetValue<string>(0);
+		// database file
+		column.column_type = row.IsNull(1) ? "(memory)" : row.GetValue<string>(1);
+		result.columns.push_back(std::move(column));
+	}
+	vector<ShellTableInfo> result_list;
+	result_list.push_back(std::move(result));
+	RenderTableMetadata(result_list);
+	return SuccessState::SUCCESS;
 }
 
 MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &args) {
@@ -3588,8 +3002,7 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt =
-	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
@@ -3783,8 +3196,19 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-
 			ShellHighlight highlight(data);
+#ifdef HAVE_LINENOISE
+			if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
+				// detect terminal colors
+				auto terminal_color = linenoiseGetTerminalColorMode();
+				if (terminal_color == LINENOISE_DARK_MODE) {
+					highlight.ToggleMode(HighlightMode::DARK_MODE);
+				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+					highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+				}
+			}
+#endif
+
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());
 			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {
@@ -3824,6 +3248,7 @@ int wmain(int argc, wchar_t **wargv) {
 		}
 	}
 	data.SetTableName(0);
+	data.last_result.reset();
 	data.db.reset();
 	data.conn.reset();
 	data.ResetOutput();

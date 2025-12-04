@@ -14,6 +14,8 @@
 namespace duckdb {
 namespace variant {
 
+void InitializeOffsets(DataChunk &offsets, idx_t count);
+
 struct OffsetData {
 public:
 	static uint32_t *GetKeys(DataChunk &offsets) {

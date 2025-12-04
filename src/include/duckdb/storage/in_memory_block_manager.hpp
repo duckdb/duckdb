@@ -36,9 +36,6 @@ public:
 	bool IsRootBlock(MetaBlockPointer root) override {
 		throw InternalException("Cannot perform IO in in-memory database - IsRootBlock!");
 	}
-	void MarkBlockAsFree(block_id_t block_id) override {
-		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsFree!");
-	}
 	void MarkBlockAsUsed(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");
 	}
