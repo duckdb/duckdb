@@ -83,4 +83,14 @@ struct StCrsFun {
 	static ScalarFunction GetFunction();
 };
 
+struct StSetcrsFun {
+	static constexpr const char *Name = "st_setcrs";
+	static constexpr const char *Parameters = "geom,crs";
+	static constexpr const char *Description = "Sets the Coordinate Reference System (CRS) identifier of the geometry";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb
