@@ -1031,7 +1031,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
+		RewriteCTEScan cte_rewriter(table_index, correlated_columns, plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
 		cte_rewriter.VisitOperator(*plan->children[1]);
 
 		parent_propagate_null_values = false;
