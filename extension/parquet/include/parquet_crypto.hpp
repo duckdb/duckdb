@@ -58,7 +58,12 @@ private:
 	unordered_map<string, string> column_keys;
 };
 
-class ParquetCrypto {
+struct ParquetCryptoMetaData : public CryptoMetaData {};
+
+struct ParquetAdditionalAuthenticatedData : public AdditionalAuthenticatedData {
+public:
+	WriteData();
+} class ParquetCrypto {
 public:
 	//! Encrypted modules
 	static constexpr idx_t LENGTH_BYTES = 4;
@@ -82,9 +87,9 @@ public:
 	static constexpr uint8_t BloomFilterBitset = 9;
 
 	// Standard AAD length for file
-	static constexpr int32_t AADFileIDLength = 8;
+	static constexpr int32_t UNIQUE_FILE_ID_LEN = 8;
 	// Maximum Parquet AAD suffix bytes
-	static constexpr int32_t AADMaxSuffixBytes = 7;
+	static constexpr int32_t AAD_MAX_SUFFIX_BYTES = 7;
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
@@ -100,15 +105,12 @@ public:
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
 	                          const string &key, const EncryptionUtil &encryption_util_p);
-	// Create Additional Authenticated Data for each module
-	uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal = -1,
-	                         int16_t column_ordinal = -1, int16_t page_ordinal = -1);
-	// Create Additional Authenticated Data for the footer
-	uint8_t *CreateFooterAad(const std::string &aad_prefix_bytes);
 
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
 	static bool ValidKey(const std::string &key);
+
+public:
 };
 
 } // namespace duckdb

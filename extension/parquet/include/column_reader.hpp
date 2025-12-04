@@ -26,6 +26,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 namespace duckdb {
 class ParquetReader;
@@ -93,6 +94,11 @@ public:
 	}
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
+	}
+
+	void InitializeNextRowGroup(idx_t row_group_ordinal_p) {
+		crypto_meta_data.column_ordinal = ColumnIndex();
+		crypto_meta_data.row_group_ordinal = row_group_ordinal_p;
 	}
 
 	virtual idx_t FileOffset() const;
@@ -314,7 +320,8 @@ private:
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
-	idx_t column_ordinal;
+	uint16_t row_group_ordinal;
+	uint16_t column_ordinal;
 
 	shared_ptr<ResizeableBuffer> block;
 
@@ -327,6 +334,7 @@ private:
 	DeltaLengthByteArrayDecoder delta_length_byte_array_decoder;
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
+	CryptoMetaData crypto_meta_data;
 
 	//! Resizeable buffers used for the various encodings above
 	ResizeableBuffer encoding_buffers[2];

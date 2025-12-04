@@ -1,6 +1,7 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -30,26 +31,59 @@ idx_t EncryptionNonce::size() const {
 	return MainHeader::AES_NONCE_LEN;
 }
 
-AdditionalAuthenticatedData::AdditionalAuthenticatedData(idx_t prefix_size, idx_t suffix_size)
-    : additional_authenticated_data(new data_t[prefix_size + suffix_size]),
-      additional_authenticated_data_prefix_size(prefix_size),
-      additional_authenticated_data_total_size(prefix_size + suffix_size) {
+AdditionalAuthenticatedData::AdditionalAuthenticatedData(ClientContext &context)
+    : additional_authenticated_data(
+          make_uniq<MemoryStream>(Allocator::Get(context), AdditionalAuthenticatedData::INITIAL_AAD_CAPACITY)) {
 }
 
 data_ptr_t AdditionalAuthenticatedData::data() const {
-	return additional_authenticated_data.get();
+	return additional_authenticated_data->GetData();
 }
 
 idx_t AdditionalAuthenticatedData::size() const {
-	return additional_authenticated_data_total_size;
+	return additional_authenticated_data->GetPosition();
 }
 
 idx_t AdditionalAuthenticatedData::GetPrefixSize() const {
-	return additional_authenticated_data_prefix_size;
+	if (!additional_authenticated_data_prefix_size.IsValid()) {
+		throw InvalidInputException("AAD prefix length is not set");
+	}
+	return additional_authenticated_data_prefix_size.GetIndex();
 }
 
-void AdditionalAuthenticatedData::SetTotalSize(idx_t size) {
-	additional_authenticated_data_total_size = size;
+void AdditionalAuthenticatedData::WritePrefix(const std::string &prefix) {
+	if (prefix.empty()) {
+		throw InvalidInputException("Prefix for Additional Authenticated Data is empty");
+	}
+
+	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(prefix.data()), prefix.size());
+	additional_authenticated_data_prefix_size = size();
+	is_set_prefix = true;
+}
+
+// Actually, Parquet stuff should be moved to ParquetCrypto
+
+void AdditionalAuthenticatedData::WriteSuffix(const CryptoMetaData &crypto_meta_data) {
+	if (!is_set_prefix) {
+		throw InvalidInputException("Prefix for Parquet additional authenticated data is not set");
+	}
+
+	if (crypto_meta_data.module < 0) {
+		throw InvalidInputException("Parquet Crypto Module not Initialized");
+	}
+
+	additional_authenticated_data->WriteData(static_cast<const_data_ptr_t>((void *)&crypto_meta_data.module),
+	                                         sizeof(int8_t));
+
+	if (crypto_meta_data.row_group_ordinal < 0) {
+		return;
+	}
+
+	additional_authenticated_data->WriteData(static_cast<const_data_ptr_t>((void *)&crypto_meta_data.row_group_ordinal),
+	                                         sizeof(int16_t));
+	if (crypto_meta_data.column_ordinal < 0) {
+		return;
+	}
 }
 
 EncryptionEngine::EncryptionEngine() {

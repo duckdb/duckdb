@@ -8,6 +8,20 @@ class DatabaseInstance;
 class AttachedDatabase;
 class FileBuffer;
 
+struct CryptoMetaData {
+	CryptoMetaData();
+	void Initialize(int8_t module = -1, int16_t row_group_ordinal = -1, int16_t column_ordinal = -1,
+	                int16_t page_ordinal = -1);
+
+	int8_t module;
+	int16_t row_group_ordinal;
+	int16_t column_ordinal;
+	int16_t page_ordinal;
+
+private:
+	bool initialized = false;
+};
+
 struct EncryptionTag {
 	EncryptionTag();
 	data_ptr_t data();
@@ -27,16 +41,23 @@ private:
 };
 
 struct AdditionalAuthenticatedData {
-	AdditionalAuthenticatedData(idx_t prefix_size, idx_t size);
+	explicit AdditionalAuthenticatedData(ClientContext &context);
 	data_ptr_t data() const;
 	idx_t size() const;
 	idx_t GetPrefixSize() const;
-	void SetTotalSize(idx_t size);
+
+	void WritePrefix(const std::string &prefix);
+
+	// make this virtual?
+	void WriteSuffix(const CryptoMetaData &crypto_meta_data) const;
 
 private:
-	unique_ptr<data_t[]> additional_authenticated_data;
-	idx_t additional_authenticated_data_prefix_size = 0;
-	idx_t additional_authenticated_data_total_size = 0;
+	static constexpr uint32_t INITIAL_AAD_CAPACITY = 32;
+
+private:
+	unique_ptr<MemoryStream> additional_authenticated_data;
+	optional_idx additional_authenticated_data_prefix_size;
+	bool is_set_prefix = false;
 };
 
 class EncryptionEngine {

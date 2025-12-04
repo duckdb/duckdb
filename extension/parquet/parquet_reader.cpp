@@ -92,7 +92,7 @@ static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t
 
 unique_ptr<AdditionalAuthenticatedData> ParquetReader::GetFooterAdditionalAuthenticatedData(string aad_prefix) {
 	auto prefix_size = aad_prefix.size();
-	if (prefix_size == 0) {
+	if (aad_prefix.empty()) {
 		// DuckDB Encrypted Parquet File written before V1.5
 		return nullptr;
 	}
@@ -961,17 +961,16 @@ unique_ptr<AdditionalAuthenticatedData> ParquetReader::GenerateAAD(uint8_t modul
 	// + page ordinal (2 bytes, optional)
 
 	auto file_aad = GetUniqueFileIdentifier(metadata->crypto_metadata->encryption_algorithm);
-	idx_t prefix_size = file_aad.size();
 
-	if (prefix_size == 0) {
+	if (file_aad.empty()) {
 		return nullptr;
 	}
 
-	idx_t max_suffix_bytes = ParquetCrypto::AADMaxSuffixBytes;
-	auto aad = make_uniq<AdditionalAuthenticatedData>(prefix_size, max_suffix_bytes);
+	idx_t max_suffix_bytes = ParquetCrypto::AAD_MAX_SUFFIX_BYTES;
+	auto aad = make_uniq<AdditionalAuthenticatedData>(file_aad.size(), max_suffix_bytes);
 
-	memcpy(aad->data(), file_aad.data(), prefix_size);
-	auto current_offset = prefix_size;
+	memcpy(aad->data(), file_aad.data(), file_aad.size());
+	auto current_offset = file_aad.size();
 	Store<uint8_t>(module_type, aad->data() + current_offset);
 	current_offset += sizeof(uint8_t);
 
@@ -1162,6 +1161,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	auto col_idx = MultiFileLocalIndex(i);
 	auto column_id = column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
+	column_reader.InitializeNextRowGroup(GetGroup(state).ordinal);
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
@@ -1316,10 +1316,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto col_idx = MultiFileLocalIndex(i);
 			PrepareRowGroupBuffer(state, col_idx);
-
 			auto file_col_idx = column_ids[col_idx];
-
 			auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+
 			to_scan_compressed_bytes += root_reader.GetChildReader(file_col_idx).TotalCompressedSize();
 		}
 

@@ -422,4 +422,18 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 	}
 }
 
+// todo; move to parquet crypto
+CryptoMetaData::CryptoMetaData() {
+}
+
+void CryptoMetaData::Initialize(int8_t module_p, int16_t row_group_ordinal_p, int16_t column_ordinal_p,
+                                int16_t page_ordinal_p) {
+	module = module_p;
+	row_group_ordinal = row_group_ordinal_p;
+	column_ordinal = column_ordinal_p;
+	page_ordinal = page_ordinal_p;
+
+	initialized = true;
+}
+
 } // namespace duckdb
