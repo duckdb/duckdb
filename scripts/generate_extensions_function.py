@@ -391,7 +391,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
     functions = set()
     function_overloads = {}
     for func in results:
-        function_name = func["function_name"]
+        function_name = func["function_name"].lower()
         function_type = func["function_type"]
         parameter_types = func["parameter_types"]
         return_type = func["return_type"]
