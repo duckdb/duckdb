@@ -60,7 +60,7 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	vector<highlightToken> tokens;
-	#ifndef SHELL_INLINE_AUTOCOMPLETE
+#ifndef SHELL_INLINE_AUTOCOMPLETE
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
 	for (auto &token : parseTokens) {
 		highlightToken new_token;
@@ -68,8 +68,8 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 		new_token.start = token.start;
 		tokens.push_back(new_token);
 	}
-	#endif
-	#ifdef SHELL_INLINE_AUTOCOMPLETE
+#endif
+#ifdef SHELL_INLINE_AUTOCOMPLETE
 	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
 	vector<SimplifiedToken> result;
@@ -80,7 +80,7 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 		new_token.start = token.offset;
 		tokens.push_back(new_token);
 	}
-	#endif
+#endif
 
 	if (!tokens.empty() && tokens[0].start > 0) {
 		highlightToken new_token;
