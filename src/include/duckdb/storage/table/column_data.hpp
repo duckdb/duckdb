@@ -247,10 +247,12 @@ protected:
 	unique_ptr<UpdateSegment> updates;
 	//! The lock for the stats
 	mutable mutex stats_lock;
-	//! The stats of the root segment
-	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
+
+public:
+	//! The stats of the root segment
+	unique_ptr<SegmentStatistics> stats;
 
 private:
 	//! Whether or not this column data belongs to a main table or if it is transaction local

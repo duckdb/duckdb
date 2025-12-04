@@ -17,6 +17,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/storage/table/geo_column_data.hpp"
 
 namespace duckdb {
 
@@ -864,8 +865,8 @@ bool PersistentColumnData::HasUpdates() const {
 }
 
 void PersistentColumnData::SetVariantShreddedType(const LogicalType &shredded_type) {
-	D_ASSERT(physical_type == PhysicalType::STRUCT);
-	D_ASSERT(logical_type_id == LogicalTypeId::VARIANT);
+	// D_ASSERT(physical_type == PhysicalType::STRUCT);
+	// D_ASSERT(logical_type_id == LogicalTypeId::VARIANT);
 	variant_shredded_type = shredded_type;
 }
 
@@ -1031,11 +1032,20 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	data.Verify();
-	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY) {
+
+	bool is_geometry_child_column = false;
+	if (type.id() == LogicalTypeId::GEOMETRY && this->parent && this->parent->type.id() == LogicalTypeId::GEOMETRY) {
+		// Geometry child column
+		is_geometry_child_column = true;
+	}
+
+	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY ||
+	    (type.id() == LogicalTypeId::GEOMETRY && !is_geometry_child_column)) {
 		// structs and fixed size lists don't have segments
 		D_ASSERT(!data.GetRootSegment());
 		return;
 	}
+
 	idx_t current_index = 0;
 	idx_t current_start = 0;
 	idx_t total_count = 0;
@@ -1053,16 +1063,22 @@ void ColumnData::Verify(RowGroup &parent) {
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
+	if (type.id() == LogicalTypeId::GEOMETRY) {
+		return make_shared_ptr<GeoColumnData>(block_manager, info, column_index, type, data_type, parent);
+	}
 	if (type.id() == LogicalTypeId::VARIANT) {
 		return make_shared_ptr<VariantColumnData>(block_manager, info, column_index, type, data_type, parent);
 	}
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		return make_shared_ptr<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.InternalType() == PhysicalType::LIST) {
+	}
+	if (type.InternalType() == PhysicalType::LIST) {
 		return make_shared_ptr<ListColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.InternalType() == PhysicalType::ARRAY) {
+	}
+	if (type.InternalType() == PhysicalType::ARRAY) {
 		return make_shared_ptr<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.id() == LogicalTypeId::VALIDITY) {
+	}
+	if (type.id() == LogicalTypeId::VALIDITY) {
 		return make_shared_ptr<ValidityColumnData>(block_manager, info, column_index, data_type, parent);
 	}
 	return make_shared_ptr<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
