@@ -31,6 +31,8 @@ template <class BLOCK_ITERATOR_STATE>
 class BlockIteratorStateBase {
 protected:
 	friend BLOCK_ITERATOR_STATE;
+
+private:
 	explicit BlockIteratorStateBase(const idx_t tuple_count_p) : tuple_count(tuple_count_p) {
 	}
 

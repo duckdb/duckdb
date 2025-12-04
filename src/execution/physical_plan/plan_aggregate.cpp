@@ -236,7 +236,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	D_ASSERT(op.children.size() == 1);
 
 	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
-	plan = ExtractAggregateExpressions(plan, op.expressions, op.groups);
+	plan = ExtractAggregateExpressions(plan, op.expressions, op.groups, op.grouping_sets);
 
 	bool can_use_simple_aggregation = true;
 	for (auto &expression : op.expressions) {
@@ -305,7 +305,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOperator &child,
                                                                      vector<unique_ptr<Expression>> &aggregates,
-                                                                     vector<unique_ptr<Expression>> &groups) {
+                                                                     vector<unique_ptr<Expression>> &groups,
+                                                                     optional_ptr<vector<GroupingSet>> grouping_sets) {
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
@@ -314,7 +315,7 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		if (bound_aggr.order_bys) {
 			// sorted aggregate!
-			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
+			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups, grouping_sets);
 		}
 	}
 	for (auto &group : groups) {

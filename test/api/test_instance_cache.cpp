@@ -205,3 +205,27 @@ TEST_CASE("Test attaching the same database path from different databases in rea
 		REQUIRE_FAIL(con1.Query(read_only_attach));
 	}
 }
+
+TEST_CASE("Test automatic DB instance caching", "[api][.]") {
+	DBInstanceCache instance_cache;
+	DBConfig config;
+
+	SECTION("Unnamed in-memory connections are not shared") {
+		auto db1 = instance_cache.GetOrCreateInstance(":memory:", config);
+		auto db2 = instance_cache.GetOrCreateInstance(":memory:", config);
+
+		Connection con(*db1);
+		Connection con2(*db2);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INT)"));
+		REQUIRE_NO_FAIL(con2.Query("CREATE TABLE t(i INT)"));
+	}
+	SECTION("Named in-memory connections are shared") {
+		auto db1 = instance_cache.GetOrCreateInstance(":memory:abc", config);
+		auto db2 = instance_cache.GetOrCreateInstance(":memory:abc", config);
+
+		Connection con(*db1);
+		Connection con2(*db2);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INT)"));
+		REQUIRE_NO_FAIL(con2.Query("SELECT * FROM t"));
+	}
+}
