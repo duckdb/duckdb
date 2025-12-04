@@ -57,4 +57,3 @@ struct BufferedIndexReplays {
 };
 
 } // namespace duckdb
-

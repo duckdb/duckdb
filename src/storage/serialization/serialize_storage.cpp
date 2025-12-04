@@ -6,7 +6,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
@@ -82,22 +81,6 @@ FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(103, "segment_counts", result.segment_counts);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(104, "allocation_sizes", result.allocation_sizes);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "buffers_with_free_space", result.buffers_with_free_space);
-	return result;
-}
-
-void IndexStorageInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(100, "name", name);
-	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
-	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", options, case_insensitive_map_t<Value>());
-}
-
-IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
-	IndexStorageInfo result;
-	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
-	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
-	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
-	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());
 	return result;
 }
 
