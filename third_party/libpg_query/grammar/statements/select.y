@@ -3840,13 +3840,13 @@ case_arg:	a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-switch_expr: SWITCH '(' case_arg ',' switch_list case_default ')'
+switch_expr: SWITCH '(' case_arg ',' map_expr ',' a_expr ')'
                 {
-					PGCaseExpr *c = makeNode(PGCaseExpr);
+					PGSwitchExpr *c = makeNode(PGSwitchExpr);
 					c->casetype = InvalidOid; /* not analyzed yet */
 					c->arg = (PGExpr *) $3;
-					c->args = $5;
-					c->defresult = (PGExpr *) $6;
+					c->arg_map = $5;
+					c->defresult = (PGExpr *) $7;
 					c->location = @1;
 					$$ = (PGNode *)c;
                 }

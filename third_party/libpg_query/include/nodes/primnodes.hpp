@@ -880,6 +880,16 @@ typedef struct PGCaseExpr {
 	int location;      /* token location, or -1 if unknown */
 } PGCaseExpr;
 
+typedef struct PGSwitchExpr {
+	PGExpr xpr;
+	PGOid casetype;    /* type of expression result */
+	PGOid casecollid;  /* OID of collation, or InvalidOid if none */
+	PGExpr *arg;       /* implicit equality comparison argument */
+	PGNode *arg_map;   /* the arguments (map_expr) */
+	PGExpr *defresult; /* the default result (ELSE clause) */
+	int location;      /* token location, or -1 if unknown */
+} PGSwitchExpr;
+
 /*
  * PGCaseWhen - one arm of a CASE expression
  */
