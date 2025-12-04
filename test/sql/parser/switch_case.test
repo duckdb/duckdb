@@ -45,7 +45,7 @@ odd
 even
 
 query I
-SELECT switch(i, MAP {1 : 100, 3 :300}) FROM nums ORDER BY i;
+SELECT switch(i, MAP {1 : 100, 3 : 300}) FROM nums ORDER BY i;
 ----
 NULL
 100
@@ -96,3 +96,8 @@ statement error
 SELECT switch(val, MAP { 1+1 : 'one', NULL : 'is_null'}, 'other') FROM null_test ORDER BY val;
 ----
 Not implemented Error: Only constant expressions are supported for keys inside SWITCH
+
+statement error
+SELECT switch(val, MAP {}, 'other') FROM null_test ORDER BY val;
+----
+Parser Error: No values provided for SWITCH expression

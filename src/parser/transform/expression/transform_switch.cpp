@@ -28,6 +28,9 @@ unique_ptr<ParsedExpression> Transformer::TransformSwitch(duckdb_libpgquery::PGS
 
 	vector<Value> keys_unpacked = ListValue::GetChildren(keys);
 	vector<Value> values_unpacked = ListValue::GetChildren(values);
+	if (keys_unpacked.empty()) {
+		throw ParserException("No values provided for SWITCH expression");
+	}
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
 		CaseCheck case_check;
 		unique_ptr<ConstantExpression> const_key;
