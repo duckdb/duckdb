@@ -820,7 +820,11 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		// this block was newly used - and now we are labeling it as no longer being required
 		// we can directly add it back to the free list
 		newly_used_blocks.erase(block_id);
-		free_list.insert(block_id);
+		if (BlockIsRegistered(block_id)) {
+			free_blocks_in_use.insert(block_id);
+		} else {
+			free_list.insert(block_id);
+		}
 	} else {
 		// this block was used in storage, we cannot directly re-use it
 		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
