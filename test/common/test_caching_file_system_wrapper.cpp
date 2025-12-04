@@ -79,7 +79,7 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
-	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
+	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content = "This is test content for write testing.";
 	TestFileGuard test_file("test_caching_write.txt", test_content);
@@ -123,7 +123,7 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
-	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
+	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content = "This is test content for caching verification. It should only be read once.";
 	TestFileGuard test_file("test_caching_file.txt", test_content);
@@ -206,7 +206,7 @@ TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]")
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
-	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
+	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content = "This is test content for sequential read testing.";
 	TestFileGuard test_file("test_caching_sequential.txt", test_content);
@@ -236,7 +236,7 @@ TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") 
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
-	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
+	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	TestFileGuard test_file("test_caching_seek.txt", test_content);
@@ -314,7 +314,7 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
-	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
+	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	// Create a test directory
 	auto test_dir = TestCreatePath("test_list_dir");
@@ -359,7 +359,7 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
-	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance);
+	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content =
 	    "Test content for parallel read access. This is a longer string to allow multiple reads.";
