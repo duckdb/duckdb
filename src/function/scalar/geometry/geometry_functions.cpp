@@ -2,6 +2,7 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
@@ -137,6 +138,35 @@ ScalarFunction StCrsFun::GetFunction() {
 	ScalarFunction geom_func({LogicalType::GEOMETRY()}, crs_type, CRSFunction, BindCRSFunction);
 	geom_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	geom_func.bind_expression = BindCRSFunctionExpression;
+	return geom_func;
+}
+
+static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	// Check if the CRS is set in the second argument
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[1]->IsFoldable()) {
+		throw BinderException("ST_SetCRS: CRS argument must be constant!");
+	}
+	const auto crs_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	if (!crs_val.IsNull()) {
+		const auto &crs_str = StringValue::Get(crs_val);
+		// Attach the CRS to the return type
+		bound_function.return_type = LogicalType::GEOMETRY(crs_str);
+	}
+	// Erase the CRS argument expression
+	return nullptr;
+}
+
+static void SetCRSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	result.Reinterpret(args.data[0]);
+}
+
+ScalarFunction StSetcrsFun::GetFunction() {
+	ScalarFunction geom_func({LogicalType::GEOMETRY(), LogicalType::VARCHAR}, LogicalType::GEOMETRY(), SetCRSFunction,
+	                         SetCRSBind);
 	return geom_func;
 }
 

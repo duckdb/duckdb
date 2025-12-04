@@ -1,0 +1,7 @@
+# name: test/sql/types/geo/geometry_crs.test
+# group: [geo]
+
+query I
+select st_crs(st_setcrs('POINT(0 1)', 'EPSG:4326'));
+----
+{'type': authority_code, 'name': NULL, 'value': 'EPSG:4326'}

@@ -8,8 +8,72 @@
 
 #include <limits>
 #include <cmath>
+#include <sys/stat.h>
 
 namespace duckdb {
+
+bool CoordinateReferenceSystem::TryParse(const string &text, CoordinateReferenceSystem &result) {
+	if (text.empty()) {
+		result.type = CoordinateReferenceSystemType::INVALID;
+		return false;
+	}
+
+	// Check if the text is all whitespace
+	auto not_space = false;
+	for (const auto c : text) {
+		if (!StringUtil::CharacterIsSpace(c)) {
+			not_space = true;
+			break;
+		}
+	}
+	if (!not_space) {
+		result.type = CoordinateReferenceSystemType::INVALID;
+		return false;
+	}
+
+	if (TryParsePROJJSON(text, result)) {
+		return true;
+	}
+
+	if (TryParseAuthCode(text, result)) {
+		return true;
+	}
+
+	// TODO: Also strip formatting
+	if (TryParseWKT2(text, result)) {
+		return true;
+	}
+
+	// Otherwise, treat this as an opaque SRID identifier, and don't set an explicit name or id
+	result.type = CoordinateReferenceSystemType::SRID;
+	result.text = text;
+	return true;
+}
+
+CoordinateReferenceSystem::CoordinateReferenceSystem(const string &crs) {
+	if (!TryParse(crs, *this)) {
+		throw InvalidInputException("Failed to parse coordinate reference system: '%s'", crs);
+	}
+}
+
+void CoordinateReferenceSystem::Serialize(Serializer &serializer) const {
+	// Only serialize the text definition
+	serializer.WritePropertyWithDefault<string>(100, "text", text);
+}
+
+CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &deserializer) {
+	string text;
+	deserializer.ReadPropertyWithDefault<string>(100, "text", text);
+	CoordinateReferenceSystem result;
+
+	// If this fails for whatever reason, just return an invalid CRS
+	try {
+		CoordinateReferenceSystem::TryParse(text, result);
+	} catch (...) {
+	}
+
+	return result;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 // WKT2:2019 Parsing
@@ -110,6 +174,11 @@ class WKTParser {
 public:
 	static unique_ptr<WKTValue> Parse(const string &wkt) {
 		WKTParser parser(wkt.c_str(), wkt.size());
+
+		// Skip leading whitespace
+		parser.SkipWhitespace();
+
+		// Parse the root node
 		return parser.ParseNode();
 	}
 
@@ -143,11 +212,11 @@ private:
 		while (pos < end && (isalpha(*pos) || *pos == '_')) {
 			pos++;
 		}
-		if (pos == beg) {
+		if (pos == start) {
 			// Didnt match any text
 			return false;
 		}
-		result = string(start, pos - start);
+		result = string(start, UnsafeNumericCast<size_t>(pos - start));
 
 		SkipWhitespace();
 		return true;
@@ -164,7 +233,7 @@ private:
 		if (pos == end) {
 			throw InvalidInputException("Unterminated string starting at position %zu", start - beg);
 		}
-		auto result = string(start, pos - start);
+		auto result = string(start, UnsafeNumericCast<size_t>(pos - start));
 
 		Match('"');
 		SkipWhitespace();
@@ -189,7 +258,7 @@ private:
 			} while (TryMatch(','));
 
 			Match(']');
-			return make_uniq<WKTKeyword>(std::move(children));
+			return make_uniq<WKTKeyword>(std::move(name), std::move(children));
 		}
 
 		if (TryMatch('(')) {
@@ -202,7 +271,7 @@ private:
 				children.push_back(std::move(child));
 			} while (TryMatch(','));
 			Match(')');
-			return make_uniq<WKTKeyword>(std::move(children));
+			return make_uniq<WKTKeyword>(std::move(name), std::move(children));
 		}
 
 		throw InvalidInputException("Expected '[' or '(' after WKT keyword at position %zu", pos - beg);
@@ -251,8 +320,8 @@ private:
 	}
 };
 
-static bool TryIdentifyWKT2(const string &wkt2, string &name) {
-	const auto node = WKTParser::Parse(wkt2);
+bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateReferenceSystem &result) {
+	const auto node = WKTParser::Parse(text);
 
 	if (!node) {
 		// Not a valid WKT2 string
@@ -268,7 +337,7 @@ static bool TryIdentifyWKT2(const string &wkt2, string &name) {
 	// Check that this is a valid CRS keyword
 	auto found = false;
 
-	constexpr auto crs_keywords = {
+	const auto crs_keywords = {
 	    // WKT2019 keywords
 	    "BOUNDCRS",     "COMPOUNDCRS", "ENGCRS",        "ENGINEERINGCRS", "GEODCRS",
 	    "GEODETICCRS",  "GEOGCRS",     "GEOGRAPHICCRS", "PARAMETRICCRS",  "PROJCRS",
@@ -328,7 +397,15 @@ static bool TryIdentifyWKT2(const string &wkt2, string &name) {
 			return false;
 		}
 
-		name = first_transform_child->As<WKTString>().GetValue();
+		// TODO: Parse "ID" subnode to get the code
+		result.type = CoordinateReferenceSystemType::WKT2_2019;
+		result.name = first_transform_child->As<WKTString>().GetValue();
+		result.text = text;
+
+		// Also trim text
+		// TODO: Normalize WKT Input
+		StringUtil::Trim(result.text);
+
 		return true;
 	}
 
@@ -339,18 +416,26 @@ static bool TryIdentifyWKT2(const string &wkt2, string &name) {
 		return false;
 	}
 
-	name = first->As<WKTString>().GetValue();
+	// TODO: Parse "ID" subnode to get the code
+	result.type = CoordinateReferenceSystemType::WKT2_2019;
+	result.name = first->As<WKTString>().GetValue();
+	result.text = text;
+
+	// Also trim text
+	// TODO: Normalize WKT Input
+	StringUtil::Trim(result.text);
+
 	return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // PROJJSON Parsing
 //----------------------------------------------------------------------------------------------------------------------
-static bool TryIdentifyPROJJSON(const string &projjson, string &name) {
+bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateReferenceSystem &result) {
 	using namespace duckdb_yyjson;
 
-	unique_ptr<yyjson_doc, void (*)(yyjson_doc *)> doc(
-	    yyjson_read(projjson.c_str(), projjson.size(), YYJSON_READ_NOFLAG), yyjson_doc_free);
+	unique_ptr<yyjson_doc, void (*)(yyjson_doc *)> doc(yyjson_read(text.c_str(), text.size(), YYJSON_READ_NOFLAG),
+	                                                   yyjson_doc_free);
 
 	if (!doc) {
 		// Not a valid JSON
@@ -372,15 +457,15 @@ static bool TryIdentifyPROJJSON(const string &projjson, string &name) {
 	// Check that the type is one of the PROJJSON CRS types
 	// There are other (derived CRS) types, but they can not be used as root CRS definitions
 	const string type_str = yyjson_get_str(type_val);
-	constexpr auto projjson_crs_types = {"GeographicCRS",
-	                                     "GeodeticCRS",
-	                                     "ProjectedCRS",
-	                                     "CompoundCRS",
-	                                     "BoundCRS",
-	                                     "VerticalCRS",
-	                                     "EngineeringCRS",
-	                                     "TemporalCRS"
-	                                     "ParametricCRS"};
+	const auto projjson_crs_types = {"GeographicCRS",
+	                                 "GeodeticCRS",
+	                                 "ProjectedCRS",
+	                                 "CompoundCRS",
+	                                 "BoundCRS",
+	                                 "VerticalCRS",
+	                                 "EngineeringCRS",
+	                                 "TemporalCRS"
+	                                 "ParametricCRS"};
 
 	auto found = false;
 	for (auto &kw : projjson_crs_types) {
@@ -394,45 +479,96 @@ static bool TryIdentifyPROJJSON(const string &projjson, string &name) {
 		return false;
 	}
 
+	// Start out with the root object
+	yyjson_val *target_val = root;
+
 	// Special case for BoundCRS, use the name of the transformation instead
 	if (StringUtil::CIEquals(type_str, "BoundCRS")) {
-		yyjson_val *transformation_val = yyjson_obj_get(root, "transformation");
-		if (!transformation_val || !yyjson_is_obj(transformation_val)) {
+		const auto trans_val = yyjson_obj_get(root, "transformation");
+		if (!trans_val || !yyjson_is_obj(trans_val)) {
 			return false;
 		}
-		yyjson_val *name_val = yyjson_obj_get(transformation_val, "name");
-		if (!name_val || !yyjson_is_str(name_val)) {
-			return false;
-		}
-		name = yyjson_get_str(name_val);
-		return true;
+
+		// Switch to the transformation object
+		target_val = trans_val;
 	}
 
-	// Try to get the "name" field from the root object
-	yyjson_val *name_val = yyjson_obj_get(root, "name");
+	// Try to get the "name" field from the target object
+	yyjson_val *name_val = yyjson_obj_get(target_val, "name");
 	if (name_val && yyjson_is_str(name_val)) {
 		const char *name_str = yyjson_get_str(name_val);
 		if (name_str) {
-			name = string(name_str);
-			return true;
+			result.name = string(name_str);
 		}
 	}
 
-	return false;
+	// Try to get the "id" field from the target object
+	yyjson_val *id_val = yyjson_obj_get(target_val, "id");
+	if (id_val && yyjson_is_obj(id_val)) {
+		const auto auth_val = yyjson_obj_get(id_val, "authority");
+		if (auth_val && yyjson_is_str(auth_val)) {
+			const auto auth_str = yyjson_get_str(auth_val);
+
+			if (auth_str) {
+				result.code = string(auth_str);
+
+				const auto code_val = yyjson_obj_get(id_val, "code");
+				if (code_val && yyjson_is_int(code_val)) {
+					const auto code_int = yyjson_get_int(code_val);
+					result.code += ":" + to_string(code_int);
+				}
+				if (code_val && yyjson_is_str(code_val)) {
+					const auto code_str = yyjson_get_str(code_val);
+					if (code_str) {
+						result.code += ":" + string(code_str);
+					}
+				}
+			}
+		}
+	}
+
+	result.type = CoordinateReferenceSystemType::PROJJSON;
+
+	// Print the PROJJSON back to a string to normalize it
+	// TODO: We should actually normalize the PROJJSON here (e.g. sort fields) to ensure consistent equality checks
+	size_t json_size = 0;
+	const auto json_text = yyjson_write(doc.get(), YYJSON_WRITE_NOFLAG, &json_size);
+	if (!json_text) {
+		return false;
+	}
+
+	result.text = string(json_text, json_size);
+	free(json_text);
+
+	return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // AUTH:CODE Parsing
 //----------------------------------------------------------------------------------------------------------------------
-static bool TryIdentifyAuthCode(const string &code) {
-	auto beg = code.c_str();
-	auto end = beg + code.size();
+bool CoordinateReferenceSystem::TryParseAuthCode(const string &text, CoordinateReferenceSystem &result) {
+	auto beg = text.c_str();
+	auto end = beg + text.size();
+
+	// Remove whitespace
+	while (beg != end) {
+		if (!StringUtil::CharacterIsSpace(*beg)) {
+			break;
+		}
+		beg++;
+	}
+	while (end != beg) {
+		if (!StringUtil::CharacterIsSpace(*(end - 1))) {
+			break;
+		}
+		end--;
+	}
 
 	for (auto colon_pos = beg; colon_pos != end; colon_pos++) {
 		if (*colon_pos == ':') {
 			bool auth_valid = true;
 			for (auto ptr = beg; ptr != colon_pos; ptr++) {
-				if (!std::isalpha(*ptr)) {
+				if (!StringUtil::CharacterIsAlpha(*ptr)) {
 					auth_valid = false;
 					break;
 				}
@@ -440,13 +576,17 @@ static bool TryIdentifyAuthCode(const string &code) {
 
 			bool code_valid = true;
 			for (auto ptr = colon_pos + 1; ptr != end; ptr++) {
-				if (!std::isdigit(*ptr)) {
+				if (!StringUtil::CharacterIsDigit(*ptr)) {
 					code_valid = false;
 					break;
 				}
 			}
 
 			if (auth_valid && code_valid) {
+				// Valid AUTH:CODE
+				result.type = CoordinateReferenceSystemType::AUTH_CODE;
+				result.text = string(beg, UnsafeNumericCast<size_t>(end - beg));
+				result.code = result.text;
 				return true;
 			}
 			break;
@@ -454,55 +594,6 @@ static bool TryIdentifyAuthCode(const string &code) {
 	}
 
 	return false;
-}
-
-struct CoordinateSystemReferenceLookupResult {
-	CoordinateReferenceSystemType type;
-	string name;
-	string text;
-};
-
-// TODO: Move this into pluggable util class
-static CoordinateSystemReferenceLookupResult IdentifyCoordinateSystem(const string &text_p) {
-	CoordinateSystemReferenceLookupResult result;
-	result.text = text_p;
-
-	// Trim whitespace
-	StringUtil::Trim(result.text);
-
-	if (result.text.empty()) {
-		result.type = CoordinateReferenceSystemType::INVALID;
-		return result;
-	}
-
-	if (TryIdentifyPROJJSON(result.text, result.name)) {
-		result.type = CoordinateReferenceSystemType::PROJJSON;
-		return result;
-	}
-
-	// Look for AUTH:CODE pattern
-	if (TryIdentifyAuthCode(result.text)) {
-		result.type = CoordinateReferenceSystemType::AUTH_CODE;
-		return result;
-	}
-
-	// Look for WKT2 pattern
-	if (TryIdentifyWKT2(result.text, result.name)) {
-		result.type = CoordinateReferenceSystemType::WKT2_2019;
-		return result;
-	}
-
-	// Otherwise, treat this as an opaque SRID identifier, and don't set an explicit name
-	result.type = CoordinateReferenceSystemType::SRID;
-
-	return result;
-}
-
-CoordinateReferenceSystem::CoordinateReferenceSystem(const string &crs) {
-	const auto result = IdentifyCoordinateSystem(crs);
-	type = result.type;
-	name = result.name;
-	text = crs;
 }
 
 } // namespace duckdb

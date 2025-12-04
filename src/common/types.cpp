@@ -528,6 +528,13 @@ string LogicalType::ToString() const {
 		}
 		return TemplateType::GetName(*this);
 	}
+	case LogicalTypeId::GEOMETRY: {
+		if (!type_info_ || !GeoType::HasCRS(*this)) {
+			return "GEOMETRY";
+		}
+		auto &crs = GeoType::GetCRS(*this);
+		return StringUtil::Format("GEOMETRY(%s)", crs.GetDisplayName());
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -2031,12 +2038,18 @@ LogicalType LogicalType::GEOMETRY() {
 	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
 }
 
+LogicalType LogicalType::GEOMETRY(const string &crs) {
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	info->crs = CoordinateReferenceSystem(crs);
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+}
+
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
-	auto &geo_info = info->Cast<GeoTypeInfo>();
+	const auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
 }

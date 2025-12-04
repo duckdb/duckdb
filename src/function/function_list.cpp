@@ -163,6 +163,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(StCrsFun),
 	DUCKDB_SCALAR_FUNCTION(StGeomfromwkbFun),
 	DUCKDB_SCALAR_FUNCTION(StIntersectsExtentFun),
+	DUCKDB_SCALAR_FUNCTION(StSetcrsFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StrSplitFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(StrSplitRegexFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
