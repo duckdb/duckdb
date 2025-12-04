@@ -254,8 +254,6 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_CaseExpr";
 	case duckdb_libpgquery::T_PGCaseWhen:
 		return "T_CaseWhen";
-	case duckdb_libpgquery::T_PGSwitchExpr:
-		return "T_SwitchExpr";
 	case duckdb_libpgquery::T_PGCaseTestExpr:
 		return "T_CaseTestExpr";
 	case duckdb_libpgquery::T_PGArrayExpr:

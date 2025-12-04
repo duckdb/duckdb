@@ -170,7 +170,6 @@ typedef enum PGNodeTag {
 	T_PGConvertRowtypeExpr,
 	T_PGCollateExpr,
 	T_PGCaseExpr,
-	T_PGSwitchExpr,
 	T_PGCaseWhen,
 	T_PGCaseTestExpr,
 	T_PGArrayExpr,

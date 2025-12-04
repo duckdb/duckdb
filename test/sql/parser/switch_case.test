@@ -106,7 +106,7 @@ statement ok
 CREATE TABLE map_expr(i map(integer, integer));
 
 statement ok
-INSERT INTO map_expr VALUES ({1 : 2});
+INSERT INTO map_expr VALUES (MAP {1 : 2});
 
 statement error
 SELECT SWITCH (1, i) FROM map_expr;

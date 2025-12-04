@@ -19,7 +19,6 @@ add_library_unity(
   transform_param_ref.cpp
   transform_positional_reference.cpp
   transform_subquery.cpp
-  transform_switch.cpp
   transform_multi_assign_reference.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_transformer_expression>

@@ -3840,22 +3840,6 @@ case_arg:	a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-switch_default :
-            ',' a_expr                              { $$ = $2; }
-            | /*EMPTY*/                             { $$ = NULL; }
-
-switch_expr: SWITCH '(' case_arg ',' map_expr switch_default ')'
-                {
-					PGSwitchExpr *c = makeNode(PGSwitchExpr);
-					c->casetype = InvalidOid; /* not analyzed yet */
-					c->arg = (PGExpr *) $3;
-					c->arg_map = $5;
-					c->defresult = (PGExpr *) $6;
-					c->location = @1;
-					$$ = (PGNode *)c;
-                }
-        ;
-
 columnrefList:
 			columnref								{ $$ = list_make1($1); }
 			| columnrefList ',' columnref				{ $$ = lappend($1, $3); }
