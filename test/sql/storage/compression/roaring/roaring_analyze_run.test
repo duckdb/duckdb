@@ -19,7 +19,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-set enable_logging=true;
+CALL enable_logging(level='trace')
 
 statement ok
 CREATE TABLE test_uncompressed AS SELECT
