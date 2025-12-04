@@ -91,3 +91,8 @@ ORDER BY val;
 one
 other
 other
+
+statement error
+SELECT switch(val, MAP { 1+1 : 'one', NULL : 'is_null'}, 'other') FROM null_test ORDER BY val;
+----
+Not implemented Error: Only constant expressions are supported for keys inside SWITCH

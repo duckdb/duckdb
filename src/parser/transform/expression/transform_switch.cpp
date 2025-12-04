@@ -18,12 +18,12 @@ unique_ptr<ParsedExpression> Transformer::TransformSwitch(duckdb_libpgquery::PGS
 	}
 	Value keys;
 	if (!ConstructConstantFromExpression(*map_expr.children[0], keys)) {
-		throw ParserException("Expected a constant expression for the keys");
+		throw NotImplementedException("Only constant expressions are supported for keys inside SWITCH");
 	}
 
 	Value values;
 	if (!ConstructConstantFromExpression(*map_expr.children[1], values)) {
-		throw ParserException("Expected a constant expression for the values");
+		throw ParserException("Only constant expressions are supported for values inside SWITCH");
 	}
 
 	vector<Value> keys_unpacked = ListValue::GetChildren(keys);
