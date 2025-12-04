@@ -250,8 +250,8 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 
 		auto &best_function = *functions[compression_idx];
 		DUCKDB_LOG_TRACE(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
-		                EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
-		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
+		                 EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
+		                 col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;
@@ -294,10 +294,8 @@ bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeR
 	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 }
 
-void ColumnDataCheckpointer::WriteToDisk() {
-	DropSegments();
-
-	// Analyze the candidate functions to select one of them to use for compression
+void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions to select one of them to use for
+	                                         // compression
 	auto analyze_result = DetectBestCompressionMethod();
 	if (ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
@@ -340,6 +338,9 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &compression_state = compression_states[i];
 		function->compress_finalize(*compression_state);
 	}
+
+	// after we finish checkpointing we can drop this segment
+	DropSegments();
 }
 
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
