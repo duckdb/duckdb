@@ -24,7 +24,7 @@ struct CachingFileHandle;
 //! Caching mode for CachingFileSystemWrapper.
 enum class CachingMode : uint8_t {
 	// Cache all files.
-	ALWAYS_CACHE,      
+	ALWAYS_CACHE,
 	// Only cache remote files, bypass cache for local files.
 	CACHE_REMOTE_ONLY,
 };
@@ -52,7 +52,7 @@ private:
 class CachingFileSystemWrapper : public FileSystem {
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
-	                                   CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
+	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
 
 	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context,
