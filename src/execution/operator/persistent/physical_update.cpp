@@ -180,7 +180,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	if (index_update) {
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
 		vector<StorageIndex> column_ids;
-		auto table_types = table.GetTypes();
 		for (idx_t i = 0; i < table.ColumnCount(); i++) {
 			column_ids.emplace_back(i);
 		};
