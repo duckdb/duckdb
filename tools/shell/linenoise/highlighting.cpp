@@ -61,7 +61,6 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
 	vector<highlightToken> tokens;
 	#ifndef SHELL_INLINE_AUTOCOMPLETE
-	string sql(buf, len);
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
 	for (auto &token : parseTokens) {
 		highlightToken new_token;
