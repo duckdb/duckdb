@@ -135,7 +135,7 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	if (column.Generated()) {
 		return nullptr;
 	}
-	auto storage_index = StorageIndex(column_id);
+	auto storage_index = StorageIndex(column.StorageOid());
 	return storage->GetStatistics(context, storage_index);
 }
 
