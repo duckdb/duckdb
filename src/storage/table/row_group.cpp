@@ -265,7 +265,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 	Initialize(context_p, type, column_id, options);
 }
 
-void CollectionScanState::Initialize(const QueryContext &context, RowGroupCollection &collection) {
+void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	D_ASSERT(column_scans.empty());
 	column_scans.reserve(column_scans.size());
@@ -277,7 +277,7 @@ void CollectionScanState::Initialize(const QueryContext &context, RowGroupCollec
 			continue;
 		}
 		auto index = column_ids[i].GetPrimaryIndex();
-		auto &type = collection.GetTypes()[index];
+		auto &type = types[index];
 		column_scans[i].Initialize(context, type, column_ids[i], &GetOptions());
 	}
 }
