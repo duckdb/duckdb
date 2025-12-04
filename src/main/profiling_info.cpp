@@ -12,9 +12,7 @@ namespace duckdb {
 
 ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
 	// Expand.
-	if (depth == 0) {
-		settings.insert(MetricsType::QUERY_NAME);
-	} else {
+	if (depth > 0) {
 		settings.insert(MetricsType::OPERATOR_NAME);
 		settings.insert(MetricsType::OPERATOR_TYPE);
 	}
