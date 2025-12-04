@@ -82,19 +82,6 @@ public:
 		copy.index = new_primary_index;
 		return copy;
 	}
-	//! Creates a copy of the ColumnIndex, up to a maximum depth, stripping all children beyond that
-	ColumnIndex CreateSubset(idx_t max_depth, bool &reached_end) const {
-		VerifySinglePath();
-		ColumnIndex copy(*this);
-		reference<ColumnIndex> current(copy);
-		idx_t i = 0;
-		for (; i < max_depth && current.get().HasChildren(); i++) {
-			current = current.get().child_indexes[0];
-		}
-		reached_end = i < max_depth;
-		current.get().child_indexes.clear();
-		return copy;
-	}
 
 	bool IsPushdownExtract() const {
 		return index_type == ColumnIndexType::PUSHDOWN_EXTRACT;
