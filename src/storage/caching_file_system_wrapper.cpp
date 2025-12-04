@@ -1,6 +1,7 @@
 #include "duckdb/storage/caching_file_system_wrapper.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -30,6 +31,10 @@ void CachingFileHandleWrapper::Close() {
 //===----------------------------------------------------------------------===//
 CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db)
     : caching_file_system(file_system, db), underlying_file_system(file_system) {
+}
+
+CachingFileSystemWrapper CachingFileSystemWrapper::Get(ClientContext &context) {
+	return CachingFileSystemWrapper(FileSystem::GetFileSystem(context), *context.db);
 }
 
 CachingFileSystemWrapper::~CachingFileSystemWrapper() {
@@ -271,8 +276,7 @@ bool CachingFileSystemWrapper::CanHandleFile(const string &fpath) {
 //===----------------------------------------------------------------------===//
 void CachingFileSystemWrapper::Seek(FileHandle &handle, idx_t location) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.caching_handle->GetFileHandle();
-	underlying_file_system.Seek(file_handle, location);
+	wrapper.caching_handle->Seek(location);
 }
 
 void CachingFileSystemWrapper::Reset(FileHandle &handle) {
@@ -281,8 +285,8 @@ void CachingFileSystemWrapper::Reset(FileHandle &handle) {
 
 idx_t CachingFileSystemWrapper::SeekPosition(FileHandle &handle) {
 	auto &wrapper = handle.Cast<CachingFileHandleWrapper>();
-	auto &file_handle = wrapper.caching_handle->GetFileHandle();
-	return underlying_file_system.SeekPosition(file_handle);
+	auto& caching_handle = wrapper.caching_handle;
+	return caching_handle->SeekPosition();
 }
 
 bool CachingFileSystemWrapper::IsManuallySet() {

@@ -16,6 +16,7 @@ namespace duckdb {
 
 // Forward declaration.
 class DatabaseInstance;
+class ClientContext;
 class QueryContext;
 class CachingFileSystemWrapper;
 
@@ -43,6 +44,8 @@ class CachingFileSystemWrapper : public FileSystem {
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
+
+	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context);
 
 	DUCKDB_API std::string GetName() const override;
 

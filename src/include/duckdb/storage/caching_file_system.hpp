@@ -54,6 +54,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Seek(idx_t location);
 
 private:
 	//! Get the version tag of the file (for checking cache invalidation)

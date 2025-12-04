@@ -2,7 +2,7 @@
 
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/function/table/read_file.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/caching_file_system_wrapper.hpp"
 
 namespace duckdb {
 
@@ -55,12 +55,11 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 	auto files = state.file_list;
 
-	auto &regular_fs = FileSystem::GetFileSystem(context);
-	auto fs = CachingFileSystem::Get(context);
+	auto caching_fs = CachingFileSystemWrapper::Get(context);
 	const idx_t out_idx = 0;
 
 	// We utilize projection pushdown here to only read the file content if the 'data' column is requested
-	unique_ptr<CachingFileHandle> file_handle = nullptr;
+	unique_ptr<FileHandle> file_handle = nullptr;
 
 	// Given the columns requested, do we even need to open the file?
 	if (state.requires_file_open) {
@@ -68,11 +67,11 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		if (FileSystem::IsRemoteFile(file.path)) {
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
-		file_handle = fs.OpenFile(QueryContext(context), file, flags);
+		file_handle = caching_fs.OpenFile(file, flags);
 	} else {
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
-		if (FileSystem::IsRemoteFile(file.path) && !regular_fs.FileExists(file.path)) {
+		if (FileSystem::IsRemoteFile(file.path) && !caching_fs.FileExists(file.path)) {
 			output.SetCardinality(0);
 			done = true;
 			return SourceResultType::FINISHED;
@@ -104,27 +103,15 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 				// Read in batches of 128mb
 				constexpr idx_t MAX_READ_SIZE = 128LL * 1024 * 1024;
-				auto remaining_bytes = file_handle->GetFileHandle().IsPipe() ? MAX_READ_SIZE : file_size;
+				auto remaining_bytes = file_handle->IsPipe() ? MAX_READ_SIZE : file_size;
 				while (remaining_bytes > 0) {
 					const auto bytes_to_read = MinValue(remaining_bytes, MAX_READ_SIZE);
-					state.stream->GrowCapacity(bytes_to_read);
-
-					idx_t actually_read;
-					if (file_handle->IsRemoteFile()) {
-						// Remote file: caching read
-						data_ptr_t read_ptr;
-						actually_read = NumericCast<idx_t>(bytes_to_read);
-						auto buffer_handle = file_handle->Read(read_ptr, actually_read);
-						state.stream->WriteData(read_ptr, actually_read);
-					} else {
-						// Local file: non-caching read
-						actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
-						    state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
-						state.stream->SetPosition(state.stream->GetPosition() + actually_read);
-					}
+					state.stream->GrowCapacity(bytes_to_read);					
+					idx_t actually_read = NumericCast<idx_t>(file_handle->Read(state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
+					state.stream->SetPosition(state.stream->GetPosition() + actually_read);
 					AssertMaxFileSize(file.path, state.stream->GetPosition());
 
-					if (file_handle->GetFileHandle().IsPipe()) {
+					if (file_handle->IsPipe()) {
 						if (actually_read == 0) {
 							remaining_bytes = 0;
 						}
@@ -158,7 +145,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
 				// correctly)
 				try {
-					auto timestamp_seconds = file_handle->GetLastModifiedTime();
+					const auto timestamp_seconds = caching_fs.GetLastModifiedTime(*file_handle);
 					FlatVector::GetData<timestamp_tz_t>(last_modified_vector)[out_idx] =
 					    timestamp_tz_t(timestamp_seconds);
 				} catch (std::exception &ex) {
