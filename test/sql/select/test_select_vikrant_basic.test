@@ -1,1 +1,39 @@
 
+# Basic SELECT tests contributed by Vikrant
+# These tests check simple arithmetic, string functions, and comparisons.
+
+# Test 1: basic arithmetic
+query I
+SELECT 1 + 2;
+----
+3
+
+# Test 2: division
+query I
+SELECT 10 / 2;
+----
+5
+
+# Test 3: string length
+query I
+SELECT LENGTH('Vikrant');
+----
+7
+
+# Test 4: lowercase function
+query I
+SELECT LOWER('HELLO');
+----
+hello
+
+# Test 5: uppercase function
+query I
+SELECT UPPER('duckdb');
+----
+DUCKDB
+
+# Test 6: basic comparison
+query I
+SELECT CASE WHEN 5 > 3 THEN 'yes' ELSE 'no' END;
+----
+yes
