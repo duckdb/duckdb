@@ -15,6 +15,7 @@
         "test/sql/storage/temp_directory/max_swap_space_inmemory.test",
         "test/sql/storage/temp_directory/max_swap_space_error.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
+        "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/pg_catalog/system_functions.test"
       ]
     }
