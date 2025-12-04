@@ -77,6 +77,11 @@ public:
 	vector<ColumnIndex> &GetChildIndexesMutable() {
 		return child_indexes;
 	}
+	ColumnIndex CopyWithPrimaryIndex(idx_t new_primary_index) const {
+		auto copy(*this);
+		copy.index = new_primary_index;
+		return copy;
+	}
 	//! Creates a copy of the ColumnIndex, up to a maximum depth, stripping all children beyond that
 	ColumnIndex CreateSubset(idx_t max_depth, bool &reached_end) const {
 		VerifySinglePath();
