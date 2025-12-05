@@ -2,6 +2,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,34 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
+struct DuckDBSettingsBindData : TableFunctionData {
+	bool in_bytes = false;
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto res = make_uniq<DuckDBSettingsBindData>();
+		res->in_bytes = in_bytes;
+		return std::move(res);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<const DuckDBSettingsBindData>();
+		return in_bytes == other.in_bytes;
+	}
+};
+
+static bool ExtractInBytesArgument(const TableFunctionBindInput &input) {
+	bool in_bytes = false;
+	auto it = input.named_parameters.find("in_bytes");
+	if (it != input.named_parameters.end()) {
+		const auto &param = it->second;
+		if (param.IsNull()) {
+			throw BinderException("'in_bytes' parameter cannot be NULL");
+		}
+		in_bytes = param.GetValue<bool>();
+	};
+	return in_bytes;
+}
+
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
@@ -46,7 +75,15 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	return nullptr;
+	bool in_bytes = ExtractInBytesArgument(input);
+	if (in_bytes) {
+		names.emplace_back("memory_in_bytes");
+		return_types.emplace_back(LogicalType::UBIGINT);
+	}
+
+	auto bind_data = make_uniq<DuckDBSettingsBindData>();
+	bind_data->in_bytes = in_bytes;
+	return std::move(bind_data);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -111,8 +148,23 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	return std::move(result);
 }
 
+static optional_idx TryParseBytes(const string &str) {
+	try {
+		auto val = DBConfig::ParseMemoryLimit(str);
+		return optional_idx(val);
+	} catch (ParserException &e) {
+		return optional_idx();
+	} catch (InvalidInputException &e) {
+		return optional_idx();
+	}
+}
+
 void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBSettingsData>();
+	const auto &data_bind = data_p.bind_data->Cast<DuckDBSettingsBindData>();
+
+	const auto in_bytes = data_bind.in_bytes;
+
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
 		return;
@@ -126,8 +178,10 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		// return values:
 		// name, LogicalType::VARCHAR
 		output.SetValue(0, count, Value(entry.name));
-		// value, LogicalType::VARCHAR
+
+		// LogicalType::VARCHAR
 		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
+
 		// description, LogicalType::VARCHAR
 		output.SetValue(2, count, Value(entry.description));
 		// input_type, LogicalType::VARCHAR
@@ -136,14 +190,26 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		output.SetValue(4, count, Value(entry.scope));
 		// aliases, LogicalType::VARCHAR[]
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+
+		if (in_bytes) {
+			// memory-like setting is represented as a VARCHAR, like '128 KiB'
+			optional_idx parsed = TryParseBytes(entry.value.ToString());
+			if (parsed.IsValid()) {
+				output.SetValue(6, count, Value::UBIGINT(parsed.GetIndex()));
+			} else {
+				output.SetValue(6, count, Value(nullptr));
+			}
+		}
+
 		count++;
 	}
 	output.SetCardinality(count);
 }
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit));
+	TableFunction fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
+	fun.named_parameters["in_bytes"] = LogicalType::BOOLEAN;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

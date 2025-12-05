@@ -1,0 +1,107 @@
+# name: test/sql/table_function/duckdb_settings_in_bytes.test
+# description: Test duckdb_settings(in_bytes=...) returns bytes for memory-like settings
+# group: [table_function]
+
+# Configuring a setting
+statement ok
+PRAGMA wal_autocheckpoint='1 KiB';
+
+# Default behavior unchanged, value still exists as VARCHAR
+query I
+SELECT typeof(value) FROM duckdb_settings() WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+VARCHAR
+
+# Default behavior unchanged, the memory column still does not exist
+statement error
+SELECT memory_in_bytes FROM duckdb_settings() WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
+
+# when in_bytes=false, Default behavior unchanged, the memory column still does not exist
+statement error
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=false) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
+
+# In bytes mode the memory column should be a number (UBIGINT) for memory-like settings
+query I
+SELECT typeof(memory_in_bytes) FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+UBIGINT
+
+# The numeric value should match 1024 for the memory-like setting we just set
+query I
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+1024
+
+# the 0 should be considered as false
+statement error
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=0) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+Binder Error: Referenced column "memory_in_bytes" not found in FROM clause
+
+# Non-byte settings
+statement ok
+SET default_collation='nfc';
+
+# The memory_in_bytes column should be NULL for non-byte settings (like default_collation)
+query I
+SELECT memory_in_bytes IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
+----
+true
+
+# Another non-byte settings, should be returned as null in the memory_in_bytes column
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name='access_mode';
+----
+automatic
+
+# The memory_in_bytes column should be NULL for non-byte settings (like access_mode)
+query I
+SELECT memory_in_bytes IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='access_mode';
+----
+true
+
+# The original column should not change for non-byte settings
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
+----
+nfc
+
+# The original column should not change for byte settings
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name='wal_autocheckpoint';
+----
+1.0 KiB
+
+# We consider 1 as true
+query I
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=1) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
+----
+1024
+
+# - non-zero should be consider true
+query I
+SELECT memory_in_bytes FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
+----
+1024
+
+# Incorrect inputs should error
+# - unknown named parameter
+statement error
+SELECT * FROM duckdb_settings(hello=true);
+----
+Binder Error: Invalid named parameter "hello" for function duckdb_settings
+
+# single value
+statement error
+SELECT * FROM duckdb_settings(true);
+----
+
+# NULL
+statement error
+SELECT * FROM duckdb_settings(in_bytes=NULL);
+----
+Binder Error: 'in_bytes' parameter cannot be NULL
