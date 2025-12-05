@@ -4,6 +4,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/common/chrono.hpp"
+
+#include <duckdb/common/wait_events.hpp>
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
 #endif
@@ -28,7 +30,10 @@ static void SleepFunction(DataChunk &input, ExpressionState &state, Vector &resu
 		    if (sleep_ms < 0) {
 			    sleep_ms = 0;
 		    }
-		    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+		    {
+			    WaitEventScope wes(WaitEventType::TIMEOUT);
+			    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+		    }
 		    return NullResultType();
 #else
 	    	throw InvalidInputException("Function sleep() only available if DuckDB is compiled with threads");

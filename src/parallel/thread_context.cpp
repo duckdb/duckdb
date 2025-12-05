@@ -3,6 +3,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/wait_events.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,9 @@ ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 
 	log_context.thread_id = TaskScheduler::GetEstimatedCPUId();
 	logger = LogManager::Get(context).CreateLogger(log_context, true);
+
+	// initialize wait events thread-local info
+	WaitEvents::OnThreadStart(context);
 }
 
 ThreadContext::~ThreadContext() {

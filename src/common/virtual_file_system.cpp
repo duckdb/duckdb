@@ -5,6 +5,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/wait_events.hpp"
 
 namespace duckdb {
 
@@ -61,18 +62,22 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 }
 
 void VirtualFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	WaitEventScope wes(WaitEventType::IO_READ);
 	handle.file_system.Read(handle, buffer, nr_bytes, location);
 }
 
 void VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	WaitEventScope wes(WaitEventType::IO_WRITE);
 	handle.file_system.Write(handle, buffer, nr_bytes, location);
 }
 
 int64_t VirtualFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	WaitEventScope wes(WaitEventType::IO_READ);
 	return handle.file_system.Read(handle, buffer, nr_bytes);
 }
 
 int64_t VirtualFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	WaitEventScope wes(WaitEventType::IO_WRITE);
 	return handle.file_system.Write(handle, buffer, nr_bytes);
 }
 

@@ -68,6 +68,7 @@ add_library_unity(
   types.cpp
   bignum.cpp
   virtual_file_system.cpp
+  wait_events.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>

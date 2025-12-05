@@ -34,6 +34,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/common/wait_events.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -54,6 +55,9 @@ DBConfig::DBConfig() {
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
 	storage_extensions["__open_file__"] = OpenFileStorageExtension::Create();
+
+	// TODO - check what's the best practice to initialise these settings, should the wait events be an extension?
+	WaitEvents::RegisterSettings(*this);
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {

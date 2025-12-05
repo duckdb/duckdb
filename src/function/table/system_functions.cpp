@@ -40,6 +40,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBSecretTypesFun::RegisterFunction(*this);
 	DuckDBSequencesFun::RegisterFunction(*this);
 	DuckDBSettingsFun::RegisterFunction(*this);
+	DuckDBWaitEventsFun::RegisterFunction(*this);
 	DuckDBTablesFun::RegisterFunction(*this);
 	DuckDBTableSample::RegisterFunction(*this);
 	DuckDBTemporaryFilesFun::RegisterFunction(*this);
