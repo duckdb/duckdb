@@ -4,6 +4,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
@@ -133,6 +134,19 @@ void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
 		stats.child_stats[i].Verify(*child_entries[i], sel, count, true);
+	}
+}
+
+unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &stats, const StorageIndex &index) {
+	D_ASSERT(index.GetPrimaryIndex() < StructType::GetChildCount(stats.type));
+	auto &child_stats = GetChildStats(stats, index.GetPrimaryIndex());
+
+	auto &child_indexes = index.GetChildIndexes();
+	if (child_indexes.empty()) {
+		return child_stats.ToUnique();
+	} else {
+		D_ASSERT(child_indexes.size() == 1);
+		return child_stats.PushdownExtract(child_indexes[0]);
 	}
 }
 

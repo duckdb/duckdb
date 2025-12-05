@@ -215,7 +215,7 @@ public:
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();

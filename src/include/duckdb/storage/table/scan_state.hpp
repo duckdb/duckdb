@@ -95,6 +95,8 @@ struct ColumnScanState {
 	idx_t offset_in_column = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
 	idx_t internal_index = 0;
+	//! Storage index of the current column that's being scanned
+	StorageIndex storage_index;
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
@@ -114,7 +116,7 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const QueryContext &context_p, const LogicalType &type, const vector<StorageIndex> &children,
+	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
 	                optional_ptr<TableScanOptions> options);
 	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)

@@ -218,12 +218,16 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 void ColumnIndex::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(1, "index", index);
 	serializer.WritePropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", child_indexes);
+	serializer.WriteProperty<ColumnIndexType>(10, "index_type", index_type);
+	serializer.WriteProperty<LogicalType>(15, "type", type);
 }
 
 ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
 	ColumnIndex result;
 	deserializer.ReadPropertyWithDefault<idx_t>(1, "index", result.index);
 	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
+	deserializer.ReadProperty<ColumnIndexType>(10, "index_type", result.index_type);
+	deserializer.ReadProperty<LogicalType>(15, "type", result.type);
 	return result;
 }
 

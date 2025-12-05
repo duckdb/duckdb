@@ -1084,6 +1084,16 @@
         "id": 2,
         "name": "child_indexes",
         "type": "vector<ColumnIndex>"
+      },
+      {
+        "id": 10,
+        "name": "index_type",
+        "type": "ColumnIndexType"
+      },
+      {
+        "id": 15,
+        "name": "type",
+        "type": "LogicalType"
       }
     ],
     "pointer_type": "none"

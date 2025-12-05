@@ -202,7 +202,7 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatistics order_by,
                                                              const OrderByColumnType column_type,
                                                              const RowGroupOrderType order_type,
-                                                             const column_t column_idx, const idx_t row_offset,
+                                                             const StorageIndex &storage_index, const idx_t row_offset,
                                                              vector<PartitionStatistics> &stats) {
 	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
 
@@ -211,7 +211,7 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 			return {row_offset, 0};
 		}
 
-		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(column_idx);
+		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
 		Value comparison_value = RetrieveStat(*column_stats, order_by, column_type);
 		auto entry = RowGroupOffsetEntry {partition_stats.count, std::move(column_stats)};
 		ordered_row_groups.emplace(comparison_value, std::move(entry));

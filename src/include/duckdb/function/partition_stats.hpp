@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 
@@ -26,7 +27,7 @@ enum class CountType { COUNT_EXACT, COUNT_APPROXIMATE };
 
 struct PartitionRowGroup {
 	virtual ~PartitionRowGroup() = default;
-	virtual unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) = 0;
+	virtual unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) = 0;
 };
 
 struct PartitionStatistics {
