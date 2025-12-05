@@ -185,7 +185,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		}
 	}
 	// Only sort row groups by primary order column and prune with limit if set
-	return make_uniq<RowGroupOrderOptions>(column_index, order_by, order_type, column_type, combined_limit, 0);
+	return make_uniq<RowGroupOrderOptions>(column_index, order_by, order_type, column_type, combined_limit,
+	                                       static_cast<idx_t>(0));
 }
 
 } // namespace duckdb

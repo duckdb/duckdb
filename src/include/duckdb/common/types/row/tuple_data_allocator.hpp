@@ -21,7 +21,7 @@ class ContinuousIdSet;
 
 struct TupleDataBlock {
 public:
-	TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p);
+	TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p);
 
 	//! Disable copy constructors
 	TupleDataBlock(const TupleDataBlock &other) = delete;
@@ -54,7 +54,7 @@ public:
 
 class TupleDataAllocator {
 public:
-	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
 	                   shared_ptr<ArenaAllocator> stl_allocator);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
@@ -136,6 +136,8 @@ private:
 	//! The layout of the data
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
+	//! Memory tag (for keeping track what the allocated memory belongs to)
+	const MemoryTag tag;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows
