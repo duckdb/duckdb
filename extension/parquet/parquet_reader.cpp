@@ -122,7 +122,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		buf.resize(allocator, 8);
 		buf.zero();
 
-		transport.Prefetch(file_size - prefetch_size, prefetch_size);
+		auto res = transport.Prefetch(file_size - prefetch_size, prefetch_size);
+		res.ExecuteTasksSynchronously();
 		transport.SetLocation(file_size - 8);
 		transport.read(buf.ptr, 8);
 
@@ -131,7 +132,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
 		if (footer_len > prefetch_size - 8) {
-			transport.Prefetch(metadata_pos, footer_len);
+			auto res = transport.Prefetch(metadata_pos, footer_len);
+			res.ExecuteTasksSynchronously();
 		}
 	} else {
 		footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
@@ -142,7 +144,8 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		idx_t total_footer_len = footer_len + 8;
 		auto metadata_pos = file_size - total_footer_len;
 		transport.SetLocation(metadata_pos);
-		transport.Prefetch(metadata_pos, total_footer_len);
+		auto res = transport.Prefetch(metadata_pos, total_footer_len);
+		res.ExecuteTasksSynchronously();
 
 		auto read_head = transport.GetReadHead(metadata_pos);
 		auto data_ptr = read_head->buffer_ptr;
@@ -1261,9 +1264,12 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (!state.current_group_prefetched) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
 					if (total_compressed_size > 0) {
-						trans.Prefetch(GetGroupOffset(state), total_row_group_span);
+						auto res = trans.Prefetch(GetGroupOffset(state), total_row_group_span);
+						state.current_group_prefetched = true;
+						return res;
+					} else {
+						state.current_group_prefetched = true;
 					}
-					state.current_group_prefetched = true;
 				}
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
@@ -1287,7 +1293,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				trans.FinalizeRegistration();
 
 				if (!lazy_fetch) {
-					trans.PrefetchRegistered();
+					auto res = trans.PrefetchRegistered();
+					result.Reset();
+					return std::move(res);
 				}
 			}
 		}

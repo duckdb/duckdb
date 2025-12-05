@@ -247,7 +247,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		// 256 bytes should cover almost all headers (unless it's a V2 header with really LONG string statistics)
 		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
 		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
-		trans.Prefetch(trans.GetLocation(), prefetch_size);
+		auto res = trans.Prefetch(trans.GetLocation(), prefetch_size);
+		res.ExecuteTasksSynchronously();
 		reader.Read(page_hdr, *protocol);
 		trans.ClearPrefetch();
 	}
