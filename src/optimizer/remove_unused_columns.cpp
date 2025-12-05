@@ -566,19 +566,22 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	get.projection_ids.clear();
 	vector<idx_t> filtered_original_ids;
 	//! Find matching indices between the proj_sel and the col_sel
-	for (auto proj_sel_idx : proj_sel) {
+	for (auto to_keep : proj_sel) {
 		for (; col_idx < col_sel.size(); col_idx++) {
-			if (proj_sel_idx == col_sel[col_idx]) {
-				filtered_original_ids.push_back(col_idx);
+			if (to_keep == col_sel[col_idx]) {
+				filtered_original_ids.push_back(to_keep);
 				break;
 			}
 		}
 	}
 	auto original_ids = state.MoveOriginalIds();
+	col_idx = 0;
 	for (auto col : filtered_original_ids) {
-		for (idx_t i = 0; i < original_ids.size(); i++) {
-			if (original_ids[i] == col) {
-				get.projection_ids.push_back(i);
+		for (; col_idx < original_ids.size(); col_idx++) {
+			if (original_ids[col_idx] == col) {
+				get.projection_ids.push_back(col_idx);
+			} else if (original_ids[col_idx] > col) {
+				break;
 			}
 		}
 	}

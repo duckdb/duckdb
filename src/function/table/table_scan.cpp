@@ -810,9 +810,7 @@ static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, idx_
 	}
 	auto &column_type = types[column_idx];
 	if (column_type.id() != LogicalTypeId::STRUCT) {
-		throw InternalException(
-		    "Expected column_idx to be of type STRUCT in TableSupportsPushdownExtract, but received %s",
-		    column_type.ToString());
+		return false;
 	}
 	return true;
 }
