@@ -259,6 +259,12 @@ void CachingFileHandle::Seek(idx_t location) {
 	}
 }
 
+void CachingFileHandle::Close() {
+	if (file_handle != nullptr) {
+		file_handle->Close();
+	}
+}
+
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
                                                  vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
                                                  optional_idx &start_location_of_next_range) {

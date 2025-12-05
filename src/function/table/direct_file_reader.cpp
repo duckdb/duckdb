@@ -175,6 +175,9 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 	}
 	output.SetCardinality(1);
 	done = true;
+	if (file_handle != nullptr) {
+		file_handle->Close();
+	}
 	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 };
 
