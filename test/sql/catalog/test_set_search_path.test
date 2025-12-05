@@ -267,3 +267,82 @@ query I
 SELECT current_query();
 ----
 SELECT current_query();
+
+# =============================================================================
+# Temp schemas in search path
+# =============================================================================
+
+statement ok
+CREATE SCHEMA temp.ts1
+
+statement ok
+CREATE TEMPORARY TABLE temp.ts1.t1(val VARCHAR)
+
+statement ok
+INSERT INTO temp.ts1.t1 VALUES ('from temp')
+
+# Temp schema in search path
+statement ok
+SET SEARCH_PATH = 'temp.ts1'
+
+query I
+SELECT current_schemas(false)
+----
+[ts1]
+
+# Access temp table without qualification
+query I
+SELECT * FROM t1
+----
+from temp
+
+# Verify current_schemas(true) includes implicit schemas
+query I
+SELECT current_schemas(true)
+----
+[main, ts1, main, main, pg_catalog]
+
+# =============================================================================
+# Shadowing with custom temp schema
+# =============================================================================
+
+# Reset search path
+statement ok
+SET SEARCH_PATH = ''
+
+# Create a schema in the default catalog and temp catalog with the same name
+statement ok
+CREATE SCHEMA shadow_schema
+
+statement ok
+CREATE TABLE shadow_schema.tbl(source VARCHAR)
+
+statement ok
+INSERT INTO shadow_schema.tbl VALUES ('from default catalog')
+
+statement ok
+CREATE SCHEMA temp.shadow_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.shadow_schema.tbl(source VARCHAR)
+
+statement ok
+INSERT INTO temp.shadow_schema.tbl VALUES ('from temp')
+
+# With temp schema in search path, it should be accessible
+statement ok
+SET SEARCH_PATH = 'temp.shadow_schema'
+
+query I
+SELECT * FROM tbl
+----
+from temp
+
+query I
+SELECT * FROM shadow_schema.tbl
+----
+from temp
+
+# Reset
+statement ok
+SET SEARCH_PATH = ''
