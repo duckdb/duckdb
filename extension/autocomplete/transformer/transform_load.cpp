@@ -10,6 +10,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransf
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = LoadType::LOAD;
+	info->repo_is_alias = false;
 	info->filename = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 	result->info = std::move(info);
 	return std::move(result);

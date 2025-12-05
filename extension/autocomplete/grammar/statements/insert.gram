@@ -1,7 +1,9 @@
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
 OrAction <- 'OR' 'REPLACE' / 'IGNORE'
-ByNameOrPosition <- 'BY' 'NAME' / 'POSITION'
+ByNameOrPosition <- 'BY' InsertByName / InsertByPosition
+InsertByName <- 'NAME'
+InsertByPosition <- 'POSITION'
 
 InsertTarget <- BaseTableName InsertAlias?
 InsertAlias <- 'AS' Identifier
@@ -9,13 +11,13 @@ InsertAlias <- 'AS' Identifier
 ColumnList <- List(ColId)
 InsertColumnList <- Parens(ColumnList)
 
-InsertValues <- SelectStatement / DefaultValues
+InsertValues <- SelectStatementInternal / DefaultValues
 DefaultValues <- 'DEFAULT' 'VALUES'
 
 OnConflictClause <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction
 
 OnConflictTarget <- OnConflictExpressionTarget / OnConflictIndexTarget
-OnConflictExpressionTarget <- Parens(List(ColId)) WhereClause?
+OnConflictExpressionTarget <- ColumnIdList WhereClause?
 OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
 
 
