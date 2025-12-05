@@ -234,80 +234,22 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
-uint8_t ColumnReader::GetModuleHeader(uint16_t page_ordinal) const {
-	if (page_ordinal > 0) {
-		// always return data page header if ordinal > 0
-		return ParquetCrypto::DataPageHeader;
-	}
-	// There is at maximum 1 dictionary, index or bf filter page header per column chunk
-	if (chunk->meta_data.__isset.dictionary_page_offset) {
-		return ParquetCrypto::DictionaryPageHeader;
-	} else if (chunk->meta_data.__isset.index_page_offset) {
-		return ParquetCrypto::OffsetIndex;
-	} else if (chunk->meta_data.__isset.bloom_filter_offset) {
-		return ParquetCrypto::BloomFilterHeader;
-	}
-
-	return ParquetCrypto::DataPageHeader;
+void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
+	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.page_ordinal =
+	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
+	reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
 }
 
-uint8_t ColumnReader::GetModule(PageType::type page_type, uint16_t page_ordinal) const {
-	if (chunk->meta_data.__isset.bloom_filter_offset && page_ordinal == 0) {
-		// return bitset if it is the first page ordinal
-		return ParquetCrypto::BloomFilterBitset;
-	}
-
-	switch (page_type) {
-	case PageType::DATA_PAGE:
-	case PageType::DATA_PAGE_V2:
-		return ParquetCrypto::DataPage;
-	case PageType::DICTIONARY_PAGE:
-		return ParquetCrypto::DictionaryPage;
-	case PageType::INDEX_PAGE:
-		if (chunk->meta_data.__isset.index_page_offset) {
-			return ParquetCrypto::OffsetIndex;
-		}
-		return ParquetCrypto::ColumnIndex;
-	default:
-		throw InvalidInputException("Module not found");
-	}
+void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
+	// to get the allocator; reader.allocator;
+	aad_crypto_metadata.module = ParquetCrypto::GetModule(*chunk, page_type, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.page_ordinal =
+	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
+	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
 }
 
-uint16_t ColumnReader::GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal) {
-	switch (module) {
-	case ParquetCrypto::DataPageHeader:
-	case ParquetCrypto::DataPage:
-		if (chunk->meta_data.__isset.dictionary_page_offset) {
-			page_ordinal -= 1;
-		} else if (chunk->meta_data.__isset.index_page_offset) {
-			page_ordinal -= 1;
-		} else if (chunk->meta_data.__isset.bloom_filter_offset) {
-			page_ordinal -= 1;
-		}
-
-		return page_ordinal;
-	default:
-		// All modules except DataPage(Header) are -1 (absent)
-		return -1;
-	}
-}
-
-void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal,
-                                 uint16_t row_group_ordinal) {
-	uint8_t module = GetModuleHeader(page_ordinal);
-	uint16_t page_ordinal_ = GetFinalPageOrdinal(module, page_ordinal);
-	reader.ReadEncrypted(object, *protocol, row_group_ordinal, ColumnIndex(), module, page_ordinal_);
-}
-
-void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module,
-                                     uint16_t row_group_ordinal, uint16_t col_idx, uint16_t page_ordinal) {
-	int8_t module_ = GetModule(module, page_ordinal);
-	uint16_t page_ordinal_ = GetFinalPageOrdinal(module_, page_ordinal);
-	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, row_group_ordinal, ColumnIndex(), module_, page_ordinal_);
-}
-
-void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal,
-                               optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
@@ -318,7 +260,7 @@ void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal
 	if (trans.HasPrefetch()) {
 		// Already has some data prefetched, let's not mess with it
 		if (reader.parquet_options.encryption_config) {
-			ReadEncrypted(page_hdr, page_ordinal, row_group_ordinal);
+			ReadEncrypted(page_hdr);
 		} else {
 			reader.Read(page_hdr, *protocol);
 		}
@@ -329,7 +271,7 @@ void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal
 		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
 		trans.Prefetch(trans.GetLocation(), prefetch_size);
 		if (reader.parquet_options.encryption_config) {
-			ReadEncrypted(page_hdr, page_ordinal, row_group_ordinal);
+			ReadEncrypted(page_hdr);
 		} else {
 			reader.Read(page_hdr, *protocol);
 		}
@@ -347,15 +289,15 @@ void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
-		PreparePageV2(page_hdr, ParquetCrypto::DataPage, page_ordinal, row_group_ordinal);
+		PreparePageV2(page_hdr);
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DATA_PAGE:
-		PreparePage(page_hdr, ParquetCrypto::DataPage, page_ordinal, row_group_ordinal);
+		PreparePage(page_hdr);
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE: {
-		PreparePage(page_hdr, ParquetCrypto::DictionaryPage, page_ordinal, row_group_ordinal);
+		PreparePage(page_hdr);
 		auto dictionary_size = page_hdr.dictionary_page_header.num_values;
 		if (dictionary_size < 0) {
 			throw InvalidInputException("Failed to read file \"%s\": Invalid dictionary page header (num_values < 0)",
@@ -373,8 +315,7 @@ void ColumnReader::PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal
 void ColumnReader::ResetPage() {
 }
 
-void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal,
-                                 uint16_t row_group_ordinal) {
+void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
@@ -390,8 +331,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t 
 	}
 	if (uncompressed) {
 		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, page_hdr.type, row_group_ordinal,
-			                  ColumnIndex(), page_ordinal);
+			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
 		} else {
 			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		}
@@ -409,8 +349,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t 
 	}
 
 	if (reader.parquet_options.encryption_config) {
-		ReadDataEncrypted(block->ptr, uncompressed_bytes, page_hdr.type, row_group_ordinal, ColumnIndex(),
-		                  page_ordinal);
+		ReadDataEncrypted(block->ptr, uncompressed_bytes, page_hdr.type);
 	} else {
 		reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
 	}
@@ -421,8 +360,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr, uint8_t module, uint16_t 
 		ResizeableBuffer compressed_buffer;
 		compressed_buffer.resize(GetAllocator(), compressed_bytes);
 		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(compressed_buffer.ptr, compressed_bytes, page_hdr.type, row_group_ordinal, ColumnIndex(),
-			                  page_ordinal);
+			ReadDataEncrypted(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
 		} else {
 			reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 		}
@@ -440,8 +378,7 @@ void ColumnReader::AllocateBlock(idx_t size) {
 	}
 }
 
-void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t page_ordinal,
-                               uint16_t row_group_ordinal) {
+void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
 
@@ -461,8 +398,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t pa
 			throw std::runtime_error("Page size mismatch");
 		}
 		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(block->ptr, compressed_page_size, page_hdr.type, row_group_ordinal, ColumnIndex(),
-			                  page_ordinal);
+			ReadDataEncrypted(block->ptr, compressed_page_size, page_hdr.type);
 		} else {
 			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
 		}
@@ -472,8 +408,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, uint16_t pa
 	ResizeableBuffer compressed_buffer;
 	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
 	if (reader.parquet_options.encryption_config) {
-		ReadDataEncrypted(compressed_buffer.ptr, compressed_page_size, page_hdr.type, row_group_ordinal, ColumnIndex(),
-		                  page_ordinal);
+		ReadDataEncrypted(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
 	} else {
 		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_page_size);
 	}
@@ -635,23 +570,24 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal) {
+void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 	// we need to reset the location because multiple column readers share the same protocol
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	trans.SetLocation(chunk_read_offset);
 
 	// Perform any skips that were not applied yet.
 	if (define_out && repeat_out) {
-		ApplyPendingSkips(define_out, repeat_out, row_group_ordinal);
+		ApplyPendingSkips(define_out, repeat_out);
 	}
 }
 
-idx_t ColumnReader::ReadPageHeaders(idx_t max_read, uint16_t row_group_ordinal = -1,
-                                    optional_ptr<const TableFilter> filter,
+idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
                                     optional_ptr<TableFilterState> filter_state) {
 	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
-		PrepareRead(page_ordinal, row_group_ordinal, filter, filter_state);
+		aad_crypto_metadata.page_ordinal = page_ordinal;
+		D_ASSERT(page_ordinal == aad_crypto_metadata.page_ordinal);
+		PrepareRead(filter, filter_state);
 		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
@@ -736,14 +672,13 @@ void ColumnReader::FinishRead(idx_t read_count) {
 	group_rows_available -= read_count;
 }
 
-idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                 uint16_t row_group_ordinal) {
+idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
-		auto read_now = ReadPageHeaders(to_read, row_group_ordinal);
+		auto read_now = ReadPageHeaders(to_read);
 
 		ReadData(read_now, define_out, repeat_out, result, result_offset);
 
@@ -755,28 +690,27 @@ idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, dat
 	return num_values;
 }
 
-idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                         uint16_t row_group_ordinal) {
-	BeginRead(define_out, repeat_out, row_group_ordinal);
-	return ReadInternal(num_values, define_out, repeat_out, result, row_group_ordinal);
+idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+	BeginRead(define_out, repeat_out);
+	return ReadInternal(num_values, define_out, repeat_out, result);
 }
 
 void ColumnReader::Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-                          const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal) {
+                          const SelectionVector &sel, idx_t approved_tuple_count) {
 	if (SupportsDirectSelect() && approved_tuple_count < num_values) {
-		DirectSelect(num_values, define_out, repeat_out, result_out, sel, approved_tuple_count, row_group_ordinal);
+		DirectSelect(num_values, define_out, repeat_out, result_out, sel, approved_tuple_count);
 		return;
 	}
-	Read(num_values, define_out, repeat_out, result_out, row_group_ordinal);
+	Read(num_values, define_out, repeat_out, result_out);
 }
 
 void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal_p) {
+                                const SelectionVector &sel, idx_t approved_tuple_count) {
 	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
-	BeginRead(define_out, repeat_out, row_group_ordinal_p);
-	auto read_now = ReadPageHeaders(num_values, row_group_ordinal_p);
+	BeginRead(define_out, repeat_out);
+	auto read_now = ReadPageHeaders(num_values);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
@@ -789,29 +723,28 @@ void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data
 		return;
 	}
 	// fallback to regular read + filter
-	ReadInternal(num_values, define_out, repeat_out, result, row_group_ordinal_p);
+	ReadInternal(num_values, define_out, repeat_out, result);
 }
 
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
                           const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-                          idx_t &approved_tuple_count, bool is_first_filter, uint16_t row_group_ordinal_p) {
+                          idx_t &approved_tuple_count, bool is_first_filter) {
 	if (SupportsDirectFilter() && is_first_filter) {
-		DirectFilter(num_values, define_out, repeat_out, result, filter, filter_state, sel, approved_tuple_count,
-		             row_group_ordinal_p);
+		DirectFilter(num_values, define_out, repeat_out, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
-	Select(num_values, define_out, repeat_out, result, sel, approved_tuple_count, row_group_ordinal_p);
+	Select(num_values, define_out, repeat_out, result, sel, approved_tuple_count);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
 void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
                                 const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-                                idx_t &approved_tuple_count, uint16_t row_group_ordinal_p) {
+                                idx_t &approved_tuple_count) {
 	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
-	BeginRead(define_out, repeat_out, row_group_ordinal_p);
-	auto read_now = ReadPageHeaders(num_values, row_group_ordinal_p, &filter, &filter_state);
+	BeginRead(define_out, repeat_out);
+	auto read_now = ReadPageHeaders(num_values, &filter, &filter_state);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
@@ -830,7 +763,7 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 		return;
 	}
 	// fallback to regular read + filter
-	ReadInternal(num_values, define_out, repeat_out, result, row_group_ordinal_p);
+	ReadInternal(num_values, define_out, repeat_out, result);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
@@ -845,7 +778,7 @@ void ColumnReader::Skip(idx_t num_values) {
 	pending_skips += num_values;
 }
 
-void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal) {
+void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
 	if (pending_skips == 0) {
 		return;
 	}
@@ -854,7 +787,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 
 	auto to_skip = num_values;
 	// start reading but do not apply skips (we are skipping now)
-	BeginRead(nullptr, nullptr, row_group_ordinal);
+	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
 		auto skip_now = ReadPageHeaders(to_skip);

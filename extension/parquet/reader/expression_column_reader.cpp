@@ -28,12 +28,11 @@ void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<
 	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 }
 
-idx_t ExpressionColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                   uint16_t row_group_ordinal) {
+idx_t ExpressionColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	intermediate_chunk.Reset();
 	auto &intermediate_vector = intermediate_chunk.data[0];
 
-	auto amount = child_reader->Read(num_values, define_out, repeat_out, intermediate_vector, row_group_ordinal);
+	auto amount = child_reader->Read(num_values, define_out, repeat_out, intermediate_vector);
 	// Execute the expression
 	intermediate_chunk.SetCardinality(amount);
 	executor.ExecuteExpression(intermediate_chunk, result);

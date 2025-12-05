@@ -90,21 +90,6 @@ static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t
 	}
 }
 
-unique_ptr<AdditionalAuthenticatedData> ParquetReader::GetFooterAdditionalAuthenticatedData(string aad_prefix) {
-	auto prefix_size = aad_prefix.size();
-	if (aad_prefix.empty()) {
-		// DuckDB Encrypted Parquet File written before V1.5
-		return nullptr;
-	}
-
-	unique_ptr<AdditionalAuthenticatedData> aad = make_uniq<AdditionalAuthenticatedData>(prefix_size, sizeof(uint8_t));
-	memcpy(aad->data(), aad_prefix.data(), prefix_size);
-	auto current_offset = prefix_size;
-	// ParquetCrypto::Footer = 0
-	Store<uint8_t>(0, aad->data() + current_offset);
-	return aad;
-}
-
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
@@ -183,7 +168,11 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			                            file_handle.GetPath());
 		}
 		auto file_aad = crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique;
-		auto footer_aad = ParquetReader::GetFooterAdditionalAuthenticatedData(file_aad);
+		unique_ptr<ParquetAdditionalAuthenticatedData> footer_aad = nullptr;
+		if (!file_aad.empty()) {
+			footer_aad = make_uniq<ParquetAdditionalAuthenticatedData>(allocator);
+			footer_aad->WriteFooterAAD(file_aad);
+		}
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
 		                    std::move(footer_aad));
 	} else {
@@ -948,61 +937,13 @@ string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAl
 	}
 }
 
-unique_ptr<AdditionalAuthenticatedData> ParquetReader::GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
-                                                                   uint16_t column_ordinal,
-                                                                   uint16_t page_ordinal) const {
-	// For the parquet encryption spec, additional authenticated data (AAD) consists of:
-	// (1) a unique prefix constructed by: an optional aad-prefix (arbitrary length, ignored for now)
-	// + a unique file identifier (default 8 bytes)
-	// (2) a suffix, which length varies according to the module type, consisting of:
-	// + module type (1 byte)
-	// + row group ordinal (2 bytes, optional)
-	// + column ordinal (2 bytes, optional)
-	// + page ordinal (2 bytes, optional)
-
-	auto file_aad = GetUniqueFileIdentifier(metadata->crypto_metadata->encryption_algorithm);
-
-	if (file_aad.empty()) {
-		return nullptr;
-	}
-
-	idx_t max_suffix_bytes = ParquetCrypto::AAD_MAX_SUFFIX_BYTES;
-	auto aad = make_uniq<AdditionalAuthenticatedData>(file_aad.size(), max_suffix_bytes);
-
-	memcpy(aad->data(), file_aad.data(), file_aad.size());
-	auto current_offset = file_aad.size();
-	Store<uint8_t>(module_type, aad->data() + current_offset);
-	current_offset += sizeof(uint8_t);
-
-	if (module_type == ParquetCrypto::Footer) {
-		// We can return directly if module is footer
-		aad->SetTotalSize(current_offset);
-		return aad;
-	}
-
-	Store<uint16_t>(row_group_ordinal, aad->data() + current_offset);
-	current_offset += sizeof(uint16_t);
-	Store<uint16_t>(column_ordinal, aad->data() + current_offset);
-	current_offset += sizeof(uint16_t);
-
-	if (page_ordinal == 65535) {
-		// No page ordinal, we adjust the size and return the aad
-		aad->SetTotalSize(current_offset);
-		return aad;
-	}
-
-	Store<uint16_t>(page_ordinal, aad->data() + current_offset);
-	return aad;
-}
-
 uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
 	return object.read(&iprot);
 }
 
 uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
-                                      uint16_t row_group_ordinal, uint16_t col_idx, uint8_t module,
-                                      uint16_t page_ordinal) {
-	auto result_aad = GenerateAAD(module, row_group_ordinal, col_idx, page_ordinal);
+                                      CryptoMetaData &aad_crypto_metadata) const {
+	auto result_aad = ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 	return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
 	                           std::move(result_aad));
 }
@@ -1013,9 +954,8 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 }
 
 uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-                                          const uint32_t buffer_size, uint16_t row_group_ordinal, uint16_t col_idx,
-                                          uint8_t module, uint16_t page_ordinal) {
-	auto result_aad = GenerateAAD(module, row_group_ordinal, col_idx, page_ordinal);
+                                          const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const {
+	auto result_aad = ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
 	                               *encryption_util, std::move(result_aad));
 }
@@ -1161,7 +1101,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	auto col_idx = MultiFileLocalIndex(i);
 	auto column_id = column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
-	column_reader.InitializeNextRowGroup(GetGroup(state).ordinal);
+
+	// keep track of column and row group ordinal if data is encrypted
+	if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+		                                       GetGroup(state).ordinal);
+	}
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
@@ -1433,8 +1378,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				auto &child_reader = root_reader.GetChildReader(column_id);
 				auto row_group_ordinal = GetGroup(state).ordinal;
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter,
-				                    row_group_ordinal);
+				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
@@ -1455,8 +1399,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			auto row_group_ordinal = GetGroup(state).ordinal;
-			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count,
-			                    row_group_ordinal);
+			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+				                                      GetGroup(state).ordinal);
+			}
+			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
 			result.Slice(state.sel, filter_count);
@@ -1468,7 +1415,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			auto row_group_ordinal = GetGroup(state).ordinal;
-			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector, row_group_ordinal);
+			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+				                                      GetGroup(state).ordinal);
+			}
+			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
 				                            file_col_idx, scan_count, rows_read);

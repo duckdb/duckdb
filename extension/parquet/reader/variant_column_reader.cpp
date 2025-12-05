@@ -51,8 +51,7 @@ static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_val
 	return LogicalType::STRUCT(std::move(children));
 }
 
-idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                uint16_t row_group_ordinal) {
+idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
 	}
@@ -69,10 +68,9 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = *group_entries[0];
 
-	auto metadata_values = child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out,
-	                                                                metadata_intermediate, row_group_ordinal);
-	auto value_values = child_readers[value_reader_idx]->Read(num_values, define_out, repeat_out, value_intermediate,
-	                                                          row_group_ordinal);
+	auto metadata_values =
+	    child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out, metadata_intermediate);
+	auto value_values = child_readers[value_reader_idx]->Read(num_values, define_out, repeat_out, value_intermediate);
 
 	D_ASSERT(child_readers[metadata_reader_idx]->Schema().name == "metadata");
 	D_ASSERT(child_readers[value_reader_idx]->Schema().name == "value");
@@ -84,8 +82,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		auto typed_values =
-		    typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1], row_group_ordinal);
+		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");

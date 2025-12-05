@@ -21,10 +21,9 @@ public:
 	ListColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
 	                 unique_ptr<ColumnReader> child_column_reader_p);
 
-	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	           uint16_t row_group_ordinal) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) override;
 
-	void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal) override;
+	void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		child_column_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
@@ -44,7 +43,7 @@ public:
 
 protected:
 	template <class OP>
-	idx_t ReadInternal(uint16_t row_group_ordinal, uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
+	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
 	                   optional_ptr<Vector> result_out);
 
 private:

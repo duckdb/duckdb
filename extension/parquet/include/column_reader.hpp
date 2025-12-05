@@ -21,6 +21,7 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
+#include "parquet_crypto.hpp"
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -67,13 +68,12 @@ public:
 public:
 	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                   uint16_t row_group_ordinal);
+	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
 	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal);
+	                    const SelectionVector &sel, idx_t approved_tuple_count);
 	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	                    const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, bool is_first_filter, uint16_t row_group_ordinal);
+	                    idx_t &approved_tuple_count, bool is_first_filter);
 	static void ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
@@ -96,9 +96,18 @@ public:
 		return column_schema.max_repeat;
 	}
 
-	void InitializeNextRowGroup(idx_t row_group_ordinal_p) {
-		crypto_meta_data.column_ordinal = ColumnIndex();
-		crypto_meta_data.row_group_ordinal = row_group_ordinal_p;
+	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
+	                              idx_t row_group_ordinal_p) {
+		std::string unique_file_identifier;
+		if (encryption_algorithm.__isset.AES_GCM_V1) {
+			unique_file_identifier = encryption_algorithm.AES_GCM_V1.aad_file_unique;
+		} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+			throw InternalException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
+		} else {
+			throw InternalException("File is encrypted but no encryption algorithm is set");
+		}
+
+		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnIndex());
 	}
 
 	virtual idx_t FileOffset() const;
@@ -181,25 +190,20 @@ protected:
 	}
 	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	                  const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                  idx_t &approved_tuple_count, uint16_t row_group_ordinal);
+	                  idx_t &approved_tuple_count);
 	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-	                  const SelectionVector &sel, idx_t approved_tuple_count, uint16_t row_group_ordinal);
-	void ReadEncrypted(duckdb_apache::thrift::TBase &object, uint16_t page_ordinal, uint16_t row_group_ordinal);
-	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module,
-	                       uint16_t row_group_ordinal, uint16_t col_idx, uint16_t page_ordinal);
-	uint16_t GetFinalPageOrdinal(uint8_t module, uint16_t page_ordinal);
-	uint8_t GetModule(PageType::type page_type, uint16_t page_ordinal) const;
-	uint8_t GetModuleHeader(uint16_t page_ordinal) const;
+	                  const SelectionVector &sel, idx_t approved_tuple_count);
+	void ReadEncrypted(duckdb_apache::thrift::TBase &object);
+	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module);
 
 private:
 	//! Check if a previous table filter has filtered out this page
 	bool PageIsFilteredOut(PageHeader &page_hdr);
-	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal);
+	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
-	idx_t ReadPageHeaders(idx_t max_read, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter = nullptr,
+	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
 	                      optional_ptr<TableFilterState> filter_state = nullptr);
-	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-	                   uint16_t row_group_ordinal);
+	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
 	//! Returns whether all values are valid (i.e., not NULL)
 	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
@@ -284,7 +288,7 @@ protected:
 	                         Vector &result, const SelectionVector &sel, idx_t count);
 
 	// applies any skips that were registered using Skip()
-	virtual void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out, uint16_t row_group_ordinal);
+	virtual void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out);
 
 	inline bool HasDefines() const {
 		return MaxDefine() > 0;
@@ -305,13 +309,10 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void PrepareRead(uint16_t page_ordinal, uint16_t row_group_ordinal, optional_ptr<const TableFilter> filter,
-	                 optional_ptr<TableFilterState> filter_state);
-	void PreparePage(PageHeader &page_hdr, uint8_t module = -1, uint16_t page_ordinal = -1,
-	                 uint16_t row_group_ordinal = -1);
+	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state);
+	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
-	void PreparePageV2(PageHeader &page_hdr, uint8_t module = -1, uint16_t page_ordinal = -1,
-	                   uint16_t row_group_ordinal = -1);
+	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
@@ -320,8 +321,6 @@ private:
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
-	uint16_t row_group_ordinal;
-	uint16_t column_ordinal;
 
 	shared_ptr<ResizeableBuffer> block;
 
@@ -334,7 +333,7 @@ private:
 	DeltaLengthByteArrayDecoder delta_length_byte_array_decoder;
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
-	CryptoMetaData crypto_meta_data;
+	CryptoMetaData aad_crypto_metadata;
 
 	//! Resizeable buffers used for the various encodings above
 	ResizeableBuffer encoding_buffers[2];

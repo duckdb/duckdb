@@ -1,26 +1,13 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
 class DatabaseInstance;
 class AttachedDatabase;
 class FileBuffer;
-
-struct CryptoMetaData {
-	CryptoMetaData();
-	void Initialize(int8_t module = -1, int16_t row_group_ordinal = -1, int16_t column_ordinal = -1,
-	                int16_t page_ordinal = -1);
-
-	int8_t module;
-	int16_t row_group_ordinal;
-	int16_t column_ordinal;
-	int16_t page_ordinal;
-
-private:
-	bool initialized = false;
-};
 
 struct EncryptionTag {
 	EncryptionTag();
@@ -40,24 +27,23 @@ private:
 	unique_ptr<data_t[]> nonce;
 };
 
-struct AdditionalAuthenticatedData {
-	explicit AdditionalAuthenticatedData(ClientContext &context);
-	data_ptr_t data() const;
-	idx_t size() const;
-	idx_t GetPrefixSize() const;
+class AdditionalAuthenticatedData {
+public:
+	AdditionalAuthenticatedData(Allocator &allocator)
+	    : additional_authenticated_data(make_uniq<MemoryStream>(allocator, INITIAL_AAD_CAPACITY)) {
+	}
+	virtual ~AdditionalAuthenticatedData();
 
-	void WritePrefix(const std::string &prefix);
-
-	// make this virtual?
-	void WriteSuffix(const CryptoMetaData &crypto_meta_data) const;
+public:
+	data_ptr_t data();
+	idx_t size();
+	void WriteData(const_data_ptr_t source, idx_t write_size);
 
 private:
 	static constexpr uint32_t INITIAL_AAD_CAPACITY = 32;
 
-private:
+protected:
 	unique_ptr<MemoryStream> additional_authenticated_data;
-	optional_idx additional_authenticated_data_prefix_size;
-	bool is_set_prefix = false;
 };
 
 class EncryptionEngine {
