@@ -46,7 +46,8 @@
         "test/sql/storage/catalog/test_store_sequences.test",
         "test/sql/storage/wal/wal_sequence_uncommitted_transaction.test",
         "test/sql/storage/wal/wal_store_default_sequence.test",
-        "test/sql/storage/wal/wal_store_sequences.test"
+        "test/sql/storage/wal/wal_store_sequences.test",
+        "test/sql/storage/catalog/test_store_temporary_schema.test"
       ]
     },
     {
