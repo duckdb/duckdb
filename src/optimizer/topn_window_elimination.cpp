@@ -2,7 +2,10 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -115,6 +118,23 @@ idx_t TraverseAndFindAggregateOffset(const unique_ptr<LogicalOperator> &op) {
 	return aggregate.groups.size();
 }
 
+string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column_id) {
+	reference<LogicalOperator> current_op = *op;
+
+	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
+		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
+		D_ASSERT(op.get()->expressions.size() >= column_id &&
+		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
+		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
+		column_id = colref.binding.column_index;
+		current_op = *op.get()->children[0];
+	}
+
+	const auto &logical_get = current_op.get().Cast<LogicalGet>();
+	const auto column_index = logical_get.GetColumnIds()[column_id];
+	return logical_get.GetColumnName(column_index);
+}
+
 } // namespace
 
 TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer &optimizer,
@@ -183,7 +203,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		// Try circumventing struct-packing with late materialization
 		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
-		if (aggregate_payload.size() == 1) {
+		if (late_mat_lhs && aggregate_payload.size() == 1) {
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
 	}
@@ -852,6 +872,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 	auto lhs = ConstructLHS(rhs_get, lhs_projections);
 
 	const auto rhs_rowid_column_idxs = rhs_get.function.get_row_id_columns(context, rhs_get.bind_data.get());
+	if (rhs_rowid_column_idxs.size() >= args.size()) {
+		// Only use late materializtion if we can reduce the number of args
+		return nullptr;
+	}
+
 	vector<TableColumn> rhs_rowid_columns;
 	for (const auto &col_idx : rhs_rowid_column_idxs) {
 		rhs_rowid_columns.push_back(rhs_get.virtual_columns[col_idx]);
@@ -956,15 +981,25 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	condition.comparison = ExpressionType::COMPARE_EQUAL;
 
 	lhs->ResolveOperatorTypes();
-	const auto lhs_rowid_idx = lhs->types.size() - 1;
-	const auto rhs_rowid_idx = rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
-	condition.left = make_uniq<BoundColumnRefExpression>("rowid", lhs->types[lhs_rowid_idx],
-	                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-	condition.right = make_uniq<BoundColumnRefExpression>("rowid", rhs->types[aggregate_offset],
-	                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
+	const idx_t rowid_column_count =
+	    params.include_row_number ? rhs->types.size() - (aggregate_offset + 1) : rhs->types.size() - aggregate_offset;
+	const idx_t rhs_binding_offset =
+	    rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
-	join->conditions.push_back(std::move(condition));
+	for (idx_t i = 0; i < rowid_column_count; i++) {
+		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
+		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
+		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
+
+		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
+		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
+		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
+
+		join->conditions.push_back(std::move(condition));
+	}
+
 	if (params.include_row_number) {
 		// Add row_number to join result
 		join->join_type = JoinType::INNER;
