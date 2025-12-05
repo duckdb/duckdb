@@ -7,6 +7,7 @@ add_library_unity(
   transform_detach.cpp
   transform_call.cpp
   transform_checkpoint.cpp
+  transform_cluster.cpp
   transform_create_function.cpp
   transform_comment_on.cpp
   transform_copy.cpp
