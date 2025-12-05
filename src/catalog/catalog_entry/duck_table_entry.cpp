@@ -248,82 +248,76 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		throw InternalException("Unrecognized alter table type!");
 	}
 }
+//! When the vector is not constant, return nullptr, otherwise a ptr to the constant vector
+unique_ptr<Vector> GetVectorWhenConstant(DataChunk &update_chunk, ExpressionExecutor &executor) {
+	update_chunk.SetCardinality(1);
+	executor.SetChunk(&update_chunk);
+	executor.ExecuteExpression(0, update_chunk.data[0]);
+	bool is_constant_default = update_chunk.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (!is_constant_default) {
+		return nullptr;
+	}
+	auto constant_vector = make_uniq<Vector>(update_chunk.data[0].GetType());
+	constant_vector->Reference(update_chunk.data[0]);
+	return constant_vector;
+}
 
+//! Populates the newly added column with its default value for all existing rows.
 unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
-	/* USES:
-	 * InCatalogEntry.catalog (Catalog&)
-	 *	The catalog the entry belongs to
-	 */
 	auto &duck_transaction = DuckTransaction::Get(context, catalog);
-
-	// The newly added column is the last logical column
-	/* USES:
-	 * TableCatalogEntry.columns (ColumnList)
-	 *	A list of columns that are part of this table
-	 */
 	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1);
 	auto new_column_physical_idx = columns.LogicalToPhysical(new_column_logical_idx);
 
-	// Set up scan to read all row IDs
-	TableScanState scan_state;
+	// Initialize scan for only row ids
+	TableScanState scan_state_for_row_ids;
 	vector<StorageIndex> column_ids;
-	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID); // We only need row IDs
+	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	storage->InitializeScan(context, duck_transaction, scan_state_for_row_ids, column_ids, nullptr);
 
-	/* USES:
-	 * DuckTableEntry.storage (shared_ptr<DataTable>)
-	 *	A reference to the underlying storage unit used for this table
-	 */
-	storage->InitializeScan(context, duck_transaction, scan_state, column_ids, nullptr);
-	// Bind constraints for update
+	// Bind constraints and create initialize a TableUpdateState
 	auto binder = Binder::CreateBinder(context);
-
-	/* USES:
-	 * TableCatalogEntry.constraints (vector<unique_ptr<Constraint>>)
-	 *	A list of constraints that are part of this table
-	 *
-	 * CatalogEntry.name (string)
-	 *	In this case, the table name
-	 */
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
-
-	// Initialize update state
 	auto update_state = storage->InitializeUpdate(*this, context, bound_constraints);
 
-	// Prepare update column list (only the new column)
-	vector<PhysicalIndex> update_columns;
-	update_columns.push_back(new_column_physical_idx);
+	auto &allocator = Allocator::Get(context);
 
-	// Scan and update in batches
-	DataChunk scan_chunk;
-	// TODO: Why ROW_TYPE? Does this mean not a columnar wise scan but row wise?
-	scan_chunk.Initialize(Allocator::Get(context), {LogicalType::ROW_TYPE});
+	// scan_chunk holds row ids for the rows that exist in the table right now.  It can look like: [0, 1, 2, ... 2047]
+	DataChunk row_ids_chunk;
+	row_ids_chunk.Initialize(allocator, {LogicalType::ROW_TYPE});
+	// update chunk provides new data for the new column. It can look like: [DefaultVal, DefaultVal, DefaultVal...]
+	DataChunk actual_values_chunk;
+	actual_values_chunk.Initialize(allocator, {columns.GetColumn(new_column_logical_idx).Type()});
 
-	DataChunk update_chunk;
-	update_chunk.Initialize(Allocator::Get(context), {columns.GetColumn(new_column_logical_idx).Type()});
-
+	// Optimization: Evaluate the expression once to check if it's a constant.
+	// If it is, we don't need to run the executor per batch of DataChunks.
+	unique_ptr<Vector> possible_constant_vector = GetVectorWhenConstant(actual_values_chunk, executor);
+	const bool is_constant_default = possible_constant_vector != nullptr;
+	// Update per batch of DataChunks
 	while (true) {
-		scan_chunk.Reset();
-		storage->Scan(duck_transaction, scan_chunk, scan_state);
+		// This scans only row ids
+		row_ids_chunk.Reset();
+		storage->Scan(duck_transaction, row_ids_chunk, scan_state_for_row_ids);
 
-		if (scan_chunk.size() == 0) {
-			break;
+		if (row_ids_chunk.size() == 0) {
+			break; // We're done.
 		}
 
-		// Extract row IDs from the scan chunk
-		auto &row_ids = scan_chunk.data[0];
+		auto &row_ids = row_ids_chunk.data[0];
 
-		// Prepare update chunk with the default values
-		update_chunk.Reset();
-		update_chunk.SetCardinality(scan_chunk.size());
+		actual_values_chunk.Reset();
+		actual_values_chunk.SetCardinality(row_ids_chunk.size());
 
-		// Set the chunk on the executor (needed for size information)
-		executor.SetChunk(&update_chunk);
-
-		// Execute the default expression for each row (expression index is 0)
-		executor.ExecuteExpression(0, update_chunk.data[0]);
+		if (is_constant_default) {
+			actual_values_chunk.data[0].Reference(*possible_constant_vector);
+		} else {
+			executor.SetChunk(&actual_values_chunk);
+			// Execute the default expression for each row
+			executor.ExecuteExpression(0, actual_values_chunk.data[0]);
+		}
 
 		// Update the newly added column with the default values
-		storage->Update(*update_state, context, row_ids, update_columns, update_chunk);
+		storage->Update(*update_state, context, row_ids, vector<PhysicalIndex> {new_column_physical_idx},
+		                actual_values_chunk);
 	}
 
 	return nullptr;

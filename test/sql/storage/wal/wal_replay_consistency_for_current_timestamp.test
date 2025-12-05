@@ -1,4 +1,4 @@
-# name: test/sql/storage/wal/wal_non_replayable_columns.test
+# name: test/sql/storage/wal/wal_replay_consistency_for_current_timestamp.test
 # group: [wal]
 
 statement ok
