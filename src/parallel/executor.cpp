@@ -504,10 +504,7 @@ bool Executor::ResultCollectorIsBlocked() {
 	if (!HasStreamingResultCollector()) {
 		return false;
 	}
-	if (completed_pipelines + 1 != total_pipelines) {
-		// The result collector is always in the last pipeline
-		return false;
-	}
+
 	if (to_be_rescheduled_tasks.empty()) {
 		return false;
 	}
