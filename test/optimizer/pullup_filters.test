@@ -6,6 +6,9 @@ statement ok
 PRAGMA explain_output = 'PHYSICAL_ONLY'
 
 statement ok
+pragma disabled_optimizers='common_subplan';
+
+statement ok
 CREATE TABLE vals1 AS SELECT i AS i, i AS j FROM range(0, 11, 1) t1(i)
 
 statement ok
