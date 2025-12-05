@@ -84,6 +84,7 @@ protected:
 	bool HandleStructExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes, vector<reference<unique_ptr<Expression>>> &expressions);
 	void SetMode(BaseColumnPrunerMode mode);
+	bool HandleStructPack(Expression &expr);
 	BaseColumnPrunerMode GetMode() const;
 
 private:
@@ -92,6 +93,7 @@ private:
 protected:
 	//! The map of column references
 	column_binding_map_t<ReferencedColumn> column_references;
+	vector<ColumnIndex> deliver_child;
 
 private:
 	//! The current mode of the pruner, enables/disables certain behaviors

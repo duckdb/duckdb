@@ -30,6 +30,7 @@
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -1004,15 +1005,38 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	storage.FinalizeLocalAppend(append_state);
 }
 
-void DataTable::AppendLock(TableAppendState &state) {
+void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state) {
 	state.append_lock = unique_lock<mutex>(append_lock);
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to insert into table \"%s\" but it has been %s by "
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
+	state.table_lock = transaction.SharedLockTable(*info);
 	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
 	state.current_row = state.row_start;
+	auto &transaction_manager = transaction.GetTransactionManager();
+	auto active_checkpoint = transaction_manager.GetActiveCheckpoint();
+	if (info->IsUnseenCheckpoint(active_checkpoint)) {
+		// there is a checkpoint active while we are appending
+		// in this case we cannot just blindly append to the last row group, because we need to checkpoint that
+		// always start a new row group in this case
+		row_groups->SetAppendRequiresNewRowGroup();
+	}
+}
+
+bool DataTableInfo::IsUnseenCheckpoint(transaction_t checkpoint_id) {
+	if (checkpoint_id == MAX_TRANSACTION_ID) {
+		// no active checkpoint
+		return false;
+	}
+	if (last_seen_checkpoint.IsValid() && last_seen_checkpoint.GetIndex() == checkpoint_id) {
+		// we have already seen this checkpoint
+		return false;
+	}
+	// we have not yet seen this checkpoint
+	last_seen_checkpoint = checkpoint_id;
+	return true;
 }
 
 void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState &state) {
@@ -1020,7 +1044,6 @@ void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState 
 	if (!state.append_lock) {
 		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
 	}
-	state.table_lock = transaction.SharedLockTable(*info);
 	row_groups->InitializeAppend(transaction, state);
 }
 
@@ -1604,7 +1627,9 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   table pointer
 	//   index data
 	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
-	row_groups->SetStats(global_stats);
+	if (writer.CanOverrideBaseStats()) {
+		row_groups->SetStats(global_stats);
+	}
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index) {

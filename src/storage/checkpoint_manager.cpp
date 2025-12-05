@@ -18,6 +18,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -32,16 +33,16 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
-                                                       BlockManager &block_manager, CheckpointType checkpoint_type)
+                                                       BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
-      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
-      checkpoint_type(checkpoint_type) {
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -147,6 +148,24 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
+	// write a checkpoint flag to the WAL
+	// in case a crash happens during the checkpoint, we know a checkpoint was instantiated
+	// we write the root meta block of the planned checkpoint to the WAL
+	// during recovery we use this:
+	// * if the root meta block matches the checkpoint entry, we know the checkpoint was completed
+	// * if the root meta block does not match the checkpoint entry, we know the checkpoint was not completed
+	// if the checkpoint was completed we don't need to replay the WAL - otherwise we need to replay the WAL
+	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
+	// to replay any concurrent commits that have succeeded and ensure these are not lost
+	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
+	ActiveCheckpointWrapper active_checkpoint(transaction_manager);
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
+
+	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
+	if (checkpoint_sleep_ms > 0) {
+		ThreadUtil::SleepMs(checkpoint_sleep_ms);
+	}
+
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
@@ -190,17 +209,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	metadata_writer->Flush();
 	table_metadata_writer->Flush();
 
-	// write a checkpoint flag to the WAL
-	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
-	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
-	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
-	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
-	bool wal_is_empty = storage_manager.GetWALSize() == 0;
-	if (!wal_is_empty) {
-		auto wal = storage_manager.GetWAL();
-		wal->WriteCheckpoint(meta_block);
-		wal->Flush();
-	}
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
@@ -250,9 +258,13 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// truncate the file
 	block_manager.Truncate();
 
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FINISH) {
+		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+	}
+
 	// truncate the WAL
-	if (!wal_is_empty) {
-		storage_manager.ResetWAL();
+	if (has_wal) {
+		storage_manager.WALFinishCheckpoint();
 	}
 }
 

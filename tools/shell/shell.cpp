@@ -359,48 +359,6 @@ bool ShellState::HighlightResults() const {
 	return highlight_results == OptionType::ON;
 }
 
-/*
-** Render output like fprintf().  Except, if the output is going to the
-** console and if this is running on a Windows machine, translate the
-** output from UTF-8 into MBCS.
-*/
-#if defined(_WIN32) || defined(WIN32)
-void utf8_printf(FILE *out, const char *zFormat, ...) {
-	va_list ap;
-	va_start(ap, zFormat);
-	auto &state = ShellState::Get();
-	if ((state.stdout_is_console && (out == stdout || out == stderr)) ||
-	    (state.pager_is_active && !state.win_utf8_mode)) {
-		char buffer[2048];
-		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
-		const char *utf8_data;
-		unique_ptr<char[]> zbuf;
-		if (required_characters > 2048) {
-			zbuf = unique_ptr<char[]>(new char[required_characters + 1]);
-			vsnprintf(zbuf.get(), required_characters + 1, zFormat, ap);
-			utf8_data = zbuf.get();
-		} else {
-			utf8_data = buffer;
-		}
-		if (state.pager_is_active) {
-			auto mbcs_text = ShellState::Win32Utf8ToMbcs(utf8_data, true);
-			fputs(mbcs_text.c_str(), out);
-		} else {
-			// convert from utf8 to utf16
-			auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
-			auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-			// use WriteConsoleW to write the unicode codepoints to the console
-			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
-		}
-	} else {
-		vfprintf(out, zFormat, ap);
-	}
-	va_end(ap);
-}
-#elif !defined(utf8_printf)
-#define utf8_printf fprintf
-#endif
-
 /* Used with ShellState::EvaluateSQL to indicate special result states */
 const string EVAL_SQL_ERROR = "#ERROR#:";
 const string EVAL_SQL_NOT_A_QUERY = "#NOT A QUERY#";
@@ -410,24 +368,64 @@ const string EVAL_SQL_TOO_MANY_COLUMNS = "#TOO MANY COLUMNS#";
 const string EVAL_SQL_NULL = "#NULL#";
 const string EVAL_SQL_EMPTY = "#EMPTY#";
 
+void ShellState::Print(PrintOutput output, const char *str, idx_t len) {
+	if (seenInterrupt) {
+		// no more printing after seeing an interrupt
+		return;
+	}
+
+#if defined(_WIN32) || defined(WIN32)
+	if ((stdout_is_console && (out == stdout || out == stderr) || pager_is_active) && !win_utf8_mode) {
+		if (pager_is_active) {
+			auto mbcs_text = ShellState::Win32Utf8ToMbcs(str, true);
+			fputs(mbcs_text.c_str(), output == PrintOutput::STDOUT ? out : stderr);
+		} else {
+			// convert from utf8 to utf16
+			auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
+			auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+			// use WriteConsoleW to write the unicode codepoints to the console
+			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
+		}
+		return;
+	}
+#endif
+	fwrite((const void *)str, len, 1, output == PrintOutput::STDOUT ? out : stderr);
+}
+
 void ShellState::Print(PrintOutput output, const char *str) {
 	if (seenInterrupt) {
 		// no more printing after seeing an interrupt
 		return;
 	}
-	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
+#if defined(_WIN32) || defined(WIN32)
+	Print(output, str, strlen(str));
+#else
+	fputs(str, output == PrintOutput::STDOUT ? out : stderr);
+#endif
 }
 
 void ShellState::Print(PrintOutput output, const string &str) {
-	Print(output, str.c_str());
+	Print(output, str.c_str(), str.size());
+}
+
+void ShellState::Print(PrintOutput output, duckdb::string_t str) {
+	Print(output, str.GetData(), str.GetSize());
+}
+
+void ShellState::Print(const char *str, idx_t len) {
+	Print(PrintOutput::STDOUT, str, len);
+}
+
+void ShellState::Print(const string &str) {
+	Print(PrintOutput::STDOUT, str.c_str(), str.size());
+}
+
+void ShellState::Print(duckdb::string_t str) {
+	Print(PrintOutput::STDOUT, str.GetData(), str.GetSize());
 }
 
 void ShellState::Print(const char *str) {
 	Print(PrintOutput::STDOUT, str);
-}
-
-void ShellState::Print(const string &str) {
-	Print(PrintOutput::STDOUT, str.c_str());
 }
 
 /* Indicate out-of-memory and exit. */
@@ -456,41 +454,6 @@ void ShellState::Destroy() {
 	last_result.reset();
 }
 
-/*
-** Output string zUtf to stream pOut as w characters.  If w is negative,
-** then right-justify the text.  W is the width in UTF-8 characters, not
-** in bytes.  This is different from the %*.*s specification in printf
-** since with %*.*s the width is measured in bytes, not characters.
-*/
-void ShellState::UTF8WidthPrint(idx_t w, const string &str, bool right_align) {
-	auto zUtf = str.c_str();
-	int i;
-	int n;
-	int aw = w < 0 ? -w : w;
-#ifdef HAVE_LINENOISE
-	i = linenoiseGetRenderPosition(zUtf, strlen(zUtf), aw, &n);
-	if (i < 0)
-#endif
-		for (i = n = 0; zUtf[i]; i++) {
-			if ((zUtf[i] & 0xc0) != 0x80) {
-				n++;
-				if (n == aw) {
-					do {
-						i++;
-					} while ((zUtf[i] & 0xc0) == 0x80);
-					break;
-				}
-			}
-		}
-	if (n >= aw) {
-		utf8_printf(out, "%.*s", i, zUtf);
-	} else if (right_align) {
-		utf8_printf(out, "%*s%s", aw - n, "", zUtf);
-	} else {
-		utf8_printf(out, "%s%*s", zUtf, aw - n, "");
-	}
-}
-
 bool ShellState::IsSpace(char c) {
 	return duckdb::StringUtil::CharacterIsSpace(c);
 }
@@ -514,13 +477,13 @@ bool ShellState::IsCharacter(char c) {
 	return (c & 0xc0) != 0x80;
 }
 
-idx_t ShellState::RenderLength(const char *z) {
+idx_t ShellState::RenderLength(const char *str, idx_t str_len) {
 #ifdef HAVE_LINENOISE
-	return linenoiseComputeRenderWidth(z, strlen(z));
+	return linenoiseComputeRenderWidth(str, str_len);
 #else
-	int n = 0;
-	for (; *z; z++) {
-		if (IsCharacter(*z)) {
+	idx_t n = 0;
+	for (idx_t i = 0; i < str_len; i++) {
+		if (IsCharacter(str[i])) {
 			n++;
 		}
 	}
@@ -528,8 +491,12 @@ idx_t ShellState::RenderLength(const char *z) {
 #endif
 }
 
+idx_t ShellState::RenderLength(duckdb::string_t str) {
+	return RenderLength(str.GetData(), str.GetSize());
+}
+
 idx_t ShellState::RenderLength(const string &str) {
-	return RenderLength(str.c_str());
+	return RenderLength(str.c_str(), str.size());
 }
 
 int ShellState::RunInitialCommand(const char *sql, bool bail) {
@@ -821,231 +788,32 @@ void ShellState::PopOutputMode() {
 }
 
 /*
-** Output the given string as a hex-encoded blob (eg. X'1234' )
-*/
-void ShellState::OutputHexBlob(const void *pBlob, int nBlob) {
-	int i;
-	char *zBlob = (char *)pBlob;
-	PrintF("X'");
-	for (i = 0; i < nBlob; i++) {
-		PrintF("%02x", zBlob[i] & 0xff);
-	}
-	PrintF("'");
-}
-
-/*
-** Output the given string as a quoted string using SQL quoting conventions.
-**
-** See also: output_quoted_escaped_string()
-*/
-void ShellState::OutputQuotedString(const char *z) {
-	int i;
-	char c;
-	SetBinaryMode();
-	for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
-	}
-	if (c == 0) {
-		PrintF("'%s'", z);
-	} else {
-		Print("'");
-		while (*z) {
-			for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
-			}
-			if (c == '\'') {
-				i++;
-			};
-			if (i) {
-				Print(string(z, i));
-				z += i;
-			}
-			if (c == '\'') {
-				Print("'");
-				continue;
-			}
-			if (c == 0) {
-				break;
-			}
-			z++;
-		}
-		Print("'");
-	}
-	SetTextMode();
-}
-
-/*
-** Output the given string as a quoted string using SQL quoting conventions.
-** Additionallly , escape the "\n" and "\r" characters so that they do not
-** get corrupted by end-of-line translation facilities in some operating
-** systems.
-**
-** This is like output_quoted_string() but with the addition of the \r\n
-** escape mechanism.
-*/
-void ShellState::OutputQuotedEscapedString(const char *z) {
-	bool needs_quoting = false;
-	bool needs_concat = false;
-	for (idx_t i = 0; z[i]; i++) {
-		if (z[i] == '\n' || z[i] == '\r') {
-			needs_quoting = true;
-			needs_concat = true;
-			break;
-		}
-		if (z[i] == '\'') {
-			needs_quoting = true;
-		}
-	}
-	if (!needs_quoting) {
-		PrintF("'%s'", z);
-		return;
-	}
-	string res;
-	if (needs_concat) {
-		res = "concat('";
-	} else {
-		res = "'";
-	}
-	for (idx_t i = 0; z[i]; i++) {
-		switch (z[i]) {
-		case '\n':
-		case '\r':
-			// newline - finish the current string literal and write the newline with a chr function
-			res += "', chr(";
-			if (z[i] == '\n') {
-				res += "10";
-			} else {
-				res += "13";
-			}
-			res += "), '";
-			break;
-		case '\'':
-			// escape the quote
-			res += "''";
-			break;
-		default:
-			res += z[i];
-			break;
-		}
-	}
-	res += "'";
-	if (needs_concat) {
-		res += ")";
-	}
-	PrintF("%s", res.c_str());
-}
-
-/*
 ** Output the given string as a quoted according to C or TCL quoting rules.
 */
-void ShellState::OutputCString(const char *z) {
-	unsigned int c;
-	fputc('"', out);
-	while ((c = *(z++)) != 0) {
+string ShellState::EscapeCString(const string &str) {
+	string result = "\"";
+	for (auto c : str) {
 		if (c == '\\') {
-			fputc(c, out);
-			fputc(c, out);
+			result += "\\\\";
 		} else if (c == '"') {
-			fputc('\\', out);
-			fputc('"', out);
+			result += "\\\"";
 		} else if (c == '\t') {
-			fputc('\\', out);
-			fputc('t', out);
+			result += "\\t";
 		} else if (c == '\n') {
-			fputc('\\', out);
-			fputc('n', out);
+			result += "\\n";
 		} else if (c == '\r') {
-			fputc('\\', out);
-			fputc('r', out);
+			result += "\\r";
 		} else if (!isprint(c & 0xff)) {
-			PrintF("\\%03o", c & 0xff);
+			result += "\\";
+			char buf[4];
+			snprintf(buf, 4, "%03o", c & 0xFF);
+			result += buf;
 		} else {
-			fputc(c, out);
+			result += c;
 		}
 	}
-	fputc('"', out);
-}
-
-/*
-** Output the given string as a quoted according to JSON quoting rules.
-*/
-void ShellState::OutputJSONString(const char *z, int n) {
-	unsigned int c;
-	if (n < 0)
-		n = (int)strlen(z);
-	fputc('"', out);
-	while (n--) {
-		c = *(z++);
-		if (c == '\\' || c == '"') {
-			fputc('\\', out);
-			fputc(c, out);
-		} else if (c <= 0x1f) {
-			fputc('\\', out);
-			if (c == '\b') {
-				fputc('b', out);
-			} else if (c == '\f') {
-				fputc('f', out);
-			} else if (c == '\n') {
-				fputc('n', out);
-			} else if (c == '\r') {
-				fputc('r', out);
-			} else if (c == '\t') {
-				fputc('t', out);
-			} else {
-				PrintF("u%04x", c);
-			}
-		} else {
-			fputc(c, out);
-		}
-	}
-	fputc('"', out);
-}
-
-/*
-** If a field contains any character identified by a 1 in the following
-** array, then the string must be quoted for CSV.
-*/
-static const char needCsvQuote[] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0,
-    0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-};
-
-void ShellState::PrintOptionallyQuotedIdentifier(const char *input) {
-	Print(StringUtil::Format("%s", SQLIdentifier(input)));
-}
-
-/*
-** Output a single term of CSV.  Actually, p->colSeparator is used for
-** the separator, which may or may not be a comma.  p->nullValue is
-** the null value.  Strings are quoted if necessary.  The separator
-** is only issued if bSep is true.
-*/
-void ShellState::OutputCSV(const char *z, int bSep) {
-	if (!z) {
-		Print(nullValue);
-	} else {
-		int i;
-		int nSep = colSeparator.size();
-		for (i = 0; z[i]; i++) {
-			if (needCsvQuote[((unsigned char *)z)[i]] ||
-			    (z[i] == colSeparator[0] && (nSep == 1 || memcmp(z, colSeparator.c_str(), nSep) == 0))) {
-				i = 0;
-				break;
-			}
-		}
-		if (i == 0) {
-			auto zQuoted = StringUtil::Format("%s", SQLIdentifier(z));
-			Print(zQuoted);
-		} else {
-			Print(z);
-		}
-	}
-	if (bSep) {
-		Print(colSeparator);
-	}
+	result += "\"";
+	return result;
 }
 
 /*
@@ -1077,74 +845,15 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 }
 #endif
 
-/*
-** Print a schema statement.  Part of RenderMode::Semi and RenderMode::Pretty output.
-**
-** This routine converts some CREATE TABLE statements for shadow tables
-** in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
-*/
-void ShellState::PrintSchemaLine(const char *z, const char *zTail) {
-	if (!z || !zTail) {
-		return;
-	}
-	if (StringGlob("CREATE TABLE ['\"]*", z)) {
-		PrintF("CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
-	} else {
-		PrintF("%s%s", z, zTail);
-	}
-}
-void ShellState::PrintSchemaLineN(char *z, int n, const char *zTail) {
-	char c = z[n];
-	z[n] = 0;
-	PrintSchemaLine(z, zTail);
-	z[n] = c;
+string ShellState::GetSchemaLine(const string &str, const string &tail) {
+	return str + tail;
 }
 
-/*
-** Print N dashes
-*/
-void ShellState::PrintDashes(idx_t N) {
-	const char zDash[] = "--------------------------------------------------";
-	const idx_t nDash = sizeof(zDash) - 1;
-	while (N > nDash) {
-		fputs(zDash, out);
-		N -= nDash;
+string ShellState::GetSchemaLineN(const string &str, idx_t n, const string &tail) {
+	if (str.size() > n) {
+		return GetSchemaLine(str.substr(0, n), tail);
 	}
-	utf8_printf(out, "%.*s", static_cast<int>(N), zDash);
-}
-
-/*
-** Print a markdown or table-style row separator using ascii-art
-*/
-void ShellState::PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth) {
-	if (nArg > 0) {
-		fputs(zSep, out);
-		PrintDashes(actualWidth[0] + 2);
-		for (idx_t i = 1; i < nArg; i++) {
-			fputs(zSep, out);
-			PrintDashes(actualWidth[i] + 2);
-		}
-		fputs(zSep, out);
-	}
-	fputs("\n", out);
-}
-
-void ShellState::PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<duckdb::LogicalType> &colTypes,
-                                        const vector<idx_t> &actualWidth) {
-	if (nArg > 0) {
-		for (idx_t i = 0; i < nArg; i++) {
-			Print(zSep);
-			if (colTypes[i].IsNumeric()) {
-				// right-align numerics in tables
-				PrintDashes(actualWidth[i] + 1);
-				Print(":");
-			} else {
-				PrintDashes(actualWidth[i] + 2);
-			}
-		}
-		Print(zSep);
-	}
-	Print("\n");
+	return GetSchemaLine(str, tail);
 }
 
 void ShellState::SetBinaryMode() {
@@ -1250,16 +959,17 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &con = *conn;
+	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX &&
-	    cMode != RenderMode::DESCRIBE) {
-		// for row-wise rendering we can use streaming results
-		result = con.SendQuery(std::move(statement));
-	} else {
+	if (renderer->RequireMaterializedResult()) {
+		// we need to materialize the result prior to rendering
 		duckdb::QueryParameters parameters;
 		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
 		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
 		result = con.SendQuery(std::move(statement), parameters);
+	} else {
+		// for row-wise rendering we can use streaming results
+		result = con.SendQuery(std::move(statement));
 	}
 	auto &res = *result;
 	if (res.HasError()) {
@@ -1285,25 +995,21 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
-	if (cMode == RenderMode::TRASH) {
-		// execute the query but don't render anything
-		return SuccessState::SUCCESS;
+	// analyze the query result so we know how long/wide the result will be
+	RenderingQueryResult render_result(res, *renderer);
+	renderer->Analyze(render_result);
+	if (seenInterrupt) {
+		return SuccessState::FAILURE;
 	}
+
+	// check if we need to use the pager for the rendering
 	unique_ptr<PagerState> pager_setup;
-	if (ShouldUsePager(res)) {
-		// we should use a pager
+	if (ShouldUsePager(*renderer, render_result)) {
 		pager_setup = SetupPager();
 	}
-	if (cMode == RenderMode::DESCRIBE) {
-		RenderDescribe(res);
-		return SuccessState::SUCCESS;
-	}
 	// render the query result
-	auto renderer = GetRenderer();
-	RenderingQueryResult render_result(res, *renderer);
-
-	renderer->Analyze(render_result);
-	return renderer->RenderQueryResult(*this, render_result);
+	PrintStream print_stream(*this);
+	return renderer->RenderQueryResult(print_stream, *this, render_result);
 }
 
 /*
@@ -1424,7 +1130,7 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 		auto zSql = row.GetValue<string>(2);
 
 		// print sql
-		PrintSchemaLine(zSql.c_str(), ";\n");
+		Print(GetSchemaLine(zSql, ";\n"));
 		if (zType == "table") {
 			// dump table contents
 			string sSelect;
@@ -1699,44 +1405,27 @@ bool ShellState::ShouldUsePager(idx_t line_count) {
 	return true;
 }
 
-bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result) {
 	if (!ShouldUsePager()) {
 		return false;
 	}
-	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
-		// in automatic mode we only use a pager when the output is large enough
-		if (cMode == RenderMode::DUCKBOX) {
-			// in duckbox mode the output is automatically truncated to "max_rows"
-			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
-			if (max_rows < pager_min_rows && max_width == 0) {
-				return false;
-			}
-		}
-		if (cMode == RenderMode::EXPLAIN) {
-			auto &materialized = result.Cast<MaterializedQueryResult>();
-			idx_t row_count = 0;
-			for (auto &row : materialized.Collection().Rows()) {
-				for (auto c : row.GetValue(1).GetValue<string>()) {
-					if (c == '\n') {
-						row_count++;
-					}
-				}
-			}
-			return row_count >= pager_min_rows;
-		}
-		// otherwise we check the size of the result set
-		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
-		if (result.ColumnCount() < pager_min_columns && !result.MoreRowsThan(pager_min_rows)) {
-			return false;
-		}
-	}
-	return true;
+	return renderer.ShouldUsePager(result, pager_mode);
+}
+
+extern "C" {
+
+void HandlePagerExit(int sig) {
+	// Pager is gone; interrupt the process to stop printing
+	auto &state = ShellState::Get();
+	++state.seenInterrupt;
+}
 }
 
 void ShellState::StartPagerDisplay() {
 #if !defined(_WIN32) && !defined(WIN32)
-	// disable sigpipe trap while displaying the pager
-	signal(SIGPIPE, SIG_IGN);
+	// turn sigpipe trap into an interrupt while displaying the pager
+	// this allows us to interrupt display after the pager is exited by the user
+	signal(SIGPIPE, HandlePagerExit);
 #endif
 }
 
@@ -2436,14 +2125,14 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "headers", showHeader ? "on" : "off");
 	PrintF("%12.12s: %s\n", "mode", ModeToString(mode));
 	PrintF("%12.12s: ", "nullvalue");
-	OutputCString(nullValue.c_str());
+	Print(EscapeCString(nullValue));
 	PrintF("\n");
 	PrintF("%12.12s: %s\n", "output", !outfile.empty() ? outfile.c_str() : "stdout");
 	PrintF("%12.12s: ", "colseparator");
-	OutputCString(colSeparator.c_str());
+	Print(EscapeCString(colSeparator));
 	PrintF("\n");
 	PrintF("%12.12s: ", "rowseparator");
-	OutputCString(rowSeparator.c_str());
+	Print(EscapeCString(rowSeparator));
 	PrintF("\n");
 	PrintF("%12.12s: ", "width");
 	for (auto w : colWidth) {
@@ -2451,31 +2140,6 @@ void ShellState::ShowConfiguration() {
 	}
 	PrintF("\n");
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
-}
-
-SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
-	vector<ShellTableInfo> result;
-	ShellTableInfo table;
-	table.table_name = describe_table_name;
-	for (auto &row : res) {
-		ShellColumnInfo column;
-		column.column_name = row.GetValue<string>(0);
-		column.column_type = row.GetValue<string>(1);
-		if (!row.IsNull(2)) {
-			column.is_not_null = row.GetValue<string>(2) == "NO";
-		}
-		if (!row.IsNull(3)) {
-			column.is_primary_key = row.GetValue<string>(3) == "PRI";
-			column.is_unique = row.GetValue<string>(3) == "UNI";
-		}
-		if (!row.IsNull(4)) {
-			column.default_value = row.GetValue<string>(4);
-		}
-		table.columns.push_back(std::move(column));
-	}
-	result.push_back(std::move(table));
-	RenderTableMetadata(result);
-	return SuccessState::SUCCESS;
 }
 
 MetadataResult ShellState::DisplayTables(const vector<string> &args) {
@@ -3343,8 +3007,7 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt =
-	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
@@ -3538,8 +3201,19 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-
 			ShellHighlight highlight(data);
+#ifdef HAVE_LINENOISE
+			if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
+				// detect terminal colors
+				auto terminal_color = linenoiseGetTerminalColorMode();
+				if (terminal_color == LINENOISE_DARK_MODE) {
+					highlight.ToggleMode(HighlightMode::DARK_MODE);
+				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+					highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+				}
+			}
+#endif
+
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());
 			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {

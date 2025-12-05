@@ -51,8 +51,8 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	                                           table_data_writer);
 }
 
-CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
-	return checkpoint_manager.GetCheckpointType();
+CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {
+	return checkpoint_manager.GetCheckpointOptions();
 }
 
 MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
