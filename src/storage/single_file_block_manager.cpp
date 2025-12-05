@@ -1054,6 +1054,8 @@ void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, blo
 
 void SingleFileBlockManager::Truncate() {
 	BlockManager::Truncate();
+
+	lock_guard<mutex> guard(block_lock);
 	idx_t blocks_to_truncate = 0;
 	// reverse iterate over the free-list
 	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
