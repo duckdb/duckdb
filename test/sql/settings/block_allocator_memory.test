@@ -2,6 +2,8 @@
 # description: Test block_allocator_memory setting
 # group: [settings]
 
+require notmingw
+
 require 64bit
 
 # defaults to 0, resetting to 0 is ok

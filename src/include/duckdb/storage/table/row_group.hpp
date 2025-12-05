@@ -19,6 +19,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -56,7 +57,7 @@ enum class ColumnDataType;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT);
+	                  CheckpointOptions options = CheckpointOptions());
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
 	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p);
 
@@ -65,7 +66,7 @@ private:
 
 public:
 	const vector<CompressionType> &compression_types;
-	CheckpointType checkpoint_type;
+	CheckpointOptions options;
 
 public:
 	PartialBlockManager &GetPartialBlockManager(idx_t column_idx);
@@ -79,7 +80,9 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
+	bool should_checkpoint = true;
 	vector<idx_t> existing_extra_metadata_blocks;
+	optional_idx write_count;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -140,6 +143,8 @@ public:
 	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
 
+	//! Whether or not this RowGroup should be
+	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
 	                            SelectionVector &sel_vector, idx_t max_count);
@@ -217,6 +222,7 @@ public:
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
+	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
 	void SetVersionInfo(shared_ptr<RowVersionManager> version);
