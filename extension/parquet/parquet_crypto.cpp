@@ -307,14 +307,6 @@ public:
 		return result;
 	}
 
-	idx_t GetTotalBytes() {
-		return total_bytes;
-	}
-
-	idx_t GetRemainingTransport() const {
-		return transport_remaining;
-	}
-
 private:
 	void Initialize(const string &key, unique_ptr<AdditionalAuthenticatedData> aad = nullptr) {
 		// Read encoded length (don't add to read_bytes)
