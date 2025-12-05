@@ -257,15 +257,7 @@ jobs:
         - create-extension-repository
 
     steps:
-      - name: Free disk space
-        uses: endersonmenezes/free-disk-space@v3
-        continue-on-error: true
-        if: inputs.run_disk_clean_step
-        with:
-          remove_haskell: true
-          remove_tool_cache: true
-          remove_folders: "/usr/local/share/powershell /usr/share/swift"
-          testing: false
+      - uses: ./.github/actions/cleanup_runner
 
       - uses: actions/checkout@v4
         with:
