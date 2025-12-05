@@ -841,4 +841,121 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 	return false;
 }
 
+//===----------------------------------------------------------------------===//
+// FileHandleWrapper implementation
+//===----------------------------------------------------------------------===//
+FileHandleWrapper::FileHandleWrapper(FileSystem &file_system, unique_ptr<FileHandle> handle, bool flag)
+    : FileHandle(file_system, handle->GetPath(), handle->GetFlags()), internal_handle(std::move(handle)),
+      flag(flag) {
+	// Copy logger from internal handle if it exists
+	if (internal_handle->logger) {
+		logger = internal_handle->logger;
+	}
+}
+
+FileHandleWrapper::~FileHandleWrapper() {
+}
+
+void FileHandleWrapper::Close() {
+	if (internal_handle) {
+		internal_handle->Close();
+	}
+}
+
+int64_t FileHandleWrapper::Read(void *buffer, idx_t nr_bytes) {
+	return internal_handle->Read(buffer, nr_bytes);
+}
+
+int64_t FileHandleWrapper::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
+	return internal_handle->Read(context, buffer, nr_bytes);
+}
+
+int64_t FileHandleWrapper::Write(void *buffer, idx_t nr_bytes) {
+	return internal_handle->Write(buffer, nr_bytes);
+}
+
+void FileHandleWrapper::Read(void *buffer, idx_t nr_bytes, idx_t location) {
+	internal_handle->Read(buffer, nr_bytes, location);
+}
+
+void FileHandleWrapper::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	internal_handle->Read(context, buffer, nr_bytes, location);
+}
+
+void FileHandleWrapper::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	internal_handle->Write(context, buffer, nr_bytes, location);
+}
+
+void FileHandleWrapper::Seek(idx_t location) {
+	internal_handle->Seek(location);
+}
+
+void FileHandleWrapper::Reset() {
+	internal_handle->Reset();
+}
+
+idx_t FileHandleWrapper::SeekPosition() {
+	return internal_handle->SeekPosition();
+}
+
+void FileHandleWrapper::Sync() {
+	internal_handle->Sync();
+}
+
+void FileHandleWrapper::Truncate(int64_t new_size) {
+	internal_handle->Truncate(new_size);
+}
+
+string FileHandleWrapper::ReadLine() {
+	return internal_handle->ReadLine();
+}
+
+string FileHandleWrapper::ReadLine(QueryContext context) {
+	return internal_handle->ReadLine(context);
+}
+
+bool FileHandleWrapper::Trim(idx_t offset_bytes, idx_t length_bytes) {
+	return internal_handle->Trim(offset_bytes, length_bytes);
+}
+
+idx_t FileHandleWrapper::GetProgress() {
+	return internal_handle->GetProgress();
+}
+
+FileCompressionType FileHandleWrapper::GetFileCompressionType() {
+	return internal_handle->GetFileCompressionType();
+}
+
+bool FileHandleWrapper::CanSeek() {
+	return internal_handle->CanSeek();
+}
+
+bool FileHandleWrapper::IsPipe() {
+	return internal_handle->IsPipe();
+}
+
+bool FileHandleWrapper::OnDiskFile() {
+	return internal_handle->OnDiskFile();
+}
+
+idx_t FileHandleWrapper::GetFileSize() {
+	return internal_handle->GetFileSize();
+}
+
+FileType FileHandleWrapper::GetType() {
+	return internal_handle->GetType();
+}
+
+FileMetadata FileHandleWrapper::Stats() {
+	return internal_handle->Stats();
+}
+
+void FileHandleWrapper::TryAddLogger(FileOpener &opener) {
+	internal_handle->TryAddLogger(opener);
+	// Also update our logger if the internal handle got one
+	if (internal_handle->logger) {
+		logger = internal_handle->logger;
+	}
+}
+
 } // namespace duckdb

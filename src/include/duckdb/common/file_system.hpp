@@ -133,6 +133,47 @@ public:
 	shared_ptr<Logger> logger;
 };
 
+class FileHandleWrapper : public FileHandle {
+public:
+	DUCKDB_API FileHandleWrapper(FileSystem &file_system, unique_ptr<FileHandle> handle, bool flag);
+	DUCKDB_API ~FileHandleWrapper() override;
+
+	DUCKDB_API void Close() override;
+
+	// Delegate all FileHandle methods to the internal file handle
+	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API void Seek(idx_t location);
+	DUCKDB_API void Reset();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Sync();
+	DUCKDB_API void Truncate(int64_t new_size);
+	DUCKDB_API string ReadLine();
+	DUCKDB_API string ReadLine(QueryContext context);
+	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
+	DUCKDB_API idx_t GetProgress() override;
+	DUCKDB_API FileCompressionType GetFileCompressionType() override;
+	DUCKDB_API bool CanSeek();
+	DUCKDB_API bool IsPipe();
+	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t GetFileSize();
+	DUCKDB_API FileType GetType();
+	DUCKDB_API FileMetadata Stats();
+	DUCKDB_API void TryAddLogger(FileOpener &opener);
+
+	bool GetFlag() const {
+		return flag;
+	}
+
+private:
+	unique_ptr<FileHandle> internal_handle;
+	bool flag;
+};
+
 class FileSystem {
 public:
 	DUCKDB_API virtual ~FileSystem();
