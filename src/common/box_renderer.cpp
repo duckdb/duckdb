@@ -1726,7 +1726,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows) {
 		// if we have shortened any columns - try to expand them
 		// how many rows do we have left to expand before we hit the max row limit?
-		idx_t rows_left = config.max_rows - render_rows.size();
+		idx_t max_rows_per_row = config.max_rows / render_rows.size();
 		// for each row - figure out if we can "expand" the row
 		for (idx_t r = 0; r < render_rows.size(); r++) {
 			auto &row = render_rows[r];
@@ -1734,8 +1734,8 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				continue;
 			}
 			bool need_extra_row = r + 1 != render_rows.size() && r != 1;
-			idx_t min_rows = need_extra_row ? 2 : 1;
-			if (rows_left < min_rows) {
+			idx_t min_rows = 2;
+			if (min_rows > max_rows_per_row) {
 				// no rows left to expand
 				continue;
 			}
@@ -1743,7 +1743,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			vector<BoxRenderRow> extra_rows;
 			for (idx_t c = 0; c < row.values.size(); c++) {
 				if (CanPrettyPrint(row.values[c].type)) {
-					idx_t max_rows = rows_left + extra_rows.size();
+					idx_t max_rows = max_rows_per_row;
 					if (need_extra_row) {
 						max_rows--;
 					}
@@ -1783,11 +1783,12 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					}
 					row.values[c].annotations.push_back(annotations[annotation_idx]);
 				}
-				idx_t min_leftover_rows = need_extra_row ? 1 : 0;
 				while (current_pos < full_value.size()) {
+					bool can_add_extra_row = true;
 					if (current_row >= extra_rows.size()) {
-						if (rows_left == min_leftover_rows) {
+						if (extra_rows.size() >= max_rows_per_row + 1) {
 							// we need to add an extra row but there's no space anymore - break
+							can_add_extra_row = false;
 							break;
 						}
 						// add a new row with empty values
@@ -1796,9 +1797,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 							extra_rows.back().values.emplace_back(string(), current_val.render_mode,
 							                                      current_val.alignment, current_val.type);
 						}
-						rows_left--;
 					}
-					bool can_add_extra_row = current_row + 1 < extra_rows.size() || rows_left > min_leftover_rows;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row
@@ -1835,7 +1834,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			// if we added extra rows we need to add a separator if this is not the last row
 			if (need_extra_row) {
 				extra_rows.emplace_back(RenderRowType::SEPARATOR);
-				rows_left--;
 			}
 			// add the extra rows at the current position
 			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r) + 1, extra_rows.begin(), extra_rows.end());
