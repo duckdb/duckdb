@@ -1407,6 +1407,10 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
                                                     idx_t max_width) {
 	auto column_count = result_types.size();
+	idx_t row_count = 0;
+	for (auto &collection : collections) {
+		row_count += collection.Count();
+	}
 
 	// prepare all rows for rendering
 	// header / type
@@ -1728,7 +1732,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	    !added_split_column) {
 		// if we have shortened any columns - try to expand them
 		// how many rows do we have left to expand before we hit the max row limit?
-		idx_t max_rows_per_row = config.max_rows / render_rows.size();
+		idx_t max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
 		// for each row - figure out if we can "expand" the row
 		for (idx_t r = 0; r < render_rows.size(); r++) {
 			auto &row = render_rows[r];
@@ -1782,11 +1786,9 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					row.values[c].annotations.push_back(annotations[annotation_idx]);
 				}
 				while (current_pos < full_value.size()) {
-					bool can_add_extra_row = true;
 					if (current_row >= extra_rows.size()) {
 						if (extra_rows.size() >= max_rows_per_row + 1) {
 							// we need to add an extra row but there's no space anymore - break
-							can_add_extra_row = false;
 							break;
 						}
 						// add a new row with empty values
@@ -1796,6 +1798,8 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 							                                      current_val.alignment, current_val.type);
 						}
 					}
+					bool can_add_extra_row =
+					    current_row + 1 < extra_rows.size() || extra_rows.size() < max_rows_per_row;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row
