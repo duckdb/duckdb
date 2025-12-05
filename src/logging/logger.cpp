@@ -88,11 +88,21 @@ ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, RegisteredLoggingConte
 }
 
 bool ThreadLocalLogger::ShouldLog(const char *log_type, LogLevel log_level) {
-	throw NotImplementedException("ThreadLocalLogger::ShouldLog");
+	if (config.level > log_level) {
+		return false;
+	}
+
+	if (config.mode == LogMode::ENABLE_SELECTED) {
+		return config.enabled_log_types.find(log_type) != config.enabled_log_types.end();
+	}
+	if (config.mode == LogMode::DISABLE_SELECTED) {
+		return config.disabled_log_types.find(log_type) == config.disabled_log_types.end();
+	}
+	return true;
 }
 
 void ThreadLocalLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
-	throw NotImplementedException("ThreadLocalLogger::WriteLog");
+	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
 }
 
 void ThreadLocalLogger::Flush() {
