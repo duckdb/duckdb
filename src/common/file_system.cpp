@@ -854,6 +854,15 @@ FileHandleWrapper::FileHandleWrapper(FileSystem &file_system, unique_ptr<FileHan
 }
 
 FileHandleWrapper::~FileHandleWrapper() {
+	try {
+		internal_handle->Close();
+	} catch (...) {
+		if (flag.OpenForRead() && !flag.OpenForWrite()) {
+			// Tolerate and ignore.
+			return;
+		}
+		throw;
+	}
 }
 
 void FileHandleWrapper::Close() {
