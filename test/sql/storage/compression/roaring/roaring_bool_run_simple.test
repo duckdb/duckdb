@@ -1,0 +1,62 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_run_simple.test
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+# 8 runs per Vector
+statement ok
+INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then false else true end FROM range(0,10000) tbl(i);
+# runs:
+# (0,350)
+# (451,512)
+# (513,862)
+# (963,1024)
+# (1025,1374)
+# (1475,1536)
+# (1537,1886)
+# (1987,2048)
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+----
+
+query I
+select count(*) from test WHERE a IS true;
+----
+1938
+
+statement ok
+delete from test;
+
+# 3 runs per Vector (uses uncompressed runs)
+statement ok
+with intermediates as (
+	select i % 2048 as i
+	from range(0, 10_000) t(i)
+)
+INSERT INTO test SELECT case when (i >= 0 and i < 110) or (i >= 1500 and i < 1800) or (i >= 2000) then false else true end FROM intermediates;
+# (0,110)
+# (1500,1800)
+# (2000,2048)
+
+statement ok
+checkpoint;
+
+query I
+select count(*) from test WHERE a IS true;
+----
+7758
+
+statement ok
+DROP TABLE test;

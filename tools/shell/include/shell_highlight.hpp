@@ -50,6 +50,7 @@ enum class HighlightElementType : uint32_t {
 	TABLE_LAYOUT,
 	VIEW_LAYOUT,
 	PRIMARY_KEY_COLUMN,
+	PROMPT,
 	NONE
 };
 
@@ -76,6 +77,8 @@ struct ShellHighlight {
 	void PrintError(string error_msg);
 
 	bool SetColor(const char *element_type, const char *color, const char *intensity);
+	void SetColor(HighlightElementType element_type, PrintColor print_color, PrintIntensity intensity,
+	              bool user_configured = true);
 	//! Whether or not a color is part of the extended color set (not available on all platforms)
 	static bool IsExtendedColor(PrintColor color);
 	static optional_ptr<const HighlightColorInfo> GetColorInfo(PrintColor color);
@@ -89,6 +92,9 @@ struct ShellHighlight {
 	//! Enable or disable highlighting
 	static void SetHighlighting(bool enabled);
 
+	void ToggleMode(HighlightMode mode);
+
+	static HighlightElementType TryGetHighlightElement(const char *element_type, string &error_msg);
 	static const HighlightElement &GetHighlightElement(HighlightElementType type);
 
 public:

@@ -251,9 +251,11 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
-			info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
 
 			auto &settings = info.expanded_settings;
+			if (info.Enabled(settings, MetricsType::QUERY_NAME)) {
+				info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
+			}
 			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
 				info.metrics[global_info_entry.first] = global_info_entry.second;
 			}
@@ -265,6 +267,10 @@ void QueryProfiler::EndQuery() {
 			}
 			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_WRITTEN)) {
 				info.metrics[MetricsType::TOTAL_BYTES_WRITTEN] = Value::UBIGINT(query_metrics.total_bytes_written);
+			}
+			if (info.Enabled(settings, MetricsType::TOTAL_MEMORY_ALLOCATED)) {
+				info.metrics[MetricsType::TOTAL_MEMORY_ALLOCATED] =
+				    Value::UBIGINT(query_metrics.total_memory_allocated);
 			}
 			if (info.Enabled(settings, MetricsType::ROWS_RETURNED)) {
 				info.metrics[MetricsType::ROWS_RETURNED] = child_info.metrics[MetricsType::OPERATOR_CARDINALITY];
@@ -352,6 +358,9 @@ void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
 		return;
 	case MetricsType::TOTAL_BYTES_WRITTEN:
 		query_metrics.total_bytes_written += amount;
+		return;
+	case MetricsType::TOTAL_MEMORY_ALLOCATED:
+		query_metrics.total_memory_allocated += amount;
 		return;
 	case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 		query_metrics.wal_replay_entry_count += amount;
@@ -793,12 +802,19 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	lock_guard<std::mutex> guard(lock);
+
+	bool show_query_name = false;
+	if (root) {
+		auto &info = root->GetProfilingInfo();
+		auto &settings = info.expanded_settings;
+		show_query_name = info.Enabled(settings, MetricsType::QUERY_NAME);
+	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << StringUtil::Replace(query_metrics.query, "\n", " ") + "\n";
+	ss << (show_query_name ? StringUtil::Replace(query_metrics.query, "\n", " ") : "") + "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized

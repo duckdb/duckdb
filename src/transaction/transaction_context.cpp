@@ -17,6 +17,12 @@ TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
 			Rollback(nullptr);
+		} catch (std::exception &ex) {
+			ErrorData data(ex);
+			try {
+				DUCKDB_LOG_ERROR(context, "TransactionContext::~TransactionContext()\t\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
 		} catch (...) { // NOLINT
 		}
 	}

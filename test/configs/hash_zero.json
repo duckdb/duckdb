@@ -32,7 +32,8 @@
         "test/sql/vacuum/test_analyze.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
         "test/sql/function/list/aggregates/approx_count_distinct.test",
-        "test/sql/copy/csv/test_glob_reorder_lineitem.test"
+        "test/sql/copy/csv/test_glob_reorder_lineitem.test",
+        "test/sql/types/geo/geometry_stats.test"
       ]
     },
     {

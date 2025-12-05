@@ -702,6 +702,16 @@ struct ExplainOutputSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ExtensionDirectoriesSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "extension_directories";
+	static constexpr const char *Description = "Set the directories to store extensions in";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ExtensionDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "extension_directory";
@@ -748,6 +758,17 @@ struct ForceCompressionSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ForceVariantShredding {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "force_variant_shredding";
+	static constexpr const char *Description =
+	    "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -1302,6 +1323,14 @@ struct ValidateExternalFileCacheSetting {
 	static constexpr const char *Description =
 	    "Whether to validate external file cache entries by checking version tag or last modification timestamp.";
 	static constexpr const char *InputType = "BOOLEAN";
+};
+
+struct VariantMinimumShreddingSize {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "variant_minimum_shredding_size";
+	static constexpr const char *Description = "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 "
+	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
+	static constexpr const char *InputType = "BIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
