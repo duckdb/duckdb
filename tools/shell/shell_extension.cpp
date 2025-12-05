@@ -4,6 +4,7 @@
 #include "duckdb/main/config.hpp"
 #include "shell_state.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "shell_renderer.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 

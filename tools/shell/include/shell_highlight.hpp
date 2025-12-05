@@ -51,6 +51,10 @@ enum class HighlightElementType : uint32_t {
 	VIEW_LAYOUT,
 	PRIMARY_KEY_COLUMN,
 	PROMPT,
+	LOG_TRACE,
+	LOG_DEBUG,
+	LOG_INFO,
+	LOG_WARNING,
 	NONE
 };
 

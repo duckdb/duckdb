@@ -1,3 +1,16 @@
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index a11af95..672a4c7 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -535,7 +535,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 	// attempt to download the full file and retry.
+ 
+ 	if (handle.logger) {
+-		DUCKDB_LOG_WARN(handle.logger,
++		DUCKDB_LOG_WARNING(handle.logger,
+ 		                "Falling back to full file download for file '%s': the server does not support HTTP range "
+ 		                "requests. Performance and memory usage are potentially degraded.",
+ 		                handle.path);
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
 index b4d6c74..480f9d7 100644
 --- a/src/s3fs.cpp
