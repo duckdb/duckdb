@@ -33,7 +33,7 @@ public:
 			// Traverse the prefix.
 			if (ref.get().GetType() == NType::PREFIX) {
 				Prefix prefix(art, ref.get());
-				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != key[depth]) {
 						// The key and the prefix don't match.
 						return nullptr;
@@ -102,7 +102,7 @@ public:
 			}
 			case NType::PREFIX: {
 				Prefix prefix(art, ref.get());
-				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != rowid[depth]) {
 						// The key and the prefix don't match.
 						return false;
@@ -196,7 +196,7 @@ public:
 			}
 			case NType::PREFIX: {
 				Prefix prefix(art, active_node, true);
-				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != active_key[depth]) {
 						// The active key and the prefix don't match.
 						InsertIntoPrefix(art, active_node_ref, active_key, row_id, i, depth, status);
@@ -278,7 +278,7 @@ public:
 				// Traverse a prefix chain until the next non-prefix node or gate.
 				while (current.get().GetType() == NType::PREFIX) {
 					Prefix prefix(art, current, true);
-					for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+					for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 						if (prefix.data[i] != current_key.get()[depth]) {
 							return;
 						}
