@@ -12,6 +12,8 @@
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
@@ -736,8 +738,13 @@ Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Validate External File Cache
 //===----------------------------------------------------------------------===//
+void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CacheValidationMode>(StringUtil::Upper(StringValue::Get(parameter)));
+}
+
 void ValidateExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.validate_external_file_cache = input.GetValue<bool>();
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.validate_external_file_cache = EnumUtil::FromString<CacheValidationMode>(str_input);
 }
 
 void ValidateExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -746,7 +753,7 @@ void ValidateExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfi
 
 Value ValidateExternalFileCacheSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.validate_external_file_cache);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.validate_external_file_cache)));
 }
 
 //===----------------------------------------------------------------------===//

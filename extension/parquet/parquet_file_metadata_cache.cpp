@@ -1,5 +1,7 @@
 #include "parquet_file_metadata_cache.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache_util.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 
 namespace duckdb {
@@ -29,13 +31,16 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 		return ParquetCacheValidity::UNKNOWN;
 	}
 	auto &open_options = info.extended_info->options;
-	const auto validate_entry = open_options.find("validate_external_file_cache");
-	if (validate_entry != open_options.end()) {
-		// check if always valid - if so just return valid
-		if (BooleanValue::Get(validate_entry->second)) {
+	
+	// Check if validation mode is explicitly set
+	CacheValidationMode validation_mode;
+	if (GetCacheValidationMode(info, validation_mode)) {
+		// If validation is disabled, assume cache is always valid
+		if (validation_mode == CacheValidationMode::NO_VALIDATION) {
 			return ParquetCacheValidity::VALID;
 		}
 	}
+	
 	const auto lm_entry = open_options.find("last_modified");
 	if (lm_entry == open_options.end()) {
 		return ParquetCacheValidity::UNKNOWN;

@@ -1,35 +1,39 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache_util.hpp"
 
 namespace duckdb {
 
 namespace {
 
-// Return whether cache validation is enabled for the given path and config.
-bool GetValidationOption(const OpenFileInfo &path, DatabaseInstance &db) {
-	// Check if file option is explicitly provided.
-	if (path.extended_info) {
-		const auto &open_options = path.extended_info->options;
-		const auto validate_entry = open_options.find("validate_external_file_cache");
-		if (validate_entry != open_options.end()) {
-			if (validate_entry->second.IsNull()) {
-				throw InvalidInputException("Cannot use NULL as argument for validate_external_file_cache");
-			}
-			return BooleanValue::Get(validate_entry->second);
-		}
-	}
+// Return the cache validation mode for the given path and config.
+CacheValidationMode GetValidationOption(const OpenFileInfo &path, DatabaseInstance &db) {
+	return GetCacheValidationMode(path, db);
+}
 
-	// Fall back to database config
-	auto &config = DBConfig::GetConfig(db);
-	return config.options.validate_external_file_cache;
+// Helper function to determine if validation should occur for a specific file
+bool ShouldValidate(const CacheValidationMode mode, bool is_remote) {
+	switch (mode) {
+	case CacheValidationMode::VALIDATE_ALL:
+		return true;
+	case CacheValidationMode::VALIDATE_REMOTE:
+		return is_remote;
+	case CacheValidationMode::NO_VALIDATION:
+		return false;
+	default:
+		return true;
+	}
 }
 
 } // namespace
@@ -61,7 +65,9 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
       validate(GetValidationOption(path_p, caching_file_system_p.db)), cached_file(cached_file_p), position(0) {
-	if (!external_file_cache.IsEnabled() || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (!external_file_cache.IsEnabled() || should_validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
 		return;
@@ -84,7 +90,9 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!cached_file.IsValid(guard, validate, version_tag, last_modified)) {
+		const bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+		bool should_validate = ShouldValidate(validate, is_remote);
+		if (!cached_file.IsValid(guard, should_validate, version_tag, last_modified)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -205,7 +213,9 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (file_handle || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (file_handle || should_validate) {
 		return GetFileHandle().GetFileSize();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -213,7 +223,9 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	if (file_handle || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (file_handle || should_validate) {
 		GetFileHandle();
 		return last_modified;
 	}
@@ -222,7 +234,9 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
-	if (file_handle || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (file_handle || should_validate) {
 		GetFileHandle();
 		return version_tag;
 	}
@@ -231,11 +245,14 @@ string CachingFileHandle::GetVersionTag() {
 }
 
 bool CachingFileHandle::Validate() const {
-	return validate;
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	return ShouldValidate(validate, is_remote);
 }
 
 bool CachingFileHandle::CanSeek() {
-	if (file_handle || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (file_handle || should_validate) {
 		return GetFileHandle().CanSeek();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -247,7 +264,9 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (file_handle || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (file_handle || should_validate) {
 		return GetFileHandle().OnDiskFile();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -255,7 +274,9 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	if (file_handle || validate) {
+	bool is_remote = FileSystem::IsRemoteFile(cached_file.path);
+	bool should_validate = ShouldValidate(validate, is_remote);
+	if (file_handle || should_validate) {
 		GetFileHandle();
 		return version_tag;
 	}

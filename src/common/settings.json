@@ -953,10 +953,13 @@
     },
     {
         "name": "validate_external_file_cache",
-        "description": "Whether to validate external file cache entries by checking version tag or last modification timestamp.",
-        "type": "BOOLEAN",
+        "description": "Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only remote cache entries), or NO_VALIDATION (disable cache validation).",
+        "type": "ENUM<CacheValidationMode>",
         "scope": "global",
-        "custom_implementation": true
+        "custom_implementation": true,
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "variant_minimum_shredding_size",

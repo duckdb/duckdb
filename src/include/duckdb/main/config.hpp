@@ -16,6 +16,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -218,8 +219,8 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
-	//! Whether to validate external file cache entries, which check version tag and last modification timestamp.
-	bool validate_external_file_cache = true;
+	//! Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only remote cache entries), or NO_VALIDATION (disable cache validation).
+	CacheValidationMode validate_external_file_cache = CacheValidationMode::VALIDATE_ALL;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;
