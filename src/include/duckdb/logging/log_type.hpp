@@ -33,6 +33,8 @@ public:
 	//! Construct a structured type
 	LogType(const string &name_p, const LogLevel &level_p, LogicalType structured_type)
 	    : name(name_p), level(level_p), is_structured(true), type(std::move(structured_type)) {
+		// Type must be nested, use the constructor for unstructured types instead.
+		D_ASSERT(type.IsNested());
 	}
 
 	string name;
