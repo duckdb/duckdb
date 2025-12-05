@@ -32,8 +32,8 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      catalog_version(catalog_version_p), awaiting_cleanup(false), transaction_manager(manager),
-      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
+      catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
+      storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -49,6 +49,10 @@ DuckTransaction &DuckTransaction::Get(ClientContext &context, Catalog &catalog) 
 		throw InternalException("DuckTransaction::Get called on non-DuckDB transaction");
 	}
 	return transaction.Cast<DuckTransaction>();
+}
+
+DuckTransactionManager &DuckTransaction::GetTransactionManager() {
+	return manager.Cast<DuckTransactionManager>();
 }
 
 LocalStorage &DuckTransaction::GetLocalStorage() {
@@ -197,8 +201,7 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	auto log = storage_manager.GetWAL();
-	if (!log) {
+	if (!storage_manager.HasWAL()) {
 		return false;
 	}
 	return true;
@@ -215,13 +218,11 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 
 		auto &profiler = *context.client_data->profiler;
 
-		profiler.StartTimer(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY);
+		auto commit_timer = profiler.StartTimer(MetricType::COMMIT_LOCAL_STORAGE_LATENCY);
 		storage->Commit(commit_state.get());
-		profiler.EndTimer(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY);
 
-		profiler.StartTimer(MetricsType::WRITE_TO_WAL_LATENCY);
+		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
-		profiler.EndTimer(MetricsType::WRITE_TO_WAL_LATENCY);
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks
@@ -297,6 +298,7 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 		return;
 	}
 	bool require_write_lock = false;
+	require_write_lock = require_write_lock || type.InsertDataWithIndex();
 	require_write_lock = require_write_lock || type.DeleteData();
 	require_write_lock = require_write_lock || type.UpdateData();
 	require_write_lock = require_write_lock || type.AlterTable();
@@ -307,15 +309,15 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 
 	if (require_write_lock) {
 		// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
-		write_lock = transaction_manager.SharedCheckpointLock();
+		write_lock = GetTransactionManager().SharedCheckpointLock();
 	}
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 	if (!write_lock) {
-		return transaction_manager.TryGetCheckpointLock();
+		return GetTransactionManager().TryGetCheckpointLock();
 	} else {
-		return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
+		return GetTransactionManager().TryUpgradeCheckpointLock(*write_lock);
 	}
 }
 

@@ -327,48 +327,6 @@ bool ShellState::HighlightResults() const {
 	return highlight_results == OptionType::ON;
 }
 
-/*
-** Render output like fprintf().  Except, if the output is going to the
-** console and if this is running on a Windows machine, translate the
-** output from UTF-8 into MBCS.
-*/
-#if defined(_WIN32) || defined(WIN32)
-void utf8_printf(FILE *out, const char *zFormat, ...) {
-	va_list ap;
-	va_start(ap, zFormat);
-	auto &state = ShellState::Get();
-	if ((state.stdout_is_console && (out == stdout || out == stderr)) ||
-	    (state.pager_is_active && !state.win_utf8_mode)) {
-		char buffer[2048];
-		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
-		const char *utf8_data;
-		unique_ptr<char[]> zbuf;
-		if (required_characters > 2048) {
-			zbuf = unique_ptr<char[]>(new char[required_characters + 1]);
-			vsnprintf(zbuf.get(), required_characters + 1, zFormat, ap);
-			utf8_data = zbuf.get();
-		} else {
-			utf8_data = buffer;
-		}
-		if (state.pager_is_active) {
-			auto mbcs_text = ShellState::Win32Utf8ToMbcs(utf8_data, true);
-			fputs(mbcs_text.c_str(), out);
-		} else {
-			// convert from utf8 to utf16
-			auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
-			auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-			// use WriteConsoleW to write the unicode codepoints to the console
-			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
-		}
-	} else {
-		vfprintf(out, zFormat, ap);
-	}
-	va_end(ap);
-}
-#elif !defined(utf8_printf)
-#define utf8_printf fprintf
-#endif
-
 /* Used with ShellState::EvaluateSQL to indicate special result states */
 const string EVAL_SQL_ERROR = "#ERROR#:";
 const string EVAL_SQL_NOT_A_QUERY = "#NOT A QUERY#";
@@ -378,24 +336,64 @@ const string EVAL_SQL_TOO_MANY_COLUMNS = "#TOO MANY COLUMNS#";
 const string EVAL_SQL_NULL = "#NULL#";
 const string EVAL_SQL_EMPTY = "#EMPTY#";
 
+void ShellState::Print(PrintOutput output, const char *str, idx_t len) {
+	if (seenInterrupt) {
+		// no more printing after seeing an interrupt
+		return;
+	}
+
+#if defined(_WIN32) || defined(WIN32)
+	if ((stdout_is_console && (out == stdout || out == stderr) || pager_is_active) && !win_utf8_mode) {
+		if (pager_is_active) {
+			auto mbcs_text = ShellState::Win32Utf8ToMbcs(str, true);
+			fputs(mbcs_text.c_str(), output == PrintOutput::STDOUT ? out : stderr);
+		} else {
+			// convert from utf8 to utf16
+			auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
+			auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+			// use WriteConsoleW to write the unicode codepoints to the console
+			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
+		}
+		return;
+	}
+#endif
+	fwrite((const void *)str, len, 1, output == PrintOutput::STDOUT ? out : stderr);
+}
+
 void ShellState::Print(PrintOutput output, const char *str) {
 	if (seenInterrupt) {
 		// no more printing after seeing an interrupt
 		return;
 	}
-	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
+#if defined(_WIN32) || defined(WIN32)
+	Print(output, str, strlen(str));
+#else
+	fputs(str, output == PrintOutput::STDOUT ? out : stderr);
+#endif
 }
 
 void ShellState::Print(PrintOutput output, const string &str) {
-	Print(output, str.c_str());
+	Print(output, str.c_str(), str.size());
+}
+
+void ShellState::Print(PrintOutput output, duckdb::string_t str) {
+	Print(output, str.GetData(), str.GetSize());
+}
+
+void ShellState::Print(const char *str, idx_t len) {
+	Print(PrintOutput::STDOUT, str, len);
+}
+
+void ShellState::Print(const string &str) {
+	Print(PrintOutput::STDOUT, str.c_str(), str.size());
+}
+
+void ShellState::Print(duckdb::string_t str) {
+	Print(PrintOutput::STDOUT, str.GetData(), str.GetSize());
 }
 
 void ShellState::Print(const char *str) {
 	Print(PrintOutput::STDOUT, str);
-}
-
-void ShellState::Print(const string &str) {
-	Print(PrintOutput::STDOUT, str.c_str());
 }
 
 /* Indicate out-of-memory and exit. */
@@ -447,13 +445,13 @@ bool ShellState::IsCharacter(char c) {
 	return (c & 0xc0) != 0x80;
 }
 
-idx_t ShellState::RenderLength(const char *z) {
+idx_t ShellState::RenderLength(const char *str, idx_t str_len) {
 #ifdef HAVE_LINENOISE
-	return linenoiseComputeRenderWidth(z, strlen(z));
+	return linenoiseComputeRenderWidth(str, str_len);
 #else
-	int n = 0;
-	for (; *z; z++) {
-		if (IsCharacter(*z)) {
+	idx_t n = 0;
+	for (idx_t i = 0; i < str_len; i++) {
+		if (IsCharacter(str[i])) {
 			n++;
 		}
 	}
@@ -461,8 +459,12 @@ idx_t ShellState::RenderLength(const char *z) {
 #endif
 }
 
+idx_t ShellState::RenderLength(duckdb::string_t str) {
+	return RenderLength(str.GetData(), str.GetSize());
+}
+
 idx_t ShellState::RenderLength(const string &str) {
-	return RenderLength(str.c_str());
+	return RenderLength(str.c_str(), str.size());
 }
 
 int ShellState::RunInitialCommand(const char *sql, bool bail) {
@@ -816,8 +818,8 @@ string ShellState::GetSchemaLine(const string &str, const string &tail) {
 }
 
 string ShellState::GetSchemaLineN(const string &str, idx_t n, const string &tail) {
-	if (str.size() < n) {
-		return GetSchemaLine(str.substr(n), tail);
+	if (str.size() > n) {
+		return GetSchemaLine(str.substr(0, n), tail);
 	}
 	return GetSchemaLine(str, tail);
 }
@@ -964,6 +966,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	// analyze the query result so we know how long/wide the result will be
 	RenderingQueryResult render_result(res, *renderer);
 	renderer->Analyze(render_result);
+	if (seenInterrupt) {
+		return SuccessState::FAILURE;
+	}
 
 	// check if we need to use the pager for the rendering
 	unique_ptr<PagerState> pager_setup;
