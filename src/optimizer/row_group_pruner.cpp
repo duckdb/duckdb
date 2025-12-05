@@ -37,8 +37,8 @@ static bool FindStorageIndex(LogicalGet &logical_get, const ColumnIndex &column_
 		//! This is a generated column, can't use the row group pruner
 		return false;
 	}
-	auto storage_index = StorageIndex::FromColumnIndex(column_index);
-	storage_index.SetIndex(column.StorageOid());
+	out_index = StorageIndex::FromColumnIndex(column_index);
+	out_index.SetIndex(column.StorageOid());
 	return true;
 }
 
@@ -210,15 +210,13 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 					combined_limit = row_limit.GetIndex() + offset_puning_result.offset_remainder;
 				}
 
-				return make_uniq<RowGroupOrderOptions>(storage_index.GetPrimaryIndex(), order_by, order_type,
-				                                       column_type, combined_limit,
+				return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, column_type, combined_limit,
 				                                       offset_puning_result.pruned_row_group_count);
 			}
 		}
 	}
 	// Only sort row groups by primary order column and prune with limit if set
-	return make_uniq<RowGroupOrderOptions>(storage_index.GetPrimaryIndex(), order_by, order_type, column_type,
-	                                       combined_limit, 0);
+	return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, column_type, combined_limit, 0);
 }
 
 } // namespace duckdb
