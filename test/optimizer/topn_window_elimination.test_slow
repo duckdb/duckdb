@@ -2,6 +2,8 @@
 # description: Test Top-N Window Elimination Rule
 # group: [optimizer]
 
+require parquet
+
 statement ok
 PRAGMA enable_verification
 
@@ -16,6 +18,9 @@ CREATE TABLE tbl_with_null AS SELECT * FROM VALUES (0, [0], null), (0, [1], 1), 
 
 statement ok
 CREATE TABLE tbl2 AS SELECT * FROM VALUES (0, 'a'), (1, 'b'), (null, 'c'), t(x, y)
+
+statement ok
+COPY (SELECT * FROM VALUES (0, {'x': 0}, 0, 0), (0, {'x': 1}, 1, 1), (1, {'x': 2}, 2, 2), (null, {'x': 3}, 3, 3), (null, {'x': 4}, 4, 4), t(grp, a, b, x)) TO '__TEST_DIR__/window_elim.parquet'
 
 statement ok
 CREATE MACRO window_fun(table_name, col_names, sort_order, topn) AS TABLE
@@ -94,6 +99,12 @@ query II
 EXPLAIN SELECT * FROM lateral_join('${sort_order}', ${topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# late materialization on parquet
+query II
+EXPLAIN SELECT * FROM (SELECT row_number() OVER (PARTITION BY grp ORDER BY b ${sort_order}) as rn, grp, a, b, x FROM '__TEST_DIR__/window_elim.parquet' QUALIFY rn <= ${topn}) ORDER BY ALL
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
 
 statement ok
 CREATE TABLE ${sort_order}${topn}_1 AS SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
