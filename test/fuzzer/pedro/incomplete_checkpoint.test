@@ -10,9 +10,6 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE SCHEMA s1;
 
 statement ok
@@ -24,13 +21,14 @@ DROP SCHEMA s1;
 statement ok
 CHECKPOINT;
 
+# We abort the CHECKPOINT after writing to the free list.
+
 statement ok
 PRAGMA DEBUG_CHECKPOINT_ABORT = 'after_free_list_write';
 
 statement ok
 CREATE SCHEMA s3;
 
-# error Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag
 statement error
 CHECKPOINT;
 ----

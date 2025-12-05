@@ -8,12 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/common/enums/on_entry_not_found.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -82,7 +78,7 @@ public:
 	idx_t ApproxDatabaseCount();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
-	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
+	void ResetDatabases();
 
 	transaction_t GetNewQueryNumber() {
 		return current_query_number++;
