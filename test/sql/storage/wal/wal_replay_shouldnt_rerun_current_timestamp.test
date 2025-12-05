@@ -11,13 +11,13 @@ statement ok
 ATTACH '__TEST_DIR__/foo.db';
 
 statement ok
-CREATE TABLE foo.t AS SELECT range::INT AS id FROM range(1);
+CREATE TABLE foo.t AS SELECT range::INT AS id FROM range(100);
 
 statement ok
 ALTER TABLE foo.t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 
 statement ok
-CREATE TABLE original AS SELECT d FROM foo.t LIMIT 1;
+CREATE TABLE original AS SELECT d FROM foo.t;
 
 statement ok
 DETACH foo;

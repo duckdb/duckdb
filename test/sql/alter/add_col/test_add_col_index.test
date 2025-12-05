@@ -14,29 +14,33 @@ BEGIN TRANSACTION
 statement ok
 ALTER TABLE test ADD COLUMN k INTEGER DEFAULT 2
 
-statement ok
+# Because `ADD COLUMN` does an update under the hood to set the column's values,
+# this should throw TransactionContext Error: Cannot create index with outstanding updates
+statement error
 CREATE INDEX i_index ON test(k)
-
-statement ok
-COMMIT
-
-statement ok
-INSERT INTO test VALUES (3, 3, 3)
-
-query III
-SELECT * FROM test WHERE k=2
 ----
-1
-1
-2
-2
-2
-2
+TransactionContext Error
 
-query III
-SELECT * FROM test WHERE k=3
-----
-3
-3
-3
+# statement ok
+# COMMIT
+#
+# statement ok
+# INSERT INTO test VALUES (3, 3, 3)
+#
+# query III
+# SELECT * FROM test WHERE k=2
+# ----
+# 1
+# 1
+# 2
+# 2
+# 2
+# 2
+#
+# query III
+# SELECT * FROM test WHERE k=3
+# ----
+# 3
+# 3
+# 3
 

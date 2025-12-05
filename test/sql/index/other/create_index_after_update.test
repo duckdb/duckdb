@@ -1,0 +1,23 @@
+# name: test/sql/index/other/create_index_after_update.test
+# group: [other]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE test SET i = 5;
+
+statement ok
+UPDATE test SET j = 6;
+
+# Currenly not supported.
+statement error
+CREATE INDEX i_index ON test(i);
+----
+TransactionContext Error
