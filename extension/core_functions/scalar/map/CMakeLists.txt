@@ -7,6 +7,7 @@ add_library_unity(
   map_entries.cpp
   map.cpp
   map_concat.cpp
+  switch.cpp
   cardinality.cpp)
 set(CORE_FUNCTION_FILES
     ${CORE_FUNCTION_FILES} $<TARGET_OBJECTS:duckdb_core_functions_map>

@@ -62,5 +62,12 @@
         "description": "Returns the values of a map as a list",
         "example": "map_values(map(['key'], ['val']))",
         "type": "scalar_function"
+    },
+    {
+        "name": "switch",
+        "parameters": "key,map",
+        "description": "Creates a switch statement similar to CASE WHEN/THEN",
+        "example": "switch(x, map({1 : 1})",
+        "type": "scalar_function_set"
     }
 ]

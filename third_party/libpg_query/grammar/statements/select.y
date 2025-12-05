@@ -2883,7 +2883,6 @@ indirection_expr:
             param_expr
 			| struct_expr
 			| map_expr
-			| switch_expr
 			| func_expr
 			| case_expr
 			| list_expr
