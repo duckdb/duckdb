@@ -248,13 +248,18 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		throw InternalException("Unrecognized alter table type!");
 	}
 }
+
+bool IsConstantExpression(ExpressionExecutor &executor) {
+	if (executor.expressions.empty()) {
+		return false;
+	}
+	auto &expression = *executor.expressions[0];
+	return !expression.IsVolatile() && expression.IsConsistent();
+}
+
 //! When the vector is not constant, return nullptr, otherwise a ptr to the constant vector
 unique_ptr<Vector> GetVectorWhenConstant(DataChunk &update_chunk, ExpressionExecutor &executor) {
-	update_chunk.SetCardinality(1);
-	executor.SetChunk(&update_chunk);
-	executor.ExecuteExpression(0, update_chunk.data[0]);
-	bool is_constant_default = update_chunk.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR;
-	if (!is_constant_default) {
+	if (!IsConstantExpression(executor)) {
 		return nullptr;
 	}
 	auto constant_vector = make_uniq<Vector>(update_chunk.data[0].GetType());
