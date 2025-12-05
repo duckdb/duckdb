@@ -215,6 +215,7 @@ private:
 			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, chunk_idx, false);
 			const auto sort_keys = reinterpret_cast<T **const>(key_ptrs);
 			const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_scan_state.chunk_state.row_locations);
+			lock_guard<mutex> lock(*payload_scan_state.chunk_state.chunk_lock);
 			for (idx_t i = 0; i < chunk_count; i++) {
 				sort_keys[i]->SetPayload(payload_ptrs[i]);
 				D_ASSERT(GetValueAtIndex<T>(chunk_idx, i).GetPayload() == payload_ptrs[i]);

@@ -323,6 +323,8 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	}
 
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts);
+
+	chunk_state.chunk_lock = &chunk.lock.get();
 }
 
 static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t heap_sizes[], const idx_t offset,
