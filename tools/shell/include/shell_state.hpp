@@ -295,15 +295,20 @@ public:
 	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
 
-	static idx_t RenderLength(const char *z);
+	static idx_t RenderLength(const char *str, idx_t str_len);
+	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
 	static bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
+	void Print(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str);
+	void Print(PrintOutput output, duckdb::string_t str);
 	void Print(PrintOutput output, const string &str);
+	void Print(const char *str, idx_t len);
+	void Print(duckdb::string_t str);
 	void Print(const char *str);
 	void Print(const string &str);
 	template <typename... ARGS>

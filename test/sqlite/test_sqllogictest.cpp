@@ -88,10 +88,11 @@ static void testRunner() {
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
 
+	ErrorData error;
 	try {
 		runner.ExecuteFile(name);
-	} catch (...) {
-		// This is to allow cleanup to be executed, failure is already logged
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
 	}
 
 	if (AUTO_SWITCH_TEST_DIR) {
@@ -119,6 +120,10 @@ static void testRunner() {
 
 	// clear test directory after running tests
 	ClearTestDirectory();
+
+	if (error.HasError()) {
+		FAIL(error.Message());
+	}
 }
 
 static string ParseGroupFromPath(string file) {
