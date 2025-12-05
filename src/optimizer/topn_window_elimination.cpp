@@ -1,8 +1,8 @@
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -12,10 +12,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -186,7 +183,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		// Try circumventing struct-packing with late materialization
 		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
-		if (late_mat_lhs) {
+		if (aggregate_payload.size() == 1) {
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
 	}
@@ -823,10 +820,6 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	}
 
 	const auto rowid_column_idxs = logical_get.function.get_row_id_columns(context, logical_get.bind_data.get());
-	if (rowid_column_idxs.size() > 1) {
-		// TODO: support multi-column rowids for parquet
-		return false;
-	}
 	for (const auto &col_idx : rowid_column_idxs) {
 		auto entry = logical_get.virtual_columns.find(col_idx);
 		if (entry == logical_get.virtual_columns.end()) {
@@ -863,12 +856,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 	for (const auto &col_idx : rhs_rowid_column_idxs) {
 		rhs_rowid_columns.push_back(rhs_get.virtual_columns[col_idx]);
 	}
-	const auto rhs_rowid_idxs =
+	auto rhs_rowid_idxs =
 	    LateMaterializationHelper::GetOrInsertRowIds(rhs_get, rhs_rowid_column_idxs, rhs_rowid_columns);
 
 	// Add rowid column to the operators on the right-hand side
 	idx_t last_table_idx = rhs_get.table_index;
-	idx_t last_rowid_offset = rhs_rowid_idxs[0];
 
 	// Add rowid projections to the query tree on the right-hand side
 	for (auto stack_it = std::next(stack.rbegin()); stack_it != stack.rend(); ++stack_it) {
@@ -876,17 +868,21 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			auto &rowid_column = rhs_rowid_columns[0];
-			op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    rowid_column.name, rowid_column.type, ColumnBinding {last_table_idx, last_rowid_offset}));
+			for (idx_t i = 0; i < rhs_rowid_columns.size(); i++) {
+				auto &rowid_column = rhs_rowid_columns[i];
+				op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+				    rowid_column.name, rowid_column.type, ColumnBinding {last_table_idx, rhs_rowid_idxs[i]}));
+				rhs_rowid_idxs[i] = op.expressions.size() - 1;
+			}
 			last_table_idx = op.GetTableIndex()[0];
-			last_rowid_offset = op.expressions.size() - 1;
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_FILTER: {
 			if (op.HasProjectionMap()) {
 				auto &filter = op.Cast<LogicalFilter>();
-				filter.projection_map.push_back(last_rowid_offset);
+				for (const auto rowid_idx : rhs_rowid_idxs) {
+					filter.projection_map.push_back(rowid_idx);
+				}
 			}
 			break;
 		}
@@ -894,10 +890,13 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 			if (op.HasProjectionMap()) {
 				auto &join = op.Cast<LogicalComparisonJoin>();
 				auto &op_child = std::prev(stack_it)->get();
-				if (&op_child == &*join.children[0]) {
-					join.left_projection_map.push_back(last_rowid_offset);
-				} else {
-					join.right_projection_map.push_back(last_rowid_offset);
+
+				auto &projection_map = join.left_projection_map;
+				if (&op_child != &*join.children[0]) {
+					projection_map = join.right_projection_map;
+				}
+				for (const auto rowid_idx : rhs_rowid_idxs) {
+					projection_map.push_back(rowid_idx);
 				}
 			}
 			break;
@@ -909,8 +908,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization
 
 	// Change args to project rowid
 	args.clear();
-	args.push_back(make_uniq<BoundColumnRefExpression>(rhs_rowid_columns[0].name, rhs_rowid_columns[0].type,
-	                                                   ColumnBinding {last_table_idx, last_rowid_offset}));
+	for (idx_t i = 0; i < rhs_rowid_columns.size(); i++) {
+		args.push_back(make_uniq<BoundColumnRefExpression>(rhs_rowid_columns[i].name, rhs_rowid_columns[i].type,
+		                                                   ColumnBinding {last_table_idx, rhs_rowid_idxs[i]}));
+	}
 
 	return lhs;
 }
