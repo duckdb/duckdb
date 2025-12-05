@@ -494,6 +494,8 @@ jobs:
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
+      - uses: ./.github/actions/cleanup_runner
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
