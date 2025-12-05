@@ -1556,39 +1556,70 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		}
 		if (total_max_shorten_amount >= total_render_length - max_width) {
 			// we can get below the max width by shortening
-			// try to shorten everything by an equivalent percentage
-			// i.e. if we have two long string columns, we would prefer them to both end up as the same size
+			// try to shorten everything to the same size
+			// i.e. if we have one long column and one small column, we would prefer to shorten only the long column
 			idx_t shorten_amount_required = total_render_length - max_width;
-			double percentage_shorten_amount = double(shorten_amount_required) / double(total_max_shorten_amount);
-			D_ASSERT(percentage_shorten_amount >= 0 && percentage_shorten_amount <= 1);
+
+			// map of "shorten amount required -> column index"
+			map<idx_t, vector<idx_t>> shorten_amount_required_map;
+			for (idx_t col_idx = 0; col_idx < max_shorten_amount.size(); col_idx++) {
+				shorten_amount_required_map[max_shorten_amount[col_idx]].push_back(col_idx);
+			}
 			vector<idx_t> actual_shorten_amounts;
-			idx_t total_shorten_amount = 0;
-			for (auto &shorten_amount : max_shorten_amount) {
-				if (shorten_amount == 0) {
-					actual_shorten_amounts.push_back(0);
-					continue;
-				}
-				idx_t new_shorten_amount =
-				    static_cast<idx_t>(percentage_shorten_amount * LossyNumericCast<double>(shorten_amount));
-				actual_shorten_amounts.push_back(new_shorten_amount);
-				total_shorten_amount += new_shorten_amount;
-			}
-			D_ASSERT(total_shorten_amount <= shorten_amount_required);
-			if (total_shorten_amount < shorten_amount_required) {
-				// because of floating point truncation we might not get exactly enough shortening
-				// ensure we
-				idx_t remaining_shorten_amount = shorten_amount_required - total_shorten_amount;
-				for (idx_t c = 0; c < actual_shorten_amounts.size() && remaining_shorten_amount > 0; c++) {
-					idx_t possible_extra_shortening = max_shorten_amount[c] - actual_shorten_amounts[c];
-					if (possible_extra_shortening == 0) {
-						continue;
+			actual_shorten_amounts.resize(max_shorten_amount.size());
+
+			while (shorten_amount_required > 0) {
+				// find the columns with the longest width
+				auto entry = shorten_amount_required_map.rbegin();
+				auto largest_width = entry->first;
+				auto &column_list = entry->second;
+				// shorten these columns to the next-shortest width
+				// move to the second-largest entry - this is the target entry
+				entry++;
+				auto second_largest_width =
+				    entry == shorten_amount_required_map.rend() ? config.max_col_width : entry->first;
+				auto max_shorten_width = largest_width - second_largest_width;
+				D_ASSERT(max_shorten_width > 0);
+
+				auto total_potential_shorten_width = max_shorten_width * column_list.size();
+				if (total_potential_shorten_width >= shorten_amount_required) {
+					// we can reach the shorten amount required just by shortening this set of columns
+					// shorten the columns equally
+					idx_t shorten_amount_per_column = shorten_amount_required / column_list.size();
+					for (auto &column_idx : column_list) {
+						actual_shorten_amounts[column_idx] += shorten_amount_per_column;
 					}
-					idx_t extra_shortening = MinValue<idx_t>(remaining_shorten_amount, possible_extra_shortening);
-					remaining_shorten_amount -= extra_shortening;
-					actual_shorten_amounts[c] += extra_shortening;
+					shorten_amount_required -= shorten_amount_per_column * column_list.size();
+
+					// because of truncation, we might still need to shorten columns by a single unit
+					for (idx_t i = column_list.size(); i > 0 && shorten_amount_required > 0; i--) {
+						actual_shorten_amounts[column_list[i - 1]]++;
+						shorten_amount_required--;
+					}
+					if (shorten_amount_required != 0) {
+						throw InternalException("Shorten amount required has tob e zero now");
+					}
+
+					// we are now done
+					break;
 				}
-				D_ASSERT(remaining_shorten_amount == 0);
+				if (entry == shorten_amount_required_map.rend()) {
+					throw InternalException(
+					    "ColumnRenderer - we could not reach the shorten amount required but we ran out of columns?");
+				}
+				// we need to shorten all columns to the width of the next-largest column
+				for (auto &column_idx : column_list) {
+					actual_shorten_amounts[column_idx] += max_shorten_width;
+				}
+				// add all columns to the second-largest list of columns
+				auto &second_largest_column_list = entry->second;
+				second_largest_column_list.insert(second_largest_column_list.end(), column_list.begin(),
+				                                  column_list.end());
+				// delete this entry from the shorten map and continue
+				shorten_amount_required_map.erase(largest_width);
+				shorten_amount_required -= total_potential_shorten_width;
 			}
+
 			// now perform the shortening
 			for (idx_t c = 0; c < actual_shorten_amounts.size(); c++) {
 				if (actual_shorten_amounts[c] == 0) {
