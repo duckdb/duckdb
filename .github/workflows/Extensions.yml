@@ -257,11 +257,12 @@ jobs:
         - create-extension-repository
 
     steps:
-      - uses: ./.github/actions/cleanup_runner
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - uses: actions/download-artifact@v4
         with:
