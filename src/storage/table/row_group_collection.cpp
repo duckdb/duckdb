@@ -965,6 +965,7 @@ private:
 // Vacuum
 //===--------------------------------------------------------------------===//
 struct VacuumState {
+	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
@@ -1096,9 +1097,15 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state) {
 	auto options = checkpoint_state.writer.GetCheckpointOptions();
-	bool full_checkpoint = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
-	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_change_row_ids = info->GetIndexes().Empty() && full_checkpoint;
+	// currently we can only vacuum deletes if we are doing a full checkpoint
+	state.can_vacuum_deletes = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
+	if (!state.can_vacuum_deletes) {
+		return;
+	}
+
+	// if there are indexes - we cannot change row-ids
+	// this limits what kind of vacuuming we can do
+	state.can_change_row_ids = info->GetIndexes().Empty();
 	// obtain the set of committed row counts for each row group
 	vector<optional_idx> committed_counts;
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
@@ -1156,6 +1163,10 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
                                              idx_t segment_idx, bool schedule_vacuum) {
 	static constexpr const idx_t MAX_MERGE_COUNT = 3;
 
+	if (!state.can_vacuum_deletes) {
+		// we cannot vacuum deletes - cannot vacuum
+		return false;
+	}
 	if (segment_idx < state.next_vacuum_idx) {
 		// this segment is being vacuumed by a previously scheduled task
 		return true;
