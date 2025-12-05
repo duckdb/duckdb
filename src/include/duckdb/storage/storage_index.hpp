@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,22 @@ public:
 	}
 	inline bool operator<(const StorageIndex &rhs) const {
 		return index < rhs.index;
+	}
+
+public:
+	static StorageIndex FromColumnIndex(const ColumnIndex &column_id) {
+		vector<StorageIndex> result;
+		for (auto &child_id : column_id.GetChildIndexes()) {
+			result.push_back(StorageIndex::FromColumnIndex(child_id));
+		}
+		auto storage_index = StorageIndex(column_id.GetPrimaryIndex(), std::move(result));
+		if (column_id.HasType()) {
+			storage_index.SetType(column_id.GetType());
+		}
+		if (column_id.IsPushdownExtract()) {
+			storage_index.SetPushdownExtract();
+		}
+		return storage_index;
 	}
 
 public:

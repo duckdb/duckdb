@@ -545,8 +545,13 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		if (entry->second.child_columns.empty() ||
 		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
 			auto &logical_column_id = state.old_column_ids[col_sel_idx];
-			ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
-			state.AddColumn(col_sel_idx, std::move(new_index));
+			if (logical_column_id.IsPushdownExtract()) {
+				D_ASSERT(entry->second.child_columns.empty());
+				state.AddColumn(col_sel_idx, logical_column_id);
+			} else {
+				ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
+				state.AddColumn(col_sel_idx, std::move(new_index));
+			}
 			continue;
 		}
 		//! Pushdown Extract is supported, emit a column for every field

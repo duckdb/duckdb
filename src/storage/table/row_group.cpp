@@ -953,8 +953,17 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, 
 }
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) const {
+	StorageIndex storage_index(column_idx);
+	return GetStatistics(storage_index);
+}
+
+unique_ptr<BaseStatistics> RowGroup::GetStatistics(const StorageIndex &column_idx) const {
 	auto &col_data = GetColumn(column_idx);
-	return col_data.GetStatistics();
+	auto column_stats = col_data.GetStatistics();
+	if (!column_idx.IsPushdownExtract()) {
+		return column_stats;
+	}
+	return column_stats->PushdownExtract(column_idx.GetChildIndex(0));
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
@@ -1348,8 +1357,8 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 
 	RowGroup &row_group;
 
-	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
-		return row_group.GetStatistics(column_id);
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
+		return row_group.GetStatistics(storage_index);
 	}
 };
 

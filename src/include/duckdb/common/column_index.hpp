@@ -77,11 +77,6 @@ public:
 	vector<ColumnIndex> &GetChildIndexesMutable() {
 		return child_indexes;
 	}
-	ColumnIndex CopyWithPrimaryIndex(idx_t new_primary_index) const {
-		auto copy(*this);
-		copy.index = new_primary_index;
-		return copy;
-	}
 
 	bool IsPushdownExtract() const {
 		return index_type == ColumnIndexType::PUSHDOWN_EXTRACT;

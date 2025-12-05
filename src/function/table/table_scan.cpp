@@ -57,21 +57,6 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	bool in_charge_of_final_stretch {false};
 };
 
-static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
-	vector<StorageIndex> result;
-	for (auto &child_id : column_id.GetChildIndexes()) {
-		result.push_back(TransformStorageIndex(child_id));
-	}
-	auto storage_index = StorageIndex(column_id.GetPrimaryIndex(), std::move(result));
-	if (column_id.HasType()) {
-		storage_index.SetType(column_id.GetType());
-	}
-	if (column_id.IsPushdownExtract()) {
-		storage_index.SetPushdownExtract();
-	}
-	return storage_index;
-}
-
 static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
 	if (column_id.IsRowIdColumn()) {
 		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID);
@@ -81,7 +66,7 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 	// for any child indices because the indices are already the physical indices.
 	// Only the top-level can have generated columns.
 	auto &col = table.GetColumn(column_id.ToLogical());
-	auto result = TransformStorageIndex(column_id);
+	auto result = StorageIndex::FromColumnIndex(column_id);
 	result.SetIndex(col.StorageOid());
 	return result;
 }
@@ -715,8 +700,8 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 		return nullptr;
 	}
 
-	ColumnIndex index_copy = column_id.CopyWithPrimaryIndex(column.StorageOid());
-	auto storage_index = TransformStorageIndex(index_copy);
+	auto storage_index = StorageIndex::FromColumnIndex(column_id);
+	storage_index.SetIndex(column.StorageOid());
 	return duck_table.GetStatistics(context, storage_index);
 }
 

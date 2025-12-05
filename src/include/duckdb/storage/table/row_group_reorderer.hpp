@@ -49,7 +49,7 @@ public:
 
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
 	static OffsetPruningResult GetOffsetAfterPruning(OrderByStatistics order_by, OrderByColumnType column_type,
-	                                                 RowGroupOrderType order_type, column_t column_idx,
+	                                                 RowGroupOrderType order_type, const StorageIndex &column_idx,
 	                                                 idx_t row_offset, vector<PartitionStatistics> &stats);
 
 private:
