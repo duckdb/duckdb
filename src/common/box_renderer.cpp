@@ -1723,7 +1723,9 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		row.values = std::move(values);
 	}
 	// check if we shortened any columns that would be rendered and if we can expand them
-	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows) {
+	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows &&
+	    !added_split_column) {
 		// if we have shortened any columns - try to expand them
 		// how many rows do we have left to expand before we hit the max row limit?
 		idx_t max_rows_per_row = config.max_rows / render_rows.size();
