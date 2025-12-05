@@ -1759,10 +1759,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				auto render_width = row.values[c].render_width.GetIndex();
 				if (render_width <= column_widths[c]) {
 					// not shortened - skip
-					if (c == 0) {
-						// if the first row is not stretched out, we don't need to add a separator
-						need_extra_row = false;
-					}
 					continue;
 				}
 				// this value was shortened! try to stretch it out
