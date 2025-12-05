@@ -56,18 +56,18 @@ public:
 
 class ParquetAdditionalAuthenticatedData : public AdditionalAuthenticatedData {
 public:
-	ParquetAdditionalAuthenticatedData(Allocator &allocator);
+	explicit ParquetAdditionalAuthenticatedData(Allocator &allocator);
 	~ParquetAdditionalAuthenticatedData() override;
 
 public:
 	idx_t GetPrefixSize() const;
 	void WriteParquetAAD(const CryptoMetaData &crypto_meta_data);
 	void WriteFooterAAD(const std::string &unique_file_identifier);
-	void WriteFooterModule() const;
+	void WriteFooterModule();
 
 private:
 	void WritePrefix(const std::string &prefix);
-	void WriteSuffix(const CryptoMetaData &crypto_meta_data) const;
+	void WriteSuffix(const CryptoMetaData &crypto_meta_data);
 
 private:
 	optional_idx additional_authenticated_data_prefix_size;

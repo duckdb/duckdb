@@ -29,7 +29,7 @@ private:
 
 class AdditionalAuthenticatedData {
 public:
-	AdditionalAuthenticatedData(Allocator &allocator)
+	explicit AdditionalAuthenticatedData(Allocator &allocator)
 	    : additional_authenticated_data(make_uniq<MemoryStream>(allocator, INITIAL_AAD_CAPACITY)) {
 	}
 	virtual ~AdditionalAuthenticatedData();

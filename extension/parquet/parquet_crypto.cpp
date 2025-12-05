@@ -48,7 +48,6 @@ ParquetAdditionalAuthenticatedData::ParquetAdditionalAuthenticatedData(Allocator
     : AdditionalAuthenticatedData(allocator) {
 }
 
-// Define the virtual destructor
 ParquetAdditionalAuthenticatedData::~ParquetAdditionalAuthenticatedData() = default;
 
 idx_t ParquetAdditionalAuthenticatedData::GetPrefixSize() const {
@@ -72,9 +71,9 @@ void ParquetAdditionalAuthenticatedData::WriteParquetAAD(const CryptoMetaData &c
 	WriteSuffix(crypto_meta_data);
 }
 
-void ParquetAdditionalAuthenticatedData::WriteFooterModule() const {
+void ParquetAdditionalAuthenticatedData::WriteFooterModule() {
 	int8_t footer_module = ParquetCrypto::Footer;
-	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&footer_module), sizeof(int8_t));
+	WriteData(reinterpret_cast<const_data_ptr_t>(&footer_module), sizeof(int8_t));
 }
 
 void ParquetAdditionalAuthenticatedData::WriteFooterAAD(const std::string &unique_file_identifier) {
@@ -88,11 +87,11 @@ void ParquetAdditionalAuthenticatedData::WritePrefix(const std::string &prefix) 
 		throw InvalidInputException("Prefix for Additional Authenticated Data is empty");
 	}
 
-	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(prefix.data()), prefix.size());
+	WriteData(reinterpret_cast<const_data_ptr_t>(prefix.data()), prefix.size());
 	additional_authenticated_data_prefix_size = additional_authenticated_data->GetPosition();
 }
 
-void ParquetAdditionalAuthenticatedData::WriteSuffix(const CryptoMetaData &crypto_meta_data) const {
+void ParquetAdditionalAuthenticatedData::WriteSuffix(const CryptoMetaData &crypto_meta_data) {
 	if (!additional_authenticated_data_prefix_size.IsValid()) {
 		throw InvalidInputException("Prefix for Parquet additional authenticated data is not set");
 	}
@@ -100,8 +99,7 @@ void ParquetAdditionalAuthenticatedData::WriteSuffix(const CryptoMetaData &crypt
 	if (crypto_meta_data.module < 0) {
 		throw InvalidInputException("Parquet Crypto Module not initialized");
 	}
-	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.module),
-	                                         sizeof(int8_t));
+	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.module), sizeof(int8_t));
 	if (crypto_meta_data.row_group_ordinal < 0) {
 		if (crypto_meta_data.module != ParquetCrypto::Footer) {
 			throw InvalidInputException("Parquet Encryption: Row group not initialized");
@@ -109,18 +107,15 @@ void ParquetAdditionalAuthenticatedData::WriteSuffix(const CryptoMetaData &crypt
 		// Footer
 		return;
 	}
-	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.row_group_ordinal),
-	                                         sizeof(int16_t));
+	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.row_group_ordinal), sizeof(int16_t));
 	if (crypto_meta_data.column_ordinal < 0) {
 		return;
 	}
-	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.column_ordinal),
-	                                         sizeof(int16_t));
+	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.column_ordinal), sizeof(int16_t));
 	if (crypto_meta_data.page_ordinal < 0) {
 		return;
 	}
-	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.page_ordinal),
-	                                         sizeof(int16_t));
+	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.page_ordinal), sizeof(int16_t));
 }
 
 ParquetEncryptionConfig::ParquetEncryptionConfig() {

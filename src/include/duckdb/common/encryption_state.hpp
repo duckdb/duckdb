@@ -42,7 +42,6 @@ public:
 protected:
 	EncryptionTypes::CipherType cipher;
 	idx_t key_len;
-	string additional_authenticated_data;
 };
 
 class EncryptionUtil {

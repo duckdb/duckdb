@@ -1261,9 +1261,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto col_idx = MultiFileLocalIndex(i);
 			PrepareRowGroupBuffer(state, col_idx);
-			auto file_col_idx = column_ids[col_idx];
-			auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
+			auto file_col_idx = column_ids[col_idx];
+
+			auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 			to_scan_compressed_bytes += root_reader.GetChildReader(file_col_idx).TotalCompressedSize();
 		}
 
