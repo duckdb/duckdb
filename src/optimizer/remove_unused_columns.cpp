@@ -452,8 +452,12 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalGet &get) {
 	auto &column_ids = get.GetColumnIds();
 	for (auto &entry : column_references) {
 		auto &binding = entry.first;
+		if (binding.table_index != get.table_index) {
+			//! Binding is not from this operator, skip the check
+			continue;
+		}
 		auto &col = entry.second;
-		if (col.child_columns.empty()) {
+		if (col.struct_extracts.empty()) {
 			//! Either not a struct, or we're not using struct field projection pushdown - skip it
 			continue;
 		}
