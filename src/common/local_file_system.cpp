@@ -1303,8 +1303,9 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(source);
 	auto target_unicode = NormalizePathAndConvertToUnicode(target);
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
-	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
+	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
