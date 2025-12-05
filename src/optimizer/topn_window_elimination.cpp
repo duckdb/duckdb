@@ -975,11 +975,6 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
                                                                  unique_ptr<LogicalOperator> rhs,
                                                                  const idx_t aggregate_offset,
                                                                  const TopNWindowEliminationParameters &params) {
-	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
-
-	JoinCondition condition;
-	condition.comparison = ExpressionType::COMPARE_EQUAL;
-
 	lhs->ResolveOperatorTypes();
 
 	const idx_t rowid_column_count =
@@ -987,16 +982,18 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	const idx_t rhs_binding_offset =
 	    rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
 	for (idx_t i = 0; i < rowid_column_count; i++) {
 		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
 		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
+		JoinCondition condition;
+		condition.comparison = ExpressionType::COMPARE_EQUAL;
 		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
 		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
 		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
-
 		join->conditions.push_back(std::move(condition));
 	}
 
