@@ -1,5 +1,6 @@
 #include "duckdb/function/table/direct_file_reader.hpp"
 
+#include "duckdb/common/scope_guard.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/function/table/read_file.hpp"
 #include "duckdb/storage/caching_file_system_wrapper.hpp"
@@ -60,6 +61,11 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 	// We utilize projection pushdown here to only read the file content if the 'data' column is requested
 	unique_ptr<FileHandle> file_handle = nullptr;
+	SCOPE_EXIT {
+		if (file_handle != nullptr) {
+			file_handle->Close();
+		}
+	};
 
 	// Given the columns requested, do we even need to open the file?
 	if (state.requires_file_open) {
@@ -175,9 +181,6 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 	}
 	output.SetCardinality(1);
 	done = true;
-	if (file_handle != nullptr) {
-		file_handle->Close();
-	}
 	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 };
 
