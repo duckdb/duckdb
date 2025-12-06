@@ -63,7 +63,11 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 	unique_ptr<FileHandle> file_handle = nullptr;
 	SCOPE_EXIT {
 		if (file_handle != nullptr) {
-			file_handle->Close();
+			try {
+				file_handle->Close();
+			} catch (...) {
+				// Suppress exceptions in cleanup code to prevent std::terminate.
+			}
 		}
 	};
 
