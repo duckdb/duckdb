@@ -1377,7 +1377,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = root_reader.GetChildReader(column_id);
-				auto row_group_ordinal = GetGroup(state).ordinal;
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
@@ -1399,7 +1398,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			}
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			auto row_group_ordinal = GetGroup(state).ordinal;
 			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
@@ -1415,7 +1413,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto file_col_idx = column_ids[col_idx];
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			auto row_group_ordinal = GetGroup(state).ordinal;
 			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
