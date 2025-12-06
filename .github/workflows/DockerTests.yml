@@ -42,12 +42,104 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- linux-x64-docker:
+  linux-x64-cross:
+    name: Cross tests on Linux (${{ matrix.settings.architecture }})
+    runs-on: ${{ matrix.settings.host }}
+    continue-on-error: ${{ matrix.settings.allow-failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          # - host: ubuntu-22.04
+          #   architecture: x86_64
+          #   allow-failure: true
+
+          # - host: ubuntu-22.04-arm
+          #   architecture: aarch64
+          #   allow-failure: true
+
+          # - host: ubuntu-24.04
+          #   architecture: ppc64le
+          #   allow-failure: true
+
+          # - host: ubuntu-24.04
+          #   architecture: riscv64
+          #   allow-failure: true
+
+          # - host: ubuntu-24.04
+          #   architecture: s390x
+          #   allow-failure: true
+
+          - host: ubuntu-24.04
+            architecture: loongarch64
+            allow-failure: true
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: docker/setup-qemu-action@v3
+        if: ${{ !(matrix.settings.architecture == 'x86_64' || matrix.settings.architecture == 'aarch64') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ git make cmake ninja-build
+
+      - name: Setup cross-tools
+        if: ${{ !(matrix.settings.architecture == 'x86_64' || matrix.settings.architecture == 'aarch64') }}
+        run: |
+          ARCH=${{ matrix.settings.architecture }}
+          TOOLCHAIN_TRIPLET="${ARCH}-linux-gnu"
+          LD_LIB_SUFFIX=""
+          case "$ARCH" in
+            loongarch64)
+              LD_LIB_SUFFIX=64
+              LD_LIBRARIES=ld-linux-loongarch-lp64d.so.1
+              DUCKDB_PLATFORM=linux_loong64
+              ;;
+            ppc64le)
+              LD_LIB_SUFFIX=64
+              LD_LIBRARIES=ld64.so.2
+              DUCKDB_PLATFORM=linux_ppc64le
+              TOOLCHAIN_TRIPLET="powerpc64le-linux-gnu"
+              ;;
+            riscv64)
+              LD_LIBRARIES=ld-linux-riscv64-lp64d.so.1
+              DUCKDB_PLATFORM=linux_riscv64
+              ;;
+            s390x)
+              LD_LIBRARIES=ld64.so.1
+              DUCKDB_PLATFORM=linux_s390x
+              ;;
+          esac
+          sudo apt-get update
+          sudo apt-get install -y g++-13-${TOOLCHAIN_TRIPLET}
+
+          echo "CC=${TOOLCHAIN_TRIPLET}-gcc-13" >> $GITHUB_ENV
+          echo "CXX=${TOOLCHAIN_TRIPLET}-g++-13" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/${TOOLCHAIN_TRIPLET}/lib:/usr/${TOOLCHAIN_TRIPLET}/lib64" >> $GITHUB_ENV
+
+          if [ -n "${DUCKDB_PLATFORM:-}" ]; then
+            echo DUCKDB_PLATFORM=${DUCKDB_PLATFORM} >> $GITHUB_ENV
+          fi
+
+          sudo ln -s /usr/${TOOLCHAIN_TRIPLET}/lib/${LD_LIBRARIES} /lib${LD_LIB_SUFFIX}/${LD_LIBRARIES}
+
+      - name: Build
+        run: |
+          GEN=ninja make &&
+          ./build/release/duckdb -c 'PRAGMA platform;' &&
+          echo 'DOCKER TEST RESULT: SUCCESS' || echo 'DOCKER TEST RESULT: FAILURE'
+
+  linux-x64-docker:
     name: Docker tests on Linux (x64)
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
