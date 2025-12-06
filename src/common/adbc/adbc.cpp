@@ -862,6 +862,18 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (has_stream && to_table) {
 		return IngestToTableFromBoundStream(wrapper, error);
 	}
+
+	if (!wrapper->statement) {
+		if (out) {
+			out->private_data = nullptr;
+			out->get_schema = nullptr;
+			out->get_next = nullptr;
+			out->release = nullptr;
+			out->get_last_error = nullptr;
+		}
+		return ADBC_STATUS_OK;
+	}
+
 	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
 	if (has_stream) {
 		// A stream was bound to the statement, use that to bind parameters
@@ -986,6 +998,10 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		SetError(error, "Missing query");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	if (strlen(query) == 0) {
+		SetError(error, "No statements found");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
 	if (wrapper->ingestion_stream.release) {
@@ -1006,6 +1022,13 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		duckdb_destroy_extracted(&extracted_statements);
 		return ADBC_STATUS_INTERNAL;
 	}
+
+	if (extract_statements_size == 0) {
+		// Query is non-empty, but there are no actual statements.
+		duckdb_destroy_extracted(&extracted_statements);
+		return ADBC_STATUS_OK;
+	}
+
 	// Now lets loop over the statements, and execute every one
 	for (idx_t i = 0; i < extract_statements_size - 1; i++) {
 		duckdb_prepared_statement statement_internal = nullptr;
