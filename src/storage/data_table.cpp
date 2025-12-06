@@ -58,12 +58,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
-		if (!HasIndexes()) {
-			// if we don't have indexes, always append a new row group upon appending
-			// we can clean up this row group again when vacuuming
-			// since we don't yet support vacuum when there are indexes, we only do this when there are no indexes
-			row_groups->SetAppendRequiresNewRowGroup();
-		}
+		row_groups->SetAppendRequiresNewRowGroup();
 	} else {
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
