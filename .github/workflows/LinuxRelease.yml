@@ -97,58 +97,33 @@ jobs:
           export CXX=g++
 
           git config --global --add safe.directory $PWD
-          make -C $PWD
+          make reldebug -C $PWD
         "
-
-    - name: Print platform
-      shell: bash
-      run: ./build/release/duckdb -c "PRAGMA platform;"
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        python3 scripts/amalgamation.py
-        zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
-        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: duckdb-binaries-linux-${{ matrix.config.arch }}
-        path: |
-          libduckdb-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.zip
-          duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
-        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/reldebug/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
 
     - name: Release specific tests
       shell: bash
       run: |
-        ./build/release/test/unittest --select-tag release
+        ./build/reldebug/test/unittest --select-tag release
 
     - name: Tools Tests
       shell: bash
       run: |
-        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+        python3 -m pytest tools/shell/tests --shell-binary build/reldebug/duckdb
 
     - name: Examples
       shell: bash
       run: |
-        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
-        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+        build/reldebug/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/reldebug/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
