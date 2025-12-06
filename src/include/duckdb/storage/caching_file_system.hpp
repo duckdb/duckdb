@@ -56,6 +56,7 @@ public:
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
+	DUCKDB_API void Close();
 
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
