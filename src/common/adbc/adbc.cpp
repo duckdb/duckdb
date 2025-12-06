@@ -1156,6 +1156,13 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		duckdb_destroy_extracted(&extracted_statements);
 		return ADBC_STATUS_INTERNAL;
 	}
+
+	if (extract_statements_size == 0) {
+		SetError(error, "No statements found");
+		duckdb_destroy_extracted(&extracted_statements);
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+
 	// Now lets loop over the statements, and execute every one
 	for (idx_t i = 0; i < extract_statements_size - 1; i++) {
 		duckdb_prepared_statement statement_internal = nullptr;
