@@ -93,6 +93,7 @@ enum class MetricType : uint8_t {
 	OPTIMIZER_CTE_INLINING,
 	OPTIMIZER_COMMON_SUBPLAN,
 	OPTIMIZER_JOIN_ELIMINATION,
+	OPTIMIZER_COUNT_WINDOW_ELIMINATION,
 	// PhaseTiming metrics
 	ALL_OPTIMIZERS,
 	CUMULATIVE_OPTIMIZER_TIMING,
@@ -128,7 +129,7 @@ public:
 	static constexpr uint8_t END_OPERATOR = static_cast<uint8_t>(MetricType::OPERATOR_TYPE);
 
 	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
-	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION);
+	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_COUNT_WINDOW_ELIMINATION);
 
 	static constexpr uint8_t START_PHASE_TIMING = static_cast<uint8_t>(MetricType::ALL_OPTIMIZERS);
 	static constexpr uint8_t END_PHASE_TIMING = static_cast<uint8_t>(MetricType::PLANNER_BINDING);

@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
+
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -38,6 +39,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
+#include "duckdb/optimizer/count_window_elimination.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -106,6 +108,8 @@ void Optimizer::Verify(LogicalOperator &op) {
 }
 
 void Optimizer::RunBuiltInOptimizers() {
+	fprintf(stderr, "DEBUG: RunBuiltInOptimizers started\n");
+
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
@@ -186,6 +190,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
+	RunOptimizer(OptimizerType::COUNT_WINDOW_ELIMINATION, [&]() {
+		CountWindowElimination count_window_elimination(*this);
+		plan = count_window_elimination.Optimize(std::move(plan));
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -197,6 +206,8 @@ void Optimizer::RunBuiltInOptimizers() {
 		JoinElimination join_elimination;
 		plan = join_elimination.Optimize(std::move(plan));
 	});
+
+
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
