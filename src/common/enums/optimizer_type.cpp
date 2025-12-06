@@ -45,6 +45,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"cte_inlining", OptimizerType::CTE_INLINING},
     {"common_subplan", OptimizerType::COMMON_SUBPLAN},
     {"join_elimination", OptimizerType::JOIN_ELIMINATION},
+    {"count_window_elimination", OptimizerType::COUNT_WINDOW_ELIMINATION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {
