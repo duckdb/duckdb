@@ -1113,10 +1113,11 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		auto &row_group = entry.GetNode();
 		auto should_checkpoint = row_group.ShouldCheckpointRowGroup(options.transaction_id);
 		if (!should_checkpoint) {
-			// cannot checkpoint this row group - skip it
-			state.row_group_counts.emplace_back();
-			committed_counts.emplace_back();
-			continue;
+			// this row group does not belong to this checkpoint - it was written by a newer commit
+			// don't vacuum - otherwise we might move this row group around
+			// which could cause the subsequent commit / clean-up to fail
+			state.can_vacuum_deletes = false;
+			return;
 		}
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (!state.can_change_row_ids) {
