@@ -1095,8 +1095,8 @@ private:
 };
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state) {
-	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
-	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
+	auto options = checkpoint_state.writer.GetCheckpointOptions();
+	bool vacuum_is_allowed = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
 	state.can_vacuum_deletes = info->GetIndexes().Empty() && vacuum_is_allowed;
 	if (!state.can_vacuum_deletes) {
@@ -1106,6 +1106,12 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
+		auto should_checkpoint = row_group.ShouldCheckpointRowGroup(options.transaction_id);
+		if (!should_checkpoint) {
+			// cannot checkpoint if there are any rows that should not be written as part of this checkpoint
+			state.can_vacuum_deletes = false;
+			return;
+		}
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (row_group_count == 0) {
 			// empty row group - we can drop it entirely
@@ -1240,7 +1246,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
-			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
+			if (writer.GetCheckpointOptions().type != CheckpointType::VACUUM_ONLY) {
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);
 				auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
@@ -1307,6 +1313,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
+	bool skipped_row_groups = false;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
 		if (!entry) {
@@ -1318,7 +1325,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
-			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
+			D_ASSERT(writer.GetCheckpointOptions().type == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
 
@@ -1336,16 +1343,29 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// row group was unchanged - emit previous row group
 			new_row_group = entry->ReferenceNode();
 		}
-		auto pointer =
-		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
-
+		RowGroupPointer pointer_copy;
 		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-		RowGroupPointer pointer_copy;
-		if (debug_verify_blocks) {
-			pointer_copy = pointer;
+
+		// check if we should write this row group to the persistent storage
+		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
+		if (row_group_write_data.should_checkpoint) {
+			if (skipped_row_groups) {
+				throw InternalException("Checkpoint failure - we are writing a row group AFTER we skipped writing a "
+				                        "row group due to concurrent insertions. This will change the row-ids of the "
+				                        "written row groups which can cause subtle issues later.");
+			}
+			auto pointer =
+			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
+
+			if (debug_verify_blocks) {
+				pointer_copy = pointer;
+			}
+			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
+		} else {
+			debug_verify_blocks = false;
+			skipped_row_groups = true;
 		}
-		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;
 
@@ -1462,6 +1482,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 	}
 	l.Release();
+
+	if (skipped_row_groups) {
+		// if we skipped any rows groups we cannot override the base stats
+		// because the stats reflect only the *checkpointed* row groups
+		// the stats of the extra (not checkpointed) row groups is not included
+		// hence the stats do not correctly reflect the current in-memory state of the table
+		writer.SetCannotOverrideStats();
+	}
 
 	// flush any partial blocks BEFORE updating the row group pointer
 	// flushing partial blocks updates where data lives

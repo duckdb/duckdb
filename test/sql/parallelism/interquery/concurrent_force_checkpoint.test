@@ -3,7 +3,7 @@
 # group: [interquery]
 
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE OR REPLACE TABLE integers(i INTEGER)
 
 statement ok
 INSERT INTO integers SELECT * FROM range(10000);
@@ -69,4 +69,3 @@ query II
 SELECT COUNT(*), SUM(i) FROM integers
 ----
 11000	121494500
-

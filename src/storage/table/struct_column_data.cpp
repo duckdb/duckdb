@@ -277,10 +277,10 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	}
 }
 
-void StructColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
+void StructColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	validity->VisitBlockIds(visitor);
 	for (auto &sub_column : sub_columns) {
-		sub_column->CommitDropColumn();
+		sub_column->VisitBlockIds(visitor);
 	}
 }
 

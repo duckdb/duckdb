@@ -723,7 +723,7 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 	return root.block_pointer == meta_block;
 }
 
-block_id_t SingleFileBlockManager::GetFreeBlockId() {
+block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 	block_id_t block;
 	{
 		lock_guard<mutex> lock(block_lock);
@@ -735,9 +735,21 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 		} else {
 			block = max_block++;
 		}
+		// add the entry to the list of newly used blocks
+		if (type == FreeBlockType::NEWLY_USED_BLOCK) {
+			newly_used_blocks.insert(block);
+		}
 	}
 	D_ASSERT(!BlockIsRegistered(block));
 	return block;
+}
+
+block_id_t SingleFileBlockManager::GetFreeBlockId() {
+	return GetFreeBlockIdInternal(FreeBlockType::NEWLY_USED_BLOCK);
+}
+
+block_id_t SingleFileBlockManager::GetFreeBlockIdForCheckpoint() {
+	return GetFreeBlockIdInternal(FreeBlockType::CHECKPOINTED_BLOCK);
 }
 
 block_id_t SingleFileBlockManager::PeekFreeBlockId() {
@@ -747,6 +759,12 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	} else {
 		return max_block;
 	}
+}
+
+void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	D_ASSERT(block_id >= 0);
+	newly_used_blocks.erase(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -789,10 +807,23 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		return;
 	}
 	// Check for multi-free
-	// TODO: Fix the bug that causes this assert to fire, then uncomment it.
-	// D_ASSERT(modified_blocks.find(block_id) == modified_blocks.end());
-	D_ASSERT(free_list.find(block_id) == free_list.end());
-	modified_blocks.insert(block_id);
+	if (modified_blocks.find(block_id) != modified_blocks.end()) {
+		throw InternalException("MarkBlockAsModified called with already modified block id %d", block_id);
+	}
+	if (free_list.find(block_id) != free_list.end()) {
+		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
+	}
+	auto newly_used_entry = newly_used_blocks.find(block_id);
+	if (newly_used_entry != newly_used_blocks.end()) {
+		// this block was newly used - and now we are labeling it as no longer being required
+		// we can directly add it back to the free list
+		newly_used_blocks.erase(block_id);
+		free_list.insert(block_id);
+	} else {
+		// this block was used in storage, we cannot directly re-use it
+		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		modified_blocks.insert(block_id);
+	}
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t block_id) {
@@ -841,7 +872,13 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			}
 		}
 	}
+	for (auto &newly_used_block : newly_used_blocks) {
+		referenced_blocks.insert(newly_used_block);
+	}
 	for (auto &free_block : free_list) {
+		referenced_blocks.insert(free_block);
+	}
+	for (auto &free_block : free_blocks_in_use) {
 		referenced_blocks.insert(free_block);
 	}
 	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
@@ -855,9 +892,39 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 				missing_blocks += to_string(i);
 			}
 		}
+		string free_list_str;
+		for (auto &block : free_list) {
+			if (!free_list_str.empty()) {
+				free_list_str += ", ";
+			}
+			free_list_str += to_string(block);
+		}
+		string block_usage_str;
+		for (auto &entry : block_usage_count) {
+			if (!block_usage_str.empty()) {
+				block_usage_str += ", ";
+			}
+			block_usage_str += to_string(entry.first);
+		}
+		string multi_use_blocks_str;
+		for (auto &entry : multi_use_blocks) {
+			if (!multi_use_blocks_str.empty()) {
+				multi_use_blocks_str += ", ";
+			}
+			multi_use_blocks_str += to_string(entry.first);
+		}
+		string newly_used_blocks_str;
+		for (auto &block : newly_used_blocks) {
+			if (!newly_used_blocks_str.empty()) {
+				newly_used_blocks_str += ", ";
+			}
+			newly_used_blocks_str += to_string(block);
+		}
+
 		throw InternalException(
-		    "Blocks %s were neither present in the free list or in the block_usage_count (max block %lld)",
-		    missing_blocks, max_block);
+		    "Block verification failed - blocks \"%s\" were not found as being used OR marked as free\nMax block: "
+		    "%d\nBlock usage: %s\nFree list: %s\nMulti-use blocks: %s\nNewly used blocks: %s",
+		    missing_blocks, max_block, block_usage_str, free_list_str, multi_use_blocks_str, newly_used_blocks_str);
 	}
 }
 
@@ -1062,11 +1129,19 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	for (auto &block : modified_blocks) {
 		all_free_blocks.insert(block);
 		if (!BlockIsRegistered(block)) {
+			// if the block is no longer registered it is not in use - so it can be re-used after this point
 			free_list.insert(block);
 			fully_freed_blocks.insert(block);
 		} else {
+			// if the block is still registered it is still in use - keep it in the free_blocks_in_use list
 			free_blocks_in_use.insert(block);
 		}
+	}
+	auto written_multi_use_blocks = multi_use_blocks;
+	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
+	for (auto &newly_used_block : newly_used_blocks) {
+		all_free_blocks.insert(newly_used_block);
+		written_multi_use_blocks.erase(newly_used_block);
 	}
 	modified_blocks.clear();
 
@@ -1084,8 +1159,8 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		for (auto &block_id : all_free_blocks) {
 			writer.Write<block_id_t>(block_id);
 		}
-		writer.Write<uint64_t>(multi_use_blocks.size());
-		for (auto &entry : multi_use_blocks) {
+		writer.Write<uint64_t>(written_multi_use_blocks.size());
+		for (auto &entry : written_multi_use_blocks) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
@@ -1098,7 +1173,10 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	lock.unlock();
 	metadata_manager.Flush();
 
+	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
+	lock.unlock();
+
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
