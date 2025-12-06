@@ -430,11 +430,13 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
+		unique_ptr<ActiveTimer> timer = nullptr;
+
 		// Start timing the storage load step.
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
 		}
 
 		// Load the checkpoint from storage.
@@ -442,15 +444,15 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		checkpoint_reader.LoadFromStorage();
 
 		// End timing the storage load step.
-		if (client_context) {
-			auto profiler = client_context->client_data->profiler;
-			profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		if (timer) {
+			timer->EndTimer();
+			timer = nullptr;
 		}
 
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY));
 		}
 
 		// Replay the WAL.
@@ -458,9 +460,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		wal = WriteAheadLog::Replay(context, *this, wal_path);
 
 		// End timing the WAL replay step.
-		if (client_context) {
-			auto profiler = client_context->client_data->profiler;
-			profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		if (timer) {
+			timer->EndTimer();
 		}
 	}
 
@@ -627,19 +628,12 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
 			if (client_context) {
-				auto profiler = client_context->client_data->profiler;
-				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
+				auto profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
-
-			// End timing the checkpoint.
-			if (client_context) {
-				auto profiler = client_context->client_data->profiler;
-				profiler->EndTimer(MetricsType::CHECKPOINT_LATENCY);
-			}
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

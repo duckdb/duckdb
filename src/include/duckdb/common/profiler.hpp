@@ -46,6 +46,14 @@ public:
 		return std::chrono::duration_cast<std::chrono::duration<double>>(measured_end - start).count();
 	}
 
+	idx_t ElapsedNanos() const {
+		if (!ran) {
+			return 0;
+		}
+		auto measured_end = finished ? end : Tick();
+		return static_cast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(measured_end - start).count());
+	}
+
 private:
 	//! Current time point.
 	time_point<T> Tick() const {
