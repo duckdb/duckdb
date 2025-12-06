@@ -9,14 +9,18 @@
 #pragma once
 
 #include "parquet_types.h"
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
 
 using duckdb_apache::thrift::TBase;
 using duckdb_apache::thrift::protocol::TProtocol;
-
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::PageType;
+class Allocator;
 class BufferedFileWriter;
 
 class ParquetKeys : public ObjectCacheEntry {
@@ -34,6 +38,39 @@ public:
 
 private:
 	unordered_map<string, string> keys;
+};
+
+struct CryptoMetaData {
+	CryptoMetaData();
+	void Initialize(const std::string &unique_file_identifier_p, int16_t row_group_ordinal = -1,
+	                int16_t column_ordinal = -1, int8_t module = -1, int16_t page_ordinal = -1);
+	bool IsEmpty() const;
+
+public:
+	string unique_file_identifier = "";
+	int8_t module;
+	int16_t row_group_ordinal;
+	int16_t column_ordinal;
+	int16_t page_ordinal;
+};
+
+class ParquetAdditionalAuthenticatedData : public AdditionalAuthenticatedData {
+public:
+	explicit ParquetAdditionalAuthenticatedData(Allocator &allocator);
+	~ParquetAdditionalAuthenticatedData() override;
+
+public:
+	idx_t GetPrefixSize() const;
+	void WriteParquetAAD(const CryptoMetaData &crypto_meta_data);
+	void WriteFooterAAD(const std::string &unique_file_identifier);
+	void WriteFooterModule();
+
+private:
+	void WritePrefix(const std::string &prefix);
+	void WriteSuffix(const CryptoMetaData &crypto_meta_data);
+
+private:
+	optional_idx additional_authenticated_data_prefix_size;
 };
 
 class ParquetEncryptionConfig {
@@ -68,15 +105,34 @@ public:
 	static constexpr idx_t CRYPTO_BLOCK_SIZE = 4096;
 	static constexpr idx_t BLOCK_SIZE = 16;
 
+	// Module types for encryption
+	static constexpr int8_t Footer = 0;
+	static constexpr int8_t ColumnMetaData = 1;
+	static constexpr int8_t DataPage = 2;
+	static constexpr int8_t DictionaryPage = 3;
+	static constexpr int8_t DataPageHeader = 4;
+	static constexpr int8_t DictionaryPageHeader = 5;
+	static constexpr int8_t ColumnIndex = 6;
+	static constexpr int8_t OffsetIndex = 7;
+	static constexpr int8_t BloomFilterHeader = 8;
+	static constexpr int8_t BloomFilterBitset = 9;
+
+	// Standard AAD length for file
+	static constexpr int32_t UNIQUE_FILE_ID_LEN = 8;
+	// Maximum Parquet AAD suffix bytes
+	static constexpr int32_t AAD_MAX_SUFFIX_BYTES = 7;
+
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
-	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p);
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p,
+	                     unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
-	                         const EncryptionUtil &encryption_util_p);
+	                         const EncryptionUtil &encryption_util_p,
+	                         unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
 	                          const string &key, const EncryptionUtil &encryption_util_p);
@@ -84,6 +140,15 @@ public:
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
 	static bool ValidKey(const std::string &key);
+
+public:
+	static int8_t GetModuleHeader(const ColumnChunk &chunk, uint16_t page_ordinal);
+	static int8_t GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal);
+	static int16_t GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal);
+	static unique_ptr<ParquetAdditionalAuthenticatedData>
+	GenerateAdditionalAuthenticatedData(Allocator &allocator, const CryptoMetaData &aad_crypto_metadata);
+	static unique_ptr<ParquetAdditionalAuthenticatedData> GenerateFooterAAD(Allocator &allocator,
+	                                                                        const std::string &unique_file_identifier);
 };
 
 } // namespace duckdb
