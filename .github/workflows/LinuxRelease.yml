@@ -54,22 +54,11 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
-
  linux-release-cli:
-    needs:
-      - check-draft
-
     strategy:
       fail-fast: false
       matrix:
-        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}]
+        config: [ {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}]
 
     name: Linux CLI (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
@@ -95,6 +84,7 @@ jobs:
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+        -e CRASH_ON_ASSERT=1                                                   \
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
         quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
@@ -139,7 +129,13 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
+        build/release/test/unittest test/sql/storage/checkpoint/concurrent_load_delete.test_slow
 
     - name: Release specific tests
       shell: bash
@@ -156,61 +152,3 @@ jobs:
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
-
- upload-libduckdb-src:
-    name: Upload libduckdb-src.zip
-    needs: linux-release-cli
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        python3 scripts/amalgamation.py
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
-
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-22.04
-    needs: linux-release-cli
-    if: ${{ inputs.skip_tests != 'true' }}
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install Ninja
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Symbol Leakage Test
-      shell: bash
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
