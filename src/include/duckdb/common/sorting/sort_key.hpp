@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
@@ -71,13 +72,13 @@ public:
 
 	data_ptr_t GetPayload() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
-		auto a = new ((void *)&sort_key.payload.u.ptr) std::atomic<data_ptr_t>;
+		auto a = new ((void *)&sort_key.payload.u.ptr) atomic<data_ptr_t>;
 		return a->load();
 	}
 
 	void SetPayload(const data_ptr_t &payload) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		auto a = new ((void *)&sort_key.payload.u.ptr) std::atomic<data_ptr_t>;
+		auto a = new ((void *)&sort_key.payload.u.ptr) atomic<data_ptr_t>;
 		a->store(payload);
 	}
 };
