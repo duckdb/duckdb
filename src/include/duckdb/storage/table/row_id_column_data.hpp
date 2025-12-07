@@ -54,7 +54,7 @@ public:
 	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
 	                  idx_t row_group_start) override;
 
-	void CommitDropColumn() override;
+	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;

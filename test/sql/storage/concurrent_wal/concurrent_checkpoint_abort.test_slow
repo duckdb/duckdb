@@ -1,0 +1,115 @@
+# name: test/sql/storage/concurrent_wal/concurrent_checkpoint_abort.test_slow
+# description: Test recovery when doing concurrent appends with a failing checkpoint
+# group: [concurrent_wal]
+
+foreach wal_abort_mode before_wal_finish before_header
+
+foreach replay_abort_mode before_moving_recovery before_deleting_checkpoint_wal
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+SET debug_checkpoint_abort='${wal_abort_mode}'
+
+statement ok
+CREATE OR REPLACE TABLE main_db.integers(i INTEGER)
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db
+
+statement ok
+CREATE OR REPLACE TABLE other_db.ranges(begin_range INT, end_range INT)
+
+concurrentloop threadid 0 20
+
+loop x 0 10
+
+# we write to two databases - the main database (that is being checkpointed) and a back-up database "concurrent_other_db"
+# we write to the database "concurrent_other_db" after a commit to the main database has succeeded
+# so anything that ends up there has to also be in the main database
+# otherwise we have lost data
+onlyif threadid<>10
+statement maybe
+INSERT INTO main_db.integers SELECT * FROM range(${x} * 2000 + ${threadid} * 100, ${x} * 2000 + (${threadid} + 1) * 100);
+----
+database has been invalidated because of a previous fatal error
+
+onlyif threadid<>10
+statement maybe
+INSERT INTO other_db.ranges VALUES (${x} * 2000 + ${threadid} * 100, ${x} * 2000 + (${threadid} + 1) * 100);
+----
+database has been invalidated because of a previous fatal error
+
+endloop
+
+onlyif threadid=10
+statement error
+CHECKPOINT main_db
+----
+Checkpoint aborted
+
+endloop
+
+restart
+# we can attach in read-only mode
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db (READ_ONLY)
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db (READ_ONLY)
+
+# verify all data was correctly written
+query I
+SELECT CASE WHEN max_i + 1 >= max_end THEN NULL ELSE CONCAT('Found min ', min_i, ', max ', max_i, ' which does not fall within range ', begin_range, ' - ', max_end, ' (all ranges: ', (SELECT LIST(r ORDER BY begin_range) FROM other_db.ranges r)::VARCHAR, ')') END
+FROM (SELECT MIN(i) min_i, MAX(i) max_i FROM main_db.integers), (SELECT MIN(begin_range) begin_range, MAX(end_range) max_end FROM other_db.ranges)
+----
+NULL
+
+# neither checkpoint WAL nor WAL is cleared when attaching in read-only mode
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/concurrent_abort.db.*wal')
+----
+2
+
+restart
+
+# failure while replaying
+statement ok
+SET debug_checkpoint_abort='${replay_abort_mode}'
+
+statement maybe
+ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
+----
+Checkpoint aborted
+
+restart
+
+statement ok
+SET debug_checkpoint_abort='none'
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_other_db.db' AS other_db
+
+# verify all data was correctly written
+query I
+SELECT CASE WHEN max_i + 1 >= max_end THEN NULL ELSE CONCAT('Found min ', min_i, ', max ', max_i, ' which does not fall within range ', begin_range, ' - ', max_end, ' (all ranges: ', (SELECT LIST(r ORDER BY begin_range) FROM other_db.ranges r)::VARCHAR, ')') END
+FROM (SELECT MIN(i) min_i, MAX(i) max_i FROM main_db.integers), (SELECT MIN(begin_range) begin_range, MAX(end_range) max_end FROM other_db.ranges)
+----
+NULL
+
+restart
+
+endloop
+
+endloop

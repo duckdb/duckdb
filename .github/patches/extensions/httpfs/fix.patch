@@ -1,5 +1,5 @@
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index 72eddc3..601ecba 100644
+index b4d6c74..480f9d7 100644
 --- a/src/s3fs.cpp
 +++ b/src/s3fs.cpp
 @@ -895,7 +895,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
@@ -27,7 +27,7 @@ index 72eddc3..601ecba 100644
 -		throw IOException("Could not remove file \"%s\": %s", {{"errno", "404"}}, path, "No such file or directory");
 +		throw IOException({{"errno", "404"}}, "Could not remove file \"%s\": %s", path, "No such file or directory");
  	}
-
+ 
  	auto &s3fh = handle->Cast<S3FileHandle>();
  	auto res = DeleteRequest(*handle, s3fh.path, {});
  	if (res->status != HTTPStatusCode::OK_200 && res->status != HTTPStatusCode::NoContent_204) {
@@ -36,3 +36,99 @@ index 72eddc3..601ecba 100644
  		                  path, res->GetError());
  	}
  }
+diff --git a/test/sql/copy/encryption/different_aes_engines.test b/test/sql/copy/encryption/different_aes_engines.test
+index 5d1e525..5c09a38 100644
+--- a/test/sql/copy/encryption/different_aes_engines.test
++++ b/test/sql/copy/encryption/different_aes_engines.test
+@@ -20,8 +20,7 @@ restart
+ require httpfs
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf');
+-
++ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ query II
+ FROM enc.test
+@@ -30,7 +29,6 @@ FROM enc.test
+ 13	22
+ 12	21
+ 
+-
+ restart
+ 
+ endloop
+@@ -41,7 +39,7 @@ foreach cipher GCM CTR
+ require httpfs
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '__TEST_DIR__/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ statement ok
+ CREATE TABLE enc.test (a INTEGER, b INTEGER);
+@@ -55,7 +53,7 @@ DETACH enc
+ restart
+ 
+ statement ok
+-ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf');
++ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ query II
+ FROM enc.test
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+index 5b09f29..13c989b 100644
+--- a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
++++ b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+@@ -2,29 +2,29 @@
+ # description: Encrypted large joins in persistent databases have a leftover temporary directory.
+ # group: [temp_files]
+ 
+-foreach cipher GCM CTR
+-
+-
+ require httpfs
+ 
+ require tpch
+ 
+-load __TEST_DIR__/leftover_temp_files.db
+-
+ statement ok
+-ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc_${cipher} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH ':memory:' AS mem
++
++foreach cipher GCM CTR
+ 
+ statement ok
+ SET temp_file_encryption=true;
+ 
+ statement ok
+-USE enc_${cipher};
++SET memory_limit='1GB';
+ 
+ statement ok
+-SET threads=8
++ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ 
+ statement ok
+-SET memory_limit='1GB';
++USE enc;
++
++statement ok
++SET threads=8
+ 
+ statement ok
+ CALL dbgen(sf=1);
+@@ -63,6 +63,10 @@ CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOI
+ statement ok
+ DROP TABLE ans;
+ 
+-restart
++statement ok
++USE mem
++
++statement ok
++DETACH enc
+ 
+ endloop
+\ No newline at end of file
