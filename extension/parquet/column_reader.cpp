@@ -585,7 +585,6 @@ idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilt
 	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
 		aad_crypto_metadata.page_ordinal = page_ordinal;
-		D_ASSERT(page_ordinal == aad_crypto_metadata.page_ordinal);
 		PrepareRead(filter, filter_state);
 		page_ordinal++;
 	}
