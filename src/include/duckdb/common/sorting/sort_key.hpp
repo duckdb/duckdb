@@ -71,12 +71,14 @@ public:
 
 	data_ptr_t GetPayload() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
-		return sort_key.payload.u.ptr;
+		auto a = new ((void *)&sort_key.payload.u.ptr) std::atomic<data_ptr_t>;
+		return a->load();
 	}
 
 	void SetPayload(const data_ptr_t &payload) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		sort_key.payload.u.ptr = payload;
+		auto a = new ((void *)&sort_key.payload.u.ptr) std::atomic<data_ptr_t>;
+		a->store(payload);
 	}
 };
 
