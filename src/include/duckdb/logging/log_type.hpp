@@ -20,7 +20,7 @@ class PhysicalOperator;
 class AttachedDatabase;
 class RowGroup;
 struct DataTableInfo;
-enum class MetricsType : uint8_t;
+enum class MetricType : uint8_t;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -117,7 +117,7 @@ public:
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(const MetricsType &type, const Value &value);
+	static string ConstructLogMessage(const MetricType &type, const Value &value);
 };
 
 class CheckpointLogType : public LogType {
@@ -140,6 +140,20 @@ public:
 private:
 	static string CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op, vector<Value> map_keys,
 	                        vector<Value> map_values);
+};
+
+class TransactionLogType : public LogType {
+public:
+	static constexpr const char *NAME = "Transaction";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	TransactionLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
+	                                  transaction_t transaction_id = MAX_TRANSACTION_ID);
 };
 
 } // namespace duckdb
