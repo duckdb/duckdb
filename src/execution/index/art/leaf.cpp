@@ -197,13 +197,13 @@ string Leaf::DeprecatedToString(ART &art, const Node &node, idx_t indent_level, 
 		}
 	};
 	string str = "";
-	
+
 	if (!print_deprecated_leaves) {
 		indent(str, indent_level);
 		str += "[deprecated leaves]\n";
 		return str;
 	}
-	
+
 	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {

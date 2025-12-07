@@ -13,7 +13,6 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include <fstream>
 
 namespace duckdb {
 
@@ -497,8 +496,8 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 	case NType::LEAF:
 		return Leaf::DeprecatedToString(art, *this, indent_level, print_deprecated_leaves);
 	case NType::PREFIX: {
-		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii, key_path,
-		                              key_depth, depth_remaining, print_deprecated_leaves);
+		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii, key_path, key_depth,
+		                              depth_remaining, print_deprecated_leaves);
 		if (is_gate) {
 			string s = "";
 			indent(s, indent_level);
@@ -530,65 +529,37 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 		}
 		str += "\n";
 	} else {
+		uint8_t expected_byte = 0;
+		bool has_expected_byte = false;
 		if (key_path && !print_full_tree && key_depth < key_path->len) {
-			// Only traverse the child matching the key at current depth
-			uint8_t expected_byte = (*key_path)[key_depth];
-			auto matching_child = GetChild(art, expected_byte);
-			
-			if (structure_only) {
-				// Structure only mode: only print the matching child, skip all others (don't print their bytes)
-				if (matching_child) {
-					idx_t next_key_depth = key_depth + 1;
-					idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
-					string c = matching_child->ToString(art, indent_level + 2, propagate_gate, display_ascii,
-					                                   key_path, next_key_depth, next_depth_remaining,
-					                                   print_deprecated_leaves, structure_only);
-					indent(str, indent_level);
-					str = str + format_byte(expected_byte) + ",\n" + c;
-				}
-			} else {
-				// Print all children, but only traverse the matching one
-				uint8_t byte = 0;
-				auto child = GetNextChild(art, byte);
-				while (child) {
-					if (byte == expected_byte && matching_child) {
-						// This is the child on the path - traverse it
-						idx_t next_key_depth = key_depth + 1;
-						idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
-						string c = matching_child->ToString(art, indent_level + 2, propagate_gate, display_ascii,
-						                                   key_path, next_key_depth, next_depth_remaining,
-						                                   print_deprecated_leaves, structure_only);
-						indent(str, indent_level);
-						str = str + format_byte(byte) + ",\n" + c;
-					} else {
-						// Not on path, print "not printed"
-						indent(str, indent_level);
-						str = str + format_byte(byte) + ", [not printed]\n";
-					}
+			expected_byte = (*key_path)[key_depth];
+			has_expected_byte = true;
+		}
 
-					if (byte == NumericLimits<uint8_t>::Maximum()) {
-						break;
-					}
-					byte++;
-					child = GetNextChild(art, byte);
-				}
-			}
-		} else {
-			uint8_t byte = 0;
-			auto child = GetNextChild(art, byte);
-			while (child) {
+		uint8_t byte = 0;
+		auto child = GetNextChild(art, byte);
+		while (child) {
+			// Determine if this child is on the path to the key_path
+			// If we have an expected byte, only traverse the matching child
+			// If we don't have an expected byte, we're printing the full tree, so all children are on_path.
+			bool on_path = !has_expected_byte || (has_expected_byte && byte == expected_byte);
+			if (on_path) {
+				idx_t next_key_depth = has_expected_byte ? key_depth + 1 : key_depth;
 				idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
-				string c = child->ToString(art, indent_level + 2, propagate_gate, display_ascii, key_path,
-				                           key_depth, next_depth_remaining, print_deprecated_leaves,
-				                           structure_only);
+				string c =
+				    child->ToString(art, indent_level + 2, propagate_gate, display_ascii, key_path, next_key_depth,
+				                    next_depth_remaining, print_deprecated_leaves, structure_only);
 				indent(str, indent_level);
 				str = str + format_byte(byte) + ",\n" + c;
-				if (byte == NumericLimits<uint8_t>::Maximum()) {
-					break;
+			} else {
+				// If we have an expected byte, but the current byte is not the expected byte.
+				if (!structure_only) {
+					indent(str, indent_level);
+					str = str + format_byte(byte) + ", [not printed]\n";
 				}
-				byte++;
-				child = GetNextChild(art, byte);
 			}
+			byte++;
+			child = GetNextChild(art, byte);
 		}
 	}
 

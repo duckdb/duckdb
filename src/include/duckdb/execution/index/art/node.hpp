@@ -109,24 +109,28 @@ public:
 	//! Returns the string representation of the node at indentation level.
 	//!
 	//! Parameters:
-	//! - art: root node of the ART
-	//! - indent_level: The indentation level for this node
-	//! - inside_gate: Whether we're currently inside a gate node (after a gate, prints full tree regardless of key_path)
+	//! - art: root node of tree being printed.
+	//! - indent_level: The indentation level for this node.
+	//! - inside_gate: Whether we're currently inside a gate node (after a gate, prints full tree regardless of
+	//! key_path)
 	//! - display_ascii: If true, displays printable ASCII characters instead of byte values
 	//! - key_path: Optional pointer to an ARTKey. If provided, only prints the path to that key.
-	//!             Children not on the path are marked as "[not printed]" (unless structure_only is true).
+	//!             Children not on the path are marked as "[not printed]" (unless structure_only is true, in which
+	//!				even those children slots are not printed.
 	//! - key_depth: The current position in the key_path as we traverse.
-	//!              Should be initialized to 0 when starting traversal. Incremented as we traverse prefix nodes and regular nodes.
-	//! - depth_remaining: Controls when to start printing full subtrees. When > 0, only prints node structure
+	//!              Should be initialized to 0 when starting traversal. Incremented as we traverse prefix nodes and
+	//!              regular nodes.
+	//! - depth_remaining: Controls when to start printing full subtrees. When N > 0, only prints node structure
 	//!                    for the first N levels (not counting prefix nodes). When it reaches 0, prints the full
 	//!                    subtree from that point. Prefix nodes don't count toward this depth.
 	//! - print_deprecated_leaves: If false, replaces deprecated leaf output with "[deprecated leaves]"
-	//!                           (maintains indentation). If true, prints full deprecated leaf details.
-	//! - structure_only: If true and key_path is provided, only prints the structure along the path to the key.
-	//!                   Skips printing "[not printed]" markers for children not on the path. Only works when key_path is provided.
+	//!                           (maintains indentation). If true, prints full deprecated leaves.
+	//! - structure_only: If true and key_path is provided, only prints the structure along the path to the key (this
+	//!					  in conjunction with depth_remaining however, as that can override this option when it becomes
+	//!					  0.
 	string ToString(ART &art, idx_t indent_level, bool inside_gate = false, bool display_ascii = false,
-	                optional_ptr<const ARTKey> key_path = nullptr, idx_t key_depth = 0,
-	                idx_t depth_remaining = 0, bool print_deprecated_leaves = true, bool structure_only = false) const;
+	                optional_ptr<const ARTKey> key_path = nullptr, idx_t key_depth = 0, idx_t depth_remaining = 0,
+	                bool print_deprecated_leaves = true, bool structure_only = false) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {
