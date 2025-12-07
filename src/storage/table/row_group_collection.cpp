@@ -965,10 +965,11 @@ private:
 // Vacuum
 //===--------------------------------------------------------------------===//
 struct VacuumState {
-	bool can_vacuum_deletes = false;
+	bool can_vacuum_deletes = true;
+	bool can_change_row_ids = false;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
-	vector<idx_t> row_group_counts;
+	vector<optional_idx> row_group_counts;
 };
 
 class VacuumTask : public BaseCheckpointTask {
@@ -1096,29 +1097,66 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state) {
 	auto options = checkpoint_state.writer.GetCheckpointOptions();
-	bool vacuum_is_allowed = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
-	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->GetIndexes().Empty() && vacuum_is_allowed;
+	// currently we can only vacuum deletes if we are doing a full checkpoint
+	state.can_vacuum_deletes = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
+
+	// if there are indexes - we cannot change row-ids
+	// this limits what kind of vacuuming we can do
+	state.can_change_row_ids = info->GetIndexes().Empty();
 	// obtain the set of committed row counts for each row group
+	vector<optional_idx> committed_counts;
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto should_checkpoint = row_group.ShouldCheckpointRowGroup(options.transaction_id);
 		if (!should_checkpoint) {
-			// cannot checkpoint if there are any rows that should not be written as part of this checkpoint
+			// this row group does not belong to this checkpoint - it was written by a newer commit
+			// don't vacuum - otherwise we might move this row group around
+			// which could cause the subsequent commit / clean-up to fail
 			state.can_vacuum_deletes = false;
 			return;
 		}
 		auto row_group_count = row_group.GetCommittedRowCount();
+		if (!state.can_change_row_ids) {
+			idx_t total_count = row_group.count;
+			committed_counts.emplace_back(row_group_count);
+			// we cannot change row ids and this row group has deletes
+			// vacuuming here would alter row ids - so skip it
+			if (total_count != row_group_count) {
+				state.row_group_counts.emplace_back();
+				continue;
+			}
+		}
 		if (row_group_count == 0) {
 			// empty row group - we can drop it entirely
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 		}
 		state.row_group_counts.push_back(row_group_count);
+	}
+	if (!state.can_change_row_ids && options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
+		// if we cannot change row ids we might still be able to vacuum trailing deletions
+		// since that would not change the row-ids of any non-deleted rows
+		auto segment_count = state.row_group_counts.size();
+		for (idx_t i = segment_count; i > 0; i--) {
+			auto segment_idx = i - 1;
+			if (!committed_counts[segment_idx].IsValid()) {
+				// cannot vacuum this row group
+				break;
+			}
+			if (committed_counts[segment_idx].GetIndex() != 0) {
+				// multiple rows found here - skip
+				break;
+			}
+			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(NumericCast<int64_t>(segment_idx));
+			auto &row_group = entry.GetNode();
+			D_ASSERT(entry.GetIndex() == segment_idx);
+			row_group.CommitDrop();
+			checkpoint_state.DropSegment(segment_idx);
+		}
 	}
 }
 
@@ -1134,7 +1172,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		// this segment is being vacuumed by a previously scheduled task
 		return true;
 	}
-	if (state.row_group_counts[segment_idx] == 0) {
+	if (state.row_group_counts[segment_idx].IsValid() && state.row_group_counts[segment_idx].GetIndex() == 0) {
 		// segment was already dropped - skip
 		D_ASSERT(checkpoint_state.SegmentIsDropped(segment_idx));
 		return false;
@@ -1159,15 +1197,20 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		merge_count = 0;
 		merge_rows = 0;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.SegmentCount(); next_idx++) {
-			if (state.row_group_counts[next_idx] == 0) {
+			if (!state.row_group_counts[next_idx].IsValid()) {
+				// cannot vacuum this row group - break
+				break;
+			}
+			auto next_row_count = state.row_group_counts[next_idx].GetIndex();
+			if (next_row_count == 0) {
 				continue;
 			}
-			if (merge_rows + state.row_group_counts[next_idx] > total_target_size) {
+			if (merge_rows + next_row_count > total_target_size) {
 				// does not fit
 				break;
 			}
 			// we can merge this row group together with the other row group
-			merge_rows += state.row_group_counts[next_idx];
+			merge_rows += next_row_count;
 			merge_count++;
 		}
 		if (next_idx == checkpoint_state.SegmentCount()) {
@@ -1179,7 +1222,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			// merge it with a row group with 1 row, creating a row group with 100K+2 rows
 			// etc. This leads to constant rewriting of the original 100K rows.
 			idx_t minimum_target =
-			    MinValue<idx_t>(state.row_group_counts[segment_idx] * 2, row_group_size) * target_count;
+			    MinValue<idx_t>(state.row_group_counts[segment_idx].GetIndex() * 2, row_group_size) * target_count;
 			if (merge_rows >= STANDARD_VECTOR_SIZE && merge_rows < minimum_target) {
 				// we haven't reached the minimum target - don't do this vacuum
 				next_idx = segment_idx + 1;
