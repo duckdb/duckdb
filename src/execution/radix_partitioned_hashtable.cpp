@@ -208,7 +208,6 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       any_combined(false), radix_ht(radix_ht_p), config(*this), stored_allocators_size(0), finalize_done(0),
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
       max_partition_size(0) {
-
 	// Compute minimum reservation
 	auto block_alloc_size = BufferManager::GetBufferManager(context).GetBlockAllocSize();
 	auto tuples_per_block = block_alloc_size / radix_ht.GetLayout().GetRowWidth();
@@ -948,14 +947,16 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
 				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-				auto aggr_state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size(aggr.function));
-				aggr.function.initialize(aggr.function, aggr_state.get());
+				auto aggr_state =
+				    make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
+				aggr.function.GetStateInitCallback()(aggr.function, aggr_state.get());
 
 				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
-				aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
-				if (aggr.function.destructor) {
-					aggr.function.destructor(state_vector, aggr_input_data, 1);
+				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
+				                                         chunk.data[null_groups.size() + i], 1, 0);
+				if (aggr.function.HasStateDestructorCallback()) {
+					aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
 				}
 			}
 			// Place the grouping values (all the groups of the grouping_set condensed into a single value)

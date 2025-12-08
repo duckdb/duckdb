@@ -3,6 +3,8 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -12,6 +14,7 @@ struct BindData : public FunctionData {
 public:
 	explicit BindData(const string &str);
 	explicit BindData(uint32_t index);
+	BindData(const BindData &other) = default;
 
 public:
 	unique_ptr<FunctionData> Copy() const override;
@@ -28,15 +31,15 @@ BindData::BindData(const string &str) : FunctionData() {
 	component.key = str;
 }
 BindData::BindData(uint32_t index) : FunctionData() {
+	if (index == 0) {
+		throw BinderException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
+	}
 	component.lookup_mode = VariantChildLookupMode::BY_INDEX;
-	component.index = index;
+	component.index = index - 1;
 }
 
 unique_ptr<FunctionData> BindData::Copy() const {
-	if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-		return make_uniq<BindData>(component.index);
-	}
-	return make_uniq<BindData>(component.key);
+	return make_uniq<BindData>(*this);
 }
 
 bool BindData::Equals(const FunctionData &other) const {
@@ -63,6 +66,64 @@ static bool GetConstantArgument(ClientContext &context, Expression &expr, Value 
 		return true;
 	}
 	return false;
+}
+
+optional_ptr<const BaseStatistics> FindShreddedStats(const BaseStatistics &shredded,
+                                                     const VariantPathComponent &component) {
+	D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(StructType::GetChildTypes(shredded.GetType()).size() == 2);
+
+	auto &typed_value_type = StructType::GetChildTypes(shredded.GetType())[1].second;
+	auto &typed_value_stats = StructStats::GetChildStats(shredded, 1);
+	switch (component.lookup_mode) {
+	case VariantChildLookupMode::BY_INDEX: {
+		if (typed_value_type.id() != LogicalTypeId::LIST) {
+			return nullptr;
+		}
+		auto &child_stats = ListStats::GetChildStats(typed_value_stats);
+		return child_stats;
+	}
+	case VariantChildLookupMode::BY_KEY: {
+		if (typed_value_type.id() != LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		auto &object_fields = StructType::GetChildTypes(typed_value_type);
+		for (idx_t i = 0; i < object_fields.size(); i++) {
+			auto &object_field = object_fields[i];
+			if (StringUtil::CIEquals(object_field.first, component.key)) {
+				return StructStats::GetChildStats(typed_value_stats, i);
+			}
+		}
+		return nullptr;
+	}
+	default:
+		throw InternalException("VariantChildLookupMode::%s not implemented for FindShreddedStats",
+		                        EnumUtil::ToString(component.lookup_mode));
+	}
+}
+
+static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &bind_data = input.bind_data;
+
+	auto &info = bind_data->Cast<BindData>();
+	auto &variant_stats = child_stats[0];
+	const bool is_shredded = VariantStats::IsShredded(variant_stats);
+	if (!is_shredded) {
+		return nullptr;
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
+	auto found_stats = FindShreddedStats(shredded_stats, info.component);
+	if (!found_stats) {
+		return nullptr;
+	}
+
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(variant_stats);
+	auto child_variant_stats = VariantStats::CreateShredded(found_stats->GetType());
+	VariantStats::SetUnshreddedStats(child_variant_stats, unshredded_stats);
+	VariantStats::SetShreddedStats(child_variant_stats, *found_stats);
+
+	return child_variant_stats.ToUnique();
 }
 
 static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
@@ -101,6 +162,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	auto &path = input.data[1];
 	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	(void)path;
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<BindData>();
@@ -141,22 +203,26 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	}
 
 	//! Look up the value_index of the child we're extracting
-	auto child_collection_result =
-	    VariantUtils::FindChildValues(variant, component, optional_idx(), new_value_index_sel, nested_data, count);
-	if (!child_collection_result.Success()) {
-		if (child_collection_result.type == VariantChildDataCollectionResult::Type::INDEX_ZERO) {
-			throw InvalidInputException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
+	ValidityMask lookup_validity(count);
+	VariantUtils::FindChildValues(variant, component, nullptr, new_value_index_sel, lookup_validity, nested_data,
+	                              count);
+	if (!lookup_validity.AllValid()) {
+		optional_idx index;
+		for (idx_t i = 0; i < count; i++) {
+			if (!lookup_validity.RowIsValid(i)) {
+				index = i;
+				break;
+			}
 		}
+		D_ASSERT(index.IsValid());
 		switch (component.lookup_mode) {
 		case VariantChildLookupMode::BY_INDEX: {
-			D_ASSERT(child_collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
-			auto nested_index = child_collection_result.nested_data_index;
+			auto nested_index = index.GetIndex();
 			throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d", nested_data[nested_index].child_count,
 			                            component.index);
 		}
 		case VariantChildLookupMode::BY_KEY: {
-			D_ASSERT(child_collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
-			auto nested_index = child_collection_result.nested_data_index;
+			auto nested_index = index.GetIndex();
 			auto row_index = nested_index;
 			auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
 			throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'", StringUtil::Join(object_keys, ","),
@@ -224,10 +290,14 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	auto variant_type = LogicalType::VARIANT();
 
 	ScalarFunctionSet fun_set;
-	fun_set.AddFunction(ScalarFunction("variant_extract", {variant_type, LogicalType::VARCHAR}, variant_type,
-	                                   VariantExtractFunction, VariantExtractBind));
-	fun_set.AddFunction(ScalarFunction("variant_extract", {variant_type, LogicalType::UINTEGER}, variant_type,
-	                                   VariantExtractFunction, VariantExtractBind));
+	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
+	                               nullptr, VariantExtractPropagateStats);
+
+	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
+	fun_set.AddFunction(variant_extract);
+
+	variant_extract.arguments = {variant_type, LogicalType::UINTEGER};
+	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }
 

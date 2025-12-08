@@ -99,7 +99,7 @@ MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	return Pin(QueryContext(), pointer);
 }
 
-MetadataHandle MetadataManager::Pin(QueryContext context, const MetadataPointer &pointer) {
+MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	shared_ptr<BlockHandle> block_handle;
 	{
@@ -469,7 +469,7 @@ block_id_t MetadataManager::PeekNextBlockId() const {
 }
 
 block_id_t MetadataManager::GetNextBlockId() const {
-	return block_manager.GetFreeBlockId();
+	return block_manager.GetFreeBlockIdForCheckpoint();
 }
 
 } // namespace duckdb

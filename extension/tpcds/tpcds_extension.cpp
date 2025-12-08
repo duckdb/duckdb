@@ -46,7 +46,10 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 	if (input.binder) {
 		auto &catalog = Catalog::GetCatalog(context, result->catalog);
 		auto &properties = input.binder->GetStatementProperties();
-		properties.RegisterDBModify(catalog, context);
+		DatabaseModificationType modification;
+		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
+		modification |= DatabaseModificationType::INSERT_DATA;
+		properties.RegisterDBModify(catalog, context, modification);
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");

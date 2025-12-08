@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/geometry_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/map_functions.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+
 
 namespace duckdb {
 
@@ -45,6 +47,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(NotLikeFun),
 	DUCKDB_SCALAR_FUNCTION(NotILikeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorModuloFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StIntersectsExtentFunAlias),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorMultiplyFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorAddFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorSubtractFun),
@@ -78,6 +81,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ArrayExtractFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayHasFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayIndexofFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayIntersectFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ArrayLengthFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayPositionFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayResizeFun),
@@ -119,6 +123,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ListExtractFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListHasFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListIndexofFun),
+	DUCKDB_SCALAR_FUNCTION(ListIntersectFun),
 	DUCKDB_SCALAR_FUNCTION(ListPositionFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListResizeFun),
 	DUCKDB_SCALAR_FUNCTION(ListSelectFun),
@@ -151,6 +156,12 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(SHA1Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(SHA256Fun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(SplitFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StAsbinaryFun),
+	DUCKDB_SCALAR_FUNCTION(StAstextFun),
+	DUCKDB_SCALAR_FUNCTION(StAswkbFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StAswktFun),
+	DUCKDB_SCALAR_FUNCTION(StGeomfromwkbFun),
+	DUCKDB_SCALAR_FUNCTION(StIntersectsExtentFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StrSplitFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(StrSplitRegexFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
@@ -177,6 +188,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
+	DUCKDB_SCALAR_FUNCTION(VariantNormalizeFun),
 	DUCKDB_SCALAR_FUNCTION(VariantTypeofFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WriteLogFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatOperatorFun),

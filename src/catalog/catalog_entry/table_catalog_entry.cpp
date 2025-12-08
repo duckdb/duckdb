@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+constexpr const char *TableCatalogEntry::Name;
+
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
@@ -79,6 +81,8 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->dependencies = dependencies;
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	result->temporary = temporary;
+	result->internal = internal;
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);
@@ -266,7 +270,7 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 	}
 }
 
-vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context) {
 	return {};
 }
 

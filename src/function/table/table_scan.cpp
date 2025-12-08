@@ -24,6 +24,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -215,6 +216,12 @@ public:
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
 				if (output.size() == 0) {
+					if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+						// We can avoid looping, and just return as appropriate
+						data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+						return;
+					}
+
 					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
 					continue;
 				}
@@ -282,6 +289,11 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
+		if (bind_data.order_options) {
+			l_state->scan_state.table_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+		}
+
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
@@ -298,9 +310,6 @@ public:
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
 		do {
-			if (context.interrupted) {
-				throw InterruptException();
-			}
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output,
 				                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
@@ -316,8 +325,22 @@ public:
 			}
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
+			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+				// We can avoid looping, and just return as appropriate
+				if (!next) {
+					data_p.async_result = AsyncResultType::FINISHED;
+				} else {
+					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+				}
+				return;
+			}
 			if (!next) {
 				return;
+			}
+
+			// Before looping back, check if we are interrupted
+			if (context.interrupted) {
+				throw InterruptException();
 			}
 		} while (true);
 	}
@@ -362,6 +385,11 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
+	if (bind_data.order_options) {
+		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+	}
+
 	storage.InitializeParallelScan(context, g_state->state);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
@@ -438,6 +466,9 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 	case TableFilterType::IN_FILTER: {
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;
+	}
+	case TableFilterType::BLOOM_FILTER: {
+		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
@@ -626,9 +657,6 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
-	// The checkpoint lock ensures that we do not checkpoint while scanning this table.
-	auto &transaction = DuckTransaction::Get(context, storage.db);
-	auto checkpoint_lock = transaction.SharedLockTable(*storage.GetDataTableInfo());
 	auto &info = storage.GetDataTableInfo();
 	auto &indexes = info->GetIndexes();
 	if (indexes.Empty()) {
@@ -698,7 +726,6 @@ OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFun
 
 vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	vector<PartitionStatistics> result;
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &storage = duck_table.GetStorage();
 	return storage.GetPartitionStats(context);
@@ -774,6 +801,11 @@ vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<F
 	return result;
 }
 
+void SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	bind_data.order_options = std::move(order_options);
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -797,6 +829,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.pushdown_expression = TableScanPushdownExpression;
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
+	scan_function.set_scan_order = SetScanOrder;
 	return scan_function;
 }
 

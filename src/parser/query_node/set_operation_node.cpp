@@ -1,7 +1,5 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
-
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -11,25 +9,27 @@ SetOperationNode::SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NO
 string SetOperationNode::ToString() const {
 	string result;
 	result = cte_map.ToString();
-	result += "(" + left->ToString() + ") ";
+	result += "(" + children[0]->ToString() + ") ";
 
-	switch (setop_type) {
-	case SetOperationType::UNION:
-		result += setop_all ? "UNION ALL" : "UNION";
-		break;
-	case SetOperationType::UNION_BY_NAME:
-		result += setop_all ? "UNION ALL BY NAME" : "UNION BY NAME";
-		break;
-	case SetOperationType::EXCEPT:
-		result += setop_all ? "EXCEPT ALL" : "EXCEPT";
-		break;
-	case SetOperationType::INTERSECT:
-		result += setop_all ? "INTERSECT ALL" : "INTERSECT";
-		break;
-	default:
-		throw InternalException("Unsupported set operation type");
+	for (idx_t i = 1; i < children.size(); i++) {
+		switch (setop_type) {
+		case SetOperationType::UNION:
+			result += setop_all ? "UNION ALL" : "UNION";
+			break;
+		case SetOperationType::UNION_BY_NAME:
+			result += setop_all ? "UNION ALL BY NAME" : "UNION BY NAME";
+			break;
+		case SetOperationType::EXCEPT:
+			result += setop_all ? "EXCEPT ALL" : "EXCEPT";
+			break;
+		case SetOperationType::INTERSECT:
+			result += setop_all ? "INTERSECT ALL" : "INTERSECT";
+			break;
+		default:
+			throw InternalException("Unsupported set operation type");
+		}
+		result += " (" + children[i]->ToString() + ")";
 	}
-	result += " (" + right->ToString() + ")";
 	return result + ResultModifiersToString();
 }
 
@@ -47,11 +47,13 @@ bool SetOperationNode::Equals(const QueryNode *other_p) const {
 	if (setop_all != other.setop_all) {
 		return false;
 	}
-	if (!left->Equals(other.left.get())) {
+	if (children.size() != other.children.size()) {
 		return false;
 	}
-	if (!right->Equals(other.right.get())) {
-		return false;
+	for (idx_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other.children[i].get())) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -60,56 +62,72 @@ unique_ptr<QueryNode> SetOperationNode::Copy() const {
 	auto result = make_uniq<SetOperationNode>();
 	result->setop_type = setop_type;
 	result->setop_all = setop_all;
-	result->left = left->Copy();
-	result->right = right->Copy();
+	for (auto &child : children) {
+		result->children.push_back(child->Copy());
+	}
 	this->CopyProperties(*result);
 	return std::move(result);
 }
 
 SetOperationNode::SetOperationNode(SetOperationType setop_type, unique_ptr<QueryNode> left, unique_ptr<QueryNode> right,
-                                   vector<unique_ptr<QueryNode>> children, bool setop_all)
+                                   vector<unique_ptr<QueryNode>> children_p, bool setop_all)
     : QueryNode(QueryNodeType::SET_OPERATION_NODE), setop_type(setop_type), setop_all(setop_all) {
-	if (left && right) {
-		// simple case - left/right are supplied
-		this->left = std::move(left);
-		this->right = std::move(right);
-		return;
+	if (children_p.empty()) {
+		if (!left || !right) {
+			throw SerializationException("Error deserializing SetOperationNode - left/right or children must be set");
+		}
+		children.push_back(std::move(left));
+		children.push_back(std::move(right));
+	} else {
+		if (left || right) {
+			throw SerializationException("Error deserializing SetOperationNode - left/right or children must be set");
+		}
+		children = std::move(children_p);
 	}
-	if (children.size() == 2) {
-		this->left = std::move(children[0]);
-		this->right = std::move(children[1]);
+	if (children.size() < 2) {
+		throw SerializationException("SetOperationNode must have at least two children");
 	}
-	// we have multiple children - we need to construct a tree of set operation nodes
-	if (children.size() <= 1) {
-		throw SerializationException("Set Operation requires at least 2 children");
+}
+
+unique_ptr<QueryNode> SetOperationNode::SerializeChildNode(Serializer &serializer, idx_t index) const {
+	if (SerializeChildList(serializer)) {
+		// serialize new version - we are serializing all children in the new "children" field
+		return nullptr;
 	}
-	if (setop_type != SetOperationType::UNION) {
-		throw SerializationException("Multiple children in set-operations are only supported for UNION");
+	// backwards compatibility - we are targeting an older version
+	// we need to serialize two children - "left" and "right"
+	if (index == 0) {
+		// for the left child, just directly emit the first child
+		return children[0]->Copy();
 	}
-	// construct a balanced tree from the union
-	while (children.size() > 2) {
+	if (index != 1) {
+		throw InternalException("SerializeChildNode should have index 0 or 1");
+	}
+	vector<unique_ptr<QueryNode>> nodes;
+	for (idx_t i = 1; i < children.size(); i++) {
+		nodes.push_back(children[i]->Copy());
+	}
+	// for the right child we construct a new tree by generating the set operation over all of the nodes
+	// we construct a balanced tree to avoid
+	while (nodes.size() > 1) {
 		vector<unique_ptr<QueryNode>> new_children;
-		for (idx_t i = 0; i < children.size(); i += 2) {
-			if (i + 1 == children.size()) {
-				new_children.push_back(std::move(children[i]));
+		for (idx_t i = 0; i < nodes.size(); i += 2) {
+			if (i + 1 == nodes.size()) {
+				new_children.push_back(std::move(nodes[i]));
 			} else {
 				vector<unique_ptr<QueryNode>> empty_children;
-				auto setop_node =
-				    make_uniq<SetOperationNode>(setop_type, std::move(children[i]), std::move(children[i + 1]),
-				                                std::move(empty_children), setop_all);
+				auto setop_node = make_uniq<SetOperationNode>(setop_type, std::move(nodes[i]), std::move(nodes[i + 1]),
+				                                              std::move(empty_children), setop_all);
 				new_children.push_back(std::move(setop_node));
 			}
 		}
-		children = std::move(new_children);
+		nodes = std::move(new_children);
 	}
-	// two children left - fill in the left/right of this node
-	this->left = std::move(children[0]);
-	this->right = std::move(children[1]);
+	return std::move(nodes[0]);
 }
 
-vector<unique_ptr<QueryNode>> SetOperationNode::SerializeChildNodes() const {
-	// we always serialize children as left/right currently
-	return vector<unique_ptr<QueryNode>>();
+bool SetOperationNode::SerializeChildList(Serializer &serializer) const {
+	return serializer.ShouldSerialize(6);
 }
 
 } // namespace duckdb

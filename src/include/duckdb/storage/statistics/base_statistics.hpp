@@ -15,6 +15,8 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -33,7 +35,16 @@ enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_AND_VALID_VALUES = 4
 };
 
-enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS, ARRAY_STATS };
+enum class StatisticsType : uint8_t {
+	NUMERIC_STATS,
+	STRING_STATS,
+	LIST_STATS,
+	STRUCT_STATS,
+	BASE_STATS,
+	ARRAY_STATS,
+	GEOMETRY_STATS,
+	VARIANT_STATS
+};
 
 class BaseStatistics {
 	friend struct NumericStats;
@@ -41,6 +52,8 @@ class BaseStatistics {
 	friend struct StructStats;
 	friend struct ListStats;
 	friend struct ArrayStats;
+	friend struct GeometryStats;
+	friend struct VariantStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();
@@ -75,7 +88,7 @@ public:
 	}
 
 	void Set(StatsInfo info);
-	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
+	void CombineValidity(const BaseStatistics &left, const BaseStatistics &right);
 	void CopyValidity(BaseStatistics &stats);
 	//! Set that the CURRENT level can have null values
 	//! Note that this is not correct for nested types unless this information is propagated in a different manner
@@ -133,7 +146,7 @@ private:
 
 private:
 	//! The type of the logical segment
-	LogicalType type;
+	LogicalType type = LogicalType::INVALID;
 	//! Whether or not the segment can contain NULL values
 	bool has_null;
 	//! Whether or not the segment can contain values that are not null
@@ -146,6 +159,10 @@ private:
 		NumericStatsData numeric_data;
 		//! String stats data, for string stats
 		StringStatsData string_data;
+		//! Geometry stats data, for geometry stats
+		GeometryStatsData geometry_data;
+		//! Variant stats data, for variant stats
+		VariantStatsData variant_data;
 	} stats_union;
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;

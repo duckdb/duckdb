@@ -23,14 +23,12 @@ enum class BlockIteratorStateType : int8_t {
 	EXTERNAL,
 };
 
-static BlockIteratorStateType GetBlockIteratorStateType(const bool &external) {
-	return external ? BlockIteratorStateType::EXTERNAL : BlockIteratorStateType::IN_MEMORY;
-}
-
 template <class BLOCK_ITERATOR_STATE>
 class BlockIteratorStateBase {
 protected:
 	friend BLOCK_ITERATOR_STATE;
+
+private:
 	explicit BlockIteratorStateBase(const idx_t tuple_count_p) : tuple_count(tuple_count_p) {
 	}
 
@@ -208,15 +206,14 @@ private:
 			key_scan_state.pin_state.row_handles.acquire_handles(pins);
 			key_scan_state.pin_state.heap_handles.acquire_handles(pins);
 		}
-		key_data.FetchChunk(key_scan_state, 0, chunk_idx, false);
+		key_data.FetchChunk(key_scan_state, chunk_idx, false);
 		if (pin_payload && payload_data) {
 			if (keep_pinned) {
 				payload_scan_state.pin_state.row_handles.acquire_handles(pins);
 				payload_scan_state.pin_state.heap_handles.acquire_handles(pins);
 			}
-			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
+			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, chunk_idx, false);
 			const auto sort_keys = reinterpret_cast<T **const>(key_ptrs);
-			payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
 			const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_scan_state.chunk_state.row_locations);
 			for (idx_t i = 0; i < chunk_count; i++) {
 				sort_keys[i]->SetPayload(payload_ptrs[i]);

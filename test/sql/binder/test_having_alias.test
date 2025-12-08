@@ -22,6 +22,7 @@ SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING k=1 ORDER BY i;
 statement error
 SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING integers.k=1 ORDER BY i;
 ----
+Binder Error: column k must appear in the GROUP BY clause
 
 # column name wins over the alias
 query II
@@ -77,8 +78,10 @@ SELECT COUNT(*) FROM (SELECT i, SUM(RANDOM()) AS k FROM integers GROUP BY i HAVI
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING integers.i=5 ORDER BY i;
 ----
+Binder Error: column i must appear in the GROUP BY clause
 
 # recursive alias without aggregate
 statement error
 SELECT i + i AS i FROM integers HAVING i=5 ORDER BY i;
 ----
+Binder Error: column i must appear in the GROUP BY clause

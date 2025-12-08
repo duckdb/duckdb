@@ -14,8 +14,10 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
@@ -34,6 +36,9 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
+enum class OrderByColumnType;
+enum class RowGroupOrderType;
+enum class OrderByStatistics;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -158,13 +163,15 @@ public:
 	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
 	                   optional_ptr<LocalTableFunctionState> local_state_p,
 	                   optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), async_result() {
 	}
 
 public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
+	AsyncResult async_result {};
+	AsyncResultsExecutionMode results_execution_mode {AsyncResultsExecutionMode::SYNCHRONOUS};
 };
 
 struct TableFunctionPartitionInput {
@@ -324,19 +331,53 @@ typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientConte
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
                                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
+                                              optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	DUCKDB_API TableFunction();
+	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
+	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
-	DUCKDB_API TableFunction();
+	// Overloads taking std::nullptr
+	DUCKDB_API
+	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
+	DUCKDB_API
+	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
+	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
+
+	bool HasBindCallback() const {
+		return bind != nullptr;
+	}
+	table_function_bind_t GetBindCallback() const {
+		return bind;
+	}
+	bool HasSerializationCallbacks() const {
+		return serialize != nullptr && deserialize != nullptr;
+	}
+	void SetSerializeCallback(table_function_serialize_t callback) {
+		serialize = callback;
+	}
+	void SetDeserializeCallback(table_function_deserialize_t callback) {
+		deserialize = callback;
+	}
+	table_function_serialize_t GetSerializeCallback() const {
+		return serialize;
+	}
+	table_function_deserialize_t GetDeserializeCallback() const {
+		return deserialize;
+	}
 
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
@@ -404,6 +445,8 @@ public:
 	table_function_get_virtual_columns_t get_virtual_columns;
 	//! (Optional) returns a list of row id columns
 	table_function_get_row_id_columns get_row_id_columns;
+	//! (Optional) sets the order to scan the row groups in
+	table_function_set_scan_order set_scan_order;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

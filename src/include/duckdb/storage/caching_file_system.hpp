@@ -54,6 +54,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Seek(idx_t location);
 
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
@@ -61,7 +63,8 @@ private:
 	//! Tries to read from the cache, filling "overlapping_ranges" with ranges that overlap with the request.
 	//! Returns an invalid BufferHandle if it fails
 	BufferHandle TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges);
+	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+	                              optional_idx &start_location_of_next_range);
 	//! Try to read from the specified range, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
@@ -108,6 +111,7 @@ private:
 	friend struct CachingFileHandle;
 
 public:
+	// Notice, the provided [file_system] should be a raw, non-caching filesystem.
 	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystem();
 

@@ -1,11 +1,12 @@
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
-MacroOrFunction <- 'MACRO'i / 'FUNCTION'i
+MacroOrFunction <- 'MACRO' / 'FUNCTION'
 
-MacroDefinition <- Parens(MacroParameters?) 'AS'i (TableMacroDefinition / ScalarMacroDefinition)
+MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / TypeFuncName
+MacroParameter <- NamedParameter / SimpleParameter
+SimpleParameter <- TypeFuncName Type?
 
 ScalarMacroDefinition <- Expression
-TableMacroDefinition <- 'TABLE'i SelectStatement
+TableMacroDefinition <- 'TABLE' SelectStatementInternal

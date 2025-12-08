@@ -1,0 +1,21 @@
+# name: test/sql/peg_parser/transformer/peg_transformer.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+statement ok
+set allow_parser_override_extension=strict;
+
+statement ok
+SET threads=1;
+
+statement error
+select 1;
+----
+Not implemented Error: Parser override has not yet implemented this transformer rule.
+Original error: No transformer function found for rule 'SelectStatement'

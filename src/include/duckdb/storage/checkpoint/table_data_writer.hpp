@@ -35,8 +35,15 @@ public:
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
-	virtual CheckpointType GetCheckpointType() const = 0;
+	virtual CheckpointOptions GetCheckpointOptions() const = 0;
+	virtual void FlushPartialBlocks() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
+	bool CanOverrideBaseStats() const {
+		return override_base_stats;
+	}
+	void SetCannotOverrideStats() {
+		override_base_stats = false;
+	}
 
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
@@ -46,6 +53,7 @@ protected:
 	optional_ptr<ClientContext> context;
 	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
+	bool override_base_stats = true;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {
@@ -58,7 +66,8 @@ public:
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
-	CheckpointType GetCheckpointType() const override;
+	CheckpointOptions GetCheckpointOptions() const override;
+	void FlushPartialBlocks() override;
 	MetadataManager &GetMetadataManager() override;
 
 private:

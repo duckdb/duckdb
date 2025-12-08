@@ -21,6 +21,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class ClientContext;
+struct DatabaseModificationType;
 class Transaction;
 
 enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
@@ -68,7 +69,7 @@ public:
 
 	void SetReadOnly();
 	bool IsReadOnly() const;
-	void ModifyDatabase(AttachedDatabase &db);
+	void ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification);
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
 		return modified_database;
 	}
@@ -76,6 +77,7 @@ public:
 		return all_transactions;
 	}
 	optional_ptr<AttachedDatabase> GetReferencedDatabase(const string &name);
+	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
 

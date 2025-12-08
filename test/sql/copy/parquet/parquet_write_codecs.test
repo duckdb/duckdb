@@ -29,13 +29,16 @@ endloop
 statement error
 COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
 ----
+<REGEX>:.*Binder Error: Expected codec argument.*
 
 # empty codec
 statement error
 COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC);
 ----
+<REGEX>:.*Invalid Input Error.*requires an argument.*
 
 # integer codec
 statement error
 COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 3);
 ----
+<REGEX>:.*Invalid Input Error.*could not be cast as this type.*

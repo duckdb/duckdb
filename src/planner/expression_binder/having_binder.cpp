@@ -31,14 +31,13 @@ unique_ptr<ParsedExpression> HavingBinder::QualifyColumnName(ColumnRefExpression
 	if (group_index != DConstants::INVALID_INDEX) {
 		return qualified_colref;
 	}
-	if (column_alias_binder.QualifyColumnAlias(colref)) {
+	if (column_alias_binder.DoesColumnAliasExist(colref)) {
 		return nullptr;
 	}
 	return qualified_colref;
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-
 	// Keep the original column name to return a meaningful error message.
 	auto col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	const auto &column_name = col_ref.GetColumnName();

@@ -24,14 +24,17 @@ CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION bla)
 ----
+Parser Error: Unrecognized option for column compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking, fsst, chimp, patas, zstd, alp, alprd or roaring
 
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)

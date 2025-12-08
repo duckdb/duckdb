@@ -248,5 +248,12 @@
         "type": "string"
       }
     ]
+  },
+  {
+    "class": "GeoTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "GEO_TYPE_INFO",
+    "members": [
+    ]
   }
 ]

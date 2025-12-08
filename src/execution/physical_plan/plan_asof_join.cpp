@@ -13,13 +13,13 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 optional_ptr<PhysicalOperator>
 PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe, PhysicalOperator &build) {
-
 	// Plan a inverse nested loop join, then aggregate the values to choose the optimal match for each probe row.
 	// Use a row number primary key to handle duplicate probe values.
 	// aggregate the fields to produce at most one match per probe row,
@@ -43,10 +43,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	const auto &probe_types = op.children[0]->types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
 
-	// TODO: We can't handle predicates right now because we would have to remap column references.
-	if (op.predicate) {
-		return nullptr;
-	}
+	// Project pk
+	LogicalType pk_type = LogicalType::BIGINT;
+	join_op.types.emplace_back(pk_type);
 
 	//	Fill in the projection maps to simplify the code below
 	//	Since NLJ doesn't support projection, but ASOF does,
@@ -65,9 +64,25 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		}
 	}
 
-	// Project pk
-	LogicalType pk_type = LogicalType::BIGINT;
-	join_op.types.emplace_back(pk_type);
+	// Remap predicate column references.
+	if (op.predicate) {
+		vector<idx_t> swap_projection_map;
+		const auto rhs_width = op.children[1]->types.size();
+		for (const auto &l : join_op.right_projection_map) {
+			swap_projection_map.emplace_back(l + rhs_width);
+		}
+		for (const auto &r : join_op.left_projection_map) {
+			swap_projection_map.emplace_back(r);
+		}
+		join_op.predicate = op.predicate->Copy();
+		ExpressionIterator::EnumerateExpression(join_op.predicate, [&](Expression &child) {
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				auto &col_idx = child.Cast<BoundReferenceExpression>().index;
+				const auto new_idx = swap_projection_map[col_idx];
+				col_idx = new_idx;
+			}
+		});
+	}
 
 	auto binder = Binder::CreateBinder(context);
 	FunctionBinder function_binder(*binder);
@@ -208,7 +223,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto window_types = probe.GetTypes();
 	window_types.emplace_back(pk_type);
 
-	idx_t probe_cardinality = op.children[0]->EstimateCardinality(context);
+	const auto probe_cardinality = op.EstimateCardinality(context);
 	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
 	window.children.emplace_back(probe);
 
@@ -275,10 +290,12 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
-	if (!force_asof_join) {
-		idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
-		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold) {
+	// If there is a non-comparison predicate, we have to use NLJ.
+	const bool has_predicate = op.predicate.get();
+	const bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
+	if (!force_asof_join || has_predicate) {
+		const idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
+		if (has_predicate || (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold)) {
 			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {
 				return *result;

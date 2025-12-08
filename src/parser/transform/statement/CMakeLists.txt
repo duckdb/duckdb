@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_transformer_statement
   OBJECT
   transform_alter_table.cpp
+  transform_alter_database.cpp
   transform_attach.cpp
   transform_detach.cpp
   transform_call.cpp

@@ -23,7 +23,6 @@ PhysicalCreateARTIndex::PhysicalCreateARTIndex(PhysicalPlan &physical_plan, Logi
     : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
       sorted(sorted), alter_table_info(std::move(alter_table_info)) {
-
 	// Convert the logical column ids to physical column ids.
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
@@ -85,7 +84,6 @@ unique_ptr<LocalSinkState> PhysicalCreateARTIndex::GetLocalSinkState(ExecutionCo
 }
 
 SinkResultType PhysicalCreateARTIndex::SinkUnsorted(OperatorSinkInput &input) const {
-
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto row_count = l_state.key_chunk.size();
 	auto &art = l_state.local_index->Cast<ART>();
@@ -105,7 +103,6 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(OperatorSinkInput &input) co
 }
 
 SinkResultType PhysicalCreateARTIndex::SinkSorted(OperatorSinkInput &input) const {
-
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto &storage = table.GetStorage();
 	auto &l_index = l_state.local_index;
@@ -172,7 +169,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	// Vacuum excess memory and verify.
 	state.global_index->Vacuum();
-	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
+	state.global_index->Verify();
 	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
@@ -223,8 +220,8 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 // Source
 //===--------------------------------------------------------------------===//
 
-SourceResultType PhysicalCreateARTIndex::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateARTIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	return SourceResultType::FINISHED;
 }
 

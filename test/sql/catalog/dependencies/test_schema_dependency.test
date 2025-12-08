@@ -31,7 +31,7 @@ DROP SCHEMA s1 CASCADE
 statement error con1
 SELECT * FROM s1.integers
 ----
-Table with name integers does not exist
+Catalog Error: Table with name "s1.integers" does not exist because schema "s1" does not exist.
 
 # schemas and dependencies
 # create a schema and a table inside the schema

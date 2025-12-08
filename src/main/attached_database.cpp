@@ -11,6 +11,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
@@ -36,17 +37,22 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
-
 	for (auto &entry : attach_options) {
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			// Extract the read access mode.
-
 			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
 				access_mode = AccessMode::READ_ONLY;
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
+			continue;
+		}
+
+		if (entry.first == "recovery_mode") {
+			// Extract the recovery mode.
+			auto mode_str = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			recovery_mode = EnumUtil::FromString<RecoveryMode>(mode_str);
 			continue;
 		}
 
@@ -82,7 +88,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
-
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
@@ -104,6 +109,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	recovery_mode = options.recovery_mode;
+	visibility = options.visibility;
+
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	stored_database_path = std::move(options.stored_database_path);
@@ -121,6 +129,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	recovery_mode = options.recovery_mode;
+	visibility = options.visibility;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
@@ -191,7 +201,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(QueryContext(context));
+		storage->Initialize(context);
 	}
 }
 
@@ -242,7 +252,7 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 	if (catalog) {
 		catalog->OnDetach(context);
 	}
-	if (stored_database_path) {
+	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
 		stored_database_path->OnDetach();
 	}
 }
@@ -256,14 +266,27 @@ void AttachedDatabase::Close() {
 
 	// shutting down: attempt to checkpoint the database
 	// but only if we are not cleaning up as part of an exception unwind
-	if (!Exception::UncaughtException() && storage && !storage->InMemory() && !ValidChecker::IsInvalidated(db)) {
-		try {
-			auto &config = DBConfig::GetConfig(db);
-			if (config.options.checkpoint_on_shutdown) {
-				CheckpointOptions options;
-				options.wal_action = CheckpointWALAction::DELETE_WAL;
-				storage->CreateCheckpoint(QueryContext(), options);
+	if (!Exception::UncaughtException() && storage && !ValidChecker::IsInvalidated(db)) {
+		if (!storage->InMemory()) {
+			try {
+				auto &config = DBConfig::GetConfig(db);
+				if (config.options.checkpoint_on_shutdown) {
+					CheckpointOptions options;
+					options.wal_action = CheckpointWALAction::DELETE_WAL;
+					storage->CreateCheckpoint(QueryContext(), options);
+				}
+			} catch (std::exception &ex) {
+				ErrorData data(ex);
+				try {
+					DUCKDB_LOG_ERROR(db, "AttachedDatabase::Close()\t\t" + data.Message());
+				} catch (...) { // NOLINT
+				}
+			} catch (...) { // NOLINT
 			}
+		}
+		try {
+			// destroy the storage
+			storage->Destroy();
 		} catch (...) { // NOLINT
 		}
 	}

@@ -16,7 +16,6 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
                            TableIOManager &table_io_manager, AttachedDatabase &db)
     : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
       storage_info(std::move(storage_info_p)) {
-
 	// Memory safety check.
 	for (idx_t info_idx = 0; info_idx < storage_info.allocator_infos.size(); info_idx++) {
 		auto &info = storage_info.allocator_infos[info_idx];

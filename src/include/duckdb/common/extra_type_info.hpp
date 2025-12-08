@@ -28,7 +28,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
-	TEMPLATE_TYPE_INFO = 12
+	TEMPLATE_TYPE_INFO = 12,
+	GEO_TYPE_INFO = 13
 };
 
 struct ExtraTypeInfo {
@@ -261,7 +262,6 @@ private:
 };
 
 struct TemplateTypeInfo : public ExtraTypeInfo {
-
 	explicit TemplateTypeInfo(string name_p);
 
 	// The name of the template, e.g. `T`, or `KEY_TYPE`. Used to distinguish between different template types within
@@ -276,6 +276,18 @@ public:
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 	TemplateTypeInfo();
+};
+
+struct GeoTypeInfo : public ExtraTypeInfo {
+public:
+	GeoTypeInfo();
+
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 };
 
 } // namespace duckdb

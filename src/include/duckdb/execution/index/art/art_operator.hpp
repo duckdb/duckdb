@@ -390,7 +390,6 @@ private:
 
 	static void InsertIntoPrefix(ART &art, reference<Node> &node_ref, const ARTKey &key, const ARTKey &row_id,
 	                             const idx_t pos, const idx_t depth, const GateStatus status) {
-
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos);
 		const auto byte = Prefix::GetByte(art, node_ref, cast_pos);
 

@@ -75,13 +75,13 @@ PRAGMA memory_limit='10000 kilobytes'
 
 # B = byte
 statement ok
-PRAGMA memory_limit='100000B'
+PRAGMA memory_limit='1000000B'
 
 statement ok
-PRAGMA memory_limit='100000b'
+PRAGMA memory_limit='1000000b'
 
 statement ok
-PRAGMA memory_limit='100000 bytes'
+PRAGMA memory_limit='1000000 bytes'
 
 # T and TB = terabyte
 statement ok
@@ -125,6 +125,7 @@ PRAGMA memory_limit
 statement error
 PRAGMA memory_limit()
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 PRAGMA memory_limit(1, 2)

@@ -2,25 +2,30 @@
 
 namespace duckdb {
 
+using namespace duckdb_parquet; // NOLINT
+
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+
 unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
 	auto result = make_uniq<ListColumnWriterState>(row_group, row_group.columns.size());
-	result->child_state = child_writer->InitializeWriteState(row_group);
+	result->child_state = GetChildWriter().InitializeWriteState(row_group);
 	return std::move(result);
 }
 
 bool ListColumnWriter::HasAnalyze() {
-	return child_writer->HasAnalyze();
+	return GetChildWriter().HasAnalyze();
 }
 void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto &list_child = ListVector::GetEntry(vector);
 	auto list_count = ListVector::GetListSize(vector);
-	child_writer->Analyze(*state.child_state, &state_p, list_child, list_count);
+	GetChildWriter().Analyze(*state.child_state, &state_p, list_child, list_count);
 }
 
 void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	child_writer->FinalizeAnalyze(*state.child_state);
+	GetChildWriter().FinalizeAnalyze(*state.child_state);
 }
 
 static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
@@ -114,12 +119,12 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	// The elements of a single list should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
-	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length, false);
+	GetChildWriter().Prepare(*state.child_state, &state_p, child_list, child_length, false);
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	child_writer->BeginWrite(*state.child_state);
+	GetChildWriter().BeginWrite(*state.child_state);
 }
 
 void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
@@ -128,12 +133,63 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
-	child_writer->Write(*state.child_state, child_list, child_length);
+	GetChildWriter().Write(*state.child_state, child_list, child_length);
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	child_writer->FinalizeWrite(*state.child_state);
+	GetChildWriter().FinalizeWrite(*state.child_state);
+}
+
+ColumnWriter &ListColumnWriter::GetChildWriter() {
+	D_ASSERT(child_writers.size() == 1);
+	return *child_writers[0];
+}
+
+void ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+	idx_t schema_idx = schemas.size();
+
+	auto &schema = column_schema;
+	schema.SetSchemaIndex(schema_idx);
+
+	auto null_type = schema.repetition_type;
+	auto &name = schema.name;
+	auto &field_id = schema.field_id;
+	auto &type = schema.type;
+
+	// set up the two schema elements for the list
+	// for some reason we only set the converted type in the OPTIONAL element
+	// first an OPTIONAL element
+	duckdb_parquet::SchemaElement optional_element;
+	optional_element.repetition_type = null_type;
+	optional_element.num_children = 1;
+	optional_element.converted_type = (type.id() == LogicalTypeId::MAP) ? ConvertedType::MAP : ConvertedType::LIST;
+	optional_element.__isset.num_children = true;
+	optional_element.__isset.type = false;
+	optional_element.__isset.repetition_type = true;
+	optional_element.__isset.converted_type = true;
+	optional_element.name = name;
+	if (field_id.IsValid()) {
+		optional_element.__isset.field_id = true;
+		optional_element.field_id = field_id.GetIndex();
+	}
+	schemas.push_back(std::move(optional_element));
+
+	if (type.id() != LogicalTypeId::MAP) {
+		duckdb_parquet::SchemaElement repeated_element;
+		repeated_element.repetition_type = FieldRepetitionType::REPEATED;
+		repeated_element.__isset.num_children = true;
+		repeated_element.__isset.type = false;
+		repeated_element.__isset.repetition_type = true;
+		repeated_element.num_children = 1;
+		repeated_element.name = "list";
+		schemas.push_back(std::move(repeated_element));
+	} else {
+		//! When we're describing a MAP, we skip the dummy "list" element
+		//! Instead, the "key_value" struct will be marked as REPEATED
+		D_ASSERT(GetChildWriter().Schema().repetition_type == FieldRepetitionType::REPEATED);
+	}
+	GetChildWriter().FinalizeSchema(schemas);
 }
 
 } // namespace duckdb

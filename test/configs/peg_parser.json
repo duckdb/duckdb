@@ -1,0 +1,67 @@
+{
+  "description": "Test PEG Parser + transformer with fallback mode",
+  "skip_compiled": "true",
+  "on_init": "set allow_parser_override_extension=fallback;",
+  "statically_loaded_extensions": [
+    "core_functions",
+    "autocomplete"
+  ],
+  "skip_tests": [
+    {
+      "reason": "Arithmetic expression",
+      "paths": [
+        "test/sql/function/operator/test_arithmetic_sqllogic.test",
+        "test/sql/projection/test_row_id_expression.test",
+        "test/sql/function/numeric/test_trigo.test",
+        "test/sql/function/generic/test_between.test"
+      ]
+    },
+    {
+      "reason": "Quotations",
+      "paths": [
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/attach/attach_dbname_quotes.test",
+        "test/sql/table_function/sqlite_master_quotes.test",
+        "test/sql/keywords/escaped_quotes_expressions.test"
+      ]
+    },
+    {
+      "reason": "Conversion Error",
+      "paths": [
+        "test/sql/storage/types/struct/wal_struct_storage.test",
+        "test/sql/storage/types/struct/struct_storage.test"
+      ]
+    },
+    {
+      "reason": "Case insensitive preservation",
+      "paths": [
+        "test/sql/settings/setting_preserve_identifier_case.test"
+      ]
+    },
+    {
+      "reason": "Create macro with param",
+      "paths": [
+        "test/sql/catalog/function/test_complex_macro.test"
+      ]
+    },
+    {
+      "reason": "Timeout",
+      "paths": [
+        "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow"
+      ]
+    },
+    {
+      "reason": "Setting option to 'fallback' changes behavior of first tests",
+      "paths": [
+        "test/extension/loadable_parser_override.test"
+      ]
+    },
+    {
+      "reason": "Unclassified failures",
+      "paths": [
+        "test/sql/types/enum/test_enum.test"
+      ]
+    }
+  ]
+}

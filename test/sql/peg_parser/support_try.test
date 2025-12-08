@@ -1,8 +1,0 @@
-# name: test/sql/peg_parser/support_try.test
-# description: Test try cast syntax in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$select TRY(~CAST('abc' as INTEGER))$TEST_PEG_PARSER$);

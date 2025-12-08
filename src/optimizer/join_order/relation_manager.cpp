@@ -46,7 +46,6 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                   const RelationStats &stats) {
-
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
@@ -561,7 +560,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.expressions.empty());
 			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// create a conjunction expression for the semi join.
 				// It's possible multiple LHS relations have a condition in

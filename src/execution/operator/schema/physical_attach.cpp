@@ -13,8 +13,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	// construct the options
@@ -40,7 +40,6 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
-
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
 				auto attached_mode = EnumUtil::ToString(options.access_mode);
@@ -61,20 +60,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// attach the database.
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
-	if (!attached_db) {
-		return SourceResultType::FINISHED;
-	}
-
-	//! Initialize the database.
-	attached_db->Initialize(context.client);
-	if (!options.default_table.name.empty()) {
-		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
-	}
-	attached_db->FinalizeLoad(context.client);
-
-	db_manager.FinalizeAttach(context.client, *info, std::move(attached_db));
+	db_manager.AttachDatabase(context.client, *info, options);
 	return SourceResultType::FINISHED;
 }
 

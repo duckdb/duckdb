@@ -1,9 +1,0 @@
-# name: test/sql/peg_parser/support_optional_not_null_constraint.test
-# description: Test optional not null constraint in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE tag_8764 (   key VARCHAR(65535) NOT NULL,   name VARCHAR(65535) NULL,   value VARCHAR(65535) NOT NULL,   PRIMARY KEY (key, name) );$TEST_PEG_PARSER$);
-

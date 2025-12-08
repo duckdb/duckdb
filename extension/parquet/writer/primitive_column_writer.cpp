@@ -7,9 +7,12 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
-PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
-                                             vector<string> schema_path, bool can_have_nulls)
-    : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
+PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
+                                             vector<string> schema_path)
+    : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
@@ -44,7 +47,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
-	HandleRepeatLevels(state, parent, count, MaxRepeat());
+	HandleRepeatLevels(state, parent, count);
 	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
 	idx_t vector_index = 0;
@@ -304,7 +307,6 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 
 	if (state.stats_state->HasGeoStats()) {
-
 		auto gpq_version = writer.GetGeoParquetVersion();
 
 		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||
@@ -427,6 +429,35 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 
 	// insert the dictionary page as the first page to write for this column
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
+}
+
+void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+	idx_t schema_idx = schemas.size();
+
+	auto &schema = column_schema;
+	schema.SetSchemaIndex(schema_idx);
+
+	auto &repetition_type = schema.repetition_type;
+	auto &name = schema.name;
+	auto &field_id = schema.field_id;
+	auto &type = schema.type;
+	auto allow_geometry = schema.allow_geometry;
+
+	duckdb_parquet::SchemaElement schema_element;
+	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
+	schema_element.repetition_type = repetition_type;
+	schema_element.__isset.num_children = false;
+	schema_element.__isset.type = true;
+	schema_element.__isset.repetition_type = true;
+	schema_element.name = name;
+	if (field_id.IsValid()) {
+		schema_element.__isset.field_id = true;
+		schema_element.field_id = field_id.GetIndex();
+	}
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry);
+	schemas.push_back(std::move(schema_element));
+
+	D_ASSERT(child_writers.empty());
 }
 
 } // namespace duckdb

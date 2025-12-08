@@ -1,0 +1,47 @@
+# name: test/parquet/variant/variant_basic_shredded_writing.test
+# group: [variant]
+
+require parquet
+
+statement ok
+create macro data() AS TABLE (
+	FROM (VALUES
+		({'a': 21::INTEGER, 'b': NULL}::VARIANT),
+		({'a': 42::INTEGER, 'd': 'test'}::VARIANT),
+		([]::VARIANT),
+		(NULL::VARIANT),
+		([{'b': True, 'c': 'test'}::VARIANT, 'test', 21, {'a': True}, [1::VARIANT, 2, True, 'false']]::VARIANT),
+		('this is a long string'::VARIANT),
+		('this is big enough to not be classified as a "short string" by parquet VARIANT'::VARIANT)
+	) t(a)
+)
+
+query I nosort expected_res
+select * from data();
+----
+
+statement ok
+COPY (
+	from data() t(a)
+) TO '__TEST_DIR__/shredded_struct.parquet' (
+	shredding {
+		a: 'STRUCT(a INTEGER, b VARIANT, c BOOLEAN)'
+	}
+)
+
+query I nosort expected_res
+select * from '__TEST_DIR__/shredded_struct.parquet';
+----
+
+statement ok
+COPY (
+	select a from data()
+) TO '__TEST_DIR__/shredded_list.parquet' (
+	shredding {
+		a: 'VARCHAR[]'
+	}
+)
+
+query I nosort expected_res
+select * from '__TEST_DIR__/shredded_list.parquet';
+----

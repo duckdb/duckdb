@@ -17,7 +17,6 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
-
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
@@ -89,6 +88,9 @@ string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
+FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
+	return handle.file_system.Stats(handle);
+}
 
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	handle.file_system.Truncate(handle, new_size);
@@ -145,6 +147,14 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
+	// Sub-filesystem number is not expected to be huge, also filesystem registration should be called infrequently.
+	const auto &name = fs->GetName();
+	for (auto sub_system = sub_systems.begin(); sub_system != sub_systems.end(); sub_system++) {
+		if (sub_system->get()->GetName() == name) {
+			throw InvalidInputException("Filesystem with name %s has already been registered, cannot re-register!",
+			                            name);
+		}
+	}
 	sub_systems.push_back(std::move(fs));
 }
 

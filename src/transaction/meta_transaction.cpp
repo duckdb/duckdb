@@ -194,6 +194,16 @@ optional_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabase(const stri
 	return nullptr;
 }
 
+shared_ptr<AttachedDatabase> MetaTransaction::GetReferencedDatabaseOwning(const string &name) {
+	lock_guard<mutex> guard(referenced_database_lock);
+	for (auto &entry : referenced_databases) {
+		if (StringUtil::CIEquals(entry.first.get().name, name)) {
+			return entry.second;
+		}
+	}
+	return nullptr;
+}
+
 void MetaTransaction::DetachDatabase(AttachedDatabase &database) {
 	lock_guard<mutex> guard(referenced_database_lock);
 	used_databases.erase(database.GetName());
@@ -216,7 +226,7 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	return db_ref;
 }
 
-void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
+void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
 	if (IsReadOnly()) {
 		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
 		                           db.GetName());
@@ -225,6 +235,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	if (transaction.IsReadOnly()) {
 		transaction.SetReadWrite();
 	}
+	transaction.SetModifications(modification);
 	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases
 		return;

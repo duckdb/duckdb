@@ -50,6 +50,16 @@
         "default_value": "false"
     },
     {
+        "name": "allow_parser_override_extension",
+        "description": "Allow extensions to override the current parser",
+        "type": "VARCHAR",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "allow_persistent_secrets",
         "description": "Allow the creation of persistent secrets, that are stored and loaded on restarts",
         "type": "BOOLEAN",
@@ -146,6 +156,17 @@
         "scope": "global"
     },
     {
+        "name": "block_allocator_memory",
+        "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",
@@ -205,6 +226,13 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_checkpoint_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep before a checkpoint",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -217,6 +245,13 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
+    },
+    {
+        "name": "debug_physical_table_scan_execution_strategy",
+        "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
+        "type": "ENUM<PhysicalTableScanExecutionStrategy>",
+        "default_scope": "global",
+        "default_value": "DEFAULT"
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
@@ -468,7 +503,7 @@
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "true"
     },
     {
         "name": "explain_output",
@@ -476,6 +511,13 @@
         "type": "ENUM<ExplainOutputType>",
         "scope": "local",
         "internal_setting": "explain_output_type"
+    },
+    {
+        "name": "extension_directories",
+        "description": "Set the directories to store extensions in",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "extension_directory",
@@ -512,6 +554,14 @@
         "description": "DEBUG SETTING: forces a specific compression method to be used",
         "type": "VARCHAR",
         "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "force_variant_shredding",
+        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "ForceVariantShredding",
         "custom_implementation": true
     },
     {
@@ -854,6 +904,13 @@
         "custom_implementation": true
     },
     {
+        "name": "storage_block_prefetch",
+        "description": "In which scenarios to use storage block prefetching",
+        "type": "ENUM<StorageBlockPrefetch>",
+        "default_scope": "global",
+        "default_value": "REMOTE_ONLY"
+    },
+    {
         "name": "storage_compatibility_version",
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "VARCHAR",
@@ -900,6 +957,21 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "variant_minimum_shredding_size",
+        "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "30000",
+        "struct": "VariantMinimumShreddingSize"
+    },
+    {
+        "name": "write_buffer_row_group_count",
+        "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "5"
     },
     {
         "name": "zstd_min_string_length",

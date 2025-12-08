@@ -20,7 +20,19 @@ struct DistinctCount {
 };
 
 struct ExpressionBinding {
-	bool found_expression = false;
+public:
+	bool FoundExpression() const {
+		return expression;
+	}
+	bool FoundColumnRef() const {
+		if (!FoundExpression()) {
+			return false;
+		}
+		return expression->type == ExpressionType::BOUND_COLUMN_REF;
+	}
+
+public:
+	optional_ptr<Expression> expression;
 	ColumnBinding child_binding;
 	bool expression_is_constant = false;
 };
@@ -65,7 +77,8 @@ public:
 	static RelationStats CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
 	                                                       vector<RelationStats> relation_stats);
 	//! Called after reordering a query plan with potentially 2+ relations.
-	static RelationStats CombineStatsOfNonReorderableOperator(LogicalOperator &op, vector<RelationStats> child_stats);
+	static RelationStats CombineStatsOfNonReorderableOperator(LogicalOperator &op,
+	                                                          const vector<RelationStats> &child_stats);
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:

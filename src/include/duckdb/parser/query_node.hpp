@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
@@ -25,7 +24,8 @@ enum class QueryNodeType : uint8_t {
 	SET_OPERATION_NODE = 2,
 	BOUND_SUBQUERY_NODE = 3,
 	RECURSIVE_CTE_NODE = 4,
-	CTE_NODE = 5
+	CTE_NODE = 5,
+	STATEMENT_NODE = 6
 };
 
 struct CommonTableExpressionInfo;
@@ -59,8 +59,6 @@ public:
 	//! CTEs (used by SelectNode and SetOperationNode)
 	CommonTableExpressionMap cte_map;
 
-	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
-
 public:
 	//! Convert the query node to a string
 	virtual string ToString() const = 0;
@@ -77,9 +75,6 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &deserializer);
-
-	//! TEMPORARY BUG FIX WORKAROUND: extract elements from the CommonTableExpressionMap and construct CTENodes
-	static void ExtractCTENodes(unique_ptr<QueryNode> &query_node);
 
 protected:
 	//! Copy base QueryNode properties from another expression to this one,

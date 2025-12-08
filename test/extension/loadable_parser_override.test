@@ -1,0 +1,66 @@
+# name: test/extension/loadable_parser_override.test
+# description: Try loading a parser override with an extension
+# group: [extension]
+
+require skip_reload
+
+statement error
+override
+----
+Parser Error: syntax error at or near "override"
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement error
+set allow_parser_override_extension=doesnotexist;
+----
+Invalid Input Error: Unrecognized value for parser override setting. Valid options are: default, fallback, strict, strict_when_supported
+
+# Default behavior is not using the parser override
+statement error
+override
+----
+Parser Error: syntax error at or near "override"
+
+# Fallback behavior is trying the parser override and if they error falling back to the default parser
+statement ok
+set allow_parser_override_extension=fallback;
+
+# The QuackParser can return a valid SQLStatement for this query
+query I
+override
+----
+The DuckDB parser has been overridden
+
+# The parser cannot return a valid SQLStatement for this query, the default parser also gets an error
+statement error
+overri
+----
+Parser Error: syntax error at or near "overri"
+
+
+query I
+SELECT 1;
+----
+1
+
+statement ok
+set allow_parser_override_extension=strict;
+
+query I
+override
+----
+The DuckDB parser has been overridden
+
+statement error
+overri
+----
+Parser Error: Parser override could not parse this query.
+Original error: Parser overridden, query equaled "overri" but not "override"
+
+statement error
+SELECT 1;
+----
+Not implemented Error: Parser override has not yet implemented this transformer rule.
+Original error: QuackParser has not yet implemented the statements to transform this query

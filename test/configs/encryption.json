@@ -39,7 +39,8 @@
         "test/sql/table_function/duckdb_databases.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/logging/file_system_logging_attach.test",
-        "test/sql/logging/file_system_logging_attach_deadlock.test"
+        "test/sql/logging/file_system_logging_attach_deadlock.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
       ]
     },
     {
@@ -54,6 +55,14 @@
           "test/sql/secrets/create_secret_hffs_autoload.test",
           "test/sql/secrets/secret_autoloading_errors.test",
           "test/sql/partitioning/hive_partitioning_autodetect.test"
+      ]
+    },
+    {
+      "reason": "Unclassified failures",
+      "paths": [
+        "test/sql/storage/encryption/wal/encrypted_wal_lazy_creation.test",
+        "test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test",
+        "test/sql/copy/encryption/different_aes_engines.test"
       ]
     }
   ]

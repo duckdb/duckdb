@@ -18,6 +18,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 
 namespace duckdb {
 
@@ -92,6 +93,18 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
+struct AllowParserOverrideExtensionSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "allow_parser_override_extension";
+	static constexpr const char *Description = "Allow extensions to override the current parser";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowPersistentSecretsSetting {
@@ -236,6 +249,17 @@ struct AutoloadKnownExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct BlockAllocatorMemorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "block_allocator_memory";
+	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use (this "
+	                                           "memory is never freed and cannot be reduced).";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct CatalogErrorMaxSchemasSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";
@@ -307,6 +331,15 @@ struct DebugCheckpointAbortSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugCheckpointSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_checkpoint_sleep_ms";
+	static constexpr const char *Description = "DEBUG SETTING: time to sleep before a checkpoint";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct DebugForceExternalSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_force_external";
@@ -326,6 +359,17 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
+};
+
+struct DebugPhysicalTableScanExecutionStrategySetting {
+	using RETURN_TYPE = PhysicalTableScanExecutionStrategy;
+	static constexpr const char *Name = "debug_physical_table_scan_execution_strategy";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force use of given strategy for executing physical table scans";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DebugSkipCheckpointOnCommitSetting {
@@ -653,7 +697,7 @@ struct ExperimentalMetadataReuseSetting {
 	static constexpr const char *Name = "experimental_metadata_reuse";
 	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -664,6 +708,16 @@ struct ExplainOutputSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ExtensionDirectoriesSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "extension_directories";
+	static constexpr const char *Description = "Set the directories to store extensions in";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
 
@@ -713,6 +767,17 @@ struct ForceCompressionSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ForceVariantShredding {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "force_variant_shredding";
+	static constexpr const char *Description =
+	    "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -1190,6 +1255,16 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StorageBlockPrefetchSetting {
+	using RETURN_TYPE = StorageBlockPrefetch;
+	static constexpr const char *Name = "storage_block_prefetch";
+	static constexpr const char *Description = "In which scenarios to use storage block prefetching";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "REMOTE_ONLY";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct StorageCompatibilityVersionSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "storage_compatibility_version";
@@ -1249,6 +1324,27 @@ struct UsernameSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct VariantMinimumShreddingSize {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "variant_minimum_shredding_size";
+	static constexpr const char *Description = "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 "
+	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct WriteBufferRowGroupCountSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "write_buffer_row_group_count";
+	static constexpr const char *Description = "The amount of row groups to buffer in bulk ingestion prior to flushing "
+	                                           "them together. Reducing this setting can reduce memory consumption.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "5";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct ZstdMinStringLengthSetting {

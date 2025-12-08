@@ -19,7 +19,8 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 	}
 }
 
-SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSourceInput &input) const {
 	if (scope == SetScope::VARIABLE) {
 		auto &client_config = ClientConfig::GetConfig(context.client);
 		client_config.ResetUserVariable(name);
@@ -36,8 +37,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name.ToStdString());
 			if (entry == config.extension_parameters.end()) {
-				throw InvalidInputException("Extension parameter %s was not found after autoloading",
-				                            name.ToStdString());
+				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
 		ResetExtensionVariable(context, config, entry->second);

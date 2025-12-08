@@ -19,16 +19,16 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
-	return function.stability == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
+	return function.GetStability() == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
 }
 
 bool BoundFunctionExpression::IsConsistent() const {
-	return function.stability != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
+	return function.GetStability() != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
-	if (function.bind_lambda) {
+	if (function.HasBindLambdaCallback()) {
 		// This is a lambda function
 		D_ASSERT(bind_info);
 		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
@@ -39,11 +39,11 @@ bool BoundFunctionExpression::IsFoldable() const {
 			}
 		}
 	}
-	return function.stability == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
+	return function.GetStability() == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
 bool BoundFunctionExpression::CanThrow() const {
-	if (function.errors == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+	if (function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		return true;
 	}
 	return Expression::CanThrow();
@@ -54,8 +54,8 @@ string BoundFunctionExpression::ToString() const {
 	                                                                         is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {
-	return function.null_handling == FunctionNullHandling::SPECIAL_HANDLING ? false
-	                                                                        : Expression::PropagatesNullValues();
+	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
+	                                                                            : Expression::PropagatesNullValues();
 }
 
 hash_t BoundFunctionExpression::Hash() const {
@@ -112,16 +112,16 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 
 	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
-	auto function_return_type = entry.first.return_type;
+	auto function_return_type = entry.first.GetReturnType();
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
 
-	if (entry.first.bind_expression) {
+	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression
 		auto &context = deserializer.Get<ClientContext &>();
 		auto bind_input = FunctionBindExpressionInput(context, entry.second, children);
 		// replace the function expression with the bound expression
-		auto bound_expression = entry.first.bind_expression(bind_input);
+		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
 		if (bound_expression) {
 			return bound_expression;
 		}

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -212,7 +213,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool lateral, idx_t lateral_depth,
                                                         bool parent_is_dependent_join) {
-
 	bool is_lateral_join = false;
 
 	// check if this entry has correlated expressions
@@ -888,12 +888,16 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto &setop = plan->Cast<LogicalSetOperation>();
 		// set operator, push into both children
 #ifdef DEBUG
-		plan->children[0]->ResolveOperatorTypes();
-		plan->children[1]->ResolveOperatorTypes();
-		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
+		for (auto &child : plan->children) {
+			child->ResolveOperatorTypes();
+		}
+		for (idx_t i = 1; i < plan->children.size(); i++) {
+			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
+		}
 #endif
-		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
+		for (auto &child : plan->children) {
+			child = PushDownDependentJoin(std::move(child));
+		}
 		for (idx_t i = 0; i < plan->children.size(); i++) {
 			if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 				auto proj_index = binder.GenerateTableIndex();
@@ -918,10 +922,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// here we need to check the children. If they have reorderable bindings, you need to plan a projection
 		// on top that will guarantee the order of the bindings.
 #ifdef DEBUG
-		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
-		plan->children[0]->ResolveOperatorTypes();
-		plan->children[1]->ResolveOperatorTypes();
-		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
+		for (idx_t i = 1; i < plan->children.size(); i++) {
+			D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[i]->GetColumnBindings().size());
+		}
+		for (auto &child : plan->children) {
+			child->ResolveOperatorTypes();
+		}
+		for (idx_t i = 1; i < plan->children.size(); i++) {
+			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
+		}
 #endif
 		// we have to refer to the setop index now
 		base_binding.table_index = setop.table_index;
@@ -987,7 +996,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-
 #ifdef DEBUG
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();

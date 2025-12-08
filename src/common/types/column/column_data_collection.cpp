@@ -8,6 +8,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -59,9 +60,10 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<Logica
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
+ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p,
+                                           ColumnDataCollectionLifetime lifetime) {
 	Initialize(std::move(types_p));
-	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager);
+	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager, lifetime);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
@@ -70,8 +72,8 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 }
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
-                                           ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type), std::move(types_p)) {
+                                           ColumnDataAllocatorType type, ColumnDataCollectionLifetime lifetime)
+    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type, lifetime), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -146,16 +148,22 @@ idx_t ColumnDataRow::RowIndex() const {
 //===--------------------------------------------------------------------===//
 // ColumnDataRowCollection
 //===--------------------------------------------------------------------===//
-ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection) {
+ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection,
+                                                 const ColumnDataScanProperties properties) {
 	if (collection.Count() == 0) {
 		return;
 	}
 	// read all the chunks
 	ColumnDataScanState temp_scan_state;
-	collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+	collection.InitializeScan(temp_scan_state, properties);
 	while (true) {
 		auto chunk = make_uniq<DataChunk>();
-		collection.InitializeScanChunk(*chunk);
+		// Use default allocator so the chunk is independently usable even after the DB allocator is destroyed
+		if (properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
+			collection.InitializeScanChunk(Allocator::DefaultAllocator(), *chunk);
+		} else {
+			collection.InitializeScanChunk(*chunk);
+		}
 		if (!collection.Scan(temp_scan_state, *chunk)) {
 			break;
 		}
@@ -252,12 +260,13 @@ ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataColle
     : collection(collection_p) {
 }
 
-ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
+ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p,
+                                                                           ColumnDataScanProperties properties)
     : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
 	}
-	collection->InitializeScan(scan_state);
+	collection->InitializeScan(scan_state, properties);
 	collection->InitializeScanChunk(*scan_chunk);
 	collection->Scan(scan_state, *scan_chunk);
 }
@@ -593,7 +602,6 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 template <>
 void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                               idx_t offset, idx_t copy_count) {
-
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
 	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
 	    allocator_type == ColumnDataAllocatorType::HYBRID) {
@@ -733,7 +741,6 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
-
 	auto &segment = meta_data.segment;
 
 	auto &child_vector = ListVector::GetEntry(source);
@@ -813,7 +820,6 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 
 void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                          idx_t offset, idx_t copy_count) {
-
 	auto &segment = meta_data.segment;
 
 	// copy the NULL values for the main array vector (the same as for a struct vector)
@@ -842,7 +848,8 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	child_vector.ToUnifiedFormat(copy_count * array_size, child_vector_data);
 
 	// Broadcast and sync the validity of the array vector to the child vector
-
+	// This requires creating a copy of the validity mask: we cannot modify the input validity
+	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
 	if (source_data.validity.IsMaskSet()) {
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
@@ -1015,6 +1022,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnData
 
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
                                           ColumnDataScanProperties properties) const {
+	state.db = allocator->GetDatabase();
 	state.chunk_index = 0;
 	state.segment_index = 0;
 	state.current_row_index = 0;
@@ -1036,6 +1044,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, ve
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
                                 DataChunk &result) const {
+	D_ASSERT(result.GetTypes() == types);
 	result.Reset();
 
 	idx_t chunk_index;
@@ -1052,7 +1061,11 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 }
 
 void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
-	chunk.Initialize(allocator->GetAllocator(), types);
+	InitializeScanChunk(allocator->GetAllocator(), chunk);
+}
+
+void ColumnDataCollection::InitializeScanChunk(Allocator &allocator, DataChunk &chunk) const {
+	chunk.Initialize(allocator, types);
 }
 
 void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const {
@@ -1129,6 +1142,10 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
+	for (idx_t i = 0; i < state.column_ids.size(); i++) {
+		D_ASSERT(result.GetTypes()[i] == types[state.column_ids[i]]);
+	}
+
 	result.Reset();
 
 	idx_t chunk_index;
@@ -1213,6 +1230,7 @@ idx_t ColumnDataCollection::ChunkCount() const {
 }
 
 void ColumnDataCollection::FetchChunk(idx_t chunk_idx, DataChunk &result) const {
+	D_ASSERT(result.GetTypes() == types);
 	D_ASSERT(chunk_idx < ChunkCount());
 	for (auto &segment : segments) {
 		if (chunk_idx >= segment->ChunkCount()) {
@@ -1352,6 +1370,11 @@ vector<shared_ptr<StringHeap>> ColumnDataCollection::GetHeapReferences() {
 
 ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
 	return allocator->GetType();
+}
+
+BufferManager &ColumnDataCollection::GetBufferManager() const {
+	D_ASSERT(allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	return allocator->GetBufferManager();
 }
 
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {

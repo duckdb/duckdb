@@ -5,6 +5,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -36,7 +37,7 @@ void IsFormatExtensionKnown(const string &format) {
 			// It's a match, we must throw
 			throw CatalogException(
 			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
-			    file_postfixes.extension);
+			    std::string(file_postfixes.extension));
 		}
 	}
 }
@@ -115,7 +116,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
-	CopyFunctionBindInput bind_input(*stmt.info);
+	CopyFunctionBindInput bind_input(*stmt.info, function.function_info);
 
 	bind_input.file_extension = function.extension;
 
@@ -251,7 +252,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 
 		auto new_select_list = function.copy_to_select(input);
 		if (!new_select_list.empty()) {
-
 			// We have a new select list, create a projection on top of the current plan
 			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(new_select_list));
 			projection->children.push_back(std::move(select_node.plan));
@@ -551,8 +551,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 			// check if this matches the mode
 			if (copy_option.mode != CopyOptionMode::READ_WRITE && copy_option.mode != copy_mode) {
 				throw InvalidInputException("Option \"%s\" is not supported for %s - only for %s", provided_option,
-				                            stmt.info->is_from ? "reading" : "writing",
-				                            stmt.info->is_from ? "writing" : "reading");
+				                            std::string(stmt.info->is_from ? "reading" : "writing"),
+				                            std::string(stmt.info->is_from ? "writing" : "reading"));
 			}
 			if (copy_option.type.id() != LogicalTypeId::ANY) {
 				if (provided_entry.second.empty()) {
@@ -599,7 +599,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	}
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);

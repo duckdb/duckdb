@@ -30,7 +30,8 @@
         "test/sql/show_select/test_describe_all.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
         "test/sql/table_function/duckdb_databases.test",
-        "test/sql/tpch/dbgen_error.test"
+        "test/sql/tpch/dbgen_error.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
       ]
     },
     {

@@ -2,20 +2,20 @@
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
                                            shared_ptr<TupleDataLayout> &layout_ptr_p)
-    : type(type_p), buffer_manager(buffer_manager_p), layout_ptr(layout_ptr_p), layout(*layout_ptr), count(0),
-      data_size(0) {
+    : type(type_p), buffer_manager(buffer_manager_p),
+      stl_allocator(make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())), layout_ptr(layout_ptr_p),
+      layout(*layout_ptr), count(0), data_size(0) {
 }
 
-PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout_ptr(other.layout_ptr), layout(*layout_ptr),
-      count(0), data_size(0) {
+PartitionedTupleData::PartitionedTupleData(PartitionedTupleData &other)
+    : PartitionedTupleData(other.type, other.buffer_manager, other.layout_ptr) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {

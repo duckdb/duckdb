@@ -51,8 +51,8 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	                                           table_data_writer);
 }
 
-CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
-	return checkpoint_manager.GetCheckpointType();
+CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {
+	return checkpoint_manager.GetCheckpointOptions();
 }
 
 MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
@@ -62,6 +62,10 @@ MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
 void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
 	existing_pointer = pointer;
 	existing_rows = total_rows;
+}
+
+void SingleFileTableDataWriter::FlushPartialBlocks() {
+	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,

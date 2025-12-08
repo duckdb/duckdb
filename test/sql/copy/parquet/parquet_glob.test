@@ -69,11 +69,13 @@ FROM parquet_scan('{DATA_DIR}/parquet-testing/glob3/*/dir/*.parquet');
 statement error
 select count(*) from parquet_scan('')
 ----
+<REGEX>:.*IO Error.*can only be set for.*
 
 # schema mismatch in parquet glob
 statement error
 select * from parquet_scan('{DATA_DIR}/parquet-testing/*.parquet')
 ----
+<REGEX>:.*Invalid Input Error: Failed to read file.*
 
 # parquet glob with COPY FROM
 statement ok
@@ -95,3 +97,4 @@ CREATE TABLE vals2 (i INTEGER, j INTEGER)
 statement error
 COPY vals2 FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
 ----
+<REGEX>:.*IO Error: No files found that match the pattern.*

@@ -1,4 +1,4 @@
-DropStatement <- 'DROP'i DropEntries DropBehavior?
+DropStatement <- 'DROP' DropEntries DropBehavior?
 
 DropEntries <-
 	DropTable /
@@ -12,22 +12,23 @@ DropEntries <-
 	DropSecret
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction <- 'MACRO'i 'TABLE'i IfExists? List(TableFunctionName)
+DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
-DropSchema <- 'SCHEMA'i IfExists? List(QualifiedSchemaName)
-DropIndex <- 'INDEX'i IfExists? List(QualifiedIndexName)
+DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
+DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
 QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
-DropSequence <- 'SEQUENCE'i IfExists? List(QualifiedSequenceName)
-DropCollation <- 'COLLATION'i IfExists? List(CollationName)
-DropType <- 'TYPE'i IfExists? List(QualifiedTypeName)
-DropSecret <- Temporary? 'SECRET'i IfExists? SecretName DropSecretStorage?
+DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
+DropCollation <- 'COLLATION' IfExists? List(CollationName)
+DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
+DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
 
-TableOrView <- 'TABLE'i / 'VIEW'i / ('MATERIALIZED'i 'VIEW'i)
-FunctionType <- 'MACRO'i / 'FUNCTION'i
+TableOrView <- CommentTable / CommentView / MaterializedViewEntry
+MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
+FunctionType <- 'MACRO' / 'FUNCTION'
 
-DropBehavior <- 'CASCADE'i / 'RESTRICT'i
+DropBehavior <- 'CASCADE' / 'RESTRICT'
 
-IfExists <- 'IF'i 'EXISTS'i
+IfExists <- 'IF' 'EXISTS'
 QualifiedSchemaName <- CatalogQualification? SchemaName
 
-DropSecretStorage <- 'FROM'i Identifier
+DropSecretStorage <- 'FROM' Identifier

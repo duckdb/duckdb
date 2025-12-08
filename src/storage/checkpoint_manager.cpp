@@ -18,10 +18,10 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
@@ -33,16 +33,16 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
-                                                       BlockManager &block_manager, CheckpointType checkpoint_type)
+                                                       BlockManager &block_manager, CheckpointOptions options_p)
     : CheckpointWriter(db), context(context.GetClientContext()),
-      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
-      checkpoint_type(checkpoint_type) {
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -148,6 +148,24 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
+	// write a checkpoint flag to the WAL
+	// in case a crash happens during the checkpoint, we know a checkpoint was instantiated
+	// we write the root meta block of the planned checkpoint to the WAL
+	// during recovery we use this:
+	// * if the root meta block matches the checkpoint entry, we know the checkpoint was completed
+	// * if the root meta block does not match the checkpoint entry, we know the checkpoint was not completed
+	// if the checkpoint was completed we don't need to replay the WAL - otherwise we need to replay the WAL
+	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
+	// to replay any concurrent commits that have succeeded and ensure these are not lost
+	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
+	ActiveCheckpointWrapper active_checkpoint(transaction_manager);
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
+
+	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
+	if (checkpoint_sleep_ms > 0) {
+		ThreadUtil::SleepMs(checkpoint_sleep_ms);
+	}
+
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
@@ -191,17 +209,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	metadata_writer->Flush();
 	table_metadata_writer->Flush();
 
-	// write a checkpoint flag to the WAL
-	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
-	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
-	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
-	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
-	bool wal_is_empty = storage_manager.GetWALSize() == 0;
-	if (!wal_is_empty) {
-		auto wal = storage_manager.GetWAL();
-		wal->WriteCheckpoint(meta_block);
-		wal->Flush();
-	}
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
@@ -223,20 +230,20 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		}
 		for (auto &entry_ref : catalog_entries) {
 			auto &entry = entry_ref.get();
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				auto &table = entry.Cast<DuckTableEntry>();
-				auto &storage = table.GetStorage();
-				auto segment_info = storage.GetColumnSegmentInfo();
-				for (auto &segment : segment_info) {
-					verify_block_usage_count[segment.block_id]++;
-					if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
-						auto overflow_blocks =
-						    StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
-						auto splits = StringUtil::Split(overflow_blocks, ", ");
-						for (auto &split : splits) {
-							auto overflow_block_id = std::stoll(split);
-							verify_block_usage_count[overflow_block_id]++;
-						}
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				continue;
+			}
+			auto &table = entry.Cast<DuckTableEntry>();
+			auto &storage = table.GetStorage();
+			auto segment_info = storage.GetColumnSegmentInfo(context);
+			for (auto &segment : segment_info) {
+				verify_block_usage_count[segment.block_id]++;
+				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
+					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+					auto splits = StringUtil::Split(overflow_blocks, ", ");
+					for (auto &split : splits) {
+						auto overflow_block_id = std::stoll(split);
+						verify_block_usage_count[overflow_block_id]++;
 					}
 				}
 			}
@@ -251,9 +258,13 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// truncate the file
 	block_manager.Truncate();
 
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FINISH) {
+		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+	}
+
 	// truncate the WAL
-	if (!wal_is_empty) {
-		storage_manager.ResetWAL();
+	if (has_wal) {
+		storage_manager.WALFinishCheckpoint();
 	}
 }
 
@@ -281,7 +292,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 		return;
 	}
 
-	if (block_manager.IsRemote()) {
+	if (block_manager.Prefetch()) {
 		auto metadata_blocks = metadata_manager.GetBlocks();
 		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
 		buffer_manager.Prefetch(metadata_blocks);
@@ -541,12 +552,10 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
-	if (auto writer = GetTableDataWriter(table)) {
+	auto writer = GetTableDataWriter(table);
+	if (writer) {
 		writer->WriteTableData(serializer);
 	}
-	// flush any partial blocks BEFORE releasing the table lock
-	// flushing partial blocks updates where data lives and is not thread-safe
-	partial_block_manager.FlushPartialBlocks();
 }
 
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
@@ -568,7 +577,6 @@ void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &d
 
 void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
-
 	// written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
