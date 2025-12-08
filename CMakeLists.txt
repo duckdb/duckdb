@@ -763,13 +763,16 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+# Capture the current dir so the below function also works when included in a different project
+set(_DUCKDB_PROJECT_SRC_DIR ${PROJECT_SOURCE_DIR})
+set(_DUCKDB_PROJECT_BIN_DIR ${PROJECT_BINARY_DIR})
 
 function(add_third_party NAME)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/${NAME} ${CMAKE_BINARY_DIR}/third_party/${NAME})
+    add_subdirectory(${_DUCKDB_PROJECT_SRC_DIR}/third_party/${NAME} ${_DUCKDB_PROJECT_BIN_DIR}/third_party/${NAME})
 endfunction()
 
 # this depends on disable_target_warnings so the order matters
-include(extension/extension_build_tools.cmake)
+include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
  add_subdirectory(src)
