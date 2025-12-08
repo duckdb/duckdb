@@ -48,3 +48,20 @@ statement error
 SET disabled_filesystems='';
 ----
 has been disabled previously
+
+# querying a non-existent catalog or schema should not trigger the disabled filesystem error
+statement error
+SELECT * FROM abc.main.t1;
+----
+Catalog "abc" does not exist
+
+statement error
+SELECT * FROM abc.t1;
+----
+schema "abc" does not exist
+
+# but querying a known extension should still trigger the disabled filesystem error
+statement error
+SELECT * FROM abc.csv;
+----
+File system LocalFileSystem has been disabled by configuration

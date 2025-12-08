@@ -814,6 +814,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			affected += static_cast<int64_t>(chunk->size());
 		}
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
+			auto error_data = duckdb_appender_error_data(appender.Get());
+			SetError(error, duckdb_error_data_message(error_data));
+			duckdb_destroy_error_data(&error_data);
 			return ADBC_STATUS_INTERNAL;
 		}
 		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
@@ -1642,3 +1645,34 @@ AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct
 }
 
 } // namespace duckdb_adbc
+
+static void ReleaseError(struct AdbcError *error) {
+	if (error) {
+		if (error->message)
+			delete[] error->message;
+		error->message = nullptr;
+		error->release = nullptr;
+	}
+}
+
+void SetError(struct AdbcError *error, const std::string &message) {
+	if (!error)
+		return;
+	if (error->message) {
+		// Append
+		std::string buffer = error->message;
+		buffer.reserve(buffer.size() + message.size() + 1);
+		buffer += '\n';
+		buffer += message;
+		error->release(error);
+
+		error->message = new char[buffer.size() + 1];
+		buffer.copy(error->message, buffer.size());
+		error->message[buffer.size()] = '\0';
+	} else {
+		error->message = new char[message.size() + 1];
+		message.copy(error->message, message.size());
+		error->message[message.size()] = '\0';
+	}
+	error->release = ReleaseError;
+}
