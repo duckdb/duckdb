@@ -183,3 +183,25 @@ from (
 ) as sub;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*s.c2.*
+
+query I
+select pack.v2
+from (
+	select {
+		'a': 42,
+		'v2': s.c2,
+		'b': 21
+	} as pack from t2
+) as sub
+----
+2
+
+statement ok
+CREATE VIEW vw as select {'a': 21, 'b': 42, 'c': 84} s
+
+query II
+select s.a, s.c from (
+	select s from vw
+)
+----
+21	84
