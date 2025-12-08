@@ -149,7 +149,9 @@ public:
 	explicit BlockIteratorState(TupleDataCollection &key_data_p, optional_ptr<TupleDataCollection> payload_data_p)
 	    : BlockIteratorStateBase(key_data_p.Count()), current_chunk_idx(DConstants::INVALID_INDEX),
 	      key_data(key_data_p), key_ptrs(FlatVector::GetData<data_ptr_t>(key_scan_state.chunk_state.row_locations)),
-	      payload_data(payload_data_p), keep_pinned(false), pin_payload(false) {
+	      payload_data(payload_data_p),
+	      sort_key_payload_state({key_scan_state.chunk_state, key_data.GetLayout().GetSortKeyType()}),
+	      keep_pinned(false), pin_payload(false) {
 		key_data.InitializeScan(key_scan_state);
 		if (payload_data) {
 			payload_data->InitializeScan(payload_scan_state);
@@ -212,14 +214,7 @@ private:
 				payload_scan_state.pin_state.row_handles.acquire_handles(pins);
 				payload_scan_state.pin_state.heap_handles.acquire_handles(pins);
 			}
-			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, chunk_idx, false);
-			const auto sort_keys = reinterpret_cast<T **const>(key_ptrs);
-			const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_scan_state.chunk_state.row_locations);
-			lock_guard<mutex> guard(*key_scan_state.chunk_state.chunk_lock);
-			for (idx_t i = 0; i < chunk_count; i++) {
-				sort_keys[i]->SetPayload(payload_ptrs[i]);
-				D_ASSERT(GetValueAtIndex<T>(chunk_idx, i).GetPayload() == payload_ptrs[i]);
-			}
+			payload_data->FetchChunk(payload_scan_state, chunk_idx, false, &sort_key_payload_state);
 		}
 	}
 
@@ -232,6 +227,8 @@ private:
 
 	optional_ptr<TupleDataCollection> payload_data;
 	TupleDataScanState payload_scan_state;
+
+	SortKeyPayloadState sort_key_payload_state;
 
 	bool keep_pinned;
 	bool pin_payload;

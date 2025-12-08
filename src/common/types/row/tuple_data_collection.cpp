@@ -571,11 +571,13 @@ void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vect
 	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
-idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap) {
+idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap,
+                                      optional_ptr<SortKeyPayloadState> sort_key_payload_state) {
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &segment = *segments[segment_idx];
 		if (chunk_idx < segment.ChunkCount()) {
-			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
+			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap,
+			                                        sort_key_payload_state);
 			return segment.chunks[chunk_idx]->count;
 		}
 		chunk_idx -= segment.ChunkCount();
