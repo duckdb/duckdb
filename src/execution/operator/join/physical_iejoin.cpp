@@ -227,7 +227,18 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-enum class IEJoinSourceStage : uint8_t { INIT, SINK_L1, MATERIALIZE_L1, SINK_L2, MATERIALIZE_L2, INNER, OUTER, DONE };
+enum class IEJoinSourceStage : uint8_t {
+	INIT,
+	SINK_L1,
+	MATERIALIZE_L1,
+	SINK_L2,
+	FINALIZE_L2,
+	MATERIALIZE_L2,
+	EXTRACT_P,
+	INNER,
+	OUTER,
+	DONE
+};
 
 struct IEJoinSourceTask {
 	using ChunkRange = std::pair<idx_t, idx_t>;
@@ -289,7 +300,7 @@ public:
 	bool TryNextTask(TaskPtr &task, Task &task_local);
 
 	void FinishL1Task();
-	void FinishL2Task();
+	void ExecutePermutationTask(ClientContext &client);
 
 public:
 	idx_t MaxThreads() override;
@@ -834,8 +845,9 @@ void IEJoinGlobalSourceState::FinishL1Task() {
 	li = IEJoinUnion::ExtractColumn<int64_t>(*l1, 1);
 }
 
-void IEJoinGlobalSourceState::FinishL2Task() {
+void IEJoinGlobalSourceState::ExecutePermutationTask(ClientContext &client) {
 	// We don't actually need the L2 column, just its sort key, which is in the sort blocks
+	l2->GetSortedRun(client);
 
 	// 6. compute the permutation array P of L2 w.r.t. L1
 	p = IEJoinUnion::ExtractColumn<idx_t, int64_t>(*l2, 0);
@@ -917,6 +929,8 @@ public:
 	void ExecuteMaterializeL1Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Sort L2
 	void ExecuteSinkL2Task(ExecutionContext &context, InterruptState &interrupt);
+	//	Finalize L2 sort
+	void ExecuteFinalizeL2Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Materialize L2
 	void ExecuteMaterializeL2Task(ExecutionContext &context, InterruptState &interrupt);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
@@ -987,8 +1001,13 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 		case IEJoinSourceStage::SINK_L2:
 			++gsource.GetStageNext(task->stage);
 			break;
+		case IEJoinSourceStage::FINALIZE_L2:
+			++gsource.GetStageNext(task->stage);
+			break;
 		case IEJoinSourceStage::MATERIALIZE_L2:
-			gsource.FinishL2Task();
+			++gsource.GetStageNext(task->stage);
+			break;
+		case IEJoinSourceStage::EXTRACT_P:
 			++gsource.GetStageNext(task->stage);
 			break;
 		case IEJoinSourceStage::INNER:
@@ -1017,7 +1036,9 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	case IEJoinSourceStage::SINK_L1:
 	case IEJoinSourceStage::MATERIALIZE_L1:
 	case IEJoinSourceStage::SINK_L2:
+	case IEJoinSourceStage::FINALIZE_L2:
 	case IEJoinSourceStage::MATERIALIZE_L2:
+	case IEJoinSourceStage::EXTRACT_P:
 		break;
 	case IEJoinSourceStage::INNER:
 		//	The join can hit any block on either side
@@ -1107,8 +1128,13 @@ void IEJoinLocalSourceState::ExecuteSinkL2Task(ExecutionContext &context, Interr
 	task->l_range.first = task->l_range.second;
 }
 
+void IEJoinLocalSourceState::ExecuteFinalizeL2Task(ExecutionContext &context, InterruptState &interrupt) {
+	gsource.l2->Finalize(context.client, interrupt);
+	task->l_range.first = task->l_range.second;
+}
+
 void IEJoinLocalSourceState::ExecuteMaterializeL2Task(ExecutionContext &context, InterruptState &interrupt) {
-	IEJoinUnion::Sort(context, interrupt, *gsource.l2);
+	gsource.l2->MaterializeSortedRun(context, interrupt);
 	task->l_range.first = task->l_range.second;
 }
 
@@ -1126,8 +1152,14 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	case IEJoinSourceStage::SINK_L2:
 		ExecuteSinkL2Task(context, interrupt);
 		break;
+	case IEJoinSourceStage::FINALIZE_L2:
+		ExecuteFinalizeL2Task(context, interrupt);
+		break;
 	case IEJoinSourceStage::MATERIALIZE_L2:
 		ExecuteMaterializeL2Task(context, interrupt);
+		break;
+	case IEJoinSourceStage::EXTRACT_P:
+		gsource.ExecutePermutationTask(context.client);
 		break;
 	case IEJoinSourceStage::INNER:
 		ResolveComplexJoin(context, result);
@@ -1254,7 +1286,13 @@ void IEJoinGlobalSourceState::Initialize() {
 	}
 	stage_tasks.emplace_back(l2_tasks);
 
+	//	FINALIZE_L2
+	stage_tasks.emplace_back(1);
+
 	//	MATERIALIZE_L2
+	stage_tasks.emplace_back(MaxValue<idx_t>(l2_tasks, 1));
+
+	//	EXTRACT_P
 	stage_tasks.emplace_back(1);
 
 	//	INNER
@@ -1306,11 +1344,23 @@ bool IEJoinGlobalSourceState::TryPrepareNextStage() {
 		break;
 	case IEJoinSourceStage::SINK_L2:
 		if (stage_next >= stage_count) {
+			stage = IEJoinSourceStage::FINALIZE_L2;
+			return true;
+		}
+		break;
+	case IEJoinSourceStage::FINALIZE_L2:
+		if (stage_next >= stage_count) {
 			stage = IEJoinSourceStage::MATERIALIZE_L2;
 			return true;
 		}
 		break;
 	case IEJoinSourceStage::MATERIALIZE_L2:
+		if (stage_next >= stage_count) {
+			stage = IEJoinSourceStage::EXTRACT_P;
+			return true;
+		}
+		break;
+	case IEJoinSourceStage::EXTRACT_P:
 		if (stage_next >= stage_count) {
 			stage = IEJoinSourceStage::INNER;
 			return true;
@@ -1409,9 +1459,9 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 		task.l_range.first = MinValue(task.thread_idx * per_thread, l1->BlockCount());
 		task.l_range.second = MinValue(task.l_range.first + per_thread, l1->BlockCount());
 		break;
+	case IEJoinSourceStage::FINALIZE_L2:
 	case IEJoinSourceStage::MATERIALIZE_L2:
-		task.l_range = {0, 1};
-		task.r_range = {0, 0};
+	case IEJoinSourceStage::EXTRACT_P:
 		break;
 	case IEJoinSourceStage::INNER: {
 		task.l_range.first = task.thread_idx * per_thread;

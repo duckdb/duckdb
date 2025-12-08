@@ -86,6 +86,10 @@ public:
 		void Materialize(Pipeline &pipeline, Event &event);
 		//! Single-threaded materialisation.
 		void Materialize(ExecutionContext &context, InterruptState &interrupt);
+		//! Parallel materialisation.
+		void MaterializeSortedRun(ExecutionContext &context, InterruptState &interrupt);
+		//! Parallel materialisation finish.
+		void GetSortedRun(ClientContext &client);
 		//! Materialize an empty sorted run.
 		void MaterializeEmpty(ClientContext &client);
 		//! Print the table to the console
