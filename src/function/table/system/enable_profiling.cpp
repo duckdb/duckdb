@@ -3,11 +3,27 @@
 
 namespace duckdb {
 
+class EnableProfilingBindData : public TableFunctionData {
+public:
+	EnableProfilingBindData()
+	    : format(ProfilerPrintFormat::QUERY_TREE), coverage(ProfilingCoverage::SELECT),
+	      enable_detailed_profiling(false) {
+	}
+
+	ProfilerPrintFormat format;
+	ProfilingCoverage coverage;
+	string save_location;
+	bool enable_detailed_profiling;
+	vector<string> metrics;
+};
+
 static void EnableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 }
 
 static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<EnableProfilingBindData>();
+
 	return nullptr;
 }
 
@@ -28,7 +44,7 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 
 	enable_fun.named_parameters.emplace("format", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("coverage", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("output", LogicalType::VARCHAR);
+	enable_fun.named_parameters.emplace("save_location", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("mode", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("enabled_metrics", LogicalType::ANY);
 
