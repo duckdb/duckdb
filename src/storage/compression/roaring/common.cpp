@@ -86,6 +86,7 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
+	// Fixed: The problem was that an offset was being passed, causing this assert to trigger. Now that offset is 0, this assert doesn't trigger anymore.
 	D_ASSERT(result.Capacity() >= end);
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
@@ -279,7 +280,7 @@ void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row
 	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
 	Vector dummy(LogicalType::UBIGINT, false, false, 1);
-	scan_state.ScanInternal(container_state, 1, dummy, result_idx);
+	scan_state.ScanInternal(container_state, 1, dummy, 0);
 	ExtractValidityMaskToData(dummy, result, result_idx, 1);
 }
 
