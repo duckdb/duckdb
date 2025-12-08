@@ -116,17 +116,21 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 	BoundCaseCheck case_check;
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
 		if (base_expr) {
-			auto max_type = LogicalType::MaxLogicalType(input.context, base_expr->return_type, keys_unpacked[i]->return_type);
-			case_check.when_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-			    base_expr->Copy(), BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), max_type));
+			auto max_type =
+			    LogicalType::MaxLogicalType(input.context, base_expr->return_type, keys_unpacked[i]->return_type);
+			case_check.when_expr = make_uniq<BoundComparisonExpression>(
+			    ExpressionType::COMPARE_EQUAL, base_expr->Copy(),
+			    BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), max_type));
 		} else {
 			case_check.when_expr =
 			    BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), LogicalType::BOOLEAN);
 		}
 		auto then_type = values_unpacked[i]->return_type;
-		if (!LogicalType::TryGetMaxLogicalType(input.context, function_data.return_type, then_type, function_data.return_type)) {
-			throw BinderException("Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
-				function_data.return_type.ToString(), then_type.ToString());
+		if (!LogicalType::TryGetMaxLogicalType(input.context, function_data.return_type, then_type,
+		                                       function_data.return_type)) {
+			throw BinderException(
+			    "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
+			    function_data.return_type.ToString(), then_type.ToString());
 		}
 		case_check.then_expr = std::move(values_unpacked[i]);
 		result->case_checks.push_back(std::move(case_check));
