@@ -40,12 +40,33 @@ public:
 	}
 
 	inline bool operator==(const ColumnIndex &rhs) const {
-		return index == rhs.index;
+		if (index != rhs.index) {
+			return false;
+		}
+		if (type != rhs.type) {
+			return false;
+		}
+		if (index_type != rhs.index_type) {
+			return false;
+		}
+
+		if (child_indexes.size() != rhs.child_indexes.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < child_indexes.size(); i++) {
+			auto &a = child_indexes[i];
+			auto &b = rhs.child_indexes[i];
+			if (a != b) {
+				return false;
+			}
+		}
+		return true;
 	}
 	inline bool operator!=(const ColumnIndex &rhs) const {
-		return index != rhs.index;
+		return !(*this == rhs);
 	}
 	inline bool operator<(const ColumnIndex &rhs) const {
+		//! FIXME: does it make sense to check children here?
 		return index < rhs.index;
 	}
 

@@ -3,13 +3,14 @@
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 
 struct ColumnIndexHashFunction {
 	uint64_t operator()(const ColumnIndex &index) const {
 		auto hasher = std::hash<idx_t>();
-		std::queue<reference<const ColumnIndex>> to_hash;
+		queue<reference<const ColumnIndex>> to_hash;
 
 		hash_t result = 0;
 		to_hash.push(std::ref(index));
@@ -28,28 +29,7 @@ struct ColumnIndexHashFunction {
 
 struct ColumnIndexEquality {
 	bool operator()(const ColumnIndex &a, const ColumnIndex &b) const {
-		std::queue<std::pair<reference<const ColumnIndex>, reference<const ColumnIndex>>> to_check;
-
-		to_check.push(std::make_pair(std::ref(a), std::ref(b)));
-		while (!to_check.empty()) {
-			auto &current = to_check.front();
-			auto &current_a = current.first;
-			auto &current_b = current.second;
-
-			if (current_a.get().GetPrimaryIndex() != current_b.get().GetPrimaryIndex()) {
-				return false;
-			}
-			auto &a_children = current_a.get().GetChildIndexes();
-			auto &b_children = current_b.get().GetChildIndexes();
-			if (a_children.size() != b_children.size()) {
-				return false;
-			}
-			for (idx_t i = 0; i < a_children.size(); i++) {
-				to_check.push(std::make_pair(std::ref(a_children[i]), std::ref(b_children[i])));
-			}
-			to_check.pop();
-		}
-		return true;
+		return a == b;
 	}
 };
 

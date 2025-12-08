@@ -49,7 +49,7 @@ idx_t StructColumnData::GetMaxEntry() {
 }
 
 void StructColumnData::IterateFields(
-    ColumnScanState &state, std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> callback) {
+    ColumnScanState &state, const std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> &callback) {
 	if (state.storage_index.IsPushdownExtract()) {
 		auto &index_children = state.storage_index.GetChildIndexes();
 		D_ASSERT(index_children.size() == 1);

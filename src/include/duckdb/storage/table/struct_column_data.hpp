@@ -28,7 +28,7 @@ public:
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
 	void IterateFields(ColumnScanState &state,
-	                   std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> callback);
+	                   const std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> &callback);
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;

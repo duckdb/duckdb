@@ -486,6 +486,8 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj) {
 	vector<unique_ptr<Expression>> expressions;
 	auto &context = this->context;
+
+	column_index_map<idx_t> new_bindings;
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto binding = ColumnBinding(proj.table_index, i);
 		auto entry = column_references.find(binding);
@@ -501,15 +503,25 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj) {
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		auto original_binding = colref.binding;
 		auto &column_type = expr.return_type;
+		idx_t start = expressions.size();
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
 		    entry->first, entry->second, i, column_type, [&](const ColumnIndex &extract_path) -> idx_t {
 			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
 			    target->SetAlias(expr.GetAlias());
 			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
-			    expressions.push_back(std::move(new_extract));
-			    return expressions.size() - 1;
+			    auto it = new_bindings.emplace(extract_path, expressions.size()).first;
+			    if (it->second == expressions.size()) {
+				    expressions.push_back(std::move(new_extract));
+			    }
+			    return it->second;
 		    });
+		////! Visit the new expressions to create references to the column in the parent
+		// for (; start < expressions.size(); start++) {
+		//	VisitExpression(&expressions[start]);
+		//}
+		////! Drop the old reference, as we've broken it up into smaller ones
+		// column_references.erase(entry);
 	}
 	proj.expressions = std::move(expressions);
 }
@@ -643,9 +655,12 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	ClearUnusedExpressions(col_sel, get.table_index);
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
-	for (auto col_sel_idx : col_sel) {
+	for (idx_t i = 0; i < col_sel.size(); i++) {
+		auto col_sel_idx = col_sel[i];
 		auto &column_type = get.GetColumnType(state.old_column_ids[col_sel_idx]);
-		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
+		//! NOTE: 'column_references' has already been updated, so we need to use the new binding index here (which is
+		//! i)
+		auto entry = column_references.find(ColumnBinding(get.table_index, i));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
@@ -772,14 +787,6 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 	auto index = PathToIndex(indexes);
 	AddBinding(*colref, std::move(index), expressions);
 	return true;
-}
-
-bool BaseColumnPruner::HandleStructPack(Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return false;
-	}
-	auto &function = expr.Cast<BoundFunctionExpression>();
-	return function.function.name == "struct_pack";
 }
 
 void BaseColumnPruner::MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
