@@ -132,7 +132,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				}
 				aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
 			} else {
-				if (bound_children.size() == 0 || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+				if (bound_children.empty() || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 					// No alias and no way to infer target column through first argument
 					throw BinderException(
 					    expr->GetQueryLocation(),
@@ -272,7 +272,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		root->ref_recurring = ref_recurring;
 		root->internal_types = std::move(internal_types);
 		root->payload_aggregates = std::move(payload_aggregates);
-		root->result_types = result.types;
 		result.plan = std::move(root);
 	}
 	return result;

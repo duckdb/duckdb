@@ -1036,7 +1036,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 					setop.key_targets.push_back(std::move(colref));
 				}
 				setop.internal_types.push_back(correlated_columns[i].type);
-				setop.result_types.push_back(correlated_columns[i].type);
 			}
 		}
 

@@ -35,7 +35,7 @@ public:
 	bool ref_recurring;
 	vector<unique_ptr<Expression>> key_targets;
 	vector<unique_ptr<Expression>> payload_aggregates;
-	vector<LogicalType> internal_types, result_types;
+	vector<LogicalType> internal_types;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -52,7 +52,25 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = !payload_aggregates.empty() ? result_types : children[0]->types;
+		types = children[0]->types;
+
+		if (payload_aggregates.empty()) {
+			return;
+		}
+
+		unordered_set<idx_t> key_idx;
+		for (auto &key_target : key_targets) {
+			D_ASSERT(key_target->type == ExpressionType::BOUND_COLUMN_REF);
+			auto &bound_ref = key_target->Cast<BoundColumnRefExpression>();
+			key_idx.insert(bound_ref.binding.column_index);
+		}
+
+		idx_t pay_idx = 0;
+		for (idx_t i = 0; i < types.size(); ++i) {
+			if (key_idx.find(i) == key_idx.end()) {
+				types[i] = payload_aggregates[pay_idx++]->return_type;
+			}
+		}
 	}
 };
 } // namespace duckdb
