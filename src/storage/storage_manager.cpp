@@ -17,6 +17,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
@@ -79,8 +80,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 }
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
-    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY),
-      in_memory_change_size(0) {
+    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY), wal_size(0) {
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 		return;
@@ -110,10 +110,15 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	if (InMemory() || wal->GetDatabase().GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
-		return in_memory_change_size.load();
-	}
-	return wal->GetWALSize();
+	return wal_size;
+}
+
+void StorageManager::AddWALSize(idx_t size) {
+	wal_size += size;
+}
+
+void StorageManager::SetWALSize(idx_t size) {
+	wal_size = size;
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -123,24 +128,115 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	return wal.get();
 }
 
-void StorageManager::ResetWAL() {
-	wal->Delete();
+bool StorageManager::HasWAL() const {
+	if (InMemory() || read_only || !load_complete) {
+		return false;
+	}
+	return true;
 }
 
-string StorageManager::GetWALPath() const {
+bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
+	lock_guard<mutex> guard(wal_lock);
+	// while holding the WAL lock - get the last committed transaction from the transaction manager
+	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
+	// any new commits made will be written to the next wal
+	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
+	options.transaction_id = transaction_manager.GetNewCheckpointId();
+
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
+	if (!wal) {
+		return false;
+	}
+	// start the checkpoint process around the WAL
+	if (GetWALSize() == 0) {
+		// no WAL - we don't need to do anything here
+		return false;
+	}
+	// verify the main WAL is the active WAL currently
+	if (wal->GetPath() != wal_path) {
+		throw InternalException("Current WAL path %s does not match base WAL path %s in WALStartCheckpoint",
+		                        wal->GetPath(), wal_path);
+	}
+	// write to the main WAL that we have initiated a checkpoint
+	wal->WriteCheckpoint(meta_block);
+	wal->Flush();
+
+	// close the main WAL
+	wal.reset();
+
+	// replace the WAL with a new WAL (.checkpoint.wal) that transactions can write to while the checkpoint is happening
+	// we don't eagerly write to this WAL - we just instantiate it here so it can be written to
+	// if a checkpoint WAL already exists - delete it before proceeding
+	auto checkpoint_wal_path = GetCheckpointWALPath();
+	auto &fs = FileSystem::Get(db);
+	fs.TryRemoveFile(checkpoint_wal_path);
+
+	// the checkpoint WAL belongs to the NEXT checkpoint - when we are done we will overwrite the current WAL with it
+	// as such override the checkpoint iteration number to the next one
+	auto &single_file_block_manager = GetBlockManager().Cast<SingleFileBlockManager>();
+	auto next_checkpoint_iteration = single_file_block_manager.GetCheckpointIteration() + 1;
+	wal = make_uniq<WriteAheadLog>(*this, checkpoint_wal_path, 0ULL, WALInitState::NO_WAL, next_checkpoint_iteration);
+	return true;
+}
+
+void StorageManager::WALFinishCheckpoint() {
+	lock_guard<mutex> guard(wal_lock);
+	D_ASSERT(wal.get());
+
+	// "wal" points to the checkpoint WAL
+	// first check if the checkpoint WAL has been written to
+	auto &fs = FileSystem::Get(db);
+	if (!wal->Initialized()) {
+		// the checkpoint WAL has not been written to
+		// this is the common scenario if there are no concurrent writes happening while checkpointing
+		// in this case we can just remove the main WAL and re-instantiate it to empty
+		fs.TryRemoveFile(wal_path);
+
+		wal = make_uniq<WriteAheadLog>(*this, wal_path);
+		return;
+	}
+
+	// we have had writes to the checkpoint WAL - we need to override our WAL with the checkpoint WAL
+	// first close the WAL writer
+	auto checkpoint_wal_path = wal->GetPath();
+	wal.reset();
+
+	// move the secondary WAL over the main WAL
+	fs.MoveFile(checkpoint_wal_path, wal_path);
+
+	// open what is now the main WAL again
+	wal = make_uniq<WriteAheadLog>(*this, wal_path);
+	wal->Initialize();
+
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
+}
+
+unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
+	return make_uniq<lock_guard<mutex>>(wal_lock);
+}
+
+string StorageManager::GetWALPath(const string &suffix) {
 	// we append the ".wal" **before** a question mark in case of GET parameters
 	// but only if we are not in a windows long path (which starts with \\?\)
 	std::size_t question_mark_pos = std::string::npos;
 	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
 		question_mark_pos = path.find('?');
 	}
-	auto wal_path = path;
+	auto result = path;
 	if (question_mark_pos != std::string::npos) {
-		wal_path.insert(question_mark_pos, ".wal");
+		result.insert(question_mark_pos, suffix);
 	} else {
-		wal_path += ".wal";
+		result += suffix;
 	}
-	return wal_path;
+	return result;
+}
+
+string StorageManager::GetCheckpointWALPath() {
+	return GetWALPath(".checkpoint.wal");
+}
+
+string StorageManager::GetRecoveryWALPath() {
+	return GetWALPath(".recovery.wal");
 }
 
 bool StorageManager::InMemory() const {
@@ -250,7 +346,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// file does not exist and we are in read-write mode
 		// create a new file
 
-		auto wal_path = GetWALPath();
+		wal_path = GetWALPath();
 		// try to remove the WAL file if it exists
 		fs.TryRemoveFile(wal_path);
 
@@ -285,7 +381,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
-		wal = make_uniq<WriteAheadLog>(db, wal_path);
+		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
@@ -334,11 +430,13 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
+		unique_ptr<ActiveTimer> timer = nullptr;
+
 		// Start timing the storage load step.
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
 		}
 
 		// Load the checkpoint from storage.
@@ -346,25 +444,24 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		checkpoint_reader.LoadFromStorage();
 
 		// End timing the storage load step.
-		if (client_context) {
-			auto profiler = client_context->client_data->profiler;
-			profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		if (timer) {
+			timer->EndTimer();
+			timer = nullptr;
 		}
 
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY));
 		}
 
 		// Replay the WAL.
-		auto wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
+		wal_path = GetWALPath();
+		wal = WriteAheadLog::Replay(context, *this, wal_path);
 
 		// End timing the WAL replay step.
-		if (client_context) {
-			auto profiler = client_context->client_data->profiler;
-			profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		if (timer) {
+			timer->EndTimer();
 		}
 	}
 
@@ -427,8 +524,15 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 		return;
 	}
 	try {
-		// truncate the WAL in case of a destructor
+		// Truncate the WAL in case of a destructor.
 		RevertCommit();
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		try {
+			DUCKDB_LOG_ERROR(wal.GetDatabase().GetDatabase(),
+			                 "SingleFileStorageCommitState::~SingleFileStorageCommitState()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
 	} catch (...) { // NOLINT
 	}
 }
@@ -503,9 +607,9 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(QueryContext context,
                                                                               CheckpointOptions options) {
 	if (InMemory()) {
-		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options.type);
+		return make_uniq<InMemoryCheckpointer>(context, db, *block_manager, *this, options);
 	}
-	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options.type);
+	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
 }
 
 void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
@@ -524,28 +628,17 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
 			if (client_context) {
-				auto profiler = client_context->client_data->profiler;
-				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
+				auto profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
 
-			// End timing the checkpoint.
-			if (client_context) {
-				auto profiler = client_context->client_data->profiler;
-				profiler->EndTimer(MetricsType::CHECKPOINT_LATENCY);
-			}
-
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
+			throw FatalException("Failed to create checkpoint because of error: %s", error.Message());
 		}
-	}
-
-	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
-		ResetWAL();
 	}
 
 	if (db.GetStorageExtension()) {

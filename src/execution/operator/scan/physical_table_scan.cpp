@@ -156,8 +156,8 @@ static void ValidateAsyncStrategyResult(const PhysicalTableScanExecutionStrategy
 	}
 }
 
-SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSourceInput &input) const {
+SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                    OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
 	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
@@ -291,6 +291,33 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 	}
 }
 
+static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<TableFilterSet> &filter_set) {
+	string filters_info;
+	bool first_item = true;
+	for (auto &f : filter_set->filters) {
+		auto &column_index = f.first;
+		auto &filter = f.second;
+		if (column_index < scan->names.size()) {
+			if (!first_item) {
+				filters_info += "\n";
+			}
+			first_item = false;
+
+			const auto col_id = scan->column_ids[column_index].GetPrimaryIndex();
+			if (IsVirtualColumn(col_id)) {
+				auto entry = scan->virtual_columns.find(col_id);
+				if (entry == scan->virtual_columns.end()) {
+					throw InternalException("Virtual column not found");
+				}
+				filters_info += filter->ToString(entry->second.name);
+			} else {
+				filters_info += filter->ToString(scan->names[col_id]);
+			}
+		}
+	}
+	return filters_info;
+}
+
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
@@ -317,31 +344,13 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		result["Projections"] = projections;
 	}
 	if (function.filter_pushdown && table_filters) {
-		string filters_info;
-		bool first_item = true;
-		for (auto &f : table_filters->filters) {
-			auto &column_index = f.first;
-			auto &filter = f.second;
-			if (column_index < names.size()) {
-				if (!first_item) {
-					filters_info += "\n";
-				}
-				first_item = false;
-
-				const auto col_id = column_ids[column_index].GetPrimaryIndex();
-				if (IsVirtualColumn(col_id)) {
-					auto entry = virtual_columns.find(col_id);
-					if (entry == virtual_columns.end()) {
-						throw InternalException("Virtual column not found");
-					}
-					filters_info += filter->ToString(entry->second.name);
-				} else {
-					filters_info += filter->ToString(names[col_id]);
-				}
-			}
-		}
-		result["Filters"] = filters_info;
+		result["Filters"] = GetFilterInfo(this, table_filters);
 	}
+
+	if (function.filter_pushdown && dynamic_filters && dynamic_filters->HasFilters()) {
+		result["Dynamic Filters"] = GetFilterInfo(this, dynamic_filters->GetFinalTableFilters(*this, nullptr));
+	}
+
 	if (extra_info.sample_options) {
 		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
 	}

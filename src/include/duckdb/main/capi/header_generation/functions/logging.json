@@ -1,0 +1,121 @@
+{
+  "group": "logging",
+  "deprecated": false,
+  "description": "Functions exposing the log storage, which allows the configuration of a custom logger. This API is not yet ready to be stabilized.",
+  "entries": [
+    {
+      "name": "duckdb_create_log_storage",
+      "return_type": "duckdb_log_storage",
+      "comment": {
+        "description": "Creates a new log storage object.\n\n",
+        "return_value": "A log storage object. Must be destroyed with `duckdb_destroy_log_storage`."
+      }
+    },
+    {
+      "name": "duckdb_destroy_log_storage",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage *",
+          "name": "log_storage"
+        }
+      ],
+      "comment": {
+        "description": "Destroys a log storage object.\n\n",
+        "param_comments": {
+          "log_storage": "The log storage object to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_log_storage_set_write_log_entry",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage",
+          "name": "log_storage"
+        },
+        {
+          "type": "duckdb_logger_write_log_entry_t",
+          "name": "function"
+        }
+      ],
+      "comment": {
+        "description": "Sets the callback function for writing log entries.\n\n",
+        "param_comments": {
+          "log_storage": "The log storage object.",
+          "function": "The function to call."
+        }
+      }
+    },
+    {
+      "name": "duckdb_log_storage_set_extra_data",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage",
+          "name": "log_storage"
+        },
+        {
+          "type": "void *",
+          "name": "extra_data"
+        },
+        {
+          "type": "duckdb_delete_callback_t",
+          "name": "delete_callback"
+        }
+      ],
+      "comment": {
+        "description": "Sets the extra data of the custom log storage.\n\n",
+        "param_comments": {
+          "log_storage": "The log storage object.",
+          "extra_data": "The extra data that is passed back into the callbacks.",
+          "delete_callback": "The delete callback to call on the extra data, if any."
+        }
+      }
+    },
+    {
+      "name": "duckdb_log_storage_set_name",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage",
+          "name": "log_storage"
+        },
+        {
+          "type": "const char *",
+          "name": "name"
+        }
+      ],
+      "comment": {
+        "description": "Sets the name of the log storage.\n\n",
+        "param_comments": {
+          "log_storage": "The log storage object.",
+          "name": "The name of the log storage."
+        }
+      }
+    },
+    {
+      "name": "duckdb_register_log_storage",
+      "return_type": "duckdb_state",
+      "params": [
+        {
+          "type": "duckdb_database",
+          "name": "database"
+        },
+        {
+          "type": "duckdb_log_storage",
+          "name": "log_storage"
+        }
+      ],
+      "comment": {
+        "description": "Registers a custom log storage for the logger.\n\n",
+        "param_comments": {
+          "database": "A database object.",
+          "log_storage": "The log storage object."
+        },
+        "return_value": "Whether the registration was successful."
+      }
+    }
+  ]
+}

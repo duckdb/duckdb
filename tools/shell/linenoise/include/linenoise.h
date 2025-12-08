@@ -47,6 +47,13 @@ typedef struct _linenoiseCompletions {
 extern "C" {
 #endif
 
+enum linenoiseTerminalColorMode {
+	LINENOISE_UNKNOWN_MODE = 0,
+	LINENOISE_DARK_MODE = 1,
+	LINENOISE_LIGHT_MODE = 2,
+	LINENOISE_MIXED_MODE = 3
+};
+
 typedef void(linenoiseCompletionCallback)(const char *, linenoiseCompletions *);
 typedef char *(linenoiseHintsCallback)(const char *, int *color, int *bold);
 typedef void(linenoiseFreeHintsCallback)(void *);
@@ -54,7 +61,7 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *);
 void linenoiseSetHintsCallback(linenoiseHintsCallback *);
 void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *);
 void linenoiseAddCompletion(linenoiseCompletions *, const char *line, const char *completion, size_t nCompletion,
-                            size_t completion_start, const char *completion_type);
+                            size_t completion_start, const char *completion_type, size_t score, char extra_char);
 
 char *linenoise(const char *prompt);
 void linenoiseFree(void *ptr);
@@ -69,6 +76,7 @@ void linenoiseSetCompletionRendering(int enabled);
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len);
 int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected);
+int linenoiseGetTerminalColorMode();
 
 #ifdef __cplusplus
 }

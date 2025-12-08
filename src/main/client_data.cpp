@@ -35,31 +35,58 @@ private:
 //! ClientBufferManager wraps the buffer manager to optionally forward the client context.
 class ClientBufferManager : public BufferManager {
 public:
-	explicit ClientBufferManager(BufferManager &buffer_manager_p) : buffer_manager(buffer_manager_p) {
+	explicit ClientBufferManager(ClientContext &context_p, BufferManager &buffer_manager_p)
+	    : context(context_p), buffer_manager(buffer_manager_p) {
 	}
 
 public:
 	shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
-		return buffer_manager.AllocateTemporaryMemory(tag, block_size, can_destroy);
+		auto result = buffer_manager.AllocateTemporaryMemory(tag, block_size, can_destroy);
+		// Track allocation based on actual allocated size from the handle
+		if (result) {
+			TrackMemoryAllocation(result->GetMemoryUsage());
+		}
+		return result;
 	}
 	shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
 	                                       bool can_destroy = true) override {
-		return buffer_manager.AllocateMemory(tag, block_manager, can_destroy);
+		auto result = buffer_manager.AllocateMemory(tag, block_manager, can_destroy);
+		// Track allocation based on actual allocated size from the handle
+		if (result) {
+			TrackMemoryAllocation(result->GetMemoryUsage());
+		}
+		return result;
 	}
 	BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
-		return buffer_manager.Allocate(tag, block_size, can_destroy);
+		auto result = buffer_manager.Allocate(tag, block_size, can_destroy);
+		// Track allocation based on actual allocated size from the handle
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemoryUsage());
+		}
+		return result;
 	}
 	BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) override {
-		return buffer_manager.Allocate(tag, block_manager, can_destroy);
+		auto result = buffer_manager.Allocate(tag, block_manager, can_destroy);
+		// Track allocation based on actual allocated size from the handle
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemoryUsage());
+		}
+		return result;
 	}
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) override {
-		return buffer_manager.ReAllocate(handle, block_size);
+		// Track the difference in size (new size - old size)
+		idx_t old_size = handle->GetMemoryUsage();
+		buffer_manager.ReAllocate(handle, block_size);
+		idx_t new_size = handle->GetMemoryUsage();
+		if (new_size > old_size) {
+			TrackMemoryAllocation(new_size - old_size);
+		}
 	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
 		return Pin(QueryContext(), handle);
 	}
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) override {
-		return buffer_manager.Pin(handle);
+		return buffer_manager.Pin(context, handle);
 	}
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
 		return buffer_manager.Prefetch(handles);
@@ -91,13 +118,19 @@ public:
 	}
 
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) override {
-		return buffer_manager.RegisterTransientMemory(size, block_manager);
+		auto result = buffer_manager.RegisterTransientMemory(size, block_manager);
+		TrackMemoryAllocation(size);
+		return result;
 	}
 	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size) override {
-		return buffer_manager.RegisterSmallMemory(size);
+		auto result = buffer_manager.RegisterSmallMemory(size);
+		TrackMemoryAllocation(size);
+		return result;
 	}
 	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size) override {
-		return buffer_manager.RegisterSmallMemory(tag, size);
+		auto result = buffer_manager.RegisterSmallMemory(tag, size);
+		TrackMemoryAllocation(size);
+		return result;
 	}
 
 	Allocator &GetBufferAllocator() override {
@@ -170,6 +203,16 @@ public:
 	}
 
 private:
+	void TrackMemoryAllocation(idx_t size) const {
+		if (size > 0) {
+			auto &profiler = QueryProfiler::Get(context);
+			// Track allocations even if profiler isn't running yet - they'll be included when the query starts
+			// AddToCounter already checks IsEnabled(), so we don't need to check here
+			profiler.AddToCounter(MetricType::TOTAL_MEMORY_ALLOCATED, size);
+		}
+	}
+
+	ClientContext &context;
 	BufferManager &buffer_manager;
 };
 
@@ -182,7 +225,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
-	client_buffer_manager = make_uniq<ClientBufferManager>(db.GetBufferManager());
+	client_buffer_manager = make_uniq<ClientBufferManager>(context, db.GetBufferManager());
 
 	temporary_objects->Initialize();
 }

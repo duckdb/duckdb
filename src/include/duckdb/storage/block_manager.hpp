@@ -48,10 +48,14 @@ public:
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
 	virtual block_id_t PeekFreeBlockId() = 0;
+	//! Returns the next free block id and immediately include it in the checkpoint
+	// Equivalent to calling GetFreeBlockId() followed by MarkBlockAsCheckpointed
+	virtual block_id_t GetFreeBlockIdForCheckpoint() = 0;
+
 	//! Returns whether or not a specified block is the root block
 	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
-	//! Mark a block as "free"; free blocks are immediately added to the free list and can be immediately overwritten
-	virtual void MarkBlockAsFree(block_id_t block_id) = 0;
+	//! Mark a block as included in the next checkpoint
+	virtual void MarkBlockACheckpointed(block_id_t block_id) = 0;
 	//! Mark a block as "used"; either the block is removed from the free list, or the reference count is incremented
 	virtual void MarkBlockAsUsed(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is
@@ -112,7 +116,7 @@ public:
 
 	void UnregisterBlock(BlockHandle &block);
 	//! UnregisterBlock, only accepts non-temporary block ids
-	void UnregisterBlock(block_id_t id);
+	virtual void UnregisterBlock(block_id_t id);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
@@ -161,6 +165,9 @@ public:
 	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
 
+protected:
+	bool BlockIsRegistered(block_id_t block_id);
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -189,4 +196,11 @@ private:
 	//! Default to default_block_header_size for file-backed block managers.
 	optional_idx block_header_size;
 };
+
+struct BlockIdVisitor {
+	virtual ~BlockIdVisitor() = default;
+
+	virtual void Visit(block_id_t block_id) = 0;
+};
+
 } // namespace duckdb

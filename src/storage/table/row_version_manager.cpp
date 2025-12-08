@@ -10,7 +10,7 @@ namespace duckdb {
 RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
     : allocator(STANDARD_VECTOR_SIZE * sizeof(transaction_t), buffer_manager_p.GetTemporaryBlockManager(),
                 MemoryTag::BASE_TABLE),
-      has_changes(false) {
+      has_unserialized_changes(false) {
 }
 
 idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
@@ -34,6 +34,53 @@ optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 		return nullptr;
 	}
 	return vector_info[vector_idx].get();
+}
+
+bool RowVersionManager::ShouldCheckpointRowGroup(transaction_t checkpoint_id, idx_t count) {
+	lock_guard<mutex> l(version_lock);
+	TransactionData checkpoint_transaction(checkpoint_id, checkpoint_id);
+
+	idx_t total_count = 0;
+	for (idx_t read_count = 0, vector_idx = 0; read_count < count; read_count += STANDARD_VECTOR_SIZE, vector_idx++) {
+		idx_t max_count = MinValue<idx_t>(count - read_count, STANDARD_VECTOR_SIZE);
+		idx_t checkpoint_count;
+		auto chunk_info = GetChunkInfo(vector_idx);
+		if (!chunk_info) {
+			checkpoint_count = max_count;
+		} else {
+			checkpoint_count = chunk_info->GetCheckpointRowCount(checkpoint_transaction, max_count);
+		}
+		if (checkpoint_count == 0) {
+			continue;
+		}
+		if (total_count != read_count) {
+			string chunk_info_text;
+			for (idx_t i = 0; i <= vector_idx; i++) {
+				auto current_info = GetChunkInfo(i);
+				chunk_info_text += "\n";
+				chunk_info_text += to_string(i) + ": ";
+				if (current_info) {
+					chunk_info_text += current_info->ToString(max_count);
+				} else {
+					chunk_info_text += "(empty)";
+				}
+			}
+			throw InternalException(
+			    "Error in RowGroup::GetCheckpointRowCount - insertions are not sequential - at vector idx %d found %d "
+			    "rows, where we have already obtained %d from the total %d, transaction start time %d%s",
+			    vector_idx, checkpoint_count, total_count, read_count, checkpoint_id, chunk_info_text);
+		}
+		total_count += checkpoint_count;
+	}
+	if (total_count == 0) {
+		return false;
+	}
+	if (total_count != count) {
+		throw InternalException("RowGroup::GetCheckpointRowCount returned a partially checkpointed entry (checkpoint "
+		                        "count %d, row group count %d)",
+		                        total_count, count);
+	}
+	return true;
 }
 
 idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
@@ -79,7 +126,7 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
                                           idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
-	has_changes = true;
+	has_unserialized_changes = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 
@@ -132,6 +179,7 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		auto &info = *vector_info[vector_idx];
+		D_ASSERT(has_unserialized_changes);
 		info.CommitAppend(commit_id, vstart, vend);
 	}
 }
@@ -158,10 +206,12 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		}
 		auto &info = *vector_info[vector_idx];
 		// if we wrote the entire chunk info try to compress it
-		unique_ptr<ChunkInfo> new_info;
-		auto cleanup = info.Cleanup(lowest_active_transaction, new_info);
+		auto cleanup = info.Cleanup(lowest_active_transaction);
 		if (cleanup) {
-			vector_info[vector_idx] = std::move(new_info);
+			if (info.HasDeletes()) {
+				has_unserialized_changes = true;
+			}
+			vector_info[vector_idx].reset();
 		}
 	}
 }
@@ -170,6 +220,7 @@ void RowVersionManager::RevertAppend(idx_t new_count) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (new_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
+		D_ASSERT(has_unserialized_changes);
 		vector_info[vector_idx].reset();
 	}
 }
@@ -192,19 +243,19 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
-	has_changes = true;
+	has_unserialized_changes = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
-	has_changes = true;
+	has_unserialized_changes = true;
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
 vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
-	if (!has_changes && !storage_pointers.empty()) {
-		// the row version manager already exists on disk and no changes were made
+	lock_guard<mutex> lock(version_lock);
+	if (!has_unserialized_changes) {
 		// we can write the current pointer as-is
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
@@ -223,24 +274,23 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 		}
 		to_serialize.emplace_back(vector_idx, *chunk_info);
 	}
-	if (to_serialize.empty()) {
-		return vector<MetaBlockPointer>();
-	}
 
 	storage_pointers.clear();
 
-	MetadataWriter writer(manager, &storage_pointers);
-	// now serialize the actual version information
-	writer.Write<idx_t>(to_serialize.size());
-	for (auto &entry : to_serialize) {
-		auto &vector_idx = entry.first;
-		auto &chunk_info = entry.second.get();
-		writer.Write<idx_t>(vector_idx);
-		chunk_info.Write(writer);
+	if (!to_serialize.empty()) {
+		MetadataWriter writer(manager, &storage_pointers);
+		// now serialize the actual version information
+		writer.Write<idx_t>(to_serialize.size());
+		for (auto &entry : to_serialize) {
+			auto &vector_idx = entry.first;
+			auto &chunk_info = entry.second.get();
+			writer.Write<idx_t>(vector_idx);
+			chunk_info.Write(writer);
+		}
+		writer.Flush();
 	}
-	writer.Flush();
 
-	has_changes = false;
+	has_unserialized_changes = false;
 	return storage_pointers;
 }
 
@@ -264,8 +314,19 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		version_info->FillVectorInfo(vector_index);
 		version_info->vector_info[vector_index] = ChunkInfo::Read(version_info->GetAllocator(), source);
 	}
-	version_info->has_changes = false;
+	version_info->has_unserialized_changes = false;
 	return version_info;
+}
+
+bool RowVersionManager::HasUnserializedChanges() {
+	lock_guard<mutex> lock(version_lock);
+	return has_unserialized_changes;
+}
+
+vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
+	lock_guard<mutex> lock(version_lock);
+	D_ASSERT(!has_unserialized_changes);
+	return storage_pointers;
 }
 
 } // namespace duckdb

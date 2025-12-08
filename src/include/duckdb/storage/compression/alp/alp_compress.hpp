@@ -37,7 +37,7 @@ public:
 		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
-		state.best_k_combinations = analyze_state->state.best_k_combinations;
+		compression_data.best_k_combinations = analyze_state->compression_data.best_k_combinations;
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -54,10 +54,10 @@ public:
 	data_ptr_t metadata_ptr; // Reverse pointer to the next free spot for the metadata; used in decoding to SKIP vectors
 	uint32_t next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 
-	T input_vector[AlpConstants::ALP_VECTOR_SIZE];
+	T input_vector[AlpConstants::ALP_VECTOR_SIZE]; // Uncompressed data
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
 
-	alp::AlpCompressionState<T, false> state;
+	alp::AlpCompressionData<T, false> compression_data;
 
 public:
 	// Returns the space currently used in the segment (in bytes)
@@ -65,19 +65,10 @@ public:
 		return AlpConstants::METADATA_POINTER_SIZE + data_bytes_used;
 	}
 
-	// Returns the required space to store the newly compressed vector
-	idx_t RequiredSpace() {
-		idx_t required_space =
-		    state.bp_size + (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
-		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
-		return required_space;
-	}
-
-	bool HasEnoughSpace() {
+	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace())) >=
+		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -85,7 +76,7 @@ public:
 	}
 
 	void ResetVector() {
-		state.Reset();
+		compression_data.Reset();
 	}
 
 	void CreateEmptySegment() {
@@ -110,57 +101,101 @@ public:
 		if (nulls_idx) {
 			alp::AlpUtils::FindAndReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
 		}
-		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, state);
+		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx,
+		                                        compression_data);
+		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_idx;
+		const idx_t compressed_size = compression_data.RequiredSpace();
+
+		const auto storage_version = checkpoint_data.GetStorageManager().GetStorageVersion();
+		const bool should_compress = compressed_size < uncompressed_size || storage_version < 7;
+
+		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
+
 		//! Check if the compressed vector fits on current segment
-		if (!HasEnoughSpace()) {
+		if (!HasEnoughSpace(vector_size)) {
 			FlushSegment();
 			CreateEmptySegment();
 		}
 
+		if (nulls_idx) {
+			current_segment->stats.statistics.SetHasNullFast();
+		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
+			current_segment->stats.statistics.SetHasNoNullFast();
 			for (idx_t i = 0; i < vector_idx; i++) {
 				current_segment->stats.statistics.UpdateNumericStats<T>(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;
-		FlushVector();
+
+		if (should_compress) {
+			FlushCompressedVector();
+		} else {
+			FlushUncompressedVector();
+		}
 	}
 
 	// Stores the vector and its metadata
-	void FlushVector() {
-		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
+	void FlushCompressedVector() {
+		Store<uint8_t>(compression_data.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		Store<uint8_t>(state.vector_encoding_indices.factor, data_ptr);
+		Store<uint8_t>(compression_data.vector_encoding_indices.factor, data_ptr);
 		data_ptr += AlpConstants::FACTOR_SIZE;
 
-		Store<uint16_t>(state.exceptions_count, data_ptr);
+		Store<uint16_t>(compression_data.exceptions_count, data_ptr);
 		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		Store<uint64_t>(state.frame_of_reference, data_ptr);
+		Store<uint64_t>(compression_data.frame_of_reference, data_ptr);
 		data_ptr += AlpConstants::FOR_SIZE;
 
-		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(compression_data.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
-		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
+		memcpy((void *)data_ptr, (void *)compression_data.values_encoded, compression_data.bp_size);
 		// We should never go out of bounds in the values_encoded array
-		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
+		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= compression_data.bp_size);
 
-		data_ptr += state.bp_size;
+		data_ptr += compression_data.bp_size;
 
-		if (state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
-			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
-			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
-			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
-			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
+		if (compression_data.exceptions_count > 0) {
+			memcpy((void *)data_ptr, (void *)compression_data.exceptions,
+			       sizeof(EXACT_TYPE) * compression_data.exceptions_count);
+			data_ptr += sizeof(EXACT_TYPE) * compression_data.exceptions_count;
+			memcpy((void *)data_ptr, (void *)compression_data.exceptions_positions,
+			       AlpConstants::EXCEPTION_POSITION_SIZE * compression_data.exceptions_count);
+			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * compression_data.exceptions_count;
 		}
 
-		data_bytes_used += state.bp_size +
-		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
-		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
-		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+		data_bytes_used +=
+		    compression_data.bp_size +
+		    (compression_data.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
+		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+
+		// Write pointer to the vector data (metadata)
+		metadata_ptr -= sizeof(uint32_t);
+		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
+		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
+
+		vectors_flushed++;
+		vector_idx = 0;
+		nulls_idx = 0;
+		ResetVector();
+	}
+
+	// Uncompressed mode
+	void FlushUncompressedVector() {
+		// Store a sentinel value instead of the exponent, signaling the coming data is stored uncompressed.
+		constexpr uint8_t sentinel = AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
+		Store<uint8_t>(sentinel, data_ptr);
+		data_ptr += AlpConstants::EXPONENT_SIZE;
+
+		// Store uncompressed data
+		memcpy(data_ptr, input_vector, sizeof(T) * vector_idx);
+		data_ptr += sizeof(T) * vector_idx;
+
+		data_bytes_used += AlpConstants::EXPONENT_SIZE + (sizeof(T) * vector_idx);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
@@ -220,7 +255,8 @@ public:
 		FlushSegment();
 		current_segment.reset();
 	}
-
+	//! Stages uncompressed input values into fixed-size batches (ALP_VECTOR_SIZE), calling CompressVector() to
+	//! compress and flush each full batch to the segment. Handles nulls and processes arbitrarily large inputs.
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		idx_t values_left_in_data = count;

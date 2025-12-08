@@ -1,0 +1,23 @@
+# name: test/sql/storage/types/variant/extension_types.test
+# group: [variant]
+
+require inet
+
+statement ok
+CREATE TABLE tbl (col VARIANT)
+
+statement ok
+INSERT into tbl select '127.0.0.1'::INET
+
+# FIXME: this works because INET is just a STRUCT under the hood,
+# perhaps we want to throw in the cast if there's an extension type on it?
+query I
+select * from tbl
+----
+{'ip_type': 1, 'address': 2130706433, 'mask': 32}
+
+query I
+select COLUMNS(*)::INET from tbl
+----
+127.0.0.1
+

@@ -1,0 +1,82 @@
+# name: test/optimizer/unused_columns/deliver_child_columns.test
+# description: deliver child columns in RemoveUnusedColumns optimizer
+# group: [unused_columns]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (s struct(c1 varchar, c2 integer));
+
+statement ok
+insert into t values(('c1', 1));
+
+# query1
+statement ok
+create or replace view test as select * from t;
+
+query II
+explain select s.c1 from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s.c1 from test;
+
+# query2
+statement ok
+create or replace view test as select s.c1, s.c2, s from t;
+
+query II
+explain select s.c2, s.c1 from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s.c2, s.c1 from test;
+
+# query3
+statement ok
+create or replace view test as select s s1, s s2 from t;
+
+query II
+explain select s1.c2, s2.c1 from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s1.c2, s2.c1 from test;
+
+# query4
+statement ok
+create or replace view test as select upper(s.c1), s.c2, s from t;
+
+query II
+explain select s.c2, s.c1 from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s.c2, s.c1 from test;
+
+# query5
+statement ok
+create or replace view test as select s.c1, s.c2, s from t;
+
+query II
+explain select s.c2, upper(s.c1) from test;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+
+statement ok
+select s.c2, upper(s.c1) from test;
+
+# query6
+statement ok
+create table t2 (s struct(c1 varchar, c2 integer), c3 integer);
+
+statement ok
+insert into t2 values(('c1', 2), 3);
+
+statement ok
+select struct_extract(pack, 'c3') from (select struct_pack(s:=s, c3:=c3) as pack from t2) as sub;

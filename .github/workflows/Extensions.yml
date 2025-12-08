@@ -14,6 +14,11 @@ on:
         type: string
       run_all:
         type: string
+      # disabling this can result in faster builds, but may run out of space on some runners
+      run_disk_clean_step:
+        type: boolean
+        required: false
+        default: true
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -38,6 +43,11 @@ on:
         type: string
         required: false
         default: 'true'
+      run_disk_clean_step:
+        description: 'Disabling this can result in faster builds, but may run out of space on some runners'
+        type: boolean
+        required: false
+        default: true
   push:
     branches-ignore:
       - 'main'
@@ -156,7 +166,7 @@ jobs:
       exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.git_ref }}
+      override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
@@ -172,7 +182,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.git_ref }}
+      override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
@@ -188,7 +198,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
-      duckdb_ref: ${{ inputs.git_ref }}
+      override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
@@ -247,9 +257,12 @@ jobs:
         - create-extension-repository
 
     steps:
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - uses: actions/download-artifact@v4
         with:
@@ -335,7 +348,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}

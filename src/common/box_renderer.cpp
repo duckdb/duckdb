@@ -1,4 +1,5 @@
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -321,7 +322,7 @@ string BoxRenderer::TruncateValue(const string &value, idx_t column_width, idx_t
 		}
 		// check if this character fits...
 		auto char_size = Utf8Proc::RenderWidth(value.c_str(), value.size(), pos);
-		if (current_render_width + char_size >= column_width) {
+		if (current_render_width + char_size > column_width) {
 			// it doesn't! stop
 			break;
 		}
@@ -566,6 +567,9 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	idx_t chunk_idx = 0;
 	idx_t row_idx = 0;
 	while (row_idx < top_rows) {
+		if (context.IsInterrupted()) {
+			break;
+		}
 		fetch_result.Reset();
 		insert_result.Reset();
 		// fetch the next chunk
@@ -623,6 +627,9 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	row_idx = 0;
 	chunk_idx = result.ChunkCount() - 1;
 	while (row_idx < bottom_rows) {
+		if (context.IsInterrupted()) {
+			break;
+		}
 		fetch_result.Reset();
 		insert_result.Reset();
 		// fetch the next chunk
@@ -686,6 +693,9 @@ list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<Colu
 		row_chunk.SetValue(current_index++, row_index, RenderType(result_types[c]));
 		for (auto &collection : input) {
 			for (auto &chunk : collection.Chunks(column_ids)) {
+				if (context.IsInterrupted()) {
+					break;
+				}
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					row_chunk.SetValue(current_index++, row_index, chunk.GetValue(0, r));
 				}
@@ -1102,23 +1112,40 @@ protected:
 		JSONFormattingResult format_result = JSONFormattingResult::SUCCESS;
 	};
 
-	bool LiteralFits(FormatState &format_state, const string &text) {
+	bool LiteralFits(FormatState &format_state, idx_t render_width) {
 		auto &line_length = format_state.line_length;
-		idx_t render_width = Utf8Proc::RenderWidth(text);
 		if (line_length + render_width > format_state.max_width) {
 			return false;
 		}
 		return true;
 	}
 
-	void AddLiteral(FormatState &format_state, const string &text) {
+	bool LiteralFits(FormatState &format_state, const string &text) {
+		idx_t render_width = Utf8Proc::RenderWidth(text);
+		return LiteralFits(format_state, render_width);
+	}
+
+	void AddLiteral(FormatState &format_state, const string &text, bool skip_adding_if_does_not_fit = false) {
 		auto &result = format_state.result;
 		auto &line_length = format_state.line_length;
+		idx_t render_width = Utf8Proc::RenderWidth(text);
+		if (!LiteralFits(format_state, render_width)) {
+			if (skip_adding_if_does_not_fit) {
+				return;
+			}
+			AddNewline(format_state);
+			if (format_state.format_result != JSONFormattingResult::SUCCESS) {
+				return;
+			}
+		}
 		result += text;
-		line_length += Utf8Proc::RenderWidth(text);
+		line_length += render_width;
 		if (line_length > format_state.max_width) {
 			format_state.format_result = JSONFormattingResult::TOO_WIDE;
 		}
+	}
+	void AddSpace(FormatState &format_state) {
+		AddLiteral(format_state, " ", true);
 	}
 	void AddNewline(FormatState &format_state) {
 		auto &result = format_state.result;
@@ -1126,34 +1153,36 @@ protected:
 		auto &row_count = format_state.row_count;
 		auto &line_length = format_state.line_length;
 		result += '\n';
-		result += string(format_state.indentation_size * depth, ' ');
+		result += string(depth, ' ');
 		row_count++;
 		if (row_count > format_state.max_rows) {
 			format_state.format_result = JSONFormattingResult::TOO_MANY_ROWS;
 			return;
 		}
-		line_length = format_state.indentation_size * depth;
+		line_length = depth;
 		if (line_length > format_state.max_width) {
 			format_state.format_result = JSONFormattingResult::TOO_WIDE;
 		}
 	}
 
-	void FormatComponent(FormatState &format_state, JSONComponent &component, bool inlined) {
+	enum class InlineMode { STANDARD, INLINED_SINGLE_LINE, INLINED_MULTI_LINE };
+
+	void FormatComponent(FormatState &format_state, JSONComponent &component, InlineMode inline_mode) {
 		auto &depth = format_state.depth;
 		auto &line_length = format_state.line_length;
 		auto &max_width = format_state.max_width;
 		auto &c = format_state.component_idx;
 		switch (component.type) {
 		case JSONComponentType::BRACKET_OPEN: {
-			depth++;
+			depth += component.text == "{" ? format_state.indentation_size : 1;
 			AddLiteral(format_state, component.text);
-			if (!inlined) {
+			if (inline_mode == InlineMode::STANDARD) {
 				// not inlined
 				// look forward until the corresponding bracket open - can we inline and not exceed the column width?
 				idx_t peek_depth = 0;
 				idx_t render_size = line_length;
 				idx_t peek_idx;
-				bool inline_bracket = false;
+				InlineMode inline_child_mode = InlineMode::STANDARD;
 				for (peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
 					auto &peek_component = components[peek_idx];
 					if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
@@ -1161,7 +1190,10 @@ protected:
 					} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
 						if (peek_depth == 0) {
 							// close!
-							inline_bracket = render_size + 1 < max_width;
+							if (render_size + 1 < max_width) {
+								// fits within a single line - inline on a single line
+								inline_child_mode = InlineMode::INLINED_SINGLE_LINE;
+							}
 							break;
 						}
 						peek_depth--;
@@ -1172,11 +1204,42 @@ protected:
 						render_size++;
 					}
 				}
-				if (inline_bracket) {
+				if (component.text == "[") {
+					// for arrays - we always inline them UNLESS there are complex objects INSIDE of the bracket
+					// scan forward until the end of the array to figure out if this is true or not
+					for (peek_idx = c + 1; peek_idx < components.size(); peek_idx++) {
+						auto &peek_component = components[peek_idx];
+						peek_depth = 0;
+						if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
+							if (peek_component.text == "{") {
+								// nested structure within the array
+								break;
+							}
+							peek_depth++;
+						}
+						if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
+							if (peek_depth == 0) {
+								inline_child_mode = InlineMode::INLINED_MULTI_LINE;
+								break;
+							}
+							peek_depth--;
+						}
+					}
+				}
+				if (inline_child_mode != InlineMode::STANDARD) {
 					// we can inline! do it
 					for (idx_t inline_idx = c + 1; inline_idx <= peek_idx; inline_idx++) {
 						auto &inline_component = components[inline_idx];
-						FormatComponent(format_state, inline_component, true);
+						if (inline_child_mode == InlineMode::INLINED_MULTI_LINE && inline_idx + 1 <= peek_idx) {
+							auto &next_component = components[inline_idx + 1];
+							if (next_component.type == JSONComponentType::COMMA ||
+							    next_component.type == JSONComponentType::BRACKET_CLOSE) {
+								if (!LiteralFits(format_state, inline_component.text + next_component.text)) {
+									AddNewline(format_state);
+								}
+							}
+						}
+						FormatComponent(format_state, inline_component, inline_child_mode);
 					}
 					c = peek_idx;
 					return;
@@ -1192,21 +1255,22 @@ protected:
 			}
 			break;
 		}
-		case JSONComponentType::BRACKET_CLOSE:
-			depth--;
-			if (!inlined) {
+		case JSONComponentType::BRACKET_CLOSE: {
+			idx_t depth_diff = component.text == "}" ? format_state.indentation_size : 1;
+			if (depth < depth_diff) {
+				// shouldn't happen - but guard against underflows
+				depth = 0;
+			} else {
+				depth -= depth_diff;
+			}
+			if (inline_mode == InlineMode::STANDARD) {
 				AddNewline(format_state);
 			}
 			AddLiteral(format_state, component.text);
 			break;
+		}
 		case JSONComponentType::COMMA:
 		case JSONComponentType::COLON:
-			if (format_state.mode != JSONFormattingMode::STANDARD) {
-				// add a newline if the comma does not fit
-				if (!LiteralFits(format_state, component.text)) {
-					AddNewline(format_state);
-				}
-			}
 			AddLiteral(format_state, component.text);
 			bool always_inline;
 			if (format_state.mode == JSONFormattingMode::COMPACT_HORIZONTAL) {
@@ -1216,8 +1280,8 @@ protected:
 				// in normal processing we always inline colons
 				always_inline = component.type == JSONComponentType::COLON;
 			}
-			if (inlined || always_inline) {
-				AddLiteral(format_state, " ");
+			if (inline_mode != InlineMode::STANDARD || always_inline) {
+				AddSpace(format_state);
 			} else {
 				if (format_state.mode != JSONFormattingMode::STANDARD) {
 					// if we are not inlining in compact mode, try to inline until the next comma
@@ -1249,10 +1313,10 @@ protected:
 					}
 					if (inline_comma) {
 						// we can inline until the next comma! do it
-						AddLiteral(format_state, " ");
+						AddSpace(format_state);
 						for (idx_t inline_idx = c + 1; inline_idx < peek_idx; inline_idx++) {
 							auto &inline_component = components[inline_idx];
-							FormatComponent(format_state, inline_component, true);
+							FormatComponent(format_state, inline_component, InlineMode::INLINED_SINGLE_LINE);
 						}
 						c = peek_idx - 1;
 						return;
@@ -1281,7 +1345,7 @@ protected:
 		                                     format_state.format_result == JSONFormattingResult::SUCCESS;
 		     format_state.component_idx++) {
 			auto &component = components[format_state.component_idx];
-			FormatComponent(format_state, component, false);
+			FormatComponent(format_state, component, InlineMode::STANDARD);
 		}
 
 		if (format_state.format_result != JSONFormattingResult::SUCCESS) {
@@ -1343,6 +1407,10 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
                                                     idx_t max_width) {
 	auto column_count = result_types.size();
+	idx_t row_count = 0;
+	for (auto &collection : collections) {
+		row_count += collection.Count();
+	}
 
 	// prepare all rows for rendering
 	// header / type
@@ -1492,39 +1560,70 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		}
 		if (total_max_shorten_amount >= total_render_length - max_width) {
 			// we can get below the max width by shortening
-			// try to shorten everything by an equivalent percentage
-			// i.e. if we have two long string columns, we would prefer them to both end up as the same size
+			// try to shorten everything to the same size
+			// i.e. if we have one long column and one small column, we would prefer to shorten only the long column
 			idx_t shorten_amount_required = total_render_length - max_width;
-			double percentage_shorten_amount = double(shorten_amount_required) / double(total_max_shorten_amount);
-			D_ASSERT(percentage_shorten_amount >= 0 && percentage_shorten_amount <= 1);
+
+			// map of "shorten amount required -> column index"
+			map<idx_t, vector<idx_t>> shorten_amount_required_map;
+			for (idx_t col_idx = 0; col_idx < max_shorten_amount.size(); col_idx++) {
+				shorten_amount_required_map[max_shorten_amount[col_idx]].push_back(col_idx);
+			}
 			vector<idx_t> actual_shorten_amounts;
-			idx_t total_shorten_amount = 0;
-			for (auto &shorten_amount : max_shorten_amount) {
-				if (shorten_amount == 0) {
-					actual_shorten_amounts.push_back(0);
-					continue;
-				}
-				idx_t new_shorten_amount =
-				    static_cast<idx_t>(percentage_shorten_amount * LossyNumericCast<double>(shorten_amount));
-				actual_shorten_amounts.push_back(new_shorten_amount);
-				total_shorten_amount += new_shorten_amount;
-			}
-			D_ASSERT(total_shorten_amount <= shorten_amount_required);
-			if (total_shorten_amount < shorten_amount_required) {
-				// because of floating point truncation we might not get exactly enough shortening
-				// ensure we
-				idx_t remaining_shorten_amount = shorten_amount_required - total_shorten_amount;
-				for (idx_t c = 0; c < actual_shorten_amounts.size() && remaining_shorten_amount > 0; c++) {
-					idx_t possible_extra_shortening = max_shorten_amount[c] - actual_shorten_amounts[c];
-					if (possible_extra_shortening == 0) {
-						continue;
+			actual_shorten_amounts.resize(max_shorten_amount.size());
+
+			while (shorten_amount_required > 0) {
+				// find the columns with the longest width
+				auto entry = shorten_amount_required_map.rbegin();
+				auto largest_width = entry->first;
+				auto &column_list = entry->second;
+				// shorten these columns to the next-shortest width
+				// move to the second-largest entry - this is the target entry
+				entry++;
+				auto second_largest_width =
+				    entry == shorten_amount_required_map.rend() ? config.max_col_width : entry->first;
+				auto max_shorten_width = largest_width - second_largest_width;
+				D_ASSERT(max_shorten_width > 0);
+
+				auto total_potential_shorten_width = max_shorten_width * column_list.size();
+				if (total_potential_shorten_width >= shorten_amount_required) {
+					// we can reach the shorten amount required just by shortening this set of columns
+					// shorten the columns equally
+					idx_t shorten_amount_per_column = shorten_amount_required / column_list.size();
+					for (auto &column_idx : column_list) {
+						actual_shorten_amounts[column_idx] += shorten_amount_per_column;
 					}
-					idx_t extra_shortening = MinValue<idx_t>(remaining_shorten_amount, possible_extra_shortening);
-					remaining_shorten_amount -= extra_shortening;
-					actual_shorten_amounts[c] += extra_shortening;
+					shorten_amount_required -= shorten_amount_per_column * column_list.size();
+
+					// because of truncation, we might still need to shorten columns by a single unit
+					for (idx_t i = column_list.size(); i > 0 && shorten_amount_required > 0; i--) {
+						actual_shorten_amounts[column_list[i - 1]]++;
+						shorten_amount_required--;
+					}
+					if (shorten_amount_required != 0) {
+						throw InternalException("Shorten amount required has tob e zero now");
+					}
+
+					// we are now done
+					break;
 				}
-				D_ASSERT(remaining_shorten_amount == 0);
+				if (entry == shorten_amount_required_map.rend()) {
+					throw InternalException(
+					    "ColumnRenderer - we could not reach the shorten amount required but we ran out of columns?");
+				}
+				// we need to shorten all columns to the width of the next-largest column
+				for (auto &column_idx : column_list) {
+					actual_shorten_amounts[column_idx] += max_shorten_width;
+				}
+				// add all columns to the second-largest list of columns
+				auto &second_largest_column_list = entry->second;
+				second_largest_column_list.insert(second_largest_column_list.end(), column_list.begin(),
+				                                  column_list.end());
+				// delete this entry from the shorten map and continue
+				shorten_amount_required_map.erase(largest_width);
+				shorten_amount_required -= total_potential_shorten_width;
 			}
+
 			// now perform the shortening
 			for (idx_t c = 0; c < actual_shorten_amounts.size(); c++) {
 				if (actual_shorten_amounts[c] == 0) {
@@ -1628,10 +1727,12 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		row.values = std::move(values);
 	}
 	// check if we shortened any columns that would be rendered and if we can expand them
-	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows) {
+	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows &&
+	    !added_split_column) {
 		// if we have shortened any columns - try to expand them
 		// how many rows do we have left to expand before we hit the max row limit?
-		idx_t rows_left = config.max_rows - render_rows.size();
+		idx_t max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
 		// for each row - figure out if we can "expand" the row
 		for (idx_t r = 0; r < render_rows.size(); r++) {
 			auto &row = render_rows[r];
@@ -1639,8 +1740,8 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				continue;
 			}
 			bool need_extra_row = r + 1 != render_rows.size() && r != 1;
-			idx_t min_rows = need_extra_row ? 2 : 1;
-			if (rows_left < min_rows) {
+			idx_t min_rows = 2;
+			if (min_rows > max_rows_per_row) {
 				// no rows left to expand
 				continue;
 			}
@@ -1648,7 +1749,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			vector<BoxRenderRow> extra_rows;
 			for (idx_t c = 0; c < row.values.size(); c++) {
 				if (CanPrettyPrint(row.values[c].type)) {
-					idx_t max_rows = rows_left + extra_rows.size();
+					idx_t max_rows = max_rows_per_row;
 					if (need_extra_row) {
 						max_rows--;
 					}
@@ -1662,10 +1763,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				auto render_width = row.values[c].render_width.GetIndex();
 				if (render_width <= column_widths[c]) {
 					// not shortened - skip
-					if (c == 0) {
-						// if the first row is not stretched out, we don't need to add a separator
-						need_extra_row = false;
-					}
 					continue;
 				}
 				// this value was shortened! try to stretch it out
@@ -1688,10 +1785,9 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					}
 					row.values[c].annotations.push_back(annotations[annotation_idx]);
 				}
-				idx_t min_leftover_rows = need_extra_row ? 1 : 0;
 				while (current_pos < full_value.size()) {
 					if (current_row >= extra_rows.size()) {
-						if (rows_left == min_leftover_rows) {
+						if (extra_rows.size() >= max_rows_per_row + 1) {
 							// we need to add an extra row but there's no space anymore - break
 							break;
 						}
@@ -1701,9 +1797,9 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 							extra_rows.back().values.emplace_back(string(), current_val.render_mode,
 							                                      current_val.alignment, current_val.type);
 						}
-						rows_left--;
 					}
-					bool can_add_extra_row = rows_left > min_leftover_rows;
+					bool can_add_extra_row =
+					    current_row + 1 < extra_rows.size() || extra_rows.size() < max_rows_per_row;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row
@@ -1740,7 +1836,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			// if we added extra rows we need to add a separator if this is not the last row
 			if (need_extra_row) {
 				extra_rows.emplace_back(RenderRowType::SEPARATOR);
-				rows_left--;
 			}
 			// add the extra rows at the current position
 			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r) + 1, extra_rows.begin(), extra_rows.end());

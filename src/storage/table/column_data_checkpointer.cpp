@@ -31,7 +31,7 @@ ColumnData &ColumnDataCheckpointData::GetColumnData() {
 	return *col_data;
 }
 
-RowGroup &ColumnDataCheckpointData::GetRowGroup() {
+const RowGroup &ColumnDataCheckpointData::GetRowGroup() {
 	return *row_group;
 }
 
@@ -49,7 +49,7 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 	D_ASSERT(!states.empty());
 
 	auto &first_state = states[0];
-	auto &col_data = first_state.get().column_data;
+	auto &col_data = first_state.get().original_column;
 	auto &type = col_data.type;
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
@@ -61,7 +61,7 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 }
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
-                                               StorageManager &storage_manager, RowGroup &row_group,
+                                               StorageManager &storage_manager, const RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
       intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
@@ -69,7 +69,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		auto &col_data = checkpoint_states[i].get().column_data;
+		auto &col_data = checkpoint_states[i].get().original_column;
 		auto to_add = config.GetCompressionFunctions(col_data.type.InternalType());
 		auto &functions = compression_functions[i];
 		for (auto &func : to_add) {
@@ -81,13 +81,11 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	auto &first_state = checkpoint_states[0];
-	auto &col_data = first_state.get().column_data;
-	auto &nodes = col_data.data.ReferenceSegments();
+	auto &col_data = first_state.get().original_column;
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment_node = *nodes[segment_idx];
-		auto &segment = *segment_node.node;
+	for (auto &segment_node : col_data.data.SegmentNodes()) {
+		auto &segment = segment_node.GetNode();
 		ColumnScanState scan_state(nullptr);
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
@@ -96,7 +94,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.offset_in_column = segment_node.row_start + base_row_index;
+			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
@@ -144,14 +142,10 @@ CompressionType ForceCompression(StorageManager &storage_manager,
 void ColumnDataCheckpointer::InitAnalyze() {
 	analyze_states.resize(checkpoint_states.size());
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
-
 		auto &functions = compression_functions[i];
 		auto &states = analyze_states[i];
 		auto &checkpoint_state = checkpoint_states[i];
-		auto &coldata = checkpoint_state.get().column_data;
+		auto &coldata = checkpoint_state.get().GetResultColumn();
 		states.resize(functions.size());
 		for (idx_t j = 0; j < functions.size(); j++) {
 			auto &func = functions[j];
@@ -186,10 +180,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	// scan over all the segments and run the analyze step
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-			if (!has_changes[i]) {
-				continue;
-			}
-
 			auto &functions = compression_functions[i];
 			auto &states = analyze_states[i];
 			for (idx_t j = 0; j < functions.size(); j++) {
@@ -211,9 +201,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	result.resize(checkpoint_states.size());
 
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
 		auto &functions = compression_functions[i];
 		auto &states = analyze_states[i];
 		auto &forced_method = forced_methods[i];
@@ -254,7 +241,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		}
 
 		auto &checkpoint_state = checkpoint_states[i];
-		auto &col_data = checkpoint_state.get().column_data;
+		auto &col_data = checkpoint_state.get().GetResultColumn();
 		if (!chosen_state) {
 			throw FatalException("No suitable compression/storage method found to store column of type %s",
 			                     col_data.type.ToString());
@@ -262,13 +249,24 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
 
 		auto &best_function = *functions[compression_idx];
-		DUCKDB_LOG_INFO(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
-		                EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
-		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
+		DUCKDB_LOG_TRACE(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
+		                 EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
+		                 col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;
 }
+
+struct CheckpointBlockIdDropper : public BlockIdVisitor {
+	explicit CheckpointBlockIdDropper(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockAsModified(block_id);
+	}
+
+	BlockManager &manager;
+};
 
 void ColumnDataCheckpointer::DropSegments() {
 	// first we check the current segments
@@ -276,18 +274,13 @@ void ColumnDataCheckpointer::DropSegments() {
 	// since the segments will be rewritten their old on disk data is no longer required
 
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
-
 		auto &state = checkpoint_states[i];
-		auto &col_data = state.get().column_data;
-		auto &nodes = col_data.data.ReferenceSegments();
+		auto &col_data = state.get().original_column;
 
 		// Drop the segments, as we'll be replacing them with new ones, because there are changes
-		for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-			auto &segment = *nodes[segment_idx]->node;
-			segment.CommitDropSegment();
+		CheckpointBlockIdDropper dropper(storage_manager.GetBlockManager());
+		for (auto &segment : col_data.data.Segments()) {
+			segment.VisitBlockIds(dropper);
 		}
 	}
 }
@@ -296,19 +289,13 @@ bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeR
 	if (result.size() != 2) {
 		return false;
 	}
-	if (!has_changes[0]) {
-		// The base data had no changes so it will not be rewritten
-		return false;
-	}
 	auto &base = result[0];
 	D_ASSERT(base.function);
 	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 }
 
-void ColumnDataCheckpointer::WriteToDisk() {
-	DropSegments();
-
-	// Analyze the candidate functions to select one of them to use for compression
+void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions to select one of them to use for
+	                                         // compression
 	auto analyze_result = DetectBestCompressionMethod();
 	if (ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
@@ -325,26 +312,20 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	vector<ColumnDataCheckpointData> checkpoint_data(checkpoint_states.size());
 	vector<unique_ptr<CompressionState>> compression_states(checkpoint_states.size());
 	for (idx_t i = 0; i < analyze_result.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
 		auto &analyze_state = analyze_result[i].analyze_state;
 		auto &function = analyze_result[i].function;
 
 		auto &checkpoint_state = checkpoint_states[i];
-		auto &col_data = checkpoint_state.get().column_data;
+		auto &col_data = checkpoint_state.get().GetResultColumn();
 
-		checkpoint_data[i] = ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group,
-		                                              checkpoint_info, storage_manager);
+		checkpoint_data[i] =
+		    ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group, storage_manager);
 		compression_states[i] = function->init_compression(checkpoint_data[i], std::move(analyze_state));
 	}
 
 	// Scan over the existing segment + changes and compress the data
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-			if (!has_changes[i]) {
-				continue;
-			}
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
 			function->compress(*compression_state, scan_vector, count);
@@ -353,77 +334,83 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// Finalize the compression
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
 		auto &function = analyze_result[i].function;
 		auto &compression_state = compression_states[i];
 		function->compress_finalize(*compression_state);
 	}
-}
 
-bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
-	return col_data.HasChanges();
+	// after we finish checkpointing we can drop this segment
+	DropSegments();
 }
 
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
 
-	auto &col_data = state.column_data;
-	auto nodes = col_data.data.MoveSegments();
+	auto &col_data = state.original_column;
 
+	optional_idx error_segment_start;
 	idx_t current_row = 0;
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx]->node;
-		auto segment_start = nodes[segment_idx]->row_start;
+	for (auto &segment_node : col_data.data.SegmentNodes()) {
+		auto &segment = segment_node.GetNode();
+		auto segment_start = segment_node.GetRowStart();
 		if (segment_start != current_row) {
-			string extra_info;
-			for (auto &s : nodes) {
-				extra_info += "\n";
-				extra_info += StringUtil::Format("Start %d, count %d", segment_start, segment.count.load());
-			}
-			const_reference<ColumnData> root = col_data;
-			while (root.get().HasParent()) {
-				root = root.get().Parent();
-			}
-			throw InternalException(
-			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
-			    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
-			    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
-			    row_group.count.load(), current_row, segment_start, root.get().column_index, col_data.type,
-			    root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(), extra_info);
+			error_segment_start = segment_start;
+			break;
 		}
 		auto pointer = segment.GetDataPointer(current_row);
 		current_row += segment.count;
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment.stats.statistics);
-
-		// directly append the current segment to the new tree
-		state.new_tree.AppendSegment(std::move(nodes[segment_idx]->node));
-
 		state.data_pointers.push_back(std::move(pointer));
 	}
+	if (error_segment_start.IsValid()) {
+		string extra_info;
+		for (auto &s : col_data.data.SegmentNodes()) {
+			extra_info += "\n";
+			extra_info += StringUtil::Format("Start %d, count %d", s.GetRowStart(), s.GetNode().count.load());
+		}
+		throw InternalException(
+		    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
+		    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
+		    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
+		    row_group.count.load(), current_row, error_segment_start.GetIndex(), col_data.column_index, col_data.type,
+		    col_data.type, col_data.info.GetSchemaName(), col_data.info.GetTableName(), extra_info);
+	}
 }
+
+struct CheckpointBlockIdMarker : public BlockIdVisitor {
+	explicit CheckpointBlockIdMarker(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockACheckpointed(block_id);
+	}
+
+	BlockManager &manager;
+};
 
 void ColumnDataCheckpointer::Checkpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i];
-		auto &col_data = state.get().column_data;
-		has_changes.push_back(HasChanges(col_data));
-	}
-
-	bool any_has_changes = false;
-	for (idx_t i = 0; i < has_changes.size(); i++) {
-		if (has_changes[i]) {
-			any_has_changes = true;
+		auto &col_data = state.get().original_column;
+		if (col_data.HasChanges()) {
+			has_changes = true;
 			break;
 		}
 	}
-	if (!any_has_changes) {
+
+	if (!has_changes) {
 		// Nothing has undergone any changes, no need to checkpoint
 		// just move on to finalizing
+		// mark block ids as checkpointed
+		CheckpointBlockIdMarker marker(storage_manager.GetBlockManager());
+		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+			auto &state = checkpoint_states[i];
+			auto &col_data = state.get().original_column;
+			col_data.VisitBlockIds(marker);
+		}
 		return;
 	}
 
@@ -431,26 +418,15 @@ void ColumnDataCheckpointer::Checkpoint() {
 }
 
 void ColumnDataCheckpointer::FinalizeCheckpoint() {
+	if (has_changes) {
+		// something has undergone changes, we rewrote everything
+		// write the new data - not the old data
+		return;
+	}
+	// no changes - copy over the original columns
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i].get();
-		auto &col_data = state.column_data;
-		if (has_changes[i]) {
-			// Move the existing segments out of the column data
-			// they will be destructed at the end of the scope
-			auto to_delete = col_data.data.MoveSegments();
-		} else {
-			WritePersistentSegments(state);
-		}
-
-		// reset the compression function
-		col_data.compression.reset();
-		// replace the old tree with the new one
-		auto new_segments = state.new_tree.MoveSegments();
-		auto l = col_data.data.Lock();
-		for (auto &new_segment : new_segments) {
-			col_data.AppendSegment(l, std::move(new_segment->node));
-		}
-		col_data.ClearUpdates();
+		WritePersistentSegments(state);
 	}
 }
 

@@ -1021,6 +1021,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	default:
 		throw InternalException("Unknown FileLockType");
 	}
+	// For windows platform, by default deletion fails when the file is accessed by other thread/process.
+	// To keep deletion behavior compatible with unix platform, which physically deletes a file when reference count
+	// drops to 0 without interfering with already opened file handles, open files with [`FILE_SHARE_DELETE`].
+	share_mode |= FILE_SHARE_DELETE;
 
 	if (open_write) {
 		if (flags.CreateFileIfNotExists()) {
@@ -1299,8 +1303,9 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(source);
 	auto target_unicode = NormalizePathAndConvertToUnicode(target);
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
-	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
+	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
