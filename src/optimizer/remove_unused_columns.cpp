@@ -107,9 +107,6 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 		}
 		created_bindings = 1;
 	}
-	auto record = std::move(colrefs->second);
-	column_references.erase(current_binding);
-	column_references.insert(make_pair(new_binding, std::move(record)));
 	return created_bindings;
 }
 
@@ -294,8 +291,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
 			CheckPushdownExtract(op);
-			ClearUnusedExpressions(proj.expressions, proj.table_index);
 			RewriteExpressions(proj);
+			ClearUnusedExpressions(proj.expressions, proj.table_index);
 
 			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
@@ -492,7 +489,10 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj) {
 		auto binding = ColumnBinding(proj.table_index, i);
 		auto entry = column_references.find(binding);
 		if (entry == column_references.end()) {
-			throw InternalException("RemoveUnusedColumns - could not find referenced column");
+			//! Expression isn't referenced, will be removed by a later call to ClearUnusedExpressions
+			//! Just preserve it for now
+			expressions.push_back(std::move(proj.expressions[i]));
+			continue;
 		}
 		if (entry->second.child_columns.empty() ||
 		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
@@ -655,12 +655,11 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	ClearUnusedExpressions(col_sel, get.table_index);
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
-	for (idx_t i = 0; i < col_sel.size(); i++) {
-		auto col_sel_idx = col_sel[i];
+	for (auto &col_sel_idx : col_sel) {
 		auto &column_type = get.GetColumnType(state.old_column_ids[col_sel_idx]);
 		//! NOTE: 'column_references' has already been updated, so we need to use the new binding index here (which is
 		//! i)
-		auto entry = column_references.find(ColumnBinding(get.table_index, i));
+		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
