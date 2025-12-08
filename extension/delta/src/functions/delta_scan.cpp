@@ -2,6 +2,7 @@
 
 #include "delta_functions.hpp"
 #include "functions/delta_scan.hpp"
+#include "delta_kernel_ffi_v2.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/extension_util.hpp"
@@ -24,6 +25,40 @@ static void *allocate_string(const struct ffi::KernelStringSlice slice) {
 	return new string(slice.ptr, slice.len);
 }
 
+//===----------------------------------------------------------------------===//
+// V2 Feature Helper Functions
+//===----------------------------------------------------------------------===//
+
+// Try to get row tracking info from the FFI layer
+// Returns true if row tracking info was available
+static bool TryGetRowTrackingInfo(const ffi::DvInfo *dv_info, ffi::SharedExternEngine *engine,
+                                   ffi::SharedGlobalScanState *state, DeltaRowTrackingInfo &out_info) {
+#ifdef DELTA_KERNEL_V2_SUPPORT
+	// Call the V2 FFI function to get row tracking info
+	auto result = ffi::get_row_tracking_info(dv_info, engine, state);
+	if (result.tag == ffi::ExternResult<ffi::RowTrackingInfo>::Tag::Ok) {
+		out_info.base_row_id = result.ok._0.base_row_id;
+		out_info.default_row_commit_version = result.ok._0.default_row_commit_version;
+		return true;
+	}
+#endif
+	// Row tracking not available or not supported
+	return false;
+}
+
+// Try to get deletion vector cardinality from the FFI layer
+static int64_t TryGetDVCardinality(const ffi::DvInfo *dv_info) {
+#ifdef DELTA_KERNEL_V2_SUPPORT
+	return ffi::get_dv_cardinality(dv_info);
+#else
+	return 0;
+#endif
+}
+
+//===----------------------------------------------------------------------===//
+// Scan Data Visitor Callback
+//===----------------------------------------------------------------------===//
+
 static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::KernelStringSlice path, int64_t size,
                            const ffi::DvInfo *dv_info, const struct ffi::CStringMap *partition_values) {
 	auto context = (DeltaSnapshot *)engine_context;
@@ -37,9 +72,12 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
 
 	D_ASSERT(context->resolved_files.size() == context->metadata.size());
 
+	auto &file_metadata = context->metadata.back();
+
 	// Initialize the file metadata
-	context->metadata.back()->delta_snapshot_version = context->version;
-	context->metadata.back()->file_number = context->resolved_files.size() - 1;
+	file_metadata->delta_snapshot_version = context->version;
+	file_metadata->file_number = context->resolved_files.size() - 1;
+	file_metadata->file_size = size;
 
 	// Fetch the deletion vector
 	auto selection_vector_res =
@@ -47,8 +85,30 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
 	auto selection_vector =
 	    KernelUtils::UnpackResult(selection_vector_res, "selection_vector_from_dv for path " + context->GetPath());
 	if (selection_vector.ptr) {
-		context->metadata.back()->selection_vector = selection_vector;
+		file_metadata->selection_vector = selection_vector;
+		
+		// Count deleted rows for this file
+		int64_t deleted_count = 0;
+		for (uintptr_t i = 0; i < selection_vector.len; i++) {
+			if (!selection_vector.ptr[i]) {
+				deleted_count++;
+			}
+		}
+		file_metadata->deletion_vector_info.cardinality = deleted_count;
+		context->total_deleted_rows += deleted_count;
+		context->files_with_deletion_vectors++;
+		
+		// Try to get extended DV info from V2 FFI
+		file_metadata->deletion_vector_info.cardinality = TryGetDVCardinality(dv_info);
+		if (file_metadata->deletion_vector_info.cardinality == 0) {
+			// Fallback: count from selection vector
+			file_metadata->deletion_vector_info.cardinality = deleted_count;
+		}
 	}
+
+	// Try to get V2 row tracking information
+	TryGetRowTrackingInfo(dv_info, context->extern_engine.get(), context->global_state.get(), 
+	                       file_metadata->row_tracking);
 
 	// Lookup all columns for potential hits in the constant map
 	case_insensitive_map_t<string> constant_map;
@@ -60,7 +120,7 @@ static void visit_callback(ffi::NullableCvoid engine_context, struct ffi::Kernel
 			delete partition_val;
 		}
 	}
-	context->metadata.back()->partition_map = std::move(constant_map);
+	file_metadata->partition_map = std::move(constant_map);
 }
 
 static void visit_data(void *engine_context, ffi::EngineData *engine_data,
@@ -231,7 +291,67 @@ void DeltaSnapshot::InitializeFiles() {
 	// Create scan data iterator
 	scan_data_iterator = TryUnpackKernelResult(ffi::kernel_scan_data_init(extern_engine.get(), scan.get()));
 
+	// Initialize V2 features
+	InitializeV2Features();
+
 	initialized = true;
+}
+
+void DeltaSnapshot::InitializeV2Features() {
+	if (v2_features_initialized) {
+		return;
+	}
+	
+#ifdef DELTA_KERNEL_V2_SUPPORT
+	// Get table protocol information
+	auto protocol_result = ffi::get_table_protocol_v2(snapshot.get());
+	if (protocol_result.tag == ffi::ExternResult<ffi::TableProtocolV2>::Tag::Ok) {
+		auto &proto = protocol_result.ok._0;
+		protocol.min_reader_version = proto.min_reader_version;
+		protocol.min_writer_version = proto.min_writer_version;
+		
+		// Map feature flags
+		if (proto.reader_features & ffi::FEATURE_DELETION_VECTORS) {
+			protocol.enabled_features = protocol.enabled_features | DeltaV2Feature::DELETION_VECTORS;
+		}
+		if (proto.reader_features & ffi::FEATURE_ROW_TRACKING) {
+			protocol.enabled_features = protocol.enabled_features | DeltaV2Feature::ROW_TRACKING;
+		}
+		if (proto.reader_features & ffi::FEATURE_LIQUID_CLUSTERING) {
+			protocol.enabled_features = protocol.enabled_features | DeltaV2Feature::LIQUID_CLUSTERING;
+		}
+		if (proto.reader_features & ffi::FEATURE_V2_CHECKPOINT) {
+			protocol.enabled_features = protocol.enabled_features | DeltaV2Feature::V2_CHECKPOINTS;
+		}
+		if (proto.reader_features & ffi::FEATURE_TIMESTAMP_NTZ) {
+			protocol.enabled_features = protocol.enabled_features | DeltaV2Feature::TIMESTAMP_NTZ;
+		}
+		if (proto.reader_features & ffi::FEATURE_COLUMN_MAPPING) {
+			protocol.enabled_features = protocol.enabled_features | DeltaV2Feature::COLUMN_MAPPING;
+		}
+	}
+	
+	// Check for liquid clustering
+	if (ffi::snapshot_has_liquid_clustering(snapshot.get())) {
+		liquid_clustering.is_enabled = true;
+		
+		// Get clustering column iterator
+		auto iter_result = ffi::get_clustering_columns_iterator(snapshot.get());
+		if (iter_result.tag == ffi::ExternResult<ffi::ClusteringColumnIterator*>::Tag::Ok) {
+			auto iter = iter_result.ok._0;
+			while (true) {
+				auto col_name = ffi::clustering_columns_next(iter);
+				if (col_name.len == 0) {
+					break;
+				}
+				liquid_clustering.clustering_columns.push_back(KernelUtils::FromDeltaString(col_name));
+			}
+			ffi::drop_clustering_columns_iterator(iter);
+		}
+	}
+#endif
+	
+	v2_features_initialized = true;
 }
 
 unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
@@ -410,8 +530,17 @@ void DeltaMultiFileReaderGlobalState::SetColumnIdx(const string &column, idx_t i
 	} else if (column == "delta_file_number") {
 		delta_file_number_idx = idx;
 		return;
+	} else if (column == "delta_base_row_id") {
+		base_row_id_idx = idx;
+		return;
+	} else if (column == "delta_row_commit_version") {
+		row_commit_version_idx = idx;
+		return;
+	} else if (column == "delta_dv_cardinality") {
+		dv_cardinality_idx = idx;
+		return;
 	}
-	throw IOException("Unknown column '%s' found as required by the DeltaMultiFileReader");
+	throw IOException("Unknown column '%s' found as required by the DeltaMultiFileReader", column);
 }
 
 unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalState(
@@ -444,6 +573,34 @@ unique_ptr<MultiFileReaderGlobalState> DeltaMultiFileReader::InitializeGlobalSta
 	if (demo_gen_col_opt != file_options.custom_options.end()) {
 		if (demo_gen_col_opt->second.GetValue<bool>()) {
 			columns_to_map.insert({"delta_file_number", LogicalType::UBIGINT});
+		}
+	}
+	
+	//===----------------------------------------------------------------------===//
+	// V2 Row Tracking Columns
+	//===----------------------------------------------------------------------===//
+	
+	// Add delta_base_row_id column if requested
+	auto base_row_id_opt = file_options.custom_options.find("delta_base_row_id");
+	if (base_row_id_opt != file_options.custom_options.end()) {
+		if (base_row_id_opt->second.GetValue<bool>()) {
+			columns_to_map.insert({"delta_base_row_id", LogicalType::BIGINT});
+		}
+	}
+	
+	// Add delta_row_commit_version column if requested
+	auto row_commit_opt = file_options.custom_options.find("delta_row_commit_version");
+	if (row_commit_opt != file_options.custom_options.end()) {
+		if (row_commit_opt->second.GetValue<bool>()) {
+			columns_to_map.insert({"delta_row_commit_version", LogicalType::BIGINT});
+		}
+	}
+	
+	// Add delta_dv_cardinality column if requested (V2 deletion vector info)
+	auto dv_card_opt = file_options.custom_options.find("delta_dv_cardinality");
+	if (dv_card_opt != file_options.custom_options.end()) {
+		if (dv_card_opt->second.GetValue<bool>()) {
+			columns_to_map.insert({"delta_dv_cardinality", LogicalType::BIGINT});
 		}
 	}
 
@@ -548,21 +705,78 @@ void DeltaMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFile
 		//! Create Dummy expression (0 + file_number)
 		vector<unique_ptr<ParsedExpression>> child_expr;
 		child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(0)));
-		child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(7)));
+		child_expr.push_back(make_uniq<ConstantExpression>(Value::UBIGINT(metadata->file_number)));
 		unique_ptr<ParsedExpression> expr =
 		    make_uniq<FunctionExpression>("+", std::move(child_expr), nullptr, nullptr, false, true);
 
-		//! s dummy expression
 		auto binder = Binder::CreateBinder(context);
 		ExpressionBinder expr_binder(*binder, context);
 		auto bound_expr = expr_binder.Bind(expr, nullptr);
 
-		//! Execute dummy expression into result column
 		ExpressionExecutor expr_executor(context);
 		expr_executor.AddExpression(*bound_expr);
-
-		//! Execute the expression directly into the output Chunk
 		expr_executor.ExecuteExpression(chunk.data[delta_global_state.delta_file_number_idx]);
+	}
+	
+	//===----------------------------------------------------------------------===//
+	// V2 Row Tracking Columns
+	//===----------------------------------------------------------------------===//
+	
+	// Populate delta_base_row_id column (V2 row tracking)
+	if (delta_global_state.base_row_id_idx != DConstants::INVALID_INDEX && chunk.size() > 0) {
+		auto &base_row_id_col = chunk.data[delta_global_state.base_row_id_idx];
+		if (metadata->row_tracking.base_row_id >= 0) {
+			// We have row tracking info - populate with base_row_id + row offset
+			auto base_id = metadata->row_tracking.base_row_id;
+			
+			// Check if we have file_row_number to compute actual row IDs
+			if (delta_global_state.file_row_number_idx != DConstants::INVALID_INDEX) {
+				auto &file_row_number_col = chunk.data[delta_global_state.file_row_number_idx];
+				UnifiedVectorFormat row_num_data;
+				file_row_number_col.ToUnifiedFormat(chunk.size(), row_num_data);
+				auto row_nums = UnifiedVectorFormat::GetData<int64_t>(row_num_data);
+				
+				auto result_data = FlatVector::GetData<int64_t>(base_row_id_col);
+				for (idx_t i = 0; i < chunk.size(); i++) {
+					auto row_num = row_nums[row_num_data.sel->get_index(i)];
+					result_data[i] = base_id + row_num;
+				}
+			} else {
+				// No row number, just use base_row_id as constant
+				base_row_id_col.SetValue(0, Value::BIGINT(base_id));
+				base_row_id_col.Flatten(chunk.size());
+			}
+		} else {
+			// No row tracking available - set to NULL
+			auto &validity = FlatVector::Validity(base_row_id_col);
+			validity.SetAllInvalid(chunk.size());
+		}
+	}
+	
+	// Populate delta_row_commit_version column (V2 row tracking)
+	if (delta_global_state.row_commit_version_idx != DConstants::INVALID_INDEX && chunk.size() > 0) {
+		auto &commit_version_col = chunk.data[delta_global_state.row_commit_version_idx];
+		if (metadata->row_tracking.default_row_commit_version >= 0) {
+			// Set constant value for all rows in this file
+			auto result_data = FlatVector::GetData<int64_t>(commit_version_col);
+			for (idx_t i = 0; i < chunk.size(); i++) {
+				result_data[i] = metadata->row_tracking.default_row_commit_version;
+			}
+		} else {
+			// No row tracking available - set to NULL
+			auto &validity = FlatVector::Validity(commit_version_col);
+			validity.SetAllInvalid(chunk.size());
+		}
+	}
+	
+	// Populate delta_dv_cardinality column (V2 deletion vector info)
+	if (delta_global_state.dv_cardinality_idx != DConstants::INVALID_INDEX && chunk.size() > 0) {
+		auto &dv_card_col = chunk.data[delta_global_state.dv_cardinality_idx];
+		// Set constant value for all rows in this file (cardinality is per-file)
+		auto result_data = FlatVector::GetData<int64_t>(dv_card_col);
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			result_data[i] = metadata->deletion_vector_info.cardinality;
+		}
 	}
 };
 
@@ -577,6 +791,25 @@ bool DeltaMultiFileReader::ParseOption(const string &key, const Value &val, Mult
 
 	// We need to capture this one to know whether to emit
 	if (loption == "file_row_number") {
+		options.custom_options[loption] = val;
+		return true;
+	}
+	
+	//===----------------------------------------------------------------------===//
+	// V2 Row Tracking Options
+	//===----------------------------------------------------------------------===//
+	
+	if (loption == "delta_base_row_id") {
+		options.custom_options[loption] = val;
+		return true;
+	}
+	
+	if (loption == "delta_row_commit_version") {
+		options.custom_options[loption] = val;
+		return true;
+	}
+	
+	if (loption == "delta_dv_cardinality") {
 		options.custom_options[loption] = val;
 		return true;
 	}
@@ -614,6 +847,17 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(DatabaseInstance &instance
 
 		// Demonstration of a generated column based on information from DeltaSnapshot
 		function.named_parameters["delta_file_number"] = LogicalType::BOOLEAN;
+		
+		//===----------------------------------------------------------------------===//
+		// V2 Feature Parameters
+		//===----------------------------------------------------------------------===//
+		
+		// Row tracking columns (Delta V2)
+		function.named_parameters["delta_base_row_id"] = LogicalType::BOOLEAN;
+		function.named_parameters["delta_row_commit_version"] = LogicalType::BOOLEAN;
+		
+		// Deletion vector info column (Delta V2)
+		function.named_parameters["delta_dv_cardinality"] = LogicalType::BOOLEAN;
 
 		function.name = "delta_scan";
 	}

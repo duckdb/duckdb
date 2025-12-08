@@ -9,7 +9,12 @@ namespace duckdb {
 vector<TableFunctionSet> DeltaFunctions::GetTableFunctions(DatabaseInstance &instance) {
 	vector<TableFunctionSet> functions;
 
+	// Main delta_scan function
 	functions.push_back(GetDeltaScanFunction(instance));
+	
+	// V2 metadata inspection functions
+	functions.push_back(GetDeltaTableInfoFunction(instance));
+	functions.push_back(GetDeltaFileStatsFunction(instance));
 
 	return functions;
 }

@@ -12,7 +12,8 @@ project(${TARGET_NAME})
 include_directories(src/include)
 
 set(EXTENSION_SOURCES src/delta_extension.cpp src/delta_functions.cpp
-                      src/delta_utils.cpp src/functions/delta_scan.cpp)
+                      src/delta_utils.cpp src/functions/delta_scan.cpp
+                      src/functions/delta_table_info.cpp)
 
 # Custom config TODO: figure out if we really need this?
 if(APPLE)
@@ -59,32 +60,30 @@ elseif("${OS_NAME}" STREQUAL "osx")
   endif()
 endif()
 
-# Add rust_example as a CMake target
+# Use local delta-kernel-rs fork instead of downloading from GitHub
+set(LOCAL_DELTA_KERNEL_PATH "/Users/danbennatan/Desktop/Projects/delta-kernel-rs")
+
+# Add rust_example as a CMake target pointing to local fork
 ExternalProject_Add(
   ${KERNEL_NAME}
-  GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
-  GIT_TAG 08f0764a00e89f42136fd478823d28278adc7ee8
+  SOURCE_DIR "${LOCAL_DELTA_KERNEL_PATH}"
   CONFIGURE_COMMAND ""
   UPDATE_COMMAND ""
   BUILD_IN_SOURCE 1
   # Build debug build
-  BUILD_COMMAND cargo build --package delta_kernel_ffi --workspace
-                --all-features --target=${RUST_PLATFORM_TARGET}
+  BUILD_COMMAND cargo build --package delta_kernel_ffi
+                --target=${RUST_PLATFORM_TARGET}
   # Build release build
-  COMMAND cargo build --package delta_kernel_ffi --workspace --all-features
+  COMMAND cargo build --package delta_kernel_ffi
           --release --target=${RUST_PLATFORM_TARGET}
-  # Build DATs
-  COMMAND
-    cargo build
-    --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
   BUILD_BYPRODUCTS
-    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
+    "${LOCAL_DELTA_KERNEL_PATH}/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
   BUILD_BYPRODUCTS
-    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
+    "${LOCAL_DELTA_KERNEL_PATH}/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
   BUILD_BYPRODUCTS
-    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.h"
+    "${LOCAL_DELTA_KERNEL_PATH}/target/ffi-headers/delta_kernel_ffi.h"
   BUILD_BYPRODUCTS
-    "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.hpp"
+    "${LOCAL_DELTA_KERNEL_PATH}/target/ffi-headers/delta_kernel_ffi.hpp"
   INSTALL_COMMAND ""
   LOG_BUILD ON)
 
@@ -92,9 +91,7 @@ build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
 include_directories(
-  ${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers)
-include_directories(
-  ${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers)
+  ${LOCAL_DELTA_KERNEL_PATH}/target/ffi-headers)
 
 # Hides annoying linker warnings
 set(CMAKE_OSX_DEPLOYMENT_TARGET
@@ -108,9 +105,9 @@ add_compile_definitions(DEFINE_DEFAULT_ENGINE)
 target_link_libraries(
   ${EXTENSION_NAME}
   debug
-  "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
+  "${LOCAL_DELTA_KERNEL_PATH}/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
   optimized
-  "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
+  "${LOCAL_DELTA_KERNEL_PATH}/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
   ${PLATFORM_LIBS})
 add_dependencies(${EXTENSION_NAME} delta_kernel)
 
@@ -118,9 +115,9 @@ add_dependencies(${EXTENSION_NAME} delta_kernel)
 target_link_libraries(
   ${LOADABLE_EXTENSION_NAME}
   debug
-  "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
+  "${LOCAL_DELTA_KERNEL_PATH}/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
   optimized
-  "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
+  "${LOCAL_DELTA_KERNEL_PATH}/target/${RUST_PLATFORM_TARGET}/release/libdelta_kernel_ffi.a"
   ${PLATFORM_LIBS})
 add_dependencies(${LOADABLE_EXTENSION_NAME} delta_kernel)
 

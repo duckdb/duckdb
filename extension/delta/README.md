@@ -44,6 +44,66 @@ regular parquet scanning logic:
 - structs
 - S3 support with secrets
 
+## Delta Lake V2 Features
+
+The following Delta Lake V2 features are now supported:
+
+### Deletion Vectors (Full Read Support)
+Tables using deletion vectors are fully supported. The extension automatically filters out deleted rows during scanning.
+
+### Row Tracking
+Expose row tracking metadata as virtual columns:
+
+```SQL
+-- Get base row IDs for CDC/audit purposes
+FROM delta_scan('path/to/table', delta_base_row_id=true);
+
+-- Get row commit versions
+FROM delta_scan('path/to/table', delta_row_commit_version=true);
+```
+
+### Deletion Vector Information
+```SQL
+-- Get deletion vector cardinality per file
+FROM delta_scan('path/to/table', delta_dv_cardinality=true);
+```
+
+### Liquid Clustering Metadata
+Liquid clustering configuration is parsed and available through the `delta_table_info` function.
+
+### V2 Checkpoints
+V2 checkpoint formats (UUID checkpoints, multi-part checkpoints, sidecar files) are supported through delta-kernel-rs.
+
+## Metadata Inspection Functions
+
+### delta_table_info
+Returns table-level metadata including V2 feature flags:
+
+```SQL
+SELECT * FROM delta_table_info('path/to/table');
+```
+
+Returns columns:
+- `path` - Table path
+- `version` - Current snapshot version
+- `min_reader_version`, `min_writer_version` - Protocol versions
+- `has_deletion_vectors`, `has_row_tracking`, `has_liquid_clustering`, `has_v2_checkpoints`, `has_timestamp_ntz`, `has_column_mapping` - V2 feature flags
+- `clustering_columns` - Array of liquid clustering column names
+- `total_files`, `files_with_deletion_vectors`, `total_deleted_rows` - Statistics
+
+### delta_file_stats
+Returns per-file metadata including deletion vector and row tracking information:
+
+```SQL
+SELECT * FROM delta_file_stats('path/to/table');
+```
+
+Returns columns:
+- `file_path`, `file_number`, `file_size` - Basic file info
+- `has_deletion_vector`, `deleted_row_count`, `dv_storage_type`, `dv_size_bytes` - Deletion vector info
+- `base_row_id`, `default_row_commit_version` - Row tracking info
+- `partition_values` - Partition column values as MAP
+
 More features coming soon!
 
 # Building

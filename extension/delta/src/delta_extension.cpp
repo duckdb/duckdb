@@ -9,7 +9,8 @@ namespace duckdb {
 
 static void LoadInternal(ExtensionLoader &loader) {
 	// Load functions
-	for (const auto &function : DeltaFunctions::GetTableFunctions(instance)) {
+	auto &db = loader.GetDatabaseInstance();
+	for (const auto &function : DeltaFunctions::GetTableFunctions(db)) {
 		loader.RegisterFunction(function);
 	}
 }
