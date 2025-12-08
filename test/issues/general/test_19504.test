@@ -1,0 +1,17 @@
+# name: test/issues/general/test_19504.test
+# description: Issue 19504 - Regression due to optimization in 1.4.0
+# group: [general]
+
+query II
+SELECT query,
+       (WITH t AS MATERIALIZED (SELECT query)
+         SELECT *
+         FROM (VALUES ('cat')) AS _(x)
+         WHERE x IN (SELECT * FROM t)
+       ) AS broken
+FROM   (VALUES ('cat'), ('dog'), ('duck')) AS queries(query)
+ORDER BY query;
+----
+cat	cat
+dog	NULL
+duck	NULL

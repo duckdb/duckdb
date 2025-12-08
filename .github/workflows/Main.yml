@@ -179,18 +179,11 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - name: Clean up the disc space
-        shell: bash
-        run: |
-          echo "Disk usage before clean up:"
-          df -h
-          rm -rf /opt/hostedtoolcache/CodeQL Java* Pypy Ruby go node
-          echo "Disk usage after clean up:"
-          df -h
-
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
