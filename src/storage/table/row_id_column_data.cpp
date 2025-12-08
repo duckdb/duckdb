@@ -157,8 +157,8 @@ void RowIdColumnData::UpdateColumn(TransactionData transaction, DataTable &data_
 	throw InternalException("RowIdColumnData cannot be updated");
 }
 
-void RowIdColumnData::CommitDropColumn() {
-	throw InternalException("RowIdColumnData cannot be dropped");
+void RowIdColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	throw InternalException("VisitBlockIds not supported for rowid");
 }
 
 unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const RowGroup &row_group,

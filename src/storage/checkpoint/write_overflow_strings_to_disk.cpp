@@ -48,18 +48,6 @@ string UncompressedStringSegmentState::GetSegmentInfo() const {
 	return "Overflow String Block Ids: " + result;
 }
 
-vector<block_id_t> UncompressedStringSegmentState::GetAdditionalBlocks() const {
-	return on_disk_blocks;
-}
-
-void UncompressedStringSegmentState::Cleanup(BlockManager &manager_p) {
-	auto &manager = block_manager ? *block_manager : manager_p;
-	for (auto &block_id : on_disk_blocks) {
-		manager.MarkBlockAsModified(block_id);
-	}
-	on_disk_blocks.clear();
-}
-
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
                                              block_id_t &result_block, int32_t &result_offset) {
 	auto &block_manager = partial_block_manager.GetBlockManager();
@@ -69,7 +57,7 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 	}
 	// first write the length of the string
 	if (block_id == INVALID_BLOCK || offset + 2 * sizeof(uint32_t) >= GetStringSpace()) {
-		AllocateNewBlock(state, block_manager.GetFreeBlockId());
+		AllocateNewBlock(state, partial_block_manager.GetFreeBlockId());
 	}
 	result_block = block_id;
 	result_offset = UnsafeNumericCast<int32_t>(offset);
@@ -96,7 +84,7 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 			D_ASSERT(offset == GetStringSpace());
 			// there is still remaining stuff to write
 			// now write the current block to disk and allocate a new block
-			AllocateNewBlock(state, block_manager.GetFreeBlockId());
+			AllocateNewBlock(state, partial_block_manager.GetFreeBlockId());
 		}
 	}
 }

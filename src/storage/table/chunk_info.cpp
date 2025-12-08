@@ -83,6 +83,13 @@ idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, trans
 	return TemplatedGetSelVector<CommittedVersionOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
 }
 
+idx_t ChunkConstantInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
+	if (TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, insert_id)) {
+		return max_count;
+	}
+	return 0;
+}
+
 bool ChunkConstantInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id);
 }
@@ -125,6 +132,18 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
 	info->insert_id = 0;
 	info->delete_id = 0;
 	return std::move(info);
+}
+
+string ChunkConstantInfo::ToString(idx_t max_count) const {
+	string result;
+	result += "Constant [Count: " + to_string(max_count);
+	result += ", ";
+	result += "Insert Id: " + to_string(insert_id);
+	if (delete_id != NOT_DELETED_ID) {
+		result += ", Delete Id: " + to_string(delete_id);
+	}
+	result += "]";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -211,6 +230,31 @@ idx_t ChunkVectorInfo::GetCommittedSelVector(transaction_t min_start_id, transac
 
 idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const {
 	return GetSelVector(transaction.start_time, transaction.transaction_id, sel_vector, max_count);
+}
+
+idx_t ChunkVectorInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
+	if (HasConstantInsertionId()) {
+		if (!TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
+		                                                    ConstantInsertId())) {
+			return 0;
+		}
+		return max_count;
+	}
+	auto insert_segment = allocator.GetHandle(GetInsertedPointer());
+	auto inserted = insert_segment.GetPtr<transaction_t>();
+
+	idx_t count = 0;
+	for (idx_t i = 0; i < max_count; i++) {
+		if (!TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
+		                                                    inserted[i])) {
+			continue;
+		}
+		if (i != count) {
+			throw InternalException("Error in ChunkVectorInfo::GetCheckpointRowCount - insertions are not sequential");
+		}
+		count++;
+	}
+	return count;
 }
 
 bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
@@ -384,6 +428,29 @@ bool ChunkVectorInfo::AnyDeleted() const {
 
 bool ChunkVectorInfo::HasConstantInsertionId() const {
 	return !inserted_data.HasMetadata();
+}
+
+string ChunkVectorInfo::ToString(idx_t max_count) const {
+	string result;
+	result += "Vector [Count: " + to_string(max_count);
+	result += ", ";
+	if (HasConstantInsertionId()) {
+		result += "Insert Id: " + to_string(constant_insert_id);
+	} else {
+		result += "Insert Ids: [";
+		auto segment = allocator.GetHandle(GetInsertedPointer());
+		auto inserted = segment.GetPtr<transaction_t>();
+
+		for (idx_t idx = 0; idx < max_count; idx++) {
+			if (idx > 0) {
+				result += ", ";
+			}
+			result += to_string(inserted[idx]);
+		}
+		result += "]";
+	}
+	result += "]";
+	return result;
 }
 
 transaction_t ChunkVectorInfo::ConstantInsertId() const {

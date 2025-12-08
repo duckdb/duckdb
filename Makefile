@@ -153,11 +153,11 @@ ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;.github/config/rust_based_extensions.cmake"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake"
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
@@ -239,6 +239,9 @@ ifeq (${HASH_ZERO}, 1)
 endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
+endif
+ifeq (${BLOCK_VERIFICATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
 endif
 ifneq (${DISABLE_CPP_UNITTESTS}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_UNITTEST_CPP_TESTS=0
@@ -513,8 +516,8 @@ generate-files:
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_enum_util.py
 	$(PYTHON) scripts/generate_metric_enums.py
+	$(PYTHON) scripts/generate_enum_util.py
 	$(PYTHON) scripts/generate_builtin_types.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

@@ -1,6 +1,7 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
 #define STDIN_FILENO  0
@@ -228,7 +229,7 @@ int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 }
 
 // returns true if there is more data available to read in a particular stream
-int Terminal::HasMoreData(int fd) {
+int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 #if defined(_WIN32) || defined(WIN32)
 	return false;
 #else
@@ -239,7 +240,7 @@ int Terminal::HasMoreData(int fd) {
 	// no timeout: return immediately
 	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 0;
+	tv.tv_usec = NumericCast<int>(timeout_micros);
 	return select(1, &rfds, NULL, NULL, &tv);
 #endif
 }
@@ -428,10 +429,20 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 		char buf[64];
 		idx_t i = 0;
 		while (i < sizeof(buf) - 1) {
+			// check if we have data to read
+			// wait up till 1ms
+			if (!HasMoreData(ifd, 10000)) {
+				// no more data available - done
+				break;
+			}
 			if (read(ifd, buf + i, 1) != 1) {
 				break;
 			}
 			if (buf[i] == '\a') {
+				break;
+			}
+			if (i > 2 && buf[i - 1] == '\e' && buf[i] == '\\') {
+				i--;
 				break;
 			}
 			i++;
