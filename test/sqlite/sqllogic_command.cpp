@@ -398,15 +398,22 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				throw std::runtime_error("Concurrent loop is not supported over this command");
 			}
 		}
-		// parallel loop: launch threads
-		std::list<ParallelExecuteContext> contexts;
+		vector<idx_t> loop_indexes;
 		while (true) {
-			contexts.emplace_back(runner, loop_commands, loop_def);
+			loop_indexes.emplace_back(loop_def.loop_idx);
 			loop_def.loop_idx++;
 			if (loop_def.loop_idx >= loop_def.loop_end) {
 				// finished
 				break;
 			}
+		}
+		std::random_shuffle(loop_indexes.begin(), loop_indexes.end());
+
+		// parallel loop: launch threads
+		std::list<ParallelExecuteContext> contexts;
+		for (auto &loop_index : loop_indexes) {
+			loop_def.loop_idx = loop_index;
+			contexts.emplace_back(runner, loop_commands, loop_def);
 		}
 		std::list<std::thread> threads;
 		for (auto &context : contexts) {
