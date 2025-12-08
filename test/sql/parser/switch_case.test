@@ -71,12 +71,10 @@ NULL
 statement ok
 CREATE TABLE null_test AS FROM VALUES (1), (NULL), (2) i(val);
 
-query I
+statement error
 SELECT switch(val, MAP { 1 : 'one', NULL : 'is_null'}, 'other') FROM null_test ORDER BY val;
 ----
-one
-other
-other
+Invalid Input Error: Map keys can not be NULL.
 
 query I
 SELECT
@@ -93,14 +91,14 @@ other
 other
 
 statement error
-SELECT switch(val, MAP { 1+1 : 'one', NULL : 'is_null'}, 'other') FROM null_test ORDER BY val;
+SELECT switch(val, MAP { 1+1 : 'one', 1: 'is_null'}, 'other') FROM null_test ORDER BY val;
 ----
 Not implemented Error: Only constant expressions are supported for keys inside SWITCH
 
 statement error
 SELECT switch(val, MAP {}, 'other') FROM null_test ORDER BY val;
 ----
-Parser Error: No values provided for SWITCH expression
+Binder Error: No values provided for SWITCH expression
 
 statement ok
 CREATE TABLE map_expr(i map(integer, integer));
@@ -111,4 +109,4 @@ INSERT INTO map_expr VALUES (MAP {1 : 2});
 statement error
 SELECT SWITCH (1, i) FROM map_expr;
 ----
-Parser Error: syntax error at or near "i"
+Binder Error: SWITCH expected a constant map for the cases
