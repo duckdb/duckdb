@@ -607,7 +607,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	const auto row_group_size = storage.GetCollection().GetRowGroupSize();
 
 	TableAppendState append_state;
-	table.AppendLock(append_state);
+	table.AppendLock(transaction, append_state);
 	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 	if ((append_state.row_start == 0 || storage.GetCollection().GetTotalRows() >= row_group_size) &&
 	    storage.deleted_rows == 0) {

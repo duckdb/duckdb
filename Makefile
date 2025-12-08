@@ -513,8 +513,8 @@ generate-files:
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_enum_util.py
 	$(PYTHON) scripts/generate_metric_enums.py
+	$(PYTHON) scripts/generate_enum_util.py
 	$(PYTHON) scripts/generate_builtin_types.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

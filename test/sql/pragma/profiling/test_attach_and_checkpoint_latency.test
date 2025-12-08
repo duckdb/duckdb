@@ -1,6 +1,9 @@
 # name: test/sql/pragma/profiling/test_attach_and_checkpoint_latency.test
 # group: [profiling]
 
+# the disk is finicky on windows so checkpoint_latency sometimes == 0 when it should be > 0
+require notwindows
+
 require json
 
 require noforcestorage

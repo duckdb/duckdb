@@ -42,6 +42,7 @@ add_library_unity(
   prepared_statement.cpp
   prepared_statement_data.cpp
   profiling_info.cpp
+  profiling_utils.cpp
   relation.cpp
   query_profiler.cpp
   query_result.cpp
