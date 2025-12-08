@@ -50,6 +50,53 @@ from cte t1,
 ----
 logical_opt	<REGEX>:.*CTE.*CTE.*
 
+# two sides of a join with a bunch of columns
+statement ok
+create table build as
+select range a, range * 2 b, range * 3 c, range * 4 d
+from (select range::utinyint as range from range(11))
+where range % 5 = 0
+
+statement ok
+create table probe as
+select range e, range * 2 f, range * 3 g, range * 4 h
+from (select range::utinyint as range from range(11))
+
+statement ok
+create view my_view as
+from probe join build on (build.a = probe.e)
+
+# there's one subquery that selects all columns from the join
+# and 9 other subqueries that select different column combinations
+# this should result in 10 CTE scans (we only perform the join in the view once)
+# NOTE:
+# this is constructed somewhat in a specific way
+# because regrettably an empty projection map means we select all columns
+# and this results in build column "a" not being projected out (despite being equal to probe column "e")
+query II
+explain
+select greatest(a, b, c, d, e, f, g, h) from my_view
+union all
+select greatest(b, f) from my_view
+union all
+select greatest(b, g) from my_view
+union all
+select greatest(b, h) from my_view
+union all
+select greatest(c, f) from my_view
+union all
+select greatest(c, g) from my_view
+union all
+select greatest(c, h) from my_view
+union all
+select greatest(d, f) from my_view
+union all
+select greatest(d, g) from my_view
+union all
+select greatest(d, h) from my_view
+----
+logical_opt	<REGEX>:(?:.*CTE_SCAN){10}.*$
+
 require tpcds
 
 statement ok
@@ -213,6 +260,47 @@ WHERE sb.ss_store_sk = sc.ss_store_sk
   AND i_item_sk = sc.ss_item_sk
 ORDER BY s_store_name NULLS FIRST,
          i_item_desc NULLS FIRST
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+query II
+explain
+SELECT sum(ss_net_profit) AS total_sum,
+       s_state,
+       s_county,
+       grouping(s_state)+grouping(s_county) AS lochierarchy,
+       rank() OVER (PARTITION BY grouping(s_state)+grouping(s_county),
+                                 CASE
+                                     WHEN grouping(s_county) = 0 THEN s_state
+                                 END
+                    ORDER BY sum(ss_net_profit) DESC) AS rank_within_parent
+FROM store_sales,
+     date_dim d1,
+     store
+WHERE d1.d_month_seq BETWEEN 1200 AND 1200+11
+  AND d1.d_date_sk = ss_sold_date_sk
+  AND s_store_sk = ss_store_sk
+  AND s_state IN
+    (SELECT s_state
+     FROM
+       (SELECT s_state AS s_state,
+               rank() OVER (PARTITION BY s_state
+                            ORDER BY sum(ss_net_profit) DESC) AS ranking
+        FROM store_sales,
+             store,
+             date_dim
+        WHERE d_month_seq BETWEEN 1200 AND 1200+11
+          AND d_date_sk = ss_sold_date_sk
+          AND s_store_sk = ss_store_sk
+        GROUP BY s_state) tmp1
+     WHERE ranking <= 5 )
+GROUP BY rollup(s_state,s_county)
+ORDER BY lochierarchy DESC ,
+         CASE
+             WHEN grouping(s_state)+grouping(s_county) = 0 THEN s_state
+         END ,
+         rank_within_parent
 LIMIT 100;
 ----
 logical_opt	<REGEX>:.*CTE.*

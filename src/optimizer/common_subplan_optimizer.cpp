@@ -72,6 +72,7 @@ public:
 	bool Convert(LogicalOperator &op) {
 		Initialize<TYPE>(op);
 		ConvertTableIndices<TYPE>(op);
+		ConvertProjectionMaps<TYPE>(op);
 		auto can_materialize = ConvertColumnIndices<TYPE>(op);
 		ConvertChildren<TYPE>(op);
 		return ConvertExpressions<TYPE>(op) && can_materialize;
@@ -87,6 +88,7 @@ private:
 			column_ids.clear();
 			projection_ids.clear();
 			table_indices.clear();
+			projection_maps.clear();
 			expression_info.clear();
 
 			// Store temporary mapping
@@ -170,6 +172,29 @@ private:
 			D_ASSERT(table_indices == table_indices_verification);
 		}
 #endif
+	}
+
+	template <ConversionType TYPE>
+	void ConvertProjectionMaps(LogicalOperator &op) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op.Cast<LogicalJoin>();
+			if (TYPE == ConversionType::TO_CANONICAL) {
+				D_ASSERT(projection_maps.empty());
+				projection_maps.push_back(std::move(join.left_projection_map));
+				projection_maps.push_back(std::move(join.right_projection_map));
+			} else {
+				D_ASSERT(TYPE == ConversionType::RESTORE_ORIGINAL);
+				D_ASSERT(!projection_maps.empty());
+				join.left_projection_map = std::move(projection_maps[0]);
+				join.right_projection_map = std::move(projection_maps[1]);
+			}
+			break;
+		}
+		default:
+			break;
+		}
 	}
 
 	template <ConversionType TYPE>
@@ -313,6 +338,8 @@ private:
 	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
 	//! Temporary vector to store table indices
 	vector<idx_t> table_indices;
+	//! Temporary vector to store projection maps
+	vector<vector<idx_t>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
@@ -514,11 +541,13 @@ struct PlanSignatureEquality {
 
 struct SubplanInfo {
 	SubplanInfo(ArenaAllocator &allocator, unique_ptr<LogicalOperator> &op,
-	            arena_vector<ColumnBinding> &&canonical_bindings_p)
-	    : subplans(allocator), canonical_bindings(allocator), lowest_common_ancestor(op) {
+	            arena_vector<idx_t> &&canonical_table_indices_p, arena_vector<ColumnBinding> &&canonical_bindings_p)
+	    : canonical_table_indices(std::move(canonical_table_indices_p)), subplans(allocator),
+	      canonical_bindings(allocator), lowest_common_ancestor(op) {
 		subplans.push_back(op);
 		canonical_bindings.push_back(std::move(canonical_bindings_p));
 	}
+	arena_vector<idx_t> canonical_table_indices;
 	arena_vector<reference<unique_ptr<LogicalOperator>>> subplans;
 	arena_vector<arena_vector<ColumnBinding>> canonical_bindings;
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
@@ -595,12 +624,32 @@ public:
 
 				// Add to subplans (if we got actually got a signature)
 				if (signature) {
+					const auto current_op_table_index = current.op->GetTableIndex();
 					auto it = subplans.find(*signature);
 					if (it == subplans.end()) {
-						subplans.emplace(*signature,
-						                 SubplanInfo(state.allocator, current.op, GetCanonicalBindings(*current.op)));
+						// New subplan, map table indices
+						arena_vector<idx_t> canonical_table_indices(state.allocator);
+						for (auto &table_index : current_op_table_index) {
+							const auto next_canonical_table_index = to_canonical_table_index.size();
+							canonical_table_indices.push_back(next_canonical_table_index);
+							D_ASSERT(to_canonical_table_index.find(table_index) == to_canonical_table_index.end());
+							to_canonical_table_index.emplace(table_index, next_canonical_table_index);
+						}
+
+						// Add new subplan
+						SubplanInfo subplan_info(state.allocator, current.op, std::move(canonical_table_indices),
+						                         GetCanonicalBindings(*current.op));
+						subplans.emplace(*signature, std::move(subplan_info));
 					} else {
 						auto &info = it->second;
+						// Matches existing subplan, map already existing table indices
+						D_ASSERT(current_op_table_index.size() == info.canonical_table_indices.size());
+						for (idx_t i = 0; i < current_op_table_index.size(); i++) {
+							to_canonical_table_index.emplace(current_op_table_index[i],
+							                                 info.canonical_table_indices[i]);
+						}
+
+						// Add subplan to existing
 						info.subplans.emplace_back(current.op);
 						info.canonical_bindings.emplace_back(GetCanonicalBindings(*current.op));
 						info.lowest_common_ancestor = LowestCommonAncestor(info.lowest_common_ancestor, current.op);
@@ -701,13 +750,10 @@ private:
 		// Compute the canonical column bindings coming out of this operator for convenience later
 		const auto &table_index_map = state.table_index_map.GetMap();
 		const auto original_bindings = op.GetColumnBindings();
-		idx_t canonical_table_index = 0;
 		arena_vector<ColumnBinding> canonical_bindings(state.allocator);
 		for (idx_t col_idx = 0; col_idx < original_bindings.size(); col_idx++) {
 			auto &cb = original_bindings[col_idx];
-			if (col_idx != 0 && cb.table_index != original_bindings[col_idx - 1].table_index) {
-				canonical_table_index++; // On to the next table index
-			}
+			const auto canonical_table_index = to_canonical_table_index.at(cb.table_index);
 			auto &table_map = table_index_map.at(cb.table_index);
 			if (table_map.Empty<ConversionType::TO_CANONICAL>()) {
 				canonical_bindings.emplace_back(canonical_table_index, cb.column_index);
@@ -769,6 +815,8 @@ private:
 	reference_map_t<unique_ptr<LogicalOperator>, OperatorInfo> operator_infos;
 	//! Mapping from subplan signature to subplan information
 	subplan_map_t subplans;
+	//! Mapping from original table index to canonical table index
+	unordered_map<idx_t, idx_t> to_canonical_table_index;
 };
 
 //===--------------------------------------------------------------------===//
