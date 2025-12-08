@@ -30,6 +30,7 @@ public:
 	}
 	idx_t GetCommittedDeletedCount(idx_t count);
 
+	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id, idx_t count);
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
 	                            SelectionVector &sel_vector, idx_t max_count);

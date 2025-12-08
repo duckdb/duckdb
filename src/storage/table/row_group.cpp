@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -11,6 +12,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -433,9 +436,21 @@ void RowGroup::CommitDrop() {
 	}
 }
 
+struct BlockIdDropper : public BlockIdVisitor {
+	explicit BlockIdDropper(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockAsModified(block_id);
+	}
+
+	BlockManager &manager;
+};
+
 void RowGroup::CommitDropColumn(const idx_t column_index) {
 	auto &column = GetColumn(column_index);
-	column.CommitDropColumn();
+	BlockIdDropper dropper(GetBlockManager());
+	column.VisitBlockIds(dropper);
 }
 
 void RowGroup::NextVector(CollectionScanState &state) {
@@ -781,6 +796,27 @@ RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
 	return *GetOrCreateVersionInfoInternal();
 }
 
+optional_ptr<RowVersionManager> RowGroup::GetVersionInfoIfLoaded() const {
+	if (!HasUnloadedDeletes()) {
+		// deletes are loaded - return the version info
+		return version_info;
+	}
+	return nullptr;
+}
+
+bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
+	if (checkpoint_id == MAX_TRANSACTION_ID) {
+		// no id specified - checkpoint all committed data
+		return true;
+	}
+	// check if this row group was committed as of the current checkpoint id
+	auto vinfo = GetVersionInfoIfLoaded();
+	if (!vinfo) {
+		return true;
+	}
+	return vinfo->ShouldCheckpointRowGroup(checkpoint_id, count);
+}
+
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                              idx_t max_count) {
 	auto vinfo = GetVersionInfo();
@@ -966,13 +1002,13 @@ ColumnCheckpointInfo::ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column
 }
 
 RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-                                     CheckpointType checkpoint_type)
-    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
+                                     CheckpointOptions options_p)
+    : manager(manager), compression_types(compression_types), options(options_p) {
 }
 
 RowGroupWriteInfo::RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
                                      vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p)
-    : manager(manager), compression_types(compression_types), checkpoint_type(CheckpointType::FULL_CHECKPOINT),
+    : manager(manager), compression_types(compression_types), options(),
       column_partial_block_managers(column_partial_block_managers_p) {
 }
 
@@ -1004,10 +1040,12 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		RowGroupWriteData write_data;
 		write_data.states.reserve(column_count);
 		write_data.statistics.reserve(column_count);
+		write_data.should_checkpoint = row_group.get().ShouldCheckpointRowGroup(info.options.transaction_id);
 		result.push_back(std::move(write_data));
 	}
 
 	// Checkpoint the row groups
+
 	// In order to co-locate columns across different row groups, we write column-at-a-time
 	// i.e. we first write column #0 of all row groups, then column #1, ...
 
@@ -1024,6 +1062,10 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
+			if (!row_group_write_data.should_checkpoint) {
+				// row group should not be checkpointed - skip
+				continue;
+			}
 			auto &column = row_group.GetColumn(column_idx);
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
@@ -1044,6 +1086,10 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 		auto &row_group_write_data = result[row_group_idx];
 		auto &row_group = row_groups[row_group_idx].get();
+		if (!row_group_write_data.should_checkpoint) {
+			// row group should not be checkpointed - skip
+			continue;
+		}
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
 		result_row_group->columns = std::move(result_columns[row_group_idx]);
 		result_row_group->version_info = row_group.version_info.load();
@@ -1141,8 +1187,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			                        column_idx, this->count.load(), column.count.load());
 		}
 	}
-
-	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
+	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointOptions());
 	return WriteToDisk(info);
 }
 
@@ -1330,13 +1375,29 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	explicit DuckDBPartitionRowGroup(const RowGroup &row_group_p, bool is_exact_p)
+	    : row_group(row_group_p), is_exact(is_exact_p) {
 	}
 
-	RowGroup &row_group;
+	const RowGroup &row_group;
+	const bool is_exact;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
 		return row_group.GetStatistics(column_id);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &stats) override {
+		if (!is_exact || row_group.HasChanges()) {
+			return false;
+		}
+		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
+			if (!StringStats::HasMaxStringLength(stats)) {
+				return false;
+			}
+			const idx_t max_length = StringStats::MaxStringLength(stats);
+			return max_length == StringStats::Max(stats).length() && max_length == StringStats::Min(stats).length();
+		}
+		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
 	}
 };
 
@@ -1347,11 +1408,12 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 	if (HasUnloadedDeletes() || version_info.load().get()) {
 		// we have version info - approx count
 		result.count_type = CountType::COUNT_APPROXIMATE;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, false);
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, true);
 	}
 
-	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this);
 	return result;
 }
 

@@ -124,11 +124,11 @@ public:
 		return offset;
 	}
 
-	optional_ptr<CompressedSegmentState> GetSegmentState() {
+	optional_ptr<CompressedSegmentState> GetSegmentState() const {
 		return segment_state.get();
 	}
 
-	void CommitDropSegment();
+	void VisitBlockIds(BlockIdVisitor &visitor) const;
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);

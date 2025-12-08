@@ -326,10 +326,10 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	}
 }
 
-void ListColumnData::CommitDropColumn() {
-	ColumnData::CommitDropColumn();
-	validity->CommitDropColumn();
-	child_column->CommitDropColumn();
+void ListColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	ColumnData::VisitBlockIds(visitor);
+	validity->VisitBlockIds(visitor);
+	child_column->VisitBlockIds(visitor);
 }
 
 void ListColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {

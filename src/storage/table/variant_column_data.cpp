@@ -32,17 +32,6 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 	}
 }
 
-void VariantColumnData::ReplaceColumns(shared_ptr<ColumnData> &&unshredded, shared_ptr<ColumnData> &&shredded) {
-	for (auto &sub_column : sub_columns) {
-		sub_column->CommitDropColumn();
-	}
-
-	sub_columns.clear();
-	sub_columns.push_back(std::move(unshredded));
-	sub_columns.push_back(std::move(shredded));
-	is_shredded = true;
-}
-
 void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	//! Re-initialize the scan state, since VARIANT can have a different shape for every RowGroup
 	state.child_states.clear();
@@ -53,7 +42,7 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
 	state.child_states.emplace_back(state.parent);
 	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
-	if (is_shredded) {
+	if (IsShredded()) {
 		auto &shredded_column = sub_columns[1];
 		state.child_states.emplace_back(state.parent);
 		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
@@ -98,7 +87,7 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 }
 
 Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
-	D_ASSERT(is_shredded);
+	D_ASSERT(IsShredded());
 	D_ASSERT(sub_columns.size() == 2);
 
 	child_list_t<LogicalType> child_types;
@@ -111,7 +100,7 @@ Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
 
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
-	if (is_shredded) {
+	if (IsShredded()) {
 		auto intermediate = CreateUnshreddingIntermediate(target_count);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], *child_vectors[0], target_count);
@@ -128,7 +117,7 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 
 idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                        idx_t target_count) {
-	if (is_shredded) {
+	if (IsShredded()) {
 		auto intermediate = CreateUnshreddingIntermediate(target_count);
 
 		auto &child_vectors = StructVector::GetEntries(intermediate);
@@ -221,7 +210,7 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 	// append the null values
 	validity->Append(stats, state.child_appends[0], vector, count);
 
-	if (is_shredded) {
+	if (IsShredded()) {
 		auto &unshredded_type = sub_columns[0]->type;
 		auto &shredded_type = sub_columns[1]->type;
 
@@ -244,6 +233,7 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
 		}
+		VariantStats::MarkAsNotShredded(stats);
 	}
 	this->count += count;
 }
@@ -284,7 +274,7 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		state.child_states.push_back(std::move(child_state));
 	}
 
-	if (is_shredded) {
+	if (IsShredded()) {
 		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		// fetch the validity state
@@ -308,11 +298,11 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 	sub_columns[0]->FetchRow(transaction, *state.child_states[1], row_id, result, result_idx);
 }
 
-void VariantColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
+void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	validity->VisitBlockIds(visitor);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
-		sub_column->CommitDropColumn();
+		sub_column->VisitBlockIds(visitor);
 	}
 }
 
@@ -332,9 +322,6 @@ void VariantColumnData::SetChildData(vector<shared_ptr<ColumnData>> child_data) 
 		col->SetParent(this);
 	}
 	this->sub_columns = std::move(child_data);
-	if (this->sub_columns.size() == 2) {
-		this->is_shredded = true;
-	}
 }
 
 struct VariantColumnCheckpointState : public ColumnCheckpointState {
@@ -373,6 +360,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
+		global_stats->Merge(*validity_state->GetStatistics());
 		VariantStats::SetUnshreddedStats(*global_stats, child_states[0]->GetStatistics());
 		if (child_states.size() == 2) {
 			VariantStats::SetShreddedStats(*global_stats, child_states[1]->GetStatistics());
@@ -402,7 +390,8 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const
 }
 
 vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group,
-                                                                    const LogicalType &shredded_type) {
+                                                                    const LogicalType &shredded_type,
+                                                                    BaseStatistics &stats) {
 	//! scan_chunk
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
@@ -453,7 +442,7 @@ vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGro
 
 		AppendShredded(scan_vector, append_vector, to_scan, append_data);
 	}
-	stats->statistics = std::move(transformed_stats);
+	stats = std::move(transformed_stats);
 	return ret;
 }
 
@@ -497,37 +486,46 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	auto &db = table_info.GetDB();
 	auto &config_options = DBConfig::Get(db).options;
 
-	if (!HasAnyChanges() || !EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+	bool should_shred = true;
+	if (!HasAnyChanges()) {
+		should_shred = false;
+	}
+	if (!EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+		should_shred = false;
+	}
+
+	LogicalType shredded_type;
+	if (should_shred) {
+		if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
+			shredded_type = config_options.force_variant_shredding;
+		} else {
+			shredded_type = GetShreddedType();
+		}
+		D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
+		auto &type_entries = StructType::GetChildTypes(shredded_type);
+		if (type_entries.size() != 2) {
+			//! We couldn't determine a shredding type from the data
+			should_shred = false;
+		}
+	}
+
+	if (!should_shred) {
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
 		}
 		return std::move(checkpoint_state);
 	}
 
-	LogicalType shredded_type;
-	if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
-		shredded_type = config_options.force_variant_shredding;
-	} else {
-		shredded_type = GetShreddedType();
-	}
+	//! STRUCT(unshredded VARIANT, shredded <...>)
+	BaseStatistics column_stats = BaseStatistics::CreateEmpty(shredded_type);
+	checkpoint_state->shredded_data = WriteShreddedData(row_group, shredded_type, column_stats);
+	D_ASSERT(checkpoint_state->shredded_data.size() == 2);
+	auto &unshredded = checkpoint_state->shredded_data[0];
+	auto &shredded = checkpoint_state->shredded_data[1];
 
-	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
-	auto &type_entries = StructType::GetChildTypes(shredded_type);
-	if (type_entries.size() == 2) {
-		//! STRUCT(unshredded VARIANT, shredded <...>)
-		checkpoint_state->shredded_data = WriteShreddedData(row_group, shredded_type);
-		D_ASSERT(checkpoint_state->shredded_data.size() == 2);
-		auto &unshredded = checkpoint_state->shredded_data[0];
-		auto &shredded = checkpoint_state->shredded_data[1];
-
-		//! Now checkpoint the shredded data
-		checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-		checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
-	} else {
-		D_ASSERT(type_entries.size() == 1);
-		//! STRUCT(unshredded VARIANT)
-		checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
-	}
+	//! Now checkpoint the shredded data
+	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
 
 	return std::move(checkpoint_state);
 }
@@ -560,7 +558,7 @@ bool VariantColumnData::HasAnyChanges() const {
 
 PersistentColumnData VariantColumnData::Serialize() {
 	PersistentColumnData persistent_data(type);
-	if (is_shredded) {
+	if (IsShredded()) {
 		persistent_data.SetVariantShreddedType(sub_columns[1]->type);
 	}
 	persistent_data.child_columns.push_back(validity->Serialize());
@@ -580,10 +578,9 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 
 		auto &shredded_type = column_data.variant_shredded_type;
-		if (!is_shredded) {
+		if (!IsShredded()) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
 			sub_columns.push_back(ColumnData::CreateColumn(block_manager, info, 2, shredded_type, GetDataType(), this));
-			is_shredded = true;
 		}
 		auto &shredded_stats = VariantStats::GetShreddedStats(target_stats);
 		sub_columns[1]->InitializeColumn(column_data.child_columns[2], shredded_stats);

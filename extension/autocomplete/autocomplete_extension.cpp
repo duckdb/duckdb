@@ -39,7 +39,8 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 
 struct AutoCompleteParameters {
 	idx_t max_suggestion_count = 20;
-	idx_t max_file_suggestion_count = 100;
+	idx_t max_file_suggestion_count = 1;
+	idx_t max_exact_suggestion_count = 100;
 	bool suggestion_contains_files = false;
 };
 
@@ -82,6 +83,7 @@ bool PreferCaseMatching(SuggestionState suggestion_state) {
 	case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
 	case SuggestionState::SUGGEST_PRAGMA_NAME:
 	case SuggestionState::SUGGEST_SETTING_NAME:
+	case SuggestionState::SUGGEST_FILE_NAME:
 		return true;
 	default:
 		return false;
@@ -114,11 +116,12 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
+		idx_t match_score = 0;
 		if (prefix.empty()) {
 		} else if (prefix.size() < str.size()) {
-			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
+			match_score = StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
-			score += StringUtil::SimilarityScore(str, prefix);
+			match_score = StringUtil::SimilarityScore(str, prefix);
 		}
 		auto type = available_suggestions[i].suggestion_type;
 		if (str[0] == '.') {
@@ -132,15 +135,17 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			score += SUBSTRING_PENALTY;
 		} else if (PreferCaseMatching(type) && !StringUtil::Contains(str, prefix)) {
 			// for types for which we prefer case matching - add a small penalty if we are not matching case
-			score++;
+			match_score++;
 		}
-		suggestion.score = score;
+		score += match_score;
+		suggestion.score = match_score;
 		scores.emplace_back(str, score);
 	}
-	idx_t suggestion_count = parameters.max_suggestion_count;
+	idx_t fuzzy_suggestion_count = parameters.max_suggestion_count;
 	if (parameters.suggestion_contains_files) {
-		suggestion_count = parameters.max_file_suggestion_count;
+		fuzzy_suggestion_count = parameters.max_file_suggestion_count;
 	}
+	idx_t suggestion_count = MaxValue<idx_t>(parameters.max_exact_suggestion_count, fuzzy_suggestion_count);
 
 	vector<AutoCompleteSuggestion> results;
 	auto top_strings = StringUtil::TopNStrings(scores, suggestion_count, 999);
@@ -148,6 +153,12 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		auto entry = matches.find(result);
 		if (entry == matches.end()) {
 			throw InternalException("Auto-complete match not found");
+		}
+		if (result.size() > fuzzy_suggestion_count) {
+			// after we exceed the "fuzzy_suggestion_count" we only accept exact suggestion matches
+			if (!StringUtil::StartsWith(StringUtil::Lower(result), lower_prefix)) {
+				break;
+			}
 		}
 		auto &suggestion = available_suggestions[entry->second];
 		if (suggestion.extra_char != '\0') {
@@ -658,6 +669,8 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 			parameters.max_suggestion_count = UBigIntValue::Get(param.second);
 		} else if (param.first == "max_file_suggestion_count") {
 			parameters.max_file_suggestion_count = UBigIntValue::Get(param.second);
+		} else if (param.first == "max_exact_suggestion_count") {
+			parameters.max_exact_suggestion_count = UBigIntValue::Get(param.second);
 		} else {
 			throw InternalException("Unsupported parameter for SQL auto complete");
 		}
@@ -832,6 +845,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	auto_complete_fun.named_parameters["max_suggestion_count"] = LogicalType::UBIGINT;
 	auto_complete_fun.named_parameters["max_file_suggestion_count"] = LogicalType::UBIGINT;
+	auto_complete_fun.named_parameters["max_exact_suggestion_count"] = LogicalType::UBIGINT;
 	loader.RegisterFunction(auto_complete_fun);
 
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,

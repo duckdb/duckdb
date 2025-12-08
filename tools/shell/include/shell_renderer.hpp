@@ -27,29 +27,67 @@ struct ResultMetadata {
 };
 
 struct RowData {
-	vector<string> data;
+	vector<duckdb::string_t> data;
 	vector<bool> is_null;
 	idx_t row_index = 0;
 };
 
 struct RenderingQueryResult {
-	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
-	    : result(result), renderer(renderer), metadata(result), is_converted(false) {
-	}
+	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer);
 
 	duckdb::QueryResult &result;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
-	vector<vector<string>> data;
-	bool is_converted = false;
+	vector<unique_ptr<duckdb::DataChunk>> chunks;
+	bool exhausted_result = false;
+	idx_t loaded_row_count = 0;
 
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();
 	}
+	bool TryConvertChunk();
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
 	RenderingResultIterator end();   // NOLINT: match stl API
+};
+
+enum class TextAlignment { CENTER, LEFT, RIGHT };
+
+struct PrintStream {
+public:
+	explicit PrintStream(ShellState &state);
+	virtual ~PrintStream() = default;
+
+	virtual void Print(const string &str) {
+		state.Print(str);
+	}
+	virtual void Print(duckdb::string_t str) {
+		state.Print(str);
+	}
+	virtual void Print(const char *str) {
+		state.Print(str);
+	}
+	virtual void SetBinaryMode() {
+		state.SetBinaryMode();
+	}
+	virtual void SetTextMode() {
+		state.SetTextMode();
+	}
+	virtual bool SupportsHighlight() {
+		return true;
+	}
+
+	void RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
+	void RenderAlignedValue(const char *str, idx_t str_len, idx_t width,
+	                        TextAlignment alignment = TextAlignment::CENTER);
+	void RenderAlignedValue(duckdb::string_t str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
+	void PrintDashes(idx_t N);
+	void OutputQuotedIdentifier(const string &str);
+	void OutputQuotedString(const string &str);
+
+public:
+	ShellState &state;
 };
 
 class ShellRenderer {
@@ -63,13 +101,22 @@ public:
 	string row_sep;
 
 public:
-	virtual SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result);
+	virtual SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result);
 	virtual void Analyze(RenderingQueryResult &result);
-	virtual void RenderHeader(ResultMetadata &result);
-	virtual void RenderRow(ResultMetadata &result, RowData &row);
-	virtual void RenderFooter(ResultMetadata &result);
-	static bool IsColumnar(RenderMode mode);
-	virtual string NullValue();
+	virtual void RenderHeader(PrintStream &out, ResultMetadata &result);
+	virtual void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row);
+	virtual void RenderFooter(PrintStream &out, ResultMetadata &result);
+	virtual const char *NullValue();
+	virtual bool RequireMaterializedResult() const = 0;
+	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
+	virtual unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk);
+	virtual bool HasConvertValue() {
+		return false;
+	}
+	virtual bool ShouldConvertValue(const char *value, idx_t str_len) {
+		return false;
+	}
+	virtual string ConvertValue(const char *value, idx_t str_len);
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -77,16 +124,17 @@ public:
 	explicit ColumnRenderer(ShellState &state);
 
 	void Analyze(RenderingQueryResult &result) override;
-	virtual string ConvertValue(const char *value);
-	void RenderRow(ResultMetadata &result, RowData &row) override;
+	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override;
 
 	virtual const char *GetColumnSeparator() = 0;
 	virtual const char *GetRowSeparator() = 0;
 	virtual const char *GetRowStart() {
 		return nullptr;
 	}
-
-	void RenderAlignedValue(ResultMetadata &result, idx_t c);
+	bool RequireMaterializedResult() const override {
+		return true;
+	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 
 protected:
 	vector<idx_t> column_width;
@@ -98,14 +146,11 @@ public:
 	explicit RowRenderer(ShellState &state);
 
 public:
-	virtual void RenderHeader(ResultMetadata &result) override;
-};
-
-class ModeDuckBoxRenderer : public ShellRenderer {
-public:
-	explicit ModeDuckBoxRenderer(ShellState &state);
-
-	SuccessState RenderQueryResult(ShellState &state, RenderingQueryResult &result) override;
+	void RenderHeader(PrintStream &out, ResultMetadata &result) override;
+	bool RequireMaterializedResult() const override {
+		return false;
+	}
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 };
 
 } // namespace duckdb_shell

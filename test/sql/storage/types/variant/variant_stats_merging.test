@@ -41,11 +41,11 @@ checkpoint
 
 restart
 
-# Mixing VARCHAR[] + INTEGER[] results in unshredded
+# Mixing VARCHAR[] + INTEGER[] results in inconsistent stats
 query I
 select stats(col) from tbl limit 1;
 ----
-<REGEX>:is_shredded: false.*
+<REGEX>:shredding_state: INCONSISTENT.*
 
 # -------------------------- Shred 'tbl2' on OBJECT(a INTEGER, b VARCHAR, c BOOLEAN) --------------------------
 
