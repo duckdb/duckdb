@@ -172,7 +172,7 @@ MetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
 	const auto idx = static_cast<uint8_t>(type) - base_opt;
 
 	const auto metric_u8 = static_cast<uint8_t>(START_OPTIMIZER + idx);
-	if (metric_u8 < START_OPTIMIZER || metric_u8 > END_OPTIMIZER) {
+    if (metric_u8 < START_OPTIMIZER || metric_u8 > END_OPTIMIZER) { // This shouldn't happen, but we want to fail gracefully if it does
 		throw InternalException("OptimizerType out of MetricType optimizer range");
 	}
 	return static_cast<MetricType>(metric_u8);
