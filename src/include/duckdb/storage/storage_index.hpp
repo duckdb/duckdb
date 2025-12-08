@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,14 @@ struct StorageIndex {
 	}
 	idx_t ChildIndexCount() const {
 		return child_indexes.size();
+	}
+	static StorageIndex FromColumnIndex(const ColumnIndex &column_id) {
+		vector<StorageIndex> result;
+		for (auto &child_id : column_id.GetChildIndexes()) {
+			result.push_back(StorageIndex::FromColumnIndex(child_id));
+		}
+		auto storage_index = StorageIndex(column_id.GetPrimaryIndex(), std::move(result));
+		return storage_index;
 	}
 	const StorageIndex &GetChildIndex(idx_t idx) const {
 		return child_indexes[idx];

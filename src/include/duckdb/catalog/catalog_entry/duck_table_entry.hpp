@@ -34,6 +34,7 @@ public:
 	DataTable &GetStorage() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &storage_index);
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 
 	unique_ptr<BlockingSample> GetSample() override;

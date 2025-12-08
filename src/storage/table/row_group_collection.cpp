@@ -1774,7 +1774,7 @@ void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
 
-unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
+unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(const StorageIndex &column_id) {
 	return stats.CopyStats(column_id);
 }
 

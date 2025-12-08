@@ -183,6 +183,25 @@ void LogicalGet::ResolveTypes() {
 	}
 }
 
+bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const {
+	auto table = GetTable();
+	if (!table || !table->IsDuckTable()) {
+		//! If there's no table (or the table is not a DuckDB table) we assume there's no mismatch between
+		//! logical/storage index
+		out_index = StorageIndex::FromColumnIndex(column_index);
+		return true;
+	}
+
+	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
+	if (column.Generated()) {
+		//! This is a generated column, can't use the row group pruner
+		return false;
+	}
+	out_index = StorageIndex::FromColumnIndex(column_index);
+	out_index.SetIndex(column.StorageOid());
+	return true;
+}
+
 idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	// join order optimizer does better cardinality estimation.
 	if (has_estimated_cardinality) {
