@@ -93,7 +93,6 @@ private:
 protected:
 	//! The map of column references
 	column_binding_map_t<ReferencedColumn> column_references;
-	vector<ColumnIndex> deliver_child;
 
 private:
 	//! The current mode of the pruner, enables/disables certain behaviors
@@ -120,6 +119,10 @@ private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get);
-	void CheckPushdownExtract(LogicalGet &get);
+	void CheckPushdownExtract(LogicalOperator &op);
+	void RewriteExpressions(LogicalProjection &proj);
+	void WritePushdownExtractColumns(const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx,
+	                                 const LogicalType &column_type,
+	                                 const std::function<idx_t(const ColumnIndex &new_index)> &callback);
 };
 } // namespace duckdb

@@ -22,6 +22,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include <utility>
 
 namespace duckdb {
@@ -292,7 +293,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
+			CheckPushdownExtract(op);
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
+			RewriteExpressions(proj);
 
 			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
@@ -300,19 +303,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// in this case we only need to project a single constant
 				proj.expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 			}
-			RemoveUnusedColumns remove(binder, context);
-			auto tmp_deliver = remove.deliver_child;
-			for (idx_t idx = 0; idx < proj.expressions.size(); idx++) {
-				auto &expr = proj.expressions[idx];
-				auto record = column_references.find(ColumnBinding(proj.table_index, idx));
-				if (record != column_references.end() && !record->second.child_columns.empty()) {
-					remove.deliver_child = record->second.child_columns;
-				}
-				remove.VisitExpression(&expr);
-				remove.deliver_child = tmp_deliver;
-			}
-			remove.VisitOperator(*op.children[0]);
-			return;
 		}
 		// then recurse into the children of this projection
 		RemoveUnusedColumns remove(binder, context);
@@ -417,11 +407,9 @@ static ColumnIndex PathToIndex(const vector<idx_t> &path) {
 	return index;
 }
 
-static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType &column_type,
-                                        BindingsRewriteState &state, idx_t col_sel_idx) {
-	auto &old_column_ids = state.old_column_ids;
-	auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
-
+void RemoveUnusedColumns::WritePushdownExtractColumns(
+    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
+    const std::function<idx_t(const ColumnIndex &extract_path)> &callback) {
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
@@ -459,44 +447,142 @@ static void WritePushdownExtractColumns(ReferencedColumn &col, const LogicalType
 		auto &new_expr = expr.get()->Cast<BoundColumnRefExpression>();
 		new_expr.return_type = return_type;
 
-		ColumnIndex new_index(struct_column_index, {*entry});
-		new_index.SetPushdownExtractType(column_type);
-		auto column_index = state.AddStructExtract(col_sel_idx, new_index);
+		auto column_index = callback(*entry);
 		new_expr.binding.column_index = column_index;
-		expr.get()->return_type = return_type;
 	}
-	D_ASSERT(col.unique_paths.size() == state.BindingsCreatedForIndex(struct_column_index));
 }
 
-void RemoveUnusedColumns::CheckPushdownExtract(LogicalGet &get) {
-	//! For all referenced struct fields, check if the scan supports pushing down the extract
-	auto &column_ids = get.GetColumnIds();
-	for (auto &entry : column_references) {
-		auto &binding = entry.first;
-		if (binding.table_index != get.table_index) {
-			//! Binding is not from this operator, skip the check
+static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &context, unique_ptr<Expression> target,
+                                                             const ColumnIndex &path) {
+	auto extract_function = GetKeyExtractFunction();
+	auto bind_callback = extract_function.GetBindCallback();
+	vector<unique_ptr<Expression>> arguments(2);
+
+	auto &struct_type = target->return_type;
+	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
+	reference<const LogicalType> type_iter(struct_type);
+	reference<const ColumnIndex> path_iter(path);
+	while (true) {
+		auto child_index = path_iter.get().GetPrimaryIndex();
+		auto &child_types = StructType::GetChildTypes(type_iter.get());
+		D_ASSERT(child_index < child_types.size());
+		auto &key = child_types[child_index].first;
+		type_iter = child_types[child_index].second;
+
+		arguments[0] = (std::move(target));
+		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
+		auto bind_info = bind_callback(context, extract_function, arguments);
+		auto return_type = extract_function.GetReturnType();
+		target = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
+		                                            std::move(bind_info));
+		if (!path_iter.get().HasChildren()) {
+			break;
+		}
+		path_iter = path_iter.get().GetChildIndex(0);
+	}
+	return std::move(target);
+}
+
+void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj) {
+	vector<unique_ptr<Expression>> expressions;
+	auto &context = this->context;
+	for (idx_t i = 0; i < proj.expressions.size(); i++) {
+		auto binding = ColumnBinding(proj.table_index, i);
+		auto entry = column_references.find(binding);
+		if (entry == column_references.end()) {
+			throw InternalException("RemoveUnusedColumns - could not find referenced column");
+		}
+		if (entry->second.child_columns.empty() ||
+		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
+			expressions.push_back(std::move(proj.expressions[i]));
 			continue;
 		}
-		auto &col = entry.second;
-		if (col.struct_extracts.empty()) {
-			//! Either not a struct, or we're not using struct field projection pushdown - skip it
-			continue;
+		auto &expr = *proj.expressions[i];
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		auto original_binding = colref.binding;
+		auto &column_type = expr.return_type;
+		//! Pushdown Extract is supported, emit a column for every field
+		WritePushdownExtractColumns(
+		    entry->first, entry->second, i, column_type, [&](const ColumnIndex &extract_path) -> idx_t {
+			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
+			    target->SetAlias(expr.GetAlias());
+			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
+			    expressions.push_back(std::move(new_extract));
+			    return expressions.size() - 1;
+		    });
+	}
+	proj.expressions = std::move(expressions);
+}
+
+void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		//! For all referenced struct fields, check if the scan supports pushing down the extract
+		auto &column_ids = get.GetColumnIds();
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto entry = column_references.find(ColumnBinding(get.table_index, i));
+			if (entry == column_references.end()) {
+				//! Binding is not referenced, skip
+				continue;
+			}
+			auto &col = entry->second;
+			if (col.struct_extracts.empty()) {
+				//! Either not a struct, or we're not using struct field projection pushdown - skip it
+				continue;
+			}
+			if (col.supports_pushdown_extract == PushdownExtractSupport::DISABLED) {
+				//! We're already not using pushdown extract for this column, no need to check with the scan
+				continue;
+			}
+			auto logical_column_index = column_ids[i].GetPrimaryIndex();
+			if (!get.function.supports_pushdown_extract) {
+				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
+				continue;
+			}
+			D_ASSERT(get.bind_data);
+			if (get.function.supports_pushdown_extract(*get.bind_data, logical_column_index)) {
+				col.supports_pushdown_extract = PushdownExtractSupport::ENABLED;
+			} else {
+				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
+			}
 		}
-		if (col.supports_pushdown_extract == PushdownExtractSupport::DISABLED) {
-			//! We're already not using pushdown extract for this column, no need to check with the scan
-			continue;
-		}
-		auto logical_column_index = column_ids[binding.column_index].GetPrimaryIndex();
-		if (!get.function.supports_pushdown_extract) {
-			col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
-			continue;
-		}
-		D_ASSERT(get.bind_data);
-		if (get.function.supports_pushdown_extract(*get.bind_data, logical_column_index)) {
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &proj = op.Cast<LogicalProjection>();
+		for (idx_t idx = 0; idx < proj.expressions.size(); idx++) {
+			auto &expr = *proj.expressions[idx];
+			auto record = column_references.find(ColumnBinding(proj.table_index, idx));
+			if (record == column_references.end()) {
+				//! Not referenced, skip
+				continue;
+			}
+			auto &col = record->second;
+			auto &child_columns = col.child_columns;
+			if (child_columns.empty()) {
+				//! No children of this column are referenced, skip
+				continue;
+			}
+			if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+				//! Not a column reference, can't pull up the extract
+				continue;
+			}
+			if (expr.return_type.id() != LogicalTypeId::STRUCT) {
+				//! Extract pull up only supported for STRUCT currently
+				continue;
+			}
+			if (col.supports_pushdown_extract == PushdownExtractSupport::DISABLED) {
+				//! Already explicitly disabled, don't need to check
+				continue;
+			}
 			col.supports_pushdown_extract = PushdownExtractSupport::ENABLED;
-		} else {
-			col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
 		}
+		return;
+	}
+	default:
+		throw InternalException("CheckPushdownExtract not supported for LogicalOperatorType::%s",
+		                        EnumUtil::ToString(op.type));
 	}
 }
 
@@ -575,8 +661,17 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			}
 			continue;
 		}
+		auto &old_column_ids = state.old_column_ids;
+		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+
 		//! Pushdown Extract is supported, emit a column for every field
-		WritePushdownExtractColumns(entry->second, column_type, state, col_sel_idx);
+		WritePushdownExtractColumns(
+		    entry->first, entry->second, col_sel_idx, column_type,
+		    [&state, &col_sel_idx, &column_type, &struct_column_index](const ColumnIndex &extract_path) -> idx_t {
+			    ColumnIndex new_index(struct_column_index, {extract_path});
+			    new_index.SetPushdownExtractType(column_type);
+			    return state.AddStructExtract(col_sel_idx, new_index);
+		    });
 	}
 	if (state.NoColumnsReferenced()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
@@ -812,13 +907,6 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 		// already handled
 		return;
 	}
-	if (HandleStructPack(**expression)) {
-		auto tmp_deliver = deliver_child;
-		deliver_child = vector<ColumnIndex>();
-		LogicalOperatorVisitor::VisitExpression(expression);
-		deliver_child = tmp_deliver;
-		return;
-	}
 	// recurse
 	LogicalOperatorVisitor::VisitExpression(expression);
 }
@@ -826,14 +914,7 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
                                                       unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
-	if (deliver_child.empty()) {
-		AddBinding(expr);
-	} else {
-		for (auto &child_idx : deliver_child) {
-			AddBinding(expr, child_idx);
-		}
-	}
-
+	AddBinding(expr);
 	return nullptr;
 }
 
