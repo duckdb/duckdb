@@ -22,6 +22,7 @@ class ConflictManager;
 class ARTKey;
 class ARTKeySection;
 class FixedSizeAllocator;
+class IndexStorageInfo;
 
 struct ARTIndexScanState;
 

@@ -923,7 +923,7 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 		TransformToDeprecated();
 	}
 
-	IndexStorageInfo info(name);
+	auto info = IndexStorageInfo(name);
 	info.root = tree.Get();
 	info.options = options;
 

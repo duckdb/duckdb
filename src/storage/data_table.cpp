@@ -149,11 +149,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	// ALTER COLUMN to add a new constraint.
 
-	// Clone the storage info vector or the table.
-	for (const auto &index_info : parent.info->index_storage_infos) {
-		info->index_storage_infos.push_back(IndexStorageInfo(index_info.name));
-	}
-
 	// Bind all indexes.
 	info->BindIndexes(context);
 
@@ -355,7 +350,7 @@ bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKey
 	return index != nullptr;
 }
 
-void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info) {
+void DataTable::SetIndexStorageInfo(vector<unique_ptr<IndexStorageInfo>> index_storage_info) {
 	info->index_storage_infos = std::move(index_storage_info);
 }
 
@@ -1652,7 +1647,7 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, const IndexStorageInfo &index_info) {
+                         const IndexConstraintType type, unique_ptr<IndexStorageInfo> index_info) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
 		                           "%s by a different transaction",
@@ -1671,10 +1666,10 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 		physical_ids.push_back(col.Physical().index);
 	}
 
-	// Create an ART around the expressions.
+	// Create an ART around the expressions. Transfer ownership of index_info to the ART.
 	auto &io_manager = TableIOManager::Get(*this);
-	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
-	                          index_info);
+	auto art = make_uniq<ART>(index_info->name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
+	                          *index_info);
 	info->indexes.AddIndex(std::move(art));
 }
 
