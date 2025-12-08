@@ -143,6 +143,8 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 //===--------------------------------------------------------------------===//
 // SortedRun
 //===--------------------------------------------------------------------===//
+sort_key_ptr_t::Atomic sort_key_ptr_t::lock_test;
+
 SortedRun::SortedRun(ClientContext &context_p, const Sort &sort_p, bool is_index_sort_p)
     : context(context_p), sort(sort_p), key_data(make_uniq<TupleDataCollection>(context, sort.key_layout)),
       payload_data(sort.payload_layout && sort.payload_layout->ColumnCount() != 0
