@@ -35,9 +35,15 @@ public:
 	virtual ~AdditionalAuthenticatedData();
 
 public:
-	data_ptr_t data();
-	idx_t size();
-	void WriteData(const_data_ptr_t source, idx_t write_size);
+	template <typename T>
+	void WriteData(const T &val) {
+		additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&val), sizeof(val));
+	}
+
+public:
+	void WriteStringData(const std::string &val) const;
+	data_ptr_t data() const;
+	idx_t size() const;
 
 private:
 	static constexpr uint32_t INITIAL_AAD_CAPACITY = 32;

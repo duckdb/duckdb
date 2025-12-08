@@ -172,7 +172,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 
 		if (!file_aad.empty()) {
 			aad_crypto_metadata.Initialize(file_aad);
-			aad_crypto_metadata.SetModule(ParquetCrypto::Footer);
+			aad_crypto_metadata.SetModule(ParquetCrypto::FOOTER);
 		}
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,

@@ -35,16 +35,16 @@ constexpr uint32_t AdditionalAuthenticatedData::INITIAL_AAD_CAPACITY;
 
 AdditionalAuthenticatedData::~AdditionalAuthenticatedData() = default;
 
-data_ptr_t AdditionalAuthenticatedData::data() {
+data_ptr_t AdditionalAuthenticatedData::data() const {
 	return additional_authenticated_data->GetData();
 }
 
-idx_t AdditionalAuthenticatedData::size() {
+idx_t AdditionalAuthenticatedData::size() const {
 	return additional_authenticated_data->GetPosition();
 }
 
-void AdditionalAuthenticatedData::WriteData(const_data_ptr_t source, idx_t write_size) {
-	additional_authenticated_data->WriteData(source, write_size);
+void AdditionalAuthenticatedData::WriteStringData(const std::string &val) const {
+	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(val.data()), val.size());
 }
 
 EncryptionEngine::EncryptionEngine() {

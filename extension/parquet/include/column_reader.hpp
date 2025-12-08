@@ -195,6 +195,8 @@ protected:
 	                  const SelectionVector &sel, idx_t approved_tuple_count);
 	void ReadEncrypted(duckdb_apache::thrift::TBase &object);
 	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module);
+	void Read(PageHeader &page_hdr);
+	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
 	//! Check if a previous table filter has filtered out this page

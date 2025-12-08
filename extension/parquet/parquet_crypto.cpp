@@ -81,8 +81,7 @@ void ParquetAdditionalAuthenticatedData::WritePrefix(const std::string &prefix) 
 	if (prefix.empty()) {
 		throw InvalidInputException("Prefix for Additional Authenticated Data is empty");
 	}
-
-	WriteData(reinterpret_cast<const_data_ptr_t>(prefix.data()), prefix.size());
+	WriteStringData(prefix);
 	additional_authenticated_data_prefix_size = additional_authenticated_data->GetPosition();
 }
 
@@ -94,23 +93,26 @@ void ParquetAdditionalAuthenticatedData::WriteSuffix(const CryptoMetaData &crypt
 	if (crypto_meta_data.module < 0) {
 		throw InvalidInputException("Parquet Crypto Module not initialized");
 	}
-	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.module), sizeof(int8_t));
+	WriteData<int8_t>(crypto_meta_data.module);
+
 	if (crypto_meta_data.row_group_ordinal < 0) {
-		if (crypto_meta_data.module != ParquetCrypto::Footer) {
+		if (crypto_meta_data.module != ParquetCrypto::FOOTER) {
 			throw InvalidInputException("Parquet Encryption: Row group not initialized");
 		}
 		// Footer
 		return;
 	}
-	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.row_group_ordinal), sizeof(int16_t));
+	WriteData<int16_t>(crypto_meta_data.row_group_ordinal);
+
 	if (crypto_meta_data.column_ordinal < 0) {
 		return;
 	}
-	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.column_ordinal), sizeof(int16_t));
+	WriteData<int16_t>(crypto_meta_data.column_ordinal);
+
 	if (crypto_meta_data.page_ordinal < 0) {
 		return;
 	}
-	WriteData(reinterpret_cast<const_data_ptr_t>(&crypto_meta_data.page_ordinal), sizeof(int16_t));
+	WriteData<int16_t>(crypto_meta_data.page_ordinal);
 }
 
 ParquetEncryptionConfig::ParquetEncryptionConfig() {
@@ -448,37 +450,37 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 int8_t ParquetCrypto::GetModuleHeader(const ColumnChunk &chunk, uint16_t page_ordinal) {
 	if (page_ordinal > 0) {
 		// always return data page header if ordinal > 0
-		return DataPageHeader;
+		return DATA_PAGE_HEADER;
 	}
 	// There is at maximum 1 dictionary, index or bf filter page header per column chunk
 	if (chunk.meta_data.__isset.dictionary_page_offset) {
-		return DictionaryPageHeader;
+		return DICTIONARY_PAGE_HEADER;
 	} else if (chunk.meta_data.__isset.index_page_offset) {
-		return OffsetIndex;
+		return OFFSET_INDEX;
 	} else if (chunk.meta_data.__isset.bloom_filter_offset) {
-		return ParquetCrypto::BloomFilterHeader;
+		return ParquetCrypto::BLOOM_FILTER_HEADER;
 	}
 
-	return DataPageHeader;
+	return DATA_PAGE_HEADER;
 }
 
 int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal) {
 	if (chunk.meta_data.__isset.bloom_filter_offset && page_ordinal == 0) {
 		// return bitset if it is the first page ordinal
-		return ParquetCrypto::BloomFilterBitset;
+		return ParquetCrypto::BLOOM_FILTER_BITSET;
 	}
 
 	switch (page_type) {
 	case PageType::DATA_PAGE:
 	case PageType::DATA_PAGE_V2:
-		return DataPage;
+		return DATA_PAGE;
 	case PageType::DICTIONARY_PAGE:
-		return DictionaryPage;
+		return DICTIONARY_PAGE;
 	case PageType::INDEX_PAGE:
 		if (chunk.meta_data.__isset.index_page_offset) {
-			return OffsetIndex;
+			return OFFSET_INDEX;
 		}
-		return ColumnIndex;
+		return COLUMN_INDEX;
 	default:
 		throw InvalidInputException("Module not found");
 	}
@@ -486,7 +488,7 @@ int8_t ParquetCrypto::GetModule(const ColumnChunk &chunk, PageType::type page_ty
 
 int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal) {
 	switch (module) {
-	case DataPageHeader:
+	case DATA_PAGE_HEADER:
 		if (chunk.meta_data.__isset.dictionary_page_offset) {
 			page_ordinal -= 1;
 		} else if (chunk.meta_data.__isset.index_page_offset) {
@@ -495,7 +497,7 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 			page_ordinal -= 1;
 		}
 		return page_ordinal;
-	case DataPage:
+	case DATA_PAGE:
 		return page_ordinal;
 	default:
 		// All modules except DataPage(Header) are -1 (absent)

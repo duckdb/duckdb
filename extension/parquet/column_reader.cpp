@@ -248,6 +248,22 @@ void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buf
 	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
 }
 
+void ColumnReader::Read(PageHeader &page_hdr) {
+	if (reader.parquet_options.encryption_config) {
+		ReadEncrypted(page_hdr);
+	} else {
+		reader.Read(page_hdr, *protocol);
+	}
+}
+
+void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
+	if (reader.parquet_options.encryption_config) {
+		ReadDataEncrypted(buffer, buffer_size, page_type);
+	} else {
+		reader.ReadData(*protocol, buffer, page_type);
+	}
+}
+
 void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
@@ -258,22 +274,14 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 
 	if (trans.HasPrefetch()) {
 		// Already has some data prefetched, let's not mess with it
-		if (reader.parquet_options.encryption_config) {
-			ReadEncrypted(page_hdr);
-		} else {
-			reader.Read(page_hdr, *protocol);
-		}
+		Read(page_hdr);
 	} else {
 		// No prefetch yet, prefetch the full header in one go (so thrift won't read byte-by-byte from storage)
 		// 256 bytes should cover almost all headers (unless it's a V2 header with really LONG string statistics)
 		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
 		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
 		trans.Prefetch(trans.GetLocation(), prefetch_size);
-		if (reader.parquet_options.encryption_config) {
-			ReadEncrypted(page_hdr);
-		} else {
-			reader.Read(page_hdr, *protocol);
-		}
+		Read(page_hdr);
 		trans.ClearPrefetch();
 	}
 	// some basic sanity check
@@ -329,11 +337,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
-		} else {
-			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
-		}
+		ReadData(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
 		return;
 	}
 
@@ -347,22 +351,15 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		    Reader().GetFileName());
 	}
 
-	if (reader.parquet_options.encryption_config) {
-		ReadDataEncrypted(block->ptr, uncompressed_bytes, page_hdr.type);
-	} else {
-		reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
-	}
+	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
 		compressed_buffer.resize(GetAllocator(), compressed_bytes);
-		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
-		} else {
-			reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
-		}
+
+		ReadData(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
 
 		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
 		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
@@ -396,21 +393,13 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 		if (compressed_page_size != page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("Page size mismatch");
 		}
-		if (reader.parquet_options.encryption_config) {
-			ReadDataEncrypted(block->ptr, compressed_page_size, page_hdr.type);
-		} else {
-			reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
-		}
+		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
 	}
 
 	ResizeableBuffer compressed_buffer;
 	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
-	if (reader.parquet_options.encryption_config) {
-		ReadDataEncrypted(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
-	} else {
-		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_page_size);
-	}
+	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);
