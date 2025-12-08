@@ -305,6 +305,10 @@ static void ThrowInsecureRNG() {
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	GenerateRandomDataInsecure(data, len);
+}
+
+void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomKey(duckdb::data_ptr_t data, duckdb::idx_t len) {
 	ThrowInsecureRNG();
 }
 
@@ -321,7 +325,13 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len_p, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
-	ThrowInsecureRNG();
+	mode = duckdb::EncryptionTypes::ENCRYPT;
+
+	if (mbedtls_cipher_setkey(context.get(), key, key_len_p * 8, MBEDTLS_ENCRYPT) != 0) {
+		runtime_error("Failed to set AES key for encryption");
+	}
+
+	InitializeInternal(iv, iv_len, aad, aad_len);
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len_p, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {

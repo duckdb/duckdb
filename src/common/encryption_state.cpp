@@ -29,6 +29,22 @@ void EncryptionState::GenerateRandomData(data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
+void EncryptionState::GenerateRandomKey(data_ptr_t, idx_t) {
+	throw NotImplementedException("EncryptionState Abstract Class is called");
+}
+
+void EncryptionState::GenerateRandomDataInsecure(data_ptr_t data, idx_t len) {
+	duckdb::RandomEngine random_engine;
+
+	while (len != 0) {
+		const auto random_integer = random_engine.NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(data, duckdb::const_data_ptr_cast(&random_integer), next);
+		data += next;
+		len -= next;
+	}
+}
+
 string EncryptionTypes::CipherToString(CipherType cipher_p) {
 	switch (cipher_p) {
 	case GCM:
