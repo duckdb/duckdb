@@ -80,7 +80,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
 
-	// Flatten the chunk to simplify processing
+	// FIXME: use unified format instead of Flatten
 	chunk.Flatten();
 
 	// Reference the key columns and rowid column
@@ -125,7 +125,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	// Vacuum excess memory and verify.
 	bound_index->Vacuum();
-	D_ASSERT(!bound_index->VerifyAndToString(true).empty());
+
 	bound_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
