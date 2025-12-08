@@ -249,28 +249,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 }
 
-bool IsConstantExpression(ExpressionExecutor &executor) {
-	if (executor.expressions.empty()) {
-		return false;
-	}
-	auto &expression = *executor.expressions[0];
-	return !expression.IsVolatile() && expression.IsConsistent();
-}
-
-// //! When the vector is not constant, return nullptr, otherwise a ptr to the constant vector
-// unique_ptr<Vector> GetVectorWhenConstant(DataChunk &update_chunk, ExpressionExecutor &executor) {
-// 	if (!IsConstantExpression(executor)) {
-// 		return nullptr;
-// 	}
-// 	auto constant_vector = make_uniq<Vector>(update_chunk.data[0].GetType(), true, true);
-// 	constant_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
-// 	ConstantVector::SetNull(*constant_vector, true);
-// 	constant_vector->Reference(update_chunk.data[0]);
-// 	return constant_vector;
-// }
-
 //! Populates the newly added column with its default value for all existing rows.
-unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
+void DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
 	auto &duck_transaction = DuckTransaction::Get(context, catalog);
 	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1);
 	auto new_column_physical_idx = columns.LogicalToPhysical(new_column_logical_idx);
@@ -288,19 +268,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &conte
 
 	auto &allocator = Allocator::Get(context);
 
-	// scan_chunk holds row ids for the rows that exist in the table right now.  It can look like: [0, 1, 2, ... 2047]
+	// row_ids_chunk holds row ids for the rows that exist in the table right now.  E.g.: [0, 1, 2, ... 2047]
 	DataChunk row_ids_chunk;
 	row_ids_chunk.Initialize(allocator, {LogicalType::ROW_TYPE});
-	// update chunk provides new data for the new column. It can look like: [DefaultVal, DefaultVal, DefaultVal...]
+	// actual_values_chunk provides new data for the new column. E.g.: [DefaultVal, DefaultVal, DefaultVal...]
 	DataChunk actual_values_chunk;
 	actual_values_chunk.Initialize(allocator, {columns.GetColumn(new_column_logical_idx).Type()});
 
-	// Optimization: Evaluate the expression once to check if it's a constant.
-	// If it is, we don't need to run the executor per batch of DataChunks.
-
-	// unique_ptr<Vector> possible_constant_vector = GetVectorWhenConstant(actual_values_chunk, executor);
-	// const bool is_constant_default = possible_constant_vector != nullptr;
-	// Update per batch of DataChunks
 	while (true) {
 		// This scans only row ids
 		row_ids_chunk.Reset();
@@ -315,20 +289,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &conte
 		actual_values_chunk.Reset();
 		actual_values_chunk.SetCardinality(row_ids_chunk.size());
 
-		// if (is_constant_default) {
-		// 	actual_values_chunk.data[0].Reference(*possible_constant_vector);
-		// } else {
 		executor.SetChunk(&actual_values_chunk);
-		// Execute the default expression for each row
 		executor.ExecuteExpression(0, actual_values_chunk.data[0]);
-		// }
 
 		// Update the newly added column with the default values
 		storage->Update(*update_state, context, row_ids, vector<PhysicalIndex> {new_column_physical_idx},
 		                actual_values_chunk);
 	}
-
-	return nullptr;
 }
 
 void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
