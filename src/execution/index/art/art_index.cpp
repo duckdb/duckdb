@@ -96,7 +96,6 @@ unique_ptr<IndexBuildLocalState> ARTBuildLocalInit(IndexBuildInitLocalStateInput
 // Sink
 //----------------------------------------------------------------------------------------------------------------------
 void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
-
 	auto &l_state = input.local_state.Cast<ARTBuildLocalState>();
 	auto row_count = key_chunk.size();
 	auto &art = l_state.local_index->Cast<ART>();

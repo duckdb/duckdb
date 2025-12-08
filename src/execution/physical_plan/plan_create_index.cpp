@@ -16,7 +16,6 @@ namespace duckdb {
 
 static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev,
                                         const IndexType &index_type, unique_ptr<IndexBuildBindData> bind_data) {
-
 	auto &cindex = plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
 	                                              std::move(op.unbound_expressions), op.estimated_cardinality,
 	                                              index_type, std::move(bind_data), std::move(op.alter_table_info));

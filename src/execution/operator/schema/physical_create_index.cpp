@@ -23,7 +23,6 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)),
       unbound_expressions(std::move(unbound_expressions_p)), index_type(std::move(index_type)),
       bind_data(std::move(bind_data)), alter_table_info(std::move(alter_table_info)) {
-
 	// Convert the logical column ids to physical column ids.
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
