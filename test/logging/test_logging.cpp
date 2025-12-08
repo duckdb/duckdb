@@ -259,7 +259,7 @@ TEST_CASE("Add LogType with VARCHAR type", "[logging][.]") {
 	LogManager &log_manager = db.instance->GetLogManager();
 
 	REQUIRE_THROWS_WITH(log_manager.RegisterLogType(make_uniq<IncorrectLogType>()),
-	                    Catch::Matchers::Contains("type.IsNested()"));
+	                    Catch::Matchers::Contains("LogType must be nested if the type is explicitly set"));
 
 	REQUIRE_NOTHROW(log_manager.RegisterLogType(make_uniq<CorrectLogType>()));
 }
