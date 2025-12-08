@@ -111,7 +111,7 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
-      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this) {
+      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
 }
 
 ColumnReader::~ColumnReader() {

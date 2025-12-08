@@ -15,6 +15,7 @@
 #include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
+class ParquetAdditionalAuthenticatedData;
 
 using duckdb_apache::thrift::TBase;
 using duckdb_apache::thrift::protocol::TProtocol;
@@ -41,9 +42,11 @@ private:
 };
 
 struct CryptoMetaData {
-	CryptoMetaData();
+	CryptoMetaData(Allocator &allocator);
 	void Initialize(const std::string &unique_file_identifier_p, int16_t row_group_ordinal = -1,
 	                int16_t column_ordinal = -1, int8_t module = -1, int16_t page_ordinal = -1);
+	void ClearAdditionalAuthenticatedData();
+	void SetModule(int8_t module_p);
 	bool IsEmpty() const;
 
 public:
@@ -52,6 +55,9 @@ public:
 	int16_t row_group_ordinal;
 	int16_t column_ordinal;
 	int16_t page_ordinal;
+
+public:
+	unique_ptr<ParquetAdditionalAuthenticatedData> additional_authenticated_data;
 };
 
 class ParquetAdditionalAuthenticatedData : public AdditionalAuthenticatedData {
@@ -61,9 +67,8 @@ public:
 
 public:
 	idx_t GetPrefixSize() const;
+	void Rewind() const;
 	void WriteParquetAAD(const CryptoMetaData &crypto_meta_data);
-	void WriteFooterAAD(const std::string &unique_file_identifier);
-	void WriteFooterModule();
 
 private:
 	void WritePrefix(const std::string &prefix);
@@ -125,14 +130,13 @@ public:
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
 	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p,
-	                     unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
+	                     const CryptoMetaData &crypto_meta_data);
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
-	                         const EncryptionUtil &encryption_util_p,
-	                         unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
+	                         const EncryptionUtil &encryption_util_p, const CryptoMetaData &crypto_meta_data);
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
 	                          const string &key, const EncryptionUtil &encryption_util_p);
@@ -145,8 +149,7 @@ public:
 	static int8_t GetModuleHeader(const ColumnChunk &chunk, uint16_t page_ordinal);
 	static int8_t GetModule(const ColumnChunk &chunk, PageType::type page_type, uint16_t page_ordinal);
 	static int16_t GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t module, uint16_t page_ordinal);
-	static unique_ptr<ParquetAdditionalAuthenticatedData>
-	GenerateAdditionalAuthenticatedData(Allocator &allocator, const CryptoMetaData &aad_crypto_metadata);
+	static void GenerateAdditionalAuthenticatedData(Allocator &allocator, CryptoMetaData &aad_crypto_metadata);
 	static unique_ptr<ParquetAdditionalAuthenticatedData> GenerateFooterAAD(Allocator &allocator,
 	                                                                        const std::string &unique_file_identifier);
 };

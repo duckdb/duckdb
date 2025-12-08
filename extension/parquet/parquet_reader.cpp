@@ -168,13 +168,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			                            file_handle.GetPath());
 		}
 		auto file_aad = crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique;
-		unique_ptr<ParquetAdditionalAuthenticatedData> footer_aad = nullptr;
+		CryptoMetaData aad_crypto_metadata = CryptoMetaData(allocator);
+
 		if (!file_aad.empty()) {
-			footer_aad = make_uniq<ParquetAdditionalAuthenticatedData>(allocator);
-			footer_aad->WriteFooterAAD(file_aad);
+			aad_crypto_metadata.Initialize(file_aad);
+			aad_crypto_metadata.SetModule(ParquetCrypto::Footer);
 		}
+		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
-		                    std::move(footer_aad));
+		                    std::move(aad_crypto_metadata));
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -943,9 +945,9 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 
 uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
                                       CryptoMetaData &aad_crypto_metadata) const {
-	auto result_aad = ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 	return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
-	                           std::move(result_aad));
+	                           aad_crypto_metadata);
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
@@ -955,9 +957,9 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 
 uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const {
-	auto result_aad = ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
-	                               *encryption_util, std::move(result_aad));
+	                               *encryption_util, aad_crypto_metadata);
 }
 
 static idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {

@@ -52,9 +52,13 @@ ParquetAdditionalAuthenticatedData::~ParquetAdditionalAuthenticatedData() = defa
 
 idx_t ParquetAdditionalAuthenticatedData::GetPrefixSize() const {
 	if (!additional_authenticated_data_prefix_size.IsValid()) {
-		throw InvalidInputException("AAD prefix length is not set");
+		return 0;
 	}
 	return additional_authenticated_data_prefix_size.GetIndex();
+}
+
+void ParquetAdditionalAuthenticatedData::Rewind() const {
+	additional_authenticated_data->SetPosition(GetPrefixSize());
 }
 
 void ParquetAdditionalAuthenticatedData::WriteParquetAAD(const CryptoMetaData &crypto_meta_data) {
@@ -62,24 +66,15 @@ void ParquetAdditionalAuthenticatedData::WriteParquetAAD(const CryptoMetaData &c
 	// (1) a unique prefix constructed by:
 	// an optional aad-prefix (arbitrary length -- ignored for now)
 	// + a unique file identifier (default 8 bytes)
-	WritePrefix(crypto_meta_data.unique_file_identifier);
+	if (GetPrefixSize() == 0) {
+		WritePrefix(crypto_meta_data.unique_file_identifier);
+	}
 	// (2) a suffix, which length varies according to the module type, consisting of:
 	// + module type (1 byte)
 	// + row group ordinal (2 bytes, optional)
 	// + column ordinal (2 bytes, optional)
 	// + page ordinal (2 bytes, optional)
 	WriteSuffix(crypto_meta_data);
-}
-
-void ParquetAdditionalAuthenticatedData::WriteFooterModule() {
-	int8_t footer_module = ParquetCrypto::Footer;
-	WriteData(reinterpret_cast<const_data_ptr_t>(&footer_module), sizeof(int8_t));
-}
-
-void ParquetAdditionalAuthenticatedData::WriteFooterAAD(const std::string &unique_file_identifier) {
-	WritePrefix(unique_file_identifier);
-	// for the footer the aad suffix just consists of the Module type (Footer)
-	WriteFooterModule();
 }
 
 void ParquetAdditionalAuthenticatedData::WritePrefix(const std::string &prefix) {
@@ -251,16 +246,13 @@ private:
 class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p,
-	                    unique_ptr<AdditionalAuthenticatedData> aad = nullptr)
+	                    const CryptoMetaData &crypto_meta_data)
 	    : prot(prot_p), trans(*prot.getTransport()),
 	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
 	      read_buffer_offset(0) {
-		if (aad) {
-			Initialize(key, std::move(aad));
-		} else {
-			Initialize(key);
-		}
+		Initialize(key, crypto_meta_data);
 	}
+
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
@@ -308,7 +300,7 @@ public:
 	}
 
 private:
-	void Initialize(const string &key, unique_ptr<AdditionalAuthenticatedData> aad = nullptr) {
+	void Initialize(const string &key, const CryptoMetaData &crypto_meta_data) {
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
 		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
@@ -317,9 +309,11 @@ private:
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
 		// check whether context is initialized
-		if (aad) {
+		if (!crypto_meta_data.IsEmpty()) {
 			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-			                          key.size(), aad->data(), aad->size());
+			                          key.size(), crypto_meta_data.additional_authenticated_data->data(),
+			                          crypto_meta_data.additional_authenticated_data->size());
+			crypto_meta_data.additional_authenticated_data->Rewind();
 		} else {
 			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
 			                          key.size());
@@ -386,10 +380,10 @@ private:
 };
 
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
-                             const EncryptionUtil &encryption_util_p, unique_ptr<AdditionalAuthenticatedData> aad) {
+                             const EncryptionUtil &encryption_util_p, const CryptoMetaData &crypto_meta_data) {
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
 	auto dprot = tproto_factory.getProtocol(
-	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, std::move(aad)));
+	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, crypto_meta_data));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
@@ -421,11 +415,11 @@ uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const strin
 
 uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size,
                                  const string &key, const EncryptionUtil &encryption_util_p,
-                                 unique_ptr<AdditionalAuthenticatedData> aad) {
+                                 const CryptoMetaData &crypto_meta_data) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
 	auto dprot = tproto_factory.getProtocol(
-	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, std::move(aad)));
+	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, crypto_meta_data));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
@@ -509,16 +503,13 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 	}
 }
 
-unique_ptr<ParquetAdditionalAuthenticatedData>
-ParquetCrypto::GenerateAdditionalAuthenticatedData(Allocator &allocator, const CryptoMetaData &aad_crypto_metadata) {
+void ParquetCrypto::GenerateAdditionalAuthenticatedData(Allocator &allocator, CryptoMetaData &aad_crypto_metadata) {
 	if (aad_crypto_metadata.IsEmpty()) {
 		// no aad, old duckdb-parquet crypto implementation
-		return nullptr;
+		aad_crypto_metadata.ClearAdditionalAuthenticatedData();
+		return;
 	}
-
-	auto aad = make_uniq<ParquetAdditionalAuthenticatedData>(allocator);
-	aad->WriteParquetAAD(aad_crypto_metadata);
-	return aad;
+	aad_crypto_metadata.additional_authenticated_data->WriteParquetAAD(aad_crypto_metadata);
 }
 
 bool ParquetCrypto::ValidKey(const std::string &key) {
@@ -562,7 +553,8 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 	}
 }
 
-CryptoMetaData::CryptoMetaData() {
+CryptoMetaData::CryptoMetaData(Allocator &allocator) {
+	additional_authenticated_data = make_uniq<ParquetAdditionalAuthenticatedData>(allocator);
 }
 
 void CryptoMetaData::Initialize(const std::string &unique_file_identifier_p, int16_t row_group_ordinal_p,
@@ -572,12 +564,19 @@ void CryptoMetaData::Initialize(const std::string &unique_file_identifier_p, int
 		// this happens with old duckdb-parquet encryption
 		return;
 	}
-
 	unique_file_identifier = unique_file_identifier_p;
 	module = module_p;
 	row_group_ordinal = row_group_ordinal_p;
 	column_ordinal = column_ordinal_p;
 	page_ordinal = page_ordinal_p;
+}
+
+void CryptoMetaData::SetModule(int8_t module_p) {
+	module = module_p;
+}
+
+void CryptoMetaData::ClearAdditionalAuthenticatedData() {
+	additional_authenticated_data = nullptr;
 }
 
 bool CryptoMetaData::IsEmpty() const {
