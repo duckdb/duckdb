@@ -606,7 +606,8 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto.getTransport());
 	transport.SetLocation(column_meta_data.bloom_filter_offset);
 	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
-		transport.Prefetch(column_meta_data.bloom_filter_offset, column_meta_data.bloom_filter_length);
+		transport.Prefetch(column_meta_data.bloom_filter_offset, column_meta_data.bloom_filter_length)
+		    .ExecuteTasksSynchronously();
 	}
 
 	duckdb_parquet::BloomFilterHeader filter_header;
