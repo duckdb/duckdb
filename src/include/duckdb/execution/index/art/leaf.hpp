@@ -65,8 +65,7 @@ public:
 
 	//! Return string representation of the linked list of leaves.
 	//! If print_deprecated_leaves is false, returns "[deprecated leaves]" with proper indentation.
-	static string DeprecatedToString(ART &art, const Node &node, idx_t indent_level,
-	                                 bool print_deprecated_leaves = true);
+	static string DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options);
 };
 
 } // namespace duckdb

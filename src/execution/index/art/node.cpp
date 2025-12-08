@@ -466,41 +466,40 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 // Printing
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool display_ascii,
-                      optional_ptr<const ARTKey> key_path, idx_t key_depth, idx_t depth_remaining,
-                      bool print_deprecated_leaves, bool structure_only) const {
+string Node::ToString(ART &art, const ToStringOptions &options) const {
 	auto indent = [](string &str, const idx_t n) {
-		for (idx_t i = 0; i < n; ++i) {
-			str += " ";
-		}
+		str.append(n, ' ');
 	};
 	// if inside gate, print byte values not ascii.
 	auto format_byte = [&](uint8_t byte) {
-		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);
 	};
 	auto type = GetType();
 	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
-	bool propagate_gate = inside_gate || is_gate;
+	bool propagate_gate = options.inside_gate || is_gate;
 
-	bool print_full_tree = propagate_gate || !key_path || depth_remaining == 0;
+	bool print_full_tree = propagate_gate || !options.key_path || options.depth_remaining == 0;
 
 	switch (type) {
 	case NType::LEAF_INLINED: {
 		string str = "";
-		indent(str, indent_level);
+		indent(str, options.indent_level);
 		return str + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
 	}
-	case NType::LEAF:
-		return Leaf::DeprecatedToString(art, *this, indent_level, print_deprecated_leaves);
+	case NType::LEAF: {
+		ToStringOptions leaf_options = options;
+		return Leaf::DeprecatedToString(art, *this, leaf_options);
+	}
 	case NType::PREFIX: {
-		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii, key_path, key_depth,
-		                              depth_remaining, print_deprecated_leaves);
+		ToStringOptions prefix_options = options;
+		prefix_options.inside_gate = propagate_gate;
+		string str = Prefix::ToString(art, *this, prefix_options);
 		if (is_gate) {
 			string s = "";
-			indent(s, indent_level);
+			indent(s, options.indent_level);
 			s += "Gate\n";
 			return s + str;
 		}
@@ -511,12 +510,12 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 		break;
 	}
 	string str = "";
-	indent(str, indent_level);
+	indent(str, options.indent_level);
 	str = str + "Node" + to_string(GetCapacity(type)) += "\n";
 	uint8_t byte = 0;
 
 	if (IsLeafNode()) {
-		indent(str, indent_level);
+		indent(str, options.indent_level);
 		str += "Leaf |";
 		auto has_byte = GetNextByte(art, byte);
 		while (has_byte) {
@@ -531,8 +530,8 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 	} else {
 		uint8_t expected_byte = 0;
 		bool has_expected_byte = false;
-		if (key_path && !print_full_tree && key_depth < key_path->len) {
-			expected_byte = (*key_path)[key_depth];
+		if (options.key_path && !print_full_tree && options.key_depth < options.key_path->len) {
+			expected_byte = (*options.key_path)[options.key_depth];
 			has_expected_byte = true;
 		}
 
@@ -544,17 +543,20 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 			// If we don't have an expected byte, we're printing the full tree, so all children are on_path.
 			bool on_path = !has_expected_byte || (has_expected_byte && byte == expected_byte);
 			if (on_path) {
-				idx_t next_key_depth = has_expected_byte ? key_depth + 1 : key_depth;
-				idx_t next_depth_remaining = (depth_remaining > 0) ? depth_remaining - 1 : 0;
-				string c =
-				    child->ToString(art, indent_level + 2, propagate_gate, display_ascii, key_path, next_key_depth,
-				                    next_depth_remaining, print_deprecated_leaves, structure_only);
-				indent(str, indent_level);
+				ToStringOptions child_options = options;
+				child_options.indent_level = options.indent_level + options.indent_amount;
+				child_options.inside_gate = propagate_gate;
+				child_options.key_depth = has_expected_byte ? options.key_depth + 1 : options.key_depth;
+				child_options.depth_remaining = (options.depth_remaining > 0) ? options.depth_remaining - 1 : 0;
+				string c = child->ToString(art, child_options);
+				indent(str, options.indent_level);
 				str = str + format_byte(byte) + ",\n" + c;
 			} else {
 				// If we have an expected byte, but the current byte is not the expected byte.
-				if (!structure_only) {
-					indent(str, indent_level);
+				// In this case we check if we are only printing the structure, in which case we skip printing the
+				// child byte.
+				if (!options.structure_only) {
+					indent(str, options.indent_level);
 					str = str + format_byte(byte) + ", [not printed]\n";
 				}
 			}
@@ -565,7 +567,7 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 
 	if (is_gate) {
 		string s = "";
-		indent(s, indent_level + 2);
+		indent(s, options.indent_level + options.indent_amount);
 		str = "Gate\n" + s + str;
 	}
 	return str;

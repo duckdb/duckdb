@@ -186,35 +186,31 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-string Prefix::ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate, bool display_ascii,
-                        optional_ptr<const ARTKey> key_path, idx_t key_depth, idx_t depth_remaining,
-                        bool print_deprecated_leaves, bool structure_only) {
+string Prefix::ToString(ART &art, const Node &node, const ToStringOptions &options) {
 	auto indent = [](string &str, const idx_t n) {
-		for (idx_t i = 0; i < n; ++i) {
-			str += " ";
-		}
+		str.append(n, ' ');
 	};
 	auto format_byte = [&](uint8_t byte) {
-		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);
 	};
 	string str = "";
-	indent(str, indent_level);
+	indent(str, options.indent_level);
 	reference<const Node> ref(node);
+	ToStringOptions child_options = options;
 	Iterator(art, ref, true, false, [&](const Prefix &prefix) {
 		str += "Prefix: |";
 		idx_t prefix_len = prefix.data[Count(art)];
 		for (idx_t i = 0; i < prefix_len; i++) {
 			str += format_byte(prefix.data[i]) + "|";
-			if (key_path) {
-				key_depth++;
+			if (options.key_path) {
+				child_options.key_depth++;
 			}
 		}
 	});
-	auto child = ref.get().ToString(art, indent_level, inside_gate, display_ascii, key_path, key_depth, depth_remaining,
-	                                print_deprecated_leaves, structure_only);
+	string child = ref.get().ToString(art, child_options);
 	return str + "\n" + child;
 }
 

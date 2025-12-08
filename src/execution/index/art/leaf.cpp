@@ -190,16 +190,14 @@ void Leaf::DeprecatedVacuum(ART &art, Node &node) {
 	}
 }
 
-string Leaf::DeprecatedToString(ART &art, const Node &node, idx_t indent_level, bool print_deprecated_leaves) {
+string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options) {
 	auto indent = [](string &str, const idx_t n) {
-		for (idx_t i = 0; i < n; ++i) {
-			str += " ";
-		}
+		str.append(n, ' ');
 	};
 	string str = "";
 
-	if (!print_deprecated_leaves) {
-		indent(str, indent_level);
+	if (!options.print_deprecated_leaves) {
+		indent(str, options.indent_level);
 		str += "[deprecated leaves]\n";
 		return str;
 	}
@@ -208,7 +206,7 @@ string Leaf::DeprecatedToString(ART &art, const Node &node, idx_t indent_level, 
 
 	while (ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
-		indent(str, indent_level);
+		indent(str, options.indent_level);
 		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			str += to_string(leaf.row_ids[i]) + "-";

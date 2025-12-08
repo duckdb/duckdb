@@ -39,6 +39,43 @@ class ART;
 class Prefix;
 class ARTKey;
 
+//! Options for ToString printing functions
+struct ToStringOptions {
+	// Indentation for root node.
+	idx_t indent_level = 0;
+	// Amount to increase idnentation when traversing to a child node.
+	idx_t indent_amount = 4;
+	bool inside_gate = false;
+	bool display_ascii = false;
+	// Optional key argument to only print the path along to a specific key.
+	// This prints nodes along the path, as well as the child bytes, but doesn't traverse into children not on the path
+	// to the optional key_path.
+	// This works in conjunction with the depth_remaining and structure_only arguments.
+	// Note that nested ARTs are printed in their entirety regardless.
+	optional_ptr<const ARTKey> key_path = nullptr;
+	idx_t key_depth = 0;
+	// If we have a key_path argument, we only print along a certain path to a specified key. depth_remaining allows us
+	// to short circuit that, and print the entire tree starting at a certain depth. So if we are traversing towards
+	// the leaf for a key, we can start printing the entire tree again. This is useful to be able to see a region of the
+	// ART around a specific leaf.
+	idx_t depth_remaining = 0;
+	bool print_deprecated_leaves = true;
+	// Similar to key path, but don't print the other child bytes at each node along the path to the key, i.e. skip
+	// printing node contents. This gives a very barebones skeleton of the node structure leading to a key, and this
+	// can also be short circuited by depth_remaining.
+	bool structure_only = false;
+
+	ToStringOptions() = default;
+
+	ToStringOptions(idx_t indent_level, bool inside_gate, bool display_ascii, optional_ptr<const ARTKey> key_path,
+	                idx_t key_depth, idx_t depth_remaining, bool print_deprecated_leaves, bool structure_only,
+	                idx_t indent_amount = 2)
+	    : indent_level(indent_level), indent_amount(indent_amount), inside_gate(inside_gate),
+	      display_ascii(display_ascii), key_path(key_path), key_depth(key_depth), depth_remaining(depth_remaining),
+	      print_deprecated_leaves(print_deprecated_leaves), structure_only(structure_only) {
+	}
+};
+
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
 class Node : public IndexPointer {
@@ -110,27 +147,8 @@ public:
 	//!
 	//! Parameters:
 	//! - art: root node of tree being printed.
-	//! - indent_level: The indentation level for this node.
-	//! - inside_gate: Whether we're currently inside a gate node (after a gate, prints full tree regardless of
-	//! key_path)
-	//! - display_ascii: If true, displays printable ASCII characters instead of byte values
-	//! - key_path: Optional pointer to an ARTKey. If provided, only prints the path to that key.
-	//!             Children not on the path are marked as "[not printed]" (unless structure_only is true, in which
-	//!				even those children slots are not printed.
-	//! - key_depth: The current position in the key_path as we traverse.
-	//!              Should be initialized to 0 when starting traversal. Incremented as we traverse prefix nodes and
-	//!              regular nodes.
-	//! - depth_remaining: Controls when to start printing full subtrees. When N > 0, only prints node structure
-	//!                    for the first N levels (not counting prefix nodes). When it reaches 0, prints the full
-	//!                    subtree from that point. Prefix nodes don't count toward this depth.
-	//! - print_deprecated_leaves: If false, replaces deprecated leaf output with "[deprecated leaves]"
-	//!                           (maintains indentation). If true, prints full deprecated leaves.
-	//! - structure_only: If true and key_path is provided, only prints the structure along the path to the key (this
-	//!					  in conjunction with depth_remaining however, as that can override this option when it becomes
-	//!					  0.
-	string ToString(ART &art, idx_t indent_level, bool inside_gate = false, bool display_ascii = false,
-	                optional_ptr<const ARTKey> key_path = nullptr, idx_t key_depth = 0, idx_t depth_remaining = 0,
-	                bool print_deprecated_leaves = true, bool structure_only = false) const;
+	//! - options: Printing options (see ToStringOptions struct for details).
+	string ToString(ART &art, const ToStringOptions &options) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {
