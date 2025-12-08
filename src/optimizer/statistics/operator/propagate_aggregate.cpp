@@ -158,10 +158,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// GET does not support getting the partition stats
 		return;
 	}
-	if (!get.table_filters.filters.empty()) {
-		// we cannot do this if the GET has filters
-		return;
-	}
+	// if (!get.table_filters.filters.empty()) {
+	// 	// we cannot do this if the GET has filters
+	// 	return;
+	// }
 	if (get.extra_info.sample_options) {
 		// only use row group statistics if we query the whole table
 		return;
@@ -211,7 +211,41 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				// we cannot get an exact count
 				return;
 			}
-			count += stats.count;
+			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+			if (!get.table_filters.filters.empty()) {
+				if (!stats.partition_row_group) {
+					return;
+				}
+				for (auto &entry : get.table_filters.filters) {
+					auto col_idx = entry.first;
+					auto &filter = entry.second;
+					auto prg = stats.partition_row_group;
+					if (!prg) {
+						return;
+					}
+					auto column_stats = prg->GetColumnStatistics(col_idx);
+					if (!column_stats) {
+						return;
+					}
+					auto col_filter_result = filter->CheckStatistics(*column_stats);
+					if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+						filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+						break;
+					}
+					if (col_filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+						filter_result = col_filter_result;
+					}
+				}
+			}
+			switch (filter_result) {
+			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
+				count += stats.count;
+				break;
+			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+				break;
+			default:
+				return;
+			}
 		}
 		for (const auto count_star_idx : count_star_idxs) {
 			auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));

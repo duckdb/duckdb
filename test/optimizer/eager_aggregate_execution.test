@@ -58,6 +58,16 @@ SELECT max(i), count(i), min(i) FROM t
 ----
 8191	8192	0
 
+query II
+explain SELECT count(*) FROM t where i >=2048
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT count(*) FROM t where i >=2048
+----
+6144
+
 statement ok
 INSERT INTO t VALUES (9999)
 
@@ -65,4 +75,3 @@ query III
 SELECT count(*), min(i), max(i) FROM t
 ----
 8193	0	9999
-
