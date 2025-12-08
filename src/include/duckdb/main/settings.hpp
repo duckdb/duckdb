@@ -331,6 +331,15 @@ struct DebugCheckpointAbortSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugCheckpointSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_checkpoint_sleep_ms";
+	static constexpr const char *Description = "DEBUG SETTING: time to sleep before a checkpoint";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct DebugForceExternalSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_force_external";

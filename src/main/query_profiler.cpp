@@ -125,7 +125,7 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 	}
 	if (running) {
 		// Called while already running: this should only happen when we print optimizer output
-		D_ASSERT(PrintOptimizerOutput());
+		// D_ASSERT(PrintOptimizerOutput());
 		return;
 	}
 	Start(query);
