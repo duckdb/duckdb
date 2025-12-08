@@ -188,11 +188,14 @@ void LogicalGet::ResolveTypes() {
 
 bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const {
 	auto table = GetTable();
-	if (!table || !table->IsDuckTable()) {
-		//! If there's no table (or the table is not a DuckDB table) we assume there's no mismatch between
+	if (!table) {
+		//! If there's no table we assume there's no mismatch between
 		//! logical/storage index
 		out_index = StorageIndex::FromColumnIndex(column_index);
 		return true;
+	}
+	if (column_index.IsRowIdColumn() || column_index.IsVirtualColumn()) {
+		return false;
 	}
 
 	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
