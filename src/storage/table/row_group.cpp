@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -11,6 +12,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -1394,13 +1397,29 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	explicit DuckDBPartitionRowGroup(const RowGroup &row_group_p, bool is_exact_p)
+	    : row_group(row_group_p), is_exact(is_exact_p) {
 	}
 
-	RowGroup &row_group;
+	const RowGroup &row_group;
+	const bool is_exact;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		return row_group.GetStatistics(storage_index);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &stats) override {
+		if (!is_exact || row_group.HasChanges()) {
+			return false;
+		}
+		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
+			if (!StringStats::HasMaxStringLength(stats)) {
+				return false;
+			}
+			const idx_t max_length = StringStats::MaxStringLength(stats);
+			return max_length == StringStats::Max(stats).length() && max_length == StringStats::Min(stats).length();
+		}
+		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
 	}
 };
 
@@ -1411,11 +1430,12 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 	if (HasUnloadedDeletes() || version_info.load().get()) {
 		// we have version info - approx count
 		result.count_type = CountType::COUNT_APPROXIMATE;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, false);
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, true);
 	}
 
-	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this);
 	return result;
 }
 

@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/row_group_pruner.hpp"
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -21,25 +22,6 @@ unique_ptr<LogicalOperator> RowGroupPruner::Optimize(unique_ptr<LogicalOperator>
 	}
 
 	return op;
-}
-
-static bool FindStorageIndex(LogicalGet &logical_get, const ColumnIndex &column_index, StorageIndex &out_index) {
-	auto table = logical_get.GetTable();
-	if (!table || !table->IsDuckTable()) {
-		//! If there's no table (or the table is not a DuckDB table) we assume there's no mismatch between
-		//! logical/storage index
-		out_index = StorageIndex::FromColumnIndex(column_index);
-		return true;
-	}
-
-	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
-	if (column.Generated()) {
-		//! This is a generated column, can't use the row group pruner
-		return false;
-	}
-	out_index = StorageIndex::FromColumnIndex(column_index);
-	out_index.SetIndex(column.StorageOid());
-	return true;
 }
 
 bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
@@ -88,7 +70,7 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 		return false;
 	}
 	StorageIndex storage_index;
-	if (!FindStorageIndex(*logical_get, column_index, storage_index)) {
+	if (!logical_get->TryGetStorageIndex(column_index, storage_index)) {
 		return false;
 	}
 
@@ -216,7 +198,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		}
 	}
 	// Only sort row groups by primary order column and prune with limit if set
-	return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, column_type, combined_limit, 0);
+	return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, column_type, combined_limit,
+	                                       NumericCast<uint64_t>(0));
 }
 
 } // namespace duckdb

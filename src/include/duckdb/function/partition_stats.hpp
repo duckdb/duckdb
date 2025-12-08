@@ -28,6 +28,7 @@ enum class CountType { COUNT_EXACT, COUNT_APPROXIMATE };
 struct PartitionRowGroup {
 	virtual ~PartitionRowGroup() = default;
 	virtual unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) = 0;
+	virtual bool MinMaxIsExact(const BaseStatistics &stats) = 0;
 };
 
 struct PartitionStatistics {
