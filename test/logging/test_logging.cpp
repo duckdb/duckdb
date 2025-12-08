@@ -220,3 +220,46 @@ TEST_CASE("Test pluggable log storage", "[logging][.]") {
 
 	REQUIRE(my_log_storage->log_store.find("HELLO, BRO") != my_log_storage->log_store.end());
 }
+
+struct IncorrectLogType : public LogType {
+	static constexpr const char *NAME = "IncorrectLogType";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	// Incorrectly using the structured type constructor for VARCHAR
+	IncorrectLogType() : LogType(NAME, LEVEL, LogicalType::VARCHAR) {
+	}
+
+	template <typename... ARGS>
+	static string ConstructLogMessage(const string &str, ARGS... params) {
+		return StringUtil::Format(str, params...);
+	}
+};
+
+struct CorrectLogType : public LogType {
+	static constexpr const char *NAME = "CorrectLogType";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	// Correctly using the unstructured type constructor for VARCHAR
+	CorrectLogType() : LogType(NAME, LEVEL) {
+	}
+
+	template <typename... ARGS>
+	static string ConstructLogMessage(const string &str, ARGS... params) {
+		return StringUtil::Format(str, params...);
+	}
+};
+
+constexpr LogLevel IncorrectLogType::LEVEL;
+constexpr LogLevel CorrectLogType::LEVEL;
+
+TEST_CASE("Add LogType with VARCHAR type", "[logging][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	LogManager &log_manager = db.instance->GetLogManager();
+
+	REQUIRE_THROWS_WITH(log_manager.RegisterLogType(make_uniq<IncorrectLogType>()),
+	                    Catch::Matchers::Contains("type.IsNested()"));
+
+	REQUIRE_NOTHROW(log_manager.RegisterLogType(make_uniq<CorrectLogType>()));
+}
