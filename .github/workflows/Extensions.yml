@@ -228,6 +228,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: ./.github/actions/cleanup_runner
+
       - uses: actions/download-artifact@v4
         name: Download main extensions
         with:
