@@ -260,7 +260,7 @@ void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size,
 	if (reader.parquet_options.encryption_config) {
 		ReadDataEncrypted(buffer, buffer_size, page_type);
 	} else {
-		reader.ReadData(*protocol, buffer, page_type);
+		reader.ReadData(*protocol, buffer, buffer_size);
 	}
 }
 
