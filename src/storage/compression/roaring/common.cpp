@@ -86,7 +86,8 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
-	// Fixed: The problem was that an offset was being passed, causing this assert to trigger. Now that offset is 0, this assert doesn't trigger anymore.
+	// Fixed: The problem was that an offset was being passed, causing this assert to trigger. Now that offset is 0,
+	// this assert doesn't trigger anymore.
 	D_ASSERT(result.Capacity() >= end);
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
@@ -223,12 +224,19 @@ void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t sca
 	// Get src's validity mask
 	auto &validity = FlatVector::Validity(src);
 
+	auto write_ptr = dst.GetData() + offset;
 	if (validity.AllValid()) {
-		memset(dst.GetData() + offset, 1, scan_count); // 1 is for valid
+		memset(write_ptr, 1, scan_count); // 1 is for valid
 	} else {
-		// "Bit-Unpack" src's validity_mask and put it in dst's data
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(dst.GetData() + offset, data_ptr_cast(validity.GetData()),
-		                                            scan_count, 1);
+		// Because UnPackBuffer writes in batches of BITPACKING_ALGORITHM_GROUP_SIZE, we create a tmp_buffer first to
+		// prevent overflow in the case dst is smaller than the batch.
+		const auto tmp_buffer = Vector(dst.GetType());
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(tmp_buffer.GetData(), data_ptr_cast(validity.GetData()), scan_count,
+		                                            1);
+		for (idx_t i = 0; i < scan_count; i++) {
+			const auto val_to_write = tmp_buffer.GetData()[i];
+			write_ptr[i] = val_to_write;
+		}
 	}
 }
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
