@@ -361,7 +361,7 @@ void TemplatedSortKeySetPayload(const data_ptr_t row_locations[], const idx_t of
 
 	// Changed: set new pointers
 	for (idx_t i = offset; i < offset + count; i++) {
-		sort_keys[offset]->SetPayload(row_locations[offset]);
+		sort_keys[i]->SetPayload(row_locations[i]);
 	}
 }
 
@@ -410,6 +410,12 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 			row_locations[offset + i] = base_row_ptr + i * row_width;
 		}
 
+		if (sort_key_payload_state) {
+			D_ASSERT(!layout.IsSortKeyLayout());
+			lock_guard<mutex> guard(part.lock);
+			SortKeySetPayload(row_locations, offset, next, *sort_key_payload_state);
+		}
+
 		if (layout.AllConstant()) { // Can't have a heap
 			offset += next;
 			continue;
@@ -438,10 +444,6 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part.base_heap_ptr = new_base_heap_ptr;
 				}
-			}
-			if (sort_key_payload_state) {
-				D_ASSERT(!layout.IsSortKeyLayout());
-				SortKeySetPayload(row_locations, offset, next, *sort_key_payload_state);
 			}
 		}
 
