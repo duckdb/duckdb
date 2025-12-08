@@ -24,6 +24,14 @@ struct SwitchFunctionBindData : FunctionData {
 
 unique_ptr<FunctionData> SwitchExpressionBind(ClientContext &context, ScalarFunction &function,
                                          vector<unique_ptr<Expression>> &arguments) {
+	auto &cases = arguments[1];
+	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		throw BinderException("Expected a map function for the cases");
+	}
+	auto &func_cases = cases->Cast<BoundFunctionExpression>();
+	if (func_cases.function.name != "map") {
+		throw BinderException("Expected a map function for the cases");
+	}
 	auto map_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	auto values_type = MapType::ValueType(map_value.type());
 	return make_uniq<SwitchFunctionBindData>(values_type);
@@ -67,16 +75,8 @@ unique_ptr<Expression> SwitchBindDefaultExpression(FunctionBindExpressionInput &
 	auto function_data = input.bind_data->Cast<SwitchFunctionBindData>();
 	auto result = make_uniq<BoundCaseExpression>(function_data.return_type);
 	auto &base = input.children[0];
-	auto &cases = input.children[1];
-	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		throw BinderException("Expected a map function for the cases");
-	}
-	auto &func_cases = cases->Cast<BoundFunctionExpression>();
-	if (func_cases.function.name != "map") {
-		throw BinderException("Expected a map function for the cases");
-	}
-
-	auto &map_children = func_cases.children;
+	auto &cases = input.children[1]->Cast<BoundFunctionExpression>();
+	auto &map_children = cases.children;
 	D_ASSERT(map_children.size() == 2);
 	ConstructCaseChecks(map_children[0], map_children[1], result->case_checks, optional_ptr<Expression>(base));
 	auto &default_case = input.children[2];
@@ -88,15 +88,8 @@ unique_ptr<Expression> SwitchBindMissingDefaultExpression(FunctionBindExpression
 	auto function_data = input.bind_data->Cast<SwitchFunctionBindData>();
 	auto result = make_uniq<BoundCaseExpression>(function_data.return_type);
 	auto &base = input.children[0];
-	auto &cases = input.children[1];
-	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		throw BinderException("Expected a map function for the cases");
-	}
-	auto &func_cases = cases->Cast<BoundFunctionExpression>();
-	if (func_cases.function.name != "map") {
-		throw BinderException("Expected a map function for the cases");
-	}
-	auto &map_children = func_cases.children;
+	auto &cases = input.children[1]->Cast<BoundFunctionExpression>();
+	auto &map_children = cases.children;
 	D_ASSERT(map_children.size() == 2);
 	ConstructCaseChecks(map_children[0], map_children[1], result->case_checks, optional_ptr<Expression>(base));
 	result->else_expr = BoundCastExpression::AddCastToType(input.context, make_uniq<BoundConstantExpression>(Value()), function_data.return_type);
