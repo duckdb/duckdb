@@ -6,77 +6,180 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create table t (s struct(c1 varchar, c2 integer));
+create table t (
+	s struct(
+		c1 varchar,
+		c2 integer
+	)
+);
 
 statement ok
-insert into t values(('c1', 1));
+insert into t values
+	(ROW('c1', 1));
 
-# query1
+# View created without any projection pushdown
 statement ok
-create or replace view test as select * from t;
+create or replace view test as
+	select
+		*
+	from t;
 
+# Projection on the view performs projection pushdown
 query II
-explain select s.c1 from test;
+explain select
+	s.c1
+from test;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
-statement ok
+query I
 select s.c1 from test;
+----
+c1
 
-# query2
+# View created without projection pushdown, as 's' is projected in full
 statement ok
-create or replace view test as select s.c1, s.c2, s from t;
+create or replace view test as
+	select
+		s.c1,
+		s.c2,
+		s
+	from t;
 
+# Because the child projection only references certain fields, projection pushdown gets applied regardless
 query II
-explain select s.c2, s.c1 from test;
+explain select
+	s.c2,
+	s.c1
+from test;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
-statement ok
-select s.c2, s.c1 from test;
-
-# query3
-statement ok
-create or replace view test as select s s1, s s2 from t;
-
+# Even when the struct_extract is nested in another expression, projection pushdown gets applied
 query II
-explain select s1.c2, s2.c1 from test;
+explain select
+	s.c2,
+	upper(s.c1)
+from test;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
-statement ok
-select s1.c2, s2.c1 from test;
-
-# query4
-statement ok
-create or replace view test as select upper(s.c1), s.c2, s from t;
+query II
+select
+	s.c2,
+	upper(s.c1)
+from test;
+----
+1	C1
 
 query II
-explain select s.c2, s.c1 from test;
+select
+	s.c2,
+	s.c1
+from test;
+----
+1	c1
+
+# View created with two projections of the full struct
+statement ok
+create or replace view test as
+	select
+		s s1,
+		s s2
+	from t;
+
+# Projection pushdown is applied to both 's1' and 's2'
+query II
+explain select
+	s1.c2,
+	s2.c1
+from test;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
-statement ok
-select s.c2, s.c1 from test;
-
-# query5
-statement ok
-create or replace view test as select s.c1, s.c2, s from t;
-
 query II
-explain select s.c2, upper(s.c1) from test;
+select
+	s1.c2,
+	s2.c1
+from test;
+----
+1	c1
+
+# View created without projection pushdown because of 's'
+statement ok
+create or replace view test as select
+	upper(s.c1),
+	s.c2,
+	s
+from t;
+
+# Projection pushdown gets applied because only individual fields are referenced
+query II
+explain select
+	s.c2,
+	s.c1
+from test;
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
 
-statement ok
-select s.c2, upper(s.c1) from test;
+query II
+select
+	s.c2,
+	s.c1
+from test;
+----
+1	c1
 
-# query6
+
+# Create a table with a STRUCT column and an additional column
 statement ok
-create table t2 (s struct(c1 varchar, c2 integer), c3 integer);
+create table t2 (
+	s struct(
+		c1 varchar,
+		c2 integer
+	),
+	c3 integer
+);
 
 statement ok
-insert into t2 values(('c1', 2), 3);
+insert into t2 values
+	(ROW('c1', 2), 3);
 
-statement ok
-select struct_extract(pack, 'c3') from (select struct_pack(s:=s, c3:=c3) as pack from t2) as sub;
+query I
+select
+	pack.c3
+from (
+	select struct_pack(
+		s:=s,
+		c3:=c3
+	) as pack from t2
+) as sub;
+----
+3
+
+query II
+explain select
+	pack.c3
+from (
+	select struct_pack(
+		s:=s,
+		c3:=c3
+	) as pack from t2
+) as sub;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.*c3.*
+
+query II
+explain select
+	pack.v4,
+	pack.v2
+from (
+	select struct_pack(
+		v1:=c3,
+		v2:=s.c1,
+		v3:='test',
+		v4:=s.c2
+	) as pack from t2
+) as sub;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*s.c2.*
