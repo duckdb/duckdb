@@ -111,7 +111,6 @@ ScalarFunctionSet SwitchFun::GetFunctions() {
 	auto switch_missing_default = ScalarFunction({key_type, LogicalType::MAP(key_type, val_type)},
 		val_type, nullptr, SwitchExpressionBind, nullptr);
 	switch_missing_default.SetBindExpressionCallback(SwitchBindMissingDefaultExpression);
-	switch_missing_default.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func_set.AddFunction(std::move(switch_missing_default));
 	auto switch_missing = ScalarFunction({key_type, LogicalType::MAP(key_type, val_type), val_type}, val_type,
 	                   nullptr, SwitchExpressionBind, nullptr);
