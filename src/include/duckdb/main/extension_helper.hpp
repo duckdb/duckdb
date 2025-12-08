@@ -93,7 +93,7 @@ struct ExtensionInstallOptions {
 class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
-
+	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 	//! Install an extension
