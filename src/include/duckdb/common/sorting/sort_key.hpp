@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
@@ -33,6 +34,28 @@ enum class SortKeyType : uint8_t {
 
 //! Forces a pointer size of 8 bytes (even on 32-bit)
 struct sort_key_ptr_t { // NOLINT: match stl case
+	//	For some reason, is_lock_free is not a class member...
+	using Atomic = atomic<data_ptr_t>;
+	static Atomic lock_test;
+
+	inline data_ptr_t GetPtr() const {
+		if (lock_test.is_lock_free()) {
+			auto a = new ((void *)&u.ptr) Atomic;
+			return a->load();
+		} else {
+			return u.ptr;
+		}
+	}
+
+	inline void SetPtr(const data_ptr_t &ptr) {
+		if (lock_test.is_lock_free()) {
+			auto a = new ((void *)&u.ptr) Atomic;
+			a->store(ptr);
+		} else {
+			u.ptr = ptr;
+		}
+	}
+
 	union {
 		data_ptr_t ptr;
 		uint64_t pad;
@@ -68,17 +91,16 @@ protected:
 
 public:
 	static constexpr bool HAS_PAYLOAD = true;
+	using Atomic = sort_key_ptr_t::Atomic;
 
 	data_ptr_t GetPayload() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
-		auto a = new ((void *)&sort_key.payload.u.ptr) std::atomic<data_ptr_t>;
-		return a->load();
+		return sort_key.payload.GetPtr();
 	}
 
 	void SetPayload(const data_ptr_t &payload) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		auto a = new ((void *)&sort_key.payload.u.ptr) std::atomic<data_ptr_t>;
-		a->store(payload);
+		sort_key.payload.SetPtr(payload);
 	}
 };
 

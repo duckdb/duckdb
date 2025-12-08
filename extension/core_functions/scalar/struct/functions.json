@@ -19,5 +19,12 @@
       "description": "Returns the field names of a STRUCT as a list",
       "example": "struct_keys({'a': 1, 'b': 2})",
       "type": "scalar_function"
+    },
+    {
+      "name": "struct_values",
+      "parameters": "struct",
+      "description": "Returns the field values of a STRUCT as an UnnamedStruct",
+      "example": "struct_values({'a': 1, 'b': 'world'})",
+      "type": "scalar_function"
     }
 ]
