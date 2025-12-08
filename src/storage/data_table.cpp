@@ -75,8 +75,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	column_definitions.emplace_back(new_column.Copy());
 
 	auto &local_storage = LocalStorage::Get(context, db);
-	// TODO: Pass default_executor to FinalizeAlter.
-	//	edit: done. it's now now being passed at DuckTableEntry::AddColumn, where this function is called.
 
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);

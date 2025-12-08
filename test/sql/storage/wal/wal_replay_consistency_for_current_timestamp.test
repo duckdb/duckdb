@@ -8,24 +8,24 @@ statement ok
 SET wal_autocheckpoint='1TB'
 
 statement ok
-ATTACH '__TEST_DIR__/foo.db';
+ATTACH '__TEST_DIR__/wal_replay.db';
 
 statement ok
-CREATE TABLE foo.t AS SELECT range::INT AS id FROM range(100);
+CREATE TABLE t AS SELECT range::INT AS id FROM range(100);
 
 statement ok
-ALTER TABLE foo.t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 
 statement ok
-CREATE TABLE original AS SELECT d FROM foo.t;
+CREATE TABLE original AS SELECT d FROM t;
 
 statement ok
-DETACH foo;
+DETACH wal_replay;
 
 statement ok
-ATTACH '__TEST_DIR__/foo.db';
+ATTACH '__TEST_DIR__/wal_replay.db';
 
 query I
-SELECT COUNT(*) != 0 FROM foo.t JOIN original ON foo.t.d = original.d;
+SELECT COUNT(*) != 0 FROM t JOIN original ON t.d = original.d;
 ----
 true

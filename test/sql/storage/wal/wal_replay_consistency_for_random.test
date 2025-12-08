@@ -8,29 +8,29 @@ statement ok
 SET wal_autocheckpoint='1TB'
 
 statement ok
-ATTACH '__TEST_DIR__/foo.db';
+ATTACH '__TEST_DIR__/wal_replay.db';
 
 statement ok
-CREATE TABLE foo.t AS SELECT range::INT AS id FROM range(100);
+CREATE TABLE t AS SELECT range::INT AS id FROM range(100);
 
 statement ok
-ALTER TABLE foo.t ADD COLUMN r DOUBLE DEFAULT RANDOM();
+ALTER TABLE t ADD COLUMN r DOUBLE DEFAULT RANDOM();
 
 statement ok
-CREATE TABLE original AS SELECT id, r FROM foo.t;
+CREATE TABLE original AS SELECT id, r FROM t;
 
 statement ok
-DETACH foo;
+DETACH wal_replay;
 
 statement ok
-ATTACH '__TEST_DIR__/foo.db';
+ATTACH '__TEST_DIR__/wal_replay.db';
 
 query I
-SELECT COUNT(*) FROM foo.t JOIN original ON foo.t.id = original.id AND foo.t.r = original.r;
+SELECT COUNT(*) FROM t JOIN original ON t.id = original.id AND t.r = original.r;
 ----
 100
 
 query I
-SELECT COUNT(*) != 0 FROM foo.t JOIN original ON foo.t.id = original.id AND foo.t.r = original.r;
+SELECT COUNT(*) != 0 FROM t JOIN original ON t.id = original.id AND t.r = original.r;
 ----
 true

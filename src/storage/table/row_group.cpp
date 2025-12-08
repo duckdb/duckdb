@@ -395,7 +395,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
 			// Here we're not writing the actual values yet, just inserting NULL as a placeholder.The actual values
 			// will be handled by an UPDATE statement
-			result.Reference(Value(new_column.Type()));
+			auto null_placeholder_value = Value(new_column.Type());
+			result.Reference(null_placeholder_value);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 	}

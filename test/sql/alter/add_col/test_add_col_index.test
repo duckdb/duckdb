@@ -14,8 +14,9 @@ BEGIN TRANSACTION
 statement ok
 ALTER TABLE test ADD COLUMN k INTEGER DEFAULT 2
 
-# Because `ADD COLUMN` does an update under the hood to set the column's values,
-# this should throw TransactionContext Error: Cannot create index with outstanding updates
+# Because `ADD COLUMN` does an update under the hood to set the column's values, this now throws a
+# TransactionContext Error: Cannot create index with outstanding updates.
+# This means index creation after an ALTER TABLE ADD COLUMN is currently unsupported.
 statement error
 CREATE INDEX i_index ON test(k)
 ----
