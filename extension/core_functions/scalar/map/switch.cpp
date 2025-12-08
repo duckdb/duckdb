@@ -7,34 +7,54 @@
 namespace duckdb {
 namespace {
 struct SwitchFunctionBindData : FunctionData {
-	explicit SwitchFunctionBindData(LogicalType return_type_p) : return_type(std::move(return_type_p)) {
-
+	explicit SwitchFunctionBindData(LogicalType return_type_p, idx_t map_index_p) : return_type(std::move(return_type_p)), map_index(std::move(map_index_p)) {
 	}
 
 	LogicalType return_type;
+	idx_t map_index;
+
 	bool Equals(const FunctionData &other_p) const override {
 		const auto &other = other_p.Cast<SwitchFunctionBindData>();
-		return return_type == other.return_type;
+		if (return_type != other.return_type) {
+			return false;
+		}
+		if (map_index != other.map_index) {
+			return false;
+		}
+		return true;
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<SwitchFunctionBindData>(return_type);
+		return make_uniq<SwitchFunctionBindData>(return_type, map_index);
 	}
 };
 
-unique_ptr<FunctionData> SwitchExpressionBind(ClientContext &context, ScalarFunction &function,
-                                         vector<unique_ptr<Expression>> &arguments) {
-	auto &cases = arguments[1];
+idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i]->return_type.id() == LogicalTypeId::MAP) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
+unique_ptr<FunctionData> SwitchBindReturnType(ClientContext &context, ScalarFunction &function,
+											  vector<unique_ptr<Expression>> &arguments) {
+	auto map_index = FindMapArgumentIndex(arguments);
+	if (map_index == DConstants::INVALID_INDEX) {
+		throw BinderException("Switch: No map argument found");
+	}
+	auto &cases = arguments[map_index];
 	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		throw BinderException("Expected a map function for the cases");
+		throw BinderException("Switch: Expected a constant map for the cases");
 	}
-	auto &func_cases = cases->Cast<BoundFunctionExpression>();
-	if (func_cases.function.name != "map") {
-		throw BinderException("Expected a map function for the cases");
+	auto &func = cases->Cast<BoundFunctionExpression>();
+	if (func.function.name != "map") {
+		throw BinderException("Switch: Expected a constant map for the cases");
 	}
-	auto map_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
 	auto values_type = MapType::ValueType(map_value.type());
-	return make_uniq<SwitchFunctionBindData>(values_type);
+	return make_uniq<SwitchFunctionBindData>(values_type, map_index);
 }
 
 void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &result) {
@@ -53,62 +73,74 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 	}
 }
 
-void ConstructCaseChecks(unique_ptr<Expression> &keys, unique_ptr<Expression> &values, vector<BoundCaseCheck> &case_checks, optional_ptr<Expression> base) {
-	vector<unique_ptr<Expression>> keys_unpacked;
-	vector<unique_ptr<Expression>> values_unpacked;
-	ExtractConstantExprFromList(keys, keys_unpacked);
-	ExtractConstantExprFromList(values, values_unpacked);
-	case_checks.reserve(keys_unpacked.size());
-	BoundCaseCheck case_check;
-	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
-		if (base) {
-			case_check.when_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, base->Copy(), std::move(keys_unpacked[i]));
-		} else {
-			case_check.when_expr = std::move(keys_unpacked[i]);
-		}
-		case_check.then_expr = std::move(values_unpacked[i]);
-		case_checks.push_back(std::move(case_check));
-	}
+unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) {
+    auto function_data = input.bind_data->Cast<SwitchFunctionBindData>();
+    auto result = make_uniq<BoundCaseExpression>(function_data.return_type);
+	idx_t map_index = function_data.map_index;
+    unique_ptr<Expression> base_expr = nullptr;
+    unique_ptr<Expression> default_expr = nullptr;
+
+    if (map_index == 1) {
+        base_expr = std::move(input.children[0]);
+    }
+
+    if (input.children.size() > map_index + 1) {
+    	// If there is an argument after the map_index, we have a default expression
+        default_expr = std::move(input.children[map_index + 1]);
+    }
+
+    auto &cases_func = input.children[map_index]->Cast<BoundFunctionExpression>();
+    D_ASSERT(cases_func.children.size() == 2);
+
+    vector<unique_ptr<Expression>> keys_unpacked;
+    vector<unique_ptr<Expression>> values_unpacked;
+    ExtractConstantExprFromList(cases_func.children[0], keys_unpacked);
+    ExtractConstantExprFromList(cases_func.children[1], values_unpacked);
+
+    result->case_checks.reserve(keys_unpacked.size());
+    BoundCaseCheck case_check;
+    for (idx_t i = 0; i < keys_unpacked.size(); i++) {
+        if (base_expr) {
+            case_check.when_expr = make_uniq<BoundComparisonExpression>(
+                ExpressionType::COMPARE_EQUAL, base_expr->Copy(), std::move(keys_unpacked[i]));
+        } else {
+            case_check.when_expr = BoundCastExpression::AddCastToType(
+                input.context, std::move(keys_unpacked[i]), LogicalType::BOOLEAN);
+        }
+        case_check.then_expr = std::move(values_unpacked[i]);
+        result->case_checks.push_back(std::move(case_check));
+    }
+    if (default_expr) {
+        result->else_expr = std::move(default_expr);
+    } else {
+        result->else_expr = BoundCastExpression::AddCastToType(
+            input.context, make_uniq<BoundConstantExpression>(Value()), function_data.return_type);
+    }
+
+    return std::move(result);
 }
 
-unique_ptr<Expression> SwitchBindDefaultExpression(FunctionBindExpressionInput &input) {
-	auto function_data = input.bind_data->Cast<SwitchFunctionBindData>();
-	auto result = make_uniq<BoundCaseExpression>(function_data.return_type);
-	auto &base = input.children[0];
-	auto &cases = input.children[1]->Cast<BoundFunctionExpression>();
-	auto &map_children = cases.children;
-	D_ASSERT(map_children.size() == 2);
-	ConstructCaseChecks(map_children[0], map_children[1], result->case_checks, optional_ptr<Expression>(base));
-	auto &default_case = input.children[2];
-	result->else_expr = std::move(default_case);
-	return std::move(result);
-}
-
-unique_ptr<Expression> SwitchBindMissingDefaultExpression(FunctionBindExpressionInput &input) {
-	auto function_data = input.bind_data->Cast<SwitchFunctionBindData>();
-	auto result = make_uniq<BoundCaseExpression>(function_data.return_type);
-	auto &base = input.children[0];
-	auto &cases = input.children[1]->Cast<BoundFunctionExpression>();
-	auto &map_children = cases.children;
-	D_ASSERT(map_children.size() == 2);
-	ConstructCaseChecks(map_children[0], map_children[1], result->case_checks, optional_ptr<Expression>(base));
-	result->else_expr = BoundCastExpression::AddCastToType(input.context, make_uniq<BoundConstantExpression>(Value()), function_data.return_type);
-	return std::move(result);
-}
 } // namespace
 
 ScalarFunctionSet SwitchFun::GetFunctions() {
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunctionSet func_set;
-	auto switch_missing_default = ScalarFunction({key_type, LogicalType::MAP(key_type, val_type)},
-		val_type, nullptr, SwitchExpressionBind, nullptr);
-	switch_missing_default.SetBindExpressionCallback(SwitchBindMissingDefaultExpression);
-	func_set.AddFunction(std::move(switch_missing_default));
-	auto switch_missing = ScalarFunction({key_type, LogicalType::MAP(key_type, val_type), val_type}, val_type,
-	                   nullptr, SwitchExpressionBind, nullptr);
-	switch_missing.SetBindExpressionCallback(SwitchBindDefaultExpression);
-	func_set.AddFunction(std::move(switch_missing));
+
+	vector<vector<LogicalType>> function_variations = {
+		{key_type, LogicalType::MAP(key_type, val_type)},
+		{key_type, LogicalType::MAP(key_type, val_type), val_type},
+		{LogicalType::MAP(key_type, val_type), val_type},
+		{LogicalType::MAP(key_type, val_type)}
+	};
+
+	for (auto variation : function_variations) {
+		auto switch_missing_default = ScalarFunction(variation,
+			val_type, nullptr, SwitchBindReturnType, nullptr);
+		switch_missing_default.SetBindExpressionCallback(SwitchBindExpression);
+		func_set.AddFunction(std::move(switch_missing_default));
+	}
+
 	return func_set;
 }
 }
