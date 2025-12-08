@@ -48,47 +48,26 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
 		distinct_idx.emplace_back(bound_ref.index);
 		distinct_types.push_back(bound_ref.return_type);
+		group_by_references[bound_ref.index] = i;
 	}
 
-	// Create a mapping of column indices to their corresponding payload aggregate indices.
-	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
-		// Ensure that the payload aggregate is of the expected type.
-		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound_aggr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+	/*
+	 * iterate over all types
+	 * 		Differentiate the occurrence of the column in the key clause.
+	 */
+	idx_t pay_idx = 0;
+	for (idx_t i = 0; i < left.GetTypes().size(); ++i) {
+		// Check if we can directly refer to a group, or if we need to push an aggregate
+		auto entry = group_by_references.find(i);
+		if (entry == group_by_references.end()) {
+			D_ASSERT(op.payload_aggregates[pay_idx]->type == ExpressionType::BOUND_AGGREGATE);
+			auto &bound_aggr = op.payload_aggregates[pay_idx]->Cast<BoundAggregateExpression>();
 
-		// add the logical type of the aggregate to the payload types
-		payload_types.push_back(bound_aggr.return_type);
-		payload_aggregates.push_back(std::move(op.payload_aggregates[i]));
-
-		// Determine the destination of the aggregate result.
-		optional_ptr<Expression> bound_ref;
-		if (op.payload_aggregate_dest_map.find(i) == op.payload_aggregate_dest_map.end()) {
-			// This aggregate hasn't specified an explicit mapping for its destination
-			// So the binder infer the destination from the first argument of the aggregate
-			switch (bound_aggr.children[0]->type) {
-			case ExpressionType::BOUND_REF: {
-				// Cast the child to a BoundReferenceExpression and map its index to the aggregate index.
-				bound_ref = &bound_aggr.children[0]->Cast<BoundReferenceExpression>();
-				break;
-			}
-			case ExpressionType::OPERATOR_CAST: {
-				// We have a cast on top of the BoundRefExpression
-				auto &bound_cast = bound_aggr.children[0]->Cast<BoundCastExpression>();
-				bound_ref = *bound_cast.child;
-				break;
-			}
-			default:
-				throw InternalException("Unexpected expression type for aggregate argument in recursive CTE");
-			}
-		} else {
-			// We have an explicit mapping for the destination of this aggregate
-			bound_ref = *op.payload_aggregate_dest_map[i];
+			// add the logical type of the aggregate to the payload types
+			payload_types.push_back(bound_aggr.return_type);
+			payload_aggregates.push_back(std::move(op.payload_aggregates[pay_idx++]));
+			payload_idx.emplace_back(i);
 		}
-		D_ASSERT(bound_ref);
-		D_ASSERT(bound_ref->type == ExpressionType::BOUND_REF);
-		auto &cast_ref = bound_ref->Cast<BoundReferenceExpression>();
-		// add the logical type of the aggregate to the payload types
-		payload_idx.emplace_back(cast_ref.index);
 	}
 
 	// If the key variant has been used, a recurring table will be created.

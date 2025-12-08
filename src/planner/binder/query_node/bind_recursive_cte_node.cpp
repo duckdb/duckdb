@@ -34,7 +34,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	result.types = left.types;
 	vector<LogicalType> internal_types = left.types;
 	vector<unique_ptr<Expression>> key_targets, payload_aggregates;
-	unordered_map<idx_t, unique_ptr<Expression>> payload_aggregate_dest_map;
 
 	// names are picked from the LHS, unless aliases are explicitly specified
 	result.names = left.names;
@@ -54,7 +53,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Set contains column indices that are already bound
 	unordered_set<idx_t> key_references;
-	unordered_set<idx_t> payload_references;
+	unordered_map<idx_t, unique_ptr<Expression>> payload_references;
 	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
 	vector<LogicalType> return_types = result.types;
 
@@ -62,8 +61,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	for (idx_t expr_idx = 0; expr_idx < statement.key_targets.size(); expr_idx++) {
 		auto &expr = statement.key_targets[expr_idx];
 
-		if(expr->type == ExpressionType::COLUMN_REF) {
-
+		if (expr->type == ExpressionType::COLUMN_REF) {
 			if (expr->HasAlias()) {
 				throw BinderException(expr->GetQueryLocation(),
 				                      "In USING KEY, only direct calls to an aggregate function can have an alias.");
@@ -80,7 +78,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			key_references.insert(column_index);
 			key_targets.push_back(std::move(bound_expr));
 		} else if (expr->type == ExpressionType::FUNCTION) {
-
 			auto &func_expr = expr->Cast<FunctionExpression>();
 
 			if (func_expr.filter) {
@@ -100,13 +97,17 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			QueryErrorContext error_context(expr->GetQueryLocation());
 
-			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.function_name, error_context);
-			auto entry = GetCatalogEntry(func_expr.catalog, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.function_name,
+			                                error_context);
+			auto entry =
+			    GetCatalogEntry(func_expr.catalog, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-				throw BinderException(expr->GetQueryLocation(),
-				                      "'%s' can't be used in the USING KEY clause.\n"
-				                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
+				throw BinderException(
+				    expr->GetQueryLocation(),
+				    "'%s' can't be used in the USING KEY clause.\n"
+				    "It has to be either a column name as a key or a direct call to an aggregate function.",
+				    expr->ToString());
 			}
 			auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 
@@ -130,14 +131,12 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 					                      func_expr.GetAlias());
 				}
 				aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
-				// Create a new bound column reference for the target column
-				payload_aggregate_dest_map[expr_idx - key_targets.size()] = make_uniq<BoundColumnRefExpression>(
-				    result.types[aggregate_idx], ColumnBinding(setop_index, aggregate_idx));
 			} else {
 				if (bound_children.size() == 0 || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 					// No alias and no way to infer target column through first argument
-					throw BinderException(expr->GetQueryLocation(),
-					                      "In USING KEY, an aggregate must either have a column reference or an alias.");
+					throw BinderException(
+					    expr->GetQueryLocation(),
+					    "In USING KEY, an aggregate must either have a column reference or an alias.");
 				}
 				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
 			}
@@ -168,19 +167,19 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			}
 
 			return_types[aggregate_idx] = aggregate->return_type;
-			payload_aggregates.push_back(std::move(aggregate));
-			payload_references.insert(aggregate_idx);
+			payload_references[aggregate_idx] = std::move(aggregate);
 		} else {
-			throw BinderException(expr->GetQueryLocation(),
-			                      "'%s' can't be used in the USING KEY clause.\n"
-			                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
+			throw BinderException(
+			    expr->GetQueryLocation(),
+			    "'%s' can't be used in the USING KEY clause.\n"
+			    "It has to be either a column name as a key or a direct call to an aggregate function.",
+			    expr->ToString());
 		}
 	}
 
-	if (key_targets.empty() && !payload_aggregates.empty()) {
+	if (key_targets.empty() && !payload_references.empty()) {
 		throw BinderException("USING KEY clause requires at least one key column.");
 	}
-
 
 	// Now that we have finished binding all aggregates, we can update the operator types
 	result.types = std::move(return_types);
@@ -189,19 +188,22 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	if (!key_targets.empty()) {
 		// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
 		for (idx_t i = 0; i < left.types.size(); i++) {
-			if (key_references.find(i) == key_references.end() &&
-			    payload_references.find(i) == payload_references.end()) {
-				// Create a new bound column reference for the missing columns
-				vector<unique_ptr<Expression>> first_children;
-				auto bound = make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(setop_index, i));
-				first_children.push_back(std::move(bound));
+			if (key_references.find(i) == key_references.end()) {
+				if (payload_references.find(i) == payload_references.end()) {
+					// Create a new bound column reference for the missing columns
+					vector<unique_ptr<Expression>> first_children;
+					auto bound = make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(setop_index, i));
+					first_children.push_back(std::move(bound));
 
-				// Create a last aggregate for the newly bound column reference
-				auto first_aggregate = function_binder.BindAggregateFunction(
-				    LastFunctionGetter::GetFunction(result.types[i]), std::move(first_children), nullptr,
-				    AggregateType::NON_DISTINCT);
+					// Create a last aggregate for the newly bound column reference
+					auto first_aggregate = function_binder.BindAggregateFunction(
+					    LastFunctionGetter::GetFunction(result.types[i]), std::move(first_children), nullptr,
+					    AggregateType::NON_DISTINCT);
 
-				payload_aggregates.push_back(std::move(first_aggregate));
+					payload_aggregates.push_back(std::move(first_aggregate));
+				} else {
+					payload_aggregates.push_back(std::move(payload_references[i]));
+				}
 			}
 		}
 	}
@@ -270,7 +272,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		root->ref_recurring = ref_recurring;
 		root->internal_types = std::move(internal_types);
 		root->payload_aggregates = std::move(payload_aggregates);
-		root->payload_aggregate_dest_map = std::move(payload_aggregate_dest_map);
 		root->result_types = result.types;
 		result.plan = std::move(root);
 	}

@@ -130,9 +130,6 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &aggregate : rec.payload_aggregates) {
 			callback(&aggregate);
 		}
-		for (auto &expr : rec.payload_aggregate_dest_map) {
-			callback(&expr.second);
-		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {

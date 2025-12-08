@@ -603,11 +603,6 @@
         "id": 208,
         "name": "result_types",
         "type": "vector<LogicalType>"
-      },
-      {
-        "id": 209,
-        "name": "payload_aggregate_dest_map",
-        "type": "unordered_map<idx_t, Expression*>"
       }
     ]
   },
