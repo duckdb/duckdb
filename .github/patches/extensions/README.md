@@ -40,14 +40,13 @@ workflow for this is as follows:
 
 9. Commit patch in `.github/patches/extensions/[your_extension]/*.patch` using a descriptive name
 
-### If the changes you made are very minor, you can skip the next two steps. (PR #2, PR #3) 
+> If the changes you made are very minor, you can skip the next two steps. (PR #2, PR #3)
+>
+> The next two steps are for the following scenarios:
+>
+> 1. You are the extension developer, and either the changes are big, or the patches have accumulated and you want to bump the extension.
+> 2. You are not the extension developer, but the changes to the extension are big, so you should follow the next two steps so that it is not so cumbersome for the extension developer to bump the extension.
 
-The next two steps are for the following scenarios: 
-
-1. You are the extension developer, and either the changes are big, or the patches have accumulated and you want to 
-bump the extension. 
-2. You are not the extension developer, but the changes to the extension are big so you should follow the next two steps
-so that it is not so cumbersome for the extension developer to bump the extension.
 
 ### PR #2: patch to extension X
 - Apply (all) the patch(es) in `.github/patches/extensions/x/*.patch` to extension X.
