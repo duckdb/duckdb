@@ -257,15 +257,17 @@ bool IsConstantExpression(ExpressionExecutor &executor) {
 	return !expression.IsVolatile() && expression.IsConsistent();
 }
 
-//! When the vector is not constant, return nullptr, otherwise a ptr to the constant vector
-unique_ptr<Vector> GetVectorWhenConstant(DataChunk &update_chunk, ExpressionExecutor &executor) {
-	if (!IsConstantExpression(executor)) {
-		return nullptr;
-	}
-	auto constant_vector = make_uniq<Vector>(update_chunk.data[0].GetType());
-	constant_vector->Reference(update_chunk.data[0]);
-	return constant_vector;
-}
+// //! When the vector is not constant, return nullptr, otherwise a ptr to the constant vector
+// unique_ptr<Vector> GetVectorWhenConstant(DataChunk &update_chunk, ExpressionExecutor &executor) {
+// 	if (!IsConstantExpression(executor)) {
+// 		return nullptr;
+// 	}
+// 	auto constant_vector = make_uniq<Vector>(update_chunk.data[0].GetType(), true, true);
+// 	constant_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
+// 	ConstantVector::SetNull(*constant_vector, true);
+// 	constant_vector->Reference(update_chunk.data[0]);
+// 	return constant_vector;
+// }
 
 //! Populates the newly added column with its default value for all existing rows.
 unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
@@ -295,8 +297,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &conte
 
 	// Optimization: Evaluate the expression once to check if it's a constant.
 	// If it is, we don't need to run the executor per batch of DataChunks.
-	unique_ptr<Vector> possible_constant_vector = GetVectorWhenConstant(actual_values_chunk, executor);
-	const bool is_constant_default = possible_constant_vector != nullptr;
+
+	// unique_ptr<Vector> possible_constant_vector = GetVectorWhenConstant(actual_values_chunk, executor);
+	// const bool is_constant_default = possible_constant_vector != nullptr;
 	// Update per batch of DataChunks
 	while (true) {
 		// This scans only row ids
@@ -312,13 +315,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::FinalizeAlterEntry(ClientContext &conte
 		actual_values_chunk.Reset();
 		actual_values_chunk.SetCardinality(row_ids_chunk.size());
 
-		if (is_constant_default) {
-			actual_values_chunk.data[0].Reference(*possible_constant_vector);
-		} else {
-			executor.SetChunk(&actual_values_chunk);
-			// Execute the default expression for each row
-			executor.ExecuteExpression(0, actual_values_chunk.data[0]);
-		}
+		// if (is_constant_default) {
+		// 	actual_values_chunk.data[0].Reference(*possible_constant_vector);
+		// } else {
+		executor.SetChunk(&actual_values_chunk);
+		// Execute the default expression for each row
+		executor.ExecuteExpression(0, actual_values_chunk.data[0]);
+		// }
 
 		// Update the newly added column with the default values
 		storage->Update(*update_state, context, row_ids, vector<PhysicalIndex> {new_column_physical_idx},
