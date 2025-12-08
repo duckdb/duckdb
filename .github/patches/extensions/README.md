@@ -40,6 +40,7 @@ workflow for this is as follows:
 
 9. Commit patch in `.github/patches/extensions/[your_extension]/*.patch` using a descriptive name
 
+> [!TIP]
 > If the changes you made are very minor, you can skip the next two steps. (PR #2, PR #3)
 >
 > The next two steps are for the following scenarios:
