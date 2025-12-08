@@ -116,10 +116,8 @@ public:
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public PrimitiveColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
-	                     vector<string> schema_path_p, // NOLINT
-	                     bool can_have_nulls)
-	    : PrimitiveColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls) {
+	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p)
+	    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 	}
 	~StandardColumnWriter() override = default;
 
@@ -208,7 +206,7 @@ public:
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
-				state.dictionary.Insert(src_value);
+				state.dictionary.template Insert<true>(src_value);
 				state.total_value_count++;
 				state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 			}
@@ -219,7 +217,7 @@ public:
 				}
 				if (validity.RowIsValid(vector_index)) {
 					const auto &src_value = data_ptr[vector_index];
-					state.dictionary.Insert(src_value);
+					state.dictionary.template Insert<true>(src_value);
 					state.total_value_count++;
 					state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 				}

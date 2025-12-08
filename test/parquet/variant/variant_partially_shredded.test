@@ -4,186 +4,186 @@
 require parquet
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded0.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded1.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded1.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded2.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded2.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded3.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded3.parquet';
-----
-
-query II nosort result
-from 'data/parquet-testing/variant_partial_shredded4.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded4.parquet';
 ----
 
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded5.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded5.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded6.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded6.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded7.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded7.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded8.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded8.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded9.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded9.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded10.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded10.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded11.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded11.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded12.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded12.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded13.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded13.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded14.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded14.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded15.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded15.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded16.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded16.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded17.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded17.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded18.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded18.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded19.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded19.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded20.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded20.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded21.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded21.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded22.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded22.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded23.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded23.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded24.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded24.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded25.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded25.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded26.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded26.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded27.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded27.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded28.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded28.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded29.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded29.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded30.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded30.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded31.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded31.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded32.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded32.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded33.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded33.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded34.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded34.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded35.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded35.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded36.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded36.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded37.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded37.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded38.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded38.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded39.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded39.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded40.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded40.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded41.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded41.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded42.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded42.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded43.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded43.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded44.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded44.parquet';
 ----
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded45.parquet';
+from '{DATA_DIR}/parquet-testing/variant_partial_shredded45.parquet';
+----
+
+query II nosort result
+from 'data/parquet-testing/variant_partial_shredded46.parquet';
 ----

@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/parser/tableref.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/parsed_data/update_extensions_info.hpp"
 
 namespace duckdb {

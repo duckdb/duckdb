@@ -1,0 +1,19 @@
+# name: test/sql/json/issues/issue19366.test
+# description: Test issue 19366 - 1.4.1: malformed JSON when running through view
+# group: [issues]
+
+require json
+
+require parquet
+
+statement ok
+copy (
+    select
+        'TEST' AS "key",
+        {Attributes: '{}'::MAP(VARCHAR, JSON), Nodes: {hardware: NULL::JSON, networking: NULL::JSON, software: NULL::JSON}, "Table": '{}'::MAP(VARCHAR, JSON)} AS "value"
+) to '__TEST_DIR__/19366.parquet' (PARQUET_VERSION V2)
+
+query II
+from '__TEST_DIR__/19366.parquet';
+----
+TEST	{'Attributes': {}, 'Nodes': {'hardware': NULL, 'networking': NULL, 'software': NULL}, 'Table': {}}

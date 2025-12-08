@@ -11,7 +11,7 @@ CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 # test if null value is correctly converted into string
 query I
-COPY test FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0,allow_quoted_nulls false );
+COPY test FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0,allow_quoted_nulls false );
 ----
 3
 
@@ -27,7 +27,7 @@ DELETE FROM test;
 
 # test if null value is correctly converted into string if explicit columns are used
 query I
-COPY test (col_a, col_b, col_c) FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0, allow_quoted_nulls false);
+COPY test (col_a, col_b, col_c) FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0, allow_quoted_nulls false);
 ----
 3
 
@@ -40,40 +40,40 @@ SELECT * FROM test ORDER BY 1;
 
 # FORCE_NOT_NULL is only supported in COPY ... FROM ...
 statement error
-COPY test TO 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0);
+COPY test TO '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_b), NULL 'test', HEADER 0);
 ----
 Option "FORCE_NOT_NULL" is not supported for writing - only for reading
 
 # FORCE_NOT_NULL must not be empty and must have the correct parameter type
 statement error
-COPY test FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL, NULL 'test');
+COPY test FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL, NULL 'test');
 ----
 "force_not_null" expects a column list or * as parameter
 
 statement error
-COPY test FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');
+COPY test FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');
 ----
 "force_not_null" expected to find 42, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not set as output, but that is a column of the table
 statement error
-COPY test (col_b, col_a) FROM 'data/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_b));
+COPY test (col_b, col_a) FROM '{DATA_DIR}/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_b));
 ----
 "force_not_null" expected to find col_c, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not a column of the table
 statement error
-COPY test FROM 'data/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
+COPY test FROM '{DATA_DIR}/csv/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
 ----
 "force_not_null" expected to find col_d, but it was not found in the table
 
 # FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
 query I
-COPY test FROM 'data/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
+COPY test FROM '{DATA_DIR}/csv/test/force_not_null.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
 ----
 3
 
 statement error
-COPY test FROM 'data/csv/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
+COPY test FROM '{DATA_DIR}/csv/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
 ----
 Error when converting column "col_a".

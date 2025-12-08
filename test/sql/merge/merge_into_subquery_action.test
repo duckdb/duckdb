@@ -1,0 +1,44 @@
+# name: test/sql/merge/merge_into_subquery_action.test
+# description: Test MERGE INTO with subqueries in the merge action condition
+# group: [merge]
+
+statement ok
+CREATE TABLE Totals(item_id int, balance int, biggest_item BOOL);
+
+statement ok
+CREATE TABLE Buy(item_id int, volume int);
+
+statement ok
+INSERT INTO Buy values(10, 1000), (30, 300), (20, 2000);
+
+statement ok
+MERGE INTO Totals USING Buy USING (item_id)
+WHEN NOT MATCHED AND Buy.volume = (SELECT MAX(Volume) FROM Buy)
+	THEN INSERT VALUES (Buy.item_id, Buy.volume, true)
+WHEN NOT MATCHED
+	THEN INSERT VALUES (Buy.item_id, Buy.volume, false)
+
+query III
+SELECT * FROM Totals ORDER BY item_id
+----
+10	1000	false
+20	2000	true
+30	300	false
+
+# original issue
+statement ok
+CREATE TABLE dummy_edge(id INTEGER, ref_id INTEGER, "value" VARCHAR, note VARCHAR);
+
+statement ok
+CREATE TABLE dummy_user(user_id INTEGER, "name" VARCHAR, email VARCHAR, created_at DATE);
+
+statement ok
+CREATE TABLE dummy_null(id INTEGER, "value" INTEGER, optional_text VARCHAR);
+
+statement ok
+MERGE INTO main.dummy_edge as target_0
+USING dummy_user as ref_0
+ON target_0.note = ref_0.name
+WHEN NOT MATCHED AND EXISTS (
+  SELECT id FROM main.dummy_null WHERE true
+) THEN DO NOTHING

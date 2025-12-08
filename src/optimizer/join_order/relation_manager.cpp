@@ -46,7 +46,6 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                   const RelationStats &stats) {
-
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
@@ -54,6 +53,10 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
+	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		get_all_child_bindings = !op.children.empty();
+	}
 	if (table_indexes.empty()) {
 		// relation represents a non-reorderable relation, most likely a join relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
@@ -65,9 +68,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
 		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_UNNEST) {
-		// logical unnest has a logical_unnest index, but other bindings can refer to
-		// columns that are not unnested.
+	} else if (get_all_child_bindings) {
+		// logical get has a logical_get index, but if a function is present other bindings can refer to
+		// columns that are not unnested, and from the child of the logical get.
 		auto bindings = op.GetColumnBindings();
 		for (auto &binding : bindings) {
 			relation_mapping[binding.table_index] = relation_id;
@@ -182,6 +185,21 @@ static void ModifyStatsIfLimit(optional_ptr<LogicalOperator> limit_op, RelationS
 	}
 }
 
+void RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op,
+                                              LogicalOperator &input_op, optional_ptr<LogicalOperator> parent,
+                                              RelationStats &child_stats, optional_ptr<LogicalOperator> limit_op,
+                                              vector<reference<LogicalOperator>> &datasource_filters) {
+	D_ASSERT(!op.children.empty());
+	auto child_optimizer = optimizer.CreateChildOptimizer();
+	op.children[0] = child_optimizer.Optimize(std::move(op.children[0]), &child_stats);
+	if (!datasource_filters.empty()) {
+		child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
+		                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY);
+	}
+	ModifyStatsIfLimit(limit_op.get(), child_stats);
+	AddRelation(input_op, parent, child_stats);
+}
+
 bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
                                            vector<reference<LogicalOperator>> &filter_operators,
                                            optional_ptr<LogicalOperator> parent) {
@@ -279,15 +297,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		// optimize children of unnest
 		RelationStats child_stats;
-		auto child_optimizer = optimizer.CreateChildOptimizer();
-		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
-		// the extracted cardinality should be set for window
-		if (!datasource_filters.empty()) {
-			child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
-			                                                  RelationStatisticsHelper::DEFAULT_SELECTIVITY);
-		}
-		ModifyStatsIfLimit(limit_op.get(), child_stats);
-		AddRelation(input_op, parent, child_stats);
+		AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -345,6 +355,14 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_GET: {
 		// TODO: Get stats from a logical GET
 		auto &get = op->Cast<LogicalGet>();
+		// this is a get that *most likely* has a function (like unnest or json_each).
+		// there are new bindings for output of the function, but child bindings also exist, and can
+		// be used in joins
+		if (!op->children.empty()) {
+			RelationStats child_stats;
+			AddRelationWithChildren(optimizer, *op, input_op, parent, child_stats, limit_op, datasource_filters);
+			return true;
+		}
 		auto stats = RelationStatisticsHelper::ExtractGetStats(get, context);
 		// if there is another logical filter that could not be pushed down into the
 		// table scan, apply another selectivity.
@@ -542,7 +560,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.expressions.empty());
 			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// create a conjunction expression for the semi join.
 				// It's possible multiple LHS relations have a condition in

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/time.hpp
+// duckdb/common/types/geometry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -173,6 +173,19 @@ public:
 		m_max = MaxValue(m_max, other.m_max);
 	}
 
+	bool IntersectsXY(const GeometryExtent &other) const {
+		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min);
+	}
+
+	bool IntersectsXYZM(const GeometryExtent &other) const {
+		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min ||
+		         z_min > other.z_max || z_max < other.z_min || m_min > other.m_max || m_max < other.m_min);
+	}
+
+	bool ContainsXY(const GeometryExtent &other) const {
+		return x_min <= other.x_min && x_max >= other.x_max && y_min <= other.y_min && y_max >= other.y_max;
+	}
+
 	double x_min;
 	double y_min;
 	double z_min;
@@ -193,6 +206,13 @@ public:
 
 	//! Convert to WKT
 	DUCKDB_API static string_t ToString(Vector &result, const string_t &geom);
+
+	//! Convert from WKB
+	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static bool FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
+
+	//! Convert to WKB
+	DUCKDB_API static void ToBinary(Vector &source, Vector &result, idx_t count);
 
 	//! Get the geometry type and vertex type from the WKB
 	DUCKDB_API static pair<GeometryType, VertexType> GetType(const string_t &wkb);

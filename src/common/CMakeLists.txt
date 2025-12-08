@@ -64,6 +64,7 @@ add_library_unity(
   enum_util.cpp
   symbols.cpp
   render_tree.cpp
+  thread_util.cpp
   tree_renderer.cpp
   types.cpp
   bignum.cpp

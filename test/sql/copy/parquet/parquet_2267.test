@@ -5,11 +5,11 @@
 require parquet
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/bug2267.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/bug2267.parquet')
 ----
 [{'disabledPlans': [bea4c11e-220a-4e6d-8eb8-8ea15d019f90], 'skuId': c7df2760-2c81-4ef7-b578-5b5392b571df}, {'disabledPlans': [8a256a2b-b617-496d-b51b-e76466e88db0, 41781fb2-bc02-4b7c-bd55-b576c07bb09d, eec0eb4f-6444-4f95-aba0-50c24d67f998], 'skuId': 84a661c4-e949-4bd2-a560-ed7766fcaf2b}, {'disabledPlans': [], 'skuId': b05e124f-c7cc-45a0-a6aa-8cf78c946968}, {'disabledPlans': [], 'skuId': f30db892-07e9-47e9-837c-80727f46fd3d}]
 
 query I
-SELECT assignedLicenses[1] FROM parquet_scan('data/parquet-testing/bug2267.parquet')
+SELECT assignedLicenses[1] FROM parquet_scan('{DATA_DIR}/parquet-testing/bug2267.parquet')
 ----
 {'disabledPlans': [bea4c11e-220a-4e6d-8eb8-8ea15d019f90], 'skuId': c7df2760-2c81-4ef7-b578-5b5392b571df}

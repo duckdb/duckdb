@@ -111,7 +111,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
                                           vector<unordered_set<string>> &lambda_params,
                                           const bool within_function_expression) {
-
 	bool next_within_function_expression = false;
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -177,7 +176,6 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 
 void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                   vector<unordered_set<string>> &lambda_params) {
-
 	for (auto &child : function.children) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
@@ -228,7 +226,6 @@ void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, u
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
                                                                    const string &field_name) {
-
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
 	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(field_name)));
@@ -507,7 +504,8 @@ BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx
 	return (*lambda_bindings)[lambda_ref.lambda_idx].Bind(lambda_ref, depth);
 }
 
-BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression) {
+BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression,
+                                            unique_ptr<ParsedExpression> &expr_ptr) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -516,21 +514,17 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	ErrorData error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
-		if (!col_ref_p.IsQualified()) {
-			// column was not found
-			// first try to bind it as an alias
+		// column wasn't found
+		if (ExpressionBinder::IsPotentialAlias(col_ref_p)) {
 			BindResult alias_result;
-			auto found_alias = TryBindAlias(col_ref_p, root_expression, alias_result);
+			auto found_alias = TryResolveAliasReference(col_ref_p, depth, root_expression, alias_result, expr_ptr);
 			if (found_alias) {
 				return alias_result;
 			}
-			found_alias = QualifyColumnAlias(col_ref_p);
-			if (!found_alias) {
-				// column was not found - check if it is a SQL value function
-				auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
-				if (value_function) {
-					return BindExpression(value_function, depth);
-				}
+
+			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+			if (value_function) {
+				return BindExpression(value_function, depth);
 			}
 		}
 		error.AddQueryLocation(col_ref_p);
@@ -578,9 +572,4 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	return result;
 }
 
-bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &col_ref) {
-	// only the BaseSelectBinder will have a valid column alias map,
-	// otherwise we return false
-	return false;
-}
 } // namespace duckdb

@@ -138,8 +138,19 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, optional_ptr<
 		                                                      false_sel.get());
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
-	case PhysicalType::ARRAY:
-		return NestedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel, null_mask);
+	case PhysicalType::ARRAY: {
+		auto result_count = NestedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel, null_mask);
+		if (true_sel && result_count > 0) {
+			std::sort(true_sel->data(), true_sel->data() + result_count);
+		}
+		if (false_sel) {
+			idx_t false_count = count - result_count;
+			if (false_count > 0) {
+				std::sort(false_sel->data(), false_sel->data() + false_count);
+			}
+		}
+		return result_count;
+	}
 	default:
 		throw InternalException("Invalid type for comparison");
 	}
@@ -209,7 +220,6 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
                                   SelectionVector &maybe_vec, OptionalSelection &false_opt,
                                   optional_ptr<ValidityMask> null_mask) {
-
 	UnifiedVectorFormat lvdata, rvdata;
 	left.ToUnifiedFormat(count, lvdata);
 	right.ToUnifiedFormat(count, rvdata);

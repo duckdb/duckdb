@@ -1,7 +1,6 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -10,39 +9,35 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // HashedSortGroup
 //===--------------------------------------------------------------------===//
-// Formerly PartitionGlobalHashGroup
 class HashedSortGroup {
 public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	HashedSortGroup(ClientContext &client, optional_ptr<Sort> sort, idx_t group_idx);
+	HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx);
 
 	const idx_t group_idx;
+	atomic<idx_t> count;
 
 	//	Sink
-	optional_ptr<Sort> sort;
+	Sort &sort;
 	unique_ptr<GlobalSinkState> sort_global;
 
 	//	Source
+	mutex scan_lock;
+	TupleDataParallelScanState parallel_scan;
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
-
-	unique_ptr<ColumnDataCollection> columns;
-	unique_ptr<SortedRun> run;
 };
 
-HashedSortGroup::HashedSortGroup(ClientContext &client, optional_ptr<Sort> sort, idx_t group_idx)
-    : group_idx(group_idx), sort(sort), tasks_completed(0) {
-	if (sort) {
-		sort_global = sort->GetGlobalSinkState(client);
-	}
+HashedSortGroup::HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx)
+    : group_idx(group_idx), count(0), sort(sort), tasks_completed(0) {
+	sort_global = sort.GetGlobalSinkState(client);
 }
 
 //===--------------------------------------------------------------------===//
 // HashedSortGlobalSinkState
 //===--------------------------------------------------------------------===//
-// Formerly PartitionGlobalSinkState
 class HashedSortGlobalSinkState : public GlobalSinkState {
 public:
 	using HashGroupPtr = unique_ptr<HashedSortGroup>;
@@ -62,6 +57,7 @@ public:
 	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress) const;
 
 	//! System and query state
+	ClientContext &client;
 	const HashedSort &hashed_sort;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
@@ -87,9 +83,8 @@ private:
 };
 
 HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
-    : hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
+    : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
-
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 8 && (thread_pages >> max_bits) > 1) {
@@ -97,22 +92,11 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
 	}
 
 	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
-	auto &partitions = hashed_sort.partitions;
-	auto &orders = hashed_sort.orders;
 	auto &payload_types = hashed_sort.payload_types;
-	if (!orders.empty()) {
-		if (partitions.empty()) {
-			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-			auto new_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, idx_t(0));
-			hash_groups.emplace_back(std::move(new_group));
-		} else {
-			auto types = payload_types;
-			types.push_back(LogicalType::HASH);
-			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-			Rehash(hashed_sort.estimated_cardinality);
-		}
-	}
+	auto types = payload_types;
+	types.push_back(LogicalType::HASH);
+	grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	Rehash(hashed_sort.estimated_cardinality);
 }
 
 unique_ptr<RadixPartitionedTupleData> HashedSortGlobalSinkState::CreatePartition(idx_t new_bits) const {
@@ -150,7 +134,7 @@ void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_part
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(hashed_sort.client, *new_partition);
+	local_partition->Repartition(client, *new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -213,9 +197,12 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 
 		auto &group_data = groups[group_idx];
 		if (group_data->Count()) {
-			hash_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, group_idx);
+			hash_group = make_uniq<HashedSortGroup>(client, *hashed_sort.sort, group_idx);
 		}
 	}
+
+	//	Combine the thread data into the global data
+	grouping_data->Combine(*local_partition);
 }
 
 ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
@@ -250,19 +237,23 @@ SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinaliz
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
-	// OVER()
-	if (!sort) {
-		return SinkFinalizeType::READY;
-	}
-
-	// OVER(...)
+	// OVER(PARTITION BY...)
+	auto &partitions = gsink.grouping_data->GetPartitions();
 	D_ASSERT(!gsink.hash_groups.empty());
-	for (auto &hash_group : gsink.hash_groups) {
+	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+		auto &partition = *partitions[hash_bin];
+		if (!partition.Count()) {
+			continue;
+		}
+
+		auto &hash_group = gsink.hash_groups[hash_bin];
 		if (!hash_group) {
 			continue;
 		}
-		OperatorSinkFinalizeInput hfinalize {*hash_group->sort_global, finalize.interrupt_state};
-		sort->Finalize(client, hfinalize);
+
+		// Prepare to scan into the sort
+		auto &parallel_scan = hash_group->parallel_scan;
+		partition.InitializeScan(parallel_scan, partition_ids);
 	}
 
 	return SinkFinalizeType::READY;
@@ -277,7 +268,6 @@ ProgressData HashedSort::GetSinkProgress(ClientContext &client, GlobalSinkState 
 //===--------------------------------------------------------------------===//
 // HashedSortLocalSinkState
 //===--------------------------------------------------------------------===//
-// Formerly PartitionLocalSinkState
 class HashedSortLocalSinkState : public LocalSinkState {
 public:
 	using LocalSortStatePtr = unique_ptr<LocalSinkState>;
@@ -305,20 +295,11 @@ public:
 	// OVER(PARTITION BY...) (hash grouping)
 	GroupingPartition local_grouping;
 	GroupingAppend grouping_append;
-
-	// OVER(ORDER BY...) (only sorting)
-	LocalSortStatePtr sort_local;
-	InterruptState interrupt;
-
-	// OVER() (no sorting)
-	unique_ptr<ColumnDataCollection> unsorted;
-	ColumnDataAppendState unsorted_append;
 };
 
 HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, const HashedSort &hashed_sort)
     : hashed_sort(hashed_sort), allocator(Allocator::Get(context.client)), hash_exec(context.client),
       sort_exec(context.client) {
-
 	vector<LogicalType> group_types;
 	for (idx_t prt_idx = 0; prt_idx < hashed_sort.partitions.size(); prt_idx++) {
 		auto &pexpr = *hashed_sort.partitions[prt_idx].expression.get();
@@ -333,31 +314,10 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	}
 	sort_chunk.Initialize(context.client, sort_types);
 
-	if (hashed_sort.sort_col_count) {
-		auto payload_types = hashed_sort.payload_types;
-		if (!group_types.empty()) {
-			// OVER(PARTITION BY...)
-			group_chunk.Initialize(allocator, group_types);
-			payload_types.emplace_back(LogicalType::HASH);
-		} else {
-			// OVER(ORDER BY...)
-			for (idx_t ord_idx = 0; ord_idx < hashed_sort.orders.size(); ord_idx++) {
-				auto &pexpr = *hashed_sort.orders[ord_idx].expression.get();
-				group_types.push_back(pexpr.return_type);
-				hash_exec.AddExpression(pexpr);
-			}
-			group_chunk.Initialize(allocator, group_types);
-
-			//	Single partition
-			auto &sort = *hashed_sort.sort;
-			sort_local = sort.GetLocalSinkState(context);
-		}
-		// OVER(...)
-		payload_chunk.Initialize(allocator, payload_types);
-	} else {
-		unsorted = make_uniq<ColumnDataCollection>(context.client, hashed_sort.payload_types);
-		unsorted->InitializeAppend(unsorted_append);
-	}
+	auto hash_types = hashed_sort.payload_types;
+	group_chunk.Initialize(allocator, group_types);
+	hash_types.emplace_back(LogicalType::HASH);
+	payload_chunk.Initialize(allocator, hash_types);
 }
 
 void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
@@ -383,17 +343,6 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 	auto &gstate = sink.global_state.Cast<HashedSortGlobalSinkState>();
 	auto &lstate = sink.local_state.Cast<HashedSortLocalSinkState>();
 	gstate.count += input_chunk.size();
-
-	// Window::Sink:
-	// PartitionedTupleData::Append
-	// Sort::Sink
-	// ColumnDataCollection::Append
-
-	// OVER()
-	if (gstate.hashed_sort.sort_col_count == 0) {
-		lstate.unsorted->Append(lstate.unsorted_append, input_chunk);
-		return SinkResultType::NEED_MORE_INPUT;
-	}
 
 	//	Payload prefix is the input data
 	auto &payload_chunk = lstate.payload_chunk;
@@ -423,15 +372,6 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 
 	payload_chunk.SetCardinality(input_chunk);
 
-	//	OVER(ORDER BY...)
-	auto &sort_local = lstate.sort_local;
-	if (sort_local) {
-		auto &hash_group = *gstate.hash_groups[0];
-		OperatorSinkInput input {*hash_group.sort_global, *sort_local, sink.interrupt_state};
-		sort->Sink(context, payload_chunk, input);
-		return SinkResultType::NEED_MORE_INPUT;
-	}
-
 	// OVER(PARTITION BY...)
 	auto &hash_vector = payload_chunk.data.back();
 	lstate.Hash(input_chunk, hash_vector);
@@ -451,40 +391,6 @@ SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSin
 	auto &gstate = combine.global_state.Cast<HashedSortGlobalSinkState>();
 	auto &lstate = combine.local_state.Cast<HashedSortLocalSinkState>();
 
-	// Window::Combine:
-	// Sort::Sink then Sort::Combine (per hash partition)
-	// Sort::Combine
-	// ColumnDataCollection::Combine
-
-	// OVER()
-	if (gstate.hashed_sort.sort_col_count == 0) {
-		// Only one partition again, so need a global lock.
-		lock_guard<mutex> glock(gstate.lock);
-		auto &hash_groups = gstate.hash_groups;
-		if (!hash_groups.empty()) {
-			D_ASSERT(hash_groups.size() == 1);
-			auto &unsorted = *hash_groups[0]->columns;
-			if (lstate.unsorted) {
-				unsorted.Combine(*lstate.unsorted);
-				lstate.unsorted.reset();
-			}
-		} else {
-			auto new_group = make_uniq<HashedSortGroup>(context.client, sort, idx_t(0));
-			new_group->columns = std::move(lstate.unsorted);
-			hash_groups.emplace_back(std::move(new_group));
-		}
-		return SinkCombineResultType::FINISHED;
-	}
-
-	//	OVER(ORDER BY...)
-	if (lstate.sort_local) {
-		auto &hash_group = *gstate.hash_groups[0];
-		OperatorSinkCombineInput input {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
-		sort->Combine(context, input);
-		lstate.sort_local.reset();
-		return SinkCombineResultType::FINISHED;
-	}
-
 	// OVER(PARTITION BY...)
 	auto &local_grouping = lstate.local_grouping;
 	if (!local_grouping) {
@@ -495,141 +401,48 @@ SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSin
 	auto &grouping_append = lstate.grouping_append;
 	gstate.CombineLocalPartition(local_grouping, grouping_append);
 
-	//	Don't scan the hash column
-	vector<column_t> column_ids;
-	for (column_t i = 0; i < payload_types.size(); ++i) {
-		column_ids.emplace_back(i);
-	}
-
-	//	Loop over the partitions and add them to each hash group's global sort state
-	TupleDataScanState scan_state;
-	DataChunk chunk;
-	auto &partitions = local_grouping->GetPartitions();
-	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
-		auto &partition = *partitions[hash_bin];
-		if (!partition.Count()) {
-			continue;
-		}
-
-		partition.InitializeScan(scan_state, column_ids, TupleDataPinProperties::DESTROY_AFTER_DONE);
-		if (chunk.data.empty()) {
-			partition.InitializeScanChunk(scan_state, chunk);
-		}
-
-		auto &hash_group = *gstate.hash_groups[hash_bin];
-		lstate.sort_local = sort->GetLocalSinkState(context);
-		OperatorSinkInput sink {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
-		while (partition.Scan(scan_state, chunk)) {
-			sort->Sink(context, chunk, sink);
-		}
-
-		OperatorSinkCombineInput lcombine {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
-		sort->Combine(context, lcombine);
-	}
-
 	return SinkCombineResultType::FINISHED;
 }
 
-//===--------------------------------------------------------------------===//
-// HashedSortMaterializeTask
-//===--------------------------------------------------------------------===//
-class HashedSortMaterializeTask : public ExecutorTask {
-public:
-	HashedSortMaterializeTask(Pipeline &pipeline, shared_ptr<Event> event, const PhysicalOperator &op,
-	                          HashedSortGroup &hash_group, idx_t tasks_scheduled, bool build_runs);
+void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) {
+	auto &gstate = finalize.global_state.Cast<HashedSortGlobalSinkState>();
 
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+	//	Loop over the partitions and add them to each hash group's global sort state
+	auto &partitions = gstate.grouping_data->GetPartitions();
+	if (hash_bin < partitions.size()) {
+		auto &partition = *partitions[hash_bin];
+		if (!partition.Count()) {
+			return;
+		}
 
-	string TaskType() const override {
-		return "HashedSortMaterializeTask";
-	}
+		auto &hash_group = *gstate.hash_groups[hash_bin];
+		auto &parallel_scan = hash_group.parallel_scan;
 
-private:
-	Pipeline &pipeline;
-	HashedSortGroup &hash_group;
-	const idx_t tasks_scheduled;
-	const bool build_runs;
-};
+		DataChunk chunk;
+		partition.InitializeScanChunk(parallel_scan.scan_state, chunk);
+		TupleDataLocalScanState local_scan;
+		partition.InitializeScan(local_scan);
 
-HashedSortMaterializeTask::HashedSortMaterializeTask(Pipeline &pipeline, shared_ptr<Event> event,
-                                                     const PhysicalOperator &op, HashedSortGroup &hash_group,
-                                                     idx_t tasks_scheduled, bool build_runs)
-    : ExecutorTask(pipeline.GetClientContext(), std::move(event), op), pipeline(pipeline), hash_group(hash_group),
-      tasks_scheduled(tasks_scheduled), build_runs(build_runs) {
-}
+		auto sort_local = sort->GetLocalSinkState(context);
+		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+		idx_t combined = 0;
+		while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
+			sort->Sink(context, chunk, sink);
+			combined += chunk.size();
+		}
 
-TaskExecutionResult HashedSortMaterializeTask::ExecuteTask(TaskExecutionMode mode) {
-	ExecutionContext execution(pipeline.GetClientContext(), *thread_context, &pipeline);
-	auto &sort = *hash_group.sort;
-	auto &sort_global = *hash_group.sort_source;
-	auto sort_local = sort.GetLocalSourceState(execution, sort_global);
-	InterruptState interrupt((weak_ptr<Task>(shared_from_this())));
-	OperatorSourceInput input {sort_global, *sort_local, interrupt};
-	if (build_runs) {
-		sort.MaterializeSortedRun(execution, input);
-	} else {
-		sort.MaterializeColumnData(execution, input);
-	}
-	if (++hash_group.tasks_completed == tasks_scheduled) {
-		if (build_runs) {
-			hash_group.run = sort.GetSortedRun(sort_global);
-			if (!hash_group.run) {
-				hash_group.run = make_uniq<SortedRun>(execution.client, sort, false);
-			}
-		} else {
-			hash_group.columns = sort.GetColumnData(input);
+		OperatorSinkCombineInput combine {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+		sort->Combine(context, combine);
+		hash_group.count += combined;
+
+		//	Whoever finishes last can Finalize
+		lock_guard<mutex> finalize_guard(hash_group.scan_lock);
+		if (hash_group.count == partition.Count() && !hash_group.sort_source) {
+			OperatorSinkFinalizeInput lfinalize {*hash_group.sort_global, finalize.interrupt_state};
+			sort->Finalize(context.client, lfinalize);
+			hash_group.sort_source = sort->GetGlobalSourceState(context.client, *hash_group.sort_global);
 		}
 	}
-
-	event->FinishTask();
-	return TaskExecutionResult::TASK_FINISHED;
-}
-
-//===--------------------------------------------------------------------===//
-// HashedSortMaterializeEvent
-//===--------------------------------------------------------------------===//
-// Formerly PartitionMergeEvent
-class HashedSortMaterializeEvent : public BasePipelineEvent {
-public:
-	HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline, const PhysicalOperator &op,
-	                           bool build_runs);
-
-	HashedSortGlobalSinkState &gstate;
-	const PhysicalOperator &op;
-	const bool build_runs;
-
-public:
-	void Schedule() override;
-};
-
-HashedSortMaterializeEvent::HashedSortMaterializeEvent(HashedSortGlobalSinkState &gstate, Pipeline &pipeline,
-                                                       const PhysicalOperator &op, bool build_runs)
-    : BasePipelineEvent(pipeline), gstate(gstate), op(op), build_runs(build_runs) {
-}
-
-void HashedSortMaterializeEvent::Schedule() {
-	auto &client = pipeline->GetClientContext();
-
-	// Schedule as many tasks per hash group as the sort will allow
-	auto &ts = TaskScheduler::GetScheduler(client);
-	const auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
-	auto &sort = *gstate.hashed_sort.sort;
-
-	vector<shared_ptr<Task>> tasks;
-	for (auto &hash_group : gstate.hash_groups) {
-		if (!hash_group) {
-			continue;
-		}
-		auto &global_sink = *hash_group->sort_global;
-		hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
-		const auto tasks_scheduled = MinValue<idx_t>(num_threads, hash_group->sort_source->MaxThreads());
-		for (idx_t t = 0; t < tasks_scheduled; ++t) {
-			tasks.emplace_back(make_uniq<HashedSortMaterializeTask>(*pipeline, shared_from_this(), op, *hash_group,
-			                                                        tasks_scheduled, build_runs));
-		}
-	}
-
-	SetTasks(std::move(tasks));
 }
 
 //===--------------------------------------------------------------------===//
@@ -639,26 +452,34 @@ class HashedSortGlobalSourceState : public GlobalSourceState {
 public:
 	using HashGroupPtr = unique_ptr<ColumnDataCollection>;
 	using SortedRunPtr = unique_ptr<SortedRun>;
+	using ChunkRow = HashedSort::ChunkRow;
+	using ChunkRows = HashedSort::ChunkRows;
 
-	HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink) {
-		if (!gsink.count) {
-			return;
-		}
-		columns.resize(gsink.hash_groups.size());
-		runs.resize(gsink.hash_groups.size());
-		for (auto &hash_group : gsink.hash_groups) {
-			if (!hash_group) {
-				continue;
-			}
-			const auto group_idx = hash_group->group_idx;
-			columns[group_idx] = std::move(hash_group->columns);
-			runs[group_idx] = std::move(hash_group->run);
-		}
+	HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink);
+
+	HashedSortGlobalSinkState &gsink;
+	ChunkRows chunk_rows;
+};
+
+HashedSortGlobalSourceState::HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink)
+    : gsink(gsink) {
+	if (!gsink.count) {
+		return;
 	}
 
-	vector<HashGroupPtr> columns;
-	vector<SortedRunPtr> runs;
-};
+	auto &partitions = gsink.grouping_data->GetPartitions();
+	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+		ChunkRow chunk_row;
+
+		auto &hash_group = gsink.hash_groups[hash_bin];
+		if (hash_group) {
+			chunk_row.count = partitions[hash_bin]->Count();
+			chunk_row.chunks = (chunk_row.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		}
+
+		chunk_rows.emplace_back(chunk_row);
+	}
+}
 
 //===--------------------------------------------------------------------===//
 // HashedSort
@@ -666,7 +487,6 @@ public:
 void HashedSort::GenerateOrderings(Orders &partitions, Orders &orders,
                                    const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
                                    const vector<unique_ptr<BaseStatistics>> &partition_stats) {
-
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	const auto partition_cols = partition_bys.size();
 	for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
@@ -690,13 +510,8 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
                        const vector<BoundOrderByNode> &order_bys, const Types &input_types,
                        const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality,
                        bool require_payload)
-    : client(client), estimated_cardinality(estimated_cardinality), payload_types(input_types) {
+    : SortStrategy(input_types), estimated_cardinality(estimated_cardinality) {
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
-
-	// The payload prefix is the same as the input schema
-	for (column_t i = 0; i < payload_types.size(); ++i) {
-		scan_ids.emplace_back(i);
-	}
 
 	//	We have to compute ordering expressions ourselves and materialise them.
 	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
@@ -718,20 +533,23 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 		sort_exprs.emplace_back(std::move(saved));
 	}
 
-	sort_col_count = orders.size() + partitions.size();
-	if (sort_col_count) {
-		// If a payload column is required, check whether there is one already
-		if (require_payload) {
-			//	Watch out for duplicate sort keys!
-			unordered_set<column_t> sort_set(sort_ids.begin(), sort_ids.end());
-			force_payload = (sort_set.size() >= payload_types.size());
-			if (force_payload) {
-				payload_types.emplace_back(LogicalType::BOOLEAN);
-			}
+	// If a payload column is required, check whether there is one already
+	if (require_payload) {
+		//	Watch out for duplicate sort keys!
+		unordered_set<column_t> sort_set(sort_ids.begin(), sort_ids.end());
+		force_payload = (sort_set.size() >= payload_types.size());
+		if (force_payload) {
+			payload_types.emplace_back(LogicalType::BOOLEAN);
 		}
-		vector<idx_t> projection_map;
-		sort = make_uniq<Sort>(client, orders, payload_types, projection_map);
 	}
+
+	// Remember the full set of materialised partition columns
+	for (column_t i = 0; i < payload_types.size(); ++i) {
+		partition_ids.emplace_back(i);
+	}
+
+	vector<idx_t> projection_map;
+	sort = make_uniq<Sort>(client, orders, payload_types, projection_map);
 }
 
 unique_ptr<GlobalSinkState> HashedSort::GetGlobalSinkState(ClientContext &client) const {
@@ -742,65 +560,92 @@ unique_ptr<LocalSinkState> HashedSort::GetLocalSinkState(ExecutionContext &conte
 	return make_uniq<HashedSortLocalSinkState>(context, *this);
 }
 
-unique_ptr<GlobalSourceState> HashedSort::GetGlobalSourceState(ClientContext &context, GlobalSinkState &sink) const {
+unique_ptr<GlobalSourceState> HashedSort::GetGlobalSourceState(ClientContext &client, GlobalSinkState &sink) const {
 	return make_uniq<HashedSortGlobalSourceState>(client, sink.Cast<HashedSortGlobalSinkState>());
 }
 
-unique_ptr<LocalSourceState> HashedSort::GetLocalSourceState(ExecutionContext &context,
-                                                             GlobalSourceState &gstate) const {
-	return make_uniq<LocalSourceState>();
-}
-
-vector<HashedSort::HashGroupPtr> &HashedSort::GetHashGroups(GlobalSourceState &gstate) const {
+const HashedSort::ChunkRows &HashedSort::GetHashGroups(GlobalSourceState &gstate) const {
 	auto &gsource = gstate.Cast<HashedSortGlobalSourceState>();
-	return gsource.columns;
+	return gsource.chunk_rows;
 }
 
-SinkFinalizeType HashedSort::MaterializeHashGroups(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
-                                                   OperatorSinkFinalizeInput &finalize) const {
-	auto &gsink = finalize.global_state.Cast<HashedSortGlobalSinkState>();
+static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_t hash_bin, bool build_runs,
+                                                 OperatorSourceInput &source) {
+	auto &gsource = source.global_state.Cast<HashedSortGlobalSourceState>();
+	auto &gsink = gsource.gsink;
+	auto &hash_group = *gsink.hash_groups[hash_bin];
 
-	// OVER()
-	if (sort_col_count == 0) {
-		auto &hash_group = *gsink.hash_groups[0];
-		auto &unsorted = *hash_group.columns;
-		if (!unsorted.Count()) {
-			return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	//	OVER(PARTITION BY...)
+	if (gsink.grouping_data) {
+		lock_guard<mutex> reset_guard(hash_group.scan_lock);
+		auto &partitions = gsink.grouping_data->GetPartitions();
+		if (hash_bin < partitions.size()) {
+			//	Release the memory now that we have finished scanning it.
+			partitions[hash_bin].reset();
 		}
-		return SinkFinalizeType::READY;
 	}
 
-	// Schedule all the sorts for maximum thread utilisation
-	auto sort_event = make_shared_ptr<HashedSortMaterializeEvent>(gsink, pipeline, op, false);
-	event.InsertEvent(std::move(sort_event));
+	auto &sort = hash_group.sort;
+	auto &sort_global = *hash_group.sort_source;
+	auto sort_local = sort.GetLocalSourceState(context, sort_global);
 
-	return SinkFinalizeType::READY;
+	OperatorSourceInput input {sort_global, *sort_local, source.interrupt_state};
+	if (build_runs) {
+		return sort.MaterializeSortedRun(context, input);
+	} else {
+		return sort.MaterializeColumnData(context, input);
+	}
 }
 
-SinkFinalizeType HashedSort::MaterializeSortedRuns(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
-                                                   OperatorSinkFinalizeInput &finalize) const {
-	auto &gsink = finalize.global_state.Cast<HashedSortGlobalSinkState>();
+SourceResultType HashedSort::MaterializeColumnData(ExecutionContext &execution, idx_t hash_bin,
+                                                   OperatorSourceInput &source) const {
+	return MaterializeHashGroupData(execution, hash_bin, false, source);
+}
 
-	// OVER()
-	if (sort_col_count == 0) {
-		auto &hash_group = *gsink.hash_groups[0];
-		auto &unsorted = *hash_group.columns;
-		if (!unsorted.Count()) {
-			return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
-		}
-		return SinkFinalizeType::READY;
+HashedSort::HashGroupPtr HashedSort::GetColumnData(idx_t hash_bin, OperatorSourceInput &source) const {
+	auto &gsource = source.global_state.Cast<HashedSortGlobalSourceState>();
+	auto &gsink = gsource.gsink;
+	auto &hash_group = *gsink.hash_groups[hash_bin];
+
+	auto &sort = hash_group.sort;
+	auto &sort_global = *hash_group.sort_source;
+
+	OperatorSourceInput input {sort_global, source.local_state, source.interrupt_state};
+	auto result = sort.GetColumnData(input);
+	hash_group.sort_source.reset();
+
+	//	Just because MaterializeColumnData returned FINISHED doesn't mean that the same thread will
+	//	get the result...
+	if (result && result->Count() == hash_group.count) {
+		return result;
 	}
 
-	// Schedule all the sorts for maximum thread utilisation
-	auto sort_event = make_shared_ptr<HashedSortMaterializeEvent>(gsink, pipeline, op, true);
-	event.InsertEvent(std::move(sort_event));
-
-	return SinkFinalizeType::READY;
+	return nullptr;
 }
 
-vector<HashedSort::SortedRunPtr> &HashedSort::GetSortedRuns(GlobalSourceState &gstate) const {
-	auto &gsource = gstate.Cast<HashedSortGlobalSourceState>();
-	return gsource.runs;
+SourceResultType HashedSort::MaterializeSortedRun(ExecutionContext &context, idx_t hash_bin,
+                                                  OperatorSourceInput &source) const {
+	return MaterializeHashGroupData(context, hash_bin, true, source);
+}
+
+HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t hash_bin,
+                                                  OperatorSourceInput &source) const {
+	auto &gsource = source.global_state.Cast<HashedSortGlobalSourceState>();
+	auto &gsink = gsource.gsink;
+	auto &hash_group = *gsink.hash_groups[hash_bin];
+
+	auto &sort = hash_group.sort;
+	auto &sort_global = *hash_group.sort_source;
+
+	auto result = sort.GetSortedRun(sort_global);
+	if (!result) {
+		D_ASSERT(hash_group.count == 0);
+		result = make_uniq<SortedRun>(client, sort, false);
+	}
+
+	hash_group.sort_source.reset();
+
+	return result;
 }
 
 } // namespace duckdb

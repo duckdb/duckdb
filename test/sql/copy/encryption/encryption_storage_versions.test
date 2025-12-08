@@ -1,6 +1,9 @@
 # name: test/sql/copy/encryption/encryption_storage_versions.test
 # group: [encryption]
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement ok
 PRAGMA enable_verification
 

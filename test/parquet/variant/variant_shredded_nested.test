@@ -5,36 +5,36 @@ require parquet
 
 # Array
 query II
-from 'data/parquet-testing/variant_shredded_array1.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_array1.parquet';
 ----
-1	[["string","iceberg"],["apple","banana"]]
+1	[[string, iceberg], [apple, banana]]
 
 # Array
 query II
-from 'data/parquet-testing/variant_shredded_array2.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_array2.parquet';
 ----
-1	[{"a":123456789,"c":"string"},{"a":123456789,"c":"string"}]
+1	[{'a': 123456789, 'c': string}, {'a': 123456789, 'c': string}]
 
 # Array
 query II
-from 'data/parquet-testing/variant_shredded_array3.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_array3.parquet';
 ----
-1	["iceberg","string"]
+1	[iceberg, string]
 
 # Object
 query II
-from 'data/parquet-testing/variant_shredded_object1.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
 ----
-1	{"a":123456789,"c":"string"}
+1	{'a': 123456789, 'c': string}
 
 # Object
 query II
-from 'data/parquet-testing/variant_shredded_object2.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_object2.parquet';
 ----
-1	{"a":null,"d":"iceberg"}
+1	{'a': NULL, 'd': iceberg}
 
 # Object
 query II
-from 'data/parquet-testing/variant_shredded_object3.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_object3.parquet';
 ----
-1	{"a":123456789,"c":["string","iceberg"]}
+1	{'a': 123456789, 'c': [string, iceberg]}

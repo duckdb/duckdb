@@ -7,7 +7,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
@@ -99,34 +99,22 @@ struct ParquetWriteBindData : public TableFunctionData {
 	GeoParquetVersion geoparquet_version = GeoParquetVersion::V1;
 };
 
-struct ParquetWriteGlobalState : public GlobalFunctionData {
-	unique_ptr<ParquetWriter> writer;
-	optional_ptr<const PhysicalOperator> op;
-
-	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
-		if (!op) {
-			return;
-		}
-		DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
-		           {{"file", writer->GetFileName()},
-		            {"rows", to_string(buffer.Count())},
-		            {"size", to_string(buffer.SizeInBytes())},
-		            {"reason", reason}});
+void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
+	if (!op) {
+		return;
 	}
+	DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
+	           {{"file", writer->GetFileName()},
+	            {"rows", to_string(buffer.Count())},
+	            {"size", to_string(buffer.SizeInBytes())},
+	            {"reason", reason}});
+}
 
-	mutex lock;
-	unique_ptr<ColumnDataCollection> combine_buffer;
-};
-
-struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
-		buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
-		buffer.InitializeAppend(append_state);
-	}
-
-	ColumnDataCollection buffer;
-	ColumnDataAppendState append_state;
-};
+ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+    : buffer(context, types) {
+	buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
+	buffer.InitializeAppend(append_state);
+}
 
 static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
 	auto &copy_options = input.options;
@@ -223,10 +211,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			} else {
 				case_insensitive_set_t variant_names;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-					if (sql_types[col_idx].id() != LogicalTypeId::STRUCT) {
-						continue;
-					}
-					if (sql_types[col_idx].GetAlias() != "PARQUET_VARIANT") {
+					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
 						continue;
 					}
 					variant_names.emplace(names[col_idx]);
@@ -408,7 +393,7 @@ static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_
 		global_state.LogFlushingRowGroup(local_state.buffer, reason);
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
-		global_state.writer->Flush(local_state.buffer);
+		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		local_state.buffer.InitializeAppend(local_state.append_state);
 	}
 }
@@ -423,7 +408,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
 		// local state buffer is more than half of the row_group_size(_bytes), just flush it
 		global_state.LogFlushingRowGroup(local_state.buffer, "Combine");
-		global_state.writer->Flush(local_state.buffer);
+		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		return;
 	}
 
@@ -438,7 +423,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 			guard.unlock();
 			global_state.LogFlushingRowGroup(*owned_combine_buffer, "Combine");
 			// Lock free, of course
-			global_state.writer->Flush(*owned_combine_buffer);
+			global_state.writer->Flush(*owned_combine_buffer, local_state.transform_data);
 		}
 		return;
 	}
@@ -452,7 +437,7 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	// flush the combine buffer (if it's there)
 	if (global_state.combine_buffer) {
 		global_state.LogFlushingRowGroup(*global_state.combine_buffer, "Finalize");
-		global_state.writer->Flush(*global_state.combine_buffer);
+		global_state.writer->Flush(*global_state.combine_buffer, global_state.transform_data);
 	}
 
 	// finalize: write any additional metadata to the file here
@@ -711,7 +696,8 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
-	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group);
+	unique_ptr<ParquetWriteTransformData> transform_data;
+	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 	return std::move(result);
 }
 
@@ -792,7 +778,7 @@ static bool IsTypeLossy(const LogicalType &type) {
 	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
 }
 
-static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
+static bool IsExtensionGeometryType(const LogicalType &type, ClientContext &context) {
 	if (type.id() != LogicalTypeId::BLOB) {
 		return false;
 	}
@@ -805,40 +791,7 @@ static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
 	return GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context);
 }
 
-static string GetShredding(case_insensitive_map_t<vector<Value>> &options, const string &col_name) {
-	//! At this point, the options haven't been parsed yet, so we have to parse them ourselves.
-	auto it = options.find("shredding");
-	if (it == options.end()) {
-		return string();
-	}
-	auto &shredding = it->second;
-	if (shredding.empty()) {
-		return string();
-	}
-
-	auto &shredding_val = shredding[0];
-	if (shredding_val.type().id() != LogicalTypeId::STRUCT) {
-		return string();
-	}
-
-	auto &shredded_variants = StructType::GetChildTypes(shredding_val.type());
-	auto &values = StructValue::GetChildren(shredding_val);
-	for (idx_t i = 0; i < shredded_variants.size(); i++) {
-		auto &shredded_variant = shredded_variants[i];
-		if (shredded_variant.first != col_name) {
-			continue;
-		}
-		auto &shredded_val = values[i];
-		if (shredded_val.type().id() != LogicalTypeId::VARCHAR) {
-			return string();
-		}
-		return shredded_val.GetValue<string>();
-	}
-	return string();
-}
-
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
-
 	auto &context = input.context;
 
 	vector<unique_ptr<Expression>> result;
@@ -846,37 +799,17 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-
 		const auto &type = expr->return_type;
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
-		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsGeometryType(type, context)) {
-
-			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
-			wkb_blob_type.SetAlias("WKB_BLOB");
-
-			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
+		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsExtensionGeometryType(type, context)) {
+			// Cast the column to GEOMETRY
+			auto cast_expr =
+			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
-			any_change = true;
-		} else if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::VARIANT) {
-			vector<unique_ptr<Expression>> arguments;
-			arguments.push_back(std::move(expr));
-
-			auto shredded_type_str = GetShredding(input.options, name);
-			if (!shredded_type_str.empty()) {
-				arguments.push_back(make_uniq<BoundConstantExpression>(Value(shredded_type_str)));
-			}
-
-			auto transform_func = VariantColumnWriter::GetTransformFunction();
-			transform_func.bind(context, transform_func, arguments);
-
-			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
-			                                                    std::move(arguments), nullptr, false);
-			func_expr->SetAlias(name);
-			result.push_back(std::move(func_expr));
 			any_change = true;
 		}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
@@ -949,6 +882,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	ParquetBloomProbeFunction bloom_probe_fun;
 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(bloom_probe_fun));
 
+	// parquet_full_metadata
+	ParquetFullMetadataFunction full_meta_fun;
+	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(full_meta_fun));
+
 	// variant_to_parquet_variant
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
@@ -998,9 +935,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
-	config.AddExtensionOption("variant_legacy_encoding",
-	                          "Enables the Parquet reader to identify a Variant structurally.", LogicalType::BOOLEAN,
-	                          Value::BOOLEAN(false));
 }
 
 void ParquetExtension::Load(ExtensionLoader &loader) {

@@ -4,53 +4,50 @@
 
 require parquet
 
-statement ok
-pragma enable_verification
-
 # userdata1.parquet
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id > 500
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id > 500
 ----
 500
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id < 500
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id < 500
 ----
 499
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id > 100 and id < 900
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id > 100 and id < 900
 ----
 799
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id between 100 and 900
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id between 100 and 900
 ----
 801
 
 query IIIII
-SELECT registration_dttm, id, first_name, birthdate, salary FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id = 42
+SELECT registration_dttm, id, first_name, birthdate, salary FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id = 42
 ----
 2016-02-03 04:33:04	42	Todd	12/19/1999	284728.990000
 
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where id = 42
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id = 42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where salary < 1000
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where salary < 1000
 ----
 0
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where salary < 1000
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where salary < 1000
 ----
 0
 
 query II
-SELECT first_name, gender FROM parquet_scan('data/parquet-testing/userdata1.parquet') where first_name = 'Mark' and gender <> ''
+SELECT first_name, gender FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where first_name = 'Mark' and gender <> ''
 ----
 Mark	Male
 Mark	Male
@@ -64,7 +61,7 @@ Mark	Male
 Mark	Male
 
 query II
-SELECT gender, first_name FROM parquet_scan('data/parquet-testing/userdata1.parquet') where first_name = 'Mark' and gender <> ''
+SELECT gender, first_name FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where first_name = 'Mark' and gender <> ''
 ----
 Male	Mark
 Male	Mark
@@ -78,13 +75,13 @@ Male	Mark
 Male	Mark
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') where gender = 'Male' and first_name = 'Mark'
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where gender = 'Male' and first_name = 'Mark'
 ----
 10
 
 
 query I
-SELECT last_name FROM parquet_scan('data/parquet-testing/userdata1.parquet') where first_name > 'Mark' and country > 'Germany' and salary > 0 order by last_name limit 10
+SELECT last_name FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where first_name > 'Mark' and country > 'Germany' and salary > 0 order by last_name limit 10
 ----
 Adams
 Adams
@@ -99,7 +96,7 @@ Arnold
 
 
 query I
-SELECT length(l_comment) FROM parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet') where l_orderkey = 1 order by l_comment
+SELECT length(l_comment) FROM parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet') where l_orderkey = 1 order by l_comment
 ----
 24
 17
@@ -109,7 +106,7 @@ SELECT length(l_comment) FROM parquet_scan('data/parquet-testing/lineitem-top100
 29
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1978-01-01' as date)
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d < cast('1978-01-01' as date)
 ----
 1970-01-01
 1971-01-01
@@ -125,7 +122,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('
 1977-01-01
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') where d > cast('1982-01-01' as date) and d < cast('1986-01-01' as date)
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d > cast('1982-01-01' as date) and d < cast('1986-01-01' as date)
 ----
 1983-01-01
 1984-01-01
@@ -136,7 +133,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') where d > cast('
 1985-05-01
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') where d >= cast('1990-01-01' as date)
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d >= cast('1990-01-01' as date)
 ----
 1990-01-01
 1991-01-01
@@ -147,56 +144,56 @@ SELECT * FROM parquet_scan('data/parquet-testing/date.parquet') where d >= cast(
 1997-01-01
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d == cast('1970-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d == cast('1970-01-01' as date)
 ----
 1
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d > cast('1970-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d > cast('1970-01-01' as date)
 ----
 26
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d >= cast('1982-01-01' as date) and d < cast('1985-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d >= cast('1982-01-01' as date) and d < cast('1985-01-01' as date)
 ----
 3
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1970-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d < cast('1970-01-01' as date)
 ----
 0
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d between cast('1975-01-01' as date) and cast('1976-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d between cast('1975-01-01' as date) and cast('1976-01-01' as date)
 ----
 6
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d >= cast('1975-01-01' as date) and d < cast('1976-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d >= cast('1975-01-01' as date) and d < cast('1976-01-01' as date)
 ----
 5
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) and d > cast('1976-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) and d > cast('1976-01-01' as date)
 ----
 0
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d > cast('1976-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d > cast('1976-01-01' as date)
 ----
 21
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d > cast('1976-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d > cast('1976-01-01' as date)
 ----
 21
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d >= cast('1976-01-01' as date)
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d < cast('1975-01-01' as date) or d >= cast('1976-01-01' as date)
 ----
 22
 
 query I
-SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/date.parquet') where d is null
+SELECT COUNT(*) FROM parquet_scan('{DATA_DIR}/parquet-testing/date.parquet') where d is null
 ----
 9

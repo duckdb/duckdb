@@ -9,11 +9,17 @@ statement ok
 pragma force_compression='dictionary'
 
 statement ok
-CREATE TABLE test ( col_a TEXT);
+CREATE TABLE test (col_a TEXT);
 
 # We need a dataset that will only write unique values as it flushes a segment, this will trigger the bug
 statement ok
-INSERT INTO test SELECT case when i<100 then concat(repeat('string',400), i::VARCHAR) else 'target_string_we_will_count' end from range(0,100000) tbl(i);
+INSERT INTO test SELECT
+	case
+		when i<100 then
+			concat(repeat('string',400), i::VARCHAR)
+		else
+			'target_string_we_will_count' end
+		from range(0,100_000) tbl(i);
 
 statement ok
 checkpoint;

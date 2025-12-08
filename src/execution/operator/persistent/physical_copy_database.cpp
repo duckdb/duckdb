@@ -28,8 +28,8 @@ PhysicalCopyDatabase::~PhysicalCopyDatabase() {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataChunk &chunk,
-                                               OperatorSourceInput &input) const {
+SourceResultType PhysicalCopyDatabase::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                       OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->target_database);
 	for (auto &create_info : info->entries) {
 		switch (create_info->type) {

@@ -15,20 +15,24 @@ WHERE key = 'geo'
 ----
 geo	{"version": "1.1.0", "primary_column": "geometry", "columns": {"geometry": {"encoding": "WKB", "geometry_types": ["Point"]}}}
 
-query II rowsort raw_wkb
+query II rowsort
+SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet'
+----
+0	POINT (30 10)
+1	POINT EMPTY
+2	NULL
+3	POINT (40 40)
+
+statement ok
+SET enable_geoparquet_conversion = false;
+
+query II rowsort
 SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet'
 ----
 0	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\x00\x00\x00\x00\x00\x00$@
 1	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F
 2	NULL
 3	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00D@\x00\x00\x00\x00\x00\x00D@
-
-statement ok
-SET enable_geoparquet_conversion = false;
-
-query II rowsort raw_wkb
-SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-encoding_wkb.parquet'
-----
 
 
 #------------------------------------------------------------------------------
@@ -40,13 +44,11 @@ load __TEST_DIR__/geometry_db_test.db
 statement ok
 SET enable_geoparquet_conversion = true;
 
-require spatial
-
 # Create a table containing geometries
 statement ok
-CREATE TABLE t1 AS SELECT col, ST_GeomFromText(geometry) as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv';
+CREATE TABLE t1 AS SELECT col, geometry::GEOMETRY as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv';
 
-# Restart, but dont load spatial now
+# Restart
 restart no_extension_load
 
 require parquet
@@ -54,11 +56,10 @@ require parquet
 statement ok
 SET enable_geoparquet_conversion = true;
 
-# Write some parquet containing geometry when spatial is not loaded
 statement ok
 COPY (FROM t1) TO '__TEST_DIR__/data-point-out-enabled.parquet' (FORMAT PARQUET)
 
-# The bytes differ because this is serialized GEOMETRY, not WKB
+# The bytes may differ because this is serialized GEOMETRY, not WKB
 query II rowsort raw_geo
 SELECT col, geometry FROM '__TEST_DIR__/data-point-out-enabled.parquet'
 ----
@@ -68,11 +69,11 @@ SELECT col, geometry FROM '__TEST_DIR__/data-point-out-enabled.parquet'
 3	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00D@\x00\x00\x00\x00\x00\x00D@
 
 
-# Check that we didnt write GeoParquet metadata to the footer (spatial is not loaded)
 query I
 SELECT (decode(value)) as col
 FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-enabled.parquet');
 ----
+{"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
 
 
 #------------------------------------------------------------------------------
@@ -84,12 +85,10 @@ FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-enabled.parquet');
 statement ok
 SET enable_geoparquet_conversion = false;
 
-require spatial
-
 statement ok
-CREATE TABLE t2 AS SELECT col, ST_GeomFromText(geometry) as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv';
+CREATE TABLE t2 AS SELECT col, geometry::GEOMETRY as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv';
 
-# Restart, but dont load spatial now
+# Restart
 restart no_extension_load
 
 require parquet
@@ -97,17 +96,18 @@ require parquet
 statement ok
 SET enable_geoparquet_conversion = true;
 
-# Write some parquet containing geometry when spatial is not loaded
+# Write some parquet containing geometry
 statement ok
 COPY (FROM t1) TO '__TEST_DIR__/data-point-out-disabled.parquet' (FORMAT PARQUET)
 
-# The bytes differ because this is serialized GEOMETRY, not WKB
+# The bytes may differ because this is serialized GEOMETRY, not WKB
 query II rowsort raw_geo
 SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled.parquet'
 ----
 
-# Check that we didnt write any GeoParquet metadata to the footer
 query I
 SELECT (decode(value)) as col
 FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-disabled.parquet');
 ----
+{"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
+

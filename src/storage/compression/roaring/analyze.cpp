@@ -13,7 +13,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/fast_mem.hpp"
-#include "duckdb/common/bitpacking.hpp"
 
 namespace duckdb {
 
@@ -167,10 +166,32 @@ void RoaringAnalyzeState::FlushContainer() {
 	count = 0;
 }
 
-void RoaringAnalyzeState::Analyze(Vector &input, idx_t count) {
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
-
 	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, input, count);
+	total_count += count;
+}
+
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	Vector bitpacked_vector(LogicalType::UBIGINT, count);
+	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	bitpacked_vector_validity.EnsureWritable();
+	auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
+	const bool *src = FlatVector::GetData<bool>(input);
+	const auto &validity = FlatVector::Validity(input);
+	if (validity.AllValid()) {
+		BitPackBooleans<false, true>(dst, src, count);
+	} else {
+		BitPackBooleans<false, false>(dst, src, count, &validity);
+	}
+
+	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
+	// mask.
+	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, bitpacked_vector, count);
 	total_count += count;
 }
 

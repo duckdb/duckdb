@@ -102,7 +102,6 @@ const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::
 unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       const vector<reference<NeighborInfo>> &possible_connections,
                                                       DPJoinNode &left, DPJoinNode &right) {
-
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
 	// cross products are technically still connections, but the filter expression is a null_ptr
@@ -452,7 +451,7 @@ void PlanEnumerator::InitLeafPlans() {
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 
 	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
-	cost_model.cardinality_estimator.AddRelationNamesToTdoms(relation_stats);
+	cost_model.cardinality_estimator.AddRelationNamesToRelationStats(relation_stats);
 
 	// then update the total domains based on the cardinalities of each relation.
 	for (idx_t i = 0; i < relation_stats.size(); i++) {

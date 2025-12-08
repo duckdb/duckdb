@@ -120,6 +120,12 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 		return make_uniq<StringAggBindData>(",");
 	}
 	D_ASSERT(arguments.size() == 2);
+	// Check if any argument is of UNKNOWN type (parameter not yet bound)
+	for (auto &arg : arguments) {
+		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -160,8 +166,8 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind);
-	string_agg_param.serialize = StringAggSerialize;
-	string_agg_param.deserialize = StringAggDeserialize;
+	string_agg_param.SetSerializeCallback(StringAggSerialize);
+	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);

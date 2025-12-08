@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE leading_zeros AS SELECT * FROM read_csv_auto('data/csv/leading_zeros.csv')
+CREATE TABLE leading_zeros AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/leading_zeros.csv')
 
 query I
 SELECT CODGEO FROM leading_zeros LIMIT 1;
@@ -19,7 +19,7 @@ SELECT typeof(CODGEO) FROM leading_zeros LIMIT 1;
 VARCHAR
 
 statement ok
-CREATE TABLE leading_zeros2 AS SELECT * FROM read_csv_auto('data/csv/leading_zeros2.csv')
+CREATE TABLE leading_zeros2 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/leading_zeros2.csv')
 
 query IIIIIII
 SELECT * FROM leading_zeros2;

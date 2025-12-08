@@ -2,7 +2,11 @@
 #include "linenoise.h"
 #include "history.hpp"
 #include "terminal.hpp"
+#include "highlighting.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "shell_highlight.hpp"
 
+using duckdb::Highlighting;
 using duckdb::History;
 using duckdb::idx_t;
 using duckdb::Linenoise;
@@ -96,20 +100,24 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
 	Linenoise::SetCompletionCallback(fn);
 }
 
-/* Register a hits function to be called to show hits to the user at the
- * right of the prompt. */
-void linenoiseSetHintsCallback(linenoiseHintsCallback *fn) {
-	Linenoise::SetHintsCallback(fn);
-}
-
-/* Register a function to free the hints returned by the hints callback
- * registered with linenoiseSetHintsCallback(). */
-void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
-	Linenoise::SetFreeHintsCallback(fn);
-}
-
 void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
+}
+
+void linenoiseSetErrorRendering(int enabled) {
+	if (enabled) {
+		Linenoise::EnableErrorRendering();
+	} else {
+		Linenoise::DisableErrorRendering();
+	}
+}
+
+void linenoiseSetCompletionRendering(int enabled) {
+	if (enabled) {
+		Linenoise::EnableCompletionRendering();
+	} else {
+		Linenoise::DisableCompletionRendering();
+	}
 }
 
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
@@ -120,21 +128,19 @@ void linenoiseSetPrompt(const char *continuation, const char *continuationSelect
  * in order to add completion options given the input string when the
  * user typed <tab>. See the example.c source code for a very easy to
  * understand example. */
-void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
-	size_t len = strlen(str);
-	char *copy, **cvec;
-
-	copy = (char *)malloc(len + 1);
-	if (copy == NULL)
-		return;
-	memcpy(copy, str, len + 1);
-	cvec = (char **)realloc(lc->cvec, sizeof(char *) * (lc->len + 1));
-	if (cvec == NULL) {
-		free(copy);
-		return;
-	}
-	lc->cvec = cvec;
-	lc->cvec[lc->len++] = copy;
+void linenoiseAddCompletion(linenoiseCompletions *lc, const char *zLine, const char *completion, size_t nCompletion,
+                            size_t completion_start, const char *completion_type, size_t score, char extra_char) {
+	auto &completions = *reinterpret_cast<duckdb::TabCompletion *>(lc);
+	duckdb::Completion c;
+	c.original_completion = duckdb::string(completion, nCompletion);
+	c.completion.reserve(completion_start + nCompletion + 1);
+	c.completion += duckdb::string(zLine, completion_start);
+	c.completion += c.original_completion;
+	c.completion_type = Linenoise::GetCompletionType(completion_type);
+	c.cursor_pos = c.completion.size();
+	c.score = score;
+	c.extra_char = extra_char;
+	completions.completions.push_back(std::move(c));
 }
 
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len) {
@@ -149,6 +155,20 @@ void linenoiseClearScreen(void) {
 	Terminal::ClearScreen();
 }
 
-int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
-	return Linenoise::ParseOption(azArg, nArg, out_error);
+int linenoiseGetTerminalColorMode() {
+	duckdb::TerminalColor background_color;
+	if (!duckdb::Terminal::TryGetBackgroundColor(background_color)) {
+		return LINENOISE_UNKNOWN_MODE;
+	}
+	// calculate the brightness
+	double brightness = 0.2126 * background_color.r + 0.7152 * background_color.g + 0.0722 * background_color.b;
+	// determine light or dark mode based on the brightness
+	// if the value is too much in the middle we leave it as mixed
+	if (brightness <= 96) {
+		return LINENOISE_DARK_MODE;
+	}
+	if (brightness >= 160) {
+		return LINENOISE_LIGHT_MODE;
+	}
+	return LINENOISE_MIXED_MODE;
 }

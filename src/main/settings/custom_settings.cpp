@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -31,6 +32,9 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
@@ -163,12 +167,15 @@ bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConf
 //===----------------------------------------------------------------------===//
 bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_value = input.GetValue<string>();
-	if (!StringUtil::CIEquals(new_value, "default") && !StringUtil::CIEquals(new_value, "fallback") &&
-	    !StringUtil::CIEquals(new_value, "strict")) {
-		throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: \"default\", "
-		                            "\"fallback\", \"strict\".");
+	vector<string> supported_options = {"default", "fallback", "strict", "strict_when_supported"};
+	string supported_option_string;
+	for (const auto &option : supported_options) {
+		if (StringUtil::CIEquals(new_value, option)) {
+			return true;
+		}
 	}
-	return true;
+	throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: %s",
+	                            StringUtil::Join(supported_options, ", "));
 }
 
 bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
@@ -312,6 +319,41 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Block Allocator Memory
+//===----------------------------------------------------------------------===//
+void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	const auto input_string = input.ToString();
+	idx_t size;
+	if (!input_string.empty() && input_string.back() == '%') {
+		double percentage;
+		if (!TryDoubleCast(input_string.c_str(), input_string.size() - 1, percentage, false) || percentage < 0 ||
+		    percentage > 100) {
+			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
+		}
+		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
+	} else {
+		size = DBConfig::ParseMemoryLimit(input_string);
+	}
+	if (db) {
+		BlockAllocator::Get(*db).Resize(size);
+	}
+	config.options.block_allocator_size = size;
+}
+
+void BlockAllocatorMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	const auto size = DBConfigOptions().block_allocator_size;
+	if (db) {
+		BlockAllocator::Get(*db).Resize(size);
+	}
+	config.options.block_allocator_size = size;
+}
+
+Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -327,7 +369,7 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Custom Profiling Settings
 //===----------------------------------------------------------------------===//
-bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_optimizers) {
+bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
 	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
 	if (matching_optimizer_type != OptimizerType::INVALID &&
 	    disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end()) {
@@ -336,22 +378,39 @@ bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_o
 	return false;
 }
 
-static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json,
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &input,
                                                 const set<OptimizerType> &disabled_optimizers) {
 	profiler_settings_t metrics;
 
 	string invalid_settings;
-	for (auto &entry : json) {
-		MetricsType setting;
+	for (auto &entry : input) {
+		MetricType setting;
+		MetricGroup group = MetricGroup::INVALID;
 		try {
-			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+			setting = EnumUtil::FromString<MetricType>(StringUtil::Upper(entry.first));
 		} catch (std::exception &ex) {
-			if (!invalid_settings.empty()) {
-				invalid_settings += ", ";
+			try {
+				group = EnumUtil::FromString<MetricGroup>(StringUtil::Upper(entry.first));
+			} catch (std::exception &ex) {
+				if (!invalid_settings.empty()) {
+					invalid_settings += ", ";
+				}
+				invalid_settings += entry.first;
+				continue;
 			}
-			invalid_settings += entry.first;
+		}
+		if (group != MetricGroup::INVALID) {
+			if (entry.second == "true") {
+				auto group_metrics = MetricsUtils::GetMetricsByGroupType(group);
+				for (auto &metric : group_metrics) {
+					if (!MetricsUtils::IsOptimizerMetric(metric) || IsEnabledOptimizer(metric, disabled_optimizers)) {
+						metrics.insert(metric);
+					}
+				}
+			}
 			continue;
 		}
+
 		if (StringUtil::Lower(entry.second) == "true" &&
 		    (!MetricsUtils::IsOptimizerMetric(setting) || IsEnabledOptimizer(setting, disabled_optimizers))) {
 			metrics.insert(setting);
@@ -365,7 +424,7 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 }
 
 void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
-	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
+	if (settings.find(MetricType::ALL_OPTIMIZERS) != settings.end()) {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (auto &metric : optimizer_metrics) {
 			if (IsEnabledOptimizer(metric, disabled_optimizers)) {
@@ -379,9 +438,9 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &config = ClientConfig::GetConfig(context);
 
 	// parse the file content
-	unordered_map<string, string> json;
+	unordered_map<string, string> input_json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
+		input_json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
@@ -392,7 +451,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &db_config = DBConfig::GetConfig(context);
 	auto &disabled_optimizers = db_config.options.disabled_optimizers;
 
-	auto settings = FillTreeNodeSettings(json, disabled_optimizers);
+	auto settings = FillTreeNodeSettings(input_json, disabled_optimizers);
 	AddOptimizerMetrics(settings, disabled_optimizers);
 	config.profiler_settings = settings;
 }
@@ -400,7 +459,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
-	config.profiler_settings = ProfilingInfo::DefaultSettings();
+	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
 }
 
 Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
@@ -653,6 +712,8 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
 			config.AddAllowedPath(path + ".wal");
+			config.AddAllowedPath(path + ".checkpoint.wal");
+			config.AddAllowedPath(path + ".recovery.wal");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
@@ -705,6 +766,110 @@ void EnableLogging::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Va
 void EnableLogging::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 	auto &db = GetDB<EnableLogging>(db_p);
 	db.GetLogManager().SetEnableLogging(false);
+}
+
+//===----------------------------------------------------------------------===//
+// Force VARIANT Shredding
+//===----------------------------------------------------------------------===//
+
+void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, const Value &value) {
+	auto &force_variant_shredding = config.options.force_variant_shredding;
+
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		throw InvalidInputException("The argument to 'force_variant_shredding' should be of type VARCHAR, not %s",
+		                            value.type().ToString());
+	}
+
+	auto logical_type = TransformStringToLogicalType(value.GetValue<string>());
+	TypeVisitor::Contains(logical_type, [](const LogicalType &type) {
+		if (type.IsNested()) {
+			if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::LIST) {
+				throw InvalidInputException("Shredding can consist of the nested types LIST (for ARRAY Variant values) "
+				                            "or STRUCT (for OBJECT Variant values), not %s",
+				                            type.ToString());
+			}
+			if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
+				throw InvalidInputException("STRUCT types in the shredding can not be empty");
+			}
+			return false;
+		}
+		switch (type.id()) {
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::BLOB:
+		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::UUID:
+		case LogicalTypeId::BIGNUM:
+		case LogicalTypeId::TIME_NS:
+		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::BIT:
+		case LogicalTypeId::GEOMETRY:
+			break;
+		default:
+			throw InvalidInputException("Variants can not be shredded on type: %s", type.ToString());
+		}
+		return false;
+	});
+
+	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
+		return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
+	});
+	force_variant_shredding =
+	    LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
+}
+
+void ForceVariantShredding::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.force_variant_shredding = LogicalType::INVALID;
+}
+
+Value ForceVariantShredding::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.force_variant_shredding.ToString());
+}
+
+//===----------------------------------------------------------------------===//
+// Extension Directory
+//===----------------------------------------------------------------------===//
+void ExtensionDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.extension_directories.clear();
+
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.options.extension_directories.emplace_back(val.GetValue<string>());
+	}
+}
+
+void ExtensionDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.extension_directories = DBConfigOptions().extension_directories;
+}
+
+Value ExtensionDirectoriesSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> extension_directories;
+	for (auto &dir : config.options.extension_directories) {
+		extension_directories.emplace_back(dir);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(extension_directories));
 }
 
 //===----------------------------------------------------------------------===//
@@ -988,9 +1153,15 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
 		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
-		if (CompressionTypeIsDeprecated(compression_type)) {
-			throw ParserException("Attempted to force a deprecated compression type (%s)",
-			                      CompressionTypeToString(compression_type));
+		auto compression_availability_result = CompressionTypeIsAvailable(compression_type);
+		if (!compression_availability_result.IsAvailable()) {
+			if (compression_availability_result.IsDeprecated()) {
+				throw ParserException("Attempted to force a deprecated compression type (%s)",
+				                      CompressionTypeToString(compression_type));
+			} else {
+				throw ParserException("Attempted to force a compression type that isn't available yet (%s)",
+				                      CompressionTypeToString(compression_type));
+			}
 		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");
@@ -1267,6 +1438,12 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
 		for (auto &setting : phase_timing_settings) {
 			config.profiler_settings.insert(setting);
+		}
+	} else if (parameter == "all") {
+		config.enable_profiler = true;
+		auto all_metrics = MetricsUtils::GetAllMetrics();
+		for (auto &metric : all_metrics) {
+			config.profiler_settings.insert(metric);
 		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);

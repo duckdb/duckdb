@@ -25,19 +25,27 @@ class PartialBlockManager;
 class TableDataWriter;
 
 struct ColumnCheckpointState {
-	ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager);
+	ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,
+	                      PartialBlockManager &partial_block_manager);
 	virtual ~ColumnCheckpointState();
 
-	RowGroup &row_group;
-	ColumnData &column_data;
-	ColumnSegmentTree new_tree;
+	const RowGroup &row_group;
+	const ColumnData &original_column;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
 
 protected:
 	PartialBlockManager &partial_block_manager;
+	shared_ptr<ColumnData> result_column;
+
+private:
+	ColumnData &original_column_mutable;
 
 public:
+	virtual shared_ptr<ColumnData> CreateEmptyColumnData();
+	virtual ColumnData &GetResultColumn();
+	virtual shared_ptr<ColumnData> GetFinalResult();
+
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);

@@ -1,7 +1,7 @@
 #include "column_writer.hpp"
 
 #include "duckdb.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
@@ -108,10 +108,9 @@ void ColumnWriterStatistics::WriteGeoStats(duckdb_parquet::GeospatialStatistics 
 //===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
-ColumnWriter::ColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
-                           vector<string> schema_path_p, bool can_have_nulls)
-    : writer(writer), column_schema(column_schema), schema_path(std::move(schema_path_p)),
-      can_have_nulls(can_have_nulls) {
+ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema_p, vector<string> schema_path_p)
+    : writer(writer), column_schema(std::move(column_schema_p)), schema_path(std::move(schema_path_p)) {
+	can_have_nulls = column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL;
 }
 ColumnWriter::~ColumnWriter() {
 }
@@ -244,19 +243,22 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
-ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
-                                                    const LogicalType &type, const string &name, bool allow_geometry,
-                                                    optional_ptr<const ChildFieldIDs> field_ids,
-                                                    optional_ptr<const ShreddingType> shredding_types, idx_t max_repeat,
-                                                    idx_t max_define, bool can_have_nulls) {
-	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
+                                                             vector<string> path_in_schema, const LogicalType &type,
+                                                             const string &name, bool allow_geometry,
+                                                             optional_ptr<const ChildFieldIDs> field_ids,
+                                                             optional_ptr<const ShreddingType> shredding_types,
+                                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
+	path_in_schema.push_back(name);
+
 	if (!can_have_nulls) {
 		max_define--;
 	}
-	idx_t schema_idx = schemas.size();
+	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
 	optional_ptr<const FieldID> field_id;
 	optional_ptr<const ChildFieldIDs> child_field_ids;
+	optional_ptr<const ShreddingType> shredding_type;
 	if (field_ids) {
 		auto field_id_it = field_ids->ids->find(name);
 		if (field_id_it != field_ids->ids->end()) {
@@ -264,22 +266,14 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 			child_field_ids = &field_id->child_field_ids;
 		}
 	}
-	optional_ptr<const ShreddingType> shredding_type;
 	if (shredding_types) {
 		shredding_type = shredding_types->GetChild(name);
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
-		// variant type
-		// variants are stored as follows:
-		// group <name> VARIANT {
-		//	metadata BYTE_ARRAY,
-		//	value BYTE_ARRAY,
-		//	[<typed_value>]
-		// }
-
+	if (type.id() == LogicalTypeId::VARIANT) {
 		const bool is_shredded = shredding_type != nullptr;
 
+		//! Build the child types for the Parquet VARIANT
 		child_list_t<LogicalType> child_types;
 		child_types.emplace_back("metadata", LogicalType::BLOB);
 		child_types.emplace_back("value", LogicalType::BLOB);
@@ -291,23 +285,16 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 			}
 		}
 
-		// variant group
-		duckdb_parquet::SchemaElement top_element;
-		top_element.repetition_type = null_type;
-		top_element.num_children = child_types.size();
-		top_element.logicalType.__isset.VARIANT = true;
-		top_element.logicalType.VARIANT.__isset.specification_version = true;
-		top_element.logicalType.VARIANT.specification_version = 1;
-		top_element.__isset.logicalType = true;
-		top_element.__isset.num_children = true;
-		top_element.__isset.repetition_type = true;
-		top_element.name = name;
-		schemas.push_back(std::move(top_element));
+		//! Construct the column schema
+		auto variant_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
+		vector<unique_ptr<ColumnWriter>> child_writers;
+		child_writers.reserve(child_types.size());
 
-		ParquetColumnSchema variant_column(name, type, max_define, max_repeat, schema_idx, 0);
-		variant_column.children.reserve(child_types.size());
-		for (auto &child_type : child_types) {
-			auto &child_name = child_type.first;
+		//! Then construct the child writers for the Parquet VARIANT
+		for (auto &entry : child_types) {
+			auto &child_name = entry.first;
+			auto &child_type = entry.second;
 			bool is_optional;
 			if (child_name == "metadata") {
 				is_optional = false;
@@ -322,287 +309,183 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 				D_ASSERT(child_name == "typed_value");
 				is_optional = true;
 			}
-			variant_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
-			                                                       allow_geometry, child_field_ids, shredding_type,
-			                                                       max_repeat, max_define + 1, is_optional));
+
+			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
+			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              max_define + 1, is_optional));
 		}
-		return variant_column;
+		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
+		                                      std::move(child_writers));
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
-		auto &child_types = StructType::GetChildTypes(type);
-		// set up the schema element for this struct
-		duckdb_parquet::SchemaElement schema_element;
-		schema_element.repetition_type = null_type;
-		schema_element.num_children = UnsafeNumericCast<int32_t>(child_types.size());
-		schema_element.__isset.num_children = true;
-		schema_element.__isset.type = false;
-		schema_element.__isset.repetition_type = true;
-		schema_element.name = name;
+		auto struct_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
-			schema_element.__isset.field_id = true;
-			schema_element.field_id = field_id->field_id;
+			struct_column.field_id = field_id->field_id;
 		}
-		schemas.push_back(std::move(schema_element));
 
-		ParquetColumnSchema struct_column(name, type, max_define, max_repeat, schema_idx, 0);
 		// construct the child schemas recursively
-		struct_column.children.reserve(child_types.size());
-		for (auto &child_type : child_types) {
-			struct_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
-			                                                      allow_geometry, child_field_ids, shredding_type,
-			                                                      max_repeat, max_define + 1, true));
+		auto &child_types = StructType::GetChildTypes(type);
+		vector<unique_ptr<ColumnWriter>> child_writers;
+		child_writers.reserve(child_types.size());
+		for (auto &entry : child_types) {
+			auto &child_type = entry.second;
+			auto &child_name = entry.first;
+			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
+			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              max_define + 1, true));
 		}
-		return struct_column;
+		return make_uniq<StructColumnWriter>(writer, std::move(struct_column), std::move(path_in_schema),
+		                                     std::move(child_writers));
 	}
+
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
 		auto is_list = type.id() == LogicalTypeId::LIST;
 		auto &child_type = is_list ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
-		// set up the two schema elements for the list
-		// for some reason we only set the converted type in the OPTIONAL element
-		// first an OPTIONAL element
-		duckdb_parquet::SchemaElement optional_element;
-		optional_element.repetition_type = null_type;
-		optional_element.num_children = 1;
-		optional_element.converted_type = ConvertedType::LIST;
-		optional_element.__isset.num_children = true;
-		optional_element.__isset.type = false;
-		optional_element.__isset.repetition_type = true;
-		optional_element.__isset.converted_type = true;
-		optional_element.name = name;
-		if (field_id && field_id->set) {
-			optional_element.__isset.field_id = true;
-			optional_element.field_id = field_id->field_id;
-		}
-		schemas.push_back(std::move(optional_element));
 
-		// then a REPEATED element
-		duckdb_parquet::SchemaElement repeated_element;
-		repeated_element.repetition_type = FieldRepetitionType::REPEATED;
-		repeated_element.num_children = 1;
-		repeated_element.__isset.num_children = true;
-		repeated_element.__isset.type = false;
-		repeated_element.__isset.repetition_type = true;
-		repeated_element.name = "list";
-		schemas.push_back(std::move(repeated_element));
-
-		ParquetColumnSchema list_column(name, type, max_define, max_repeat, schema_idx, 0);
-		list_column.children.push_back(FillParquetSchema(schemas, child_type, "element", allow_geometry,
-		                                                 child_field_ids, shredding_type, max_repeat + 1,
-		                                                 max_define + 2, true));
-		return list_column;
-	}
-	if (type.id() == LogicalTypeId::MAP) {
-		// map type
-		// maps are stored as follows:
-		// <map-repetition> group <name> (MAP) {
-		// 	repeated group key_value {
-		// 		required <key-type> key;
-		// 		<value-repetition> <value-type> value;
-		// 	}
-		// }
-		// top map element
-		duckdb_parquet::SchemaElement top_element;
-		top_element.repetition_type = null_type;
-		top_element.num_children = 1;
-		top_element.converted_type = ConvertedType::MAP;
-		top_element.__isset.repetition_type = true;
-		top_element.__isset.num_children = true;
-		top_element.__isset.converted_type = true;
-		top_element.__isset.type = false;
-		top_element.name = name;
-		if (field_id && field_id->set) {
-			top_element.__isset.field_id = true;
-			top_element.field_id = field_id->field_id;
-		}
-		schemas.push_back(std::move(top_element));
-
-		// key_value element
-		duckdb_parquet::SchemaElement kv_element;
-		kv_element.repetition_type = FieldRepetitionType::REPEATED;
-		kv_element.num_children = 2;
-		kv_element.__isset.repetition_type = true;
-		kv_element.__isset.num_children = true;
-		kv_element.__isset.type = false;
-		kv_element.name = "key_value";
-		schemas.push_back(std::move(kv_element));
-
-		// construct the child types recursively
-		vector<LogicalType> kv_types {MapType::KeyType(type), MapType::ValueType(type)};
-		vector<string> kv_names {"key", "value"};
-
-		ParquetColumnSchema map_column(name, type, max_define, max_repeat, schema_idx, 0);
-		map_column.children.reserve(2);
-		for (idx_t i = 0; i < 2; i++) {
-			// key needs to be marked as REQUIRED
-			bool is_key = i == 0;
-			auto child_schema = FillParquetSchema(schemas, kv_types[i], kv_names[i], allow_geometry, child_field_ids,
-			                                      shredding_type, max_repeat + 1, max_define + 2, !is_key);
-
-			map_column.children.push_back(std::move(child_schema));
-		}
-		return map_column;
-	}
-
-	duckdb_parquet::SchemaElement schema_element;
-	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
-	schema_element.repetition_type = null_type;
-	schema_element.__isset.num_children = false;
-	schema_element.__isset.type = true;
-	schema_element.__isset.repetition_type = true;
-	schema_element.name = name;
-	if (field_id && field_id->set) {
-		schema_element.__isset.field_id = true;
-		schema_element.field_id = field_id->field_id;
-	}
-	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry);
-	schemas.push_back(std::move(schema_element));
-	return ParquetColumnSchema(name, type, max_define, max_repeat, schema_idx, 0);
-}
-
-unique_ptr<ColumnWriter>
-ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
-                                    const vector<duckdb_parquet::SchemaElement> &parquet_schemas,
-                                    const ParquetColumnSchema &schema, vector<string> path_in_schema) {
-	auto &type = schema.type;
-	auto can_have_nulls = parquet_schemas[schema.schema_index].repetition_type == FieldRepetitionType::OPTIONAL;
-	path_in_schema.push_back(schema.name);
-
-	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
-		vector<unique_ptr<ColumnWriter>> child_writers;
-		child_writers.reserve(schema.children.size());
-		for (idx_t i = 0; i < schema.children.size(); i++) {
-			child_writers.push_back(
-			    CreateWriterRecursive(context, writer, parquet_schemas, schema.children[i], path_in_schema));
-		}
-		return make_uniq<VariantColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
-	}
-
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
-		// construct the child writers recursively
-		vector<unique_ptr<ColumnWriter>> child_writers;
-		child_writers.reserve(schema.children.size());
-		for (auto &child_column : schema.children) {
-			child_writers.push_back(
-			    CreateWriterRecursive(context, writer, parquet_schemas, child_column, path_in_schema));
-		}
-		return make_uniq<StructColumnWriter>(writer, schema, std::move(path_in_schema), std::move(child_writers),
-		                                     can_have_nulls);
-	}
-	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
-		auto is_list = type.id() == LogicalTypeId::LIST;
 		path_in_schema.push_back("list");
-		auto child_writer = CreateWriterRecursive(context, writer, parquet_schemas, schema.children[0], path_in_schema);
+		auto child_writer =
+		    CreateWriterRecursive(context, writer, path_in_schema, child_type, "element", allow_geometry,
+		                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, true);
+
+		auto list_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
+		if (field_id && field_id->set) {
+			list_column.field_id = field_id->field_id;
+		}
+
 		if (is_list) {
-			return make_uniq<ListColumnWriter>(writer, schema, std::move(path_in_schema), std::move(child_writer),
-			                                   can_have_nulls);
+			return make_uniq<ListColumnWriter>(writer, std::move(list_column), std::move(path_in_schema),
+			                                   std::move(child_writer));
 		} else {
-			return make_uniq<ArrayColumnWriter>(writer, schema, std::move(path_in_schema), std::move(child_writer),
-			                                    can_have_nulls);
+			return make_uniq<ArrayColumnWriter>(writer, std::move(list_column), std::move(path_in_schema),
+			                                    std::move(child_writer));
 		}
 	}
+
 	if (type.id() == LogicalTypeId::MAP) {
 		path_in_schema.push_back("key_value");
+
 		// construct the child types recursively
+		child_list_t<LogicalType> key_value;
+		key_value.reserve(2);
+		key_value.emplace_back("key", MapType::KeyType(type));
+		key_value.emplace_back("value", MapType::ValueType(type));
+		auto key_value_type = LogicalType::STRUCT(key_value);
+
+		auto map_column =
+		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
+		if (field_id && field_id->set) {
+			map_column.field_id = field_id->field_id;
+		}
+
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(2);
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
+			bool is_key = i == 0;
+			auto &child_name = key_value[i].first;
+			auto &child_type = key_value[i].second;
 			auto child_writer =
-			    CreateWriterRecursive(context, writer, parquet_schemas, schema.children[i], path_in_schema);
+			    CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name, allow_geometry,
+			                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, !is_key);
+
 			child_writers.push_back(std::move(child_writer));
 		}
-		auto struct_writer =
-		    make_uniq<StructColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
-		return make_uniq<ListColumnWriter>(writer, schema, path_in_schema, std::move(struct_writer), can_have_nulls);
+
+		auto key_value_schema =
+		    ParquetColumnSchema::FromLogicalType("key_value", key_value_type, max_define + 1, max_repeat + 1, 0,
+		                                         FieldRepetitionType::REPEATED, allow_geometry);
+		auto struct_writer = make_uniq<StructColumnWriter>(writer, std::move(key_value_schema), path_in_schema,
+		                                                   std::move(child_writers));
+		return make_uniq<ListColumnWriter>(writer, std::move(map_column), path_in_schema, std::move(struct_writer));
 	}
 
-	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
-		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+	auto schema =
+	    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
+	if (field_id && field_id->set) {
+		schema.field_id = field_id->field_id;
 	}
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_uniq<BooleanColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<BooleanColumnWriter>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::TINYINT:
-		return make_uniq<StandardColumnWriter<int8_t, int32_t>>(writer, schema, std::move(path_in_schema),
-		                                                        can_have_nulls);
+		return make_uniq<StandardColumnWriter<int8_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::SMALLINT:
-		return make_uniq<StandardColumnWriter<int16_t, int32_t>>(writer, schema, std::move(path_in_schema),
-		                                                         can_have_nulls);
+		return make_uniq<StandardColumnWriter<int16_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, schema, std::move(path_in_schema),
-		                                                         can_have_nulls);
+		return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
-		return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, schema, std::move(path_in_schema),
-		                                                         can_have_nulls);
+		return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::TIME_TZ:
-		return make_uniq<StandardColumnWriter<dtime_tz_t, int64_t, ParquetTimeTZOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<dtime_tz_t, int64_t, ParquetTimeTZOperator>>(writer, std::move(schema),
+		                                                                                   std::move(path_in_schema));
 	case LogicalTypeId::HUGEINT:
-		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(writer, std::move(schema),
+		                                                                                  std::move(path_in_schema));
 	case LogicalTypeId::UHUGEINT:
-		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(writer, std::move(schema),
+		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(writer, std::move(schema),
+		                                                                                     std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(writer, std::move(schema),
+		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::UTINYINT:
-		return make_uniq<StandardColumnWriter<uint8_t, int32_t>>(writer, schema, std::move(path_in_schema),
-		                                                         can_have_nulls);
+		return make_uniq<StandardColumnWriter<uint8_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::USMALLINT:
-		return make_uniq<StandardColumnWriter<uint16_t, int32_t>>(writer, schema, std::move(path_in_schema),
-		                                                          can_have_nulls);
+		return make_uniq<StandardColumnWriter<uint16_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::UINTEGER:
-		return make_uniq<StandardColumnWriter<uint32_t, uint32_t>>(writer, schema, std::move(path_in_schema),
-		                                                           can_have_nulls);
+		return make_uniq<StandardColumnWriter<uint32_t, uint32_t>>(writer, std::move(schema),
+		                                                           std::move(path_in_schema));
 	case LogicalTypeId::UBIGINT:
-		return make_uniq<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema, std::move(path_in_schema),
-		                                                           can_have_nulls);
+		return make_uniq<StandardColumnWriter<uint64_t, uint64_t>>(writer, std::move(schema),
+		                                                           std::move(path_in_schema));
 	case LogicalTypeId::FLOAT:
-		return make_uniq<StandardColumnWriter<float_na_equal, float, FloatingPointOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<float_na_equal, float, FloatingPointOperator>>(writer, std::move(schema),
+		                                                                                     std::move(path_in_schema));
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<StandardColumnWriter<double_na_equal, double, FloatingPointOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		    writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return make_uniq<StandardColumnWriter<int16_t, int32_t>>(writer, schema, std::move(path_in_schema),
-			                                                         can_have_nulls);
+			return make_uniq<StandardColumnWriter<int16_t, int32_t>>(writer, std::move(schema),
+			                                                         std::move(path_in_schema));
 		case PhysicalType::INT32:
-			return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, schema, std::move(path_in_schema),
-			                                                         can_have_nulls);
+			return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema),
+			                                                         std::move(path_in_schema));
 		case PhysicalType::INT64:
-			return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, schema, std::move(path_in_schema),
-			                                                         can_have_nulls);
+			return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema),
+			                                                         std::move(path_in_schema));
 		default:
-			return make_uniq<FixedDecimalColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls);
+			return make_uniq<FixedDecimalColumnWriter>(writer, std::move(schema), std::move(path_in_schema));
 		}
 	case LogicalTypeId::BLOB:
-		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(writer, std::move(schema),
+		                                                                                std::move(path_in_schema));
+	case LogicalTypeId::GEOMETRY:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(writer, std::move(schema),
+		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::VARCHAR:
-		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(writer, std::move(schema),
+		                                                                                  std::move(path_in_schema));
 	case LogicalTypeId::UUID:
 		return make_uniq<StandardColumnWriter<hugeint_t, ParquetUUIDTargetType, ParquetUUIDOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		    writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::INTERVAL:
 		return make_uniq<StandardColumnWriter<interval_t, ParquetIntervalTargetType, ParquetIntervalOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
+		    writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::ENUM:
-		return make_uniq<EnumColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls);
+		return make_uniq<EnumColumnWriter>(writer, std::move(schema), std::move(path_in_schema));
 	default:
 		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}

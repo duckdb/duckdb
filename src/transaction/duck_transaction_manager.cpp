@@ -1,5 +1,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
+#include "duckdb/main/client_data.hpp"
+
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/exception.hpp"
@@ -40,6 +42,7 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 	current_transaction_id = TRANSACTION_ID_START;
 	lowest_active_id = TRANSACTION_ID_START;
 	lowest_active_start = MAX_TRANSACTION_ID;
+	active_checkpoint = MAX_TRANSACTION_ID;
 	if (!db.GetCatalog().IsDuckCatalog()) {
 		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
 		throw InternalException("DuckTransactionManager should only be created together with a DuckCatalog");
@@ -85,6 +88,27 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// store it in the set of active transactions
 	active_transactions.push_back(std::move(transaction));
 	return transaction_ref;
+}
+
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(DuckTransactionManager &manager) : manager(manager) {
+}
+
+ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
+	manager.ResetCheckpointId();
+}
+
+transaction_t DuckTransactionManager::GetNewCheckpointId() {
+	if (active_checkpoint != MAX_TRANSACTION_ID) {
+		throw InternalException(
+		    "DuckTransactionManager::GetNewCheckpointId requested a new id but active_checkpoint was already set");
+	}
+	auto result = last_commit.load();
+	active_checkpoint = result;
+	return result;
+}
+
+void DuckTransactionManager::ResetCheckpointId() {
+	active_checkpoint = MAX_TRANSACTION_ID;
 }
 
 DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)
@@ -227,10 +251,12 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(Stor
 	return checkpoint_lock.TryUpgradeCheckpointLock(lock);
 }
 
+unique_ptr<StorageLockKey> DuckTransactionManager::TryGetCheckpointLock() {
+	return checkpoint_lock.TryGetExclusiveLock();
+}
+
 transaction_t DuckTransactionManager::GetCommitTimestamp() {
-	auto commit_ts = current_start_timestamp++;
-	last_commit = commit_ts;
-	return commit_ts;
+	return current_start_timestamp++;
 }
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
@@ -253,22 +279,19 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_ptr<lock_guard<mutex>> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
 	if (!checkpoint_decision.can_checkpoint && transaction.ShouldWriteToWAL(db)) {
+		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
 		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
-		if (!transaction.HasWriteLock()) {
-			// sanity check - this transaction should have a write lock
-			// the write lock prevents other transactions from checkpointing until this transaction is fully finished
-			// if we do not hold the write lock here, other transactions can bypass this branch by auto-checkpoint
-			// this would lead to a checkpoint WHILE this thread is writing to the WAL
-			// this should never happen
-			throw InternalException("Transaction writing to WAL does not have the write lock");
-		}
 		// unlock the transaction lock while we write to the WAL
 		t_lock.unlock();
 		// grab the WAL lock and hold it until the entire commit is finished
-		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
-		error = transaction.WriteToWAL(db, commit_state);
+		held_wal_lock = storage_manager.GetWALLock();
+
+		// Commit the changes to the WAL.
+		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {
+			error = transaction.WriteToWAL(context, db, commit_state);
+		}
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
@@ -276,18 +299,21 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
-		if (storage_manager.InMemory()) {
-			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
+		if (storage_manager.InMemory() || db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
+			storage_manager.AddWALSize(undo_properties.estimated_size);
 		}
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();
+
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
 		error = transaction.Commit(db, commit_id, std::move(commit_state));
 	}
 
 	if (error.HasError()) {
+		DUCKDB_LOG(context, TransactionLogType, db, "Rollback (after failed commit)", commit_id);
+
 		// COMMIT not successful: ROLLBACK.
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
@@ -299,6 +325,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			    error.Message(), rollback_error.Message());
 		}
 	} else {
+		DUCKDB_LOG(context, TransactionLogType, db, "Commit", commit_id);
+		last_commit = commit_id;
+
 		// check if catalog changes were made
 		if (transaction.catalog_version >= TRANSACTION_ID_START) {
 			transaction.catalog_version = ++last_committed_version;
@@ -326,6 +355,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// We do not need to hold the transaction lock during cleanup of transactions,
 	// as they (1) have been removed, or (2) enter cleanup_info.
 	t_lock.unlock();
+	held_wal_lock.reset();
 
 	{
 		lock_guard<mutex> c_lock(cleanup_lock);
@@ -364,6 +394,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
+
+	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Rollback", transaction.transaction_id);
 
 	ErrorData error;
 	{
@@ -412,6 +444,7 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 	idx_t t_index = active_transactions.size();
 	auto lowest_start_time = TRANSACTION_ID_START;
 	auto lowest_transaction_id = MAX_TRANSACTION_ID;
+	auto active_checkpoint_id = active_checkpoint.load();
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
@@ -419,6 +452,9 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 		}
 		lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
+	}
+	if (active_checkpoint_id != MAX_TRANSACTION_ID && active_checkpoint_id < lowest_start_time) {
+		lowest_start_time = active_checkpoint_id;
 	}
 	lowest_active_start = lowest_start_time;
 	lowest_active_id = lowest_transaction_id;

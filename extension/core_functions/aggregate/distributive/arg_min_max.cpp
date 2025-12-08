@@ -149,7 +149,8 @@ struct ArgMinMaxBase {
 		D_ASSERT(binary.input.bind_data);
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
 
-		if (binary.right_mask.RowIsValid(binary.ridx) && COMPARATOR::Operation(y_data, state.value)) {
+		if (binary.right_mask.RowIsValid(binary.ridx) &&
+		    (state.val_null || COMPARATOR::Operation(y_data, state.value))) {
 			if (bind_data.null_handling != ArgMinMaxNullHandling::IGNORE_ANY_NULL ||
 			    binary.left_mask.RowIsValid(binary.lidx)) {
 				Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), false, binary.input);
@@ -190,7 +191,7 @@ struct ArgMinMaxBase {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
@@ -264,9 +265,9 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 			if (!bdata.validity.RowIsValid(bidx)) {
 				if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL && !state.is_initialized) {
-					state.is_initialized = true;
 					state.val_null = true;
 					if (!arg_null) {
+						state.is_initialized = true;
 						if (&state == last_state) {
 							assign_count--;
 						}
@@ -353,7 +354,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
@@ -452,9 +453,9 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	    AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP, AggregateDestructorType::LEGACY>(
 	        type, by_type, type);
 	if (type.InternalType() == PhysicalType::VARCHAR || by_type.InternalType() == PhysicalType::VARCHAR) {
-		function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+		function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	}
-	function.bind = GetBindFunction<OP>(null_handling);
+	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.arguments = {type, by_type};
@@ -550,7 +551,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateF
 	auto name = std::move(function.name);
 	function = GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING);
 	function.name = std::move(name);
-	function.return_type = decimal_type;
+	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 	return unique_ptr<FunctionData>(std::move(function_data));
@@ -716,13 +717,13 @@ void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
-	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
-	function.combine = AggregateFunction::StateCombine<STATE, OP>;
-	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 
-	function.finalize = MinMaxNOperation::Finalize<STATE>;
-	function.update = ArgMinMaxNUpdate<STATE>;
+	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
+	function.SetStateUpdateCallback(ArgMinMaxNUpdate<STATE>);
 }
 
 template <class VAL_TYPE, class COMPARATOR>
@@ -782,13 +783,12 @@ void SpecializeArgMinMaxNullNFunction(AggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
-	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
-	function.combine = AggregateFunction::StateCombine<STATE, OP>;
-	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
-
-	function.finalize = MinMaxNOperation::Finalize<STATE>;
-	function.update = ArgMinMaxNUpdate<STATE>;
+	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
+	function.SetStateUpdateCallback(ArgMinMaxNUpdate<STATE>);
 }
 
 template <class VAL_TYPE, bool NULLS_LAST, class COMPARATOR>
@@ -858,7 +858,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 
 	const auto val_type = arguments[0]->return_type.InternalType();
 	const auto arg_type = arguments[1]->return_type.InternalType();
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 
 	// Specialize the function based on the input types
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING, NULLS_LAST);

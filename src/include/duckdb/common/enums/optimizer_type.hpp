@@ -32,6 +32,7 @@ enum class OptimizerType : uint32_t {
 	COLUMN_LIFETIME,
 	BUILD_SIDE_PROBE_SIDE,
 	LIMIT_PUSHDOWN,
+	ROW_GROUP_PRUNER,
 	TOP_N,
 	TOP_N_WINDOW_ELIMINATION,
 	COMPRESSED_MATERIALIZATION,
@@ -45,6 +46,7 @@ enum class OptimizerType : uint32_t {
 	LATE_MATERIALIZATION,
 	CTE_INLINING,
 	COMMON_SUBPLAN,
+	JOIN_ELIMINATION
 };
 
 string OptimizerTypeToString(OptimizerType type);

@@ -29,6 +29,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"common_aggregate", OptimizerType::COMMON_AGGREGATE},
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"limit_pushdown", OptimizerType::LIMIT_PUSHDOWN},
+    {"row_group_pruner", OptimizerType::ROW_GROUP_PRUNER},
     {"top_n", OptimizerType::TOP_N},
     {"top_n_window_elimination", OptimizerType::TOP_N_WINDOW_ELIMINATION},
     {"build_side_probe_side", OptimizerType::BUILD_SIDE_PROBE_SIDE},
@@ -43,6 +44,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"late_materialization", OptimizerType::LATE_MATERIALIZATION},
     {"cte_inlining", OptimizerType::CTE_INLINING},
     {"common_subplan", OptimizerType::COMMON_SUBPLAN},
+    {"join_elimination", OptimizerType::JOIN_ELIMINATION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

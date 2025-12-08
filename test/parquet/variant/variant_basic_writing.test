@@ -18,16 +18,16 @@ COPY (select
 query I
 select * from '__TEST_DIR__/integer_variant.parquet';
 ----
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
-{"a":42,"b":[null,1,2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
+{'a': 42, 'b': [NULL, 1, 2]}
 
 statement ok
 COPY (select
@@ -38,11 +38,11 @@ COPY (select
 query I
 select * from '__TEST_DIR__/list_of_list_variant.parquet';
 ----
-[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
-[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
-[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
-[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
-[["string","iceberg",-34],[-34,null],[],["string","iceberg"],-34]
+[[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
+[[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
+[[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
+[[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
+[[string, iceberg, -34], [-34, NULL], [], [string, iceberg], -34]
 
 statement ok
 COPY (
@@ -62,18 +62,17 @@ COPY (
 query I
 select * from '__TEST_DIR__/varied_variant.parquet';
 ----
-{"a":21,"b":null}
+{'a': 21, 'b': NULL}
 []
 NULL
-[{"b":true,"c":"test"}]
-"this is a long string"
-"this is big enough to not be classified as a \"short string\" by parquet VARIANT"
+[{'b': true, 'c': test}]
+this is a long string
+this is big enough to not be classified as a "short string" by parquet VARIANT
 
-# VARIANT is only supported at the root for now
 statement error
 COPY (select [123::VARIANT]) TO '__TEST_DIR__/list_of_variant.parquet'
 ----
-Not implemented Error: Unimplemented type for Parquet "VARIANT"
+Not implemented Error: ColumnWriter of type 'VARIANT' requires a transform, but is not a root column, this isn't supported currently
 
 statement ok
 create macro data() as table (
@@ -108,7 +107,7 @@ COPY (
 ) TO '__TEST_DIR__/variant_test_all_types.parquet';
 
 query I nosort expected_res
-select IF(VARIANT_TYPEOF(COLUMNS(*)) == 'VARIANT_NULL', NULL, COLUMNS(*)::JSON) from data();
+select * from data();
 ----
 
 query I nosort expected_res

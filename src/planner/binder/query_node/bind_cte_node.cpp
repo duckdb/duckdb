@@ -138,6 +138,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
 		// CTE was not bound - just ignore it
+		MoveCorrelatedExpressions(*bound_cte.child_binder);
 		return child;
 	}
 	auto &bind_state = *bound_cte.cte_bind_state;

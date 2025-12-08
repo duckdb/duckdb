@@ -56,8 +56,6 @@ static const TestConfigOption test_config_options[] = {
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
-    {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
-     nullptr},
     {"select_tag", "Select tests which match named tag (as singleton set; multiple sets are OR'd)",
      LogicalType::VARCHAR, TestConfiguration::AppendSelectTagSet},
     {"select_tag_set", "Select tests which match _all_ named tags (multiple sets are OR'd)",
@@ -108,6 +106,42 @@ void TestConfiguration::Initialize() {
 			ParseOption("summarize_failures", Value(true));
 		}
 	}
+
+	working_dir = FileSystem::GetWorkingDirectory();
+	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
+	UpdateEnvironment();
+}
+
+void TestConfiguration::UpdateEnvironment() {
+	// Setup standard vars
+
+	// XXX: UUID used by ducklake to avoid collisions, is there a better way?
+	test_env["TEST_UUID"] = test_uuid;
+	test_env["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
+	test_env["WORKING_DIR"] = working_dir;        // can be overridden per runner
+	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
+
+	string temp_dir = TestDirectoryPath();
+	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
+}
+
+string TestConfiguration::GetWorkingDirectory() {
+	return working_dir;
+}
+
+bool TestConfiguration::ChangeWorkingDirectory(const string &dir) {
+	bool rv = false;
+	// set CWD first, then get it -- this gets us normalized absolute path for free
+	// making the comparison below meaningful
+	FileSystem::SetWorkingDirectory(dir);
+	const auto &normalized = FileSystem::GetWorkingDirectory();
+	if (working_dir != normalized) {
+		rv = true;
+		working_dir = normalized;
+		UpdateEnvironment();
+	}
+	return rv;
 }
 
 bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv, idx_t &i) {
@@ -212,15 +246,6 @@ bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	return tests_to_be_skipped.count(test_name);
 }
 
-string TestConfiguration::DataLocation() {
-	string res = GetOptionOrDefault("data_location", string("data/"));
-	// Force DataLocation to end with a '/'
-	if (res.back() != '/') {
-		res += "/";
-	}
-	return res;
-}
-
 string TestConfiguration::OnInitCommand() {
 	return GetOptionOrDefault("on_init", string());
 }
@@ -276,6 +301,7 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
 	}
 	return res;
 }
@@ -327,27 +353,33 @@ string TestConfiguration::ReadFileToString(const string &path) {
 }
 
 void TestConfiguration::LoadConfig(const string &config_path) {
-	// read the config file
-	auto buffer = ReadFileToString(config_path);
-	// parse json
-	auto json = StringUtil::ParseJSONMap(buffer);
-	auto json_values = json->Flatten();
-	for (auto &entry : json_values) {
-		ParseOption(entry.first, Value(entry.second));
-	}
-
-	// Convert to unordered_set<string> the list of tests to be skipped
-	auto entry = options.find("skip_tests");
-	if (entry != options.end()) {
-		auto skip_list_entry = ListValue::GetChildren(entry->second);
-		for (const auto &value : skip_list_entry) {
-			auto children = StructValue::GetChildren(value);
-			auto skip_list = ListValue::GetChildren(children[1]);
-			for (const auto &skipped_test : skip_list) {
-				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
-			}
+	try {
+		// read the config file
+		auto buffer = ReadFileToString(config_path);
+		// parse json
+		auto json = StringUtil::ParseJSONMap(buffer);
+		auto json_values = json->Flatten();
+		for (auto &entry : json_values) {
+			ParseOption(entry.first, Value(entry.second));
 		}
-		options.erase("skip_tests");
+
+		// Convert to unordered_set<string> the list of tests to be skipped
+		auto entry = options.find("skip_tests");
+		if (entry != options.end()) {
+			auto skip_list_entry = ListValue::GetChildren(entry->second);
+			for (const auto &value : skip_list_entry) {
+				auto children = StructValue::GetChildren(value);
+				auto skip_list = ListValue::GetChildren(children[1]);
+				for (const auto &skipped_test : skip_list) {
+					tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+				}
+			}
+			options.erase("skip_tests");
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		throw std::runtime_error(
+		    StringUtil::Format("Failed to parse config file \"%s\": %s", config_path, error.Message()));
 	}
 }
 

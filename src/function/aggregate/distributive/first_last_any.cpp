@@ -213,7 +213,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
 };
@@ -233,7 +233,7 @@ void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_in
 template <class T, bool LAST, bool SKIP_NULLS>
 AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	auto result = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
-	result.simple_update = FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>;
+	result.SetStateSimpleUpdateCallback(FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>);
 	return result;
 }
 
@@ -260,7 +260,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
 		function.arguments[0] = type;
-		function.return_type = type;
+		function.SetReturnType(type);
 		return function;
 	}
 	switch (type.InternalType()) {
@@ -317,8 +317,8 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
 	function.name = std::move(name);
-	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
-	function.return_type = decimal_type;
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetReturnType(decimal_type);
 	return nullptr;
 }
 
@@ -337,9 +337,9 @@ unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &fu
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
-	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
-	if (function.bind) {
-		return function.bind(context, function, arguments);
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	if (function.HasBindCallback()) {
+		return function.GetBindCallback()(context, function, arguments);
 	} else {
 		return nullptr;
 	}

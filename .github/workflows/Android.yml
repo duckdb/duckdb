@@ -62,7 +62,7 @@ jobs:
       CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -89,6 +89,7 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |

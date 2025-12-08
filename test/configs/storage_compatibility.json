@@ -2,7 +2,10 @@
   "description": "Storage compatibility test.",
   "initial_db": "bwc_storage_test.db",
   "settings": [
-    {"name": "storage_compatibility_version", "value": "v1.0.0"}
+    {
+      "name": "storage_compatibility_version",
+      "value": "v1.0.0"
+    }
   ],
   "skip_compiled": "true",
   "skip_tests": [
@@ -49,7 +52,61 @@
         "test/sql/copy/csv/test_null_padding_projection.test",
         "test/sql/types/geo/geometry.test",
         "test/sql/types/geo/geometry_stats.test",
-        "test/sql/types/variant/variant_distinct.test"
+        "test/sql/types/geo/geometry_wkb.test",
+        "test/geoparquet/disabled.test",
+        "test/geoparquet/geoarrow.test",
+        "test/geoparquet/mixed.test",
+        "test/geoparquet/no_spatial.test",
+        "test/geoparquet/roundtrip.test",
+        "test/geoparquet/unsupported.test",
+        "test/geoparquet/versions.text",
+        "test/sql/types/variant/variant_distinct.test",
+        "test/sql/function/variant/variant_typeof.test",
+        "test/sql/storage/types/variant/append_shredded.test",
+        "test/sql/storage/types/variant/big_table.test",
+        "test/sql/storage/types/variant/extension_types.test",
+        "test/sql/storage/types/variant/index_fetch.test",
+        "test/sql/storage/types/variant/null_tests.test",
+        "test/sql/storage/types/variant/test_all_types.test",
+        "test/sql/storage/types/variant/test_all_types_single_table.test",
+        "test/sql/storage/types/variant/test_all_types_variant.test",
+        "test/sql/storage/types/variant/tpcds_sf1.test_slow",
+        "test/sql/storage/types/variant/tpch_sf1.test_slow",
+        "test/sql/storage/types/variant/update.test",
+        "test/sql/storage/types/variant/variant_index.test",
+        "test/sql/storage/types/variant/variant_shredding.test",
+        "test/sql/storage/types/variant/variant_stats_merging.test",
+        "test/sql/types/variant/tpch_test.test",
+        "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_fetch_row.test",
+        "test/sql/storage/compression/roaring/roaring_bool_first_is_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_inverted_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_inverted_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
+        "test/sql/storage/compression/roaring/roaring_bool_uncompressed_under_v1_5_0.test"
+      ]
+    },
+    {
+      "reason": "Use of load that fails when the path is replaced",
+      "paths": [
+        "test/fuzzer/sqlsmith/nullif_map_with_config.test",
+        "test/sql/alter/add_pk/test_add_pk_attach.test",
+        "test/sql/catalog/comment_on_column.test",
+        "test/sql/catalog/function/test_table_macro_copy.test",
+        "test/sql/copy_database/copy_database_gen_col.test",
+        "test/sql/storage/temp_directory/max_swap_space_persistent.test",
+        "test/sql/storage/test_index_checkpoint.test",
+        "test/sql/create/create_objects_readonly.test",
+        "test/sql/index/art/storage/test_art_readonly.test",
+        "test/sql/pragma/pragma_database_size_readonly.test",
+        "test/sql/index/art/storage/test_art_duckdb_versions.test",
+        "test/sql/attach/attach_read_only.test",
+        "test/sql/function/list/lambdas/test_lambda_storage.test"
       ]
     }
   ]

@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <string>
+#include <system_error>
 #include <vector>
 
 using namespace duckdb;
@@ -37,18 +38,18 @@ template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
-	auto name = Catch::getResultCapture().getCurrentTestName();
-
+	const auto name = Catch::getResultCapture().getCurrentTestName();
+	const auto test_dir_path = TestDirectoryPath(); // can vary between tests, and does IO
 	auto &test_config = TestConfiguration::Get();
 
 	string initial_dbpath = test_config.GetInitialDBPath();
 	test_config.ProcessPath(initial_dbpath, name);
 	if (!initial_dbpath.empty()) {
-		auto test_path = StringUtil::Replace(initial_dbpath, TestDirectoryPath(), string());
+		auto test_path = StringUtil::Replace(initial_dbpath, test_dir_path, string());
 		test_path = StringUtil::Replace(test_path, "\\", "/");
 		auto components = StringUtil::Split(test_path, "/");
 		components.pop_back();
-		string total_path = TestDirectoryPath();
+		string total_path = test_dir_path;
 		for (auto &component : components) {
 			if (component.empty()) {
 				continue;
@@ -61,11 +62,6 @@ static void testRunner() {
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;
 
-	// Copy configured env vars
-	for (auto &kv : test_config.GetTestEnvMap()) {
-		runner.environment_variables[kv.first] = kv.second;
-	}
-
 	string prev_directory;
 
 	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
@@ -74,24 +70,33 @@ static void testRunner() {
 	if (AUTO_SWITCH_TEST_DIR) {
 		prev_directory = TestGetCurrentDirectory();
 
-		std::size_t found = name.rfind("test/sql");
+		std::size_t found = name.rfind("/test/sql");
 		if (found == std::string::npos) {
 			throw InvalidInputException("Failed to auto detect working dir for test '" + name +
 			                            "' because a non-standard path was used!");
 		}
 		auto test_working_dir = name.substr(0, found);
-
-		// Parse the test dir automatically
-		TestChangeDirectory(test_working_dir);
+		test_config.ChangeWorkingDirectory(test_working_dir);
 	}
+
+	// setup this test runner with Config-based env, then override with ephemerals (only WORKING_DIR at this point)
+	for (auto &kv : test_config.GetTestEnvMap()) {
+		runner.environment_variables[kv.first] = kv.second;
+	}
+	// Per runner vars
+	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
+	runner.environment_variables["TEST_NAME"] = name;
+	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
+
+	ErrorData error;
 	try {
 		runner.ExecuteFile(name);
-	} catch (...) {
-		// This is to allow cleanup to be executed, failure is already logged
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
 	}
 
 	if (AUTO_SWITCH_TEST_DIR) {
-		TestChangeDirectory(prev_directory);
+		test_config.ChangeWorkingDirectory(prev_directory);
 	}
 
 	auto on_cleanup = test_config.OnCleanupCommand();
@@ -115,6 +120,10 @@ static void testRunner() {
 
 	// clear test directory after running tests
 	ClearTestDirectory();
+
+	if (error.HasError()) {
+		FAIL(error.Message());
+	}
 }
 
 static string ParseGroupFromPath(string file) {
@@ -253,8 +262,7 @@ void RegisterSqllogictests() {
 		}
 	});
 
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
+	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				auto fun = testRunner<false, true>;
@@ -262,6 +270,5 @@ void RegisterSqllogictests() {
 			}
 		});
 	}
-#endif
 }
 } // namespace duckdb

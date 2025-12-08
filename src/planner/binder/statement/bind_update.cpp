@@ -135,7 +135,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
@@ -191,7 +191,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

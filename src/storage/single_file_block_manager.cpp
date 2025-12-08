@@ -14,6 +14,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -66,13 +67,12 @@ void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
 
 void GenerateDBIdentifier(uint8_t *db_identifier) {
 	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(db_identifier,
-	                                                                          MainHeader::DB_IDENTIFIER_LEN);
+	RandomEngine engine;
+	engine.RandomData(db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 }
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 
 	// we zero-out the iv and the (not yet) encrypted canary
@@ -248,7 +248,7 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db_p), options.block_alloc_size, options.block_header_size),
-      db(db_p), path(path_p), header_buffer(Allocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
+      db(db_p), path(path_p), header_buffer(BlockAllocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
                                             Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                             options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
@@ -362,6 +362,15 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
+	auto encryption_enabled = options.encryption_options.encryption_enabled;
+	if (encryption_enabled) {
+		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+			throw InvalidConfigurationException(
+			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
+			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
+		}
+	}
+
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
@@ -376,7 +385,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// Derive the encryption key and add it to the cache.
 	// Not used for plain databases.
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-	auto encryption_enabled = options.encryption_options.encryption_enabled;
 
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
@@ -487,6 +495,15 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	if (main_header.IsEncrypted()) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
+
+			//! Check if our encryption module can write, if not, we should throw here
+			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+				throw InvalidConfigurationException(
+				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
+				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
+				    "httpfs`.");
+			}
+
 			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache
 			CheckAndAddEncryptionKey(main_header);
@@ -506,6 +523,19 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       path, EncryptionTypes::CipherToString(config_cipher),
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
+
+		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// of the cipher used instead of this trick to avoid downgrades
+		if (stored_cipher != EncryptionTypes::GCM) {
+			if (config_cipher == EncryptionTypes::INVALID) {
+				throw CatalogException(
+				    "Cannot open encrypted database \"%s\" without explicitly specifying the "
+				    "encryption cipher for security reasons. Please make sure you understand the security implications "
+				    "and re-attach the database specifying the desired cipher.",
+				    path);
+			}
+		}
+
 		// this is ugly, but the storage manager does not know the cipher type before
 		db.GetStorageManager().SetCipher(stored_cipher);
 	}
@@ -620,7 +650,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
 		temp_buffer_manager =
-		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(context, *handle, location);
 	} else {
@@ -677,7 +707,6 @@ void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 	for (idx_t i = 0; i < free_list_count; i++) {
 		auto block = reader.Read<block_id_t>(context);
 		free_list.insert(block);
-		newly_freed_list.insert(block);
 	}
 	auto multi_use_blocks_count = reader.Read<uint64_t>(context);
 	multi_use_blocks.clear();
@@ -694,19 +723,35 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 	return root.block_pointer == meta_block;
 }
 
-block_id_t SingleFileBlockManager::GetFreeBlockId() {
-	lock_guard<mutex> lock(block_lock);
+block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 	block_id_t block;
-	if (!free_list.empty()) {
-		// The free list is not empty, so we take its first element.
-		block = *free_list.begin();
-		// erase the entry from the free list again
-		free_list.erase(free_list.begin());
-		newly_freed_list.erase(block);
-	} else {
-		block = max_block++;
+	{
+		lock_guard<mutex> lock(block_lock);
+		if (!free_list.empty()) {
+			// The free list is not empty, so we take its first element.
+			block = *free_list.begin();
+			// erase the entry from the free list again
+			free_list.erase(free_list.begin());
+		} else {
+			block = max_block++;
+		}
+		// add the entry to the list of newly used blocks
+		if (type == FreeBlockType::NEWLY_USED_BLOCK) {
+			newly_used_blocks.insert(block);
+		}
+	}
+	if (BlockIsRegistered(block)) {
+		throw InternalException("Free block %d is already registered", block);
 	}
 	return block;
+}
+
+block_id_t SingleFileBlockManager::GetFreeBlockId() {
+	return GetFreeBlockIdInternal(FreeBlockType::NEWLY_USED_BLOCK);
+}
+
+block_id_t SingleFileBlockManager::GetFreeBlockIdForCheckpoint() {
+	return GetFreeBlockIdInternal(FreeBlockType::CHECKPOINTED_BLOCK);
 }
 
 block_id_t SingleFileBlockManager::PeekFreeBlockId() {
@@ -718,16 +763,10 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	}
 }
 
-void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
+void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
-	D_ASSERT(block_id < max_block);
-	if (free_list.find(block_id) != free_list.end()) {
-		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
-	}
-	multi_use_blocks.erase(block_id);
-	free_list.insert(block_id);
-	newly_freed_list.insert(block_id);
+	newly_used_blocks.erase(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -746,7 +785,6 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 	} else if (free_list.find(block_id) != free_list.end()) {
 		// block is currently in the free list - erase
 		free_list.erase(block_id);
-		newly_freed_list.erase(block_id);
 	} else {
 		// block is already in use - increase reference count
 		IncreaseBlockReferenceCountInternal(block_id);
@@ -771,10 +809,27 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		return;
 	}
 	// Check for multi-free
-	// TODO: Fix the bug that causes this assert to fire, then uncomment it.
-	// D_ASSERT(modified_blocks.find(block_id) == modified_blocks.end());
-	D_ASSERT(free_list.find(block_id) == free_list.end());
-	modified_blocks.insert(block_id);
+	if (modified_blocks.find(block_id) != modified_blocks.end()) {
+		throw InternalException("MarkBlockAsModified called with already modified block id %d", block_id);
+	}
+	if (free_list.find(block_id) != free_list.end()) {
+		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
+	}
+	auto newly_used_entry = newly_used_blocks.find(block_id);
+	if (newly_used_entry != newly_used_blocks.end()) {
+		// this block was newly used - and now we are labeling it as no longer being required
+		// we can directly add it back to the free list
+		newly_used_blocks.erase(block_id);
+		if (BlockIsRegistered(block_id)) {
+			free_blocks_in_use.insert(block_id);
+		} else {
+			free_list.insert(block_id);
+		}
+	} else {
+		// this block was used in storage, we cannot directly re-use it
+		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		modified_blocks.insert(block_id);
+	}
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t block_id) {
@@ -823,7 +878,13 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			}
 		}
 	}
+	for (auto &newly_used_block : newly_used_blocks) {
+		referenced_blocks.insert(newly_used_block);
+	}
 	for (auto &free_block : free_list) {
+		referenced_blocks.insert(free_block);
+	}
+	for (auto &free_block : free_blocks_in_use) {
 		referenced_blocks.insert(free_block);
 	}
 	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
@@ -837,9 +898,39 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 				missing_blocks += to_string(i);
 			}
 		}
+		string free_list_str;
+		for (auto &block : free_list) {
+			if (!free_list_str.empty()) {
+				free_list_str += ", ";
+			}
+			free_list_str += to_string(block);
+		}
+		string block_usage_str;
+		for (auto &entry : block_usage_count) {
+			if (!block_usage_str.empty()) {
+				block_usage_str += ", ";
+			}
+			block_usage_str += to_string(entry.first);
+		}
+		string multi_use_blocks_str;
+		for (auto &entry : multi_use_blocks) {
+			if (!multi_use_blocks_str.empty()) {
+				multi_use_blocks_str += ", ";
+			}
+			multi_use_blocks_str += to_string(entry.first);
+		}
+		string newly_used_blocks_str;
+		for (auto &block : newly_used_blocks) {
+			if (!newly_used_blocks_str.empty()) {
+				newly_used_blocks_str += ", ";
+			}
+			newly_used_blocks_str += to_string(block);
+		}
+
 		throw InternalException(
-		    "Blocks %s were neither present in the free list or in the block_usage_count (max block %lld)",
-		    missing_blocks, max_block);
+		    "Block verification failed - blocks \"%s\" were not found as being used OR marked as free\nMax block: "
+		    "%d\nBlock usage: %s\nFree list: %s\nMulti-use blocks: %s\nNewly used blocks: %s",
+		    missing_blocks, max_block, block_usage_str, free_list_str, multi_use_blocks_str, newly_used_blocks_str);
 	}
 }
 
@@ -892,7 +983,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, *this);
+		result = make_uniq<Block>(BlockAllocator::Get(db), block_id, *this);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
@@ -963,6 +1054,8 @@ void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, blo
 
 void SingleFileBlockManager::Truncate() {
 	BlockManager::Truncate();
+
+	lock_guard<mutex> guard(block_lock);
 	idx_t blocks_to_truncate = 0;
 	// reverse iterate over the free-list
 	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
@@ -979,7 +1072,6 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
 	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
@@ -1036,13 +1128,28 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
 
-	lock_guard<mutex> lock(block_lock);
+	unique_lock<mutex> lock(block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
+	set<block_id_t> all_free_blocks = free_list;
+	set<block_id_t> fully_freed_blocks;
 	for (auto &block : modified_blocks) {
-		free_list.insert(block);
-		newly_freed_list.insert(block);
+		all_free_blocks.insert(block);
+		if (!BlockIsRegistered(block)) {
+			// if the block is no longer registered it is not in use - so it can be re-used after this point
+			free_list.insert(block);
+			fully_freed_blocks.insert(block);
+		} else {
+			// if the block is still registered it is still in use - keep it in the free_blocks_in_use list
+			free_blocks_in_use.insert(block);
+		}
+	}
+	auto written_multi_use_blocks = multi_use_blocks;
+	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
+	for (auto &newly_used_block : newly_used_blocks) {
+		all_free_blocks.insert(newly_used_block);
+		written_multi_use_blocks.erase(newly_used_block);
 	}
 	modified_blocks.clear();
 
@@ -1056,12 +1163,12 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		auto ptr = writer.GetMetaBlockPointer();
 		header.free_list = ptr.block_pointer;
 
-		writer.Write<uint64_t>(free_list.size());
-		for (auto &block_id : free_list) {
+		writer.Write<uint64_t>(all_free_blocks.size());
+		for (auto &block_id : all_free_blocks) {
 			writer.Write<block_id_t>(block_id);
 		}
-		writer.Write<uint64_t>(multi_use_blocks.size());
-		for (auto &entry : multi_use_blocks) {
+		writer.Write<uint64_t>(written_multi_use_blocks.size());
+		for (auto &entry : written_multi_use_blocks) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
@@ -1071,8 +1178,13 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
+	lock.unlock();
 	metadata_manager.Flush();
+
+	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
+	lock.unlock();
+
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
@@ -1107,31 +1219,48 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
-	// Release the free blocks to the filesystem.
-	TrimFreeBlocks();
+	// Release the free fully freed blocks to the filesystem.
+	TrimFreeBlocks(fully_freed_blocks);
 }
 
 void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::TrimFreeBlocks() {
-	if (DBConfig::Get(db).options.trim_free_blocks) {
-		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {
-			block_id_t first = *itr;
-			block_id_t last = first;
-			// Find end of contiguous range.
-			for (++itr; itr != newly_freed_list.end() && (*itr == last + 1); ++itr) {
-				last = *itr;
-			}
-			// We are now one too far.
-			--itr;
-			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
-			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
-		}
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	// check if it is part of the newly free list
+	lock_guard<mutex> lock(block_lock);
+	auto entry = free_blocks_in_use.find(id);
+	if (entry != free_blocks_in_use.end()) {
+		// it is! move it to the regular free list so the block can be re-used
+		free_list.insert(id);
+		free_blocks_in_use.erase(entry);
 	}
-	newly_freed_list.clear();
+}
+
+void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
+	auto block_count = NumericCast<idx_t>(end + 1 - start);
+	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+}
+
+void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
+	if (!DBConfig::Get(db).options.trim_free_blocks) {
+		return;
+	}
+	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+		block_id_t first = *itr;
+		block_id_t last = first;
+		// Find end of contiguous range.
+		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+			last = *itr;
+		}
+		// We are now one too far.
+		--itr;
+		// Trim the range.
+		TrimFreeBlockRange(first, last);
+	}
 }
 
 } // namespace duckdb
