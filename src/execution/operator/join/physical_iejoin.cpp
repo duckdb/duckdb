@@ -251,8 +251,6 @@ struct IEJoinSourceTask {
 	idx_t thread_idx = 0;
 	//! The chunk range
 	ChunkRange l_range;
-	//! The right chunk range
-	ChunkRange r_range;
 };
 
 class IEJoinLocalSourceState;
@@ -924,7 +922,7 @@ public:
 
 	bool TryAssignTask();
 	//	Sort L1
-	void ExecuteSortL1Task(ExecutionContext &context, InterruptState &interrupt);
+	void ExecuteSinkL1Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Materialize L1
 	void ExecuteMaterializeL1Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Sort L2
@@ -1059,7 +1057,7 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 			outer_idx = 0;
 			outer_count = left_table.BlockSize(left_block_index);
 		} else {
-			right_block_index = task->r_range.first;
+			right_block_index = task->l_range.first;
 			right_base = right_table.BlockStart(right_block_index);
 
 			right_matches = right_table.found_match.get() + right_base;
@@ -1075,7 +1073,7 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	return true;
 }
 
-void IEJoinLocalSourceState::ExecuteSortL1Task(ExecutionContext &context, InterruptState &interrupt) {
+void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, InterruptState &interrupt) {
 	auto &gsink = gsource.gsink;
 	auto &left_table = *gsink.tables[0];
 	auto &right_table = *gsink.tables[1];
@@ -1086,25 +1084,39 @@ void IEJoinLocalSourceState::ExecuteSortL1Task(ExecutionContext &context, Interr
 
 	auto &l1 = gsource.l1;
 
-	// LHS has positive rids
-	ExpressionExecutor l_executor(context.client);
-	l_executor.AddExpression(*order1.expression);
-	// add const column true
-	auto left_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-	l_executor.AddExpression(*left_const);
-	l_executor.AddExpression(*order2.expression);
-	IEJoinUnion::AppendKey(context, interrupt, left_table, l_executor, *l1, 1, 1, task->l_range);
-	task->l_range.first = task->l_range.second;
+	//	Process the LHS sub-range
+	if (task->l_range.first < gsource.left_blocks) {
+		auto range = task->l_range;
+		range.second = MinValue(gsource.left_blocks, range.second);
 
-	// RHS has negative rids
-	ExpressionExecutor r_executor(context.client);
-	r_executor.AddExpression(*op.rhs_orders[0].expression);
-	// add const column flase
-	auto right_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
-	r_executor.AddExpression(*right_const);
-	r_executor.AddExpression(*op.rhs_orders[1].expression);
-	IEJoinUnion::AppendKey(context, interrupt, right_table, r_executor, *l1, -1, -1, task->r_range);
-	task->r_range.first = task->r_range.second;
+		// LHS has positive rids
+		ExpressionExecutor l_executor(context.client);
+		l_executor.AddExpression(*order1.expression);
+		// add const column true
+		auto left_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		l_executor.AddExpression(*left_const);
+		l_executor.AddExpression(*order2.expression);
+		const auto rid = UnsafeNumericCast<int64_t>(left_table.BlockStart(range.first)) + 1;
+		IEJoinUnion::AppendKey(context, interrupt, left_table, l_executor, *l1, 1, rid, range);
+	}
+
+	//	Process the RHS sub-range
+	if (task->l_range.second > gsource.left_blocks) {
+		auto range = task->l_range;
+		range.first = MaxValue(gsource.left_blocks, range.first) - gsource.left_blocks;
+		range.second -= gsource.left_blocks;
+
+		// RHS has negative rids
+		ExpressionExecutor r_executor(context.client);
+		r_executor.AddExpression(*op.rhs_orders[0].expression);
+		// add const column flase
+		auto right_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		r_executor.AddExpression(*right_const);
+		r_executor.AddExpression(*op.rhs_orders[1].expression);
+		const auto rid = UnsafeNumericCast<int64_t>(right_table.BlockStart(range.first)) + 1;
+		IEJoinUnion::AppendKey(context, interrupt, right_table, r_executor, *l1, -1, -rid, range);
+	}
+	task->l_range.first = task->l_range.second;
 }
 
 void IEJoinLocalSourceState::ExecuteMaterializeL1Task(ExecutionContext &context, InterruptState &interrupt) {
@@ -1144,7 +1156,7 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	case IEJoinSourceStage::DONE:
 		break;
 	case IEJoinSourceStage::SINK_L1:
-		ExecuteSortL1Task(context, interrupt);
+		ExecuteSinkL1Task(context, interrupt);
 		break;
 	case IEJoinSourceStage::MATERIALIZE_L1:
 		ExecuteMaterializeL1Task(context, interrupt);
@@ -1274,7 +1286,11 @@ void IEJoinGlobalSourceState::Initialize() {
 	stage_tasks.emplace_back(0);
 
 	//	SINK_L1
-	stage_tasks.emplace_back(1);
+	idx_t l1_tasks = 0;
+	if (per_thread) {
+		l1_tasks = BinValue<idx_t>(left_blocks + right_blocks, per_thread);
+	}
+	stage_tasks.emplace_back(l1_tasks);
 
 	//	MATERIALIZE_L1
 	stage_tasks.emplace_back(1);
@@ -1448,12 +1464,11 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 
 	switch (stage) {
 	case IEJoinSourceStage::SINK_L1:
-		task.l_range = {0, left_blocks};
-		task.r_range = {0, right_blocks};
+		task.l_range.first = MinValue(task.thread_idx * per_thread, left_blocks + right_blocks);
+		task.l_range.second = MinValue(task.l_range.first + per_thread, left_blocks + right_blocks);
 		break;
 	case IEJoinSourceStage::MATERIALIZE_L1:
 		task.l_range = {0, 1};
-		task.r_range = {0, 0};
 		break;
 	case IEJoinSourceStage::SINK_L2:
 		task.l_range.first = MinValue(task.thread_idx * per_thread, l1->BlockCount());
@@ -1473,12 +1488,10 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 			// Left outer blocks
 			const auto left_task = task.thread_idx;
 			task.l_range = {left_task, left_task + 1};
-			task.r_range = {0, 0};
 		} else {
 			// Right outer blocks
 			const auto right_task = task.thread_idx - left_outers;
-			task.l_range = {0, 0};
-			task.r_range = {right_task, right_task + 1};
+			task.l_range = {right_task, right_task + 1};
 		}
 		break;
 	case IEJoinSourceStage::INIT:
