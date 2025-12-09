@@ -86,8 +86,6 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
-	// Fixed: The problem was that an offset was being passed, causing this assert to trigger. Now that offset is 0,
-	// this assert doesn't trigger anymore.
 	D_ASSERT(result.Capacity() >= end);
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
@@ -233,10 +231,7 @@ void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t sca
 		const auto tmp_buffer = Vector(dst.GetType());
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(tmp_buffer.GetData(), data_ptr_cast(validity.GetData()), scan_count,
 		                                            1);
-		for (idx_t i = 0; i < scan_count; i++) {
-			const auto val_to_write = tmp_buffer.GetData()[i];
-			write_ptr[i] = val_to_write;
-		}
+		memcpy(write_ptr, tmp_buffer.GetData(), scan_count);
 	}
 }
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
