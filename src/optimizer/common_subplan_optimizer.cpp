@@ -539,17 +539,20 @@ struct PlanSignatureEquality {
 	}
 };
 
+struct Subplan {
+	reference<unique_ptr<LogicalOperator>> op;
+	arena_vector<ColumnBinding> canonical_bindings;
+};
+
 struct SubplanInfo {
 	SubplanInfo(ArenaAllocator &allocator, unique_ptr<LogicalOperator> &op,
-	            arena_vector<idx_t> &&canonical_table_indices_p, arena_vector<ColumnBinding> &&canonical_bindings_p)
+	            arena_vector<idx_t> &&canonical_table_indices_p, arena_vector<ColumnBinding> &&canonical_bindings)
 	    : canonical_table_indices(std::move(canonical_table_indices_p)), subplans(allocator),
-	      canonical_bindings(allocator), lowest_common_ancestor(op) {
-		subplans.push_back(op);
-		canonical_bindings.push_back(std::move(canonical_bindings_p));
+	      lowest_common_ancestor(op) {
+		subplans.push_back({op, std::move(canonical_bindings)});
 	}
 	arena_vector<idx_t> canonical_table_indices;
-	arena_vector<reference<unique_ptr<LogicalOperator>>> subplans;
-	arena_vector<arena_vector<ColumnBinding>> canonical_bindings;
+	arena_vector<Subplan> subplans;
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
 };
 
@@ -591,10 +594,6 @@ private:
 	};
 
 public:
-	const PlanSignatureTableIndexMap &GetTableIndexMap() const {
-		return state.table_index_map;
-	}
-
 	subplan_map_t FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
@@ -650,8 +649,7 @@ public:
 						}
 
 						// Add subplan to existing
-						info.subplans.emplace_back(current.op);
-						info.canonical_bindings.emplace_back(GetCanonicalBindings(*current.op));
+						info.subplans.push_back({current.op, GetCanonicalBindings(*current.op)});
 						info.lowest_common_ancestor = LowestCommonAncestor(info.lowest_common_ancestor, current.op);
 					}
 				}
@@ -677,8 +675,8 @@ public:
 			// Collect all subplan bindings, and figure out which subplan has the most outgoing bindings
 			idx_t max_subplan_idx = 0;
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
-				const auto &subplan_bindings = subplan_info.canonical_bindings[subplan_idx];
-				const auto &max_subplan_bindings = subplan_info.canonical_bindings[max_subplan_idx];
+				const auto &subplan_bindings = subplan_info.subplans[subplan_idx].canonical_bindings;
+				const auto &max_subplan_bindings = subplan_info.subplans[max_subplan_idx].canonical_bindings;
 				if (subplan_bindings.size() > max_subplan_bindings.size()) {
 					max_subplan_idx = subplan_idx;
 				}
@@ -689,7 +687,7 @@ public:
 
 			// Insert the bindings of the subplan with the most bindings into a set
 			column_binding_set_t max_subplan_column_binding_set;
-			for (auto &cb : subplan_info.canonical_bindings[max_subplan_idx]) {
+			for (auto &cb : subplan_info.subplans[0].canonical_bindings) {
 				D_ASSERT(max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end());
 				max_subplan_column_binding_set.insert(cb);
 			}
@@ -697,7 +695,7 @@ public:
 			// Check if the maximum subplan fully contains the column bindings of the other subplans
 			bool all_contained = true;
 			for (idx_t subplan_idx = 1; subplan_idx < subplan_info.subplans.size() && all_contained; subplan_idx++) {
-				const auto &subplan_bindings = subplan_info.canonical_bindings[subplan_idx];
+				const auto &subplan_bindings = subplan_info.subplans[subplan_idx].canonical_bindings;
 				for (auto &cb : subplan_bindings) {
 					if (max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end()) {
 						all_contained = false;
@@ -712,8 +710,8 @@ public:
 				continue;
 			}
 
-			auto &subplan = subplan_info.subplans[0].get();
-			auto &parent = operator_infos.find(subplan)->second.parent;
+			auto &subplan = subplan_info.subplans[0];
+			auto &parent = operator_infos.find(subplan.op)->second.parent;
 			auto &parent_signature = operator_infos.find(parent)->second.signature;
 			if (parent_signature) {
 				auto parent_it = subplans.find(*parent_signature);
@@ -722,7 +720,7 @@ public:
 					continue;
 				}
 			}
-			if (CTEInlining::EndsInAggregateOrDistinct(*subplan) || IsSelectiveMultiTablePlan(subplan)) {
+			if (CTEInlining::EndsInAggregateOrDistinct(*subplan.op.get()) || IsSelectiveMultiTablePlan(subplan.op)) {
 				it++; // This subplan might be useful
 			} else {
 				it = subplans.erase(it); // Not eligible for materialization
@@ -825,8 +823,7 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-static void ConvertSubplansToCTE(Optimizer &optimizer, const PlanSignatureTableIndexMap &table_index_map,
-                                 unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info) {
+static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info) {
 	const auto cte_index = optimizer.binder.GenerateTableIndex();
 	const auto cte_name = StringUtil::Format("__common_subplan_1");
 
@@ -834,25 +831,26 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, const PlanSignatureTableI
 	op->ResolveOperatorTypes();
 
 	// Get types and names
-	const auto &primary_subplan = *subplan_info.subplans[0].get();
-	const auto &types = primary_subplan.types;
+	const auto &primary_subplan = subplan_info.subplans[0];
+	const auto &types = primary_subplan.op.get()->types;
 	vector<string> col_names;
 	for (idx_t i = 0; i < types.size(); i++) {
 		col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i));
 	}
-	const auto &primary_subplan_bindings = subplan_info.canonical_bindings[0];
+	const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
 
 	// Create CTE refs and figure out column binding replacements
 	vector<unique_ptr<LogicalOperator>> cte_refs;
 	ColumnBindingReplacer replacer;
 	for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+		const auto &subplan = subplan_info.subplans[subplan_idx];
 		const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
 		cte_refs.emplace_back(make_uniq<LogicalCTERef>(cte_ref_index, cte_index, types, col_names));
-		const auto old_bindings = subplan_info.subplans[subplan_idx].get()->GetColumnBindings();
+		const auto old_bindings = subplan.op.get()->GetColumnBindings();
 		auto new_bindings = cte_refs.back()->GetColumnBindings();
 		if (old_bindings.size() != new_bindings.size()) {
 			// Different number of output columns - project columns out
-			const auto &canonical_bindings = subplan_info.canonical_bindings[subplan_idx];
+			const auto &canonical_bindings = subplan.canonical_bindings;
 			vector<unique_ptr<Expression>> select_list;
 			for (auto &cb : canonical_bindings) {
 				idx_t cte_col_idx = 0;
@@ -881,10 +879,11 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, const PlanSignatureTableI
 	// Create the materialized CTE and replace the common subplans with references to it
 	auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
 	auto cte =
-	    make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, types.size(), std::move(subplan_info.subplans[0].get()),
+	    make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, types.size(), std::move(primary_subplan.op.get()),
 	                                      std::move(lowest_common_ancestor), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	for (idx_t i = 0; i < subplan_info.subplans.size(); i++) {
-		subplan_info.subplans[i].get() = std::move(cte_refs[i]);
+	for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+		const auto &subplan = subplan_info.subplans[subplan_idx];
+		subplan.op.get() = std::move(cte_refs[subplan_idx]);
 	}
 	lowest_common_ancestor = std::move(cte);
 
@@ -911,7 +910,7 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	}
 
 	// Create a CTE!
-	ConvertSubplansToCTE(optimizer, finder.GetTableIndexMap(), op, best_it->second);
+	ConvertSubplansToCTE(optimizer, op, best_it->second);
 	return op;
 }
 
