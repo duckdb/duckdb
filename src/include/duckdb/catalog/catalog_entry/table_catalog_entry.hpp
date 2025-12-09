@@ -95,6 +95,7 @@ public:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
 	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false) const;
+	DUCKDB_API StorageIndex GetStorageIndex(const ColumnIndex &column_index) const;
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;

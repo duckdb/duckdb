@@ -203,8 +203,7 @@ bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageInde
 		//! This is a generated column, can't use the row group pruner
 		return false;
 	}
-	out_index = StorageIndex::FromColumnIndex(column_index);
-	out_index.SetIndex(column.StorageOid());
+	out_index = table->GetStorageIndex(column_index);
 	return true;
 }
 

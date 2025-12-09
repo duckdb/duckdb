@@ -58,20 +58,6 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	bool in_charge_of_final_stretch {false};
 };
 
-static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
-	if (column_id.IsRowIdColumn()) {
-		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID);
-	}
-
-	// The index of the base ColumnIndex is equal to the physical column index in the table
-	// for any child indices because the indices are already the physical indices.
-	// Only the top-level can have generated columns.
-	auto &col = table.GetColumn(column_id.ToLogical());
-	auto result = StorageIndex::FromColumnIndex(column_id);
-	result.SetIndex(col.StorageOid());
-	return result;
-}
-
 class TableScanGlobalState : public GlobalTableFunctionState {
 public:
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
@@ -144,7 +130,7 @@ public:
 		auto &local_storage = LocalStorage::Get(context.client, duck_table.catalog);
 
 		for (const auto &col_idx : input.column_indexes) {
-			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
+			l_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
 		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
@@ -278,7 +264,7 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
-			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
+			storage_ids.push_back(bind_data.table.GetStorageIndex(col));
 		}
 
 		if (bind_data.order_options) {
@@ -426,7 +412,7 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		g_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
+		g_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		if (col_idx.IsRowIdColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			continue;
@@ -704,8 +690,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, Ta
 		return nullptr;
 	}
 
-	auto storage_index = StorageIndex::FromColumnIndex(column_id);
-	storage_index.SetIndex(column.StorageOid());
+	auto storage_index = duck_table.GetStorageIndex(column_id);
 	return duck_table.GetStatistics(context, storage_index);
 }
 
