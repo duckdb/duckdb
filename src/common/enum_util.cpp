@@ -1046,8 +1046,7 @@ ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const ch
 const StringUtil::EnumStringLiteral *GetColumnIndexTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ColumnIndexType::INVALID), "INVALID" },
-		{ static_cast<uint32_t>(ColumnIndexType::DIRECT_READ), "DIRECT_READ" },
-		{ static_cast<uint32_t>(ColumnIndexType::OPTIONAL_PRUNE_HINT), "OPTIONAL_PRUNE_HINT" },
+		{ static_cast<uint32_t>(ColumnIndexType::FULL_READ), "FULL_READ" },
 		{ static_cast<uint32_t>(ColumnIndexType::PUSHDOWN_EXTRACT), "PUSHDOWN_EXTRACT" }
 	};
 	return values;
@@ -1055,12 +1054,12 @@ const StringUtil::EnumStringLiteral *GetColumnIndexTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value) {
-	return StringUtil::EnumToString(GetColumnIndexTypeValues(), 4, "ColumnIndexType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetColumnIndexTypeValues(), 3, "ColumnIndexType", static_cast<uint32_t>(value));
 }
 
 template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value) {
-	return static_cast<ColumnIndexType>(StringUtil::StringToEnum(GetColumnIndexTypeValues(), 4, "ColumnIndexType", value));
+	return static_cast<ColumnIndexType>(StringUtil::StringToEnum(GetColumnIndexTypeValues(), 3, "ColumnIndexType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentTypeValues() {

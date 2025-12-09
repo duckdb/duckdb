@@ -16,10 +16,8 @@ namespace duckdb {
 
 enum class ColumnIndexType : uint8_t {
 	INVALID,
-	//! Regular column index
-	DIRECT_READ,
-	//! Hint to scans that unreferenced fields *can* be pruned.
-	OPTIONAL_PRUNE_HINT,
+	//! Regular column index, refers to a column in its entirety
+	FULL_READ,
 	//! This index references a struct/variant field that MUST be extracted by the scan and emitted directly
 	PUSHDOWN_EXTRACT
 };
@@ -30,13 +28,10 @@ public:
 	ColumnIndex() : index(DConstants::INVALID_INDEX), index_type(ColumnIndexType::INVALID) {
 	}
 	explicit ColumnIndex(idx_t index)
-	    : index(index), type(LogicalType::INVALID), index_type(ColumnIndexType::DIRECT_READ) {
+	    : index(index), type(LogicalType::INVALID), index_type(ColumnIndexType::FULL_READ) {
 	}
 	ColumnIndex(idx_t index, vector<ColumnIndex> child_indexes_p)
-	    : index(index), index_type(ColumnIndexType::DIRECT_READ), child_indexes(std::move(child_indexes_p)) {
-		if (!child_indexes.empty()) {
-			index_type = ColumnIndexType::OPTIONAL_PRUNE_HINT;
-		}
+	    : index(index), index_type(ColumnIndexType::FULL_READ), child_indexes(std::move(child_indexes_p)) {
 	}
 
 	inline bool operator==(const ColumnIndex &rhs) const {
@@ -107,7 +102,6 @@ public:
 	}
 	void SetPushdownExtractType(const LogicalType &type_information) {
 		//! We can upgrade the optional prune hint to a PUSHDOWN_EXTRACT, which is no longer optional
-		D_ASSERT(index_type == ColumnIndexType::OPTIONAL_PRUNE_HINT);
 		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 		type = type_information;
 		D_ASSERT(child_indexes.size() == 1);
@@ -133,9 +127,6 @@ public:
 	}
 	void AddChildIndex(ColumnIndex new_index) {
 		this->child_indexes.push_back(std::move(new_index));
-		if (index_type == ColumnIndexType::DIRECT_READ) {
-			index_type = ColumnIndexType::OPTIONAL_PRUNE_HINT;
-		}
 	}
 	bool IsRowIdColumn() const {
 		return index == COLUMN_IDENTIFIER_ROW_ID;
