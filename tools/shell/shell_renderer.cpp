@@ -281,7 +281,7 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
 	vector<duckdb::LogicalType> all_varchar;
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
+		all_varchar.emplace_back(duckdb::LogicalType(duckdb::LogicalTypeId::VARCHAR));
 	}
 	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
 
@@ -1264,7 +1264,7 @@ public:
 		vector<duckdb::LogicalType> all_json;
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 			if (!RequiresJSONCast(chunk.data[c].GetType())) {
-				all_json.emplace_back(duckdb::LogicalType::VARCHAR);
+				all_json.emplace_back(duckdb::LogicalType(duckdb::LogicalTypeId::VARCHAR));
 			} else {
 				all_json.emplace_back(duckdb::LogicalType::JSON());
 			}
