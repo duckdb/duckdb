@@ -15,19 +15,16 @@
 
 namespace duckdb {
 
-enum class StorageIndexType : uint8_t { DIRECT_READ, OPTIONAL_PRUNE_HINT, PUSHDOWN_EXTRACT };
+enum class StorageIndexType : uint8_t { FULL_READ, PUSHDOWN_EXTRACT };
 
 struct StorageIndex {
 public:
-	StorageIndex() : index(COLUMN_IDENTIFIER_ROW_ID), index_type(StorageIndexType::DIRECT_READ) {
+	StorageIndex() : index(COLUMN_IDENTIFIER_ROW_ID), index_type(StorageIndexType::FULL_READ) {
 	}
-	explicit StorageIndex(idx_t index) : index(index), index_type(StorageIndexType::DIRECT_READ) {
+	explicit StorageIndex(idx_t index) : index(index), index_type(StorageIndexType::FULL_READ) {
 	}
 	StorageIndex(idx_t index, vector<StorageIndex> child_indexes_p)
-	    : index(index), index_type(StorageIndexType::DIRECT_READ), child_indexes(std::move(child_indexes_p)) {
-		if (!child_indexes.empty()) {
-			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
-		}
+	    : index(index), index_type(StorageIndexType::FULL_READ), child_indexes(std::move(child_indexes_p)) {
 	}
 
 	inline bool operator==(const StorageIndex &rhs) const {
@@ -83,16 +80,12 @@ public:
 	}
 	void AddChildIndex(StorageIndex new_index) {
 		this->child_indexes.push_back(std::move(new_index));
-		if (index_type == StorageIndexType::DIRECT_READ) {
-			index_type = StorageIndexType::OPTIONAL_PRUNE_HINT;
-		}
 	}
 	void SetType(const LogicalType &type_information) {
 		type = type_information;
 	}
 	void SetPushdownExtract() {
 		D_ASSERT(!IsPushdownExtract());
-		D_ASSERT(index_type == StorageIndexType::OPTIONAL_PRUNE_HINT);
 		index_type = StorageIndexType::PUSHDOWN_EXTRACT;
 	}
 	bool IsPushdownExtract() const {

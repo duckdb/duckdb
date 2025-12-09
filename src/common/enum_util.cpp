@@ -4548,8 +4548,7 @@ StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *valu
 
 const StringUtil::EnumStringLiteral *GetStorageIndexTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(StorageIndexType::DIRECT_READ), "DIRECT_READ" },
-		{ static_cast<uint32_t>(StorageIndexType::OPTIONAL_PRUNE_HINT), "OPTIONAL_PRUNE_HINT" },
+		{ static_cast<uint32_t>(StorageIndexType::FULL_READ), "FULL_READ" },
 		{ static_cast<uint32_t>(StorageIndexType::PUSHDOWN_EXTRACT), "PUSHDOWN_EXTRACT" }
 	};
 	return values;
@@ -4557,12 +4556,12 @@ const StringUtil::EnumStringLiteral *GetStorageIndexTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value) {
-	return StringUtil::EnumToString(GetStorageIndexTypeValues(), 3, "StorageIndexType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStorageIndexTypeValues(), 2, "StorageIndexType", static_cast<uint32_t>(value));
 }
 
 template<>
 StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value) {
-	return static_cast<StorageIndexType>(StringUtil::StringToEnum(GetStorageIndexTypeValues(), 3, "StorageIndexType", value));
+	return static_cast<StorageIndexType>(StringUtil::StringToEnum(GetStorageIndexTypeValues(), 2, "StorageIndexType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {
