@@ -685,27 +685,31 @@ public:
 			// Move the "maximum subplan" to the front
 			std::swap(subplan_info.subplans[0], subplan_info.subplans[max_subplan_idx]);
 
+			// We can bail on a subplan for various reasons (some of which could potentially be fixed)
+			bool bail = false;
+
 			// Insert the bindings of the subplan with the most bindings into a set
 			column_binding_set_t max_subplan_column_binding_set;
 			for (auto &cb : subplan_info.subplans[0].canonical_bindings) {
-				D_ASSERT(max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end());
+				if (max_subplan_column_binding_set.find(cb) != max_subplan_column_binding_set.end()) {
+					bail = true; // Subplan contains duplicate column bindings, i.e., another nested duplicate subplan
+					break;
+				}
 				max_subplan_column_binding_set.insert(cb);
 			}
 
 			// Check if the maximum subplan fully contains the column bindings of the other subplans
-			bool all_contained = true;
-			for (idx_t subplan_idx = 1; subplan_idx < subplan_info.subplans.size() && all_contained; subplan_idx++) {
+			for (idx_t subplan_idx = 1; subplan_idx < subplan_info.subplans.size() && !bail; subplan_idx++) {
 				const auto &subplan_bindings = subplan_info.subplans[subplan_idx].canonical_bindings;
 				for (auto &cb : subplan_bindings) {
 					if (max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end()) {
-						all_contained = false;
+						bail = true; // Subplan does not fully contain the the other subplans
 						break;
 					}
 				}
 			}
 
-			// If not, we bail on this subplan
-			if (!all_contained) {
+			if (bail) {
 				it = subplans.erase(it);
 				continue;
 			}
