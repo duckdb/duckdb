@@ -149,11 +149,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 	// ALTER COLUMN to add a new constraint.
 
-	// Clone the storage info vector or the table.
-	for (const auto &index_info : parent.info->index_storage_infos) {
-		info->index_storage_infos.push_back(IndexStorageInfo(index_info.name));
-	}
-
 	// Bind all indexes.
 	info->BindIndexes(context);
 
