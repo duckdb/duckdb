@@ -225,10 +225,15 @@ void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t sca
 	auto write_ptr = dst.GetData() + offset;
 	if (validity.AllValid()) {
 		memset(write_ptr, 1, scan_count); // 1 is for valid
+	} else if (scan_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0) {
+		// "Bit-Unpack" src's validity_mask and put it in dst's data
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(dst.GetData() + offset, data_ptr_cast(validity.GetData()),
+		                                            scan_count, 1);
 	} else {
 		// Because UnPackBuffer writes in batches of BITPACKING_ALGORITHM_GROUP_SIZE, we create a tmp_buffer first to
 		// prevent overflow in the case dst is smaller than the batch.
-		const auto tmp_buffer = Vector(dst.GetType());
+		const auto tmp_buffer =
+		    Vector(dst.GetType(), AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(scan_count));
 		BitpackingPrimitives::UnPackBuffer<uint8_t>(tmp_buffer.GetData(), data_ptr_cast(validity.GetData()), scan_count,
 		                                            1);
 		memcpy(write_ptr, tmp_buffer.GetData(), scan_count);
