@@ -11,6 +11,7 @@
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -264,6 +265,69 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 	}
 
 	return to_string(array[0]) + (bytes == 1 ? " byte" : " bytes");
+}
+
+idx_t StringUtil::ParseFormattedBytes(const string &arg) {
+	if (arg[0] == '-' || arg == "null" || arg == "none") {
+		// infinite
+		return NumericLimits<idx_t>::Maximum();
+	}
+	// split based on the number/non-number
+	idx_t idx = 0;
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	idx_t num_start = idx;
+	while ((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' ||
+	       arg[idx] == '-') {
+		idx++;
+	}
+	if (idx == num_start) {
+		throw NonNumericMemoryException("Memory must have a number (e.g. 1GB)");
+	}
+	string number = arg.substr(num_start, idx - num_start);
+
+	// try to parse the number
+	double limit = Cast::Operation<string_t, double>(string_t(number));
+
+	// now parse the memory limit unit (e.g. bytes, gb, etc)
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	idx_t start = idx;
+	while (idx < arg.size() && !StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	if (limit < 0) {
+		// limit < 0, set limit to infinite
+		return (idx_t)-1;
+	}
+	string unit = StringUtil::Lower(arg.substr(start, idx - start));
+	idx_t multiplier;
+	if (unit == "byte" || unit == "bytes" || unit == "b") {
+		multiplier = 1;
+	} else if (unit == "kilobyte" || unit == "kilobytes" || unit == "kb" || unit == "k") {
+		multiplier = 1000LL;
+	} else if (unit == "megabyte" || unit == "megabytes" || unit == "mb" || unit == "m") {
+		multiplier = 1000LL * 1000LL;
+	} else if (unit == "gigabyte" || unit == "gigabytes" || unit == "gb" || unit == "g") {
+		multiplier = 1000LL * 1000LL * 1000LL;
+	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
+		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
+	} else {
+		throw ParserException("Unknown unit for memory: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i units)",
+		                      unit);
+	}
+	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 
 string StringUtil::Upper(const string &str) {

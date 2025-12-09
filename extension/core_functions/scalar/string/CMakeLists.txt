@@ -19,6 +19,7 @@ add_library_unity(
   pad.cpp
   trim.cpp
   format_bytes.cpp
+  parse_formatted_bytes.cpp
   hex.cpp
   repeat.cpp
   translate.cpp

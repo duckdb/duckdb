@@ -15,6 +15,8 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/complex_json.hpp"
+#include "exception/parser_exception.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -203,6 +205,8 @@ public:
 	//! Return a string that formats the give number of bytes
 	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes, idx_t multiplier = 1024);
 
+	DUCKDB_API static idx_t ParseFormattedBytes(const string &arg);
+
 	//! Convert a string to UPPERCASE
 	DUCKDB_API static string Upper(const string &str);
 
@@ -348,6 +352,12 @@ public:
 	                                           const char *enum_name, uint32_t enum_value);
 	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
 	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
+};
+
+class NonNumericMemoryException final : public ParserException {
+public:
+	explicit NonNumericMemoryException(const string &message) : ParserException(message) {
+	}
 };
 
 } // namespace duckdb

@@ -294,6 +294,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ParseDirnameFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ParseDirpathFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ParseFilenameFun),
+	DUCKDB_SCALAR_FUNCTION(ParseFormattedBytesFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ParsePathFun),
 	DUCKDB_SCALAR_FUNCTION(PiFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(PositionFun),
