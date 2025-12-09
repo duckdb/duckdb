@@ -1,5 +1,5 @@
 # name: test/sql/index/art/test_art_tx_update_key.test
-# group: [constraints]
+# group: [art]
 
 statement ok
 CREATE TABLE test_table (id INTEGER PRIMARY KEY)
