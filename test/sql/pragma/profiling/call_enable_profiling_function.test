@@ -1,0 +1,6 @@
+# name: test/sql/pragma/profiling/call_enable_profiling_function.test
+# description: Test logging
+# group: [profiling]
+
+statement ok
+CALL enable_profiling();
