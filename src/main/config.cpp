@@ -183,7 +183,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
-    DUCKDB_GLOBAL(ValidateExternalFileCacheSetting),
+    DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_GLOBAL(VariantMinimumShreddingSize),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),

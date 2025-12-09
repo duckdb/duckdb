@@ -1337,9 +1337,6 @@ struct ValidateExternalFileCacheSetting {
 	static constexpr const char *DefaultValue = "VALIDATE_ALL";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
 };
 
 struct VariantMinimumShreddingSize {
