@@ -268,7 +268,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		collection.Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// Remove the chunk.
 			try {
-				table.RemoveFromIndexes(append_state, chunk, current_row);
+				table.RevertIndexAppend(append_state, chunk, current_row);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
 				return false;
