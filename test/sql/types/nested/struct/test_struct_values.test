@@ -1,0 +1,120 @@
+# name: test/sql/types/nested/struct/test_struct_values.test
+# group: [struct]
+
+# Basic: returns unnamed struct (ROW) with values in field order
+query I
+select struct_values({a: 1, b: 'x', c: 3});
+----
+(1, x, 3)
+
+# NULL as input (typed)
+query I
+select struct_values(NULL::STRUCT(a INT, b VARCHAR));
+----
+NULL
+
+# NULL as input (untyped)
+query I
+select struct_values(NULL);
+----
+NULL
+
+# Constant vector as input (same result for every row)
+query I
+SELECT struct_values({a: 1, b: 'y'}) FROM range(3);
+----
+(1, y)
+(1, y)
+(1, y)
+
+# Flat vector as input with per-row NULLs
+statement ok
+CREATE TABLE t_struct_values_flat(col STRUCT(a INT, b VARCHAR), idx INTEGER);
+
+statement ok
+INSERT INTO t_struct_values_flat VALUES
+	((1, 'x'), 0),
+	((2, 'y'), 1),
+	((3, 'z'), 2),
+	(NULL, 3),
+	((4, 'q'), 4);
+
+query I
+SELECT struct_values(col) FROM t_struct_values_flat;
+----
+(1, x)
+(2, y)
+(3, z)
+NULL
+(4, q)
+
+# Preserve per-row NULLs and order after filtering
+statement ok
+CREATE TABLE filtered_struct_values (
+    col STRUCT(a INT, b VARCHAR),
+    idx INTEGER
+);
+
+statement ok
+INSERT INTO filtered_struct_values VALUES
+    ((1, 'x'), 0),
+    ((2, 'y'), 1),
+    (NULL, 3),
+    ((4, 'q'), 2);
+
+# Expecting to get the results respectively to the filtration & ordering
+query I
+SELECT struct_values(col) FROM filtered_struct_values WHERE idx % 2 != 0 ORDER BY idx;
+----
+(2, y)
+NULL
+
+# Unnamed struct as input is allowed and should return the same row
+query I
+select struct_values((10, 'hello'));
+----
+(10, hello)
+
+# struct with a null value field
+query I
+select struct_values({a: NULL, b: 'not null'});
+----
+(NULL, not null)
+
+# struct with a nested struct field
+query I
+select struct_values({a: 1, b: {x: 'nested', y: 2}});
+----
+(1, {'x': nested, 'y': 2})
+
+# nested struct_value calls
+query I
+select struct_values(struct_values({a: 1, b: {x: 'deep', y: 3}}));
+----
+(1, {'x': deep, 'y': 3})
+
+# nested struct_values_calls inside of a struct
+query I
+select struct_values({a: struct_values({x: 7, y: 'inside'}), b: 'outer'});
+----
+((7, inside), outer)
+
+# prepared parameter as input
+statement ok
+PREPARE stmt as SELECT struct_values(?);
+
+query I
+EXECUTE stmt({x: 5, y: 'test'});
+----
+(5, test)
+
+# Error cases: non-STRUCT inputs should fail
+statement error
+select struct_values(42);
+----
+Binder Error: No function matches the given name and argument types 'struct_values(INTEGER_LITERAL)'. You might need to add explicit type casts.
+
+statement error
+select struct_values(['a', 'b']);
+----
+Binder Error: No function matches the given name and argument types 'struct_values(VARCHAR[])'. You might need to add explicit type casts.
