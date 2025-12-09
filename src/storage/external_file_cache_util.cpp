@@ -34,16 +34,15 @@ bool GetCacheValidationMode(const OpenFileInfo &info, CacheValidationMode &mode)
 }
 
 CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info, DatabaseInstance &db) {
-	// First check if explicitly set in options
+	// First check if explicitly set in options.
 	CacheValidationMode mode;
 	if (GetCacheValidationMode(info, mode)) {
 		return mode;
 	}
 
-	// Fall back to database config
+	// Fall back to database config.
 	auto &config = DBConfig::GetConfig(db);
 	return config.options.validate_external_file_cache;
 }
 
 } // namespace duckdb
-

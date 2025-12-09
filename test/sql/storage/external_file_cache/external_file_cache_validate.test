@@ -10,31 +10,42 @@ copy (select 1 as col1, 2 as col2 from range(100)) to '__TEST_DIR__/test_validat
 statement ok
 set prefetch_all_parquet_files=true;
 
-# Test 1: With validation enabled (default), queries should work.
+# Test 1: Check default value, which should be VALIDATE_ALL.
+query I
+select current_setting('validate_external_file_cache');
+----
+validate_all
+
+# Test 2: check validation option VALIDATE_REMOTE.
 statement ok
-set validate_external_file_cache=true;
+set validate_external_file_cache='VALIDATE_REMOTE';
 
 query I
 select current_setting('validate_external_file_cache');
 ----
-true
-
-query I
-select count(*) from '__TEST_DIR__/test_validate.parquet';
-----
-100
-
-# Test 2: With validation disabled, queries should still work.
-statement ok
-set validate_external_file_cache=false;
-
-# Verify setting
-query I
-select current_setting('validate_external_file_cache');
-----
-false
+validate_remote
 
 query I
 select sum(col1) from '__TEST_DIR__/test_validate.parquet';
 ----
 100
+
+# Test 3: With NO_VALIDATION, queries should still work.
+statement ok
+set validate_external_file_cache='NO_VALIDATION';
+
+query I
+select current_setting('validate_external_file_cache');
+----
+no_validation
+
+query I
+select sum(col1) from '__TEST_DIR__/test_validate.parquet';
+----
+100
+
+# Test 5: Invalid enum value should fail
+statement error
+set validate_external_file_cache='INVALID_VALUE';
+----
+<REGEX>:.*unrecognized value.*

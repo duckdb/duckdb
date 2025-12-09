@@ -15,11 +15,11 @@ namespace duckdb {
 
 class DatabaseInstance;
 
-//! Get the cache validation mode from the given OpenFileInfo.
+//! Get the cache validation mode from the given file info.
 //! Returns whether the mode was explicitly set in options.
 DUCKDB_API bool GetCacheValidationMode(const OpenFileInfo &info, CacheValidationMode &mode);
 
-//! Get the cache validation mode from [OpenFileInfo options or database config.
+//! Get the cache validation mode from file open info or database config.
 DUCKDB_API CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info, DatabaseInstance &db);
 
 } // namespace duckdb

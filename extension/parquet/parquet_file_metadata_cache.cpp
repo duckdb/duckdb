@@ -31,16 +31,20 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 		return ParquetCacheValidity::UNKNOWN;
 	}
 	auto &open_options = info.extended_info->options;
-	
-	// Check if validation mode is explicitly set
+
 	CacheValidationMode validation_mode;
-	if (GetCacheValidationMode(info, validation_mode)) {
-		// If validation is disabled, assume cache is always valid
-		if (validation_mode == CacheValidationMode::NO_VALIDATION) {
+	bool has_explicit_mode = GetCacheValidationMode(info, validation_mode);
+	if (has_explicit_mode && validation_mode == CacheValidationMode::NO_VALIDATION) {
+		return ParquetCacheValidity::VALID;
+	}
+
+	if (has_explicit_mode && validation_mode == CacheValidationMode::VALIDATE_REMOTE) {
+		const bool is_remote = FileSystem::IsRemoteFile(info.path);
+		if (!is_remote) {
 			return ParquetCacheValidity::VALID;
 		}
 	}
-	
+
 	const auto lm_entry = open_options.find("last_modified");
 	if (lm_entry == open_options.end()) {
 		return ParquetCacheValidity::UNKNOWN;
@@ -51,7 +55,15 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 	if (etag_entry != open_options.end()) {
 		new_etag = StringValue::Get(etag_entry->second);
 	}
-	if (ExternalFileCache::IsValid(false, version_tag, last_modified, new_etag, new_last_modified)) {
+
+	// Determine if we should validate based on the mode
+	// If validation mode is explicitly VALIDATE_ALL or VALIDATE_REMOTE (and file is remote), validate
+	// Otherwise (NO_VALIDATION or VALIDATE_REMOTE with local file), we already returned VALID above
+	bool should_validate =
+	    !has_explicit_mode || validation_mode == CacheValidationMode::VALIDATE_ALL ||
+	    (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path));
+
+	if (ExternalFileCache::IsValid(should_validate, version_tag, last_modified, new_etag, new_last_modified)) {
 		return ParquetCacheValidity::VALID;
 	}
 	return ParquetCacheValidity::INVALID;

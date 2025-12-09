@@ -11,6 +11,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
@@ -1318,11 +1319,18 @@ struct UsernameSetting {
 };
 
 struct ValidateExternalFileCacheSetting {
-	using RETURN_TYPE = bool;
+	using RETURN_TYPE = CacheValidationMode;
 	static constexpr const char *Name = "validate_external_file_cache";
 	static constexpr const char *Description =
-	    "Whether to validate external file cache entries by checking version tag or last modification timestamp.";
-	static constexpr const char *InputType = "BOOLEAN";
+	    "Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only "
+	    "remote cache entries), or NO_VALIDATION (disable cache validation).";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "VALIDATE_ALL";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct VariantMinimumShreddingSize {
