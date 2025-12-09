@@ -12,8 +12,9 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
+TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p)
+    : capacity(capacity_p), size(0) {
+	auto buffer_handle = buffer_manager.Allocate(tag, capacity, false);
 	handle = buffer_handle.GetBlockHandle();
 }
 
@@ -31,13 +32,13 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 }
 
 TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
-                                       shared_ptr<ArenaAllocator> stl_allocator_p)
+                                       MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
     : stl_allocator(std::move(stl_allocator_p)), buffer_manager(buffer_manager), layout_ptr(std::move(layout_ptr_p)),
-      layout(*layout_ptr), row_blocks(*stl_allocator), heap_blocks(*stl_allocator) {
+      layout(*layout_ptr), tag(tag_p), row_blocks(*stl_allocator), heap_blocks(*stl_allocator) {
 }
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
-    : TupleDataAllocator(allocator.buffer_manager, allocator.layout_ptr, allocator.stl_allocator) {
+    : TupleDataAllocator(allocator.buffer_manager, allocator.layout_ptr, allocator.tag, allocator.stl_allocator) {
 }
 
 void TupleDataAllocator::SetDestroyBufferUponUnpin() {
@@ -728,12 +729,12 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 }
 
 void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment) {
-	row_blocks.emplace_back(buffer_manager, buffer_manager.GetBlockSize());
+	row_blocks.emplace_back(buffer_manager, tag, buffer_manager.GetBlockSize());
 	segment.pinned_row_handles.resize(row_blocks.size());
 }
 
 void TupleDataAllocator::CreateHeapBlock(TupleDataSegment &segment, idx_t size) {
-	heap_blocks.emplace_back(buffer_manager, size);
+	heap_blocks.emplace_back(buffer_manager, tag, size);
 	segment.pinned_heap_handles.resize(heap_blocks.size());
 }
 
