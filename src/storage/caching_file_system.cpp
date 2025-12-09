@@ -20,18 +20,32 @@ namespace {
 // Return whether validation should occur for a specific file
 bool ShouldValidate(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db,
                     const string &filepath) {
-	CacheValidationMode mode = GetCacheValidationMode(info, client_context, db);
-	bool is_remote = FileSystem::IsRemoteFile(filepath);
+	const CacheValidationMode mode = ExternalFileCacheUtil::GetCacheValidationMode(info, client_context, db);
 	switch (mode) {
 	case CacheValidationMode::VALIDATE_ALL:
 		return true;
 	case CacheValidationMode::VALIDATE_REMOTE:
-		return is_remote;
+		return FileSystem::IsRemoteFile(filepath);
 	case CacheValidationMode::NO_VALIDATION:
 		return false;
 	default:
 		return true;
 	}
+}
+
+bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
+	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
+
+	if (added_length > MAX_BOUND_TO_BE_ADDED_LENGTH) {
+		// Absolute value of what would be needed to added is too high
+		return false;
+	}
+	if (added_length > current_length) {
+		// Relative value of what would be needed to added is too high
+		return false;
+	}
+
+	return true;
 }
 
 } // namespace
@@ -62,11 +76,10 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
-      validate(GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
+      validate(
+          ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
       cached_file(cached_file_p), position(0) {
-	const bool should_validate =
-	    ShouldValidate(path_p, context.GetClientContext(), caching_file_system_p.db, cached_file.path);
-	if (!external_file_cache.IsEnabled() || should_validate) {
+	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
 		return;
@@ -89,9 +102,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		const bool should_validate =
-		    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-		if (!cached_file.IsValid(guard, should_validate, version_tag, last_modified)) {
+		if (!cached_file.IsValid(guard, Validate(), version_tag, last_modified)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -101,21 +112,6 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		cached_file.OnDiskFile(guard) = file_handle->OnDiskFile();
 	}
 	return *file_handle;
-}
-
-static bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
-	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
-
-	if (added_length > MAX_BOUND_TO_BE_ADDED_LENGTH) {
-		// Absolute value of what would be needed to added is too high
-		return false;
-	}
-	if (added_length > current_length) {
-		// Relative value of what would be needed to added is too high
-		return false;
-	}
-
-	return true;
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
@@ -212,9 +208,7 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	const bool should_validate =
-	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-	if (file_handle || should_validate) {
+	if (file_handle || Validate()) {
 		return GetFileHandle().GetFileSize();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -222,9 +216,7 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	const bool should_validate =
-	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-	if (file_handle || should_validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return last_modified;
 	}
@@ -233,9 +225,7 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
-	const bool should_validate =
-	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-	if (file_handle || should_validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return version_tag;
 	}
@@ -248,9 +238,7 @@ bool CachingFileHandle::Validate() const {
 }
 
 bool CachingFileHandle::CanSeek() {
-	const bool should_validate =
-	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-	if (file_handle || should_validate) {
+	if (file_handle || Validate()) {
 		return GetFileHandle().CanSeek();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -262,9 +250,7 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	const bool should_validate =
-	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-	if (file_handle || should_validate) {
+	if (file_handle || Validate()) {
 		return GetFileHandle().OnDiskFile();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -272,9 +258,7 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	const bool should_validate =
-	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
-	if (file_handle || should_validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return version_tag;
 	}

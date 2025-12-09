@@ -755,27 +755,6 @@ Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Validate External File Cache
-//===----------------------------------------------------------------------===//
-void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	EnumUtil::FromString<CacheValidationMode>(StringUtil::Upper(StringValue::Get(parameter)));
-}
-
-void ValidateExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.validate_external_file_cache = EnumUtil::FromString<CacheValidationMode>(str_input);
-}
-
-void ValidateExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.validate_external_file_cache = DBConfigOptions().validate_external_file_cache;
-}
-
-Value ValidateExternalFileCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.validate_external_file_cache)));
-}
-
-//===----------------------------------------------------------------------===//
 // Enable Logging
 //===----------------------------------------------------------------------===//
 Value EnableLogging::GetSetting(const ClientContext &context) {

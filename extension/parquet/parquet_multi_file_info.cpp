@@ -299,7 +299,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		}
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
-		auto is_valid = metadata_entry->IsValid(file);
+		const auto is_valid = metadata_entry->IsValid(file, context);
 		if (is_valid != ParquetCacheValidity::VALID) {
 			return result;
 		}

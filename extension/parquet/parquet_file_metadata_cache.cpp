@@ -28,25 +28,16 @@ bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
 	                                  new_handle.GetLastModifiedTime());
 }
 
-ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info) const {
-	if (!info.extended_info) {
-		return ParquetCacheValidity::UNKNOWN;
+ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info, ClientContext &context) const {
+	CacheValidationMode validation_mode = ExternalFileCacheUtil::GetCacheValidationMode(info, &context, *context.db);
+	if (validation_mode == CacheValidationMode::NO_VALIDATION) {
+		return ParquetCacheValidity::VALID;
 	}
-	auto &open_options = info.extended_info->options;
-
-	CacheValidationMode validation_mode;
-	bool has_explicit_mode = GetCacheValidationMode(info, validation_mode);
-	if (has_explicit_mode && validation_mode == CacheValidationMode::NO_VALIDATION) {
+	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path)) {
 		return ParquetCacheValidity::VALID;
 	}
 
-	if (has_explicit_mode && validation_mode == CacheValidationMode::VALIDATE_REMOTE) {
-		const bool is_remote = FileSystem::IsRemoteFile(info.path);
-		if (!is_remote) {
-			return ParquetCacheValidity::VALID;
-		}
-	}
-
+	const auto &open_options = info.extended_info->options;
 	const auto lm_entry = open_options.find("last_modified");
 	if (lm_entry == open_options.end()) {
 		return ParquetCacheValidity::UNKNOWN;
@@ -58,14 +49,7 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 		new_etag = StringValue::Get(etag_entry->second);
 	}
 
-	// Determine if we should validate based on the mode
-	// If validation mode is explicitly VALIDATE_ALL or VALIDATE_REMOTE (and file is remote), validate
-	// Otherwise (NO_VALIDATION or VALIDATE_REMOTE with local file), we already returned VALID above
-	bool should_validate =
-	    !has_explicit_mode || validation_mode == CacheValidationMode::VALIDATE_ALL ||
-	    (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path));
-
-	if (ExternalFileCache::IsValid(should_validate, version_tag, last_modified, new_etag, new_last_modified)) {
+	if (ExternalFileCache::IsValid(/*validate=*/true, version_tag, last_modified, new_etag, new_last_modified)) {
 		return ParquetCacheValidity::VALID;
 	}
 	return ParquetCacheValidity::INVALID;
