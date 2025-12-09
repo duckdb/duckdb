@@ -222,6 +222,17 @@ public:
 	const OperatorPartitionInfo &partition_info;
 };
 
+struct TableFunctionGetStatisticsInput {
+public:
+	TableFunctionGetStatisticsInput(const FunctionData *bind_data, const ColumnIndex &column_index)
+	    : bind_data(bind_data), column_index(column_index) {
+	}
+
+public:
+	optional_ptr<const FunctionData> bind_data;
+	ColumnIndex column_index;
+};
+
 struct GetPartitionStatsInput {
 	GetPartitionStatsInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
 	    : table_function(table_function_p), bind_data(bind_data_p) {
@@ -286,8 +297,8 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
                                                                            GlobalTableFunctionState *global_state);
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
-typedef unique_ptr<BaseStatistics> (*table_statistics_extended_t)(ClientContext &context, const FunctionData *bind_data,
-                                                                  const ColumnIndex &column_index);
+typedef unique_ptr<BaseStatistics> (*table_statistics_extended_t)(ClientContext &context,
+                                                                  TableFunctionGetStatisticsInput &input);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);

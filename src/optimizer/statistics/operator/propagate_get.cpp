@@ -124,7 +124,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		unique_ptr<BaseStatistics> stats;
 		if (get.function.statistics_extended) {
-			stats = get.function.statistics_extended(context, get.bind_data.get(), column_ids[i]);
+			TableFunctionGetStatisticsInput input(get.bind_data.get(), column_ids[i]);
+			stats = get.function.statistics_extended(context, input);
 		} else {
 			stats = get.function.statistics(context, get.bind_data.get(), column_ids[i].GetPrimaryIndex());
 			//! FIXME: propagate if it's a PushdownExtract() ?

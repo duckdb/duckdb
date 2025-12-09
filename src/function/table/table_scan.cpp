@@ -685,9 +685,9 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids);
 }
 
-static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
-                                                      const ColumnIndex &column_id) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, TableFunctionGetStatisticsInput &input) {
+	auto &column_id = input.column_index;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
 
