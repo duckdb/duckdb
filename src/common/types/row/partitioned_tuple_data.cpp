@@ -8,14 +8,14 @@
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
-                                           shared_ptr<TupleDataLayout> &layout_ptr_p)
+                                           shared_ptr<TupleDataLayout> &layout_ptr_p, MemoryTag tag_p)
     : type(type_p), buffer_manager(buffer_manager_p),
       stl_allocator(make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())), layout_ptr(layout_ptr_p),
-      layout(*layout_ptr), count(0), data_size(0) {
+      layout(*layout_ptr), tag(tag_p), count(0), data_size(0) {
 }
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleData &other)
-    : PartitionedTupleData(other.type, other.buffer_manager, other.layout_ptr) {
+    : PartitionedTupleData(other.type, other.buffer_manager, other.layout_ptr, other.tag) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
@@ -318,7 +318,7 @@ unsafe_vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartiti
 
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
-	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
+	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag);
 
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);

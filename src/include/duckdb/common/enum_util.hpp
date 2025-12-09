@@ -101,6 +101,7 @@ enum class CSVState : uint8_t;
 enum class CTEMaterialize : uint8_t;
 
 enum class CacheValidationMode : uint8_t;
+enum class CachingMode : uint8_t;
 
 enum class CatalogLookupBehavior : uint8_t;
 
@@ -266,7 +267,9 @@ enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
 
-enum class MetricsType : uint8_t;
+enum class MetricGroup : uint8_t;
+
+enum class MetricType : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -577,6 +580,7 @@ const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template<>
 const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value);
+const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
 
 template<>
 const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
@@ -825,7 +829,10 @@ template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
-const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
+
+template<>
+const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1238,6 +1245,7 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template<>
 CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value);
+CachingMode EnumUtil::FromString<CachingMode>(const char *value);
 
 template<>
 CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
@@ -1486,7 +1494,10 @@ template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
-MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
+
+template<>
+MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);

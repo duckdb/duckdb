@@ -55,6 +55,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Seek(idx_t location);
 
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
@@ -110,7 +112,8 @@ private:
 	friend struct CachingFileHandle;
 
 public:
-	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db_p);
+	// Notice, the provided [file_system] should be a raw, non-caching filesystem.
+	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystem();
 
 public:

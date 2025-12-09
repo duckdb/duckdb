@@ -281,6 +281,17 @@ const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> 
 	return cached_file.VersionTag(guard);
 }
 
+idx_t CachingFileHandle::SeekPosition() {
+	return position;
+}
+
+void CachingFileHandle::Seek(idx_t location) {
+	position = location;
+	if (file_handle != nullptr) {
+		file_handle->Seek(location);
+	}
+}
+
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
                                                  vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
                                                  optional_idx &start_location_of_next_range) {

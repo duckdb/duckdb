@@ -249,13 +249,24 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
 
 		auto &best_function = *functions[compression_idx];
-		DUCKDB_LOG_INFO(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
-		                EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
-		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
+		DUCKDB_LOG_TRACE(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
+		                 EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
+		                 col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;
 }
+
+struct CheckpointBlockIdDropper : public BlockIdVisitor {
+	explicit CheckpointBlockIdDropper(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockAsModified(block_id);
+	}
+
+	BlockManager &manager;
+};
 
 void ColumnDataCheckpointer::DropSegments() {
 	// first we check the current segments
@@ -267,8 +278,9 @@ void ColumnDataCheckpointer::DropSegments() {
 		auto &col_data = state.get().original_column;
 
 		// Drop the segments, as we'll be replacing them with new ones, because there are changes
+		CheckpointBlockIdDropper dropper(storage_manager.GetBlockManager());
 		for (auto &segment : col_data.data.Segments()) {
-			segment.CommitDropSegment();
+			segment.VisitBlockIds(dropper);
 		}
 	}
 }
@@ -282,10 +294,8 @@ bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeR
 	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 }
 
-void ColumnDataCheckpointer::WriteToDisk() {
-	DropSegments();
-
-	// Analyze the candidate functions to select one of them to use for compression
+void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions to select one of them to use for
+	                                         // compression
 	auto analyze_result = DetectBestCompressionMethod();
 	if (ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
@@ -328,6 +338,9 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &compression_state = compression_states[i];
 		function->compress_finalize(*compression_state);
 	}
+
+	// after we finish checkpointing we can drop this segment
+	DropSegments();
 }
 
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
@@ -367,6 +380,17 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	}
 }
 
+struct CheckpointBlockIdMarker : public BlockIdVisitor {
+	explicit CheckpointBlockIdMarker(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockACheckpointed(block_id);
+	}
+
+	BlockManager &manager;
+};
+
 void ColumnDataCheckpointer::Checkpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i];
@@ -380,6 +404,13 @@ void ColumnDataCheckpointer::Checkpoint() {
 	if (!has_changes) {
 		// Nothing has undergone any changes, no need to checkpoint
 		// just move on to finalizing
+		// mark block ids as checkpointed
+		CheckpointBlockIdMarker marker(storage_manager.GetBlockManager());
+		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+			auto &state = checkpoint_states[i];
+			auto &col_data = state.get().original_column;
+			col_data.VisitBlockIds(marker);
+		}
 		return;
 	}
 
