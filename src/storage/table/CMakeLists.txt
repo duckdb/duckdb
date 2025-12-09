@@ -20,6 +20,7 @@ add_library_unity(
   row_group_reorderer.cpp
   row_version_manager.cpp
   scan_state.cpp
+  split_column_data.cpp
   standard_column_data.cpp
   struct_column_data.cpp
   table_statistics.cpp
