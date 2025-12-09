@@ -29,7 +29,8 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
+	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler ||
+	       !ClientConfig::GetConfig(context).profile_result_hooks.empty();
 }
 
 bool QueryProfiler::IsDetailedEnabled() const {
@@ -241,6 +242,14 @@ void QueryProfiler::EndQuery() {
 
 	// To log is inexpensive, whether to log or not depends on whether logging is active
 	ToLog();
+
+	auto hooks = ClientConfig::GetConfig(context).profile_result_hooks;
+	if (!hooks.empty()) {
+		auto hook_data = ToString(ProfilerPrintFormat::JSON);
+		for (auto &hook : hooks) {
+			hook(context, hook_data);
+		}
+	}
 
 	if (emit_output) {
 		string tree = ToString();
