@@ -19,6 +19,7 @@ class WriteAheadLog;
 class ClientContext;
 
 struct DataTableInfo;
+class DataTable;
 struct DeleteInfo;
 struct UpdateInfo;
 
