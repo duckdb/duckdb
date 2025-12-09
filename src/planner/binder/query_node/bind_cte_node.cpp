@@ -96,17 +96,17 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	}
 
 	// Rename columns if duplicate names are detected
-	idx_t index = 1;
 	vector<string> new_names;
-	// Use a case-insensitive set to track names
-	case_insensitive_set_t ci_names;
+	// Use a case-insensitive map to track names and their counts
+	case_insensitive_map_t<idx_t> name_counts;
 	for (auto &n : names) {
 		string name = n;
-		while (ci_names.find(name) != ci_names.end()) {
-			name = n + "_" + std::to_string(index++);
+		while (name_counts.find(name) != name_counts.end()) {
+			name_counts[name] += 1;
+			name = n + "_" + std::to_string(name_counts[name]);
 		}
+		name_counts[name] = 0;
 		new_names.push_back(name);
-		ci_names.insert(name);
 	}
 	names = std::move(new_names);
 }
