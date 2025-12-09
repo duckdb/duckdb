@@ -85,6 +85,61 @@ private:
 
 } // namespace
 
+static void GetUniquePath(const ColumnIndex &index, column_index_set &result) {
+	auto &child_indexes = index.GetChildIndexes();
+
+	ColumnIndex path(index.GetPrimaryIndex());
+	reference<ColumnIndex> path_iter(path);
+
+	if (child_indexes.empty()) {
+		result.insert(path);
+		return;
+	}
+
+	//! Create a stack that we'll visit to create the unique paths
+	stack<std::pair<
+	    //! The child to visit
+	    reference<const ColumnIndex>,
+	    //! The part of 'path' to add it to
+	    reference<ColumnIndex>>>
+	    to_visit;
+
+	//! Push the initial children
+	for (auto &child : child_indexes) {
+		to_visit.push(make_pair(std::ref(child), std::ref(path)));
+	}
+
+	while (!to_visit.empty()) {
+		auto &top = to_visit.top();
+		auto &source = top.first.get();
+		auto &dest = top.second.get();
+		to_visit.pop();
+
+		//! Clear the previous child
+		dest.GetChildIndexesMutable().clear();
+		dest.AddChildIndex(source);
+
+		auto &source_children = source.GetChildIndexes();
+		if (!source_children.empty()) {
+			auto &new_dest = dest.GetChildIndex(0);
+			for (auto &child : source_children) {
+				to_visit.push(make_pair(std::ref(child), std::ref(new_dest)));
+			}
+		} else {
+			//! No further children, we've reached a leaf, add it to the set
+			result.insert(path);
+		}
+	}
+}
+
+void ReferencedColumn::GetUniquePaths() {
+	D_ASSERT(unique_paths.empty());
+
+	for (auto &child : child_columns) {
+		GetUniquePath(child, unique_paths);
+	}
+}
+
 idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs == column_references.end()) {
@@ -94,6 +149,7 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 	auto &col = colrefs->second;
 	idx_t created_bindings;
 	if (!col.child_columns.empty() && col.supports_pushdown_extract == PushdownExtractSupport::ENABLED) {
+		col.GetUniquePaths();
 		D_ASSERT(!col.unique_paths.empty());
 		//! Pushdown extract is supported, so we are potentially creating multiple bindings, 1 for each unique extract
 		//! path
@@ -834,46 +890,6 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 	}
 }
 
-void ReferencedColumn::AddPath(const ColumnIndex &path) {
-	if (child_columns.empty()) {
-		//! Full field already referenced, won't use struct field projection pushdown at all
-		return;
-	}
-	path.VerifySinglePath();
-
-	//! Do not add the path if it is a child of an existing path
-	ColumnIndex copy(path.GetPrimaryIndex());
-	reference<const ColumnIndex> path_iter(path);
-	reference<ColumnIndex> copy_iter(copy);
-	while (true) {
-		//! Create a subset of the path up to an increasing depth, so we can check if the parent path already exists
-		if (unique_paths.count(copy)) {
-			//! The parent path already exists, don't add the new path
-			return;
-		}
-		if (!path_iter.get().HasChildren()) {
-			break;
-		}
-		path_iter = path_iter.get().GetChildIndex(0);
-		copy_iter.get().AddChildIndex(ColumnIndex(path_iter.get().GetPrimaryIndex()));
-		copy_iter = copy_iter.get().GetChildIndex(0);
-	}
-	//! No parent path exists, but child paths could already be added, remove them if they exist
-	auto it = unique_paths.begin();
-	for (; it != unique_paths.end();) {
-		auto &unique_path = *it;
-		if (unique_path.IsChildPathOf(path)) {
-			auto current = it;
-			it++;
-			unique_paths.erase(current);
-		} else {
-			it++;
-		}
-	}
-	//! Finally add the new path to the map
-	unique_paths.emplace(path);
-}
-
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
                                   vector<reference<unique_ptr<Expression>>> parent) {
 	AddBinding(col, child_column);
@@ -887,7 +903,6 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 
 	//! NOTE: this path does not contain the column index of the root,
 	//! i.e 's.a' will just be a ColumnIndex with the index of 'a', without children
-	referenced_column.AddPath(child_column);
 	referenced_column.struct_extracts.emplace_back(parent, referenced_column.bindings.size() - 1,
 	                                               std::move(child_column));
 }

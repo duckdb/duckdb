@@ -40,9 +40,6 @@ enum class PushdownExtractSupport : uint8_t { UNCHECKED, DISABLED, ENABLED };
 
 class ReferencedColumn {
 public:
-	void AddPath(const ColumnIndex &path);
-
-public:
 	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
 	vector<reference<BoundColumnRefExpression>> bindings;
 	vector<ReferencedStructExtract> struct_extracts;
@@ -51,6 +48,9 @@ public:
 	PushdownExtractSupport supports_pushdown_extract = PushdownExtractSupport::UNCHECKED;
 	//! Map from extract path to the binding created for it (if pushdown extract)
 	column_index_set unique_paths;
+
+public:
+	void GetUniquePaths();
 };
 
 enum class BaseColumnPrunerMode : uint8_t {
