@@ -9,7 +9,6 @@ PRAGMA enable_verification
 foreach type <integral>
 
 # Positive Number - Positive Exponent
-
 query I
 select '1e2'::${type};
 ----
@@ -105,6 +104,11 @@ select '-1584.92e-2'::${type};
 
 query I
 select '-1.235e-2'::${type};
+----
+0
+
+query I
+select '9.5e-5'::${type};
 ----
 0
 
