@@ -289,6 +289,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout duckdb-httpfs
+        uses: actions/checkout@v4
+        with:
+          repository: duckdb/duckdb-httpfs
+          path: duckdb-httpfs
+          sparse-checkout: scripts
+
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -312,6 +319,7 @@ jobs:
         run: CORE_EXTENSIONS="tpch" make
 
       - name: Start Minio
+        working-directory: $GITHUB_WORKSPACE/duckdb-httpfs
         shell: bash
         run: |
           sudo ./scripts/install_s3_test_server.sh
