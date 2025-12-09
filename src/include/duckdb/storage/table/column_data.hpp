@@ -303,6 +303,8 @@ public:
 	vector<PersistentColumnData> child_columns;
 	bool has_updates = false;
 	LogicalType variant_shredded_type;
+
+	vector<LogicalType> split_types;
 };
 
 struct PersistentRowGroupData {
