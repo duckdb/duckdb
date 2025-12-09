@@ -25,7 +25,8 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id);
+	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
+	                     ActiveTransactionState transaction_state);
 	~CommitState();
 
 public:
@@ -40,6 +41,7 @@ private:
 private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
+	ActiveTransactionState transaction_state;
 	// data for index cleanup
 	optional_ptr<DataTable> current_table;
 	DataChunk chunk;

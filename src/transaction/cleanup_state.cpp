@@ -13,8 +13,10 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction)
-    : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
+CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction,
+                           ActiveTransactionState transaction_state)
+    : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0),
+      transaction_state(transaction_state) {
 }
 
 CleanupState::~CleanupState() {
@@ -58,6 +60,11 @@ void CleanupState::CleanupUpdate(UpdateInfo &info) {
 }
 
 void CleanupState::CleanupDelete(DeleteInfo &info) {
+	if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+		// if there are no active transactions we don't need to do any clean-up, as we haven't written to
+		// deleted_rows_in_use
+		return;
+	}
 	auto version_table = info.table;
 	if (!version_table->HasIndexes()) {
 		// this table has no indexes: no cleanup to be done

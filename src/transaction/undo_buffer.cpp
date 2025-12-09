@@ -177,7 +177,7 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state(QueryContext(), lowest_active_transaction);
+	CleanupState state(QueryContext(), lowest_active_transaction, active_transaction_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 
@@ -195,13 +195,15 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id) {
-	CommitState state(transaction, commit_id);
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
+	active_transaction_state = info.active_transactions;
+
+	CommitState state(transaction, info.commit_id, active_transaction_state);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction, transaction_id);
+	CommitState state(transaction, transaction_id, active_transaction_state);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }

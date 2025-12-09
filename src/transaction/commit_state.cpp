@@ -21,8 +21,9 @@
 
 namespace duckdb {
 
-CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id)
-    : transaction(transaction_p), commit_id(commit_id) {
+CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
+                         ActiveTransactionState transaction_state)
+    : transaction(transaction_p), commit_id(commit_id), transaction_state(transaction_state) {
 }
 
 CommitState::~CommitState() {
@@ -253,8 +254,12 @@ void CommitState::Flush() {
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
 	try {
-		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count,
-		                                 IndexRemovalType::MAIN_INDEX);
+		IndexRemovalType removal_type = IndexRemovalType::MAIN_INDEX;
+		if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+			// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
+			removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
+		}
+		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count, removal_type);
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {
