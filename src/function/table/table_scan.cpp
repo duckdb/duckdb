@@ -791,13 +791,13 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
-static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, idx_t column_idx) {
+static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, const LogicalIndex &column_idx) {
 	auto &bind_data = bind_data_ref.Cast<TableScanBindData>();
-	auto types = bind_data.table.GetTypes();
-	if (column_idx > types.size()) {
-		throw InternalException("Column index out of range in TableSupportsPushdownExtract");
+	auto &column = bind_data.table.GetColumn(column_idx);
+	if (column.Generated()) {
+		return false;
 	}
-	auto &column_type = types[column_idx];
+	auto column_type = column.GetType();
 	if (column_type.id() != LogicalTypeId::STRUCT) {
 		return false;
 	}

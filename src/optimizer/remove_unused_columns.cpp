@@ -544,7 +544,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! We're already not using pushdown extract for this column, no need to check with the scan
 				continue;
 			}
-			auto logical_column_index = column_ids[i].GetPrimaryIndex();
+			auto logical_column_index = LogicalIndex(column_ids[i].GetPrimaryIndex());
 			if (!get.function.supports_pushdown_extract) {
 				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
 				continue;

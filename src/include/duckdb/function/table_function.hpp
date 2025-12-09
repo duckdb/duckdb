@@ -313,7 +313,7 @@ typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(co
 
 typedef bool (*table_function_supports_pushdown_type_t)(const FunctionData &bind_data, idx_t col_idx);
 
-typedef bool (*table_function_supports_pushdown_extract_t)(const FunctionData &bind_data, idx_t col_idx);
+typedef bool (*table_function_supports_pushdown_extract_t)(const FunctionData &bind_data, const LogicalIndex &col_idx);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
