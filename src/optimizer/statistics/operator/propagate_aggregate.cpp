@@ -177,6 +177,51 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
+	vector<PartitionStatistics> remaining_partition_stats;
+	if (get.table_filters.filters.empty()) {
+		remaining_partition_stats = std::move(partition_stats);
+	} else {
+		idx_t MAX_REMAINING_PARTITION_NUM = 100000;
+		for (const auto &stats : partition_stats) {
+			if (remaining_partition_stats.size() >= MAX_REMAINING_PARTITION_NUM) {
+				// too many remaining partitions
+				return;
+			}
+			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+			if (!stats.partition_row_group) {
+				return;
+			}
+			for (auto &entry : get.table_filters.filters) {
+				auto col_idx = entry.first;
+				auto &filter = entry.second;
+				auto prg = stats.partition_row_group;
+				if (!prg) {
+					return;
+				}
+				auto column_stats = prg->GetColumnStatistics(col_idx);
+				if (!column_stats) {
+					return;
+				}
+				auto col_filter_result = filter->CheckStatistics(*column_stats);
+				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+					break;
+				}
+				if (col_filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+					filter_result = col_filter_result;
+				}
+			}
+			switch (filter_result) {
+			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
+				remaining_partition_stats.push_back(stats);
+				break;
+			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+				break;
+			default:
+				return;
+			}
+		}
+	}
 
 	if (!min_max_bindings.empty()) {
 		// Execute min/max aggregates on partition statistics
@@ -186,12 +231,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			auto &comparator = comparators[agg_idx];
 
 			Value agg_result;
-			if (!TryGetValueFromStats(partition_stats[0], column_index, *comparator, agg_result)) {
+			if (!TryGetValueFromStats(remaining_partition_stats[0], column_index, *comparator, agg_result)) {
 				return;
 			}
-			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
+			for (idx_t partition_idx = 1; partition_idx < remaining_partition_stats.size(); partition_idx++) {
 				Value rhs;
-				if (!TryGetValueFromStats(partition_stats[partition_idx], column_index, *comparator, rhs)) {
+				if (!TryGetValueFromStats(remaining_partition_stats[partition_idx], column_index, *comparator, rhs)) {
 					return;
 				}
 				if (!comparator->Compare(agg_result, rhs)) {
@@ -206,46 +251,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (!count_star_idxs.empty()) {
 		// Execute count_star aggregates on partition statistics
 		idx_t count = 0;
-		for (const auto &stats : partition_stats) {
+		for (const auto &stats : remaining_partition_stats) {
 			if (stats.count_type == CountType::COUNT_APPROXIMATE) {
 				// we cannot get an exact count
 				return;
 			}
-			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			if (!get.table_filters.filters.empty()) {
-				if (!stats.partition_row_group) {
-					return;
-				}
-				for (auto &entry : get.table_filters.filters) {
-					auto col_idx = entry.first;
-					auto &filter = entry.second;
-					auto prg = stats.partition_row_group;
-					if (!prg) {
-						return;
-					}
-					auto column_stats = prg->GetColumnStatistics(col_idx);
-					if (!column_stats) {
-						return;
-					}
-					auto col_filter_result = filter->CheckStatistics(*column_stats);
-					if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-						filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-						break;
-					}
-					if (col_filter_result != FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-						filter_result = col_filter_result;
-					}
-				}
-			}
-			switch (filter_result) {
-			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
-				count += stats.count;
-				break;
-			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
-				break;
-			default:
-				return;
-			}
+			count += stats.count;
 		}
 		for (const auto count_star_idx : count_star_idxs) {
 			auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));

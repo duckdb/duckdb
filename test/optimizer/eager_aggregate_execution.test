@@ -12,7 +12,7 @@ statement ok
 USE db
 
 statement ok
-CREATE TABLE t AS SELECT i FROM range(8192) t(i)
+CREATE TABLE t AS (SELECT * FROM range(8192) _(i), LATERAL (select (i*2) as j));
 
 # Work-around for unsetting version info
 statement ok
@@ -59,17 +59,22 @@ SELECT max(i), count(i), min(i) FROM t
 8191	8192	0
 
 query II
-explain SELECT count(*) FROM t where i >=2048
+explain SELECT count(*),max(i),min(i) FROM t where i >=2048
 ----
 physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
 
-query I
-SELECT count(*) FROM t where i >=2048
+query III
+SELECT count(*),max(i),min(i) FROM t where i >=204 and j >=4096
 ----
-6144
+6144	8191	2048
+
+query II
+explain SELECT count(*),max(i),min(i) FROM t where i >=2048 and j > 20000
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
 
 statement ok
-INSERT INTO t VALUES (9999)
+INSERT INTO t VALUES (9999, 9999)
 
 query III
 SELECT count(*), min(i), max(i) FROM t
