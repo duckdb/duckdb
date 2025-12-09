@@ -21,13 +21,88 @@
 
 namespace duckdb {
 
-CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
-                         ActiveTransactionState transaction_state, CommitMode commit_mode)
-    : transaction(transaction_p), commit_id(commit_id), transaction_state(transaction_state), commit_mode(commit_mode) {
+//===--------------------------------------------------------------------===//
+// IndexDataRemover
+//===--------------------------------------------------------------------===//
+IndexDataRemover::IndexDataRemover(QueryContext context, IndexRemovalType removal_type)
+    : context(context), removal_type(removal_type) {
 }
 
-CommitState::~CommitState() {
+IndexDataRemover::~IndexDataRemover() {
 	Flush();
+}
+
+void IndexDataRemover::PushDelete(DeleteInfo &info) {
+	auto version_table = info.table;
+	if (!version_table->HasIndexes()) {
+		// this table has no indexes: no cleanup to be done
+		return;
+	}
+
+	if (current_table != version_table) {
+		// table for this entry differs from previous table: flush and switch to the new table
+		Flush();
+		current_table = version_table;
+	}
+
+	count = 0;
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
+		}
+	} else {
+		auto rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
+		}
+	}
+	Flush();
+}
+
+void IndexDataRemover::Flush() {
+	if (count == 0) {
+		return;
+	}
+
+	// set up the row identifiers vector
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
+
+	// delete the tuples from all the indexes.
+	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
+	// data, hence the transaction cannot be guaranteed.
+	try {
+		current_table->RemoveFromIndexes(context, row_identifiers, count, removal_type);
+	} catch (std::exception &ex) {
+		throw FatalException(ErrorData(ex).Message());
+	} catch (...) {
+		throw FatalException("unknown failure in CommitState::Flush");
+	}
+
+	count = 0;
+}
+
+//===--------------------------------------------------------------------===//
+// CommitState
+//===--------------------------------------------------------------------===//
+CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
+                         ActiveTransactionState transaction_state, CommitMode commit_mode)
+    : transaction(transaction_p), commit_id(commit_id),
+      index_data_remover(*transaction.context.lock(), GetIndexRemovalType(transaction_state, commit_mode)) {
+}
+
+IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
+	if (commit_mode == CommitMode::PERFORM_COMMIT) {
+		if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+			// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
+			return IndexRemovalType::MAIN_INDEX_ONLY;
+		}
+		return IndexRemovalType::MAIN_INDEX;
+	}
+	// revert the appends to the indexes
+	if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+		return IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
+	}
+	return IndexRemovalType::REVERT_MAIN_INDEX_APPEND;
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
@@ -216,66 +291,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 void CommitState::CommitDelete(DeleteInfo &info) {
 	// mark the tuples as committed
 	info.version_info->CommitDelete(info.vector_idx, commit_id, info);
-	auto version_table = info.table;
-	if (!version_table->HasIndexes()) {
-		// this table has no indexes: no cleanup to be done
-		return;
-	}
-
-	if (current_table != version_table) {
-		// table for this entry differs from previous table: flush and switch to the new table
-		Flush();
-		current_table = version_table;
-	}
-
-	count = 0;
-	if (info.is_consecutive) {
-		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
-		}
-	} else {
-		auto rows = info.GetRows();
-		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
-		}
-	}
-	Flush();
-}
-
-void CommitState::Flush() {
-	if (count == 0) {
-		return;
-	}
-
-	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
-
-	// delete the tuples from all the indexes.
-	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
-	// data, hence the transaction cannot be guaranteed.
-	try {
-		IndexRemovalType removal_type;
-		if (commit_mode == CommitMode::PERFORM_COMMIT) {
-			removal_type = IndexRemovalType::MAIN_INDEX;
-			if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
-				// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
-				removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
-			}
-		} else {
-			// revert the appends to the indexes
-			removal_type = IndexRemovalType::REVERT_MAIN_INDEX_APPEND;
-			if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
-				removal_type = IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
-			}
-		}
-		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count, removal_type);
-	} catch (std::exception &ex) {
-		throw FatalException(ErrorData(ex).Message());
-	} catch (...) {
-		throw FatalException("unknown failure in CommitState::Flush");
-	}
-
-	count = 0;
+	index_data_remover.PushDelete(info);
 }
 
 void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {

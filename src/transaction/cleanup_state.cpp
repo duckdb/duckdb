@@ -16,12 +16,8 @@ namespace duckdb {
 
 CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction,
                            ActiveTransactionState transaction_state)
-    : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0),
-      transaction_state(transaction_state) {
-}
-
-CleanupState::~CleanupState() {
-	Flush();
+    : lowest_active_transaction(lowest_active_transaction), transaction_state(transaction_state),
+      index_data_remover(context, IndexRemovalType::DELETED_ROWS_IN_USE) {
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
@@ -66,47 +62,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 		// deleted_rows_in_use
 		return;
 	}
-	auto version_table = info.table;
-	if (!version_table->HasIndexes()) {
-		// this table has no indexes: no cleanup to be done
-		return;
-	}
-
-	if (current_table != version_table) {
-		// table for this entry differs from previous table: flush and switch to the new table
-		Flush();
-		current_table = version_table;
-	}
-
-	// possibly vacuum any indexes in this table later
-	indexed_tables[current_table->GetTableName()] = current_table;
-
-	count = 0;
-	if (info.is_consecutive) {
-		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
-		}
-	} else {
-		auto rows = info.GetRows();
-		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
-		}
-	}
-	Flush();
-}
-
-void CleanupState::Flush() {
-	if (count == 0) {
-		return;
-	}
-
-	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
-
-	// clean-up from deleted_rows_in_use
-	current_table->RemoveFromIndexes(context, row_identifiers, count, IndexRemovalType::DELETED_ROWS_IN_USE);
-
-	count = 0;
+	index_data_remover.PushDelete(info);
 }
 
 } // namespace duckdb

@@ -25,31 +25,44 @@ struct UpdateInfo;
 
 enum class CommitMode { PERFORM_COMMIT, REVERT_COMMIT };
 
-class CommitState {
+struct IndexDataRemover {
 public:
-	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
-	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
-	~CommitState();
+	explicit IndexDataRemover(QueryContext context, IndexRemovalType removal_type);
+	~IndexDataRemover();
 
-public:
-	void CommitEntry(UndoFlags type, data_ptr_t data);
-	void RevertCommit(UndoFlags type, data_ptr_t data);
+	void PushDelete(DeleteInfo &info);
 
 private:
-	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
-	void CommitDelete(DeleteInfo &info);
 	void Flush();
 
 private:
-	DuckTransaction &transaction;
-	transaction_t commit_id;
-	ActiveTransactionState transaction_state;
-	CommitMode commit_mode;
 	// data for index cleanup
+	QueryContext context;
+	IndexRemovalType removal_type;
 	optional_ptr<DataTable> current_table;
 	DataChunk chunk;
 	row_t row_numbers[STANDARD_VECTOR_SIZE];
 	idx_t count = 0;
+};
+
+class CommitState {
+public:
+	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
+	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
+
+public:
+	void CommitEntry(UndoFlags type, data_ptr_t data);
+	void RevertCommit(UndoFlags type, data_ptr_t data);
+	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
+
+private:
+	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
+	void CommitDelete(DeleteInfo &info);
+
+private:
+	DuckTransaction &transaction;
+	transaction_t commit_id;
+	IndexDataRemover index_data_remover;
 };
 
 } // namespace duckdb
