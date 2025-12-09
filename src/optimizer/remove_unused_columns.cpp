@@ -454,7 +454,6 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
                                                              const ColumnIndex &path) {
 	auto extract_function = GetKeyExtractFunction();
 	auto bind_callback = extract_function.GetBindCallback();
-	vector<unique_ptr<Expression>> arguments(2);
 
 	auto &struct_type = target->return_type;
 	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
@@ -467,6 +466,7 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		auto &key = child_types[child_index].first;
 		type_iter = child_types[child_index].second;
 
+		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
 		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
 		auto bind_info = bind_callback(context, extract_function, arguments);
