@@ -1086,14 +1086,16 @@
         "type": "vector<ColumnIndex>"
       },
       {
-        "id": 10,
+        "id": 3,
         "name": "index_type",
-        "type": "ColumnIndexType"
+        "type": "ColumnIndexType",
+        "default": "ColumnIndexType::FULL_READ"
       },
       {
-        "id": 15,
+        "id": 4,
         "name": "type",
-        "type": "LogicalType"
+        "type": "LogicalType",
+        "default": "LogicalType::INVALID"
       }
     ],
     "pointer_type": "none"
