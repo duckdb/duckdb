@@ -108,6 +108,8 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
