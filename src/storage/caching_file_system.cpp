@@ -18,8 +18,9 @@ namespace duckdb {
 namespace {
 
 // Return whether validation should occur for a specific file
-bool ShouldValidate(const OpenFileInfo &info, DatabaseInstance &db, const string &filepath) {
-	CacheValidationMode mode = GetCacheValidationMode(info, db);
+bool ShouldValidate(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db,
+                    const string &filepath) {
+	CacheValidationMode mode = GetCacheValidationMode(info, client_context, db);
 	bool is_remote = FileSystem::IsRemoteFile(filepath);
 	switch (mode) {
 	case CacheValidationMode::VALIDATE_ALL:
@@ -61,8 +62,10 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
-      validate(GetCacheValidationMode(path_p, caching_file_system_p.db)), cached_file(cached_file_p), position(0) {
-	const bool should_validate = ShouldValidate(path_p, caching_file_system_p.db, cached_file.path);
+      validate(GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
+      cached_file(cached_file_p), position(0) {
+	const bool should_validate =
+	    ShouldValidate(path_p, context.GetClientContext(), caching_file_system_p.db, cached_file.path);
 	if (!external_file_cache.IsEnabled() || should_validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -86,7 +89,8 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+		const bool should_validate =
+		    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 		if (!cached_file.IsValid(guard, should_validate, version_tag, last_modified)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
@@ -208,7 +212,8 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+	const bool should_validate =
+	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 	if (file_handle || should_validate) {
 		return GetFileHandle().GetFileSize();
 	}
@@ -217,7 +222,8 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+	const bool should_validate =
+	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 	if (file_handle || should_validate) {
 		GetFileHandle();
 		return last_modified;
@@ -227,7 +233,8 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
-	const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+	const bool should_validate =
+	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 	if (file_handle || should_validate) {
 		GetFileHandle();
 		return version_tag;
@@ -237,11 +244,12 @@ string CachingFileHandle::GetVersionTag() {
 }
 
 bool CachingFileHandle::Validate() const {
-	return ShouldValidate(path, caching_file_system.db, cached_file.path);
+	return ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 }
 
 bool CachingFileHandle::CanSeek() {
-	const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+	const bool should_validate =
+	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 	if (file_handle || should_validate) {
 		return GetFileHandle().CanSeek();
 	}
@@ -254,7 +262,8 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+	const bool should_validate =
+	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 	if (file_handle || should_validate) {
 		return GetFileHandle().OnDiskFile();
 	}
@@ -263,7 +272,8 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	const bool should_validate = ShouldValidate(path, caching_file_system.db, cached_file.path);
+	const bool should_validate =
+	    ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 	if (file_handle || should_validate) {
 		GetFileHandle();
 		return version_tag;

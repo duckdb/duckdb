@@ -11,8 +11,10 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -33,14 +35,20 @@ bool GetCacheValidationMode(const OpenFileInfo &info, CacheValidationMode &mode)
 	return true;
 }
 
-CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info, DatabaseInstance &db) {
+CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info, optional_ptr<ClientContext> client_context,
+                                           DatabaseInstance &db) {
 	// First check if explicitly set in options.
 	CacheValidationMode mode;
 	if (GetCacheValidationMode(info, mode)) {
 		return mode;
 	}
 
-	// Fall back to database config.
+	// If client context is available, check client-local settings first, then fall back to database config.
+	if (client_context) {
+		return DBConfig::GetSetting<ValidateExternalFileCacheSetting>(*client_context);
+	}
+
+	// No client context, fall back to database config.
 	auto &config = DBConfig::GetConfig(db);
 	return config.options.validate_external_file_cache;
 }

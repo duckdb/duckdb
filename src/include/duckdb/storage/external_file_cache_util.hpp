@@ -14,12 +14,15 @@
 namespace duckdb {
 
 class DatabaseInstance;
+class ClientContext;
 
 //! Get the cache validation mode from the given file info.
 //! Returns whether the mode was explicitly set in options.
 DUCKDB_API bool GetCacheValidationMode(const OpenFileInfo &info, CacheValidationMode &mode);
 
-//! Get the cache validation mode from file open info or database config.
-DUCKDB_API CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info, DatabaseInstance &db);
+//! Get the cache validation mode in order from file open info, client context (for client-local settings), or database
+//! config.
+DUCKDB_API CacheValidationMode GetCacheValidationMode(const OpenFileInfo &info,
+                                                      optional_ptr<ClientContext> client_context, DatabaseInstance &db);
 
 } // namespace duckdb
