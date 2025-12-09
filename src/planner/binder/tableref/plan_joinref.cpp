@@ -20,6 +20,9 @@
 namespace duckdb {
 
 //! Check if a filter can be safely pushed to the left child
+//! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.
+//! The logic determines whether a condition that references only the left side can be
+//! pushed down as a filter on the left child operator.
 static bool CanPushToLeftChild(JoinType type) {
 	switch (type) {
 	case JoinType::INNER:
@@ -36,6 +39,9 @@ static bool CanPushToLeftChild(JoinType type) {
 }
 
 //! Check if a filter can be safely pushed to the right child
+//! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.
+//! The logic determines whether a condition that references only the right side can be
+//! pushed down as a filter on the right child operator.
 static bool CanPushToRightChild(JoinType type) {
 	switch (type) {
 	case JoinType::INNER:
