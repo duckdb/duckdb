@@ -45,18 +45,22 @@ void IndexDataRemover::PushDelete(DeleteInfo &info) {
 		current_table = version_table;
 	}
 
-	count = 0;
 	if (info.is_consecutive) {
 		for (idx_t i = 0; i < info.count; i++) {
+			if (count == STANDARD_VECTOR_SIZE) {
+				Flush();
+			}
 			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
 		}
 	} else {
 		auto rows = info.GetRows();
 		for (idx_t i = 0; i < info.count; i++) {
+			if (count == STANDARD_VECTOR_SIZE) {
+				Flush();
+			}
 			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
 		}
 	}
-	Flush();
 }
 
 void IndexDataRemover::Flush() {
@@ -291,6 +295,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 void CommitState::CommitDelete(DeleteInfo &info) {
 	// mark the tuples as committed
 	info.version_info->CommitDelete(info.vector_idx, commit_id, info);
+	// delete from indexes
 	index_data_remover.PushDelete(info);
 }
 

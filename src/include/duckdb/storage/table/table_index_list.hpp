@@ -28,6 +28,8 @@ struct IndexEntry {
 	explicit IndexEntry(unique_ptr<Index> index);
 
 	atomic<IndexBindState> bind_state;
+	//! lock that should be used if access to "index" and "deleted_rows_in_use" at the same time is necessary
+	mutex lock;
 	unique_ptr<Index> index;
 	unique_ptr<Index> deleted_rows_in_use;
 };

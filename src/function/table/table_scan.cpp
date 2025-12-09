@@ -617,6 +617,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	if (filter == filter_set.filters.end()) {
 		return false;
 	}
+
+	lock_guard<mutex> guard(entry.lock);
 	vector<reference<ART>> arts_to_scan;
 	arts_to_scan.push_back(art);
 	if (entry.deleted_rows_in_use) {

@@ -842,6 +842,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			if (index.IsBound()) {
 				auto &main_index = index.Cast<BoundIndex>();
 				optional_ptr<BoundIndex> add_index, removal_index;
+
+				lock_guard<mutex> guard(entry.lock);
 				switch (removal_type) {
 				case IndexRemovalType::MAIN_INDEX_ONLY:
 					// directly remove from main index
@@ -875,15 +877,15 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 				default:
 					throw InternalException("Unsupported IndexRemovalType");
 				}
-				if (removal_index) {
-					removal_index->Delete(result_chunk, row_identifiers);
-				}
 				if (add_index) {
 					IndexAppendInfo append_info;
 					auto error = add_index->Append(result_chunk, row_identifiers, append_info);
 					if (error.HasError()) {
 						throw InternalException("Failed to append to %s: %s", add_index->name, error.Message());
 					}
+				}
+				if (removal_index) {
+					removal_index->Delete(result_chunk, row_identifiers);
 				}
 				return false;
 			}
