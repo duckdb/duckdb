@@ -31,7 +31,7 @@ struct IndexEntry {
 	//! lock that should be used if access to "index" and "deleted_rows_in_use" at the same time is necessary
 	mutex lock;
 	unique_ptr<Index> index;
-	unique_ptr<Index> deleted_rows_in_use;
+	unique_ptr<BoundIndex> deleted_rows_in_use;
 };
 
 class TableIndexList {

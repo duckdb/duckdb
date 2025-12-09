@@ -842,9 +842,21 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			if (index.IsBound()) {
 				auto &main_index = index.Cast<BoundIndex>();
 				optional_ptr<BoundIndex> add_index, removal_index;
+				auto current_removal_type = removal_type;
+				if (!main_index.RequiresTransactionality()) {
+					// this index is not transactional - don't use "deleted_rows_in_use"
+					if (current_removal_type == IndexRemovalType::MAIN_INDEX) {
+						current_removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
+					} else if (current_removal_type == IndexRemovalType::REVERT_MAIN_INDEX_APPEND) {
+						current_removal_type = IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
+					} else if (current_removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
+						// nop
+						return false;
+					}
+				}
 
 				lock_guard<mutex> guard(entry.lock);
-				switch (removal_type) {
+				switch (current_removal_type) {
 				case IndexRemovalType::MAIN_INDEX_ONLY:
 					// directly remove from main index
 					removal_index = main_index;
@@ -857,22 +869,20 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 					if (!entry.deleted_rows_in_use) {
 						// create "deleted_rows_in_use" if it does not exist yet
 						entry.deleted_rows_in_use =
-						    make_uniq<ART>("deleted_rows_in_use_" + main_index.name, IndexConstraintType::NONE,
-						                   main_index.GetColumnIds(), main_index.table_io_manager,
-						                   main_index.unbound_expressions, main_index.db);
+						    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
 					}
 					// remove from main index - add to removal index
 					removal_index = main_index;
-					add_index = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					add_index = entry.deleted_rows_in_use;
 					break;
 				case IndexRemovalType::REVERT_MAIN_INDEX_APPEND:
 					// revert append - remove from deleted_rows_in_use and add back to main index
 					add_index = main_index;
-					removal_index = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					removal_index = entry.deleted_rows_in_use;
 					break;
 				case IndexRemovalType::DELETED_ROWS_IN_USE:
 					// remove from removal index
-					removal_index = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					removal_index = entry.deleted_rows_in_use;
 					break;
 				default:
 					throw InternalException("Unsupported IndexRemovalType");
