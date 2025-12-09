@@ -63,12 +63,6 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 	if (!logical_get) {
 		return false;
 	}
-	if (column_index.IsRowIdColumn()) {
-		return false;
-	}
-	if (column_index.IsVirtualColumn()) {
-		return false;
-	}
 	StorageIndex storage_index;
 	if (!logical_get->TryGetStorageIndex(column_index, storage_index)) {
 		return false;

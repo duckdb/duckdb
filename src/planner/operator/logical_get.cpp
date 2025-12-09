@@ -187,6 +187,13 @@ void LogicalGet::ResolveTypes() {
 }
 
 bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const {
+	if (column_index.IsRowIdColumn()) {
+		return false;
+	}
+	if (column_index.IsVirtualColumn()) {
+		return false;
+	}
+
 	auto table = GetTable();
 	if (!table) {
 		//! If there's no table we assume there's no mismatch between

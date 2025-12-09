@@ -601,7 +601,8 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				continue;
 			}
 			auto logical_column_index = LogicalIndex(column_ids[i].GetPrimaryIndex());
-			if (!get.function.supports_pushdown_extract) {
+			if (!get.function.supports_pushdown_extract || get.function.statistics) {
+				//! Either 'statistics_extended' needs to be set or 'statistics' needs to be NULL
 				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
 				continue;
 			}
