@@ -291,8 +291,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
 			CheckPushdownExtract(op);
-			RewriteExpressions(proj);
+			auto old_expression_count = proj.expressions.size();
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
+			RewriteExpressions(proj, old_expression_count);
 
 			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
@@ -480,26 +481,25 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 	return std::move(target);
 }
 
-void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj) {
+void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expression_count) {
 	vector<unique_ptr<Expression>> expressions;
 	auto &context = this->context;
 
 	column_index_map<idx_t> new_bindings;
-	for (idx_t i = 0; i < proj.expressions.size(); i++) {
+	idx_t expression_idx = 0;
+	for (idx_t i = 0; i < expression_count; i++) {
 		auto binding = ColumnBinding(proj.table_index, i);
 		auto entry = column_references.find(binding);
 		if (entry == column_references.end()) {
-			//! Expression isn't referenced, will be removed by a later call to ClearUnusedExpressions
-			//! Just preserve it for now
-			expressions.push_back(std::move(proj.expressions[i]));
+			//! Already removed by the call to ClearUnusedExpressions
 			continue;
 		}
 		if (entry->second.child_columns.empty() ||
 		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
-			expressions.push_back(std::move(proj.expressions[i]));
+			expressions.push_back(std::move(proj.expressions[expression_idx++]));
 			continue;
 		}
-		auto &expr = *proj.expressions[i];
+		auto &expr = *proj.expressions[expression_idx++];
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		auto original_binding = colref.binding;
 		auto &column_type = expr.return_type;
@@ -516,12 +516,9 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj) {
 			    }
 			    return it->second;
 		    });
-		////! Visit the new expressions to create references to the column in the parent
-		// for (; start < expressions.size(); start++) {
-		//	VisitExpression(&expressions[start]);
-		//}
-		////! Drop the old reference, as we've broken it up into smaller ones
-		// column_references.erase(entry);
+		for (; start < expressions.size(); start++) {
+			VisitExpression(&expressions[start]);
+		}
 	}
 	proj.expressions = std::move(expressions);
 }
@@ -657,8 +654,6 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
 		auto &column_type = get.GetColumnType(state.old_column_ids[col_sel_idx]);
-		//! NOTE: 'column_references' has already been updated, so we need to use the new binding index here (which is
-		//! i)
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
@@ -667,6 +662,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
 			auto &logical_column_id = state.old_column_ids[col_sel_idx];
 			if (logical_column_id.IsPushdownExtract()) {
+				//! RemoveUnusedColumns is also used by other optimizers,
+				//! so we have to deal with this case and preserve the PushdownExtract we created earlier
 				D_ASSERT(entry->second.child_columns.empty());
 				state.AddColumn(col_sel_idx, logical_column_id);
 			} else {

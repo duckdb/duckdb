@@ -2,6 +2,8 @@
 # description: deliver child columns in RemoveUnusedColumns optimizer
 # group: [unused_columns]
 
+require parquet
+
 statement ok
 PRAGMA enable_verification
 
@@ -17,12 +19,17 @@ statement ok
 insert into t values
 	(ROW('c1', 1));
 
+statement ok
+COPY t TO '__TEST_DIR__/test_structs.parquet'
+
+foreach source t read_parquet('__TEST_DIR__/test_structs.parquet')
+
 # View created without any projection pushdown
 statement ok
 create or replace view test as
 	select
 		*
-	from t;
+	from ${source};
 
 # Projection on the view performs projection pushdown
 query II
@@ -30,7 +37,7 @@ explain select
 	s.c1
 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+physical_plan	<REGEX>:.*Projections:.*s.c1.*
 
 query I
 select s.c1 from test;
@@ -44,7 +51,7 @@ create or replace view test as
 		s.c1,
 		s.c2,
 		s
-	from t;
+	from ${source};
 
 # Because the child projection only references certain fields, projection pushdown gets applied regardless
 query II
@@ -53,7 +60,7 @@ explain select
 	s.c1
 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+physical_plan	<REGEX>:.*Projections:.*s.c1.*
 
 # Even when the struct_extract is nested in another expression, projection pushdown gets applied
 query II
@@ -62,7 +69,7 @@ explain select
 	upper(s.c1)
 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+physical_plan	<REGEX>:.*Projections:.*s.c1.*
 
 query II
 select
@@ -86,7 +93,7 @@ create or replace view test as
 	select
 		s s1,
 		s s2
-	from t;
+	from ${source};
 
 # Projection pushdown is applied to both 's1' and 's2'
 query II
@@ -95,7 +102,7 @@ explain select
 	s2.c1
 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+physical_plan	<REGEX>:.*Projections:.*s.c1.*
 
 query II
 select
@@ -111,7 +118,7 @@ create or replace view test as select
 	upper(s.c1),
 	s.c2,
 	s
-from t;
+from ${source};
 
 # Projection pushdown gets applied because only individual fields are referenced
 query II
@@ -120,7 +127,7 @@ explain select
 	s.c1
 from test;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*
+physical_plan	<REGEX>:.*Projections:.*s.c1.*
 
 query II
 select
@@ -130,6 +137,7 @@ from test;
 ----
 1	c1
 
+endloop
 
 # Create a table with a STRUCT column and an additional column
 statement ok
@@ -145,6 +153,11 @@ statement ok
 insert into t2 values
 	(ROW('c1', 2), 3);
 
+statement ok
+COPY t2 TO '__TEST_DIR__/test_structs2.parquet'
+
+foreach source t2 read_parquet('__TEST_DIR__/test_structs2.parquet')
+
 query I
 select
 	pack.c3
@@ -152,7 +165,7 @@ from (
 	select struct_pack(
 		s:=s,
 		c3:=c3
-	) as pack from t2
+	) as pack from ${source}
 ) as sub;
 ----
 3
@@ -164,10 +177,10 @@ from (
 	select struct_pack(
 		s:=s,
 		c3:=c3
-	) as pack from t2
+	) as pack from ${source}
 ) as sub;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.*c3.*
+physical_plan	<REGEX>:.*Projections:.*s.*c3.*
 
 query II
 explain select
@@ -179,10 +192,10 @@ from (
 		v2:=s.c1,
 		v3:='test',
 		v4:=s.c2
-	) as pack from t2
+	) as pack from ${source}
 ) as sub;
 ----
-physical_plan	<REGEX>:.*SEQ_SCAN.*Projections:.*s.c1.*s.c2.*
+physical_plan	<REGEX>:.*Projections:.*s.c1.*s.c2.*
 
 query I
 select pack.v2
@@ -191,13 +204,13 @@ from (
 		'a': 42,
 		'v2': s.c2,
 		'b': 21
-	} as pack from t2
+	} as pack from ${source}
 ) as sub
 ----
 2
 
 statement ok
-CREATE VIEW vw as select {'a': 21, 'b': 42, 'c': 84} s
+CREATE OR REPLACE VIEW vw as select {'a': 21, 'b': 42, 'c': 84} s
 
 query II
 select s.a, s.c from (
@@ -205,3 +218,5 @@ select s.a, s.c from (
 )
 ----
 21	84
+
+endloop

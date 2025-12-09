@@ -120,7 +120,7 @@ private:
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get);
 	void CheckPushdownExtract(LogicalOperator &op);
-	void RewriteExpressions(LogicalProjection &proj);
+	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void WritePushdownExtractColumns(const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx,
 	                                 const LogicalType &column_type,
 	                                 const std::function<idx_t(const ColumnIndex &new_index)> &callback);
