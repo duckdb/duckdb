@@ -446,7 +446,7 @@ struct IEJoinUnion {
 	IEJoinGlobalSourceState &gsource;
 
 	//! Inverted loop
-	idx_t JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rsel);
+	idx_t JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel);
 
 	//! B
 	vector<validity_t> bit_array;
@@ -695,11 +695,13 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	return j;
 }
 
-idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rsel) {
+idx_t IEJoinUnion::JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel) {
 	auto &li = gsource.li;
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
+	lsel.resize(0);
+	rsel.resize(0);
 
 	// 11. for(i←1 to n) do
 	while (i < n) {
@@ -729,8 +731,8 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 
 			D_ASSERT(lrid > 0 && rrid < 0);
 			// 15. add tuples w.r.t. (L1[j], L1[i]) to join result
-			lsel.set_index(result_count, sel_t(+lrid - 1));
-			rsel.set_index(result_count, sel_t(-rrid - 1));
+			lsel.emplace_back(idx_t(+lrid - 1));
+			rsel.emplace_back(idx_t(-rrid - 1));
 			++result_count;
 			if (result_count == STANDARD_VECTOR_SIZE) {
 				// out of space!
@@ -900,18 +902,18 @@ public:
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
-		idx_t count = 0;
+		outer_sel.resize(0);
 		for (; outer_idx < outer_count; ++outer_idx) {
 			if (!matches[outer_idx]) {
-				true_sel.set_index(count++, outer_idx);
-				if (count >= STANDARD_VECTOR_SIZE) {
+				outer_sel.emplace_back(outer_idx);
+				if (outer_sel.size() >= STANDARD_VECTOR_SIZE) {
 					outer_idx++;
 					break;
 				}
 			}
 		}
 
-		return count;
+		return outer_sel.size();
 	}
 
 	//	Are we executing a task?
@@ -955,7 +957,7 @@ public:
 	idx_t left_block_index;
 	unique_ptr<ExternalBlockIteratorState> left_iterator;
 	TupleDataChunkState left_chunk_state;
-	SelectionVector lsel;
+	vector<idx_t> lsel;
 	DataChunk lpayload;
 	unique_ptr<SortedRunScanState> left_scan_state;
 
@@ -963,7 +965,7 @@ public:
 	idx_t right_block_index;
 	unique_ptr<ExternalBlockIteratorState> right_iterator;
 	TupleDataChunkState right_chunk_state;
-	SelectionVector rsel;
+	vector<idx_t> rsel;
 	DataChunk rpayload;
 	unique_ptr<SortedRunScanState> right_scan_state;
 
@@ -979,6 +981,7 @@ public:
 	DataChunk unprojected;
 
 	// Outer joins
+	vector<idx_t> outer_sel;
 	idx_t outer_idx;
 	idx_t outer_count;
 	bool *left_matches;
@@ -1225,9 +1228,9 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		right_table.Repin(*right_iterator);
 
 		op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
-		                      result_count, *left_scan_state);
+		                      *left_scan_state);
 		op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel,
-		                      result_count, *right_scan_state);
+		                      *right_scan_state);
 
 		auto sel = FlatVector::IncrementalSelectionVector();
 		if (conditions.size() > 2) {
@@ -1604,7 +1607,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 	auto &left_table = *ie_sink.tables[0];
 
 	left_table.Repin(*left_iterator);
-	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, true_sel, count,
+	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
 	                      *left_scan_state);
 
 	// Fill in NULLs to the right
@@ -1637,10 +1640,8 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 	}
 
 	auto &right_table = *ie_sink.tables[1];
-	auto &rsel = true_sel;
-
 	right_table.Repin(*right_iterator);
-	op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel, count,
+	op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, outer_sel,
 	                      *right_scan_state);
 
 	// Fill in NULLs to the left
