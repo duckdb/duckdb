@@ -872,7 +872,20 @@ const StringUtil::EnumStringLiteral *GetCacheValidationModeValues() {
 		{ static_cast<uint32_t>(CacheValidationMode::VALIDATE_ALL), "VALIDATE_ALL" },
 		{ static_cast<uint32_t>(CacheValidationMode::VALIDATE_REMOTE), "VALIDATE_REMOTE" },
 		{ static_cast<uint32_t>(CacheValidationMode::NO_VALIDATION), "NO_VALIDATION" }
+	};
+	return values;
 }
+
+template<>
+const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value) {
+	return StringUtil::EnumToString(GetCacheValidationModeValues(), 3, "CacheValidationMode", static_cast<uint32_t>(value));
+}
+
+template<>
+CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value) {
+	return static_cast<CacheValidationMode>(StringUtil::StringToEnum(GetCacheValidationModeValues(), 3, "CacheValidationMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCachingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CachingMode::ALWAYS_CACHE), "ALWAYS_CACHE" },
@@ -882,15 +895,6 @@ const StringUtil::EnumStringLiteral *GetCachingModeValues() {
 }
 
 template<>
-<<<<<<< HEAD
-const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value) {
-	return StringUtil::EnumToString(GetCacheValidationModeValues(), 3, "CacheValidationMode", static_cast<uint32_t>(value));
-}
-
-template<>
-CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value) {
-	return static_cast<CacheValidationMode>(StringUtil::StringToEnum(GetCacheValidationModeValues(), 3, "CacheValidationMode", value));
-=======
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
 	return StringUtil::EnumToString(GetCachingModeValues(), 2, "CachingMode", static_cast<uint32_t>(value));
 }
@@ -898,7 +902,6 @@ const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
 	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 2, "CachingMode", value));
->>>>>>> main
 }
 
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {
