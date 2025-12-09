@@ -29,8 +29,7 @@ public:
 public:
 	//! The index into the 'bindings' of the ReferencedColumn that is the child of this struct_extract
 	idx_t bindings_idx;
-	//! The struct extract expressions, from deepest (most nested) to the root (i.e:
-	//! s.my_field.my_nested_field.my_even_deeper_nested_field is index 0)
+	//! The struct extract expressions, in order from root to leaf
 	vector<reference<unique_ptr<Expression>>> expr;
 	//! The ColumnIndex with a path that matches this struct extract
 	ColumnIndex extract_path;
