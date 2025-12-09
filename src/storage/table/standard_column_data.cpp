@@ -182,6 +182,9 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &da
 		// update the child column (i.e. the validity column)
 		validity->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
 		                       row_group_start);
+		//validity.UpdateWithBase(transaction, data_table, column_path[0], update_vector, row_ids, update_count, *this);
+
+
 	}
 }
 
@@ -207,8 +210,9 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
 		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+
 }
 
 void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {

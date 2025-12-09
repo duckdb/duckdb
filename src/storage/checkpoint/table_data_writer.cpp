@@ -122,6 +122,15 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
+
+	// If there is a context available, bind indexes before serialization.
+	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
+	// we would lose them if there was a restart after this.
+	if (context && context->transaction.HasActiveTransaction()) {
+		info.BindIndexes(*context);
+	}
+	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
+
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
 
 	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
