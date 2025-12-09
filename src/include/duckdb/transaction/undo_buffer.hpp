@@ -40,6 +40,7 @@ public:
 		optional_ptr<UndoBufferEntry> current;
 		data_ptr_t start;
 		data_ptr_t end;
+		bool started = false;
 	};
 
 public:

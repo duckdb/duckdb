@@ -41,6 +41,7 @@ template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
 	// iterate in insertion order: start with the tail
 	state.current = allocator.tail.get();
+	state.started = true;
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
 		state.start = state.handle.Ptr();
@@ -60,6 +61,9 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 
 template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
+	if (!end_state.started) {
+		return;
+	}
 	// iterate in insertion order: start with the tail
 	state.current = allocator.tail.get();
 	while (state.current) {

@@ -28,21 +28,17 @@ enum class CommitMode { PERFORM_COMMIT, REVERT_COMMIT };
 struct IndexDataRemover {
 public:
 	explicit IndexDataRemover(QueryContext context, IndexRemovalType removal_type);
-	~IndexDataRemover();
 
 	void PushDelete(DeleteInfo &info);
 
 private:
-	void Flush();
+	void Flush(DataTable &table, row_t *row_numbers, idx_t count);
 
 private:
 	// data for index cleanup
 	QueryContext context;
 	IndexRemovalType removal_type;
-	optional_ptr<DataTable> current_table;
 	DataChunk chunk;
-	row_t row_numbers[STANDARD_VECTOR_SIZE];
-	idx_t count = 0;
 };
 
 class CommitState {
@@ -53,6 +49,7 @@ public:
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 	void RevertCommit(UndoFlags type, data_ptr_t data);
+	void Flush();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 private:

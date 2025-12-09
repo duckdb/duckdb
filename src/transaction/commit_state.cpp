@@ -28,42 +28,29 @@ IndexDataRemover::IndexDataRemover(QueryContext context, IndexRemovalType remova
     : context(context), removal_type(removal_type) {
 }
 
-IndexDataRemover::~IndexDataRemover() {
-	Flush();
-}
-
 void IndexDataRemover::PushDelete(DeleteInfo &info) {
-	auto version_table = info.table;
-	if (!version_table->HasIndexes()) {
+	auto &version_table = *info.table;
+	if (!version_table.HasIndexes()) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
 
-	if (current_table != version_table) {
-		// table for this entry differs from previous table: flush and switch to the new table
-		Flush();
-		current_table = version_table;
-	}
-
+	idx_t count = 0;
+	row_t row_numbers[STANDARD_VECTOR_SIZE];
 	if (info.is_consecutive) {
 		for (idx_t i = 0; i < info.count; i++) {
-			if (count == STANDARD_VECTOR_SIZE) {
-				Flush();
-			}
 			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
 		}
 	} else {
 		auto rows = info.GetRows();
 		for (idx_t i = 0; i < info.count; i++) {
-			if (count == STANDARD_VECTOR_SIZE) {
-				Flush();
-			}
 			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
 		}
 	}
+	Flush(version_table, row_numbers, count);
 }
 
-void IndexDataRemover::Flush() {
+void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -75,7 +62,7 @@ void IndexDataRemover::Flush() {
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
 	try {
-		current_table->RemoveFromIndexes(context, row_identifiers, count, removal_type);
+		table.RemoveFromIndexes(context, row_identifiers, count, removal_type);
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {
