@@ -108,6 +108,11 @@ select '-1.235e-2'::${type};
 0
 
 query I
+select '5.5e-1'::bigint;
+----
+1
+
+query I
 select '9.5e-5'::${type};
 ----
 0
