@@ -230,7 +230,9 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 enum class IEJoinSourceStage : uint8_t {
 	INIT,
 	SINK_L1,
+	FINALIZE_L1,
 	MATERIALIZE_L1,
+	EXTRACT_LI,
 	SINK_L2,
 	FINALIZE_L2,
 	MATERIALIZE_L2,
@@ -297,7 +299,7 @@ public:
 	bool TryPrepareNextStage();
 	bool TryNextTask(TaskPtr &task, Task &task_local);
 
-	void FinishL1Task();
+	void ExecuteLiTask(ClientContext &client);
 	void ExecutePermutationTask(ClientContext &client);
 
 public:
@@ -382,11 +384,6 @@ struct IEJoinUnion {
 	static idx_t AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
 	                       ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
 	                       const ChunkRange &range);
-
-	static void Sort(ExecutionContext &context, InterruptState &interrupt, SortedTable &table) {
-		table.Finalize(context.client, interrupt);
-		table.Materialize(context, interrupt);
-	}
 
 	template <typename T, typename VECTOR_TYPE = T>
 	static vector<T> ExtractColumn(SortedTable &table, idx_t col_idx) {
@@ -838,8 +835,10 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 	Initialize();
 }
 
-void IEJoinGlobalSourceState::FinishL1Task() {
+void IEJoinGlobalSourceState::ExecuteLiTask(ClientContext &client) {
 	// We don't actually need the L1 column, just its sort key, which is in the sort blocks
+	l1->GetSortedRun(client);
+
 	li = IEJoinUnion::ExtractColumn<int64_t>(*l1, 1);
 }
 
@@ -923,6 +922,8 @@ public:
 	bool TryAssignTask();
 	//	Sort L1
 	void ExecuteSinkL1Task(ExecutionContext &context, InterruptState &interrupt);
+	//	Finalize L1 sort
+	void ExecuteFinalizeL1Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Materialize L1
 	void ExecuteMaterializeL1Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Sort L2
@@ -992,8 +993,13 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 		case IEJoinSourceStage::SINK_L1:
 			++gsource.GetStageNext(task->stage);
 			break;
+		case IEJoinSourceStage::FINALIZE_L1:
+			++gsource.GetStageNext(task->stage);
+			break;
 		case IEJoinSourceStage::MATERIALIZE_L1:
-			gsource.FinishL1Task();
+			++gsource.GetStageNext(task->stage);
+			break;
+		case IEJoinSourceStage::EXTRACT_LI:
 			++gsource.GetStageNext(task->stage);
 			break;
 		case IEJoinSourceStage::SINK_L2:
@@ -1032,7 +1038,9 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 
 	switch (task->stage) {
 	case IEJoinSourceStage::SINK_L1:
+	case IEJoinSourceStage::FINALIZE_L1:
 	case IEJoinSourceStage::MATERIALIZE_L1:
+	case IEJoinSourceStage::EXTRACT_LI:
 	case IEJoinSourceStage::SINK_L2:
 	case IEJoinSourceStage::FINALIZE_L2:
 	case IEJoinSourceStage::MATERIALIZE_L2:
@@ -1116,11 +1124,14 @@ void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, Interr
 		const auto rid = UnsafeNumericCast<int64_t>(right_table.BlockStart(range.first)) + 1;
 		IEJoinUnion::AppendKey(context, interrupt, right_table, r_executor, *l1, -1, -rid, range);
 	}
-	task->l_range.first = task->l_range.second;
+}
+
+void IEJoinLocalSourceState::ExecuteFinalizeL1Task(ExecutionContext &context, InterruptState &interrupt) {
+	gsource.l1->Finalize(context.client, interrupt);
 }
 
 void IEJoinLocalSourceState::ExecuteMaterializeL1Task(ExecutionContext &context, InterruptState &interrupt) {
-	IEJoinUnion::Sort(context, interrupt, *gsource.l1);
+	gsource.l1->MaterializeSortedRun(context, interrupt);
 }
 
 void IEJoinLocalSourceState::ExecuteSinkL2Task(ExecutionContext &context, InterruptState &interrupt) {
@@ -1135,19 +1146,14 @@ void IEJoinLocalSourceState::ExecuteSinkL2Task(ExecutionContext &context, Interr
 	executor.AddExpression(*ref);
 	const auto rid = UnsafeNumericCast<int64_t>(l1.BlockStart(task->l_range.first));
 	IEJoinUnion::AppendKey(context, interrupt, l1, executor, l2, 1, rid, task->l_range);
-
-	//	Mark task as done
-	task->l_range.first = task->l_range.second;
 }
 
 void IEJoinLocalSourceState::ExecuteFinalizeL2Task(ExecutionContext &context, InterruptState &interrupt) {
 	gsource.l2->Finalize(context.client, interrupt);
-	task->l_range.first = task->l_range.second;
 }
 
 void IEJoinLocalSourceState::ExecuteMaterializeL2Task(ExecutionContext &context, InterruptState &interrupt) {
 	gsource.l2->MaterializeSortedRun(context, interrupt);
-	task->l_range.first = task->l_range.second;
 }
 
 void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result, InterruptState &interrupt) {
@@ -1158,8 +1164,15 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	case IEJoinSourceStage::SINK_L1:
 		ExecuteSinkL1Task(context, interrupt);
 		break;
+	case IEJoinSourceStage::FINALIZE_L1:
+		ExecuteFinalizeL1Task(context, interrupt);
+		break;
 	case IEJoinSourceStage::MATERIALIZE_L1:
 		ExecuteMaterializeL1Task(context, interrupt);
+		break;
+	case IEJoinSourceStage::EXTRACT_LI:
+		gsource.ExecuteLiTask(context.client);
+		break;
 		break;
 	case IEJoinSourceStage::SINK_L2:
 		ExecuteSinkL2Task(context, interrupt);
@@ -1292,7 +1305,13 @@ void IEJoinGlobalSourceState::Initialize() {
 	}
 	stage_tasks.emplace_back(l1_tasks);
 
+	//	FINALIZE_L1
+	stage_tasks.emplace_back(1);
+
 	//	MATERIALIZE_L1
+	stage_tasks.emplace_back(MaxValue<idx_t>(l1_tasks, 1));
+
+	//	EXTRACT_LI
 	stage_tasks.emplace_back(1);
 
 	//	SINK_L2
@@ -1348,11 +1367,23 @@ bool IEJoinGlobalSourceState::TryPrepareNextStage() {
 		return true;
 	case IEJoinSourceStage::SINK_L1:
 		if (stage_next >= stage_count) {
+			stage = IEJoinSourceStage::FINALIZE_L1;
+			return true;
+		}
+		break;
+	case IEJoinSourceStage::FINALIZE_L1:
+		if (stage_next >= stage_count) {
 			stage = IEJoinSourceStage::MATERIALIZE_L1;
 			return true;
 		}
 		break;
 	case IEJoinSourceStage::MATERIALIZE_L1:
+		if (stage_next >= stage_count) {
+			stage = IEJoinSourceStage::EXTRACT_LI;
+			return true;
+		}
+		break;
+	case IEJoinSourceStage::EXTRACT_LI:
 		if (stage_next >= stage_count) {
 			stage = IEJoinSourceStage::SINK_L2;
 			return true;
@@ -1467,8 +1498,9 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 		task.l_range.first = MinValue(task.thread_idx * per_thread, left_blocks + right_blocks);
 		task.l_range.second = MinValue(task.l_range.first + per_thread, left_blocks + right_blocks);
 		break;
+	case IEJoinSourceStage::FINALIZE_L1:
 	case IEJoinSourceStage::MATERIALIZE_L1:
-		task.l_range = {0, 1};
+	case IEJoinSourceStage::EXTRACT_LI:
 		break;
 	case IEJoinSourceStage::SINK_L2:
 		task.l_range.first = MinValue(task.thread_idx * per_thread, l1->BlockCount());
