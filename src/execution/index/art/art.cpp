@@ -895,13 +895,11 @@ string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t
 void ART::TransformToDeprecated() {
 	auto idx = Node::GetAllocatorIdx(NType::PREFIX);
 	auto &block_manager = (*allocators)[idx]->block_manager;
-	unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator;
 	TransformToDeprecatedState state;
 
 	if (prefix_count != Prefix::DEPRECATED_COUNT) {
 		auto prefix_size = NumericCast<idx_t>(Prefix::DEPRECATED_COUNT) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
-		deprecated_allocator = make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager);
-		state = TransformToDeprecatedState(*deprecated_allocator);
+		state = TransformToDeprecatedState(make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager));
 	}
 
 	// Transform all leaves, and possibly the prefixes.
@@ -910,6 +908,7 @@ void ART::TransformToDeprecated() {
 	}
 
 	// Replace the prefix allocator with the deprecated allocator.
+	auto deprecated_allocator = state.TakeAllocator();
 	if (deprecated_allocator) {
 		prefix_count = Prefix::DEPRECATED_COUNT;
 

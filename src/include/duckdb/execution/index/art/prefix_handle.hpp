@@ -45,7 +45,7 @@ private:
 	PrefixHandle TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte);
 
 private:
-	unique_ptr<SegmentHandle> segment_handle;
+	SegmentHandle segment_handle;
 };
 
 } // namespace duckdb

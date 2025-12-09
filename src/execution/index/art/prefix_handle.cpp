@@ -6,17 +6,17 @@
 namespace duckdb {
 
 PrefixHandle::PrefixHandle(const ART &art, const Node node)
-    : segment_handle(make_uniq<SegmentHandle>(Node::GetAllocator(art, PREFIX).GetHandle(node))) {
-	data = segment_handle->GetPtr();
+    : segment_handle(Node::GetAllocator(art, PREFIX).GetHandle(node)) {
+	data = segment_handle.GetPtr();
 	child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
-	segment_handle->MarkModified();
+	segment_handle.MarkModified();
 }
 
 PrefixHandle::PrefixHandle(FixedSizeAllocator &allocator, const Node node, const uint8_t count)
-    : segment_handle(make_uniq<SegmentHandle>(allocator.GetHandle(node))) {
-	data = segment_handle->GetPtr();
+    : segment_handle(allocator.GetHandle(node)) {
+	data = segment_handle.GetPtr();
 	child = reinterpret_cast<Node *>(data + count + 1);
-	segment_handle->MarkModified();
+	segment_handle.MarkModified();
 }
 
 PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
@@ -27,7 +27,11 @@ PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
 
 PrefixHandle &PrefixHandle::operator=(PrefixHandle &&other) noexcept {
 	if (this != &other) {
+		// Move old segment_handle to temporary so it's destroyed and decrements reader count
+		SegmentHandle old_handle = std::move(segment_handle);
+		// Now move in the new one
 		segment_handle = std::move(other.segment_handle);
+
 		data = other.data;
 		child = other.child;
 

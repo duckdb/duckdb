@@ -47,16 +47,38 @@ struct TransformToDeprecatedState {
 	//! True if we need to create new nodes in deprecated format.
 	bool needs_transformation;
 	//! Allocator for creating deprecated nodes. Only valid when needs_transformation is true.
-	FixedSizeAllocator *allocator;
+	unsafe_unique_ptr<FixedSizeAllocator> allocator;
 
 	//! Constructor for when transformation is needed.
-	explicit TransformToDeprecatedState(FixedSizeAllocator &alloc) : needs_transformation(true), allocator(&alloc) {
-		D_ASSERT(allocator != nullptr);
+	explicit TransformToDeprecatedState(unsafe_unique_ptr<FixedSizeAllocator> allocator_p)
+	    : needs_transformation(true), allocator(std::move(allocator_p)) {
+		D_ASSERT(allocator);
 	}
 
 	//! Constructor for when transformation is not needed.
 	TransformToDeprecatedState() : needs_transformation(false), allocator(nullptr) {
 	}
+
+	//! Move constructor.
+	TransformToDeprecatedState(TransformToDeprecatedState &&other) noexcept
+	    : needs_transformation(other.needs_transformation), allocator(std::move(other.allocator)) {
+		other.needs_transformation = false;
+	}
+
+	//! Move assignment operator.
+	TransformToDeprecatedState &operator=(TransformToDeprecatedState &&other) noexcept {
+		if (this != &other) {
+			needs_transformation = other.needs_transformation;
+			allocator = std::move(other.allocator);
+			other.needs_transformation = false;
+		}
+		return *this;
+	}
+
+	//! Copy constructor deleted - state owns unique resources.
+	TransformToDeprecatedState(const TransformToDeprecatedState &) = delete;
+	//! Copy assignment deleted - state owns unique resources.
+	TransformToDeprecatedState &operator=(const TransformToDeprecatedState &) = delete;
 
 	//! Helper to check if allocator is available.
 	bool HasAllocator() const {
@@ -67,6 +89,12 @@ struct TransformToDeprecatedState {
 	FixedSizeAllocator &GetAllocator() const {
 		D_ASSERT(HasAllocator());
 		return *allocator;
+	}
+
+	//! Transfer ownership of the allocator to the caller.
+	unsafe_unique_ptr<FixedSizeAllocator> TakeAllocator() {
+		needs_transformation = false;
+		return std::move(allocator);
 	}
 };
 

@@ -54,7 +54,7 @@ private:
 	}
 
 private:
-	unique_ptr<SegmentHandle> segment_handle;
+	SegmentHandle segment_handle;
 	data_ptr_t data;
 	Node *child;
 };

@@ -6,8 +6,8 @@
 namespace duckdb {
 
 ConstPrefixHandle::ConstPrefixHandle(const ART &art, const Node node)
-    : segment_handle(make_uniq<SegmentHandle>(Node::GetAllocator(art, PREFIX).GetHandle(node))) {
-	data = segment_handle->GetPtr();
+    : segment_handle(Node::GetAllocator(art, PREFIX).GetHandle(node)) {
+	data = segment_handle.GetPtr();
 	child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
 	// Read-only: don't mark segment as modified
 }
