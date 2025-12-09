@@ -102,7 +102,8 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
 unique_ptr<RadixPartitionedTupleData> HashedSortGlobalSinkState::CreatePartition(idx_t new_bits) const {
 	auto &payload_types = hashed_sort.payload_types;
 	const auto hash_col_idx = payload_types.size();
-	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, new_bits, hash_col_idx);
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, MemoryTag::WINDOW, new_bits,
+	                                            hash_col_idx);
 }
 
 void HashedSortGlobalSinkState::Rehash(idx_t cardinality) {
