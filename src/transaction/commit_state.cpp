@@ -25,6 +25,10 @@ CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id
     : transaction(transaction_p), commit_id(commit_id) {
 }
 
+CommitState::~CommitState() {
+	Flush();
+}
+
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 	if (entry.temporary || entry.Parent().temporary) {
 		return;
@@ -178,14 +182,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (!info->table->IsMainTable()) {
-			auto table_name = info->table->GetTableName();
-			auto table_modification = info->table->TableModification();
-			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                           table_name, table_modification);
-		}
-		// mark the tuples as committed
-		info->version_info->CommitDelete(info->vector_idx, commit_id, *info);
+		CommitDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -207,6 +204,63 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	default:
 		throw InternalException("UndoBuffer - don't know how to commit this type!");
 	}
+}
+
+void CommitState::CommitDelete(DeleteInfo &info) {
+	if (!info.table->IsMainTable()) {
+		auto table_name = info.table->GetTableName();
+		auto table_modification = info.table->TableModification();
+		throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+		                           table_name, table_modification);
+	}
+	// mark the tuples as committed
+	info.version_info->CommitDelete(info.vector_idx, commit_id, info);
+	auto version_table = info.table;
+	if (!version_table->HasIndexes()) {
+		// this table has no indexes: no cleanup to be done
+		return;
+	}
+
+	if (current_table != version_table) {
+		// table for this entry differs from previous table: flush and switch to the new table
+		Flush();
+		current_table = version_table;
+	}
+
+	count = 0;
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
+		}
+	} else {
+		auto rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
+		}
+	}
+	Flush();
+}
+
+void CommitState::Flush() {
+	if (count == 0) {
+		return;
+	}
+
+	// set up the row identifiers vector
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
+
+	// delete the tuples from all the indexes.
+	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
+	// data, hence the transaction cannot be guaranteed.
+	try {
+		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count);
+	} catch (std::exception &ex) {
+		throw FatalException(ErrorData(ex).Message());
+	} catch (...) {
+		throw FatalException("unknown failure in CleanupState::Flush");
+	}
+
+	count = 0;
 }
 
 void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {

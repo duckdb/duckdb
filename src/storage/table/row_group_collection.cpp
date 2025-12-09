@@ -19,6 +19,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -836,9 +837,22 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		// Slice the vector with all rows that are present in this vector.
 		// If the index is bound, delete the data. If unbound, buffer into unbound_index.
 		result_chunk.Slice(sel, sel_count);
-		indexes.Scan([&](Index &index) {
+		indexes.ScanEntries([&](IndexEntry &entry) {
+			auto &index = *entry.index;
 			if (index.IsBound()) {
-				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
+				auto &main_index = index.Cast<BoundIndex>();
+				if (!entry.deleted_rows_in_use) {
+					entry.deleted_rows_in_use = make_uniq<ART>(
+					    "deleted_rows_in_use_" + main_index.name, IndexConstraintType::NONE, main_index.GetColumnIds(),
+					    main_index.table_io_manager, main_index.unbound_expressions, main_index.db);
+				}
+				auto &deleted_rows_in_use = entry.deleted_rows_in_use->Cast<BoundIndex>();
+				IndexAppendInfo append_info;
+				auto error = deleted_rows_in_use.Append(result_chunk, row_identifiers, append_info);
+				if (error.HasError()) {
+					throw InternalException("Failed to append to deleted_rows_in_use: %s", error.Message());
+				}
+				main_index.Delete(result_chunk, row_identifiers);
 				return false;
 			}
 			// Buffering takes only the indexed columns in ordering of the column_ids mapping.
