@@ -49,9 +49,9 @@ class TupleDataCollection {
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
-	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
 	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
-	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr,
+	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
 	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
 
 	~TupleDataCollection();
@@ -272,6 +272,8 @@ private:
 	//! The layout of the TupleDataCollection
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
+	//! Memory tag (for keeping track what the allocated memory belongs to)
+	const MemoryTag tag;
 	//! The TupleDataAllocator
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
