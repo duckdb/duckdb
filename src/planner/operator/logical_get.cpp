@@ -192,7 +192,7 @@ bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageInde
 	}
 
 	auto table = GetTable();
-	if (!table || !table->IsDuckTable()) {
+	if (!table) {
 		//! If there's no table (or the table is not a DuckDB table) we assume there's no mismatch between
 		//! logical/storage index
 		out_index = StorageIndex::FromColumnIndex(column_index);
