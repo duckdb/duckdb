@@ -308,7 +308,6 @@ jobs:
         with:
           repository: duckdb/duckdb-httpfs
           path: duckdb-httpfs
-          sparse-checkout: scripts
 
       - name: Install
         shell: bash
