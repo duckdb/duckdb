@@ -742,7 +742,7 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 }
 
 void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
-                                           Vector &row_identifiers, idx_t count) {
+                                           Vector &row_identifiers, idx_t count, IndexRemovalType removal_type) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// Collect all Indexed columns on the table.
@@ -840,17 +840,29 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		indexes.ScanEntries([&](IndexEntry &entry) {
 			auto &index = *entry.index;
 			if (index.IsBound()) {
-				auto &main_index = index.Cast<BoundIndex>();
-				if (!entry.deleted_rows_in_use) {
-					entry.deleted_rows_in_use = make_uniq<ART>(
-					    "deleted_rows_in_use_" + main_index.name, IndexConstraintType::NONE, main_index.GetColumnIds(),
-					    main_index.table_io_manager, main_index.unbound_expressions, main_index.db);
+				if (removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
+					if (!entry.deleted_rows_in_use) {
+						throw InternalException(
+						    "Deleting from entry.deleted_rows_in_use but deleted_rows_in_use did not exist");
+					}
+					auto &deleted_rows_in_use = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					deleted_rows_in_use.Delete(result_chunk, row_identifiers);
+					return false;
 				}
-				auto &deleted_rows_in_use = entry.deleted_rows_in_use->Cast<BoundIndex>();
-				IndexAppendInfo append_info;
-				auto error = deleted_rows_in_use.Append(result_chunk, row_identifiers, append_info);
-				if (error.HasError()) {
-					throw InternalException("Failed to append to deleted_rows_in_use: %s", error.Message());
+				auto &main_index = index.Cast<BoundIndex>();
+				if (removal_type != IndexRemovalType::MAIN_INDEX_ONLY) {
+					if (!entry.deleted_rows_in_use) {
+						entry.deleted_rows_in_use =
+						    make_uniq<ART>("deleted_rows_in_use_" + main_index.name, IndexConstraintType::NONE,
+						                   main_index.GetColumnIds(), main_index.table_io_manager,
+						                   main_index.unbound_expressions, main_index.db);
+					}
+					auto &deleted_rows_in_use = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					IndexAppendInfo append_info;
+					auto error = deleted_rows_in_use.Append(result_chunk, row_identifiers, append_info);
+					if (error.HasError()) {
+						throw InternalException("Failed to append to deleted_rows_in_use: %s", error.Message());
+					}
 				}
 				main_index.Delete(result_chunk, row_identifiers);
 				return false;

@@ -95,8 +95,8 @@ void CleanupState::Flush() {
 	// set up the row identifiers vector
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
 
-	// FIXME: clean-up from deleted_rows_in_use
-	// current_table->CleanupFromIndexes(context, row_identifiers, count);
+	// clean-up from deleted_rows_in_use
+	current_table->RemoveFromIndexes(context, row_identifiers, count, IndexRemovalType::DELETED_ROWS_IN_USE);
 
 	count = 0;
 }

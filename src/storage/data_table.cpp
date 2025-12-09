@@ -1278,9 +1278,10 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 	});
 }
 
-void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count) {
+void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
+                                  IndexRemovalType removal_type) {
 	D_ASSERT(IsMainTable());
-	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count);
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type);
 }
 
 //===--------------------------------------------------------------------===//

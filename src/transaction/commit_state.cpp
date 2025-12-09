@@ -253,7 +253,8 @@ void CommitState::Flush() {
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
 	try {
-		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count);
+		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count,
+		                                 IndexRemovalType::MAIN_INDEX);
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {

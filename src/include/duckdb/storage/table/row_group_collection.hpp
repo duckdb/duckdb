@@ -38,6 +38,8 @@ class CheckpointTask;
 class TableIOManager;
 class DataTable;
 
+enum class IndexRemovalType { MAIN_INDEX, DELETED_ROWS_IN_USE, MAIN_INDEX_ONLY };
+
 class RowGroupCollection {
 public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, TableIOManager &io_manager, vector<LogicalType> types,
@@ -101,7 +103,8 @@ public:
 	                  optional_ptr<StorageCommitState> commit_state);
 	bool IsPersistent() const;
 
-	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,

@@ -196,7 +196,8 @@ public:
 	//! Revert a previous append made to indexes with the given row-ids
 	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type);
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
