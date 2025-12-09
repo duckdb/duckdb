@@ -1338,8 +1338,7 @@ string LocalFileSystem::GetVersionTag(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get file size for file \"%s\": %s", {{"errno", std::to_string(errno)}},
-		                  handle.path, strerror(errno));
+		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
 	}
 
 	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time

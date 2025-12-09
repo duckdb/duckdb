@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+constexpr idx_t SampleOptions::MAX_SAMPLE_ROWS;
 
 static SampleMethod GetSampleMethod(const string &method) {
 	auto lmethod = StringUtil::Lower(method);

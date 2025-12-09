@@ -29,7 +29,7 @@ public:
 
 	void Verify(RowGroup &parent) override;
 	void UpdateWithBase(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
-	                    row_t *row_ids, idx_t update_count, ColumnData &base);
+	                    row_t *row_ids, idx_t update_count, ColumnData &base, idx_t row_group_start);
 };
 
 } // namespace duckdb

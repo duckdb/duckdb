@@ -363,19 +363,19 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		for (auto &entry : json_values) {
 			ParseOption(entry.first, Value(entry.second));
 		}
-	auto inherit_entry = options.find("inherit_skip_tests");
-	if (inherit_entry != options.end()) {
-		auto path_value = inherit_entry->second;
-		D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
-		D_ASSERT(!path_value.IsNull());
-		auto cwd = TestGetCurrentDirectory();
-		auto path = TestJoinPath(cwd, path_value.ToString());
-		TestConfiguration inherit_config;
-		inherit_config.LoadConfig(path);
+		auto inherit_entry = options.find("inherit_skip_tests");
+		if (inherit_entry != options.end()) {
+			auto path_value = inherit_entry->second;
+			D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
+			D_ASSERT(!path_value.IsNull());
+			auto cwd = TestGetCurrentDirectory();
+			auto path = TestJoinPath(cwd, path_value.ToString());
+			TestConfiguration inherit_config;
+			inherit_config.LoadConfig(path);
 
-		tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
-		                           inherit_config.tests_to_be_skipped.end());
-	}
+			tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
+			                           inherit_config.tests_to_be_skipped.end());
+		}
 		// Convert to unordered_set<string> the list of tests to be skipped
 		auto entry = options.find("skip_tests");
 		if (entry != options.end()) {
