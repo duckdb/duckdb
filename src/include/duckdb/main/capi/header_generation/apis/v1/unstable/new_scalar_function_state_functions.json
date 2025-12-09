@@ -1,0 +1,13 @@
+{
+  "version": "unstable_new_scalar_function_state_functions",
+  "description": "New functions to configure local states for scalar functions",
+  "entries": [
+    "duckdb_scalar_function_get_state",
+    "duckdb_scalar_function_set_init",
+    "duckdb_scalar_function_init_set_error",
+    "duckdb_scalar_function_init_set_state",
+    "duckdb_scalar_function_init_get_client_context",
+    "duckdb_scalar_function_init_get_bind_data",
+    "duckdb_scalar_function_init_get_extra_info"
+  ]
+}
