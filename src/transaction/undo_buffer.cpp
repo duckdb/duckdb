@@ -198,12 +198,12 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
 	active_transaction_state = info.active_transactions;
 
-	CommitState state(transaction, info.commit_id, active_transaction_state);
+	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::PERFORM_COMMIT);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction, transaction_id, active_transaction_state);
+	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }

@@ -10,6 +10,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {
 

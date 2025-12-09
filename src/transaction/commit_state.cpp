@@ -22,8 +22,8 @@
 namespace duckdb {
 
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
-                         ActiveTransactionState transaction_state)
-    : transaction(transaction_p), commit_id(commit_id), transaction_state(transaction_state) {
+                         ActiveTransactionState transaction_state, CommitMode commit_mode)
+    : transaction(transaction_p), commit_id(commit_id), transaction_state(transaction_state), commit_mode(commit_mode) {
 }
 
 CommitState::~CommitState() {
@@ -183,6 +183,12 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			auto table_name = info->table->GetTableName();
+			auto table_modification = info->table->TableModification();
+			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+			                           table_name, table_modification);
+		}
 		CommitDelete(*info);
 		break;
 	}
@@ -208,12 +214,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 }
 
 void CommitState::CommitDelete(DeleteInfo &info) {
-	if (!info.table->IsMainTable()) {
-		auto table_name = info.table->GetTableName();
-		auto table_modification = info.table->TableModification();
-		throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
-		                           table_name, table_modification);
-	}
 	// mark the tuples as committed
 	info.version_info->CommitDelete(info.vector_idx, commit_id, info);
 	auto version_table = info.table;
@@ -254,16 +254,25 @@ void CommitState::Flush() {
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
 	try {
-		IndexRemovalType removal_type = IndexRemovalType::MAIN_INDEX;
-		if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
-			// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
-			removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
+		IndexRemovalType removal_type;
+		if (commit_mode == CommitMode::PERFORM_COMMIT) {
+			removal_type = IndexRemovalType::MAIN_INDEX;
+			if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+				// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
+				removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
+			}
+		} else {
+			// revert the appends to the indexes
+			removal_type = IndexRemovalType::REVERT_MAIN_INDEX_APPEND;
+			if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+				removal_type = IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
+			}
 		}
 		current_table->RemoveFromIndexes(*transaction.context.lock(), row_identifiers, count, removal_type);
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {
-		throw FatalException("unknown failure in CleanupState::Flush");
+		throw FatalException("unknown failure in CommitState::Flush");
 	}
 
 	count = 0;
@@ -292,7 +301,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		info->version_info->CommitDelete(info->vector_idx, transaction_id, *info);
+		CommitDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {

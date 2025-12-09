@@ -1,0 +1,82 @@
+# name: test/sql/index/art/constraints/test_art_tx_conflict_revert.test
+# description: Verify that, also with background transactions, we can immediately
+# group: [constraints]
+
+statement ok
+SET immediate_transaction_mode=true;
+
+foreach mode with_open_transaction without_open_transaction
+
+statement ok
+CREATE TABLE tbl(i INT PRIMARY KEY);
+
+statement ok con1
+INSERT INTO tbl FROM range(100_000);
+
+statement ok
+CREATE TABLE tbl2(i INT);
+
+statement ok
+INSERT INTO tbl2 VALUES (42);
+
+onlyif mode=with_open_transaction
+statement ok read_con
+BEGIN
+
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+# con2 deletes rows 0M...1M
+statement ok con2
+DELETE FROM tbl;
+
+# and inserts into tbl2
+statement ok con2
+DELETE FROM tbl2
+
+# con1 now alters tbl2
+statement ok con1
+ALTER TABLE tbl2 ADD COLUMN j INTEGER
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+----
+another transaction has altered this table
+
+query I
+FROM tbl WHERE i=50_000
+----
+50000
+
+query I read_con
+FROM tbl WHERE i=50_000
+----
+50000
+
+onlyif mode=with_open_transaction
+statement ok read_con
+COMMIT
+
+query I
+FROM tbl WHERE i=50_000
+----
+50000
+
+statement error
+INSERT INTO tbl VALUES (50_000)
+----
+violates primary key constraint
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+DROP TABLE tbl2
+
+endloop

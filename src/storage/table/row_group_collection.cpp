@@ -840,31 +840,51 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		indexes.ScanEntries([&](IndexEntry &entry) {
 			auto &index = *entry.index;
 			if (index.IsBound()) {
-				if (removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
-					if (!entry.deleted_rows_in_use) {
-						throw InternalException(
-						    "Deleting from entry.deleted_rows_in_use but deleted_rows_in_use did not exist");
-					}
-					auto &deleted_rows_in_use = entry.deleted_rows_in_use->Cast<BoundIndex>();
-					deleted_rows_in_use.Delete(result_chunk, row_identifiers);
-					return false;
-				}
 				auto &main_index = index.Cast<BoundIndex>();
-				if (removal_type != IndexRemovalType::MAIN_INDEX_ONLY) {
+				optional_ptr<BoundIndex> add_index, removal_index;
+				switch (removal_type) {
+				case IndexRemovalType::MAIN_INDEX_ONLY:
+					// directly remove from main index
+					removal_index = main_index;
+					break;
+				case IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND:
+					// revert main index only append - just add back to index
+					add_index = main_index;
+					break;
+				case IndexRemovalType::MAIN_INDEX:
 					if (!entry.deleted_rows_in_use) {
+						// create "deleted_rows_in_use" if it does not exist yet
 						entry.deleted_rows_in_use =
 						    make_uniq<ART>("deleted_rows_in_use_" + main_index.name, IndexConstraintType::NONE,
 						                   main_index.GetColumnIds(), main_index.table_io_manager,
 						                   main_index.unbound_expressions, main_index.db);
 					}
-					auto &deleted_rows_in_use = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					// remove from main index - add to removal index
+					removal_index = main_index;
+					add_index = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					break;
+				case IndexRemovalType::REVERT_MAIN_INDEX_APPEND:
+					// revert append - remove from deleted_rows_in_use and add back to main index
+					add_index = main_index;
+					removal_index = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					break;
+				case IndexRemovalType::DELETED_ROWS_IN_USE:
+					// remove from removal index
+					removal_index = entry.deleted_rows_in_use->Cast<BoundIndex>();
+					break;
+				default:
+					throw InternalException("Unsupported IndexRemovalType");
+				}
+				if (removal_index) {
+					removal_index->Delete(result_chunk, row_identifiers);
+				}
+				if (add_index) {
 					IndexAppendInfo append_info;
-					auto error = deleted_rows_in_use.Append(result_chunk, row_identifiers, append_info);
+					auto error = add_index->Append(result_chunk, row_identifiers, append_info);
 					if (error.HasError()) {
-						throw InternalException("Failed to append to deleted_rows_in_use: %s", error.Message());
+						throw InternalException("Failed to append to %s: %s", add_index->name, error.Message());
 					}
 				}
-				main_index.Delete(result_chunk, row_identifiers);
 				return false;
 			}
 			// Buffering takes only the indexed columns in ordering of the column_ids mapping.

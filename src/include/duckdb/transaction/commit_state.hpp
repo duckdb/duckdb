@@ -23,10 +23,12 @@ class DataTable;
 struct DeleteInfo;
 struct UpdateInfo;
 
+enum class CommitMode { PERFORM_COMMIT, REVERT_COMMIT };
+
 class CommitState {
 public:
 	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
-	                     ActiveTransactionState transaction_state);
+	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
 	~CommitState();
 
 public:
@@ -42,6 +44,7 @@ private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
 	ActiveTransactionState transaction_state;
+	CommitMode commit_mode;
 	// data for index cleanup
 	optional_ptr<DataTable> current_table;
 	DataChunk chunk;
