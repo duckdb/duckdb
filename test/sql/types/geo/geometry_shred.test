@@ -1,0 +1,20 @@
+# name: test/sql/types/geo/geometry_shred.test
+# group: [geo]
+
+load __TEST_DIR__/test_add_pk_attach.db
+
+statement ok
+create table t1(g GEOMETRY);
+
+statement ok
+INSERT INTO t1 VALUES ('POINT(1 2)'::GEOMETRY);
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT ST_AsText(g) FROM t1;
+----
+POINT (1 2)

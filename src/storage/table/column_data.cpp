@@ -792,6 +792,13 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 		serializer.WriteList(102, "sub_columns", child_columns.size() - 1,
 		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(child_columns[i + 1]); });
 	}
+
+	// Also write extra info for GEOMETRY and VARIANT shredded types
+	if (!split_types.empty()) {
+		serializer.WritePropertyWithDefault(103, "split_types", split_types);
+		serializer.WriteList(104, "split_columns", split_types.size(),
+		                     [&](Serializer::List &list, idx_t i) { list.WriteElement(child_columns[i + 1]); });
+	}
 }
 
 void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
@@ -849,6 +856,16 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 	default:
 		break;
 	}
+
+	result.split_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(103, "split_types");
+	if (!result.split_types.empty()) {
+		deserializer.ReadList(104, "split_columns", [&](Deserializer::List &list, idx_t i) {
+			deserializer.Set<const LogicalType &>(result.split_types[i]);
+			result.child_columns.push_back(list.ReadElement<PersistentColumnData>());
+			deserializer.Unset<LogicalType>();
+		});
+	}
+
 	return result;
 }
 
