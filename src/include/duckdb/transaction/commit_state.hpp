@@ -10,6 +10,8 @@
 
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/enums/index_removal_type.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 class CatalogEntry;

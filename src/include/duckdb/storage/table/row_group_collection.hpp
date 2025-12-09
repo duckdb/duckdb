@@ -13,6 +13,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/enums/index_removal_type.hpp"
 
 namespace duckdb {
 
@@ -37,14 +38,6 @@ struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
 class DataTable;
-
-enum class IndexRemovalType {
-	MAIN_INDEX,
-	DELETED_ROWS_IN_USE,
-	MAIN_INDEX_ONLY,
-	REVERT_MAIN_INDEX_APPEND,
-	REVERT_MAIN_INDEX_ONLY_APPEND
-};
 
 class RowGroupCollection {
 public:
