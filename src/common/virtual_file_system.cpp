@@ -88,6 +88,9 @@ string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
+FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
+	return handle.file_system.Stats(handle);
+}
 
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	handle.file_system.Truncate(handle, new_size);
@@ -223,6 +226,17 @@ void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 
 bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
 	return disabled_file_systems.find(name) != disabled_file_systems.end();
+}
+
+bool VirtualFileSystem::IsDisabledForPath(const string &path) {
+	if (disabled_file_systems.empty()) {
+		return false;
+	}
+	auto fs = FindFileSystemInternal(path);
+	if (!fs) {
+		fs = default_fs.get();
+	}
+	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {

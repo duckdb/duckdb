@@ -53,8 +53,8 @@ unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &
 
 	union_members.push_back(make_pair(child->GetAlias(), child->return_type));
 
-	bound_function.return_type = LogicalType::UNION(std::move(union_members));
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::UNION(std::move(union_members)));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 } // namespace
@@ -62,9 +62,9 @@ unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &
 ScalarFunction UnionValueFun::GetFunction() {
 	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = VariableReturnBindData::Serialize;
-	fun.deserialize = VariableReturnBindData::Deserialize;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
+	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;
 }
 

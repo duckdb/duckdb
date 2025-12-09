@@ -1,0 +1,37 @@
+# name: test/sql/pragma/profiling/test_logging_interaction.test
+# description: Test profiling all operator types.
+# group: [profiling]
+
+require skip_reload
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_attach.json';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+ATTACH '__TEST_DIR__/profiler_logger.db' AS my_db;
+
+statement ok
+USE my_db;
+
+statement ok
+call enable_logging();
+
+statement ok
+CREATE TABLE small AS FROM range(100);
+
+statement ok
+CREATE TABLE medium AS FROM range(10000);
+
+statement ok
+CREATE TABLE big AS FROM range(1000000);
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('Metrics') WHERE metric == 'CPU_TIME';
+----
+3

@@ -7,6 +7,9 @@ require parquet
 # parquet keys are not persisted across restarts
 require noforcestorage
 
+# writing encrypted parquet requires httpfs to be loaded
+require httpfs
+
 statement ok
 PRAGMA enable_verification
 

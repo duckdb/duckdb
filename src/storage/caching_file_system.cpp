@@ -41,6 +41,9 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 		const auto &open_options = path.extended_info->options;
 		const auto validate_entry = open_options.find("validate_external_file_cache");
 		if (validate_entry != open_options.end()) {
+			if (validate_entry->second.IsNull()) {
+				throw InvalidInputException("Cannot use NULL as argument for validate_external_file_cache");
+			}
 			validate = BooleanValue::Get(validate_entry->second);
 		}
 	}
@@ -243,6 +246,17 @@ const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> 
 		return version_tag;
 	}
 	return cached_file.VersionTag(guard);
+}
+
+idx_t CachingFileHandle::SeekPosition() {
+	return position;
+}
+
+void CachingFileHandle::Seek(idx_t location) {
+	position = location;
+	if (file_handle != nullptr) {
+		file_handle->Seek(location);
+	}
 }
 
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,

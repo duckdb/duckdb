@@ -114,7 +114,8 @@
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
         "test/sql/storage/compression/rle/rle_constant.test",
-        "test/sql/types/geo/geometry_stats.test"
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/window/test_window_constant_allocator.test"
       ]
     },
     {
@@ -131,6 +132,9 @@
         "test/sql/types/list/list_stats.test",
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/types/struct/struct_stats.test",
+        "test/sql/storage/types/variant/variant_shredding.test",
+        "test/sql/storage/types/variant/variant_stats_merging.test",
+        "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/vacuum/test_analyze.test"
       ]
     },
@@ -732,6 +736,12 @@
       "reason": "Profiling in combination with verification is disabled for SELECT statements",
       "paths": [
         "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
+    },
+    {
+      "reason": "Verification query results are not buffer managed",
+      "paths": [
+        "test/sql/outofcore/buffer_managed_query_result.test_slow"
       ]
     }
   ]

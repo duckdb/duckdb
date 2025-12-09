@@ -107,7 +107,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 				auto new_colref = QualifyColumnName(*colref, error);
 				if (error.HasError()) {
 					// could not find the column - try to qualify the alias
-					if (!QualifyColumnAlias(*colref)) {
+					if (!DoesColumnAliasExist(*colref)) {
 						if (!allow_throw) {
 							return func;
 						}
@@ -195,7 +195,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
-		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
 	}
@@ -206,7 +206,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
                                                 idx_t depth) {
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = func.functions.functions.front();
-	auto &bind_lambda_function = scalar_function.bind_lambda;
+	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
 	if (!bind_lambda_function) {
 		return BindResult("This scalar function does not support lambdas!");
 	}

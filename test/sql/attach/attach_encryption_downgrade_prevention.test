@@ -1,0 +1,22 @@
+# name: test/sql/attach/attach_encryption_downgrade_prevention.test
+# description: Ensure crypto cipher can not be downgraded to strip integrity checks
+# group: [attach]
+
+load __TEST_DIR__/tmp.db
+
+require httpfs
+
+# This is unsafe: an attacker could manipulate  
+statement error
+ATTACH 'data/attach_test/encrypted_ctr_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde');
+----
+Catalog Error: Cannot open encrypted database "data/attach_test/encrypted_ctr_key=abcde.db" without explicitly specifying the encryption cipher for security reasons. Please make sure you understand the security implications and re-attach the database specifying the desired cipher.
+
+# For CTR we need to specify the cipher to ensure we don't accidentally downgrade the cipher 
+statement ok
+ATTACH 'data/attach_test/encrypted_ctr_key=abcde.db' as enc1 (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'CTR');
+
+# For GCM this is no problem
+statement ok
+ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc2 (ENCRYPTION_KEY 'abcde');
+

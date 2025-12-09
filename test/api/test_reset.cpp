@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -56,6 +57,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"debug_force_external", {Value(true)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
+	    {"variant_minimum_shredding_size", {Value::INTEGER(-1)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
 	    {"default_secret_storage", {"custom_storage"}},
@@ -81,6 +83,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
+	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
@@ -91,6 +94,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"NULLS_FIRST"}},
 	    {"debug_verify_vector", {"dictionary_expression"}},
+	    {"debug_physical_table_scan_execution_strategy", {"default"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
@@ -164,6 +168,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "disable_database_invalidation", // cant change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
+	    "force_variant_shredding",
 	    "streaming_buffer_size",
 	    "log_query_path",
 	    "password",
@@ -182,9 +187,11 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
+	    "extension_directories",
 	    "progress_bar_time",
 	    "index_scan_max_count",
-	    "profiling_mode"};
+	    "profiling_mode",
+	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
 

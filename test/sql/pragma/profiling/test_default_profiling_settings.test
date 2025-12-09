@@ -8,13 +8,13 @@
 require json
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+SET profiling_mode='standard';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -33,7 +33,7 @@ SELECT unnest(res) FROM (
 "ATTACH_REPLAY_WAL_LATENCY": "true"
 "BLOCKED_THREAD_TIME": "true"
 "CHECKPOINT_LATENCY": "true"
-"COMMIT_WRITE_WAL_LATENCY": "true"
+"COMMIT_LOCAL_STORAGE_LATENCY": "true"
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
@@ -51,8 +51,10 @@ SELECT unnest(res) FROM (
 "SYSTEM_PEAK_TEMP_DIR_SIZE": "true"
 "TOTAL_BYTES_READ": "true"
 "TOTAL_BYTES_WRITTEN": "true"
+"TOTAL_MEMORY_ALLOCATED": "true"
 "WAITING_TO_ATTACH_LATENCY": "true"
 "WAL_REPLAY_ENTRY_COUNT": "true"
+"WRITE_TO_WAL_LATENCY": "true"
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';

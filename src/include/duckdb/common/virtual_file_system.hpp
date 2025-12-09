@@ -30,6 +30,7 @@ public:
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
+	FileMetadata Stats(FileHandle &handle) override;
 
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
@@ -65,6 +66,7 @@ public:
 
 	void SetDisabledFileSystems(const vector<string> &names) override;
 	bool SubSystemIsDisabled(const string &name) override;
+	bool IsDisabledForPath(const string &path) override;
 
 	string PathSeparator(const string &path) override;
 

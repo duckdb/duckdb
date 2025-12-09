@@ -514,7 +514,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
+		auto storage_info = table.GetStorageInfo(context);
+		if (!storage_info.index_info.empty()) {
+			modification_type = DatabaseModificationType::INSERT_DATA_WITH_INDEX;
+		}
+		properties.RegisterDBModify(table.catalog, context, modification_type);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
@@ -590,7 +595,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.plan = std::move(insert);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

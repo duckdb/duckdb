@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"

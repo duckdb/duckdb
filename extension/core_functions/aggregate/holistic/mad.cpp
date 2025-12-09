@@ -267,11 +267,11 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
 	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
-	fun.bind = BindMAD;
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	fun.SetBindCallback(BindMAD);
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
-	fun.window = OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>;
-	fun.window_init = OP::template WindowInit<STATE, INPUT_TYPE>;
+	fun.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
+	fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
 	return fun;
 }
@@ -316,7 +316,7 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const Logi
 
 AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
 	auto result = GetMedianAbsoluteDeviationAggregateFunctionInternal(type);
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	result.SetFallible();
 	return result;
 }
 
@@ -324,7 +324,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
                                                             vector<unique_ptr<Expression>> &arguments) {
 	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->return_type);
 	function.name = "mad";
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return BindMAD(context, function, arguments);
 }
 

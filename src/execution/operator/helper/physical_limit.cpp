@@ -21,7 +21,8 @@ PhysicalLimit::PhysicalLimit(PhysicalPlan &physical_plan, vector<LogicalType> ty
 //===--------------------------------------------------------------------===//
 class LimitGlobalState : public GlobalSinkState {
 public:
-	explicit LimitGlobalState(ClientContext &context, const PhysicalLimit &op) : data(context, op.types, true) {
+	explicit LimitGlobalState(ClientContext &context, const PhysicalLimit &op)
+	    : data(context, op.types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 		limit = 0;
 		offset = 0;
 	}
@@ -35,7 +36,7 @@ public:
 class LimitLocalState : public LocalSinkState {
 public:
 	explicit LimitLocalState(ClientContext &context, const PhysicalLimit &op)
-	    : current_offset(0), data(context, op.types, true) {
+	    : current_offset(0), data(context, op.types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 		PhysicalLimit::SetInitialLimits(op.limit_val, op.offset_val, limit, offset);
 	}
 
@@ -166,7 +167,8 @@ unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext 
 	return make_uniq<LimitSourceState>();
 }
 
-SourceResultType PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<LimitGlobalState>();
 	auto &state = input.global_state.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {

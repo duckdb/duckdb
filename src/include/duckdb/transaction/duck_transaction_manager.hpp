@@ -14,6 +14,7 @@
 #include "duckdb/common/queue.hpp"
 
 namespace duckdb {
+class DuckTransactionManager;
 class DuckTransaction;
 struct UndoBufferProperties;
 
@@ -26,6 +27,13 @@ struct DuckCleanupInfo {
 
 	void Cleanup() noexcept;
 	bool ScheduleCleanup() noexcept;
+};
+
+struct ActiveCheckpointWrapper {
+	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
+	~ActiveCheckpointWrapper();
+
+	DuckTransactionManager &manager;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -56,6 +64,11 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
+	transaction_t GetActiveCheckpoint() const {
+		return active_checkpoint;
+	}
+	transaction_t GetNewCheckpointId();
+	void ResetCheckpointId();
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -63,6 +76,8 @@ public:
 
 	//! Obtains a shared lock to the checkpoint lock
 	unique_ptr<StorageLockKey> SharedCheckpointLock();
+	//! Try to obtain an exclusive checkpoint lock
+	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
@@ -106,6 +121,8 @@ private:
 	atomic<transaction_t> lowest_active_start;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
+	//! The currently active checkpoint
+	atomic<transaction_t> active_checkpoint;
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions
@@ -116,8 +133,6 @@ private:
 	StorageLock checkpoint_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
-	//! Mutex used to control writes to the WAL - separate from the transaction lock
-	mutex wal_lock;
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;

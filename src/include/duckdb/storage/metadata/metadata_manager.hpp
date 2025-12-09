@@ -81,6 +81,8 @@ public:
 	//! Flush all blocks to disk
 	void Flush();
 
+	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
+
 	void MarkBlocksAsModified();
 	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 

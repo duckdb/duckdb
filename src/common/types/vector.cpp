@@ -32,7 +32,8 @@ namespace duckdb {
 UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr), physical_type(PhysicalType::INVALID) {
 }
 
-UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept : sel(nullptr), data(nullptr) {
+UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept
+    : sel(nullptr), data(nullptr), physical_type(PhysicalType::INVALID) {
 	bool refers_to_self = other.sel == &other.owned_sel;
 	std::swap(sel, other.sel);
 	std::swap(data, other.data);
@@ -920,7 +921,6 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	default:
 		throw NotImplementedException("Vector::GetAllocationSize not implemented for type: %s", type.ToString());
-		break;
 	}
 }
 

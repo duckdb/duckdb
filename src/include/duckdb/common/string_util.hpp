@@ -300,6 +300,17 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+	static bool Equals(const string &s1, const char *s2) {
+		return Equals(s1.c_str(), s2);
+	}
+	static bool Equals(const char *s1, const string &s2) {
+		return Equals(s1, s2.c_str());
+	}
+	static bool Equals(const string &s1, const string &s2) {
+		return s1 == s2;
+	}
+	static bool Equals(const string_t &s1, const char *s2);
+	static bool Equals(const char *s1, const string_t &s2);
 
 	//! JSON method that parses a { string: value } JSON blob
 	//! NOTE: this method is not efficient

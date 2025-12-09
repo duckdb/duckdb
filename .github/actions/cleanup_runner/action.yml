@@ -1,0 +1,22 @@
+name: 'Cleanup Runner'
+runs:
+  using: "composite"
+  steps:
+    - name: Before
+      shell: bash
+      run: df -h
+
+    - name: Free disk space
+      uses: endersonmenezes/free-disk-space@v3
+      with:
+        rm_cmd: "rmz" # apparently faster
+        remove_android: true
+        remove_dotnet: true
+        remove_haskell: true
+        remove_tool_cache: true
+        remove_folders: /opt/az /opt/ghc /opt/google /opt/hostedtoolcache /opt/microsoft /usr/lib/firefox /usr/lib/jvm /usr/local/.ghcup /usr/local/julia* /usr/local/lib/android /usr/local/share/boost /usr/local/share/chromium /usr/local/share/powershell /usr/share/dotnet /usr/share/swift /var/lib/apt/lists/*
+
+    - name: After
+      shell: bash
+      run: df -h
+

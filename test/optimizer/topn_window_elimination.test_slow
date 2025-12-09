@@ -1,0 +1,227 @@
+# name: test/optimizer/topn_window_elimination.test_slow
+# description: Test Top-N Window Elimination Rule
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM VALUES (0, {'x': 0}, 0), (0, {'x': 1}, 1), (1, {'x': 2}, 2), (null, {'x': 3}, 3), (null, {'x': 4}, 4), t(grp, a, b)
+
+statement ok
+CREATE TABLE tbl_with_null AS SELECT * FROM VALUES (0, [0], null), (0, [1], 1), (1, [2], null), (null, [3], 3), (null, [4], 4), t(grp, a, b)
+
+statement ok
+CREATE TABLE tbl2 AS SELECT * FROM VALUES (0, 'a'), (1, 'b'), (null, 'c'), t(x, y)
+
+statement ok
+CREATE MACRO window_fun(table_name, col_names, sort_order, topn) AS TABLE
+FROM query(
+	'SELECT * FROM (SELECT row_number() OVER (PARTITION BY grp ORDER BY b ' || sort_order || ') as rn, ' || array_to_string(col_names, ',') || ' FROM ' || table_name || ' QUALIFY rn <= ' || topn || ') ORDER BY ALL'
+)
+
+statement ok
+CREATE MACRO lateral_join(sort_order, topn) AS TABLE
+FROM query (
+	'SELECT t1.* FROM tbl t1 INNER JOIN LATERAL (SELECT * FROM tbl t2 WHERE t1.grp = t2.grp ORDER BY b ' || sort_order || ' LIMIT ' || topn || ' ) ON true'
+)
+
+# test min_max
+foreach sort_order ASC DESC
+
+# test topn sizes
+loop topn 1 3
+
+# min/max
+query II
+EXPLAIN SELECT * FROM window_fun('tbl', ['grp'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# arg_min/max, no struct_pack
+query II
+EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# arg_min/max with struct_pack
+query II
+EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# min/max and nulls
+query II
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# arg_min/max, no struct_pack and nulls
+query II
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# arg_min/max with struct_pack and nulls
+query II
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# window function with join and one-sided projections
+query II
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# window function with join and one-sided projections + join column
+query II
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+
+# window function with join and two-sided projections
+query II
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'y'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+
+# test lateral join
+query II
+EXPLAIN SELECT * FROM lateral_join('${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_1 AS SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_2 AS SELECT * FROM window_fun('tbl', ['b', 'a', 'grp'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_3 AS SELECT * FROM window_fun('tbl', ['grp', 'a'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_4 AS SELECT * FROM window_fun('tbl', ['a', 'b'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_5 AS SELECT * FROM window_fun('tbl', ['a'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_6 AS SELECT * FROM lateral_join('${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_7 AS SELECT * FROM window_fun('tbl_with_null', ['a', 'grp'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_8 AS SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_9 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_10 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+query IIII
+SELECT * FROM ${sort_order}${topn}_1 EXCEPT SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+
+query IIII
+SELECT * FROM ${sort_order}${topn}_2 EXCEPT SELECT * FROM window_fun('tbl', ['b', 'a', 'grp'], '${sort_order}', ${topn})
+----
+
+query III
+SELECT * FROM ${sort_order}${topn}_3 EXCEPT SELECT * FROM window_fun('tbl', ['grp', 'a'], '${sort_order}', ${topn})
+----
+
+query III
+SELECT * FROM ${sort_order}${topn}_4 EXCEPT SELECT * FROM window_fun('tbl', ['a', 'b'], '${sort_order}', ${topn})
+----
+
+query II
+SELECT * FROM ${sort_order}${topn}_5 EXCEPT SELECT * FROM window_fun('tbl', ['a'], '${sort_order}', ${topn})
+----
+
+query III
+SELECT * FROM ${sort_order}${topn}_6 EXCEPT SELECT * FROM lateral_join('${sort_order}', ${topn})
+----
+
+query III
+SELECT * FROM ${sort_order}${topn}_7 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['a', 'grp'], '${sort_order}', ${topn})
+----
+
+query IIII
+SELECT * FROM ${sort_order}${topn}_8 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+
+query IIII
+SELECT * FROM ${sort_order}${topn}_9 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+
+query IIIII
+SELECT * FROM ${sort_order}${topn}_10 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+----
+
+statement ok
+SET disabled_optimizers = ''
+
+endloop
+
+endloop
+
+# Test vector functions
+statement ok
+CREATE TABLE vectors AS
+SELECT [x,y,z] AS vec, row_number() OVER () AS id
+FROM range(0,10) r(x), range(0,10) rr(y), range(0, 10) rrr(z)
+
+statement ok
+CREATE OR REPLACE TABLE with_optimizer AS SELECT * EXCLUDE (rn)
+FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
+WHERE rn <= 7
+
+statement ok
+set disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE OR REPLACE TABLE without_optimizer AS SELECT * EXCLUDE (rn)
+FROM (SELECT *, list_distance(vec, [5,5,5]) AS dist, row_number() over (ORDER BY dist ASC) as rn FROM vectors)
+WHERE rn <= 7
+
+statement ok
+set disabled_optimizers = ''
+
+query III
+SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
+----
+
+statement ok
+CREATE OR REPLACE TABLE with_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
+FROM vectors as a, LATERAL (
+	SELECT *, b.id
+	FROM vectors as b
+	ORDER BY list_distance(a.vec, b.vec) LIMIT 1
+) as neighbor
+ORDER BY a.id, list_distance(a.vec, neighbor.vec);
+
+statement ok
+set disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE OR REPLACE TABLE without_optimizer AS SELECT a.id, a.vec, neighbor.id as nbr_id, neighbor.vec as nbr_vec
+FROM vectors as a, LATERAL (
+	SELECT *, b.id
+	FROM vectors as b
+	ORDER BY list_distance(a.vec, b.vec) LIMIT 1
+) as neighbor
+ORDER BY a.id, list_distance(a.vec, neighbor.vec);
+
+query IIII
+SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
+---

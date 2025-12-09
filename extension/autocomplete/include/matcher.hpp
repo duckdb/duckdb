@@ -26,6 +26,7 @@ enum class SuggestionState : uint8_t {
 	SUGGEST_TYPE_NAME,
 	SUGGEST_COLUMN_NAME,
 	SUGGEST_FILE_NAME,
+	SUGGEST_DIRECTORY,
 	SUGGEST_VARIABLE,
 	SUGGEST_SCALAR_FUNCTION_NAME,
 	SUGGEST_TABLE_FUNCTION_NAME,
@@ -38,17 +39,20 @@ enum class CandidateType { KEYWORD, IDENTIFIER, LITERAL };
 
 struct AutoCompleteCandidate {
 	// NOLINTNEXTLINE: allow implicit conversion from string
-	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0,
+	AutoCompleteCandidate(string candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
 	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
-	    : candidate(std::move(candidate_p)), score_bonus(score_bonus), candidate_type(candidate_type) {
+	    : candidate(std::move(candidate_p)), suggestion_type(suggestion_type), score_bonus(score_bonus),
+	      candidate_type(candidate_type) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from const char*
-	AutoCompleteCandidate(const char *candidate_p, int32_t score_bonus = 0,
+	AutoCompleteCandidate(const char *candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
 	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
-	    : AutoCompleteCandidate(string(candidate_p), score_bonus, candidate_type) {
+	    : AutoCompleteCandidate(string(candidate_p), suggestion_type, score_bonus, candidate_type) {
 	}
 
 	string candidate;
+	//! Type being suggested
+	SuggestionState suggestion_type;
 	//! The higher the score bonus, the more likely this candidate will be chosen
 	int32_t score_bonus;
 	//! The type of candidate we are suggesting - this modifies how we handle quoting/case sensitivity
@@ -57,14 +61,20 @@ struct AutoCompleteCandidate {
 	char extra_char = '\0';
 	//! Suggestion position
 	idx_t suggestion_pos = 0;
+	//! The final score
+	optional_idx score;
 };
 
 struct AutoCompleteSuggestion {
-	AutoCompleteSuggestion(string text_p, idx_t pos) : text(std::move(text_p)), pos(pos) {
+	AutoCompleteSuggestion(string text_p, idx_t pos, string type_p, idx_t score, char extra_char_p)
+	    : text(std::move(text_p)), pos(pos), type(std::move(type_p)), score(score), extra_char(extra_char_p) {
 	}
 
 	string text;
 	idx_t pos;
+	string type;
+	idx_t score;
+	char extra_char;
 };
 
 enum class MatchResultType { SUCCESS, FAIL };
@@ -87,11 +97,11 @@ struct MatcherToken {
 
 struct MatcherSuggestion {
 	// NOLINTNEXTLINE: allow implicit conversion from auto-complete candidate
-	MatcherSuggestion(AutoCompleteCandidate keyword_p)
-	    : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
+	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(keyword.suggestion_type) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from suggestion state
-	MatcherSuggestion(SuggestionState type, char extra_char = '\0') : keyword(""), type(type), extra_char(extra_char) {
+	MatcherSuggestion(SuggestionState type, char extra_char = '\0')
+	    : keyword("", type), type(type), extra_char(extra_char) {
 	}
 
 	//! Literal suggestion

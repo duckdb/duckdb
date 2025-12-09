@@ -222,8 +222,8 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda expression to list child type");
 	}
-	bound_function.return_type = cast_lambda_expr->return_type;
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index,
+	bound_function.SetReturnType(cast_lambda_expr->return_type);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
 	                                     has_initial);
 }
 
@@ -310,10 +310,10 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::ANY,
 	                   LambdaFunctions::ListReduceFunction, ListReduceBind, nullptr, nullptr);
 
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = ListLambdaBindData::Serialize;
-	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.bind_lambda = ListReduceBindLambda;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
+	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
+	fun.SetBindLambdaCallback(ListReduceBindLambda);
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);

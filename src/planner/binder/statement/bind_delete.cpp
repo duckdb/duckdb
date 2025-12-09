@@ -26,7 +26,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::DELETE_DATA);
 	}
 
 	// plan any tables from the various using clauses
@@ -84,7 +84,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 
 	return result;

@@ -205,7 +205,7 @@ void LogManager::SetEnableStructuredLoggers(vector<string> &enabled_logger_types
 			throw InvalidInputException("Unknown log type: '%s'", enabled_logger_type);
 		}
 
-		new_config.enabled_log_types.insert(enabled_logger_type);
+		new_config.enabled_log_types.insert(lookup->name);
 
 		min_log_level = MinValue(min_log_level, lookup->level);
 	}
@@ -266,6 +266,7 @@ void LogManager::RegisterDefaultLogTypes() {
 	RegisterLogType(make_uniq<HTTPLogType>());
 	RegisterLogType(make_uniq<QueryLogType>());
 	RegisterLogType(make_uniq<PhysicalOperatorLogType>());
+	RegisterLogType(make_uniq<MetricsLogType>());
 }
 
 } // namespace duckdb

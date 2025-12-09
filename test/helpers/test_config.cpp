@@ -301,6 +301,7 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
 	}
 	return res;
 }
@@ -352,27 +353,33 @@ string TestConfiguration::ReadFileToString(const string &path) {
 }
 
 void TestConfiguration::LoadConfig(const string &config_path) {
-	// read the config file
-	auto buffer = ReadFileToString(config_path);
-	// parse json
-	auto json = StringUtil::ParseJSONMap(buffer);
-	auto json_values = json->Flatten();
-	for (auto &entry : json_values) {
-		ParseOption(entry.first, Value(entry.second));
-	}
-
-	// Convert to unordered_set<string> the list of tests to be skipped
-	auto entry = options.find("skip_tests");
-	if (entry != options.end()) {
-		auto skip_list_entry = ListValue::GetChildren(entry->second);
-		for (const auto &value : skip_list_entry) {
-			auto children = StructValue::GetChildren(value);
-			auto skip_list = ListValue::GetChildren(children[1]);
-			for (const auto &skipped_test : skip_list) {
-				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
-			}
+	try {
+		// read the config file
+		auto buffer = ReadFileToString(config_path);
+		// parse json
+		auto json = StringUtil::ParseJSONMap(buffer);
+		auto json_values = json->Flatten();
+		for (auto &entry : json_values) {
+			ParseOption(entry.first, Value(entry.second));
 		}
-		options.erase("skip_tests");
+
+		// Convert to unordered_set<string> the list of tests to be skipped
+		auto entry = options.find("skip_tests");
+		if (entry != options.end()) {
+			auto skip_list_entry = ListValue::GetChildren(entry->second);
+			for (const auto &value : skip_list_entry) {
+				auto children = StructValue::GetChildren(value);
+				auto skip_list = ListValue::GetChildren(children[1]);
+				for (const auto &skipped_test : skip_list) {
+					tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+				}
+			}
+			options.erase("skip_tests");
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		throw std::runtime_error(
+		    StringUtil::Format("Failed to parse config file \"%s\": %s", config_path, error.Message()));
 	}
 }
 

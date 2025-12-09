@@ -102,7 +102,7 @@ public:
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
-			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+			(&sort_key.part0)[i] = BSwapIfLE((&sort_key.part0)[i]);
 		}
 	}
 
@@ -143,10 +143,6 @@ public:
 		val = static_cast<int64_t>(sort_key.part0); // NOLINT: unsafe cast on purpose
 	}
 
-	void Reconstruct() {
-		ByteSwap();
-	}
-
 	data_ptr_t GetData() const {
 		throw InternalException("GetData() called on a FixedSortKey");
 	}
@@ -176,7 +172,7 @@ public:
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
-			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+			(&sort_key.part0)[i] = BSwapIfLE((&sort_key.part0)[i]);
 		}
 	}
 
@@ -217,13 +213,6 @@ public:
 
 	void Deconstruct(int64_t &) {
 		throw InternalException("VariableSortKey::Deconstruct() called with an int64_t");
-	}
-
-	void Reconstruct() {
-		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		if (sort_key.size <= SORT_KEY::INLINE_LENGTH) {
-			ByteSwap();
-		}
 	}
 
 	data_ptr_t GetData() const {

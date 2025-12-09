@@ -98,7 +98,7 @@ struct ZSTDStorage {
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnSegment &segment);
+	static void VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor);
 };
 
 //===--------------------------------------------------------------------===//
@@ -142,6 +142,11 @@ public:
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports sztd
 	auto &storage = col_data.GetStorageManager();
+	auto &block_manager = col_data.GetBlockManager();
+	if (block_manager.InMemory()) {
+		//! Can't use ZSTD in in-memory environment
+		return nullptr;
+	}
 	if (storage.GetStorageVersion() < 4) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
@@ -307,14 +312,8 @@ public:
 			throw InternalException("We are asking for a new segment, but somehow we're still writing vector data onto "
 			                        "the initial (segment) page");
 		}
-		idx_t row_start;
-		if (segment) {
-			row_start = segment->start + segment->count;
-			FlushSegment();
-		} else {
-			row_start = checkpoint_data.GetRowGroup().start;
-		}
-		CreateEmptySegment(row_start);
+		FlushSegment();
+		CreateEmptySegment();
 
 		// Figure out how many vectors we are storing in this segment
 		idx_t vectors_in_segment;
@@ -424,7 +423,7 @@ public:
 		}
 	}
 
-	void AddString(const string_t &string) {
+	void AddStringInternal(const string_t &string) {
 		if (!tuple_count) {
 			InitializeVector();
 		}
@@ -438,7 +437,10 @@ public:
 			// Reached the end of this vector
 			FlushVector();
 		}
+	}
 
+	void AddString(const string_t &string) {
+		AddStringInternal(string);
 		UncompressedStringStorage::UpdateStringStats(segment->stats, string);
 	}
 
@@ -453,7 +455,8 @@ public:
 
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = block_manager.GetFreeBlockId();
+		auto new_id = partial_block_manager.GetFreeBlockId();
+
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
@@ -519,11 +522,11 @@ public:
 		return res;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
@@ -531,6 +534,9 @@ public:
 	}
 
 	void FlushSegment() {
+		if (!segment) {
+			return;
+		}
 		auto &state = checkpoint_data.GetCheckpointState();
 		idx_t segment_block_size;
 
@@ -553,7 +559,8 @@ public:
 	}
 
 	void AddNull() {
-		AddString("");
+		segment->stats.statistics.SetHasNullFast();
+		AddStringInternal("");
 	}
 
 public:
@@ -988,7 +995,7 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &con
 void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
 	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
@@ -1035,11 +1042,10 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 	return std::move(result);
 }
 
-void ZSTDStorage::CleanupState(ColumnSegment &segment) {
+void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManager();
 	for (auto &block_id : state.on_disk_blocks) {
-		block_manager.MarkBlockAsModified(block_id);
+		visitor.Visit(block_id);
 	}
 }
 
@@ -1056,7 +1062,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
 	zstd.deserialize_state = ZSTDStorage::DeserializeState;
-	zstd.cleanup_state = ZSTDStorage::CleanupState;
+	zstd.visit_block_ids = ZSTDStorage::VisitBlockIds;
 	return zstd;
 }
 
