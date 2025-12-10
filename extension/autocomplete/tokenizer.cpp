@@ -145,11 +145,20 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end) {
 	tokens.emplace_back(std::move(last_token), start);
 }
 
+// Valid characters can be between A-Z, a-z, 0-9, underscore, or \200 - \377
+// Note: 0-9 are only valid after the first character. Callers are expected to validate that before calling this
+// function.
 bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 	if (c >= 'A' && c <= 'Z') {
 		return true;
 	}
 	if (c >= 'a' && c <= 'z') {
+		return true;
+	}
+	if (c >= '0' && c <= '9') {
+		return true;
+	}
+	if (c == '_') {
 		return true;
 	}
 	if (c >= '\200' && c <= '\377') {
