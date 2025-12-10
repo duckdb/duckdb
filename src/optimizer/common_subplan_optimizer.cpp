@@ -685,18 +685,33 @@ public:
 
 		// Filter out redundant or ineligible subplans before returning
 		const auto subplan_infos = GetSortedSubplans();
+		vector<subplan_map_t::key_type> to_remove;
 		for (auto &entry : subplan_infos) {
 			const auto it = subplans.find(entry.get().first);
 			D_ASSERT(it != subplans.end());
 			const auto &signature = it->first.get();
 			auto &subplan_info = it->second;
 			if (signature.OperatorCount() == 1) {
-				subplans.erase(it); // Just one operator in this subplan
+				to_remove.push_back(it->first); // Just one operator in this subplan
 				continue;
 			}
 			if (subplan_info.subplans.size() == 1) {
-				subplans.erase(it); // No other identical subplan
+				to_remove.push_back(it->first); // No other identical subplan
 				continue;
+			}
+
+			auto &parent_op = operator_infos.find(subplan_info.subplans[0].op)->second.parent;
+			auto &parent_signature = operator_infos.find(parent_op)->second.signature;
+			if (parent_signature) {
+				auto parent_it = subplans.find(*parent_signature);
+				if (parent_it != subplans.end()) {
+					const auto subplan_count = it->second.subplans.size() * signature.OperatorCount();
+					const auto parent_count = parent_it->second.subplans.size() * parent_signature->OperatorCount();
+					if (parent_count >= subplan_count) {
+						to_remove.push_back(it->first); // Parent is better, this one is redundant
+						continue;
+					}
+				}
 			}
 
 			// Collect all subplan bindings, and figure out which subplan has the most outgoing bindings
@@ -736,23 +751,19 @@ public:
 				}
 			}
 
-			auto &subplan = subplan_info.subplans[0];
-			auto &parent = operator_infos.find(subplan.op)->second.parent;
-			auto &parent_signature = operator_infos.find(parent)->second.signature;
-			if (parent_signature) {
-				auto parent_it = subplans.find(*parent_signature);
-				if (parent_it != subplans.end() && subplan_info.subplans.size() == parent_it->second.subplans.size()) {
-					bail = true; // Parent has exact same number of identical subplans
-				}
-			}
-
-			if (!CTEInlining::EndsInAggregateOrDistinct(*subplan.op.get()) && !IsSelectiveMultiTablePlan(subplan.op)) {
+			auto &subplan = subplan_info.subplans[0].op.get();
+			if (!CTEInlining::EndsInAggregateOrDistinct(*subplan) && !IsSelectiveMultiTablePlan(subplan)) {
 				bail = true; // Does not end in agg or distinct, and is not a selective multi table plan
 			}
 
 			if (bail) {
-				subplans.erase(it);
+				to_remove.push_back(it->first);
 			}
+		}
+
+		// Only remove them all at the end so the logic above doesn't get affected
+		for (auto &signature : to_remove) {
+			subplans.erase(signature);
 		}
 
 		return GetSortedSubplans();
@@ -878,7 +889,7 @@ CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimiz
 static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info,
                                  idx_t index) {
 	const auto cte_index = optimizer.binder.GenerateTableIndex();
-	const auto cte_name = StringUtil::Format("__common_subplan_%llu", index);
+	const auto cte_name = StringUtil::Format("__common_subplan_%llu", index + 1);
 
 	// Resolve types to be used for creating the materialized CTE and refs
 	op->ResolveOperatorTypes();
