@@ -117,7 +117,6 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(type_name.typmods->length));
 	}
 	if (base_type == LogicalTypeId::GEOMETRY) {
-		// Always return a type with GeoTypeInfo
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			return LogicalType::GEOMETRY();
 		}

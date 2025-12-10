@@ -2034,8 +2034,7 @@ LogicalType LogicalType::VARIANT() {
 //===--------------------------------------------------------------------===//
 
 LogicalType LogicalType::GEOMETRY() {
-	auto info = make_shared_ptr<GeoTypeInfo>();
-	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+	return LogicalType(LogicalTypeId::GEOMETRY);
 }
 
 LogicalType LogicalType::GEOMETRY(const string &crs) {
@@ -2053,7 +2052,9 @@ LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
+	if (!info) {
+		return false;
+	}
 	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	const auto &geo_info = info->Cast<GeoTypeInfo>();
 
@@ -2063,6 +2064,9 @@ bool GeoType::HasCRS(const LogicalType &type) {
 const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
+	if (!info) {
+		throw InternalException("Geometry type has no CRS information");
+	}
 	D_ASSERT(info);
 	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	auto &geo_info = info->Cast<GeoTypeInfo>();
