@@ -167,7 +167,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		}
 		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
 		candidates.insert(candidate);
-		scores.emplace_back(make_pair(std::move(candidate), score));
+		scores.emplace_back(std::move(candidate), score);
 	}
 	// get a new top-n
 	auto top_candidates = StringUtil::TopNStrings(scores);
