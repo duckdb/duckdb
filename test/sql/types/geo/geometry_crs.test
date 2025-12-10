@@ -10,16 +10,16 @@ statement ok
 create table t1 (g GEOMETRY('EPSG:4326'));
 
 statement ok
-insert into t1 values ('POINT(0 1)');
-
-statement ok
 create table t2 (g GEOMETRY('EPSG:3857'));
 
-# We cannot insert into t2 from t1 because of CRS mismatch
+statement ok
+insert into t2 values ('POINT(0 1)');
+
+# We cannot insert into t1 from t2 because of CRS mismatch
 statement error
-insert into t2 select * from t1;
+insert into t1 select * from t2;
 ----
-Binder Error: Cannot cast GEOMETRY with CRS 'EPSG:4326' to GEOMETRY with different CRS 'EPSG:3857'
+Binder Error: Cannot cast GEOMETRY with CRS 'EPSG:3857' to GEOMETRY with different CRS 'EPSG:4326'
 
 # But we can insert unknown CRS
 statement ok
@@ -34,3 +34,4 @@ query I
 select st_crs(g) from t2;
 ----
 EPSG:3857
+
