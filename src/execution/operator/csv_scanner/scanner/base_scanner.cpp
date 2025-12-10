@@ -26,6 +26,10 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	}
 }
 
+void BaseScanner::Print() const {
+	state_machine->Print();
+}
+
 string BaseScanner::RemoveSeparator(const char *value_ptr, const idx_t size, char thousands_separator) {
 	string result;
 	result.reserve(size);

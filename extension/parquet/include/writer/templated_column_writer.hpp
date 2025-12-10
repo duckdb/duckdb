@@ -124,7 +124,8 @@ public:
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
 		auto result = make_uniq<StandardColumnWriterState<SRC, TGT, OP>>(writer, row_group, row_group.columns.size());
-		result->encoding = duckdb_parquet::Encoding::RLE_DICTIONARY;
+		result->encoding = writer.GetParquetVersion() == ParquetVersion::V1 ? duckdb_parquet::Encoding::PLAIN_DICTIONARY
+		                                                                    : duckdb_parquet::Encoding::RLE_DICTIONARY;
 		RegisterToRowGroup(row_group);
 		return std::move(result);
 	}
@@ -148,6 +149,8 @@ public:
 			}
 			page_state.dbp_encoder.FinishWrite(temp_writer);
 			break;
+		case duckdb_parquet::Encoding::PLAIN_DICTIONARY:
+			// PLAIN_DICTIONARY can be treated the same as RLE_DICTIONARY
 		case duckdb_parquet::Encoding::RLE_DICTIONARY:
 			D_ASSERT(page_state.dict_bit_width != 0);
 			if (!page_state.dict_written_value) {
@@ -264,7 +267,8 @@ public:
 
 	bool HasDictionary(PrimitiveColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		return state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY;
+		return state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY ||
+		       state.encoding == duckdb_parquet::Encoding::PLAIN_DICTIONARY;
 	}
 
 	idx_t DictionarySize(PrimitiveColumnWriterState &state_p) override {
@@ -284,7 +288,8 @@ public:
 
 	void FlushDictionary(PrimitiveColumnWriterState &state_p, ColumnWriterStatistics *stats) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		D_ASSERT(state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY);
+		D_ASSERT(state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY ||
+		         state.encoding == duckdb_parquet::Encoding::PLAIN_DICTIONARY);
 
 		if (writer.EnableBloomFilters()) {
 			state.bloom_filter =
@@ -309,7 +314,8 @@ public:
 	idx_t GetRowSize(const Vector &vector, const idx_t index,
 	                 const PrimitiveColumnWriterState &state_p) const override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-		if (state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY) {
+		if (state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY ||
+		    state.encoding == duckdb_parquet::Encoding::PLAIN_DICTIONARY) {
 			return (state.key_bit_width + 7) / 8;
 		} else {
 			return OP::template GetRowSize<SRC, TGT>(vector, index);
@@ -327,6 +333,8 @@ private:
 		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
 
 		switch (page_state.encoding) {
+		case duckdb_parquet::Encoding::PLAIN_DICTIONARY:
+			// PLAIN_DICTIONARY can be treated the same as RLE_DICTIONARY
 		case duckdb_parquet::Encoding::RLE_DICTIONARY: {
 			idx_t r = chunk_start;
 			if (!page_state.dict_written_value) {
