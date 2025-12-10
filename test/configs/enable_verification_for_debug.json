@@ -2,6 +2,7 @@
   "description": "Run with verification enabled (suitable for debug builds).",
   "on_init": "PRAGMA enable_verification;",
   "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/enable_verification.json",
   "skip_tests": [
     {
       "reason": "Contains random() or gen_random_uuid().",
@@ -685,51 +686,9 @@
       ]
     },
     {
-      "reason": "FIXME: Unexpected Parser Error",
-      "paths": [
-        "test/issues/general/test_16524.test",
-        "test/sql/alter/test_alter_if_exists.test",
-        "test/sql/catalog/comment_on.test",
-        "test/sql/catalog/comment_on_column.test",
-        "test/sql/catalog/comment_on_dependencies.test",
-        "test/sql/catalog/comment_on_extended.test",
-        "test/sql/catalog/comment_on_pg_description.test",
-        "test/sql/collate/test_collate_between.test",
-        "test/sql/index/create_index_options.test",
-        "test/sql/pragma/test_show_tables.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Unexpected catalog duplicate/missing entry error.",
-      "paths": [
-        "test/sql/catalog/function/test_macro_issue_13104.test",
-        "test/sql/catalog/function/test_macro_relpersistence_conflict.test",
-        "test/sql/catalog/function/test_recursive_macro.test",
-        "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
-        "test/sql/catalog/test_set_schema.test",
-        "test/sql/catalog/test_set_search_path.test",
-        "test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test",
-        "test/sql/function/list/lambdas/lambdas_and_functions.test"
-      ]
-    },
-    {
       "reason": "FIXME: Misc. unexpected failures (including internal exception).",
       "paths": [
-        "test/fuzzer/duckfuzz/null_arguments.test",
-        "test/issues/internal/test_5457.test",
-        "test/parquet/variant/variant_nanos_tz.test",
-        "test/parquet/variant/variant_nested_with_nulls.test",
-        "test/sql/aggregate/aggregates/test_state_export.test",
-        "test/sql/copy/file_size_bytes.test",
-        "test/sql/copy/parquet/bloom_filters.test",
-        "test/sql/copy/parquet/corrupt_stats.test",
-        "test/sql/copy/parquet/parquet_1618_struct_strings.test",
-        "test/sql/create/create_table_compression.test",
-        "test/sql/logging/logging_file_bind_replace.test",
-        "test/sql/optimizer/test_rowid_pushdown_plan.test",
-        "test/sql/pg_catalog/system_functions.test",
-        "test/sql/storage/compression/test_using_compression.test",
-        "test/sql/error/error_position.test"
+        "test/sql/copy/file_size_bytes.test"
       ]
     },
     {

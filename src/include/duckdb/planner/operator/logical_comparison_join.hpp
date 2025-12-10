@@ -52,7 +52,7 @@ public:
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              unique_ptr<Expression> condition);
-	static unique_ptr<LogicalOperator> CreateJoin(ClientContext &context, JoinType type, JoinRefType ref_type,
+	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, JoinRefType ref_type,
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              vector<JoinCondition> conditions,
