@@ -401,7 +401,8 @@ bool BaseTokenizer::TokenizeInput() {
 		break;
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
-		// no suggestions in comments
+	case TokenizeState::DOLLAR_QUOTED_STRING:
+		// no suggestions in comments or dollar-quoted strings
 		return false;
 	default:
 		break;
