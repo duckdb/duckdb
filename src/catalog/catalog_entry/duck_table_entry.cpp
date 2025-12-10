@@ -424,7 +424,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	// Store the expression in AlterInfo to keep it alive (the executor only stores a pointer)
 	info.default_expression = std::move(bound_defaults.back());
 
-	info.default_executor.reset(new ExpressionExecutor(context));
+	info.default_executor = make_uniq<ExpressionExecutor>(context);
 	info.default_executor->AddExpression(*info.default_expression);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column);
