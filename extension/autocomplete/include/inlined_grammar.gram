@@ -790,8 +790,8 @@ OptFull <- 'FULL'?
 OptFreeze <- 'FREEZE'?
 OptVerbose <- 'VERBOSE'?
 
-QualifiedTarget <- QualifiedName OptNameList
-OptNameList <- Parens(List(Name))?
+QualifiedTarget <- QualifiedName NameList?
+NameList <- Parens(List(ColId))
 MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
 MergeIntoUsingClause <- 'USING' TableRef JoinQualifier
 MergeMatch <- MatchedClause / NotMatchedClause
@@ -1458,8 +1458,7 @@ ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptions? Statement
 ExplainOptions <- Parens(GenericCopyOptionList)
 
 AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
-AnalyzeTarget <- QualifiedName Parens(List(Name))?
-Name <- ColId ('.' ColLabel)*
+AnalyzeTarget <- BaseTableName NameList?
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
 MacroOrFunction <- 'MACRO' / 'FUNCTION'

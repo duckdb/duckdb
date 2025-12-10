@@ -8,5 +8,5 @@ OptFull <- 'FULL'?
 OptFreeze <- 'FREEZE'?
 OptVerbose <- 'VERBOSE'?
 
-QualifiedTarget <- QualifiedName OptNameList
-OptNameList <- Parens(List(Name))?
+QualifiedTarget <- QualifiedName NameList?
+NameList <- Parens(List(ColId))

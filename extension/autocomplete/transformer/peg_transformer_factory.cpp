@@ -103,6 +103,13 @@ void PEGTransformerFactory::RegisterAttach() {
 	REGISTER_TRANSFORM(TransformGenericCopyOption);
 }
 
+void PEGTransformerFactory::RegisterAnalyze() {
+	// analyze.gram
+	REGISTER_TRANSFORM(TransformAnalyzeStatement);
+	REGISTER_TRANSFORM(TransformAnalyzeTarget);
+	REGISTER_TRANSFORM(TransformNameList);
+}
+
 void PEGTransformerFactory::RegisterCall() {
 	// call.gram
 	REGISTER_TRANSFORM(TransformCallStatement);
@@ -747,6 +754,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
 	RegisterAttach();
+	RegisterAnalyze();
 	RegisterCall();
 	RegisterCheckpoint();
 	RegisterComment();

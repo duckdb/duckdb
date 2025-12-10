@@ -5,6 +5,7 @@
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
 #include "ast/add_column_entry.hpp"
+#include "ast/analyze_target.hpp"
 #include "ast/column_elements.hpp"
 #include "ast/create_table_as.hpp"
 #include "ast/distinct_clause.hpp"
@@ -156,6 +157,7 @@ public:
 	// Registration methods
 	void RegisterAlter();
 	void RegisterAttach();
+	void RegisterAnalyze();
 	void RegisterCall();
 	void RegisterCheckpoint();
 	void RegisterComment();
@@ -284,6 +286,11 @@ private:
 	                                                                optional_ptr<ParseResult> parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
+
+	// analyze.gram
+	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformNameList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// call.gram
 	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
