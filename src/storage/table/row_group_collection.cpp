@@ -741,6 +741,53 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 	} while (pos < updates.size());
 }
 
+void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, optional_ptr<BoundIndex> &append_target,
+                            optional_ptr<BoundIndex> &remove_target) {
+	auto &main_index = entry.index->Cast<BoundIndex>();
+
+	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
+	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
+	bool index_requires_delta = main_index.RequiresTransactionality();
+
+	switch (removal_type) {
+	case IndexRemovalType::MAIN_INDEX_ONLY:
+		// directly remove from main index without appending to delta indexes
+		remove_target = main_index;
+		break;
+	case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
+		// revert main index only append - just add back to index
+		append_target = main_index;
+		break;
+	case IndexRemovalType::MAIN_INDEX:
+		// regular removal from main index - add rows to delta index if required
+		if (index_requires_delta) {
+			if (!entry.deleted_rows_in_use) {
+				// create "deleted_rows_in_use" if it does not exist yet
+				entry.deleted_rows_in_use =
+				    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
+			}
+			append_target = entry.deleted_rows_in_use;
+		}
+		remove_target = main_index;
+		break;
+	case IndexRemovalType::REVERT_MAIN_INDEX:
+		// revert regular append to main index - remove from deleted_rows_in_use if we appended there before
+		append_target = main_index;
+		if (index_requires_delta) {
+			remove_target = entry.deleted_rows_in_use;
+		}
+		break;
+	case IndexRemovalType::DELETED_ROWS_IN_USE:
+		// remove from removal index if we appended any rows
+		if (index_requires_delta) {
+			remove_target = entry.deleted_rows_in_use;
+		}
+		break;
+	default:
+		throw InternalException("Unsupported IndexRemovalType");
+	}
+}
+
 void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes,
                                            Vector &row_identifiers, idx_t count, IndexRemovalType removal_type) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
@@ -840,53 +887,15 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		indexes.ScanEntries([&](IndexEntry &entry) {
 			auto &index = *entry.index;
 			if (index.IsBound()) {
-				auto &main_index = index.Cast<BoundIndex>();
-				optional_ptr<BoundIndex> append_target, remove_target;
-				auto current_removal_type = removal_type;
-				if (!main_index.RequiresTransactionality()) {
-					// this index is not transactional - don't use "deleted_rows_in_use"
-					if (current_removal_type == IndexRemovalType::MAIN_INDEX) {
-						current_removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
-					} else if (current_removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
-						current_removal_type = IndexRemovalType::REVERT_MAIN_INDEX_ONLY;
-					} else if (current_removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
-						// nop
-						return false;
-					}
-				}
-
 				lock_guard<mutex> guard(entry.lock);
-				switch (current_removal_type) {
-				case IndexRemovalType::MAIN_INDEX_ONLY:
-					// directly remove from main index
-					remove_target = main_index;
-					break;
-				case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
-					// revert main index only append - just add back to index
-					append_target = main_index;
-					break;
-				case IndexRemovalType::MAIN_INDEX:
-					if (!entry.deleted_rows_in_use) {
-						// create "deleted_rows_in_use" if it does not exist yet
-						entry.deleted_rows_in_use =
-						    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
-					}
-					// remove from main index - add to removal index
-					remove_target = main_index;
-					append_target = entry.deleted_rows_in_use;
-					break;
-				case IndexRemovalType::REVERT_MAIN_INDEX:
-					// revert append - remove from deleted_rows_in_use and add back to main index
-					append_target = main_index;
-					remove_target = entry.deleted_rows_in_use;
-					break;
-				case IndexRemovalType::DELETED_ROWS_IN_USE:
-					// remove from removal index
-					remove_target = entry.deleted_rows_in_use;
-					break;
-				default:
-					throw InternalException("Unsupported IndexRemovalType");
-				}
+				// check which indexes we should append to or remove from
+				// note that this method might also involve appending to indexes
+				// the reason for that is that we have "delta" indexes that we must fill with data we are removing
+				// OR because we are actually reverting a previous removal
+				optional_ptr<BoundIndex> append_target, remove_target;
+				GetIndexRemovalTargets(entry, removal_type, append_target, remove_target);
+
+				// perform the targeted append / removal
 				if (append_target) {
 					IndexAppendInfo append_info;
 					auto error = append_target->Append(result_chunk, row_identifiers, append_info);
