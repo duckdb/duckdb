@@ -37,7 +37,7 @@ set(ZSTD_FILES
 	deprecated/zbuff_compress.cpp
 )
 
-add_library(duckdb_zstd STATIC ${ZSTD_FILES})
+add_library_unity(duckdb_zstd STATIC ${ZSTD_FILES})
 
 target_include_directories(
 		duckdb_zstd
