@@ -211,9 +211,9 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
 	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
 }
 
-void StandardColumnData::CommitDropColumn() {
-	ColumnData::CommitDropColumn();
-	validity->CommitDropColumn();
+void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	ColumnData::VisitBlockIds(visitor);
+	validity->VisitBlockIds(visitor);
 }
 
 void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {

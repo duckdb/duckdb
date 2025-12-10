@@ -469,7 +469,7 @@ block_id_t MetadataManager::PeekNextBlockId() const {
 }
 
 block_id_t MetadataManager::GetNextBlockId() const {
-	return block_manager.GetFreeBlockId();
+	return block_manager.GetFreeBlockIdForCheckpoint();
 }
 
 } // namespace duckdb

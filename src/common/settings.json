@@ -226,6 +226,13 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_checkpoint_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep before a checkpoint",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -504,6 +511,13 @@
         "type": "ENUM<ExplainOutputType>",
         "scope": "local",
         "internal_setting": "explain_output_type"
+    },
+    {
+        "name": "extension_directories",
+        "description": "Set the directories to store extensions in",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "extension_directory",

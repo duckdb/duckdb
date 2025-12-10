@@ -178,20 +178,20 @@ private:
 //! DatabaseHeader.
 struct DatabaseHeader {
 	//! The iteration count, increases by 1 every time the storage is checkpointed.
-	uint64_t iteration;
+	uint64_t iteration = 0;
 	//! A pointer to the initial meta block
-	idx_t meta_block;
+	idx_t meta_block = 0;
 	//! A pointer to the block containing the free list
-	idx_t free_list;
+	idx_t free_list = 0;
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
-	uint64_t block_count;
+	uint64_t block_count = 0;
 	//! The allocation size of blocks in this database file. Defaults to default_block_alloc_size (DBConfig).
-	idx_t block_alloc_size;
+	idx_t block_alloc_size = 0;
 	//! The vector size of the database file
-	idx_t vector_size;
+	idx_t vector_size = 0;
 	//! The serialization compatibility version
-	idx_t serialization_compatibility;
+	idx_t serialization_compatibility = 0;
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
