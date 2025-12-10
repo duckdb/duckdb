@@ -661,7 +661,7 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 }
 
 unique_ptr<PaginatedResult<OpenFileInfo>> FileSystem::PaginatedGlobFiles(const string &pattern, ClientContext &context,
-																		 const FileGlobInput &input) {
+                                                                         const FileGlobInput &input) {
 	auto result = PaginatedGlob(pattern);
 	if (!result->FetchNextPage()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
