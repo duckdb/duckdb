@@ -1,5 +1,5 @@
 # name: test/sql/index/art/constraints/test_art_tx_over_eager.test
-# description: Verify that, also with background transactions, we can immediately
+# description: Verify that, also with background transactions, we can immediately re-insert deleted keys after the delete is committed
 # group: [constraints]
 
 statement ok

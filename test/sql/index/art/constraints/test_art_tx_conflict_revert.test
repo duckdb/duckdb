@@ -1,5 +1,5 @@
 # name: test/sql/index/art/constraints/test_art_tx_conflict_revert.test
-# description: Verify that, also with background transactions, we can immediately
+# description: Test reverting of a commit that has removed from indexes
 # group: [constraints]
 
 statement ok

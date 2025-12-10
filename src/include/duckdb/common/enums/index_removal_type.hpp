@@ -11,11 +11,16 @@
 namespace duckdb {
 
 enum class IndexRemovalType {
+	//! Remove from main index, insert into deleted_rows_in_use
 	MAIN_INDEX,
-	DELETED_ROWS_IN_USE,
+	//! Remove from main index only
 	MAIN_INDEX_ONLY,
-	REVERT_MAIN_INDEX_APPEND,
-	REVERT_MAIN_INDEX_ONLY_APPEND
+	//! Revert MAIN_INDEX, i.e. append to main index and remove from deleted_rows_in_use
+	REVERT_MAIN_INDEX,
+	//! Revert MAIN_INDEX_ONLY, i.e. append to main index
+	REVERT_MAIN_INDEX_ONLY,
+	//! Remove from deleted_rows_in_use
+	DELETED_ROWS_IN_USE
 };
 
 } // namespace duckdb

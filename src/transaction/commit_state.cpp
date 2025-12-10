@@ -82,7 +82,7 @@ CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
-	if (commit_mode == CommitMode::PERFORM_COMMIT) {
+	if (commit_mode == CommitMode::COMMIT) {
 		if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
 			// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
 			return IndexRemovalType::MAIN_INDEX_ONLY;
@@ -91,9 +91,9 @@ IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transac
 	}
 	// revert the appends to the indexes
 	if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
-		return IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
+		return IndexRemovalType::REVERT_MAIN_INDEX_ONLY;
 	}
-	return IndexRemovalType::REVERT_MAIN_INDEX_APPEND;
+	return IndexRemovalType::REVERT_MAIN_INDEX;
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {

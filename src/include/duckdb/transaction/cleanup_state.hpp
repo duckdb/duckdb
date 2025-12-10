@@ -34,6 +34,7 @@ private:
 	//! Lowest active transaction
 	transaction_t lowest_active_transaction;
 	ActiveTransactionState transaction_state;
+	//! While cleaning up, we remove data from any delta indexes we added data to during the commit
 	IndexDataRemover index_data_remover;
 
 private:

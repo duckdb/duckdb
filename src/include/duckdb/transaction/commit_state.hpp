@@ -25,7 +25,7 @@ class DataTable;
 struct DeleteInfo;
 struct UpdateInfo;
 
-enum class CommitMode { PERFORM_COMMIT, REVERT_COMMIT };
+enum class CommitMode { COMMIT, REVERT_COMMIT };
 
 struct IndexDataRemover {
 public:

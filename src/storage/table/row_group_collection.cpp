@@ -841,14 +841,14 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			auto &index = *entry.index;
 			if (index.IsBound()) {
 				auto &main_index = index.Cast<BoundIndex>();
-				optional_ptr<BoundIndex> add_index, removal_index;
+				optional_ptr<BoundIndex> append_target, remove_target;
 				auto current_removal_type = removal_type;
 				if (!main_index.RequiresTransactionality()) {
 					// this index is not transactional - don't use "deleted_rows_in_use"
 					if (current_removal_type == IndexRemovalType::MAIN_INDEX) {
 						current_removal_type = IndexRemovalType::MAIN_INDEX_ONLY;
-					} else if (current_removal_type == IndexRemovalType::REVERT_MAIN_INDEX_APPEND) {
-						current_removal_type = IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
+					} else if (current_removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
+						current_removal_type = IndexRemovalType::REVERT_MAIN_INDEX_ONLY;
 					} else if (current_removal_type == IndexRemovalType::DELETED_ROWS_IN_USE) {
 						// nop
 						return false;
@@ -859,11 +859,11 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 				switch (current_removal_type) {
 				case IndexRemovalType::MAIN_INDEX_ONLY:
 					// directly remove from main index
-					removal_index = main_index;
+					remove_target = main_index;
 					break;
-				case IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND:
+				case IndexRemovalType::REVERT_MAIN_INDEX_ONLY:
 					// revert main index only append - just add back to index
-					add_index = main_index;
+					append_target = main_index;
 					break;
 				case IndexRemovalType::MAIN_INDEX:
 					if (!entry.deleted_rows_in_use) {
@@ -872,30 +872,30 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 						    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
 					}
 					// remove from main index - add to removal index
-					removal_index = main_index;
-					add_index = entry.deleted_rows_in_use;
+					remove_target = main_index;
+					append_target = entry.deleted_rows_in_use;
 					break;
-				case IndexRemovalType::REVERT_MAIN_INDEX_APPEND:
+				case IndexRemovalType::REVERT_MAIN_INDEX:
 					// revert append - remove from deleted_rows_in_use and add back to main index
-					add_index = main_index;
-					removal_index = entry.deleted_rows_in_use;
+					append_target = main_index;
+					remove_target = entry.deleted_rows_in_use;
 					break;
 				case IndexRemovalType::DELETED_ROWS_IN_USE:
 					// remove from removal index
-					removal_index = entry.deleted_rows_in_use;
+					remove_target = entry.deleted_rows_in_use;
 					break;
 				default:
 					throw InternalException("Unsupported IndexRemovalType");
 				}
-				if (add_index) {
+				if (append_target) {
 					IndexAppendInfo append_info;
-					auto error = add_index->Append(result_chunk, row_identifiers, append_info);
+					auto error = append_target->Append(result_chunk, row_identifiers, append_info);
 					if (error.HasError()) {
-						throw InternalException("Failed to append to %s: %s", add_index->name, error.Message());
+						throw InternalException("Failed to append to %s: %s", append_target->name, error.Message());
 					}
 				}
-				if (removal_index) {
-					removal_index->Delete(result_chunk, row_identifiers);
+				if (remove_target) {
+					remove_target->Delete(result_chunk, row_identifiers);
 				}
 				return false;
 			}
