@@ -17,6 +17,7 @@
 #include <cctype>
 #include <iomanip>
 #include <memory>
+#include <cmath>
 #include <stdarg.h>
 #include <string.h>
 #include <stack>
@@ -154,8 +155,7 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 
 	if (str[index] == quote) {
 		index++;
-		TakeWhile(
-		    str, index, [quote](char c) { return c != quote; }, entry);
+		TakeWhile(str, index, [quote](char c) { return c != quote; }, entry);
 		ConsumeLetter(str, index, quote);
 	} else {
 		TakeWhile(
@@ -298,10 +298,7 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 	while (idx < arg.size() && !StringUtil::CharacterIsSpace(arg[idx])) {
 		idx++;
 	}
-	if (limit < 0) {
-		// limit < 0, set limit to infinite
-		return (idx_t)-1;
-	}
+
 	string unit = StringUtil::Lower(arg.substr(start, idx - start));
 	idx_t multiplier;
 	if (unit == "byte" || unit == "bytes" || unit == "b") {
@@ -327,6 +324,15 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 		                      "MiB, GiB, TiB for 1024^i units)",
 		                      unit);
 	}
+
+	// Make sure the result is not greater than `idx_t` max value
+	constexpr double max_value = static_cast<double>(NumericLimits<idx_t>::Maximum());
+	const double double_multiplier = static_cast<double>(multiplier);
+
+	if (limit > (max_value / double_multiplier)) {
+		throw ParserException("Memory value out of range: value is too large");
+	}
+
 	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }
 

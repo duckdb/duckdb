@@ -5,14 +5,14 @@
 namespace duckdb {
 static void PraseFormattedBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto arg0 = args.data[0];
-	UnaryExecutor::Execute<string_t, int64_t>(arg0, result, args.size(), [&](string_t str) {
+	UnaryExecutor::Execute<string_t, idx_t>(arg0, result, args.size(), [&](string_t str) {
 		// Invalid input exceptions thrown from ParseMemoryLimit won't be handled but wil be thrown as is
 		return StringUtil::ParseFormattedBytes(str.GetString());
 	});
 }
 
 ScalarFunction ParseFormattedBytesFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT, PraseFormattedBytesFunction);
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, PraseFormattedBytesFunction);
 }
 
 } // namespace duckdb

@@ -1,0 +1,151 @@
+# name: test/sql/function/string/parse_formatted_bytes.test
+# description: Test the parse_formatted_bytes function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# Basic bytes and aliases
+query I
+SELECT parse_formatted_bytes('0 B');
+----
+0
+
+query I
+SELECT parse_formatted_bytes('1 byte');
+----
+1
+
+query I
+SELECT parse_formatted_bytes('2 bytes');
+----
+2
+
+query I
+SELECT parse_formatted_bytes('1 b');
+----
+1
+
+# Decimal (1000^i) units
+query I
+SELECT parse_formatted_bytes('1 KB');
+----
+1000
+
+query I
+SELECT parse_formatted_bytes('1.5 KB');
+----
+1500
+
+query I
+SELECT parse_formatted_bytes('2 MB');
+----
+2000000
+
+query I
+SELECT parse_formatted_bytes('1 GB');
+----
+1000000000
+
+query I
+SELECT parse_formatted_bytes('1 TB');
+----
+1000000000000
+
+# Binary (1024^i) units
+query I
+SELECT parse_formatted_bytes('1 KiB');
+----
+1024
+
+query I
+SELECT parse_formatted_bytes('1.5 KiB');
+----
+1536
+
+query I
+SELECT parse_formatted_bytes('2 MiB');
+----
+2097152
+
+query I
+SELECT parse_formatted_bytes('1 GiB');
+----
+1073741824
+
+# No-space and mixed casing should work
+query I
+SELECT parse_formatted_bytes('5MB');
+----
+5000000
+
+query I
+SELECT parse_formatted_bytes('  2  mib  ');
+----
+2097152
+
+query I
+SELECT parse_formatted_bytes('1e3 b');
+----
+1000
+
+# NULL input propagates to NULL
+query I
+SELECT parse_formatted_bytes(NULL);
+----
+NULL
+
+# Negative values are mapped to max uint64
+query I
+SELECT parse_formatted_bytes('-5 MB');
+----
+18446744073709551615
+
+# null string is mapped to inifinte (max uint64)
+query I
+SELECT parse_formatted_bytes('null');
+----
+18446744073709551615
+
+# none is mapped to infinite (max uint64)
+query I
+SELECT parse_formatted_bytes('none');
+----
+18446744073709551615
+
+# Error cases
+statement error
+SELECT parse_formatted_bytes('5');
+----
+Parser Error: Unknown unit for memory: '' (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
+
+statement error
+SELECT parse_formatted_bytes('abc');
+----
+Memory must have a number (e.g. 1GB)
+
+statement error
+SELECT parse_formatted_bytes('1 Ki');
+----
+Unknown unit for memory: 'ki' (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
+
+statement error
+SELECT parse_formatted_bytes(1933);
+----
+Binder Error: No function matches the given name and argument types 'parse_formatted_bytes(INTEGER_LITERAL)'. You might need to add explicit type casts.
+
+statement error
+SELECT parse_formatted_bytes('10000000000 TiB');
+----
+Parser Error: Memory value out of range: value is too large
+
+# not a number
+statement error
+SELECT parse_formatted_bytes('1.5.3 GB');
+----
+Invalid Input Error: Could not convert string '1.5.3' to DOUBLE
+
+statement error
+SELECT parse_formatted_bytes('inf GiB');
+----
+Parser Error: Memory must have a number (e.g. 1GB)
