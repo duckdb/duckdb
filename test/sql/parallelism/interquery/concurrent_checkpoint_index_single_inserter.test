@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_checkpoint_wal_index.test
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_index_single_inserter.test
 # description: Test concurrent appends to persistent while checkpointing with an index
 # group: [interquery]
 
@@ -19,17 +19,27 @@ ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}.db' AS concurrent_ch
 statement ok
 CREATE TABLE concurrent_checkpoint_wal.integers(i INTEGER PRIMARY KEY)
 
-concurrentloop threadid 0 20
-
-loop x 0 10
-
-onlyif threadid<>10
 statement ok
-INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+SET index_scan_max_count=999999999
 
-onlyif threadid=10
+statement ok
+SET index_scan_percentage=1
+
+concurrentloop threadid 0 2
+
+loop x 0 50
+
+onlyif threadid=0
 statement ok
 CHECKPOINT concurrent_checkpoint_wal
+
+endloop
+
+loop x 0 500
+
+onlyif threadid=1
+statement ok
+INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(${x} * 100, (${x} + 1) * 100);
 
 endloop
 
@@ -38,7 +48,7 @@ endloop
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers
 ----
-19000	189940500
+50000	1249975000
 
 statement ok
 DETACH concurrent_checkpoint_wal
@@ -49,13 +59,17 @@ ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}.db' AS concurrent_ch
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers
 ----
-19000	189940500
+50000	1249975000
 
-statement ok
-DELETE FROM concurrent_checkpoint_wal.integers
+query II
+SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers WHERE i <= 49995
+----
+49996	1249775010
 
-statement ok
-INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(0, 20000);
+statement error
+INSERT INTO concurrent_checkpoint_wal.integers VALUES (4999)
+----
+Duplicate key
 
 statement ok
 DETACH concurrent_checkpoint_wal

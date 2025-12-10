@@ -186,7 +186,6 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			high_value = constant_value;
 			high_comparison_type = comparison_type;
 		}
-
 	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		auto &between = filter_expr.Cast<BoundBetweenExpression>();
 		if (!between.input->Equals(expr)) {
