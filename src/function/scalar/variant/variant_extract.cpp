@@ -275,7 +275,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 
 	auto value_is_null = VariantUtils::ValueIsNull(variant, new_value_index_sel, count, optional_idx());
 	if (!value_is_null.empty()) {
-		result.Flatten(count);
+		result.Flatten(count, /*force_rewrite=*/true);
 		for (auto &i : value_is_null) {
 			FlatVector::SetNull(result, i, true);
 		}
