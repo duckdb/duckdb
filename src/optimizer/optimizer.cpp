@@ -188,8 +188,8 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	RunOptimizer(OptimizerType::COUNT_WINDOW_ELIMINATION, [&]() {
-		CountWindowElimination count_window_elimination(*this);
-		plan = count_window_elimination.Optimize(std::move(plan));
+		WindowSelfJoinOptimizer window_self_join_optimizer(*this);
+		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});
 
 	// then we perform the join ordering optimization
