@@ -236,7 +236,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 					auto &child = children[i];
 					auto index = child.GetPrimaryIndex();
 					scan_child_column[index] = true;
-					child_states[index + 1].Initialize(context, struct_children[i].second, child, options);
+					child_states[index + 1].Initialize(context, struct_children[index].second, child, options);
 				}
 			}
 		}
