@@ -562,6 +562,9 @@ string Node::ToString(ART &art, const ToStringOptions &options) const {
 			}
 			byte++;
 			child = GetNextChild(art, byte);
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
 		}
 	}
 
