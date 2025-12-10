@@ -306,3 +306,18 @@ VALUES
 )items_per_order(order_occurrences, item_count);
 ----
 1000
+
+# Parallel combine with UTF-8 strings (use-after-free bug in Combine)
+statement ok
+PRAGMA threads=4;
+
+statement ok
+CREATE TABLE mode_utf8 AS
+SELECT g, (['চৌদ্দগ্রাম', 'São Paulo', '東京都', 'Região Geográfica'])[1 + (g+s) % 4] AS v
+FROM generate_series(0,100000) _(g), generate_series(0,2) __(s);
+
+query I
+SELECT count(*) FROM (SELECT g, mode(v) AS m FROM mode_utf8 GROUP BY g)
+WHERE m IN ('চৌদ্দগ্রাম', 'São Paulo', '東京都', 'Região Geográfica');
+----
+100001
