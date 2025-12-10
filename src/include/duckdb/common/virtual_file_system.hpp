@@ -51,6 +51,10 @@ public:
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
+	unique_ptr<PaginatedResult<OpenFileInfo>> PaginatedGlob(const string &path, FileOpener *opener = nullptr) override;
+
+	bool SupportsPaginatedGlobbing(const string &fpath, ClientContext &context) override;
+
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 
 	void UnregisterSubSystem(const string &name) override;
