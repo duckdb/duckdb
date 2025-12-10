@@ -618,7 +618,7 @@ private:
 	};
 
 public:
-	subplan_map_t FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
+	vector<reference<subplan_map_t::value_type>> FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
 			root = root.get()->children[0];
@@ -684,15 +684,18 @@ public:
 		}
 
 		// Filter out redundant or ineligible subplans before returning
-		for (auto it = subplans.begin(); it != subplans.end();) {
+		const auto subplan_infos = GetSortedSubplans();
+		for (auto &entry : subplan_infos) {
+			const auto it = subplans.find(entry.get().first);
+			D_ASSERT(it != subplans.end());
 			const auto &signature = it->first.get();
 			auto &subplan_info = it->second;
 			if (signature.OperatorCount() == 1) {
-				it = subplans.erase(it); // Just one operator in this subplan
+				subplans.erase(it); // Just one operator in this subplan
 				continue;
 			}
 			if (subplan_info.subplans.size() == 1) {
-				it = subplans.erase(it); // No other identical subplan
+				subplans.erase(it); // No other identical subplan
 				continue;
 			}
 
@@ -733,29 +736,26 @@ public:
 				}
 			}
 
-			if (bail) {
-				it = subplans.erase(it);
-				continue;
-			}
-
 			auto &subplan = subplan_info.subplans[0];
 			auto &parent = operator_infos.find(subplan.op)->second.parent;
 			auto &parent_signature = operator_infos.find(parent)->second.signature;
 			if (parent_signature) {
 				auto parent_it = subplans.find(*parent_signature);
 				if (parent_it != subplans.end() && subplan_info.subplans.size() == parent_it->second.subplans.size()) {
-					it = subplans.erase(it); // Parent has exact same number of identical subplans
-					continue;
+					bail = true; // Parent has exact same number of identical subplans
 				}
 			}
-			if (CTEInlining::EndsInAggregateOrDistinct(*subplan.op.get()) || IsSelectiveMultiTablePlan(subplan.op)) {
-				it++; // This subplan might be useful
-			} else {
-				it = subplans.erase(it); // Not eligible for materialization
+
+			if (!CTEInlining::EndsInAggregateOrDistinct(*subplan.op.get()) && !IsSelectiveMultiTablePlan(subplan.op)) {
+				bail = true; // Does not end in agg or distinct, and is not a selective multi table plan
+			}
+
+			if (bail) {
+				subplans.erase(it);
 			}
 		}
 
-		return std::move(subplans);
+		return GetSortedSubplans();
 	}
 
 private:
@@ -843,6 +843,19 @@ private:
 
 		// Otherwise, materialize if it is selective enough
 		return op->estimated_cardinality < signature.MaxBaseTableCardinality() / CARDINALITY_RATIO;
+	}
+
+	vector<reference<subplan_map_t::value_type>> GetSortedSubplans() {
+		// Grab entries from map, and sort by smallest plans first
+		vector<reference<subplan_map_t::value_type>> subplan_infos;
+		for (auto &entry : subplans) {
+			subplan_infos.push_back(entry);
+		}
+		std::sort(subplan_infos.begin(), subplan_infos.end(),
+		          [](reference<subplan_map_t::value_type> lhs, reference<subplan_map_t::value_type> rhs) {
+			          return lhs.get().first.get().OperatorCount() < rhs.get().first.get().OperatorCount();
+		          });
+		return subplan_infos;
 	}
 
 private:
@@ -938,19 +951,9 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	CommonSubplanFinder finder(optimizer.context);
 	auto subplans = finder.FindCommonSubplans(op);
 
-	// Grab entries from map, and sort by smallest plans first
-	vector<reference<subplan_map_t::value_type>> subplan_infos;
-	for (auto &entry : subplans) {
-		subplan_infos.push_back(entry);
-	}
-	std::sort(subplan_infos.begin(), subplan_infos.end(),
-	          [](reference<subplan_map_t::value_type> lhs, reference<subplan_map_t::value_type> rhs) {
-		          return lhs.get().first.get().OperatorCount() < rhs.get().first.get().OperatorCount();
-	          });
-
 	// Convert all subplans to CTEs
-	for (idx_t i = 0; i < subplan_infos.size(); i++) {
-		ConvertSubplansToCTE(optimizer, op, subplan_infos[i].get().second, i);
+	for (idx_t i = 0; i < subplans.size(); i++) {
+		ConvertSubplansToCTE(optimizer, op, subplans[i].get().second, i);
 	}
 
 	return op;
