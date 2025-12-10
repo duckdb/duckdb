@@ -144,6 +144,14 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 	return FindFileSystem(path, opener).Glob(path, opener);
 }
 
+unique_ptr<PaginatedResult<OpenFileInfo>> VirtualFileSystem::PaginatedGlob(const string &path, FileOpener *opener) {
+	return FindFileSystem(path, opener).PaginatedGlob(path, opener);
+}
+
+bool VirtualFileSystem::SupportsPaginatedGlobbing(const string &fpath, ClientContext &context) {
+	return FindFileSystem(fpath, context.db).SupportsPaginatedGlobbing(fpath, context);
+}
+
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
 	sub_systems.push_back(std::move(fs));
 }

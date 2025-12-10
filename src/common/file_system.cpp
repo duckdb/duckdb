@@ -596,6 +596,10 @@ vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
+unique_ptr<PaginatedResult<OpenFileInfo>> FileSystem::PaginatedGlob(const string &path, FileOpener *opener) {
+	throw NotImplementedException("%s: PaginatedGlob is not implemented!", GetName());
+}
+
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
@@ -628,6 +632,10 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
+bool FileSystem::SupportsPaginatedGlobbing(const string &fpath, ClientContext &context) {
+	return false;
+}
+
 vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
@@ -640,6 +648,31 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
 				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
 				if (!result.empty()) {
+					// we found files by globbing the target as if it was a directory - return them
+					return result;
+				}
+			}
+		}
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
+			throw IOException("No files found that match the pattern \"%s\"", pattern);
+		}
+	}
+	return result;
+}
+
+unique_ptr<PaginatedResult<OpenFileInfo>> FileSystem::PaginatedGlobFiles(const string &pattern, ClientContext &context,
+																		 const FileGlobInput &input) {
+	auto result = PaginatedGlob(pattern);
+	if (!result->FetchNextPage()) {
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
+			// if we have no glob in the pattern and we have an extension, we try to glob
+			if (!HasGlob(pattern)) {
+				if (input.extension.empty()) {
+					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
+				}
+				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
+				result = PaginatedGlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				if (result->FetchNextPage()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;
 				}
