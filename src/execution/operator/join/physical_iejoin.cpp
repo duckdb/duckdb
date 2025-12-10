@@ -229,6 +229,21 @@ OperatorResultType PhysicalIEJoin::ExecuteInternal(ExecutionContext &context, Da
 //===--------------------------------------------------------------------===//
 enum class IEJoinSourceStage : uint8_t { INIT, INNER, OUTER, DONE };
 
+struct IEJoinSourceTask {
+	using ChunkRange = std::pair<idx_t, idx_t>;
+
+	IEJoinSourceTask() {
+	}
+
+	IEJoinSourceStage stage = IEJoinSourceStage::DONE;
+	//! The thread index (for local state)
+	idx_t thread_idx = 0;
+	//! The chunk range
+	ChunkRange l_range;
+	//! The right chunk range
+	ChunkRange r_range;
+};
+
 struct IEJoinUnion {
 	using SortedTable = PhysicalRangeJoin::GlobalSortedTable;
 	using ChunkRange = std::pair<idx_t, idx_t>;
@@ -816,24 +831,55 @@ class IEJoinLocalSourceState;
 
 class IEJoinGlobalSourceState : public GlobalSourceState {
 public:
+	using Task = IEJoinSourceTask;
+	using TaskPtr = optional_ptr<Task>;
+
 	IEJoinGlobalSourceState(const PhysicalIEJoin &op, IEJoinGlobalState &gsink)
-	    : op(op), gsink(gsink), stage(IEJoinSourceStage::INIT), next_pair(0), completed(0), left_outers(0),
-	      next_left(0), right_outers(0), next_right(0) {
+	    : op(op), gsink(gsink), stage(IEJoinSourceStage::INIT), started(0), finished(0), stopped(false), completed(0),
+	      next_outer(0) {
 		auto &left_table = *gsink.tables[0];
 		auto &right_table = *gsink.tables[1];
 
 		left_blocks = left_table.BlockCount();
 		left_ranges = (left_blocks + left_per_thread - 1) / left_per_thread;
+		if (left_table.found_match) {
+			left_outers = left_blocks;
+		}
 
 		right_blocks = right_table.BlockCount();
 		right_ranges = (right_blocks + right_per_thread - 1) / right_per_thread;
+		if (right_table.found_match) {
+			right_outers = right_blocks;
+		}
 
 		pair_count = left_ranges * right_ranges;
 	}
 
+	idx_t GetStageCount(IEJoinSourceStage stage) const {
+		return stage_tasks[size_t(stage)];
+	}
+
+	//! The processing stage for this group
+	IEJoinSourceStage GetStage() const {
+		return stage;
+	}
+
+	//! The total number of tasks we will execute
+	idx_t GetTaskCount() const {
+		return stage_begin[size_t(IEJoinSourceStage::DONE)];
+	}
+
+	//! Are there any more tasks?
+	bool HasMoreTasks() const {
+		return !stopped && started < total_tasks;
+	}
+	bool HasUnfinishedTasks() const {
+		return !stopped && finished < total_tasks;
+	}
+
 	void Initialize();
 	bool TryPrepareNextStage();
-	bool AssignTask(ExecutionContext &context, IEJoinLocalSourceState &lstate);
+	bool TryNextTask(TaskPtr &task, Task &task_local);
 
 public:
 	idx_t MaxThreads() override;
@@ -843,7 +889,22 @@ public:
 	const PhysicalIEJoin &op;
 	IEJoinGlobalState &gsink;
 
-	atomic<IEJoinSourceStage> stage;
+	//! The processing stage
+	IEJoinSourceStage stage = IEJoinSourceStage::INIT;
+	//! The the number of tasks per stage.
+	vector<idx_t> stage_tasks;
+	//! The the first task in the stage.
+	vector<idx_t> stage_begin;
+	//! The next task to process
+	idx_t next_task = 0;
+	//! The total number of tasks
+	idx_t total_tasks = 0;
+	//! The number of started tasks
+	atomic<idx_t> started;
+	//! The number of tasks finished.
+	atomic<idx_t> finished;
+	//! Stop producing tasks
+	atomic<bool> stopped;
 
 	// Join queue state
 	idx_t left_blocks = 0;
@@ -852,20 +913,24 @@ public:
 	idx_t right_blocks = 0;
 	idx_t right_ranges = 0;
 	const idx_t right_per_thread = 1024;
-	idx_t pair_count;
-	atomic<size_t> next_pair;
+	idx_t pair_count = 0;
 	atomic<size_t> completed;
 
 	// Outer joins
-	atomic<idx_t> left_outers;
-	atomic<idx_t> next_left;
+	atomic<idx_t> next_outer;
+	idx_t left_outers = 0;
+	idx_t right_outers = 0;
 
-	atomic<idx_t> right_outers;
-	atomic<idx_t> next_right;
+protected:
+	void FinishTask(TaskPtr task);
+	bool TryNextTask(Task &task);
 };
 
 class IEJoinLocalSourceState : public LocalSourceState {
 public:
+	using Task = IEJoinSourceTask;
+	using TaskPtr = optional_ptr<Task>;
+
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
 	      left_executor(client), right_executor(client), left_matches(nullptr), right_matches(nullptr)
@@ -930,6 +995,7 @@ public:
 		return !joiner && !left_matches && !right_matches;
 	}
 
+	bool TryAssignTask();
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
@@ -940,6 +1006,11 @@ public:
 	void ExecuteTask(ExecutionContext &context, DataChunk &result);
 
 	IEJoinGlobalSourceState &gsource;
+
+	//! The task this thread is working on
+	TaskPtr task;
+	//! The task storage
+	Task task_local;
 
 	// Joining
 	unique_ptr<IEJoinUnion> joiner;
@@ -978,6 +1049,68 @@ public:
 	bool *right_matches;
 };
 
+bool IEJoinLocalSourceState::TryAssignTask() {
+	// Because downstream operators may be using our internal buffers,
+	// we can't "finish" a task until we are about to get the next one.
+	if (task) {
+		switch (task->stage) {
+		case IEJoinSourceStage::INNER:
+			gsource.completed++;
+			break;
+		case IEJoinSourceStage::OUTER:
+			gsource.next_outer++;
+			left_matches = nullptr;
+			right_matches = nullptr;
+			break;
+		case IEJoinSourceStage::INIT:
+		case IEJoinSourceStage::DONE:
+			break;
+		}
+	}
+
+	if (!gsource.TryNextTask(task, task_local)) {
+		return false;
+	}
+
+	auto &gsink = gsource.gsink;
+	auto &left_table = *gsink.tables[0];
+	auto &right_table = *gsink.tables[1];
+
+	switch (task->stage) {
+	case IEJoinSourceStage::INNER:
+		left_block_index = task->l_range.first;
+		left_base = left_table.BlockStart(left_block_index);
+
+		right_block_index = task->r_range.first;
+		right_base = right_table.BlockStart(right_block_index);
+
+		joiner = make_uniq<IEJoinUnion>(left_table, task->l_range, right_table, task->r_range);
+		break;
+	case IEJoinSourceStage::OUTER:
+		if (task->thread_idx < gsource.left_outers) {
+			left_block_index = task->l_range.first;
+			left_base = left_table.BlockStart(left_block_index);
+
+			left_matches = left_table.found_match.get() + left_base;
+			outer_idx = 0;
+			outer_count = left_table.BlockSize(left_block_index);
+		} else {
+			right_block_index = task->r_range.first;
+			right_base = right_table.BlockStart(right_block_index);
+
+			right_matches = right_table.found_match.get() + right_base;
+			outer_idx = 0;
+			outer_count = right_table.BlockSize(right_block_index);
+		}
+		break;
+	case IEJoinSourceStage::INIT:
+	case IEJoinSourceStage::DONE:
+		break;
+	}
+
+	return true;
+}
+
 void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &result) {
 	if (joiner) {
 		ResolveComplexJoin(context, result);
@@ -1006,7 +1139,6 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		if (result_count == 0) {
 			// exhausted this pair
 			joiner.reset();
-			++gsource.completed;
 			return;
 		}
 
@@ -1091,42 +1223,55 @@ void IEJoinGlobalSourceState::Initialize() {
 		return;
 	}
 
-	// Compute the starting row for each block
-	auto &left_table = *gsink.tables[0];
-	const auto left_blocks = left_table.BlockCount();
+	//	INIT
+	stage_tasks.emplace_back(0);
 
-	auto &right_table = *gsink.tables[1];
-	const auto right_blocks = right_table.BlockCount();
+	//	INNER
+	stage_tasks.emplace_back(pair_count);
 
-	// Outer join block counts
-	if (left_table.found_match) {
-		left_outers = left_blocks;
+	//	OUTER
+	stage_tasks.emplace_back(left_outers + right_outers);
+
+	//	DONE
+	stage_tasks.emplace_back(0);
+
+	//	Accumulate task counts so we can find boundaries reliably
+	idx_t begin = 0;
+	for (const auto &stage_task : stage_tasks) {
+		stage_begin.emplace_back(begin);
+		begin += stage_task;
 	}
 
-	if (right_table.found_match) {
-		right_outers = right_blocks;
-	}
+	total_tasks = stage_begin.back();
 
 	// Ready for action
-	stage = IEJoinSourceStage::INNER;
+	stage = IEJoinSourceStage(1);
 }
+
 bool IEJoinGlobalSourceState::TryPrepareNextStage() {
-	//	Inside lock
-	switch (stage.load()) {
+	const auto stage_count = GetStageCount(stage);
+	switch (stage) {
+	case IEJoinSourceStage::INIT:
+		stage = IEJoinSourceStage::INNER;
+		return true;
 	case IEJoinSourceStage::INNER:
-		if (completed >= pair_count) {
-			stage = IEJoinSourceStage::OUTER;
+		if (completed >= stage_count) {
+			if (GetStageCount(IEJoinSourceStage::OUTER)) {
+				stage = IEJoinSourceStage::OUTER;
+			} else {
+				stage = IEJoinSourceStage::DONE;
+			}
 			return true;
 		}
 		break;
 	case IEJoinSourceStage::OUTER:
-		if (next_left >= left_outers && next_right >= right_outers) {
+		if (next_outer >= stage_count) {
 			stage = IEJoinSourceStage::DONE;
 			return true;
 		}
 		break;
-	default:
-		break;
+	case IEJoinSourceStage::DONE:
+		return true;
 	}
 
 	return false;
@@ -1138,77 +1283,95 @@ idx_t IEJoinGlobalSourceState::MaxThreads() {
 	return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
 }
 
-bool IEJoinGlobalSourceState::AssignTask(ExecutionContext &context, IEJoinLocalSourceState &lstate) {
-	auto guard = Lock();
+void IEJoinGlobalSourceState::FinishTask(TaskPtr task) {
+	//	Inside the lock
+	if (!task) {
+		return;
+	}
 
-	using ChunkRange = IEJoinUnion::ChunkRange;
-	auto &left_table = *gsink.tables[0];
-	auto &right_table = *gsink.tables[1];
+	++finished;
+}
+
+bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
+	auto guard = Lock();
+	FinishTask(task);
+
+	if (!HasMoreTasks()) {
+		task = nullptr;
+		return false;
+	}
+
+	if (TryPrepareNextStage()) {
+		UnblockTasks(guard);
+	}
+
+	if (TryNextTask(task_local)) {
+		task = task_local;
+		++started;
+		return true;
+	}
+
+	task = nullptr;
+
+	return false;
+}
+
+bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
+	if (next_task >= GetTaskCount()) {
+		return false;
+	}
+
+	//	Search for where we are in the task list
+	for (idx_t stage = idx_t(IEJoinSourceStage::INIT); stage <= idx_t(IEJoinSourceStage::DONE); ++stage) {
+		if (next_task < stage_begin[stage]) {
+			task.stage = IEJoinSourceStage(stage - 1);
+			task.thread_idx = next_task - stage_begin[size_t(task.stage)];
+			break;
+		}
+	}
+
+	if (task.stage != stage) {
+		return false;
+	}
 
 	// Regular block
-	switch (stage.load()) {
-	case IEJoinSourceStage::INNER:
-		if (next_pair < pair_count) {
-			const auto i = next_pair++;
-			const auto b1 = (i / right_ranges) * left_per_thread;
-			const auto b2 = (i % right_ranges) * right_per_thread;
+	switch (stage) {
+	case IEJoinSourceStage::INNER: {
+		const auto i = task.thread_idx;
+		const auto b1 = (i / right_ranges) * left_per_thread;
+		const auto b2 = (i % right_ranges) * right_per_thread;
 
-			ChunkRange l_range {b1, MinValue(left_blocks, b1 + left_per_thread)};
-			lstate.left_block_index = l_range.first;
-			lstate.left_base = left_table.BlockStart(l_range.first);
-
-			ChunkRange r_range {b2, MinValue(right_blocks, b2 + right_per_thread)};
-			lstate.right_block_index = r_range.first;
-			lstate.right_base = right_table.BlockStart(r_range.first);
-
-			lstate.joiner = make_uniq<IEJoinUnion>(left_table, l_range, right_table, r_range);
-			return true;
-		}
+		task.l_range = {b1, MinValue(left_blocks, b1 + left_per_thread)};
+		task.r_range = {b2, MinValue(right_blocks, b2 + right_per_thread)};
 		break;
+	}
 	case IEJoinSourceStage::OUTER:
-		// Left outer blocks
-		if (next_left < left_outers) {
-			const auto l = next_left++;
-			lstate.joiner = nullptr;
-			lstate.left_block_index = l;
-			lstate.left_base = left_table.BlockStart(l);
-
-			lstate.left_matches = left_table.found_match.get() + lstate.left_base;
-			lstate.outer_idx = 0;
-			lstate.outer_count = left_table.BlockSize(l);
-			return true;
+		if (task.thread_idx < left_outers) {
+			// Left outer blocks
+			const auto left_task = task.thread_idx;
+			task.l_range = {left_task, left_task + 1};
+			task.r_range = {0, 0};
 		} else {
-			lstate.left_matches = nullptr;
-		}
-
-		// Right outer blocks
-		if (next_right < right_outers) {
-			const auto r = next_right++;
-			lstate.joiner = nullptr;
-			lstate.right_block_index = r;
-			lstate.right_base = right_table.BlockStart(r);
-
-			lstate.right_matches = right_table.found_match.get() + lstate.right_base;
-			lstate.outer_idx = 0;
-			lstate.outer_count = right_table.BlockSize(r);
-			return true;
-		} else {
-			lstate.right_matches = nullptr;
+			// Right outer blocks
+			const auto right_task = task.thread_idx - left_outers;
+			task.l_range = {0, 0};
+			task.r_range = {right_task, right_task + 1};
 		}
 		break;
-	default:
+	case IEJoinSourceStage::INIT:
+	case IEJoinSourceStage::DONE:
 		break;
 	}
 
-	return false;
+	++next_task;
+
+	return true;
 }
 
 ProgressData IEJoinGlobalSourceState::GetProgress() const {
 	const auto count = pair_count + left_outers + right_outers;
 
-	const auto l = MinValue(next_left.load(), left_outers.load());
-	const auto r = MinValue(next_right.load(), right_outers.load());
-	const auto returned = completed.load() + l + r;
+	const auto returned = completed.load() + next_outer.load();
 
 	ProgressData res;
 	if (count) {
@@ -1245,7 +1408,7 @@ SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, Data
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.stage != IEJoinSourceStage::DONE && result.size() == 0) {
-		if (!lsource.TaskFinished() || gsource.AssignTask(context, lsource)) {
+		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
 			lsource.ExecuteTask(context, result);
 		} else {
 			auto guard = gsource.Lock();

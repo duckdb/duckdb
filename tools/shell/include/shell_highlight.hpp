@@ -51,6 +51,8 @@ enum class HighlightElementType : uint32_t {
 	VIEW_LAYOUT,
 	PRIMARY_KEY_COLUMN,
 	PROMPT,
+	ERROR_EMPHASIS,
+	ERROR_SUGGESTION,
 	NONE
 };
 

@@ -144,9 +144,10 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 // SortedRun
 //===--------------------------------------------------------------------===//
 SortedRun::SortedRun(ClientContext &context_p, const Sort &sort_p, bool is_index_sort_p)
-    : context(context_p), sort(sort_p), key_data(make_uniq<TupleDataCollection>(context, sort.key_layout)),
+    : context(context_p), sort(sort_p),
+      key_data(make_uniq<TupleDataCollection>(context, sort.key_layout, MemoryTag::ORDER_BY)),
       payload_data(sort.payload_layout && sort.payload_layout->ColumnCount() != 0
-                       ? make_uniq<TupleDataCollection>(context, sort.payload_layout)
+                       ? make_uniq<TupleDataCollection>(context, sort.payload_layout, MemoryTag::ORDER_BY)
                        : nullptr),
       is_index_sort(is_index_sort_p), finalized(false) {
 	key_data->InitializeAppend(key_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);

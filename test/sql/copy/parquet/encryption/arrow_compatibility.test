@@ -1,0 +1,56 @@
+# name: test/sql/copy/parquet/encryption/arrow_compatibility.test
+# description: Test Arrow Compatibility for Parquet Encryption
+# group: [encryption]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA disable_verification
+
+statement ok
+PRAGMA add_parquet_key('arrow_key', '0123456789012345')
+
+statement ok
+PRAGMA add_parquet_key('arrow_key_generated_files', '0123456789abcdef')
+
+# from apache/parquet-testing repo
+query I
+SELECT flba_field FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption.parquet', encryption_config={footer_key: 'arrow_key'}) LIMIT 1;
+----
+\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+
+# generated encrypted parquet file
+query II
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_gist.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+10	true
+20	false
+30	true
+
+# generated encrypted parquet files with arrow, 10 row groups
+query II
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_ten_row_groups.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+1	true
+2	false
+3	true
+4	false
+5	true
+6	false
+7	true
+8	false
+9	true
+10	false
+11	true
+12	false
+13	true
+14	false
+15	true
+16	false
+17	true
+18	false
+19	true
+20	false

@@ -27,8 +27,9 @@ enum class MemoryTag : uint8_t {
 	EXTENSION = 11,
 	TRANSACTION = 12,
 	EXTERNAL_FILE_CACHE = 13,
+	WINDOW = 14
 };
 
-static constexpr const idx_t MEMORY_TAG_COUNT = 14;
+static constexpr const idx_t MEMORY_TAG_COUNT = 15;
 
 } // namespace duckdb

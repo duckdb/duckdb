@@ -212,13 +212,8 @@ private:
 				payload_scan_state.pin_state.row_handles.acquire_handles(pins);
 				payload_scan_state.pin_state.heap_handles.acquire_handles(pins);
 			}
-			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, chunk_idx, false);
-			const auto sort_keys = reinterpret_cast<T **const>(key_ptrs);
-			const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_scan_state.chunk_state.row_locations);
-			for (idx_t i = 0; i < chunk_count; i++) {
-				sort_keys[i]->SetPayload(payload_ptrs[i]);
-				D_ASSERT(GetValueAtIndex<T>(chunk_idx, i).GetPayload() == payload_ptrs[i]);
-			}
+			SortKeyPayloadState skp_state {key_scan_state.chunk_state, key_data.GetLayout().GetSortKeyType()};
+			payload_data->FetchChunk(payload_scan_state, chunk_idx, false, &skp_state);
 		}
 	}
 

@@ -150,6 +150,10 @@ public:
 		return GetFileSystem().SubSystemIsDisabled(name);
 	}
 
+	bool IsDisabledForPath(const string &path) override {
+		return GetFileSystem().IsDisabledForPath(path);
+	}
+
 	vector<string> ListSubSystems() override {
 		return GetFileSystem().ListSubSystems();
 	}

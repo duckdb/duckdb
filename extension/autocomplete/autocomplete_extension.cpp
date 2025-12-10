@@ -99,6 +99,7 @@ bool PreferCaseMatching(SuggestionState suggestion_state) {
 	case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
 	case SuggestionState::SUGGEST_PRAGMA_NAME:
 	case SuggestionState::SUGGEST_SETTING_NAME:
+	case SuggestionState::SUGGEST_FILE_NAME:
 		return true;
 	default:
 		return false;
@@ -131,11 +132,12 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
+		idx_t match_score = 0;
 		if (prefix.empty()) {
 		} else if (prefix.size() < str.size()) {
-			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
+			match_score = StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
-			score += StringUtil::SimilarityScore(str, prefix);
+			match_score = StringUtil::SimilarityScore(str, prefix);
 		}
 		auto type = available_suggestions[i].suggestion_type;
 		if (str[0] == '.') {
@@ -149,9 +151,10 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			score += SUBSTRING_PENALTY;
 		} else if (PreferCaseMatching(type) && !StringUtil::Contains(str, prefix)) {
 			// for types for which we prefer case matching - add a small penalty if we are not matching case
-			score++;
+			match_score++;
 		}
-		suggestion.score = score;
+		score += match_score;
+		suggestion.score = match_score;
 		scores.emplace_back(str, score);
 	}
 	idx_t fuzzy_suggestion_count = parameters.max_suggestion_count;
