@@ -871,7 +871,7 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
 		// regular column: fetch data from the base column
 		auto &col_data = GetColumn(column);
-		col_data.FetchRow(transaction, state, row_id, result_vector, result_idx);
+		col_data.FetchRow(transaction, state, column, row_id, result_vector, result_idx);
 	}
 }
 

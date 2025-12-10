@@ -167,8 +167,8 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-	                      idx_t result_idx);
+	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	                      row_t row_id, Vector &result, idx_t result_idx);
 
 	virtual void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
 	                    row_t *row_ids, idx_t update_count, idx_t row_group_start);

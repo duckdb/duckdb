@@ -241,15 +241,15 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                               idx_t result_idx) {
+void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                               row_t row_id, Vector &result, idx_t result_idx) {
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());
 	}
 
 	// Fetch validity
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetEntry(result);

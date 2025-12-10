@@ -291,20 +291,23 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	return stats.ToUnique();
 }
 
-void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                                idx_t result_idx) {
-	// fetch validity mask
-	auto &child_entries = StructVector::GetEntries(result);
-	// insert any child states that are required
-	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
-	}
+void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                                row_t row_id, Vector &result, idx_t result_idx) {
 	// fetch the validity state
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+	if (storage_index.IsPushdownExtract()) {
+		auto &index_children = storage_index.GetChildIndexes();
+		D_ASSERT(index_children.size() == 1);
+		auto &child_storage_index = index_children[0];
+		auto child_index = child_storage_index.GetPrimaryIndex();
+		auto &sub_column = *sub_columns[child_index];
+		return sub_column.FetchRow(transaction, state, child_storage_index, row_id, result, result_idx);
+	}
+
+	auto &child_entries = StructVector::GetEntries(result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], row_id, *child_entries[i], result_idx);
+		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, *child_entries[i], result_idx);
 	}
 }
 

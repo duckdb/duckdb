@@ -415,9 +415,11 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		g_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		if (col_idx.IsRowIdColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
-			continue;
+		} else if (col_idx.HasType()) {
+			g_state->scanned_types.emplace_back(col_idx.GetScanType());
+		} else {
+			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 		}
-		g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 	}
 
 	// Const-cast to indicate an index scan.

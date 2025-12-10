@@ -568,8 +568,8 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
-void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                          idx_t result_idx) {
+void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                          row_t row_id, Vector &result, idx_t result_idx) {
 	if (UnsafeNumericCast<idx_t>(row_id) > count) {
 		throw InternalException("ColumnData::FetchRow - row_id out of range");
 	}
