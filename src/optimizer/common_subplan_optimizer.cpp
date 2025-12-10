@@ -822,15 +822,26 @@ private:
 	}
 
 	bool IsSelectiveMultiTablePlan(unique_ptr<LogicalOperator> &op) const {
+		static constexpr idx_t CARDINALITY_THRESHOLD = 2048;
 		static constexpr idx_t CARDINALITY_RATIO = 2;
 
+		// Must have an estimated cardinality
 		if (!op->has_estimated_cardinality) {
 			return false;
 		}
+
+		// Must select more than 1 base table
 		const auto &signature = *operator_infos.find(op)->second.signature;
 		if (signature.BaseTableCount() <= 1) {
 			return false;
 		}
+
+		// If it has this cardinality or less, just materialize
+		if (op->estimated_cardinality <= CARDINALITY_THRESHOLD) {
+			return true;
+		}
+
+		// Otherwise, materialize if it is selective enough
 		return op->estimated_cardinality < signature.MaxBaseTableCardinality() / CARDINALITY_RATIO;
 	}
 
@@ -851,9 +862,10 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info) {
+static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info,
+                                 idx_t index) {
 	const auto cte_index = optimizer.binder.GenerateTableIndex();
-	const auto cte_name = StringUtil::Format("__common_subplan_1");
+	const auto cte_name = StringUtil::Format("__common_subplan_%llu", index);
 
 	// Resolve types to be used for creating the materialized CTE and refs
 	op->ResolveOperatorTypes();
@@ -926,19 +938,21 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	CommonSubplanFinder finder(optimizer.context);
 	auto subplans = finder.FindCommonSubplans(op);
 
-	// Identify the single best subplan (TODO: for now, in the future we should identify multiple)
-	if (subplans.empty()) {
-		return op; // No eligible subplans
+	// Grab entries from map, and sort by smallest plans first
+	vector<reference<subplan_map_t::value_type>> subplan_infos;
+	for (auto &entry : subplans) {
+		subplan_infos.push_back(entry);
 	}
-	auto best_it = subplans.begin();
-	for (auto it = ++subplans.begin(); it != subplans.end(); it++) {
-		if (it->first.get().OperatorCount() > best_it->first.get().OperatorCount()) {
-			best_it = it;
-		}
+	std::sort(subplan_infos.begin(), subplan_infos.end(),
+	          [](reference<subplan_map_t::value_type> lhs, reference<subplan_map_t::value_type> rhs) {
+		          return lhs.get().first.get().OperatorCount() < rhs.get().first.get().OperatorCount();
+	          });
+
+	// Convert all subplans to CTEs
+	for (idx_t i = 0; i < subplan_infos.size(); i++) {
+		ConvertSubplansToCTE(optimizer, op, subplan_infos[i].get().second, i);
 	}
 
-	// Create a CTE!
-	ConvertSubplansToCTE(optimizer, op, best_it->second);
 	return op;
 }
 
