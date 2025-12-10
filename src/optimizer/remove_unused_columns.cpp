@@ -48,7 +48,7 @@ static void GetUniquePath(const ColumnIndex &index, column_index_set &result) {
 
 	//! Push the initial children
 	for (auto &child : child_indexes) {
-		to_visit.emplace(make_pair(std::ref(child), std::ref(path)));
+		to_visit.emplace(std::ref(child), std::ref(path));
 	}
 
 	while (!to_visit.empty()) {
@@ -65,7 +65,7 @@ static void GetUniquePath(const ColumnIndex &index, column_index_set &result) {
 		if (!source_children.empty()) {
 			auto &new_dest = dest.GetChildIndex(0);
 			for (auto &child : source_children) {
-				to_visit.emplace(make_pair(std::ref(child), std::ref(new_dest)));
+				to_visit.emplace(std::ref(child), std::ref(new_dest));
 			}
 		} else {
 			//! No further children, we've reached a leaf, add it to the set
@@ -709,7 +709,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		// need to read any of the columns
 		auto any_column = get.GetAnyColumn();
 		original_ids.emplace_back(any_column);
-		new_column_ids.emplace_back(ColumnIndex(any_column));
+		new_column_ids.emplace_back(any_column);
 	}
 	get.SetColumnIds(std::move(new_column_ids));
 
