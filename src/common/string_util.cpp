@@ -155,7 +155,8 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 
 	if (str[index] == quote) {
 		index++;
-		TakeWhile(str, index, [quote](char c) { return c != quote; }, entry);
+		TakeWhile(
+		    str, index, [quote](char c) { return c != quote; }, entry);
 		ConsumeLetter(str, index, quote);
 	} else {
 		TakeWhile(
