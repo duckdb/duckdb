@@ -27,64 +27,6 @@
 
 namespace duckdb {
 
-namespace {
-
-struct BindingsRewriteState {
-public:
-	BindingsRewriteState() {
-	}
-
-public:
-	void AddColumn(idx_t original_id, ColumnIndex index) {
-		new_column_ids.emplace_back(std::move(index));
-		original_ids.emplace_back(original_id);
-	}
-	//! Returns the 'ColumnBinding.column_index' for the path referenced by the struct extract
-	idx_t AddStructExtract(idx_t original_id, ColumnIndex index) {
-		D_ASSERT(index.HasChildren());
-
-		auto column_binding_index = new_column_ids.size();
-		auto entry = child_map.find(index);
-		if (entry == child_map.end()) {
-			//! Adds the binding for the child only if it doesn't exist yet
-			entry = child_map.emplace(index, column_binding_index).first;
-			created_bindings[index.GetPrimaryIndex()]++;
-
-			new_column_ids.emplace_back(std::move(index));
-			original_ids.emplace_back(original_id);
-		}
-		return entry->second;
-	}
-	bool NoColumnsReferenced() const {
-		return new_column_ids.empty();
-	}
-	vector<ColumnIndex> MoveNewColumns() {
-		return std::move(new_column_ids);
-	}
-	vector<idx_t> MoveOriginalIds() {
-		return std::move(original_ids);
-	}
-	idx_t BindingsCreatedForIndex(idx_t column_index) {
-		return created_bindings[column_index];
-	}
-
-public:
-	//! The existing column ids
-	vector<ColumnIndex> old_column_ids;
-
-private:
-	//! The newly written column ids (same size as 'original_ids')
-	vector<ColumnIndex> new_column_ids;
-	//! The old index that the new one is based on (same size as 'new_column_ids')
-	vector<idx_t> original_ids;
-	//! Map of column index to binding, for pushed down struct extracts
-	column_index_map<idx_t> child_map;
-	//! Created bindings per original_column (for pushdown extract verification)
-	unordered_map<idx_t, idx_t> created_bindings;
-};
-
-} // namespace
-
 static void GetUniquePath(const ColumnIndex &index, column_index_set &result) {
 	auto &child_indexes = index.GetChildIndexes();
 
@@ -661,13 +603,21 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		return;
 	}
 
-	BindingsRewriteState state;
-	state.old_column_ids = get.GetColumnIds();
+	//! The existing column ids
+	auto old_column_ids = get.GetColumnIds();
+	//! The newly written column ids (same size as 'original_ids')
+	vector<ColumnIndex> new_column_ids;
+	//! The old index that the new one is based on (same size as 'new_column_ids')
+	vector<idx_t> original_ids;
+	//! Map of column index to binding, for pushed down struct extracts
+	column_index_map<idx_t> child_map;
+	//! Created bindings per original_column (for pushdown extract verification)
+	unordered_map<idx_t, idx_t> created_bindings;
 
 	// Create "selection vector" that contains all indices of the old 'column_ids' of the LogicalGet
 	//! i.e: This contains all the columns of the table
 	vector<idx_t> proj_sel;
-	for (idx_t col_idx = 0; col_idx < state.old_column_ids.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < old_column_ids.size(); col_idx++) {
 		proj_sel.push_back(col_idx);
 	}
 	// Create a copy so we can later check the difference between these two:
@@ -688,7 +638,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	//! NOTE: This vector is required to keep the referenced Expressions alive
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &filter : get.table_filters.filters) {
-		auto index = GetColumnIdsIndexForFilter(state.old_column_ids, filter.first);
+		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
 		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
 
 		ColumnBinding filter_binding(get.table_index, index);
@@ -711,45 +661,57 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
-		auto &column_type = get.GetColumnType(state.old_column_ids[col_sel_idx]);
+		auto &column_type = get.GetColumnType(old_column_ids[col_sel_idx]);
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
 		if (entry->second.child_columns.empty() ||
 		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
-			auto &logical_column_id = state.old_column_ids[col_sel_idx];
+			auto &logical_column_id = old_column_ids[col_sel_idx];
+
+			original_ids.emplace_back(col_sel_idx);
 			if (logical_column_id.IsPushdownExtract()) {
 				//! RemoveUnusedColumns is also used by other optimizers,
 				//! so we have to deal with this case and preserve the PushdownExtract we created earlier
 				D_ASSERT(entry->second.child_columns.empty());
-				state.AddColumn(col_sel_idx, logical_column_id);
+				new_column_ids.emplace_back(logical_column_id);
 			} else {
 				ColumnIndex new_index(logical_column_id.GetPrimaryIndex(), entry->second.child_columns);
-				state.AddColumn(col_sel_idx, std::move(new_index));
+				new_column_ids.emplace_back(std::move(new_index));
 			}
 			continue;
 		}
-		auto &old_column_ids = state.old_column_ids;
 		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
 
 		//! Pushdown Extract is supported, emit a column for every field
-		WritePushdownExtractColumns(
-		    entry->first, entry->second, col_sel_idx, column_type,
-		    [&state, &col_sel_idx, &column_type, &struct_column_index](const ColumnIndex &extract_path) -> idx_t {
-			    ColumnIndex new_index(struct_column_index, {extract_path});
-			    new_index.SetPushdownExtractType(column_type);
-			    return state.AddStructExtract(col_sel_idx, new_index);
-		    });
+		WritePushdownExtractColumns(entry->first, entry->second, col_sel_idx, column_type,
+		                            [&](const ColumnIndex &extract_path) -> idx_t {
+			                            ColumnIndex new_index(struct_column_index, {extract_path});
+			                            new_index.SetPushdownExtractType(column_type);
+
+			                            auto column_binding_index = new_column_ids.size();
+			                            auto entry = child_map.find(new_index);
+			                            if (entry == child_map.end()) {
+				                            //! Adds the binding for the child only if it doesn't exist yet
+				                            entry = child_map.emplace(new_index, column_binding_index).first;
+				                            created_bindings[new_index.GetPrimaryIndex()]++;
+
+				                            new_column_ids.emplace_back(std::move(new_index));
+				                            original_ids.emplace_back(col_sel_idx);
+			                            }
+			                            return entry->second;
+		                            });
 	}
-	if (state.NoColumnsReferenced()) {
+	if (new_column_ids.empty()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
 		// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 		// need to read any of the columns
 		auto any_column = get.GetAnyColumn();
-		state.AddColumn(any_column, ColumnIndex(any_column));
+		original_ids.emplace_back(any_column);
+		new_column_ids.emplace_back(ColumnIndex(any_column));
 	}
-	get.SetColumnIds(state.MoveNewColumns());
+	get.SetColumnIds(std::move(new_column_ids));
 
 	if (!get.function.filter_prune) {
 		return;
@@ -768,7 +730,6 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			}
 		}
 	}
-	auto original_ids = state.MoveOriginalIds();
 	col_idx = 0;
 	for (auto col : filtered_original_ids) {
 		for (; col_idx < original_ids.size(); col_idx++) {
