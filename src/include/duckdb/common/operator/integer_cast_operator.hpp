@@ -103,9 +103,12 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		int16_t e = exponent;
 		// Negative Exponent
 		if (e < 0) {
-			while (state.result != 0 && e++ < 0) {
+			while (e++ < 0) {
 				state.decimal = state.result % 10;
 				state.result /= 10;
+				if (state.result == 0 && state.decimal == 0) {
+					break;
+				}
 			}
 			if (state.decimal < 0) {
 				state.decimal = -state.decimal;

@@ -794,6 +794,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"|", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"~", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
 }; // END_OF_EXTENSION_FUNCTIONS
+
 static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>INTERVAL"},
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP,TIMESTAMP]>INTERVAL"},
