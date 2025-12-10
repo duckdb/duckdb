@@ -34,7 +34,6 @@ CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const
 	requires_quotes = vector<bool>(256, false);
 	requires_quotes['\n'] = true;
 	requires_quotes['\r'] = true;
-	requires_quotes['#'] = true;
 	requires_quotes[NumericCast<idx_t>(delim[0])] = true;
 	requires_quotes[NumericCast<idx_t>(quote)] = true;
 

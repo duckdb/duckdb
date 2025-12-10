@@ -1,0 +1,64 @@
+# name: test/sql/copy/csv/test_csv_hash_minimal_quoting.test
+# description: Test that hash (#) characters are not quoted per RFC 4180
+# group: [csv]
+
+# Test 1: Hash at the beginning should not be quoted
+statement ok
+COPY (SELECT '#test' as value) TO '__TEST_DIR__/hash_start.csv' (HEADER false);
+
+query I
+SELECT * FROM read_csv_auto('__TEST_DIR__/hash_start.csv', header=false);
+----
+#test
+
+# Test 2: Hash in the middle (like the issue example)
+statement ok
+COPY (SELECT 'Elvis 30 #1 Hits' as title, 'vinyl' as format) TO '__TEST_DIR__/hash_middle.csv' (HEADER true);
+
+query II
+SELECT * FROM read_csv_auto('__TEST_DIR__/hash_middle.csv', header=true);
+----
+Elvis 30 #1 Hits	vinyl
+
+# Test 3: Multiple hashes
+statement ok
+COPY (SELECT '##test##' as value) TO '__TEST_DIR__/hash_multiple.csv' (HEADER false);
+
+query I
+SELECT * FROM read_csv_auto('__TEST_DIR__/hash_multiple.csv', header=false);
+----
+##test##
+
+# Test 4: Ensure comma still gets quoted
+statement ok
+COPY (SELECT 'a,b,c' as value) TO '__TEST_DIR__/comma.csv' (HEADER false);
+
+query I
+SELECT * FROM read_csv_auto('__TEST_DIR__/comma.csv', header=false);
+----
+a,b,c
+
+# Test 5: Ensure newline still gets quoted
+statement ok
+COPY (SELECT 'line1
+line2' as value) TO '__TEST_DIR__/newline.csv' (HEADER false);
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/newline.csv', header=false);
+----
+1
+
+query I
+SELECT LENGTH(column0) FROM read_csv_auto('__TEST_DIR__/newline.csv', header=false);
+# 5 + 1 + 5 = "line1" + newline + "line2"
+----
+11
+
+# Test 6: Ensure quote character still gets escaped
+statement ok
+COPY (SELECT 'hello "world"' as value) TO '__TEST_DIR__/quotes.csv' (HEADER false);
+
+query I
+SELECT * FROM read_csv_auto('__TEST_DIR__/quotes.csv', header=false);
+----
+hello "world"
