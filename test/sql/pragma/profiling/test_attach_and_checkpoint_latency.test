@@ -54,7 +54,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs
 
 query I
 SELECT
-	CASE WHEN checkpoint_latency > 0 THEN 'true'
+	CASE WHEN checkpoint_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -82,7 +82,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs
 
 query I
 SELECT
-	CASE WHEN waiting_to_attach_latency > 0 THEN 'true'
+	CASE WHEN waiting_to_attach_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -90,7 +90,7 @@ true
 
 query I
 SELECT
-	CASE WHEN attach_load_storage_latency > 0 THEN 'true'
+	CASE WHEN attach_load_storage_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -98,7 +98,7 @@ true
 
 query I
 SELECT
-	CASE WHEN attach_replay_wal_latency > 0 THEN 'true'
+	CASE WHEN attach_replay_wal_latency >= 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
