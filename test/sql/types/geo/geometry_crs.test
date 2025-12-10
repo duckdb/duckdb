@@ -4,4 +4,33 @@
 query I
 select st_crs(st_setcrs('POINT(0 1)', 'EPSG:4326'));
 ----
-{'type': authority_code, 'name': NULL, 'value': 'EPSG:4326'}
+EPSG:4326
+
+statement ok
+create table t1 (g GEOMETRY('EPSG:4326'));
+
+statement ok
+insert into t1 values ('POINT(0 1)');
+
+statement ok
+create table t2 (g GEOMETRY('EPSG:3857'));
+
+# We cannot insert into t2 from t1 because of CRS mismatch
+statement error
+insert into t2 select * from t1;
+----
+Binder Error: Cannot cast GEOMETRY with CRS 'EPSG:4326' to GEOMETRY with different CRS 'EPSG:3857'
+
+# But we can insert unknown CRS
+statement ok
+insert into t2 select st_setcrs(g, '') from t1;
+
+query I
+select * from t2;
+----
+POINT (0 1)
+
+query I
+select st_crs(g) from t2;
+----
+EPSG:3857

@@ -20,15 +20,15 @@ class Serializer;
 class Deserializer;
 
 enum class CoordinateReferenceSystemType : uint8_t {
-	// Empty
+	//! Unknown
 	INVALID = 0,
-	// Opaque identifier
+	//! Opaque identifier
 	SRID = 1,
-	// PROJJSON format
+	//! PROJJSON format
 	PROJJSON = 2,
-	// WKT2_2019 format
+	//! WKT2_2019 format
 	WKT2_2019 = 3,
-	// AUTH:CODE format
+	//! AUTH:CODE format
 	AUTH_CODE = 4,
 };
 
@@ -73,25 +73,43 @@ public:
 		return text;
 	}
 
-	// Only compare the definition, as "type", "name" and "id" are derived from it
-	bool operator==(const CoordinateReferenceSystem &other) const {
-		return text == other.text;
-	}
+	//! Attempt to determine if this CRS is equivalent to another CRS
+	//! This is currently not very precise, and may yield false negatives
+	//! We consider two CRSs equal if one of the following is true:
+	//! - Their codes match (if both have a code)
+	//! - Their names match (if both have a name)
+	//! - Their type and full text definitions match, character-for-character
+	bool Equals(const CoordinateReferenceSystem &other) const {
+		if (!code.empty() && code == other.code) {
+			// Whatever the definitions are, if the codes match we consider them equal
+			return true;
+		}
+		if (!name.empty() && name == other.name) {
+			// Whatever the definitions are, if the names match we consider them equal
+			return true;
+		}
+		// Finally, fall back to comparing the full definitions
+		// This is not ideal, because the same CRS (in the same format!) can often be expressed in multiple ways
+		// E.g. field order, whitespace differences, casing, etc. But it's better than nothing for now.
 
-	bool operator!=(const CoordinateReferenceSystem &other) const {
-		return !(*this == other);
+		// In the future we should:
+		// 1. Implement proper normalization for each CRS format, and make _structured_ comparisons
+		// 2. Allow extensions to inject a CRS handling library (e.g. PROJ) to perform proper _semantic_ comparisons
+		return type == other.type && text == other.text;
 	}
 
 	void Serialize(Serializer &serializer) const;
 	static CoordinateReferenceSystem Deserialize(Deserializer &deserializer);
 
 public:
+	static bool TryParse(const string &text, CoordinateReferenceSystem &result);
+	static void Parse(const string &text, CoordinateReferenceSystem &result);
+
+private:
 	static bool TryParseAuthCode(const string &text, CoordinateReferenceSystem &result);
 	static bool TryParseWKT2(const string &text, CoordinateReferenceSystem &result);
 	static bool TryParsePROJJSON(const string &text, CoordinateReferenceSystem &result);
-	static bool TryParse(const string &text, CoordinateReferenceSystem &result);
 
-private:
 	//! The type of the coordinate reference system
 	CoordinateReferenceSystemType type = CoordinateReferenceSystemType::INVALID;
 
