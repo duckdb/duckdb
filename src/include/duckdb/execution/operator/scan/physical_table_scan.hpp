@@ -61,7 +61,7 @@ public:
 
 	bool Equals(const PhysicalOperator &other) const override;
 
-	OrderPreservationType OperatorOrder() const override {
+	OrderPreservationType SourceOrder() const override {
 		return function.order_preservation_type;
 	}
 
