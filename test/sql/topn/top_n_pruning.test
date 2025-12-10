@@ -21,7 +21,13 @@ USE db
 #               [ ]    : 10240   2048
 
 statement ok
-CREATE TABLE t AS SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+CREATE TABLE t(
+	generated_col AS (i + 1),
+	i BIGINT
+);
+
+statement ok
+INSERT INTO t SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
 
 statement ok
 INSERT INTO t SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)

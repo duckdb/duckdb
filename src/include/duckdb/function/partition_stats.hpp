@@ -12,6 +12,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 

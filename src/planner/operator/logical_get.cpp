@@ -201,9 +201,6 @@ bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageInde
 		out_index = StorageIndex::FromColumnIndex(column_index);
 		return true;
 	}
-	if (column_index.IsRowIdColumn() || column_index.IsVirtualColumn()) {
-		return false;
-	}
 
 	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
 	if (column.Generated()) {
