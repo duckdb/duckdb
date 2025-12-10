@@ -6,7 +6,7 @@ include_directories(include)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-add_library(duckdb_mbedtls STATIC
+add_library_unity(duckdb_mbedtls STATIC
         mbedtls_wrapper.cpp
         library/aes.cpp
         library/asn1parse.cpp
