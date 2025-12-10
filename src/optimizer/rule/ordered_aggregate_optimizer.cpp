@@ -90,6 +90,12 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
 	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
+
+	// only apply to LogicalAggregate nodes
+	if (op.type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return nullptr;
+	}
+
 	return Apply(rewriter.context, aggr, op.Cast<LogicalAggregate>().groups, changes_made);
 }
 

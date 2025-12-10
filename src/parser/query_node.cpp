@@ -24,6 +24,9 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		for (auto &al : kv.second->key_targets) {
 			kv_info->key_targets.push_back(al->Copy());
 		}
+		for (auto &al : kv.second->payload_aggregates) {
+			kv_info->payload_aggregates.push_back(al->Copy());
+		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
 		res.map[kv.first] = std::move(kv_info);
@@ -73,6 +76,9 @@ string CommonTableExpressionMap::ToString() const {
 					result += ", ";
 				}
 				result += cte.key_targets[k]->ToString();
+				if (cte.key_targets[k]->HasAlias()) {
+					result += StringUtil::Format(" AS %s", SQLIdentifier(cte.key_targets[k]->GetAlias()));
+				}
 			}
 			result += ") ";
 		}
@@ -160,6 +166,9 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		if (!ParsedExpression::ListEquals(entry.second->key_targets, other_entry->second->key_targets)) {
 			return false;
 		}
+		if (!ParsedExpression::ListEquals(entry.second->payload_aggregates, other_entry->second->payload_aggregates)) {
+			return false;
+		}
 		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
 			return false;
 		}
@@ -178,6 +187,9 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		}
 		for (auto &key : kv.second->key_targets) {
 			kv_info->key_targets.push_back(key->Copy());
+		}
+		for (auto &agg : kv.second->payload_aggregates) {
+			kv_info->payload_aggregates.push_back(agg->Copy());
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
