@@ -8,29 +8,11 @@
 
 namespace duckdb {
 
-namespace {
-
-struct BindData : public FunctionData {
-public:
-	explicit BindData(const string &str);
-	explicit BindData(uint32_t index);
-	BindData(const BindData &other) = default;
-
-public:
-	unique_ptr<FunctionData> Copy() const override;
-	bool Equals(const FunctionData &other) const override;
-
-public:
-	VariantPathComponent component;
-};
-
-} // namespace
-
-BindData::BindData(const string &str) : FunctionData() {
+VariantExtractBindData::VariantExtractBindData(const string &str) : FunctionData() {
 	component.lookup_mode = VariantChildLookupMode::BY_KEY;
 	component.key = str;
 }
-BindData::BindData(uint32_t index) : FunctionData() {
+VariantExtractBindData::VariantExtractBindData(uint32_t index) : FunctionData() {
 	if (index == 0) {
 		throw BinderException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
 	}
@@ -38,12 +20,12 @@ BindData::BindData(uint32_t index) : FunctionData() {
 	component.index = index - 1;
 }
 
-unique_ptr<FunctionData> BindData::Copy() const {
-	return make_uniq<BindData>(*this);
+unique_ptr<FunctionData> VariantExtractBindData::Copy() const {
+	return make_uniq<VariantExtractBindData>(*this);
 }
 
-bool BindData::Equals(const FunctionData &other) const {
-	auto &bind_data = other.Cast<BindData>();
+bool VariantExtractBindData::Equals(const FunctionData &other) const {
+	auto &bind_data = other.Cast<VariantExtractBindData>();
 	if (bind_data.component.lookup_mode != component.lookup_mode) {
 		return false;
 	}
@@ -106,7 +88,7 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
 
-	auto &info = bind_data->Cast<BindData>();
+	auto &info = bind_data->Cast<VariantExtractBindData>();
 	auto &variant_stats = child_stats[0];
 	const bool is_shredded = VariantStats::IsShredded(variant_stats);
 	if (!is_shredded) {
@@ -143,9 +125,9 @@ static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, Scala
 	}
 
 	if (constant_arg.type().id() == LogicalTypeId::VARCHAR) {
-		return make_uniq<BindData>(constant_arg.GetValue<string>());
+		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<string>());
 	} else if (constant_arg.type().id() == LogicalTypeId::UINTEGER) {
-		return make_uniq<BindData>(constant_arg.GetValue<uint32_t>());
+		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<uint32_t>());
 	} else {
 		throw InternalException("Constant-folded argument was not of type UINTEGER or VARCHAR");
 	}
@@ -165,7 +147,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	(void)path;
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<BindData>();
+	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;

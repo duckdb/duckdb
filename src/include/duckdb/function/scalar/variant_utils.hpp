@@ -16,6 +16,20 @@
 
 namespace duckdb {
 
+struct VariantExtractBindData : public FunctionData {
+public:
+	explicit VariantExtractBindData(const string &str);
+	explicit VariantExtractBindData(uint32_t index);
+	VariantExtractBindData(const VariantExtractBindData &other) = default;
+
+public:
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other) const override;
+
+public:
+	VariantPathComponent component;
+};
+
 struct VariantNestedDataCollectionResult {
 public:
 	VariantNestedDataCollectionResult() : success(true) {
