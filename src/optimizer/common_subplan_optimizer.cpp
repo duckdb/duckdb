@@ -192,6 +192,30 @@ private:
 			}
 			break;
 		}
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			if (TYPE == ConversionType::TO_CANONICAL) {
+				D_ASSERT(projection_maps.empty());
+				projection_maps.push_back(std::move(filter.projection_map));
+			} else {
+				D_ASSERT(TYPE == ConversionType::RESTORE_ORIGINAL);
+				D_ASSERT(!projection_maps.empty());
+				filter.projection_map = std::move(projection_maps[0]);
+			}
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_ORDER_BY: {
+			auto &order = op.Cast<LogicalOrder>();
+			if (TYPE == ConversionType::TO_CANONICAL) {
+				D_ASSERT(projection_maps.empty());
+				projection_maps.push_back(std::move(order.projection_map));
+			} else {
+				D_ASSERT(TYPE == ConversionType::RESTORE_ORIGINAL);
+				D_ASSERT(!projection_maps.empty());
+				order.projection_map = std::move(projection_maps[0]);
+			}
+			break;
+		}
 		default:
 			break;
 		}
