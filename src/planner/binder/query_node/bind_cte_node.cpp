@@ -96,19 +96,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	}
 
 	// Rename columns if duplicate names are detected
-	vector<string> new_names;
-	// Use a case-insensitive map to track names and their counts
-	case_insensitive_map_t<idx_t> name_counts;
-	for (auto &n : names) {
-		string name = n;
-		while (name_counts.find(name) != name_counts.end()) {
-			name_counts[name] += 1;
-			name = n + "_" + std::to_string(name_counts[name]);
-		}
-		name_counts[name] = 0;
-		new_names.push_back(name);
-	}
-	names = std::move(new_names);
+	QueryResult::DeduplicateColumns(names);
 }
 
 BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement) {
