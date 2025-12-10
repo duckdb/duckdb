@@ -50,10 +50,26 @@ void IndexDataRemover::PushDelete(DeleteInfo &info) {
 	Flush(version_table, row_numbers, count);
 }
 
+void IndexDataRemover::Verify() {
+#ifdef DEBUG
+	// Verify that our index memory is stable.
+	for (auto &table : verify_indexes) {
+		table.second->VerifyIndexBuffers();
+	}
+#endif
+}
+
+void CommitState::Verify() {
+	index_data_remover.Verify();
+}
+
 void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) {
 	if (count == 0) {
 		return;
 	}
+#ifdef DEBUG
+	verify_indexes.insert(make_pair(reference<DataTable>(table), table.GetDataTableInfo()));
+#endif
 
 	// set up the row identifiers vector
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));

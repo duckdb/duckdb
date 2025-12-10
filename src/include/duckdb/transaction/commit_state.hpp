@@ -32,6 +32,7 @@ public:
 	explicit IndexDataRemover(QueryContext context, IndexRemovalType removal_type);
 
 	void PushDelete(DeleteInfo &info);
+	void Verify();
 
 private:
 	void Flush(DataTable &table, row_t *row_numbers, idx_t count);
@@ -39,8 +40,11 @@ private:
 private:
 	// data for index cleanup
 	QueryContext context;
+	//! While committing, we remove data from any indexes that was deleted
 	IndexRemovalType removal_type;
 	DataChunk chunk;
+	//! Debug mode only - list of indexes to verify
+	reference_map_t<DataTable, shared_ptr<DataTableInfo>> verify_indexes;
 };
 
 class CommitState {
@@ -52,6 +56,7 @@ public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 	void Flush();
+	void Verify();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 private:
