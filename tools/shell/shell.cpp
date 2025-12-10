@@ -2615,11 +2615,14 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 					next_dollar = idx;
 					break;
 				}
-				// all characters can be between A-Z, a-z or \200 - \377
+				// all characters can be between A-Z, a-z, underscore, or \200 - \377
 				if (zSql[idx] >= 'A' && zSql[idx] <= 'Z') {
 					continue;
 				}
 				if (zSql[idx] >= 'a' && zSql[idx] <= 'z') {
+					continue;
+				}
+				if (zSql[idx] == '_') {
 					continue;
 				}
 				if (zSql[idx] >= '\200' && zSql[idx] <= '\377') {
