@@ -20,9 +20,9 @@
 
 namespace duckdb {
 
-class TableRebinder : public LogicalOperatorVisitor {
+class CountWindowTableRebinder : public LogicalOperatorVisitor {
 public:
-	TableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
+	CountWindowTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
 	unordered_map<idx_t, idx_t> table_map;
@@ -70,10 +70,10 @@ public:
 	}
 };
 
-CountWindowElimination::CountWindowElimination(Optimizer &optimizer) : optimizer(optimizer) {
+WindowSelfJoinOptimizer::WindowSelfJoinOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
-unique_ptr<LogicalOperator> CountWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
 	ColumnBindingReplacer replacer;
 	op = OptimizeInternal(std::move(op), replacer);
 	if (!replacer.replacement_bindings.empty()) {
@@ -82,7 +82,7 @@ unique_ptr<LogicalOperator> CountWindowElimination::Optimize(unique_ptr<LogicalO
 	return op;
 }
 
-unique_ptr<LogicalOperator> CountWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
+unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                      ColumnBindingReplacer &replacer) {
 	if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 		auto &filter = op->Cast<LogicalFilter>();
@@ -147,7 +147,7 @@ unique_ptr<LogicalOperator> CountWindowElimination::OptimizeInternal(unique_ptr<
 			auto copy_child = original_child->Copy(optimizer.context);
 
 			// Rebind copy_child to avoid duplicate table indices
-			TableRebinder rebinder(optimizer);
+			CountWindowTableRebinder rebinder(optimizer);
 			rebinder.VisitOperator(*copy_child);
 
 			auto aggregate_index = optimizer.binder.GenerateTableIndex();
@@ -216,7 +216,7 @@ unique_ptr<LogicalOperator> CountWindowElimination::OptimizeInternal(unique_ptr<
 
 			for (size_t i = 0; i < w_expr.partitions.size(); ++i) {
 				JoinCondition cond;
-				cond.comparison = ExpressionType::COMPARE_EQUAL;
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				cond.left = w_expr.partitions[i]->Copy();
 				cond.right = make_uniq<BoundColumnRefExpression>(w_expr.partitions[i]->return_type,
 				                                                 ColumnBinding(group_index, i));

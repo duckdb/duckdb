@@ -14,9 +14,9 @@
 
 namespace duckdb {
 
-class CountWindowElimination {
+class WindowSelfJoinOptimizer {
 public:
-	explicit CountWindowElimination(Optimizer &optimizer);
+	explicit WindowSelfJoinOptimizer(Optimizer &optimizer);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
