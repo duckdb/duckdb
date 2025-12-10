@@ -80,7 +80,7 @@ FULL OUTER JOIN (
     GROUP BY GROUPING SETS((month))
 ) AS anon_2 ON anon_1.month = anon_2.month
 ----
-2022-01-01	1100.0
+2022-01-01 00:00:00	1100.0
 
 query II
 SELECT 
@@ -125,7 +125,7 @@ FULL OUTER JOIN (
     GROUP BY GROUPING SETS((month))
 ) AS anon_2 ON anon_1.month = anon_2.month
 ----
-2022-01-01	1110.0
+2022-01-01 00:00:00	1110.0
 
 query II
 SELECT 
@@ -170,4 +170,4 @@ FULL OUTER JOIN (
     GROUP BY GROUPING SETS((month))
 ) AS anon_2 ON anon_1.month = anon_2.month
 ----
-2022-01-01	1100.0
+2022-01-01 00:00:00	1100.0
