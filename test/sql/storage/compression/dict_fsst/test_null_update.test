@@ -1,0 +1,25 @@
+# name: test/sql/storage/compression/dict_fsst/test_null_update.test
+# group: [dict_fsst]
+
+load __TEST_DIR__/missing_null.db readwrite v1.4.2
+
+statement ok
+CREATE OR REPLACE TABLE t(
+	compressed VARCHAR USING COMPRESSION 'DICT_FSST'
+);
+
+statement ok
+INSERT INTO t VALUES
+	('Error3');
+
+statement ok
+UPDATE t SET compressed = NULL;
+
+# Only the validity is changed, no data changes occurred
+statement ok
+CHECKPOINT;
+
+query I
+SELECT * FROM t AS e WHERE e.compressed IS NULL;
+----
+NULL

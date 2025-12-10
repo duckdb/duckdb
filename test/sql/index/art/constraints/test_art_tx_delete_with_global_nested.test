@@ -43,17 +43,23 @@ DELETE FROM tbl WHERE id = 1;
 statement ok con2
 INSERT INTO tbl VALUES (1, ['con2 payload']);
 
-# Unique indexes can have a maximum of two row IDs in their leaves.
-
-statement error con2
+statement ok con2
 COMMIT;
+
+query III old
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
 ----
-<REGEX>:TransactionContext Error.*write-write conflict on key.*
+1	[first payload]	0
+
+query III con2
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	[con2 payload]	2
 
 statement ok old
 COMMIT;
 
-query III
+query III old
 SELECT id, payload, rowid FROM tbl WHERE id = 1;
 ----
-1	[con1 payload]	1
+1	[con2 payload]	2
