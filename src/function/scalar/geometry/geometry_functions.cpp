@@ -65,50 +65,13 @@ ScalarFunction StIntersectsExtentFun::GetFunction() {
 	return function;
 }
 
-static LogicalType GetCRSLogicalType() {
-	return LogicalType::STRUCT({
-	    {"type", LogicalType::VARCHAR},
-	    {"name", LogicalType::VARCHAR},
-	    {"value", LogicalType::VARCHAR},
-	});
-}
-
 static Value GetCRSValue(const LogicalType &logical_type) {
 	if (!GeoType::HasCRS(logical_type)) {
 		// Return null
-		return Value(GetCRSLogicalType());
+		return Value(LogicalTypeId::VARCHAR);
 	}
-
 	auto &crs = GeoType::GetCRS(logical_type);
-
-	const char *type_str;
-	switch (crs.GetType()) {
-	case CoordinateReferenceSystemType::PROJJSON:
-		type_str = "projjson";
-		break;
-	case CoordinateReferenceSystemType::WKT2_2019:
-		type_str = "wkt2:2019";
-		break;
-	case CoordinateReferenceSystemType::AUTH_CODE:
-		type_str = "authority_code";
-		break;
-	case CoordinateReferenceSystemType::SRID:
-		type_str = "srid";
-		break;
-	case CoordinateReferenceSystemType::INVALID:
-	default:
-		type_str = "unknown";
-		break;
-	}
-
-	auto type_value = Value(type_str);
-	auto name_value = crs.GetName().empty() ? Value(LogicalTypeId::VARCHAR) : Value(crs.GetName());
-	auto text_value = Value(crs.GetDefinition());
-
-	auto crs_value =
-	    Value::STRUCT(GetCRSLogicalType(), {std::move(type_value), std::move(name_value), std::move(text_value)});
-
-	return crs_value;
+	return Value(crs.GetDefinition());
 }
 
 static void CRSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -134,8 +97,7 @@ static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFu
 }
 
 ScalarFunction StCrsFun::GetFunction() {
-	const auto crs_type = GetCRSLogicalType();
-	ScalarFunction geom_func({LogicalType::GEOMETRY()}, crs_type, CRSFunction, BindCRSFunction);
+	ScalarFunction geom_func({LogicalType::GEOMETRY()}, LogicalType::VARCHAR, CRSFunction, BindCRSFunction);
 	geom_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	geom_func.bind_expression = BindCRSFunctionExpression;
 	return geom_func;

@@ -2044,6 +2044,12 @@ LogicalType LogicalType::GEOMETRY(const string &crs) {
 	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
 }
 
+LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	info->crs = crs;
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+}
+
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();

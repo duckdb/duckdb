@@ -12,48 +12,55 @@
 
 namespace duckdb {
 
-bool CoordinateReferenceSystem::TryParse(const string &text, CoordinateReferenceSystem &result) {
+void CoordinateReferenceSystem::Parse(const string &text, CoordinateReferenceSystem &result) {
 	if (text.empty()) {
 		result.type = CoordinateReferenceSystemType::INVALID;
-		return false;
+		return;
 	}
 
 	// Check if the text is all whitespace
-	auto not_space = false;
+	auto all_space = true;
 	for (const auto c : text) {
 		if (!StringUtil::CharacterIsSpace(c)) {
-			not_space = true;
+			all_space = false;
 			break;
 		}
 	}
-	if (!not_space) {
+
+	if (all_space) {
 		result.type = CoordinateReferenceSystemType::INVALID;
-		return false;
+		return;
 	}
 
 	if (TryParsePROJJSON(text, result)) {
-		return true;
+		return;
 	}
 
 	if (TryParseAuthCode(text, result)) {
-		return true;
+		return;
 	}
 
 	// TODO: Also strip formatting
 	if (TryParseWKT2(text, result)) {
-		return true;
+		return;
 	}
 
 	// Otherwise, treat this as an opaque SRID identifier, and don't set an explicit name or id
 	result.type = CoordinateReferenceSystemType::SRID;
 	result.text = text;
+}
+
+bool CoordinateReferenceSystem::TryParse(const string &text, CoordinateReferenceSystem &result) {
+	try {
+		Parse(text, result);
+	} catch (const InvalidInputException &ex) {
+		return false;
+	}
 	return true;
 }
 
 CoordinateReferenceSystem::CoordinateReferenceSystem(const string &crs) {
-	if (!TryParse(crs, *this)) {
-		throw InvalidInputException("Failed to parse coordinate reference system: '%s'", crs);
-	}
+	Parse(crs, *this);
 }
 
 void CoordinateReferenceSystem::Serialize(Serializer &serializer) const {
@@ -65,13 +72,11 @@ CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &d
 	string text;
 	deserializer.ReadPropertyWithDefault<string>(100, "text", text);
 	CoordinateReferenceSystem result;
-
 	// If this fails for whatever reason, just return an invalid CRS
-	try {
-		CoordinateReferenceSystem::TryParse(text, result);
-	} catch (...) {
+	if (!TryParse(text, result)) {
+		result.text = "";
+		result.type = CoordinateReferenceSystemType::INVALID;
 	}
-
 	return result;
 }
 
