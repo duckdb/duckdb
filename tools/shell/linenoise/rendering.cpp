@@ -485,11 +485,14 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 						next_dollar = idx;
 						break;
 					}
-					// all characters can be between A-Z, a-z or \200 - \377
+					// all characters can be between A-Z, a-z, underscore, or \200 - \377
 					if (buf[idx] >= 'A' && buf[idx] <= 'Z') {
 						continue;
 					}
 					if (buf[idx] >= 'a' && buf[idx] <= 'z') {
+						continue;
+					}
+					if (buf[idx] == '_') {
 						continue;
 					}
 					if (buf[idx] >= '\200' && buf[idx] <= '\377') {

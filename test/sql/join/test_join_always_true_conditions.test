@@ -1,0 +1,89 @@
+# name: test/sql/join/test_join_always_true_conditions.test
+# description: Test all join types with ON TRUE condition
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE left_table (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO left_table VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE right_table (id INTEGER, category INTEGER);
+
+statement ok
+INSERT INTO right_table VALUES (1, 100), (2, 200);
+
+statement ok
+CREATE TABLE empty_table (id INTEGER, category INTEGER);
+
+# INNER JOIN with ON TRUE
+query IIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON TRUE;
+----
+1	10	1	100
+1	10	2	200
+2	20	1	100
+2	20	2	200
+
+# LEFT JOIN with ON TRUE
+query IIII rowsort
+SELECT * FROM left_table l
+LEFT JOIN right_table r ON TRUE;
+----
+1	10	1	100
+1	10	2	200
+2	20	1	100
+2	20	2	200
+
+# RIGHT JOIN with ON TRUE
+query IIII rowsort
+SELECT * FROM left_table l
+RIGHT JOIN right_table r ON TRUE;
+----
+1	10	1	100
+1	10	2	200
+2	20	1	100
+2	20	2	200
+
+# FULL OUTER JOIN with ON TRUE
+query IIII rowsort
+SELECT * FROM left_table l
+FULL OUTER JOIN right_table r ON TRUE;
+----
+1	10	1	100
+1	10	2	200
+2	20	1	100
+2	20	2	200
+
+# SEMI JOIN with ON TRUE (non-empty right table)
+query II rowsort
+SELECT * FROM left_table l
+SEMI JOIN right_table r ON TRUE;
+----
+1	10
+2	20
+
+# SEMI JOIN with ON TRUE (empty right table)
+query II rowsort
+SELECT * FROM left_table l
+SEMI JOIN empty_table e ON TRUE;
+----
+
+# ANTI JOIN with ON TRUE (non-empty right table)
+query II rowsort
+SELECT * FROM left_table l
+ANTI JOIN right_table r ON TRUE;
+----
+
+# ANTI JOIN with ON TRUE (empty right table)
+query II rowsort
+SELECT * FROM left_table l
+ANTI JOIN empty_table e ON TRUE;
+----
+1	10
+2	20
