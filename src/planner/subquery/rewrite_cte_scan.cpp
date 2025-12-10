@@ -14,8 +14,10 @@
 
 namespace duckdb {
 
-RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns)
-    : table_index(table_index), correlated_columns(correlated_columns) {
+RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns,
+                               bool rewrite_dependent_joins)
+    : table_index(table_index), correlated_columns(correlated_columns),
+      rewrite_dependent_joins(rewrite_dependent_joins) {
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
@@ -29,7 +31,7 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			}
 			cteref.correlated_columns += correlated_columns.size();
 		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && rewrite_dependent_joins) {
 		// There is another DependentJoin below the correlated recursive CTE.
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.

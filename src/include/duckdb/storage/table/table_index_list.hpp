@@ -26,8 +26,12 @@ enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
 struct IndexEntry {
 	explicit IndexEntry(unique_ptr<Index> index);
+
 	atomic<IndexBindState> bind_state;
+	//! lock that should be used if access to "index" and "deleted_rows_in_use" at the same time is necessary
+	mutex lock;
 	unique_ptr<Index> index;
+	unique_ptr<BoundIndex> deleted_rows_in_use;
 };
 
 class TableIndexList {
@@ -43,6 +47,15 @@ public:
 		}
 	}
 
+	template <class T>
+	void ScanEntries(T &&callback) {
+		lock_guard<mutex> lock(index_entries_lock);
+		for (auto &entry : index_entries) {
+			if (callback(*entry)) {
+				break;
+			}
+		}
+	}
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries.
