@@ -1330,6 +1330,28 @@ bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
 }
 
+string LocalFileSystem::GetVersionTag(FileHandle &handle) {
+	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
+#ifdef _WIN32
+	return "";
+#else
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
+	}
+
+	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
+	uint64_t version_tag[4];
+	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
+	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
+	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
+	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
+
+	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+#endif
+}
+
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {
 	if (!CanSeek()) {
 		throw IOException("Cannot seek in files of this type");

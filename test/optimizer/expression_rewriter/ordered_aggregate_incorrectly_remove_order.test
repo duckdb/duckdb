@@ -1,0 +1,19 @@
+# name: test/optimizer/expression_rewriter/ordered_aggregate_incorrectly_remove_order.test
+# description: When there are multiple GroupingSets in aggregates, optimizer may incorrectly remove the ORDER BY clause from aggregates.
+# group: [expression_rewriter]
+
+statement ok
+CREATE TABLE t1(col1 INT, col2 INT);
+
+statement ok
+INSERT INTO t1 VALUES (2, 1), (1, 2);
+
+query I
+SELECT GROUP_CONCAT(col1 ORDER BY col1) AS c1
+FROM t1
+GROUP BY ROLLUP (col1)
+ORDER BY c1;
+----
+1
+1,2
+2
