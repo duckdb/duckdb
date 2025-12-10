@@ -196,6 +196,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"format", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"format_bytes", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parse_formatted_bytes", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"try_parse_formatted_bytes", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"formatreadabledecimalsize", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"formatreadablesize", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_base64", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},

@@ -2,9 +2,6 @@
 # description: Test the parse_formatted_bytes function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # Basic bytes and aliases
 query I
 SELECT parse_formatted_bytes('0 B');
@@ -94,6 +91,24 @@ query I
 SELECT parse_formatted_bytes(NULL);
 ----
 NULL
+
+# running the function on a table column
+query II
+WITH data(value) AS (
+	VALUES
+		('1 KB'),
+		('2 MB'),
+		('3 GiB'),
+		('4 TB'),
+		(NULL)
+)
+SELECT value, parse_formatted_bytes(value) AS bytes FROM data;
+----
+1 KB	1000
+2 MB	2000000
+3 GiB	3221225472
+4 TB	4000000000000
+NULL	NULL
 
 # Negative values are mapped to max uint64
 query I
