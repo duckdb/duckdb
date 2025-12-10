@@ -1,5 +1,5 @@
 # name: test/optimizer/common_subplan.test_slow
-# description: Test the Common Subplan optimizer
+# description: Test the CommonSubplanOptimizer
 # group: [optimizer]
 
 statement ok
@@ -96,6 +96,30 @@ union all
 select greatest(d, h) from my_view
 ----
 logical_opt	<REGEX>:(?:.*CTE_SCAN){10}.*$
+
+# One common subplan contains another, we get 2 CTEs and 3 CTE scans
+# this also tests that we set up the CTEs in the correct order for scheduling pipeline dependencies
+query II
+explain
+select count(*) from (select distinct range from range(10))
+union all
+select count(*) from (select distinct range from range(10))
+union all
+select * from (select distinct range from range(10))
+----
+logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){3}.*
+
+# A subplan inside a materialized CTE that is common with a subplan outside of the CTE, should also work
+# this also tests that we don't reorder materialized CTEs that were created by hand
+query II
+explain with cte as materialized (
+    select sum(range) s from range(10)
+)
+select * from cte
+union all
+select sum(range) s from range(10)
+----
+logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){3}.*
 
 require tpcds
 

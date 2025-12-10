@@ -886,8 +886,8 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info,
-                                 idx_t index) {
+static idx_t ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info,
+                                  idx_t index, optional_idx min_cte_idx) {
 	const auto cte_index = optimizer.binder.GenerateTableIndex();
 	const auto cte_name = StringUtil::Format("__common_subplan_%llu", index + 1);
 
@@ -955,6 +955,21 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperato
 	replacer.stop_operator = lowest_common_ancestor.get();
 	replacer.VisitOperator(*op);                                  // Replace from the root until CTE
 	replacer.VisitOperator(*lowest_common_ancestor->children[1]); // Replace in CTE child
+
+	auto &rhs_child = lowest_common_ancestor->children[1];
+	if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		// We have to be careful with the order in which we place the CTEs created by this optimizer
+		const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
+		if (min_cte_idx.IsValid() && child_table_index >= min_cte_idx.GetIndex() && child_table_index < cte_index) {
+			// CTEs are in the wrong order - pipeline dependencies cannot be set up, swap previous and current CTE
+			auto tmp = std::move(rhs_child->children[1]);
+			rhs_child->children[1] = std::move(lowest_common_ancestor);
+			lowest_common_ancestor = std::move(rhs_child);
+			rhs_child = std::move(tmp);
+		}
+	}
+
+	return cte_index;
 }
 
 unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
@@ -963,8 +978,10 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	auto subplans = finder.FindCommonSubplans(op);
 
 	// Convert all subplans to CTEs
+	optional_idx min_cte_idx;
 	for (idx_t i = 0; i < subplans.size(); i++) {
-		ConvertSubplansToCTE(optimizer, op, subplans[i].get().second, i);
+		auto cte_index = ConvertSubplansToCTE(optimizer, op, subplans[i].get().second, i, min_cte_idx);
+		min_cte_idx = min_cte_idx.IsValid() ? min_cte_idx : cte_index;
 	}
 
 	return op;
