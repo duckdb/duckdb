@@ -158,10 +158,6 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// GET does not support getting the partition stats
 		return;
 	}
-	// if (!get.table_filters.filters.empty()) {
-	// 	// we cannot do this if the GET has filters
-	// 	return;
-	// }
 	if (get.extra_info.sample_options) {
 		// only use row group statistics if we query the whole table
 		return;
@@ -181,12 +177,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (get.table_filters.filters.empty()) {
 		remaining_partition_stats = std::move(partition_stats);
 	} else {
-		idx_t MAX_REMAINING_PARTITION_NUM = 100000;
-		for (const auto &stats : partition_stats) {
-			if (remaining_partition_stats.size() >= MAX_REMAINING_PARTITION_NUM) {
-				// too many remaining partitions
-				return;
-			}
+		for (auto &stats : partition_stats) {
 			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			if (!stats.partition_row_group) {
 				return;
@@ -213,7 +204,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			switch (filter_result) {
 			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
-				remaining_partition_stats.push_back(stats);
+				remaining_partition_stats.push_back(std::move(stats));
 				break;
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				break;
