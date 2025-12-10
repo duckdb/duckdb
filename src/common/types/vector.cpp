@@ -958,15 +958,9 @@ static void TemplatedFlattenConstantVector(data_ptr_t data, data_ptr_t old_data,
 	}
 }
 
-void Vector::Flatten(idx_t count, bool force_rewrite) {
+void Vector::Flatten(idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
-		if (force_rewrite) {
-			Vector other(GetType(), count);
-			VectorOperations::Copy(*this, other, count, 0, 0);
-			this->Reference(other);
-			break;
-		}
 		// already a flat vector
 		switch (GetType().InternalType()) {
 		case PhysicalType::STRUCT: {
@@ -1170,18 +1164,11 @@ void Vector::Flatten(idx_t count, bool force_rewrite) {
 	}
 }
 
-void Vector::Flatten(const SelectionVector &sel, idx_t count, bool force_rewrite) {
+void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
-		if (force_rewrite) {
-			Vector other(GetType(), count);
-			VectorOperations::Copy(*this, other, sel, count, 0, 0);
-			this->Reference(other);
-			break;
-		} else {
-			// already a flat vector
-			break;
-		}
+		// already a flat vector
+		break;
 	case VectorType::FSST_VECTOR: {
 		// create a new flat vector of this type
 		Vector other(GetType(), count);
