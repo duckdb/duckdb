@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
