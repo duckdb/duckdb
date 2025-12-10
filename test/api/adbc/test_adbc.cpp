@@ -140,6 +140,21 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT 42"));
 }
 
+TEST_CASE("ADBC - non-empty query without actual statements", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	SECTION("Whitespace") {
+		REQUIRE(db.QueryAndCheck(" "));
+	}
+
+	SECTION("Line comment") {
+		REQUIRE(db.QueryAndCheck("--"));
+	}
+}
+
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -1196,7 +1211,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
-TEST_CASE("ADBC - Empty statement (unhappy)", "[adbc]") {
+TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
@@ -1206,13 +1221,7 @@ TEST_CASE("ADBC - Empty statement (unhappy)", "[adbc]") {
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
 
-	string query;
-	SECTION("Empty Statement") {
-		query = "";
-	}
-	SECTION("Commented out line") {
-		query = "--";
-	}
+	string query = "";
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
