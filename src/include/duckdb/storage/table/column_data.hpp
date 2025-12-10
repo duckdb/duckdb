@@ -198,7 +198,7 @@ public:
 	                                  vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
-	FilterPropagateResult CheckZonemap(TableFilter &filter);
+	FilterPropagateResult CheckZonemap(const StorageIndex &index, TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           const LogicalType &type,

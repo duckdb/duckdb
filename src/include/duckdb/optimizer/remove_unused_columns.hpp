@@ -23,7 +23,7 @@ struct ReferencedStructExtract {
 public:
 	ReferencedStructExtract(vector<reference<unique_ptr<Expression>>> expressions, idx_t bindings_idx,
 	                        ColumnIndex &&path)
-	    : bindings_idx(bindings_idx), expr(expressions), extract_path(std::move(path)) {
+	    : bindings_idx(bindings_idx), expr(std::move(expressions)), extract_path(std::move(path)) {
 	}
 
 public:
@@ -72,7 +72,7 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-	                vector<reference<unique_ptr<Expression>>> parent);
+	                const vector<reference<unique_ptr<Expression>>> &parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	//! ret: The amount of bindings created

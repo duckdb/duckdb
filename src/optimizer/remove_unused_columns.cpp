@@ -106,7 +106,7 @@ static void GetUniquePath(const ColumnIndex &index, column_index_set &result) {
 
 	//! Push the initial children
 	for (auto &child : child_indexes) {
-		to_visit.push(make_pair(std::ref(child), std::ref(path)));
+		to_visit.emplace(make_pair(std::ref(child), std::ref(path)));
 	}
 
 	while (!to_visit.empty()) {
@@ -123,7 +123,7 @@ static void GetUniquePath(const ColumnIndex &index, column_index_set &result) {
 		if (!source_children.empty()) {
 			auto &new_dest = dest.GetChildIndex(0);
 			for (auto &child : source_children) {
-				to_visit.push(make_pair(std::ref(child), std::ref(new_dest)));
+				to_visit.emplace(make_pair(std::ref(child), std::ref(new_dest)));
 			}
 		} else {
 			//! No further children, we've reached a leaf, add it to the set
@@ -522,12 +522,13 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		auto &key = child_types[child_index].first;
 		type_iter = child_types[child_index].second;
 
+		auto function = extract_function;
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
 		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
-		auto bind_info = bind_callback(context, extract_function, arguments);
-		auto return_type = extract_function.GetReturnType();
-		target = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
+		auto bind_info = bind_callback(context, function, arguments);
+		auto return_type = function.GetReturnType();
+		target = make_uniq<BoundFunctionExpression>(return_type, std::move(function), std::move(arguments),
 		                                            std::move(bind_info));
 		if (!path_iter.get().HasChildren()) {
 			break;
@@ -892,7 +893,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-                                  vector<reference<unique_ptr<Expression>>> parent) {
+                                  const vector<reference<unique_ptr<Expression>>> &parent) {
 	AddBinding(col, child_column);
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {

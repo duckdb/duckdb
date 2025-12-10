@@ -492,9 +492,9 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	for (idx_t i = 0; i < filter_list.size(); i++) {
 		auto &entry = filter_list[i];
 		auto &filter = entry.filter;
-		auto base_column_index = entry.table_column_index;
+		const auto &base_column_index = entry.table_column_index;
 
-		auto prune_result = GetColumn(base_column_index).CheckZonemap(filter);
+		auto prune_result = GetColumn(base_column_index).CheckZonemap(base_column_index, filter);
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}

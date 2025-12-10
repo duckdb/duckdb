@@ -144,7 +144,7 @@ struct ScanFilter {
 	ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
 
 	idx_t scan_column_index;
-	idx_t table_column_index;
+	StorageIndex table_column_index;
 	TableFilter &filter;
 	bool always_true;
 	unique_ptr<TableFilterState> filter_state;
