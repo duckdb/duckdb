@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+set enable_external_file_cache=true;
+
+statement ok
 set prefetch_all_parquet_files=true;
 
 # Create a single test file that will be used for all tests
