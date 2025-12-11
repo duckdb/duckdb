@@ -504,7 +504,8 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
 	const auto is_at_root = depth == 1;
 	const auto is_in_gpq_metadata = metadata.geo_metadata && metadata.geo_metadata->IsGeometryColumn(s_ele.name);
-	const auto is_leaf = s_ele.num_children == 0;
+	// A leaf node has a type set (as per Parquet spec)
+	const auto is_leaf = s_ele.__isset.type;
 	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
 
 	if (is_geoparquet_geom) {
@@ -557,11 +558,23 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
 
-	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
+	// Determine if this is an inner node
+	// According to Parquet spec: nodes without 'type' set are inner nodes (groups)
+	// For backwards compatibility with non-standard files, also check the old condition
+	bool is_inner_node = !s_ele.__isset.type || (s_ele.__isset.num_children && s_ele.num_children > 0);
+
+	if (is_inner_node && s_ele.__isset.type) {
+		// This case handles non-standard files where both type and num_children are set
+		// Prioritize num_children if set and > 0
+		is_inner_node = s_ele.__isset.num_children && s_ele.num_children > 0;
+	}
+
+	if (is_inner_node) { // inner node
 		vector<ParquetColumnSchema> child_schemas;
 
 		idx_t c_idx = 0;
-		while (c_idx < NumericCast<idx_t>(s_ele.num_children)) {
+		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
+		while (c_idx < num_children) {
 			next_schema_idx++;
 
 			auto child_schema =
