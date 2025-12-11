@@ -45,6 +45,7 @@ static const TestConfigOption test_config_options[] = {
     {"test_env", "The test variables",
      LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})),
      nullptr},
+    {"inherit_skip_tests", "Path of config to inherit 'skip_tests' from", LogicalType::VARCHAR},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -353,27 +354,45 @@ string TestConfiguration::ReadFileToString(const string &path) {
 }
 
 void TestConfiguration::LoadConfig(const string &config_path) {
-	// read the config file
-	auto buffer = ReadFileToString(config_path);
-	// parse json
-	auto json = StringUtil::ParseJSONMap(buffer);
-	auto json_values = json->Flatten();
-	for (auto &entry : json_values) {
-		ParseOption(entry.first, Value(entry.second));
-	}
-
-	// Convert to unordered_set<string> the list of tests to be skipped
-	auto entry = options.find("skip_tests");
-	if (entry != options.end()) {
-		auto skip_list_entry = ListValue::GetChildren(entry->second);
-		for (const auto &value : skip_list_entry) {
-			auto children = StructValue::GetChildren(value);
-			auto skip_list = ListValue::GetChildren(children[1]);
-			for (const auto &skipped_test : skip_list) {
-				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
-			}
+	try {
+		// read the config file
+		auto buffer = ReadFileToString(config_path);
+		// parse json
+		auto json = StringUtil::ParseJSONMap(buffer);
+		auto json_values = json->Flatten();
+		for (auto &entry : json_values) {
+			ParseOption(entry.first, Value(entry.second));
 		}
-		options.erase("skip_tests");
+		auto inherit_entry = options.find("inherit_skip_tests");
+		if (inherit_entry != options.end()) {
+			auto path_value = inherit_entry->second;
+			D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
+			D_ASSERT(!path_value.IsNull());
+			auto cwd = TestGetCurrentDirectory();
+			auto path = TestJoinPath(cwd, path_value.ToString());
+			TestConfiguration inherit_config;
+			inherit_config.LoadConfig(path);
+
+			tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
+			                           inherit_config.tests_to_be_skipped.end());
+		}
+		// Convert to unordered_set<string> the list of tests to be skipped
+		auto entry = options.find("skip_tests");
+		if (entry != options.end()) {
+			auto skip_list_entry = ListValue::GetChildren(entry->second);
+			for (const auto &value : skip_list_entry) {
+				auto children = StructValue::GetChildren(value);
+				auto skip_list = ListValue::GetChildren(children[1]);
+				for (const auto &skipped_test : skip_list) {
+					tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+				}
+			}
+			options.erase("skip_tests");
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		throw std::runtime_error(
+		    StringUtil::Format("Failed to parse config file \"%s\": %s", config_path, error.Message()));
 	}
 }
 

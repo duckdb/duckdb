@@ -460,7 +460,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 
 	if (on_conflict_info.action_type == OnConflictAction::REPLACE) {
 		D_ASSERT(!on_conflict_info.set_info);
-		on_conflict_info.set_info = CreateSetInfoForReplace(table, stmt, storage_info);
+		// For BY POSITION, create explicit SET information
+		// For BY NAME, leave it empty and let bind_merge_into handle it automatically
+		if (stmt.column_order != InsertColumnOrder::INSERT_BY_NAME) {
+			on_conflict_info.set_info = CreateSetInfoForReplace(table, stmt, storage_info);
+		}
 		on_conflict_info.action_type = OnConflictAction::UPDATE;
 	}
 	// now set up the merge actions
@@ -479,16 +483,19 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 		// when doing UPDATE set up the when matched action
 		auto update_action = make_uniq<MergeIntoAction>();
 		update_action->action_type = MergeActionType::MERGE_UPDATE;
-		for (auto &col : on_conflict_info.set_info->expressions) {
-			vector<unordered_set<string>> lambda_params;
-			DoUpdateSetQualify(col, table_name, lambda_params);
+		update_action->column_order = stmt.column_order;
+		if (on_conflict_info.set_info) {
+			for (auto &col : on_conflict_info.set_info->expressions) {
+				vector<unordered_set<string>> lambda_params;
+				DoUpdateSetQualify(col, table_name, lambda_params);
+			}
+			if (on_conflict_info.set_info->condition) {
+				vector<unordered_set<string>> lambda_params;
+				DoUpdateSetQualify(on_conflict_info.set_info->condition, table_name, lambda_params);
+				update_action->condition = std::move(on_conflict_info.set_info->condition);
+			}
+			update_action->update_info = std::move(on_conflict_info.set_info);
 		}
-		if (on_conflict_info.set_info->condition) {
-			vector<unordered_set<string>> lambda_params;
-			DoUpdateSetQualify(on_conflict_info.set_info->condition, table_name, lambda_params);
-			update_action->condition = std::move(on_conflict_info.set_info->condition);
-		}
-		update_action->update_info = std::move(on_conflict_info.set_info);
 
 		merge_into->actions[MergeActionCondition::WHEN_MATCHED].push_back(std::move(update_action));
 	}
@@ -514,7 +521,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::INSERT_DATA);
+		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
+		auto storage_info = table.GetStorageInfo(context);
+		if (!storage_info.index_info.empty()) {
+			modification_type = DatabaseModificationType::INSERT_DATA_WITH_INDEX;
+		}
+		properties.RegisterDBModify(table.catalog, context, modification_type);
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());

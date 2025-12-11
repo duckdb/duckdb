@@ -65,8 +65,8 @@ void Prefix::New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t 
 	}
 }
 
-void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-                    const GateStatus node4_status) {
+void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte, const GateStatus node4_status,
+                    const GateStatus status) {
 	// We have four situations from which we enter here:
 	// 1: PREFIX (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
 	// 2: PREFIX (parent) - Node4 (prev_node4) - INLINED_LEAF (child), or
@@ -90,10 +90,7 @@ void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8
 		ConcatChildIsGate(art, parent, node4, child, byte);
 		return;
 	}
-
-	auto inside_gate = parent.GetGateStatus() == GateStatus::GATE_SET;
-	ConcatInternal(art, parent, node4, child, byte, inside_gate);
-	return;
+	ConcatInternal(art, parent, node4, child, byte, status);
 }
 
 void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
@@ -304,9 +301,9 @@ Prefix Prefix::GetTail(ART &art, const Node &node) {
 }
 
 void Prefix::ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-                            const bool inside_gate) {
+                            const GateStatus status) {
 	if (child.GetType() == NType::LEAF_INLINED) {
-		if (inside_gate) {
+		if (status == GateStatus::GATE_SET) {
 			if (parent.GetType() == NType::PREFIX) {
 				// The parent only contained the Node4, so we can now inline 'all the way up',
 				// and the gate is no longer nested.

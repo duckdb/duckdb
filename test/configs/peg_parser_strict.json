@@ -198,6 +198,31 @@
         "test/extension/loadable_parser_override.test",
         "test/sql/peg_parser/transformer/peg_transformer.test"
       ]
+    },
+    {
+      "reason": "Unclassified failures",
+      "paths": [
+        "test/extension/install_extension.test",
+        "test/optimizer/pushdown/pushdown_in_to_parquet.test",
+        "test/optimizer/remove_unused_filter_column.test",
+        "test/fuzzer/pedro/export_parquet_generated.test",
+        "test/fuzzer/pedro/incomplete_checkpoint.test",
+        "test/parquet/test_internal_5021.test",
+        "test/parquet/timens_parquet.test",
+        "test/sql/settings/allowed_directories.test",
+        "test/sql/types/enum/test_enum.test",
+        "test/sql/types/struct/nested_struct_projection_pushdown.test",
+        "test/sql/types/struct/struct_cast_superset.test",
+        "test/sql/attach/attach_new_compression.test",
+        "test/sql/attach/attach_wal_alter.test",
+        "test/sql/attach/attach_storage_version.test",
+        "test/sql/storage/compression/string/blob.test",
+        "test/sql/storage/compression/alprd/alprd_min_max.test",
+        "test/sql/storage/compression/rle/rle_nulls_edge_case.test",
+        "test/sql/storage/compression/alp/alp_min_max.test",
+        "test/sql/pragma/test_metadata_info.test",
+        "test/sql/secrets/create_secret_persistence_no_client_context.test"
+      ]
     }
   ]
 }

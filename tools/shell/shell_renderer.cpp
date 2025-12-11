@@ -3,6 +3,7 @@
 #include "shell_state.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "shell_highlight.hpp"
+#include "duckdb/logging/log_storage.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -14,27 +15,37 @@ namespace duckdb_shell {
 PrintStream::PrintStream(ShellState &state) : state(state) {
 }
 
-void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment) {
+void PrintStream::RenderAlignedValue(const char *str, idx_t str_len, idx_t width, TextAlignment alignment) {
 	idx_t w = width;
-	idx_t n = state.RenderLength(str);
+	idx_t n = state.RenderLength(str, str_len);
 	idx_t space_count = w < n ? 0 : w - n;
+	idx_t lspace;
+	idx_t rspace;
 	if (alignment == TextAlignment::LEFT) {
-		Print(str);
-		Print(string(space_count, ' '));
-		return;
+		lspace = 0;
+		rspace = space_count;
+	} else if (alignment == TextAlignment::RIGHT) {
+		lspace = space_count;
+		rspace = 0;
+	} else {
+		lspace = space_count / 2;
+		rspace = (space_count + 1) / 2;
 	}
-	if (alignment == TextAlignment::RIGHT) {
-		Print(string(space_count, ' '));
-		Print(str);
-		return;
+	if (lspace > 0) {
+		Print(string(lspace, ' '));
 	}
-	idx_t lspace = space_count / 2;
-	idx_t rspace = (space_count + 1) / 2;
-	Print(string(lspace, ' '));
-	Print(str);
-	Print(string(rspace, ' '));
+	Print(duckdb::string_t(str, str_len));
+	if (rspace > 0) {
+		Print(string(rspace, ' '));
+	}
 }
 
+void PrintStream::RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment) {
+	RenderAlignedValue(str.c_str(), str.size(), width, alignment);
+}
+void PrintStream::RenderAlignedValue(duckdb::string_t str, idx_t width, TextAlignment alignment) {
+	RenderAlignedValue(str.GetData(), str.GetSize(), width, alignment);
+}
 void PrintStream::PrintDashes(idx_t N) {
 	Print(string(N, '-'));
 }
@@ -44,7 +55,15 @@ void PrintStream::OutputQuotedIdentifier(const string &str) {
 }
 
 void PrintStream::OutputQuotedString(const string &str) {
-	Print(StringUtil::Format("%s", SQLString(str)));
+	string result = "'";
+	for (auto c : str) {
+		if (c == '\'') {
+			result += c;
+		}
+		result += c;
+	}
+	result += "'";
+	Print(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -63,12 +82,12 @@ void ShellRenderer::RenderRow(PrintStream &out, ResultMetadata &result, RowData 
 void ShellRenderer::RenderFooter(PrintStream &out, ResultMetadata &result) {
 }
 
-string ShellRenderer::NullValue() {
-	return state.nullValue;
+const char *ShellRenderer::NullValue() {
+	return state.nullValue.c_str();
 }
 
-string ShellRenderer::ConvertValue(const char *value) {
-	return value ? value : state.nullValue;
+string ShellRenderer::ConvertValue(const char *value, idx_t str_len) {
+	return string(value, str_len);
 }
 
 void ShellRenderer::Analyze(RenderingQueryResult &result) {
@@ -88,41 +107,45 @@ public:
 		row_data.data.resize(nCol, string());
 		row_data.is_null.resize(nCol, false);
 		row_data.row_index = 0;
-		if (!result->exhausted_result) {
-			result_iterator = query_result.begin();
+		chunk_idx = 0;
+		row_in_chunk = 0;
+
+		if (!result->exhausted_result && Finished()) {
+			result->TryConvertChunk();
 		}
 		AssignData();
 	}
 
 	optional_ptr<RenderingQueryResult> result;
-	duckdb::QueryResult::iterator result_iterator;
 	RowData row_data;
+	idx_t chunk_idx;
+	idx_t row_in_chunk;
 
 public:
+	bool Finished() {
+		return row_data.row_index >= result->loaded_row_count;
+	}
+
 	void AssignData() {
-		auto &query_result = result->result;
-		auto nCol = query_result.ColumnCount();
-		if (row_data.row_index >= result->data.size()) {
-			if (result->exhausted_result || result_iterator == query_result.end()) {
-				// exhausted
-				result = nullptr;
-				return;
+		if (Finished()) {
+			result = nullptr;
+			return;
+		}
+		// read from the materialized rows
+		auto &chunk = *result->chunks[chunk_idx];
+		idx_t column_count = chunk.ColumnCount();
+		if (row_data.data.size() != column_count) {
+			row_data.data.resize(column_count);
+		}
+		for (idx_t c = 0; c < column_count; c++) {
+			auto &vector = chunk.data[c];
+			if (duckdb::FlatVector::IsNull(vector, row_in_chunk)) {
+				row_data.data[c] = duckdb::string_t(result->renderer.NullValue());
+				row_data.is_null[c] = true;
+			} else {
+				row_data.data[c] = duckdb::FlatVector::GetData<duckdb::string_t>(chunk.data[c])[row_in_chunk];
+				row_data.is_null[c] = false;
 			}
-			// read from the query result
-			auto &row = *result_iterator;
-			// convert the result
-			for (idx_t c = 0; c < nCol; c++) {
-				if (row.IsNull(c)) {
-					row_data.is_null[c] = true;
-					row_data.data[c] = result->renderer.NullValue();
-				} else {
-					row_data.is_null[c] = false;
-					row_data.data[c] = row.GetValue<string>(c);
-				}
-			}
-		} else {
-			// read from the materialized rows
-			row_data.data = std::move(result->data[row_data.row_index]);
 		}
 	}
 
@@ -131,10 +154,17 @@ public:
 			return;
 		}
 		// iterate to next position
-		if (!result->exhausted_result && row_data.row_index >= result->data.size()) {
-			++result_iterator;
-		}
 		row_data.row_index++;
+		row_in_chunk++;
+		auto &chunk = *result->chunks[chunk_idx];
+		if (row_in_chunk >= chunk.size()) {
+			row_in_chunk = 0;
+			chunk_idx++;
+		}
+		if (!result->exhausted_result && Finished()) {
+			// convert the next chunk (if we have any)
+			result->TryConvertChunk();
+		}
 		// read data from this position
 		AssignData();
 	}
@@ -150,6 +180,10 @@ public:
 		return row_data;
 	}
 };
+
+RenderingQueryResult::RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
+    : result(result), renderer(renderer), metadata(result) {
+}
 
 RenderingResultIterator RenderingQueryResult::begin() {
 	return RenderingResultIterator(*this);
@@ -243,7 +277,22 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-bool RenderingQueryResult::TryConvertChunk(ShellRenderer &renderer) {
+unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chunk) {
+	// cast to the varchar chunk
+	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
+	vector<duckdb::LogicalType> all_varchar;
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
+	}
+	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
+
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
+	}
+	return varchar_chunk;
+}
+
+bool RenderingQueryResult::TryConvertChunk() {
 	if (exhausted_result) {
 		return false;
 	}
@@ -252,24 +301,37 @@ bool RenderingQueryResult::TryConvertChunk(ShellRenderer &renderer) {
 		exhausted_result = true;
 		return false;
 	}
-	for (idx_t r = 0; r < chunk->size(); r++) {
-		vector<string> row_data;
+	auto varchar_chunk = renderer.ConvertChunk(*chunk);
+	varchar_chunk->SetCardinality(chunk->size());
+	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			auto str_val = chunk->data[c].GetValue(r).GetValue<string>();
-			row_data.push_back(renderer.ConvertValue(str_val.c_str()));
+			auto &str_vec = varchar_chunk->data[c];
+			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
+				if (duckdb::FlatVector::IsNull(str_vec, r)) {
+					continue;
+				}
+				auto val = strings[r].GetData();
+				auto str_len = strings[r].GetSize();
+				if (!renderer.ShouldConvertValue(val, str_len)) {
+					continue;
+				}
+				strings[r] = duckdb::StringVector::AddStringOrBlob(str_vec, renderer.ConvertValue(val, str_len));
+			}
 		}
-		data.push_back(std::move(row_data));
 	}
+	loaded_row_count += chunk->size();
+	chunks.push_back(std::move(varchar_chunk));
 	return true;
 }
 
 void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 	auto &state = ShellState::Get();
 	for (auto &column_name : result.metadata.column_names) {
-		column_name = ConvertValue(column_name.c_str());
+		column_name = ConvertValue(column_name.c_str(), column_name.size());
 	}
 	// materialize the query result
-	while (result.TryConvertChunk(*this)) {
+	while (result.TryConvertChunk()) {
 		if (state.seenInterrupt) {
 			state.PrintF("Interrupt\n");
 			return;
@@ -292,11 +354,20 @@ void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 		}
 		column_width.push_back(render_width);
 	}
-	for (auto &row : result.data) {
-		for (idx_t column_idx = 0; column_idx < row.size(); column_idx++) {
-			idx_t width = state.RenderLength(row[column_idx]);
-			if (width > column_width[column_idx]) {
-				column_width[column_idx] = width;
+	for (idx_t column_idx = 0; column_idx < result.ColumnCount(); column_idx++) {
+		for (auto &chunk : result.chunks) {
+			auto &vector = chunk->data[column_idx];
+			auto string_data = duckdb::FlatVector::GetData<duckdb::string_t>(vector);
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				idx_t width;
+				if (duckdb::FlatVector::IsNull(vector, r)) {
+					width = state.RenderLength(state.nullValue);
+				} else {
+					width = state.RenderLength(string_data[r]);
+				}
+				if (width > column_width[column_idx]) {
+					column_width[column_idx] = width;
+				}
 			}
 		}
 	}
@@ -306,7 +377,7 @@ bool ColumnRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode glob
 	if (global_mode == PagerMode::PAGER_ON) {
 		return true;
 	}
-	if (result.data.size() >= state.pager_min_rows) {
+	if (result.loaded_row_count >= state.pager_min_rows) {
 		// rows exceed min rows
 		return true;
 	}
@@ -417,10 +488,30 @@ public:
 	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	string ConvertValue(const char *value) override {
+	bool HasConvertValue() override {
+		return true;
+	}
+
+	bool ShouldConvertValue(const char *value, idx_t str_len) override {
+		for (idx_t i = 0; i < str_len; i++) {
+			if (value[i] == '|') {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	string ConvertValue(const char *value, idx_t str_len) override {
 		// when rendering for markdown we need to escape pipes
-		string result = ColumnRenderer::ConvertValue(value);
-		return StringUtil::Replace(result, "|", "\\|");
+		string result;
+		for (idx_t idx = 0; idx < str_len; idx++) {
+			auto c = value[idx];
+			if (c == '|') {
+				result += '\\';
+			}
+			result += c;
+		}
+		return result;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
@@ -495,30 +586,28 @@ public:
 	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	string ConvertValue(const char *value) override {
-		// for MODE_Box truncate large values
-		if (!value) {
-			return ColumnRenderer::ConvertValue(value);
+	bool HasConvertValue() override {
+		return true;
+	}
+
+	bool ShouldConvertValue(const char *value, idx_t str_len) override {
+		for (idx_t i = 0; i < str_len; i++) {
+			if (value[i] == '\n') {
+				return true;
+			}
 		}
-		static constexpr idx_t MAX_SIZE = 80;
+		return false;
+	}
+
+	string ConvertValue(const char *value, idx_t str_len) override {
 		string result;
-		idx_t count = 0;
-		bool interrupted = false;
-		for (const char *s = value; *s; s++) {
-			if (*s == '\n') {
-				result += "\\";
-				result += "n";
+		for (idx_t i = 0; i < str_len; i++) {
+			auto c = value[i];
+			if (c == '\n') {
+				result += "\\n";
 			} else {
-				result += *s;
+				result += c;
 			}
-			count++;
-			if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
-				interrupted = true;
-				break;
-			}
-		}
-		if (interrupted) {
-			result += "...";
 		}
 		return result;
 	}
@@ -564,7 +653,7 @@ private:
 	/*
 	** Draw a horizontal separator for a RenderMode::Box table.
 	*/
-	void PrintBoxRowSeparator(PrintStream &out, int nArg, const char *zSep1, const char *zSep2, const char *zSep3,
+	void PrintBoxRowSeparator(PrintStream &out, idx_t nArg, const char *zSep1, const char *zSep2, const char *zSep3,
 	                          const vector<idx_t> &actualWidth) {
 		int i;
 		if (nArg > 0) {
@@ -632,21 +721,38 @@ public:
 	explicit WidthMeasuringStream(ShellState &state) : PrintStream(state) {
 	}
 
+	void ProcessCharacter(char c) {
+		if (c == '\r') {
+			return;
+		}
+		if (c == '\n') {
+			// newline - compute the render width of the current line and reset
+			auto render_width = state.RenderLength(output);
+			if (render_width > max_width) {
+				max_width = render_width;
+			}
+			output = string();
+			return;
+		}
+		output += c;
+	}
+
+	void MeasureText(const char *str, idx_t str_len) {
+		for (idx_t i = 0; i < str_len; i++) {
+			auto c = str[i];
+			ProcessCharacter(c);
+		}
+	}
 	void Print(const string &str) override {
-		for (auto c : str) {
-			if (c == '\r') {
-				continue;
-			}
-			if (c == '\n') {
-				// newline - compute the render width of the current line and reset
-				auto render_width = state.RenderLength(output);
-				if (render_width > max_width) {
-					max_width = render_width;
-				}
-				output = string();
-				continue;
-			}
-			output += c;
+		MeasureText(str.c_str(), str.size());
+	}
+	void Print(duckdb::string_t str) override {
+		MeasureText(str.GetData(), str.GetSize());
+	}
+	void Print(const char *str) override {
+		for (idx_t i = 0; str[i]; i++) {
+			auto c = str[i];
+			ProcessCharacter(c);
 		}
 	}
 	void SetBinaryMode() override {
@@ -666,9 +772,9 @@ bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_
 		return true;
 	}
 	// fetch data until we have either fetched more than the pager min, or we have exhausted the data
-	while (result.data.size() < state.pager_min_rows && result.TryConvertChunk(*this)) {
+	while (result.loaded_row_count < state.pager_min_rows && result.TryConvertChunk()) {
 	}
-	if (result.data.size() >= state.pager_min_rows) {
+	if (result.loaded_row_count >= state.pager_min_rows) {
 		// rows exceed min rows
 		return true;
 	}
@@ -676,9 +782,7 @@ bool RowRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_
 	// figure out how wide the result would be when rendered
 	WidthMeasuringStream stream(state);
 	// make a copy of the result to avoid consuming it
-	auto result_copy = result.data;
 	RenderQueryResult(stream, state, result);
-	result.data = std::move(result_copy);
 
 	idx_t max_render_width = state.GetMaxRenderWidth();
 	if (stream.max_width > max_render_width) {
@@ -760,10 +864,18 @@ public:
 			return true;
 		}
 		idx_t row_count = 0;
-		for (auto &row : result.data) {
-			for (auto c : row[1]) {
-				if (c == '\n') {
-					row_count++;
+		for (auto &chunk : result.chunks) {
+			auto &plan_vector = chunk->data[1];
+			auto string_data = duckdb::FlatVector::GetData<duckdb::string_t>(plan_vector);
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				if (duckdb::FlatVector::IsNull(plan_vector, r)) {
+					continue;
+				}
+				for (idx_t s_idx = 0; s_idx < string_data[r].GetSize(); s_idx++) {
+					auto c = string_data[r].GetData()[s_idx];
+					if (c == '\n') {
+						row_count++;
+					}
 				}
 			}
 		}
@@ -826,7 +938,7 @@ public:
 		out.Print("<tr>");
 		for (idx_t i = 0; i < data.size(); i++) {
 			out.Print("<td>");
-			OutputHTMLString(out, data[i]);
+			OutputHTMLString(out, data[i].GetString());
 			out.Print("</td>\n");
 		}
 		out.Print("</tr>\n");
@@ -877,7 +989,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			out.Print(state.EscapeCString(col_names[i].c_str()));
+			out.Print(state.EscapeCString(col_names[i]));
 		}
 		out.Print(row_sep);
 	}
@@ -888,7 +1000,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			out.Print(state.EscapeCString(data[i].c_str()));
+			out.Print(state.EscapeCString(data[i].GetString()));
 		}
 		out.Print(row_sep);
 	}
@@ -906,7 +1018,10 @@ public:
 		out.SetBinaryMode();
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			out.Print(EscapeCSV(col_names[i], i < col_names.size() - 1));
+			if (i > 0) {
+				out.Print(state.colSeparator);
+			}
+			PrintEscapedCSV(out, col_names[i].c_str(), col_names[i].size());
 		}
 		out.Print(row_sep);
 		out.SetTextMode();
@@ -916,7 +1031,10 @@ public:
 		out.SetBinaryMode();
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			out.Print(EscapeCSV(data[i].c_str(), i < data.size() - 1));
+			if (i > 0) {
+				out.Print(state.colSeparator);
+			}
+			PrintEscapedCSV(out, data[i].GetData(), data[i].GetSize());
 		}
 		out.Print(row_sep);
 		out.SetTextMode();
@@ -927,37 +1045,36 @@ public:
 			// non-printable - needs quote
 			return true;
 		}
-		if (c == '"') {
+		if (c == '"' || c == '\'') {
 			return true;
 		}
-		if (c >= 123) {
+		if (c >= 127) {
 			return true;
 		}
 		return false;
 	}
 
-	string EscapeCSV(const string &str, bool print_sep) {
-		string result;
+	void PrintEscapedCSV(PrintStream &out, const char *str, idx_t str_len) {
 		bool needs_quote = false;
-		for (idx_t idx = 0; idx < str.size(); idx++) {
+		idx_t col_sep_size = state.colSeparator.size();
+		for (idx_t idx = 0; idx < str_len; idx++) {
 			if (CharacterNeedsQuote((unsigned char)str[idx])) {
 				needs_quote = true;
 				break;
 			}
+			if (idx + col_sep_size <= str_len) {
+				if (memcmp((const void *)(str + idx), (const void *)state.colSeparator.c_str(), col_sep_size) == 0) {
+					needs_quote = true;
+					break;
+				}
+			}
 		}
-		if (!needs_quote && StringUtil::Contains(str, state.colSeparator)) {
-			needs_quote = true;
+		if (!needs_quote) {
+			out.Print(duckdb::string_t(str, str_len));
+			return;
 		}
-		if (needs_quote) {
-			auto zQuoted = StringUtil::Format("%s", SQLIdentifier(str));
-			result += zQuoted;
-		} else {
-			result += str;
-		}
-		if (print_sep) {
-			result += state.colSeparator;
-		}
-		return result;
+		auto result = StringUtil::Format("%s", SQLIdentifier(string(str, str_len)));
+		out.Print(result);
 	}
 };
 
@@ -1008,7 +1125,7 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			out.OutputQuotedString(col_names[i].c_str());
+			out.OutputQuotedString(col_names[i]);
 		}
 		out.Print(row_sep);
 	}
@@ -1021,16 +1138,16 @@ public:
 			if (i > 0) {
 				out.Print(col_sep);
 			}
-			if (types[i].IsNumeric() || is_null[i]) {
+			if (types[i].IsNumeric() || is_null[i] || types[i].id() == duckdb::LogicalTypeId::BOOLEAN) {
 				out.Print(data[i]);
 			} else {
-				out.OutputQuotedString(data[i].c_str());
+				out.OutputQuotedString(data[i].GetString());
 			}
 		}
 		out.Print(row_sep);
 	}
 
-	string NullValue() override {
+	const char *NullValue() override {
 		return "NULL";
 	}
 };
@@ -1048,6 +1165,21 @@ public:
 		out.Print("{");
 	}
 
+	bool RequiresQuotes(const duckdb::LogicalType &type) {
+		if (!type.IsNumeric()) {
+			return true;
+		}
+		switch (type.id()) {
+		case duckdb::LogicalTypeId::UBIGINT:
+		case duckdb::LogicalTypeId::HUGEINT:
+		case duckdb::LogicalTypeId::UHUGEINT:
+		case duckdb::LogicalTypeId::DECIMAL:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		if (row.row_index > 0) {
 			if (json_array) {
@@ -1057,9 +1189,9 @@ public:
 			out.Print("\n{");
 		}
 		auto &data = row.data;
+		auto &is_null = row.is_null;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
-		auto &is_null = row.is_null;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
 				out.Print(",");
@@ -1067,24 +1199,16 @@ public:
 			out.Print(EscapeJSONString(col_names[i]));
 			out.Print(":");
 			if (is_null[i]) {
+				out.Print("null");
+			} else if (types[i].IsNested() || types[i].IsJSONType()) {
+				// nested types have already been converted to the correct JSON format
 				out.Print(data[i]);
-			} else if (types[i].id() == duckdb::LogicalTypeId::FLOAT ||
-			           types[i].id() == duckdb::LogicalTypeId::DOUBLE) {
-				if (duckdb::StringUtil::Equals(data[i], "inf")) {
-					out.Print("1e999");
-				} else if (duckdb::StringUtil::Equals(data[i], "-inf")) {
-					out.Print("-1e999");
-				} else if (duckdb::StringUtil::Equals(data[i], "nan")) {
-					out.Print("null");
-				} else if (duckdb::StringUtil::Equals(data[i], "-nan")) {
-					out.Print("null");
-				} else {
-					out.Print(data[i]);
-				}
-			} else if (types[i].IsNumeric() || types[i].IsJSONType()) {
+			} else if (!RequiresQuotes(types[i])) {
+				// for numeric types emit the data directly without quoting
 				out.Print(data[i]);
 			} else {
-				out.Print(EscapeJSONString(data[i]));
+				// not a nested type - escape here
+				out.Print(EscapeJSONString(data[i].GetString()));
 			}
 		}
 		out.Print("}");
@@ -1092,11 +1216,12 @@ public:
 
 	string EscapeJSONString(const string &str) {
 		string result = "\"";
-		for (auto c : str) {
+		for (auto c_ : str) {
+			auto c = (unsigned char)c_;
 			if (c == '\\' || c == '"') {
 				// escape \ and "
 				result += "\\";
-				result += c;
+				result += c_;
 			} else if (c <= 0x1f) {
 				result += "\\";
 				if (c == '\b') {
@@ -1115,11 +1240,43 @@ public:
 					result += buf;
 				}
 			} else {
-				result += c;
+				result += c_;
 			}
 		}
 		result += "\"";
 		return result;
+	}
+
+	static bool RequiresJSONCast(const duckdb::LogicalType &type) {
+		if (type.IsNested()) {
+			// cast nested types to JSON to preserve structure
+			return true;
+		}
+		if (type.IsFloating()) {
+			// cast floating point numbers to JSON to correctly deal with inf / nan
+			return true;
+		}
+		return false;
+	}
+
+	unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk) override {
+		// convert all nested types to JSON directly
+		duckdb::DataChunk json_chunk;
+		vector<duckdb::LogicalType> all_json;
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			if (!RequiresJSONCast(chunk.data[c].GetType())) {
+				all_json.emplace_back(duckdb::LogicalType::VARCHAR);
+			} else {
+				all_json.emplace_back(duckdb::LogicalType::JSON());
+			}
+		}
+		json_chunk.Initialize(duckdb::Allocator::DefaultAllocator(), all_json);
+
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
+		}
+		// now convert the JSON chunk to VARCHAR
+		return ShellRenderer::ConvertChunk(json_chunk);
 	}
 
 	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
@@ -1130,7 +1287,7 @@ public:
 		}
 	}
 
-	string NullValue() override {
+	const char *NullValue() override {
 		return "null";
 	}
 
@@ -1167,29 +1324,21 @@ public:
 			} else if (types[i].IsNumeric()) {
 				out.Print(data[i]);
 			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
-				out.OutputQuotedString(data[i]);
+				out.OutputQuotedString(data[i].GetString());
 			} else {
-				out.OutputQuotedString(EscapeNewlines(data[i]));
+				out.Print(EscapeNewlines(data[i].GetString()));
 			}
 		}
 		out.Print(");\n");
 	}
 
 	string EscapeNewlines(const string &str) {
-		bool needs_quoting = false;
 		bool needs_concat = false;
 		for (auto c : str) {
-			if (c == '\n' || c == '\r') {
-				needs_quoting = true;
+			if (c == '\n' || c == '\r' || c == '\0') {
 				needs_concat = true;
 				break;
 			}
-			if (c == '\'') {
-				needs_quoting = true;
-			}
-		}
-		if (!needs_quoting) {
-			return str;
 		}
 		string res;
 		if (needs_concat) {
@@ -1201,12 +1350,19 @@ public:
 			switch (c) {
 			case '\n':
 			case '\r':
+			case '\0':
 				// newline - finish the current string literal and write the newline with a chr function
 				res += "', chr(";
-				if (c == '\n') {
+				switch (c) {
+				case '\n':
 					res += "10";
-				} else {
+					break;
+				case '\r':
 					res += "13";
+					break;
+				case '\0':
+					res += "0";
+					break;
 				}
 				res += "), '";
 				break;
@@ -1234,7 +1390,7 @@ public:
 
 	void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row) override {
 		/* .schema and .fullschema output */
-		out.Print(state.GetSchemaLine(row.data[0], "\n"));
+		out.Print(state.GetSchemaLine(row.data[0].GetString(), "\n"));
 	}
 };
 
@@ -1258,14 +1414,16 @@ public:
 		char cEnd = 0;
 		char c;
 		int nLine = 0;
-		if (duckdb::StringUtil::StartsWith(data[0], "CREATE VIEW") ||
-		    duckdb::StringUtil::StartsWith(data[0], "CREATE TRIG")) {
+		if (duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE VIEW") ||
+		    duckdb::StringUtil::StartsWith(data[0].GetString(), "CREATE TRIG")) {
 			out.Print(data[0]);
 			out.Print(";\n");
 			return;
 		}
-		auto zStr = data[0];
-		auto z = (char *)zStr.data();
+		auto zStr = unique_ptr<char[]>(new char[data[0].GetSize() + 1]);
+		memcpy(zStr.get(), data[0].GetData(), data[0].GetSize());
+		zStr[data[0].GetSize()] = '\0';
+		auto z = zStr.get();
 		j = 0;
 		idx_t i;
 		for (i = 0; IsSpace(z[i]); i++) {
@@ -1583,6 +1741,39 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 	default:
 		throw std::runtime_error("Unsupported mode for GetRenderer");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Shell Logging Storage
+//===--------------------------------------------------------------------===//
+
+void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+                                    const string &log_message, const duckdb::RegisteredLoggingContext &context) {
+	HighlightElementType element_type;
+	switch (level) {
+	case (duckdb::LogLevel::LOG_TRACE):
+		element_type = HighlightElementType::LOG_TRACE;
+		break;
+	case (duckdb::LogLevel::LOG_DEBUG):
+		element_type = HighlightElementType::LOG_DEBUG;
+		break;
+	case (duckdb::LogLevel::LOG_INFO):
+		element_type = HighlightElementType::LOG_INFO;
+		break;
+	case (duckdb::LogLevel::LOG_WARNING):
+		element_type = HighlightElementType::LOG_WARNING;
+		break;
+	case (duckdb::LogLevel::LOG_ERROR):
+	case (duckdb::LogLevel::LOG_FATAL):
+		element_type = HighlightElementType::ERROR_TOKEN;
+		break;
+	default:
+		throw std::runtime_error("Unsupported log level for WriteLogEntry");
+	}
+
+	const auto log_level = duckdb::EnumUtil::ToString(level);
+	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
+	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, HighlightElementType::NONE);
 }
 
 } // namespace duckdb_shell

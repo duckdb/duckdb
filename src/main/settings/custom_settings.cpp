@@ -369,7 +369,7 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Custom Profiling Settings
 //===----------------------------------------------------------------------===//
-bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_optimizers) {
+bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
 	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
 	if (matching_optimizer_type != OptimizerType::INVALID &&
 	    disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end()) {
@@ -378,22 +378,39 @@ bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_o
 	return false;
 }
 
-static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json,
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &input,
                                                 const set<OptimizerType> &disabled_optimizers) {
 	profiler_settings_t metrics;
 
 	string invalid_settings;
-	for (auto &entry : json) {
-		MetricsType setting;
+	for (auto &entry : input) {
+		MetricType setting;
+		MetricGroup group = MetricGroup::INVALID;
 		try {
-			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+			setting = EnumUtil::FromString<MetricType>(StringUtil::Upper(entry.first));
 		} catch (std::exception &ex) {
-			if (!invalid_settings.empty()) {
-				invalid_settings += ", ";
+			try {
+				group = EnumUtil::FromString<MetricGroup>(StringUtil::Upper(entry.first));
+			} catch (std::exception &ex) {
+				if (!invalid_settings.empty()) {
+					invalid_settings += ", ";
+				}
+				invalid_settings += entry.first;
+				continue;
 			}
-			invalid_settings += entry.first;
+		}
+		if (group != MetricGroup::INVALID) {
+			if (entry.second == "true") {
+				auto group_metrics = MetricsUtils::GetMetricsByGroupType(group);
+				for (auto &metric : group_metrics) {
+					if (!MetricsUtils::IsOptimizerMetric(metric) || IsEnabledOptimizer(metric, disabled_optimizers)) {
+						metrics.insert(metric);
+					}
+				}
+			}
 			continue;
 		}
+
 		if (StringUtil::Lower(entry.second) == "true" &&
 		    (!MetricsUtils::IsOptimizerMetric(setting) || IsEnabledOptimizer(setting, disabled_optimizers))) {
 			metrics.insert(setting);
@@ -407,7 +424,7 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 }
 
 void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
-	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
+	if (settings.find(MetricType::ALL_OPTIMIZERS) != settings.end()) {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (auto &metric : optimizer_metrics) {
 			if (IsEnabledOptimizer(metric, disabled_optimizers)) {
@@ -421,9 +438,9 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &config = ClientConfig::GetConfig(context);
 
 	// parse the file content
-	unordered_map<string, string> json;
+	unordered_map<string, string> input_json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
+		input_json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
@@ -434,7 +451,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &db_config = DBConfig::GetConfig(context);
 	auto &disabled_optimizers = db_config.options.disabled_optimizers;
 
-	auto settings = FillTreeNodeSettings(json, disabled_optimizers);
+	auto settings = FillTreeNodeSettings(input_json, disabled_optimizers);
 	AddOptimizerMetrics(settings, disabled_optimizers);
 	config.profiler_settings = settings;
 }
@@ -442,7 +459,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
-	config.profiler_settings = ProfilingInfo::DefaultSettings();
+	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
 }
 
 Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
@@ -695,6 +712,8 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
 			config.AddAllowedPath(path + ".wal");
+			config.AddAllowedPath(path + ".checkpoint.wal");
+			config.AddAllowedPath(path + ".recovery.wal");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
@@ -964,6 +983,17 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	config.enable_profiler = true;
 	config.emit_profiler_output = true;
 
+	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
+		auto &file_system = FileSystem::GetFileSystem(context);
+		const auto file_type = file_system.ExtractExtension(config.profiler_save_location);
+		if (file_type != parameter && file_type != "txt") {
+			throw ParserException(
+			    "Profiler file type (%s) must either have the same file extension as the profiling output type (%s), "
+			    "or be a '.txt' file. Set 'profiling_output' to a '%s' file or run \"RESET profiling_output\" first.",
+			    config.profiler_save_location, parameter, parameter);
+		}
+	}
+
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
@@ -990,9 +1020,9 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	} else if (parameter == "graphviz") {
 		config.profiler_print_format = ProfilerPrintFormat::GRAPHVIZ;
 	} else {
-		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
-		    parameter);
+		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, "
+		                      "query_tree_optimizer, no_output, html, graphviz]",
+		                      parameter);
 	}
 }
 
@@ -1384,6 +1414,26 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
+
+	if (!parameter.empty() && config.profiler_print_format != ProfilerPrintFormat::NO_OUTPUT) {
+		auto &file_system = FileSystem::GetFileSystem(context);
+		const auto file_type = file_system.ExtractExtension(parameter);
+		if (file_type != "txt") {
+			try {
+				EnumUtil::FromString<ProfilerPrintFormat>(file_type);
+			} catch (std::exception &e) {
+				throw ParserException("Invalid output file type: %s", file_type);
+			}
+		}
+
+		const auto printer_format = StringUtil::Lower(EnumUtil::ToString(config.profiler_print_format));
+		if (file_type != printer_format && file_type != "txt") {
+			throw ParserException("Profiler file type (%s) must either have the same file extension as the profiling "
+			                      "output type (%s), or be a '.txt' file. Set \"enable_profiling = \'%s\'\" first.",
+			                      parameter, printer_format, file_type);
+		}
+	}
+
 	config.profiler_save_location = parameter;
 }
 
@@ -1419,6 +1469,12 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
 		for (auto &setting : phase_timing_settings) {
 			config.profiler_settings.insert(setting);
+		}
+	} else if (parameter == "all") {
+		config.enable_profiler = true;
+		auto all_metrics = MetricsUtils::GetAllMetrics();
+		for (auto &metric : all_metrics) {
+			config.profiler_settings.insert(metric);
 		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);

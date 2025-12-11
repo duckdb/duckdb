@@ -4,8 +4,9 @@ import shutil
 import subprocess
 from python_helpers import open_utf8
 import re
+import tempfile
 
-excluded_objects = ['utf8proc_data.cpp']
+excluded_objects = ['utf8proc_data.cpp', 'dummy_static_extension_loader.cpp']
 
 
 def third_party_includes():
@@ -278,9 +279,45 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     # include the main extension helper
     include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
     # include the separate extensions
+    ext_loader_body = ''
+    ext_headers = ''
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
         include_package(ext, ext_path, include_files, include_list, source_list)
+
+        ext_headers += f'#include "{ext}_extension.hpp"\n'
+
+        # handle generated_extension_loader
+        # this - beautifully - approximates code in extension/CMakeLists.txt
+        ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
+
+        ext_loader_body += """
+    if (extension=="${EXT_NAME}") {
+        db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
+        return ExtensionLoadResult::LOADED_EXTENSION;
+    }
+        """.replace(
+            '${EXT_NAME}', ext
+        ).replace(
+            '${EXT_NAME_CAMELCASE}', ext_name_camelcase
+        )
+
+    loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
+    loader_code = (
+        loader_code.replace('${EXT_LOADER_BODY}', ext_loader_body)
+        .replace('${EXT_NAME_VECTOR_INITIALIZER}', ', '.join([f'"{x}"' for x in extensions]))
+        .replace('${EXT_TEST_PATH_INITIALIZER}', '')
+        .replace('CMake', 'package_build.py')
+    )
+
+    loader_code = ext_headers + loader_code
+
+    loader_name = 'generated_extension_loader_package_build.cpp'
+    f = open(loader_name, 'wb')
+    f.write(loader_code.encode('utf8'))
+    f.close()
+
+    source_list += [loader_name]
 
     for src in source_list:
         copy_file(src, target_dir)
@@ -376,7 +413,7 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
             current_files = files_per_directory[dirname]
             cmake_file = os.path.join(dirname, 'CMakeLists.txt')
             unity_build = False
-            if os.path.isfile(cmake_file):
+            if os.path.isfile(cmake_file) and len(current_files) > 1:
                 with open(cmake_file, 'r') as f:
                     text = f.read()
                     if 'add_library_unity' in text:

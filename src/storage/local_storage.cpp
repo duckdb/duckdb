@@ -268,7 +268,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		collection.Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// Remove the chunk.
 			try {
-				table.RemoveFromIndexes(append_state, chunk, current_row);
+				table.RevertIndexAppend(append_state, chunk, current_row);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
 				return false;
@@ -573,7 +573,8 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 
 	// delete from unique indices (if any)
 	if (!storage->append_indexes.Empty()) {
-		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count);
+		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count,
+		                                           IndexRemovalType::MAIN_INDEX_ONLY);
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -607,7 +608,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	const auto row_group_size = storage.GetCollection().GetRowGroupSize();
 
 	TableAppendState append_state;
-	table.AppendLock(append_state);
+	table.AppendLock(transaction, append_state);
 	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 	if ((append_state.row_start == 0 || storage.GetCollection().GetTotalRows() >= row_group_size) &&
 	    storage.deleted_rows == 0) {

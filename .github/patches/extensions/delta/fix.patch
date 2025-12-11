@@ -1,0 +1,62 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 3edbbea..9dc2d66 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -1060,8 +1060,8 @@ LogLevel LoggerCallback::GetDuckDBLogLevel(ffi::Level level) {
+ 		return LogLevel::LOG_DEBUG;
+ 	case ffi::Level::INFO:
+ 		return LogLevel::LOG_INFO;
+-	case ffi::Level::WARN:
+-		return LogLevel::LOG_WARN;
++	case ffi::Level::WARNING:
++		return LogLevel::LOG_WARNING;
+ 	case ffi::Level::ERROR:
+ 		return LogLevel::LOG_ERROR;
+ 	default:
+diff --git a/src/include/delta_kernel_ffi.hpp b/src/include/delta_kernel_ffi.hpp
+index df82fe1..9f4ea0e 100644
+--- a/src/include/delta_kernel_ffi.hpp
++++ b/src/include/delta_kernel_ffi.hpp
+@@ -68,7 +68,7 @@ enum class KernelError {
+ /// Level::ERROR is the lowest, and Level::TRACE the highest.
+ enum class Level {
+   ERROR = 0,
+-  WARN = 1,
++  WARNING = 1,
+   INFO = 2,
+ 	DEBUGGING = 3,
+   TRACE = 4,
+diff --git a/src/include/storage/delta_insert.hpp b/src/include/storage/delta_insert.hpp
+index cf74ede..1cc4cb7 100644
+--- a/src/include/storage/delta_insert.hpp
++++ b/src/include/storage/delta_insert.hpp
+@@ -35,7 +35,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index 93ebf9f..08638b2 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -1,7 +1,5 @@
+ #include "storage/delta_insert.hpp"
+ 
+-#include <duckdb/common/sort/partition_state.hpp>
+-
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+@@ -219,7 +217,7 @@ SinkResultType DeltaInsert::Sink(ExecutionContext &context, DataChunk &chunk, Op
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DeltaInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType DeltaInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+     auto &global_state = sink_state->Cast<DeltaInsertGlobalState>();
+     auto value = Value::BIGINT(global_state.insert_count);
+     chunk.SetCardinality(1);
