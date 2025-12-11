@@ -20,6 +20,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/enums/order_preservation_type.hpp"
 
 #include <functional>
 
@@ -468,6 +469,8 @@ public:
 	bool late_materialization;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+	//! The order preservation type of the table function
+	OrderPreservationType order_preservation_type = OrderPreservationType::INSERTION_ORDER;
 
 	//! When to call init_global
 	//! By default init_global is called when the pipeline is ready for execution
