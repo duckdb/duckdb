@@ -895,26 +895,28 @@ string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t
 void ART::TransformToDeprecated() {
 	auto idx = Node::GetAllocatorIdx(NType::PREFIX);
 	auto &block_manager = (*allocators)[idx]->block_manager;
-	TransformToDeprecatedState state;
-
+	unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator = nullptr;
 	if (prefix_count != Prefix::DEPRECATED_COUNT) {
 		auto prefix_size = NumericCast<idx_t>(Prefix::DEPRECATED_COUNT) + NumericCast<idx_t>(Prefix::METADATA_SIZE);
-		state = TransformToDeprecatedState(make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager));
+		deprecated_allocator = make_unsafe_uniq<FixedSizeAllocator>(prefix_size, block_manager);
 	}
+
+	unique_ptr<TransformToDeprecatedState> state =
+	    make_uniq<TransformToDeprecatedState>(std::move(deprecated_allocator));
 
 	// Transform all leaves, and possibly the prefixes.
 	if (tree.HasMetadata()) {
-		Node::TransformToDeprecated(*this, tree, state);
+		Node::TransformToDeprecated(*this, tree, *state);
 	}
 
 	// Replace the prefix allocator with the deprecated allocator.
-	auto deprecated_allocator = state.TakeAllocator();
-	if (deprecated_allocator) {
+	if (state->HasAllocator()) {
+		auto taken_allocator = state->TakeAllocator();
 		prefix_count = Prefix::DEPRECATED_COUNT;
 
 		D_ASSERT((*allocators)[idx]->Empty());
 		(*allocators)[idx]->Reset();
-		(*allocators)[idx] = std::move(deprecated_allocator);
+		(*allocators)[idx] = std::move(taken_allocator);
 	}
 }
 

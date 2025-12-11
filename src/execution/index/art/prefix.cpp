@@ -183,59 +183,6 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-void Prefix::Verify(ART &art, const Node &node) {
-	reference<const Node> ref(node);
-
-	Iterator(art, ref, true, false, [&](Prefix &prefix) {
-		D_ASSERT(prefix.data[art.PrefixCount()] != 0);
-		D_ASSERT(prefix.data[art.PrefixCount()] <= art.PrefixCount());
-	});
-
-	ref.get().Verify(art);
-}
-
-void Prefix::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
-	// Early-out, if we do not need any transformations.
-	if (!state.needs_transformation) {
-		reference<Node> ref(node);
-		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-			Prefix prefix(art, ref, true, true);
-			if (!prefix.in_memory) {
-				return;
-			}
-			ref = *prefix.ptr;
-		}
-		return Node::TransformToDeprecated(art, ref, state);
-	}
-
-	// We need to create a new prefix (chain).
-	D_ASSERT(state.HasAllocator());
-	auto &allocator = state.GetAllocator();
-	Node new_node;
-	new_node = allocator.New();
-	new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
-	Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
-
-	Node current_node = node;
-	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
-		Prefix prefix(art, current_node, true, true);
-		if (!prefix.in_memory) {
-			return;
-		}
-
-		for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
-			new_prefix = new_prefix.TransformToDeprecatedAppend(art, allocator, prefix.data[i]);
-		}
-
-		*new_prefix.ptr = *prefix.ptr;
-		Node::FreeNode(art, current_node);
-		current_node = *new_prefix.ptr;
-	}
-
-	node = new_node;
-	return Node::TransformToDeprecated(art, *new_prefix.ptr, state);
-}
-
 Prefix Prefix::Append(ART &art, const uint8_t byte) {
 	if (data[art.PrefixCount()] != art.PrefixCount()) {
 		data[data[art.PrefixCount()]] = byte;

@@ -41,61 +41,35 @@ class Prefix;
 class ARTKey;
 class FixedSizeAllocator;
 
-//! State for TransformToDeprecated operations.
-//! Makes it explicit whether transformation is needed and contains the deprecated allocator.
-struct TransformToDeprecatedState {
-	//! True if we need to create new nodes in deprecated format.
-	bool needs_transformation;
-	//! Allocator for creating deprecated nodes. Only valid when needs_transformation is true.
-	unsafe_unique_ptr<FixedSizeAllocator> allocator;
-
-	//! Constructor for when transformation is needed.
+//! State for TransformToDeprecated operations
+class TransformToDeprecatedState {
+public:
 	explicit TransformToDeprecatedState(unsafe_unique_ptr<FixedSizeAllocator> allocator_p)
-	    : needs_transformation(true), allocator(std::move(allocator_p)) {
-		D_ASSERT(allocator);
+	    : allocator(std::move(allocator_p)) {
 	}
 
-	//! Constructor for when transformation is not needed.
-	TransformToDeprecatedState() : needs_transformation(false), allocator(nullptr) {
-	}
-
-	//! Move constructor.
-	TransformToDeprecatedState(TransformToDeprecatedState &&other) noexcept
-	    : needs_transformation(other.needs_transformation), allocator(std::move(other.allocator)) {
-		other.needs_transformation = false;
-	}
-
-	//! Move assignment operator.
-	TransformToDeprecatedState &operator=(TransformToDeprecatedState &&other) noexcept {
-		if (this != &other) {
-			needs_transformation = other.needs_transformation;
-			allocator = std::move(other.allocator);
-			other.needs_transformation = false;
-		}
-		return *this;
-	}
-
-	//! Copy constructor deleted - state owns unique resources.
+	TransformToDeprecatedState() = delete;
 	TransformToDeprecatedState(const TransformToDeprecatedState &) = delete;
-	//! Copy assignment deleted - state owns unique resources.
 	TransformToDeprecatedState &operator=(const TransformToDeprecatedState &) = delete;
+	TransformToDeprecatedState(TransformToDeprecatedState &&) = delete;
+	TransformToDeprecatedState &operator=(TransformToDeprecatedState &&) = delete;
 
-	//! Helper to check if allocator is available.
 	bool HasAllocator() const {
-		return needs_transformation && allocator != nullptr;
+		return allocator != nullptr;
 	}
 
-	//! Get reference to allocator. Only valid when HasAllocator() is true.
 	FixedSizeAllocator &GetAllocator() const {
 		D_ASSERT(HasAllocator());
 		return *allocator;
 	}
 
-	//! Transfer ownership of the allocator to the caller.
 	unsafe_unique_ptr<FixedSizeAllocator> TakeAllocator() {
-		needs_transformation = false;
 		return std::move(allocator);
 	}
+
+private:
+	//! Allocator for creating deprecated nodes.
+	unsafe_unique_ptr<FixedSizeAllocator> allocator;
 };
 
 //! Options for ToString printing functions
