@@ -5,6 +5,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 
 #include <algorithm>
 
@@ -28,7 +29,31 @@ TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<Tupl
                           std::move(stl_allocator)) {
 }
 
+class TupleDataDestroyTask : public BaseExecutorTask {
+public:
+	TupleDataDestroyTask(TaskExecutor &executor, unsafe_arena_ptr<TupleDataSegment> segment_p)
+	    : BaseExecutorTask(executor), segment(std::move(segment_p)) {
+	}
+
+	void ExecuteTask() override {
+		segment.reset();
+	}
+
+private:
+	unsafe_arena_ptr<TupleDataSegment> segment;
+};
+
+void TupleDataCollection::Destroy() {
+	TaskExecutor executor(TaskScheduler::GetScheduler(allocator->GetBufferManager().GetDatabase()));
+	for (auto &segment : segments) {
+		auto destroy_task = make_uniq<TupleDataDestroyTask>(executor, std::move(segment));
+		executor.ScheduleTask(std::move(destroy_task));
+	}
+	executor.WorkOnTasks();
+}
+
 TupleDataCollection::~TupleDataCollection() {
+	Destroy();
 }
 
 void TupleDataCollection::Initialize() {
