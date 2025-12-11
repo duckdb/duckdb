@@ -375,89 +375,32 @@ bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_op
 	       disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end();
 }
 
-static void InsertIfEnabled(profiler_settings_t &out, const profiler_settings_t &candidates,
-                            const set<OptimizerType> &disabled_optimizers) {
-	for (auto &metric : candidates) {
-		if (!MetricsUtils::IsOptimizerMetric(metric) || IsEnabledOptimizer(metric, disabled_optimizers)) {
-			out.insert(metric);
-		}
-	}
-}
-
-static profiler_settings_t ConvertToMetricTypeOrGroup(const std::string &input, vector<std::string> &invalid_settings) {
-	profiler_settings_t metrics;
-	const auto upper = StringUtil::Upper(input);
-	try {
-		metrics.insert(EnumUtil::FromString<MetricType>(upper));
-	} catch (std::exception &) {
-		try {
-			auto group = EnumUtil::FromString<MetricGroup>(upper);
-			metrics.insert(MetricsUtils::GetMetricsByGroupType(group).begin(),
-			               MetricsUtils::GetMetricsByGroupType(group).end());
-		} catch (std::exception &) {
-			invalid_settings.push_back(input);
-		}
-	}
-	return metrics;
-}
-
 template <typename ExtractFromType>
 static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const set<OptimizerType> &disabled_optimizers,
                                            vector<std::string> &invalid_settings) {
 	profiler_settings_t enabled_metrics;
+
+	auto insert_if_enabled = [&](MetricType m) {
+		if (!MetricsUtils::IsOptimizerMetric(m) || IsEnabledOptimizer(m, disabled_optimizers)) {
+			enabled_metrics.insert(m);
+		}
+	};
+
 	extract_from([&](const std::string &metric) {
-		auto converted_metrics = ConvertToMetricTypeOrGroup(metric, invalid_settings);
-		InsertIfEnabled(enabled_metrics, converted_metrics, disabled_optimizers);
+		const auto upper = StringUtil::Upper(metric);
+		try {
+			insert_if_enabled(EnumUtil::FromString<MetricType>(upper));
+		} catch (std::exception &) {
+			try {
+				auto group = EnumUtil::FromString<MetricGroup>(upper);
+				for (auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
+					insert_if_enabled(converted_metric);
+				}
+			} catch (std::exception &) {
+				invalid_settings.push_back(metric);
+			}
+		}
 	});
-	return enabled_metrics;
-}
-
-static profiler_settings_t ExtractSettingsFromList(const Value &input, const set<OptimizerType> &disabled_optimizers,
-                                                   vector<std::string> &invalid_settings) {
-	profiler_settings_t enabled_metrics;
-
-	for (auto &val : ListValue::GetChildren(input)) {
-		auto converted_metrics = ConvertToMetricTypeOrGroup(val.ToString(), invalid_settings);
-		InsertIfEnabled(enabled_metrics, converted_metrics, disabled_optimizers);
-	}
-
-	return enabled_metrics;
-}
-
-static profiler_settings_t ExtractSettingsFromStruct(const Value &input, const set<OptimizerType> &disabled_optimizers,
-                                                     vector<std::string> &invalid_settings) {
-	profiler_settings_t enabled_metrics;
-	auto &children = StructValue::GetChildren(input);
-	for (idx_t i = 0; i < children.size(); i++) {
-		if (children[i].GetValue<bool>() == true) {
-			auto converted_metrics =
-			    ConvertToMetricTypeOrGroup(StructType::GetChildName(input.type(), i), invalid_settings);
-			InsertIfEnabled(enabled_metrics, converted_metrics, disabled_optimizers);
-		}
-	}
-
-	return enabled_metrics;
-}
-
-static profiler_settings_t ExtractSettingsFromJSON(const Value &input, const set<OptimizerType> &disabled_optimizers,
-                                                   vector<std::string> &invalid_settings) {
-	unordered_map<string, string> json;
-	try {
-		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
-	} catch (std::exception &ex) {
-		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
-		                  "all the keys and values start with a quote. (error: %s)",
-		                  input.ToString(), ex.what());
-	}
-
-	profiler_settings_t enabled_metrics;
-	for (auto &entry : json) {
-		if (StringUtil::Lower(entry.second) == "true") {
-			auto converted_metrics = ConvertToMetricTypeOrGroup(entry.first, invalid_settings);
-			InsertIfEnabled(enabled_metrics, converted_metrics, disabled_optimizers);
-		}
-	}
-
 	return enabled_metrics;
 }
 
@@ -481,11 +424,55 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	vector<string> invalid_settings;
 	profiler_settings_t enabled_metrics;
 	if (input.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-		enabled_metrics = ExtractSettingsFromList(input, disabled_optimizers, invalid_settings);
+		config.profiler_settings_type = LogicalTypeId::LIST;
+
+		enabled_metrics = ExtractSettings(
+		    [&](const std::function<void(const std::string &)> &func) {
+			    for (auto &val : ListValue::GetChildren(input)) {
+				    func(val.GetValue<string>());
+			    }
+		    },
+		    disabled_optimizers, invalid_settings);
+
 	} else if (input.type().id() == LogicalTypeId::STRUCT) {
-		enabled_metrics = ExtractSettingsFromStruct(input, disabled_optimizers, invalid_settings);
+		config.profiler_settings_type = LogicalTypeId::STRUCT;
+
+		enabled_metrics = ExtractSettings(
+		    [&](const std::function<void(const std::string &)> &func) {
+			    auto &children = StructValue::GetChildren(input);
+			    for (idx_t i = 0; i < children.size(); i++) {
+				    auto child_val = children[i];
+				    if ((child_val.type() == LogicalType::BOOLEAN && child_val.GetValue<bool>() == true) ||
+				        StringUtil::Lower(child_val.ToString()) == "true") {
+					    func(StructType::GetChildName(input.type(), i));
+				    }
+			    }
+		    },
+		    disabled_optimizers, invalid_settings);
+
 	} else if (input.type() == LogicalType::VARCHAR) {
-		enabled_metrics = ExtractSettingsFromJSON(input, disabled_optimizers, invalid_settings);
+		config.profiler_settings_type = LogicalTypeId::VARCHAR;
+
+		// JSON string: parse, then accept entries with value == "true"
+		std::unordered_map<std::string, std::string> json;
+		try {
+			json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
+		} catch (std::exception &ex) {
+			throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make "
+			                  "sure all the keys and values start with a quote. (error: %s)",
+			                  input.ToString(), ex.what());
+		}
+
+		enabled_metrics = ExtractSettings(
+		    [&](const std::function<void(const std::string &)> &func) {
+			    for (auto &entry : json) {
+				    if (StringUtil::Lower(entry.second) == "true") {
+					    func(entry.first);
+				    }
+			    }
+		    },
+		    disabled_optimizers, invalid_settings);
+
 	} else {
 		throw ParserException("Invalid custom profiler settings type \"%s\", expected LIST(VARCHAR) or JSON",
 		                      input.type().ToString());
@@ -511,17 +498,31 @@ void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
+	config.profiler_settings_type = LogicalTypeId::VARCHAR;
 }
 
 Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	string profiling_settings_str;
+	auto &quote = config.profiler_settings_type == LogicalTypeId::LIST ? "\'" : "\"";
+
 	for (auto &entry : config.profiler_settings) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
+		profiling_settings_str += StringUtil::Format("%s%s%s", quote, EnumUtil::ToString(entry), quote);
+		if (config.profiler_settings_type == LogicalTypeId::STRUCT) {
+			profiling_settings_str += ": true";
+		}
+		if (config.profiler_settings_type == LogicalTypeId::VARCHAR) {
+			// i.e. JSON
+			profiling_settings_str += ": \"true\"";
+		}
+	}
+
+	if (config.profiler_settings_type == LogicalTypeId::LIST) {
+		return Value(StringUtil::Format("[%s]", profiling_settings_str));
 	}
 	return Value(StringUtil::Format("{%s}", profiling_settings_str));
 }

@@ -121,7 +121,7 @@ CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_
 query I
 SELECT current_setting('custom_profiling_settings');
 ----
-{"OPERATOR_CARDINALITY": "true", "CUMULATIVE_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_ROWS_SCANNED": "true"}
+{"OPERATOR_CARDINALITY": true, "CUMULATIVE_CARDINALITY": true, "OPERATOR_ROWS_SCANNED": true, "CUMULATIVE_ROWS_SCANNED": true}
 
 # Set metrics from STRUCT
 statement ok
@@ -130,7 +130,7 @@ CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERAT
 query I
 SELECT current_setting('custom_profiling_settings');
 ----
-{"QUERY_NAME": "true", "EXTRA_INFO": "true"}
+{"QUERY_NAME": true, "EXTRA_INFO": true}
 
 # Set metrics from LIST
 statement ok
@@ -139,7 +139,7 @@ CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE']);
 query I
 SELECT current_setting('custom_profiling_settings');
 ----
-{"LATENCY": "true", "RESULT_SET_SIZE": "true"}
+['LATENCY', 'RESULT_SET_SIZE']
 
 # Can't mix types though
 statement error
@@ -167,7 +167,7 @@ CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE']);
 query I
 SELECT current_setting('custom_profiling_settings');
 ----
-{"LATENCY": "true", "RESULT_SET_SIZE": "true"}
+['LATENCY', 'RESULT_SET_SIZE']
 
 # Set metrics straight into function with other settings too
 statement ok
@@ -176,7 +176,7 @@ CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE'], mode = 'detailed');
 query I
 SELECT current_setting('custom_profiling_settings');
 ----
-{"LATENCY": "true", "RESULT_SET_SIZE": "true"}
+['LATENCY', 'RESULT_SET_SIZE']
 
 query I
 SELECT current_setting('profiling_mode');
