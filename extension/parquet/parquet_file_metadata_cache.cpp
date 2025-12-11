@@ -36,6 +36,9 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path)) {
 		return ParquetCacheValidity::VALID;
 	}
+	if (info.extended_info == nullptr) {
+		return ParquetCacheValidity::UNKNOWN;
+	}
 
 	const auto &open_options = info.extended_info->options;
 	const auto lm_entry = open_options.find("last_modified");
