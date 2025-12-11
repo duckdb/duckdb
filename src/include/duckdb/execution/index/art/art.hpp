@@ -66,12 +66,6 @@ public:
 	bool verify_max_key_len;
 
 public:
-	//! Returns the configured prefix byte capacity.
-	uint8_t PrefixCount() const {
-		return prefix_count;
-	}
-
-public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
@@ -133,6 +127,11 @@ public:
 
 	//! Returns string representation of the ART.
 	string ToString(IndexLock &l, bool display_ascii = false) override;
+
+	//! Returns the configured prefix byte capacity.
+	uint8_t PrefixCount() const {
+		return prefix_count;
+	}
 
 private:
 	//! The number of bytes fitting in the prefix.
