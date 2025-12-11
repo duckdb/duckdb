@@ -279,7 +279,7 @@ private:
 			return make_uniq<WKTKeyword>(std::move(name), std::move(children));
 		}
 
-		throw InvalidInputException("Expected '[' or '(' after WKT keyword at position %zu", pos - beg);
+		return nullptr;
 	}
 
 	unique_ptr<WKTValue> ParseNumberNode() {
@@ -581,7 +581,7 @@ bool CoordinateReferenceSystem::TryParseAuthCode(const string &text, CoordinateR
 
 			bool code_valid = true;
 			for (auto ptr = colon_pos + 1; ptr != end; ptr++) {
-				if (!StringUtil::CharacterIsDigit(*ptr)) {
+				if (!StringUtil::CharacterIsAlphaNumeric(*ptr)) {
 					code_valid = false;
 					break;
 				}

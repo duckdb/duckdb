@@ -20,6 +20,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -264,8 +265,11 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		if (allow_geometry) { // Don't set this if we write GeoParquet V1
 			schema_ele.__isset.logicalType = true;
 			schema_ele.logicalType.__isset.GEOMETRY = true;
-			// TODO: Set CRS in the future
-			schema_ele.logicalType.GEOMETRY.__isset.crs = false;
+			if (GeoType::HasCRS(duckdb_type)) {
+				const auto &crs = GeoType::GetCRS(duckdb_type);
+				schema_ele.logicalType.GEOMETRY.__isset.crs = true;
+				schema_ele.logicalType.GEOMETRY.crs = crs.GetDefinition();
+			}
 		}
 	default:
 		break;

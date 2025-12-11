@@ -488,7 +488,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	return ret;
 }
 
-static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth) {
+static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth,
+                           string &crs) {
 	const auto is_blob = s_ele.__isset.type && s_ele.type == Type::BYTE_ARRAY;
 	if (!is_blob) {
 		return false;
@@ -496,8 +497,18 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 
 	// TODO: Handle CRS in the future
 	const auto is_native_geom = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOMETRY;
+	if (is_native_geom) {
+		if (s_ele.logicalType.GEOMETRY.__isset.crs) {
+			crs = s_ele.logicalType.GEOMETRY.crs;
+		}
+		return true;
+	}
+
 	const auto is_native_geog = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOGRAPHY;
-	if (is_native_geom || is_native_geog) {
+	if (is_native_geog) {
+		if (s_ele.logicalType.GEOGRAPHY.__isset.crs) {
+			crs = s_ele.logicalType.GEOGRAPHY.crs;
+		}
 		return true;
 	}
 
@@ -509,6 +520,10 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
 
 	if (is_geoparquet_geom) {
+		auto meta_ptr = metadata.geo_metadata->GetColumnMeta(s_ele.name);
+		if (meta_ptr) {
+			crs = meta_ptr->projjson;
+		}
 		return true;
 	}
 
@@ -539,7 +554,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	}
 
 	// Check for geometry type
-	if (IsGeometryType(s_ele, *metadata, depth)) {
+	string crs;
+	if (IsGeometryType(s_ele, *metadata, depth, crs)) {
 		// Geometries in both GeoParquet and native parquet are stored as a WKB-encoded BLOB.
 		// Because we don't just want to validate that the WKB encoding is correct, but also transform it into
 		// little-endian if necessary, we cant just make use of the StringColumnReader without heavily modifying it.
@@ -553,7 +569,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx));
 
 		// Wrap in geometry schema
-		return ParquetColumnSchema::FromChildSchemas(s_ele.name, LogicalType::GEOMETRY(), max_define, max_repeat,
+		return ParquetColumnSchema::FromChildSchemas(s_ele.name, LogicalType::GEOMETRY(crs), max_define, max_repeat,
 		                                             this_idx, next_file_idx++, std::move(geometry_child),
 		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
