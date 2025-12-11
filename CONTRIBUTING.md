@@ -51,6 +51,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * For parallel builds, you can use the [Ninja](https://ninja-build.org/) build system: `GEN=ninja make`.
   * The default number of parallel processes can lock up the system depending on the CPU-to-memory ratio. If this happens, restrict the maximum number of build processes: `CMAKE_BUILD_PARALLEL_LEVEL=4 GEN=ninja make`.
   * Without using Ninja, build times can still be reduced by setting `CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)`.
+* To speed up rebuilds, install [ccache](https://ccache.dev/). The build system will automatically detect and use it if available.
 
 ## Testing
 
