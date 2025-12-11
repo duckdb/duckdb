@@ -484,10 +484,8 @@ jobs:
       - name: Fast and storage tests with default and small block size
         shell: bash
         run: |
-          ./build/relassert/test/unittest
-          ./build/relassert/test/unittest "test/sql/storage/*"
-          ./build/relassert/test/unittest --test-config test/configs/block_size_16kB.json
-          ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/block_size_16kB.json
+          ./build/relassert/test/unittest "*" --test-config test/configs/vector_size_512.json
+          ./build/relassert/test/unittest "*" --test-config test/configs/block_size_16kB.json
 
   linux-debug-configs:
     name: Tests different configurations with a debug build
