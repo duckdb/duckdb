@@ -312,7 +312,8 @@ GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFile
 	// Expand all paths into a copy
 	// FIXME: lazy expansion and push filters into glob
 	idx_t path_index = current_path;
-	vector<unique_ptr<PaginatedResult<OpenFileInfo>>> paginated_files;
+	vector<unique_ptr<PaginatedResult<OpenFileInfo>>> paginated_files{};
+	paginated_files.resize(paths.size());
 	auto file_list = expanded_files;
 	while (ExpandPathInternal(path_index, file_list, paginated_files)) {
 	}
