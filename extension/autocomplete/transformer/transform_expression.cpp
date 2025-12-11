@@ -744,7 +744,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 		auto prefix = transformer.Transform<string>(prefix_expr);
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
-		expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+		func_expr->is_operator = true;
+		expr = std::move(func_expr);
 	}
 	return expr;
 }

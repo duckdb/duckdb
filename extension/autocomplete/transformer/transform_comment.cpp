@@ -19,6 +19,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 		// Column type returned
 		column_name = dotted_identifier.back();
 		dotted_identifier.pop_back();
+		if (dotted_identifier.empty()) {
+			throw ParserException("Invalid column reference: '%s'", column_name);
+		}
 		auto qualified_name = StringToQualifiedName(dotted_identifier);
 		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
 		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
