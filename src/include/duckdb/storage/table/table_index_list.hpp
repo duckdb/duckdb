@@ -97,6 +97,8 @@ public:
 		D_ASSERT(index_entries.empty());
 		index_entries = std::move(other.index_entries);
 	}
+	//! Merge any changes added to deltas during a checkpoint back into the main indexes
+	void MergeCheckpointDeltas(transaction_t checkpoint_id);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<Index> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);

@@ -266,6 +266,25 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	if (has_wal) {
 		storage_manager.WALFinishCheckpoint();
 	}
+
+	// for any indexes that were appended to while checkpointing, merge the delta back into the main index
+	// FIXME: we only clean up appends made to tables that are part of this checkpoint
+	// Currently, that is correct, since we don't allow creating tables DURING a checkpoint
+	// In the future, we will allow this
+	// When that happens, we should ensure the delta indexes are NOT used for tables created DURING a checkpoint
+	// this is also not necessary - if we are not checkpointing a table, we are not checkpointing its indexes
+	// ergo we don't need the delta indexes
+	for (auto &entry_ref : catalog_entries) {
+		auto &entry = entry_ref.get();
+		if (entry.type != CatalogType::TABLE_ENTRY) {
+			continue;
+		}
+		auto &table = entry.Cast<DuckTableEntry>();
+		auto &storage = table.GetStorage();
+		auto &table_info = storage.GetDataTableInfo();
+		auto &index_list = table_info->GetIndexes();
+		index_list.MergeCheckpointDeltas(options.transaction_id);
+	}
 }
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {

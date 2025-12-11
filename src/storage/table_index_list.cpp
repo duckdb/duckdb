@@ -250,21 +250,28 @@ vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, c
 		auto &bound_index = index.Cast<BoundIndex>();
 		auto storage_info = bound_index.SerializeToDisk(context, info.options);
 		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
-
-		// now merge any data appended to the index while the checkpoint was running
-		lock_guard<mutex> guard(entry->lock);
-		if (entry->added_data_during_checkpoint) {
-			// after writing, new data can go directly into the main index again
-			// merge added data during checkpoint into the index
-			bound_index.MergeIndexes(*entry->added_data_during_checkpoint);
-			// clear the added data during checkpoint
-			entry->added_data_during_checkpoint.reset();
-		}
-		// set the last written checkpoint id
-		entry->last_written_checkpoint = info.checkpoint_id;
 		infos.push_back(storage_info);
 	}
 	return infos;
+}
+
+void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		// merge any data appended to the index while the checkpoint was running
+		auto &index = *entry->index;
+		if (!index.IsBound()) {
+			continue;
+		}
+		lock_guard<mutex> guard(entry->lock);
+		if (entry->added_data_during_checkpoint) {
+			// we have written data here while checkpointing - merge it into the main index
+			auto &bound_index = index.Cast<BoundIndex>();
+			bound_index.MergeIndexes(*entry->added_data_during_checkpoint);
+			entry->added_data_during_checkpoint.reset();
+		}
+		entry->last_written_checkpoint = checkpoint_id;
+	}
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
