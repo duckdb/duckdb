@@ -281,3 +281,8 @@ statement error
 CALL enable_profiling(format);
 ----
 No function matches the given name and argument types 'enable_profiling(VARCHAR)'.
+
+statement error
+CALL enable_profiling('hello', 'goodbye');
+----
+No function matches the given name and argument types 'enable_profiling(VARCHAR, VARCHAR)'
