@@ -16,8 +16,7 @@ SET index_scan_percentage=1
 
 foreach storage_version latest v0.10.3
 
-#foreach sleep_time 0 25 50 75 100
-loop sleep_time 0 100
+foreach sleep_time 0 25 50 75 100
 
 statement ok
 SET debug_checkpoint_sleep_ms=${sleep_time}

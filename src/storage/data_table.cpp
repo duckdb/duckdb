@@ -1171,11 +1171,20 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
-			info->indexes.Scan([&](Index &index) {
-				// We cannot add to unbound indexes, so there is no need to revert them.
-				if (index.IsBound()) {
-					index.Cast<BoundIndex>().Delete(chunk, row_identifiers);
+			info->indexes.ScanEntries([&](IndexEntry &entry) {
+				lock_guard<mutex> guard(entry.lock);
+				auto &index = *entry.index;
+				optional_ptr<BoundIndex> remove_index;
+				if (entry.added_data_during_checkpoint) {
+					remove_index = entry.added_data_during_checkpoint;
+				} else {
+					if (!index.IsBound()) {
+						// We cannot add to unbound indexes, so there is no need to revert them.
+						return false;
+					}
+					remove_index = index.Cast<BoundIndex>();
 				}
+				remove_index->Delete(chunk, row_identifiers);
 				return false;
 			});
 			current_row_base += chunk.size();

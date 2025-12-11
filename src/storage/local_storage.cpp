@@ -214,56 +214,26 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	return error;
 }
 
-void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
-                                        bool append_to_table) {
+void LocalTableStorage::AppendToTable(DuckTransaction &transaction, TableAppendState &append_state) {
+	auto &table = table_ref.get();
+	table.InitializeAppend(transaction, append_state);
+	auto &collection = *row_groups->collection;
+	collection.Scan(transaction, [&](DataChunk &table_chunk) -> bool {
+		// Append to the base table.
+		table.Append(table_chunk, append_state);
+		return true;
+	});
+	table.FinalizeAppend(transaction, append_state);
+}
+
+void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state) {
 	// In this function, we might scan all table columns,
 	// as we might also append to the table itself (append_to_table).
 	auto &table = table_ref.get();
-	if (append_to_table) {
-		table.InitializeAppend(transaction, append_state);
-	}
-
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
-	ErrorData error;
-
 	auto &collection = *row_groups->collection;
-	if (append_to_table) {
-		// Appending to the table: we need to scan the entire chunk.
-		DataChunk index_chunk;
-		vector<StorageIndex> mapped_column_ids;
-		if (table.HasIndexes() && index_list.HasUnbound()) {
-			TableIndexList::InitializeIndexChunk(index_chunk, collection.GetTypes(), mapped_column_ids,
-			                                     *data_table_info);
-		}
-
-		collection.Scan(transaction, [&](DataChunk &table_chunk) -> bool {
-			if (table.HasIndexes()) {
-				if (index_list.HasUnbound()) {
-					// The index chunk references all indexed columns.
-					TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
-				}
-
-				// Pass both the table and the index chunk.
-				// We need the table chunk for the bound indexes,
-				// and the index chunk for the unbound indexes (to buffer it).
-				error = table.AppendToIndexes(delete_indexes, table_chunk, index_chunk, mapped_column_ids,
-				                              append_state.current_row, index_append_mode);
-				if (error.HasError()) {
-					return false;
-				}
-			}
-
-			// Append to the base table.
-			table.Append(table_chunk, append_state);
-			return true;
-		});
-
-	} else {
-		// We only append to the indexes.
-		error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
-	}
-
+	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
 	if (error.HasError()) {
 		// Revert all appended row IDs.
 		row_t current_row = append_state.row_start;
@@ -285,19 +255,11 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 
-		if (append_to_table) {
-			table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
-		}
-
 #ifdef DEBUG
 		// Verify that our index memory is stable.
 		table.VerifyIndexBuffers();
 #endif
 		error.Throw();
-	}
-
-	if (append_to_table) {
-		table.FinalizeAppend(transaction, append_state);
 	}
 }
 
@@ -620,7 +582,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		storage.FlushBlocks();
 		// Append to the indexes.
 		if (table.HasIndexes()) {
-			storage.AppendToIndexes(transaction, append_state, false);
+			storage.AppendToIndexes(transaction, append_state);
 		}
 		// finally move over the row groups
 		table.MergeStorage(storage.GetCollection(), storage.append_indexes, commit_state);
@@ -629,8 +591,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// if we have, we cannot merge to disk after all
 		// so we need to revert the data we have already written
 		storage.Rollback();
-		// append to the indexes and append to the base table
-		storage.AppendToIndexes(transaction, append_state, true);
+		// append to the indexes
+		storage.AppendToIndexes(transaction, append_state);
+		// after that is successful - append to the table
+		storage.AppendToTable(transaction, append_state);
 	}
 
 #ifdef DEBUG
