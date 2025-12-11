@@ -2038,6 +2038,9 @@ LogicalType LogicalType::GEOMETRY() {
 }
 
 LogicalType LogicalType::GEOMETRY(const string &crs) {
+	if (crs.empty()) {
+		return LogicalType::GEOMETRY();
+	}
 	auto info = make_shared_ptr<GeoTypeInfo>();
 	info->crs = CoordinateReferenceSystem(crs);
 	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
