@@ -300,6 +300,11 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 		idx++;
 	}
 
+	if (limit < 0) {
+		// limit < 0, set limit to infinite
+		return (idx_t)-1;
+	}
+
 	string unit = StringUtil::Lower(arg.substr(start, idx - start));
 	idx_t multiplier;
 	if (unit == "byte" || unit == "bytes" || unit == "b") {
