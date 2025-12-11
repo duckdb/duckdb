@@ -54,6 +54,7 @@ public:
 	TransformToDeprecatedState(TransformToDeprecatedState &&) = delete;
 	TransformToDeprecatedState &operator=(TransformToDeprecatedState &&) = delete;
 
+public:
 	bool HasAllocator() const {
 		return allocator != nullptr;
 	}
