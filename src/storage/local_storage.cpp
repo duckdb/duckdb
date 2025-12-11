@@ -12,6 +12,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
