@@ -965,7 +965,6 @@ unique_ptr<IndexStorageInfo> ART::PrepareSerialize(const case_insensitive_map_t<
 
 unique_ptr<IndexStorageInfo> ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 	lock_guard<mutex> guard(lock);
-
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");

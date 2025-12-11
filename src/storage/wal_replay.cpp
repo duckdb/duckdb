@@ -239,7 +239,7 @@ protected:
 	void ReplayCheckpoint();
 
 private:
-	unique_ptr<IndexStorageInfo> ReplayIndexData(unique_ptr<IndexStorageInfo> info);
+	void ReplayIndexData(IndexStorageInfo &info);
 
 private:
 	ReplayState &state;
@@ -685,15 +685,15 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-unique_ptr<IndexStorageInfo> WriteAheadLogDeserializer::ReplayIndexData(unique_ptr<IndexStorageInfo> info) {
-	D_ASSERT(info->IsValid() && !info->name.empty());
+void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
+	D_ASSERT(info.IsValid() && !info.name.empty());
 
 	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
-		auto &data_info = info->allocator_infos[i];
+		auto &data_info = info.allocator_infos[i];
 
 		// Read the data into buffer handles and convert them to blocks on disk.
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
@@ -713,7 +713,6 @@ unique_ptr<IndexStorageInfo> WriteAheadLogDeserializer::ReplayIndexData(unique_p
 			}
 		}
 	});
-	return std::move(info);
 }
 
 void WriteAheadLogDeserializer::ReplayAlter() {
@@ -725,7 +724,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto index_storage_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<IndexStorageInfo>>(
 	    102, "index_storage_info", unique_ptr<IndexStorageInfo>());
-	index_storage_info = ReplayIndexData(std::move(index_storage_info));
+	ReplayIndexData(*index_storage_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -943,7 +942,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto index_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<IndexStorageInfo>>(
 	    102, "index_storage_info", unique_ptr<IndexStorageInfo>());
 
-	index_info = ReplayIndexData(std::move(index_info));
+	ReplayIndexData(*index_info);
 	if (DeserializeOnly()) {
 		return;
 	}
