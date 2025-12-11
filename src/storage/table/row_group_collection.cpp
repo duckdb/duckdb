@@ -69,7 +69,7 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
       types(std::move(types_p)), owned_row_groups(make_shared_ptr<RowGroupSegmentTree>(*this, row_start)),
-      allocation_size(0), requires_new_row_group(false) {
+      allocation_size(0) {
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -130,7 +130,8 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 }
 
 void RowGroupCollection::SetAppendRequiresNewRowGroup() {
-	requires_new_row_group = true;
+	auto row_groups = GetRowGroups();
+	checkpointed_row_group_idx = row_groups->GetSegmentCount();
 }
 
 void RowGroupCollection::InitializeEmpty() {
@@ -151,7 +152,6 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
-	requires_new_row_group = false;
 }
 
 optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
@@ -411,7 +411,14 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	// start writing to the row_groups
 	state.row_groups = GetRowGroups();
 	auto l = state.row_groups->Lock();
-	if (state.row_groups->IsEmpty(l) || requires_new_row_group) {
+	auto segment_count = state.row_groups->GetSegmentCount(l);
+	bool requires_new_row_group = false;
+	if (segment_count == 0) {
+		requires_new_row_group = true;
+	} else if (checkpointed_row_group_idx.IsValid() && segment_count <= checkpointed_row_group_idx.GetIndex()) {
+		requires_new_row_group = true;
+	}
+	if (requires_new_row_group) {
 		// empty row group collection: empty first row group
 		AppendRowGroup(l, state.row_groups->GetBaseRowId() + total_rows);
 	}

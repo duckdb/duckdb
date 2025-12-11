@@ -1650,9 +1650,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	// checkpoint each individual row group
 	TableStatistics global_stats;
 	row_groups->Checkpoint(writer, global_stats);
-	if (!HasIndexes()) {
-		row_groups->SetAppendRequiresNewRowGroup();
-	}
+	row_groups->SetAppendRequiresNewRowGroup();
 	// The row group payload data has been written. Now write:
 	//   sample
 	//   column stats

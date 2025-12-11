@@ -184,8 +184,9 @@ private:
 	atomic<idx_t> allocation_size;
 	//! Root metadata pointer, if the collection is loaded from disk
 	MetaBlockPointer metadata_pointer;
-	//! Whether or not we need to append a new row group prior to appending
-	bool requires_new_row_group;
+	//! The last row group index that was checkpointed
+	//! When attempting to append, we CANNOT do in-place appends to row-groups lower than this index
+	optional_idx checkpointed_row_group_idx;
 };
 
 } // namespace duckdb
