@@ -365,4 +365,8 @@ bool CachingFileSystemWrapper::SubSystemIsDisabled(const string &name) {
 	return underlying_file_system.SubSystemIsDisabled(name);
 }
 
+bool CachingFileSystemWrapper::IsDisabledForPath(const string &path) {
+	return underlying_file_system.IsDisabledForPath(path);
+}
+
 } // namespace duckdb

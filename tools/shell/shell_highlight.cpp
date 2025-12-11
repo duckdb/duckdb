@@ -9,7 +9,7 @@
 namespace duckdb_shell {
 
 static HighlightElement highlight_elements[] = {
-    {"error", PrintColor::RED, PrintIntensity::BOLD},
+    {"error", PrintColor::RED, PrintIntensity::STANDARD},
     {"keyword", PrintColor::GREEN, PrintIntensity::STANDARD},
     {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
@@ -43,8 +43,15 @@ static HighlightElement highlight_elements[] = {
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
     {"prompt", PrintColor::DARKORANGE, PrintIntensity::BOLD},
+    {"error_emphasis", PrintColor::RED, PrintIntensity::BOLD},
+    {"error_suggestion", PrintColor::RED, PrintIntensity::BOLD},
+    {"log_trace", PrintColor::BLUE, PrintIntensity::BOLD},
+    {"log_debug", PrintColor::YELLOW, PrintIntensity::BOLD},
+    {"log_info", PrintColor::GREEN, PrintIntensity::BOLD},
+    {"log_warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
-    {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
+    {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD},
+};
 
 const HighlightElement &ShellHighlight::GetHighlightElement(HighlightElementType type) {
 	auto index = static_cast<uint32_t>(type);
@@ -182,7 +189,7 @@ void ShellHighlight::PrintError(string error_msg) {
 		tokens.push_back(new_token);
 	}
 	if (!error_type.empty()) {
-		PrintText(error_type + "\n", PrintOutput::STDERR, HighlightElementType::ERROR_TOKEN);
+		PrintText(error_type + "\n", PrintOutput::STDERR, HighlightElementType::ERROR_EMPHASIS);
 	}
 	for (idx_t i = 0; i < tokens.size(); i++) {
 		HighlightElementType element_type = HighlightElementType::NONE;
@@ -191,6 +198,12 @@ void ShellHighlight::PrintError(string error_msg) {
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
 			element_type = HighlightElementType::ERROR_TOKEN;
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS:
+			element_type = HighlightElementType::ERROR_EMPHASIS;
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION:
+			element_type = HighlightElementType::ERROR_SUGGESTION;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 			element_type = HighlightElementType::NUMERIC_CONSTANT;
@@ -251,23 +264,28 @@ void ShellHighlight::ToggleMode(HighlightMode mode) {
 	}
 
 	if (mode == HighlightMode::DARK_MODE) {
-		SetColor(HighlightElementType::KEYWORD, PrintColor::CORNFLOWERBLUE, PrintIntensity::BOLD, user_configured);
-		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::LIGHTGOLDENROD4, PrintIntensity::STANDARD,
+		SetColor(HighlightElementType::KEYWORD, PrintColor::DODGERBLUE1, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::GOLD1, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::ORCHID2, PrintIntensity::STANDARD,
 		         user_configured);
-		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::LIGHTGOLDENROD4, PrintIntensity::STANDARD,
+		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::DODGERBLUE1, PrintIntensity::STANDARD,
 		         user_configured);
-		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::CORNFLOWERBLUE, PrintIntensity::STANDARD,
-		         user_configured);
+		SetColor(HighlightElementType::ERROR_TOKEN, PrintColor::INDIANRED3, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::ERROR_EMPHASIS, PrintColor::INDIANRED3, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::ERROR_SUGGESTION, PrintColor::INDIANRED3, PrintIntensity::BOLD, user_configured);
 	}
 
 	if (mode == HighlightMode::LIGHT_MODE) {
-		SetColor(HighlightElementType::KEYWORD, PrintColor::DEEPSKYBLUE6, PrintIntensity::BOLD, user_configured);
-		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::ORANGE5, PrintIntensity::STANDARD, user_configured);
-		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::ORANGE5, PrintIntensity::STANDARD,
+		SetColor(HighlightElementType::KEYWORD, PrintColor::DODGERBLUE2, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::STRING_CONSTANT, PrintColor::ORANGE4, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::DARKMAGENTA, PrintIntensity::STANDARD,
 		         user_configured);
-		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::DEEPSKYBLUE6, PrintIntensity::STANDARD,
+		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::DODGERBLUE2, PrintIntensity::STANDARD,
 		         user_configured);
 		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE4, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::ERROR_TOKEN, PrintColor::RED3, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::ERROR_EMPHASIS, PrintColor::RED3, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::ERROR_SUGGESTION, PrintColor::RED3, PrintIntensity::BOLD, user_configured);
 		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::DARKORANGE4, PrintIntensity::STANDARD,
 		         user_configured);
 		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE6, PrintIntensity::STANDARD,

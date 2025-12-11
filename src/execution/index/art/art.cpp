@@ -1051,6 +1051,15 @@ idx_t ART::GetInMemorySize(IndexLock &index_lock) {
 	return in_memory_size;
 }
 
+bool ART::RequiresTransactionality() const {
+	return true;
+}
+
+unique_ptr<BoundIndex> ART::CreateEmptyCopy(const string &name_prefix, IndexConstraintType constraint_type) const {
+	return make_uniq<ART>(name_prefix + name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions,
+	                      db);
+}
+
 //===-------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//
@@ -1215,7 +1224,7 @@ string ART::ToString(IndexLock &l, bool display_ascii) {
 
 string ART::ToStringInternal(bool display_ascii) {
 	if (tree.HasMetadata()) {
-		return "\nART: \n" + tree.ToString(*this, 0, false, display_ascii);
+		return "\nART: \n" + tree.ToString(*this, ToStringOptions(0, false, display_ascii, nullptr, 0, 0, true, false));
 	}
 	return "[empty]";
 }

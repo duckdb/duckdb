@@ -48,6 +48,7 @@ public:
 		return checkpoint_lock.GetSharedLock();
 	}
 	bool IsUnseenCheckpoint(transaction_t checkpoint_id);
+	void VerifyIndexBuffers();
 
 	string GetSchemaName();
 	string GetTableName();

@@ -36,7 +36,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	Connection con(db);
 
 	duckdb::vector<Value> default_types = {"default", "default"};
-	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
@@ -64,7 +64,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARNING, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *db.instance, DatabaseInstance);
 
@@ -72,7 +72,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *con.context, ClientContext);
-	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARNING, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *con.context, ClientContext);
 
@@ -124,7 +124,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 // - all log levels
 // - all combinations of log levels and having either enabled_log_types or disabled_log_types
 TEST_CASE("Test logging", "[logging][.]") {
-	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
 	for (const auto &level : log_levels) {
 		// Test in regular mode without explicitly enabled or disabled loggers
 		test_logging(level, "", "");
@@ -219,4 +219,47 @@ TEST_CASE("Test pluggable log storage", "[logging][.]") {
 	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, BRO');"));
 
 	REQUIRE(my_log_storage->log_store.find("HELLO, BRO") != my_log_storage->log_store.end());
+}
+
+struct IncorrectLogType : public LogType {
+	static constexpr const char *NAME = "IncorrectLogType";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	// Incorrectly using the structured type constructor for VARCHAR
+	IncorrectLogType() : LogType(NAME, LEVEL, LogicalType::VARCHAR) {
+	}
+
+	template <typename... ARGS>
+	static string ConstructLogMessage(const string &str, ARGS... params) {
+		return StringUtil::Format(str, params...);
+	}
+};
+
+struct CorrectLogType : public LogType {
+	static constexpr const char *NAME = "CorrectLogType";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	// Correctly using the unstructured type constructor for VARCHAR
+	CorrectLogType() : LogType(NAME, LEVEL) {
+	}
+
+	template <typename... ARGS>
+	static string ConstructLogMessage(const string &str, ARGS... params) {
+		return StringUtil::Format(str, params...);
+	}
+};
+
+constexpr LogLevel IncorrectLogType::LEVEL;
+constexpr LogLevel CorrectLogType::LEVEL;
+
+TEST_CASE("Add LogType with VARCHAR type", "[logging][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	LogManager &log_manager = db.instance->GetLogManager();
+
+	REQUIRE_THROWS_WITH(log_manager.RegisterLogType(make_uniq<IncorrectLogType>()),
+	                    Catch::Matchers::Contains("LogType must be nested if the type is explicitly set"));
+
+	REQUIRE_NOTHROW(log_manager.RegisterLogType(make_uniq<CorrectLogType>()));
 }

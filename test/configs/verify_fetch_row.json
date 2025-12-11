@@ -1,82 +1,16 @@
 {
   "description": "Run on persistent databases as storage with row verification enabled.",
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__verify_fetch_row.db",
-  "on_init": "PRAGMA verify_fetch_row;",
+  "on_init": "PRAGMA enable_verification;PRAGMA verify_fetch_row;",
   "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/enable_verification.json",
   "skip_tests": [
     {
-      "reason": "Contains random() or gen_random_uuid().",
-      "paths": [
-        "test/optimizer/pushdown/issue_16104.test",
-        "test/fuzzer/pedro/nan_as_seed.test",
-        "test/sql/function/numeric/test_random.test",
-        "test/sql/function/uuid/test_uuid.test",
-        "test/sql/window/test_volatile_independence.test"
-      ]
-    },
-    {
-      "reason": "Contains SEQUENCE.",
-      "paths": [
-        "test/fuzzer/pedro/having_query_wrong_result.test",
-        "test/fuzzer/pedro/temp_sequence_durability.test",
-        "test/issues/fuzz/sequence_overflow.test",
-        "test/sql/aggregate/aggregates/test_bit_xor.test",
-        "test/sql/aggregate/aggregates/test_bit_and.test",
-        "test/sql/aggregate/aggregates/test_bit_or.test",
-        "test/sql/aggregate/aggregates/test_avg.test",
-        "test/sql/catalog/comment_on_wal.test",
-        "test/sql/catalog/dependencies/test_alter_dependency_ownership.test",
-        "test/sql/catalog/function/test_sequence_macro.test",
-        "test/sql/catalog/sequence/sequence_offset_increment.test",
-        "test/sql/catalog/sequence/sequence_cycle.test",
-        "test/sql/catalog/sequence/test_sequence.test",
-        "test/sql/catalog/sequence/sequence_overflow.test",
-        "test/sql/function/list/aggregates/avg.test",
-        "test/sql/function/list/aggregates/bit_and.test",
-        "test/sql/function/list/aggregates/bit_xor.test",
-        "test/sql/function/list/aggregates/bit_or.test",
-        "test/sql/storage/wal/wal_store_sequences.test",
-        "test/sql/storage/wal/wal_store_default_sequence.test",
-        "test/sql/storage/wal/wal_sequence_uncommitted_transaction.test",
-        "test/sql/storage/catalog/test_sequence_uncommitted_transaction.test",
-        "test/sql/storage/catalog/test_store_default_sequence.test",
-        "test/sql/storage/catalog/test_store_sequences.test",
-        "test/sql/attach/reattach_schema.test",
-        "test/sql/attach/attach_sequence.test",
-        "test/sql/export/export_database.test",
-        "test/sql/copy_database/copy_database_different_types.test"
-      ]
-    },
-    {
-      "reason": "Contains SAMPLE (non-deterministic).",
-      "paths": [
-        "test/fuzzer/pedro/sample_limit_overflow.test",
-        "test/sql/function/numeric/set_seed_for_sample.test"
-      ]
-    },
-    {
-      "reason": "Contains current time function.",
-      "paths": [
-        "test/sql/parser/test_value_functions.test",
-        "test/sql/function/timestamp/current_time.test",
-        "test/sql/timezone/test_icu_timezone.test"
-      ]
-    },
-    {
-      "reason": "Contains FIRST (non-deterministic).",
-      "paths": [
-        "test/sql/parallelism/intraquery/test_parallel_nested_aggregates.test"
-      ]
-    },
-    {
-      "reason": "Contains explicit use of the memory catalog.",
+      "reason": "Wrong result",
       "paths": [
         "test/sql/show_select/test_describe_all.test",
         "test/sql/catalog/function/attached_macro.test",
-        "test/sql/catalog/test_temporary.test",
         "test/sql/pragma/test_show_tables_temp_views.test",
-        "test/sql/pg_catalog/system_functions.test",
-        "test/sql/pg_catalog/sqlalchemy.test",
         "test/sql/attach/attach_table_info.test",
         "test/sql/attach/attach_defaults.test",
         "test/sql/attach/attach_did_you_mean.test",
@@ -86,82 +20,24 @@
         "test/sql/attach/attach_issue_7660.test",
         "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_views.test",
-        "test/sql/copy_database/copy_table_with_sequence.test"
+        "test/sql/copy_database/copy_table_with_sequence.test",
+        "test/sql/pg_catalog/sqlalchemy.test"
       ]
     },
     {
-      "reason": "Non-deterministic query (subqueries return multiple rows).",
+      "reason": "FIXME: crash/error in test",
       "paths": [
-        "test/sql/subquery/scalar/test_issue_6136.test"
-      ]
-    },
-    {
-      "reason": "Running verification creates extra output.",
-      "paths": [
-        "test/sql/pragma/test_query_log.test",
-        "test/sql/copy/csv/rejects/csv_rejects_auto.test",
-        "test/sql/copy/csv/rejects/csv_rejects_flush_cast.test",
-        "test/sql/copy/csv/rejects/csv_unquoted_rejects.test",
-        "test/sql/copy/csv/rejects/csv_rejects_read.test",
-        "test/sql/copy/csv/rejects/csv_rejects_maximum_line.test",
-        "test/sql/copy/csv/rejects/test_invalid_utf_rejects.test",
-        "test/sql/copy/csv/rejects/csv_rejects_flush_message.test",
-        "test/sql/copy/csv/rejects/csv_rejects_two_tables.test",
-        "test/sql/copy/csv/rejects/test_mixed.test",
-        "test/sql/copy/csv/rejects/test_multiple_errors_same_line.test",
-        "test/sql/copy/csv/rejects/csv_incorrect_columns_amount_rejects.test",
-        "test/sql/copy/csv/test_non_unicode_header.test"
-      ]
-    },
-    {
-      "reason": "Emits different vector type (FLAT).",
-      "paths": [
-        "test/sql/storage/compression/rle/rle_constant.test"
-      ]
-    },
-    {
-      "reason": "Round-trip of literals changes type, e.g., DOUBLE -> DECIMAL.",
-      "paths": [
-        "test/sql/types/decimal/large_decimal_constants.test",
-        "test/sql/types/uhugeint/test_uhugeint_conversion.test",
-        "test/sql/types/hugeint/test_hugeint_conversion.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Unexpected Parser Error",
-      "paths": [
-        "test/issues/general/test_16524.test",
-        "test/sql/collate/test_collate_between.test",
-        "test/sql/catalog/comment_on_dependencies.test",
-        "test/sql/catalog/comment_on_column.test",
-        "test/sql/catalog/comment_on.test",
-        "test/sql/catalog/comment_on_extended.test",
-        "test/sql/catalog/comment_on_pg_description.test",
-        "test/sql/pragma/test_show_tables.test",
-        "test/sql/alter/test_alter_if_exists.test",
-        "test/sql/index/create_index_options.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Unexpected catalog duplicate/missing entry error.",
-      "paths": [
-        "test/sql/catalog/test_set_search_path.test",
-        "test/sql/catalog/function/test_macro_issue_13104.test",
-        "test/sql/catalog/function/test_macro_relpersistence_conflict.test",
-        "test/sql/catalog/function/test_recursive_macro.test",
-        "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
-        "test/sql/catalog/test_set_schema.test",
-        "test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test",
-        "test/sql/function/list/lambdas/lambdas_and_functions.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Misc. unexpected failures (query succeeds, wrong result).",
-      "paths": [
-        "test/sql/storage/compression/test_using_compression.test",
-        "test/sql/create/create_table_compression.test",
-        "test/sql/create/create_table_compression.test",
-        "test/sql/aggregate/aggregates/test_state_export.test"
+        "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_inverted_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
+        "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_inverted_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_first_is_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_fetch_row.test",
+        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
       ]
     }
   ]

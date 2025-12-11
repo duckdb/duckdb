@@ -311,22 +311,22 @@ physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 query TT
 explain select first_value(i) over (), last_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 query TT
 explain select last_value(i) over (), first_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 query TT
 explain select first_value(i) over (), last_value(i) over (order by j) from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 query TT
 explain select last_value(i) over (order by j), first_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 #
 # Global state tests from #3275

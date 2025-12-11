@@ -482,9 +482,13 @@ void AttachWorker::Work() {
 			profiler.End();
 			db_pool.removeWorker(*this, task.db_id.GetIndex());
 			auto elapsed = profiler.Elapsed();
-			if (elapsed >= 0.1) {
+
+			// NOTE: Magic threshold used for debugging slowness in this test.
+			// NOTE Set to a fairly high value for CI purposes.
+			if (elapsed >= 0.5) {
 				Printer::PrintF("Slow task %s - took %lf seconds\n", AttachTaskTypeToString(task.type), elapsed);
 			}
+
 		} catch (const std::exception &e) {
 			addLog("Caught exception when running iterations: " + string(e.what()));
 			success = false;

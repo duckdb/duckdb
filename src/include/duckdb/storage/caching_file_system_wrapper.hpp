@@ -121,6 +121,7 @@ public:
 
 	DUCKDB_API void SetDisabledFileSystems(const vector<string> &names) override;
 	DUCKDB_API bool SubSystemIsDisabled(const string &name) override;
+	DUCKDB_API bool IsDisabledForPath(const string &path) override;
 
 protected:
 	DUCKDB_API unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
