@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -86,6 +88,7 @@ public:
 
 	InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
 	                                                      LocalSourceState &lstate) const override;
+	optional_idx GetRowsScanned(LocalSourceState &lstate) const;
 };
 
 } // namespace duckdb

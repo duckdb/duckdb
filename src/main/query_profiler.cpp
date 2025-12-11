@@ -3,6 +3,7 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
@@ -443,10 +444,14 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 				}
 			}
 		}
-		if (ProfilingInfo::Enabled(settings, MetricsType::OPERATOR_ROWS_SCANNED) &&
+		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROWS_SCANNED) &&
 		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
-			// TODO: Use local source to add rows_scanned
-			// TODO: Maybe custom function.get_rows_scanned(lstate) ?
+			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
+			const auto rows_scanned = table_scan.GetRowsScanned(lstate);
+			if (rows_scanned.IsValid()) {
+				auto &info = GetOperatorInfo(*active_operator);
+				info.AddRowsScanned(rows_scanned.GetIndex());
+			}
 		}
 	}
 }
@@ -497,17 +502,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			info.MetricSum<idx_t>(MetricType::OPERATOR_CARDINALITY, node.second.elements_returned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROWS_SCANNED)) {
-			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
-				auto &scan_op = op.Cast<PhysicalTableScan>();
-				auto &bind_data = scan_op.bind_data;
-
-				if (bind_data && scan_op.function.cardinality) {
-					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
-					if (cardinality && cardinality->has_estimated_cardinality) {
-						info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
-					}
-				}
-			}
+			info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, node.second.rows_scanned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);

@@ -10,6 +10,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -310,6 +311,12 @@ public:
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
+		idx_t current_row_group_size = 0;
+		if (l_state.scan_state.table_state.row_group && l_state.scan_state.table_state.row_group->HasNode()) {
+			current_row_group_size = l_state.scan_state.table_state.row_group->GetCount();
+		} else if (l_state.scan_state.local_state.row_group && l_state.scan_state.local_state.row_group->HasNode()) {
+			current_row_group_size = l_state.scan_state.local_state.row_group->GetCount();
+		}
 
 		do {
 			if (bind_data.is_create_index) {
@@ -327,7 +334,7 @@ public:
 			}
 
 			// We have processed a row group. Add to scanned_rows
-			l_state.rows_scanned += l_state.scan_state.local_state.row_group->GetCount();
+			l_state.rows_scanned += current_row_group_size;
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
@@ -767,6 +774,11 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
+idx_t TableScanRowsScanned(LocalTableFunctionState &local_state) {
+	auto &state = local_state.Cast<TableScanLocalState>();
+	return state.rows_scanned;
+}
+
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
@@ -829,6 +841,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.statistics = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
+	scan_function.rows_scanned = TableScanRowsScanned;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;

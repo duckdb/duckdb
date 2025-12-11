@@ -46,6 +46,7 @@ struct OperatorInformation {
 	idx_t result_set_size = 0;
 	idx_t system_peak_buffer_manager_memory = 0;
 	idx_t system_peak_temp_directory_size = 0;
+	idx_t rows_scanned = 0;
 
 	InsertionOrderPreservingMap<string> extra_info;
 
@@ -71,6 +72,10 @@ struct OperatorInformation {
 		if (used_swap > system_peak_temp_directory_size) {
 			system_peak_temp_directory_size = used_swap;
 		}
+	}
+
+	void AddRowsScanned(idx_t n_rows_scanned) {
+		rows_scanned += n_rows_scanned;
 	}
 };
 
