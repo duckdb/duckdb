@@ -101,14 +101,17 @@ bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
 	return BoundOrderModifier::Equals(*left, *right);
 }
 
-bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups) {
+bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups,
+                                  optional_ptr<vector<GroupingSet>> grouping_sets) {
 	// for each ORDER BY - check if it is actually necessary
 	// expressions that are in the groups do not need to be ORDERED BY
 	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
 	// similarly, we only need to ORDER BY each aggregate once
+	expression_map_t<idx_t> group_expressions;
 	expression_set_t seen_expressions;
+	idx_t i = 0;
 	for (auto &target : groups) {
-		seen_expressions.insert(*target);
+		group_expressions.insert({*target, i++});
 	}
 	vector<BoundOrderByNode> new_order_nodes;
 	for (auto &order_node : orders) {
@@ -116,16 +119,30 @@ bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector
 			// we do not need to order by this node
 			continue;
 		}
+		auto it = group_expressions.find(*order_node.expression);
+		bool add_to_new_order = it == group_expressions.end();
+		if (!add_to_new_order && grouping_sets) {
+			idx_t group_idx = it->second;
+			for (auto &grouping_set : *grouping_sets) {
+				if (grouping_set.find(group_idx) == grouping_set.end()) {
+					add_to_new_order = true;
+					break;
+				}
+			}
+		}
 		seen_expressions.insert(*order_node.expression);
-		new_order_nodes.push_back(std::move(order_node));
+		if (add_to_new_order) {
+			new_order_nodes.push_back(std::move(order_node));
+		}
 	}
 	orders.swap(new_order_nodes);
 
 	return orders.empty(); // NOLINT
 }
 
-bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) {
-	return Simplify(orders, groups);
+bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups,
+                                  optional_ptr<vector<GroupingSet>> grouping_sets) {
+	return Simplify(orders, groups, grouping_sets);
 }
 
 BoundLimitNode::BoundLimitNode(LimitNodeType type, idx_t constant_integer, double constant_percentage,

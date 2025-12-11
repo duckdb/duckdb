@@ -65,8 +65,8 @@ void Prefix::New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t 
 	}
 }
 
-void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-                    const GateStatus node4_status) {
+void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte, const GateStatus node4_status,
+                    const GateStatus status) {
 	// We have four situations from which we enter here:
 	// 1: PREFIX (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
 	// 2: PREFIX (parent) - Node4 (prev_node4) - INLINED_LEAF (child), or
@@ -90,10 +90,7 @@ void Prefix::Concat(ART &art, Node &parent, Node &node4, const Node child, uint8
 		ConcatChildIsGate(art, parent, node4, child, byte);
 		return;
 	}
-
-	auto inside_gate = parent.GetGateStatus() == GateStatus::GATE_SET;
-	ConcatInternal(art, parent, node4, child, byte, inside_gate);
-	return;
+	ConcatInternal(art, parent, node4, child, byte, status);
 }
 
 void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
@@ -186,29 +183,31 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-string Prefix::ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate, bool display_ascii) {
+string Prefix::ToString(ART &art, const Node &node, const ToStringOptions &options) {
 	auto indent = [](string &str, const idx_t n) {
-		for (idx_t i = 0; i < n; ++i) {
-			str += " ";
-		}
+		str.append(n, ' ');
 	};
 	auto format_byte = [&](uint8_t byte) {
-		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);
 	};
 	string str = "";
-	indent(str, indent_level);
+	indent(str, options.indent_level);
 	reference<const Node> ref(node);
+	ToStringOptions child_options = options;
 	Iterator(art, ref, true, false, [&](const Prefix &prefix) {
 		str += "Prefix: |";
-		for (idx_t i = 0; i < prefix.data[Count(art)]; i++) {
+		idx_t prefix_len = prefix.data[Count(art)];
+		for (idx_t i = 0; i < prefix_len; i++) {
 			str += format_byte(prefix.data[i]) + "|";
+			if (options.key_path) {
+				child_options.key_depth++;
+			}
 		}
 	});
-
-	auto child = ref.get().ToString(art, indent_level, inside_gate, display_ascii);
+	string child = ref.get().ToString(art, child_options);
 	return str + "\n" + child;
 }
 
@@ -304,9 +303,9 @@ Prefix Prefix::GetTail(ART &art, const Node &node) {
 }
 
 void Prefix::ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-                            const bool inside_gate) {
+                            const GateStatus status) {
 	if (child.GetType() == NType::LEAF_INLINED) {
-		if (inside_gate) {
+		if (status == GateStatus::GATE_SET) {
 			if (parent.GetType() == NType::PREFIX) {
 				// The parent only contained the Node4, so we can now inline 'all the way up',
 				// and the gate is no longer nested.

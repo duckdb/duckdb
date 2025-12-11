@@ -549,8 +549,8 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
-                  idx_t max_count, set<row_t> &row_ids) {
+bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
+                  TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art.unbound_expressions.size() > 1) {
@@ -618,17 +618,27 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 		return false;
 	}
 
+	lock_guard<mutex> guard(entry.lock);
+	vector<reference<ART>> arts_to_scan;
+	arts_to_scan.push_back(art);
+	if (entry.deleted_rows_in_use) {
+		arts_to_scan.push_back(entry.deleted_rows_in_use->Cast<ART>());
+	}
+
 	auto expressions = ExtractFilterExpressions(col, filter->second, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {
-		auto scan_state = art.TryInitializeScan(*index_expr, *filter_expr);
-		if (!scan_state) {
-			return false;
-		}
+		for (auto &art_ref : arts_to_scan) {
+			auto &art_to_scan = art_ref.get();
+			auto scan_state = art_to_scan.TryInitializeScan(*index_expr, *filter_expr);
+			if (!scan_state) {
+				return false;
+			}
 
-		// Check if we can use an index scan, and already retrieve the matching row ids.
-		if (!art.Scan(*scan_state, max_count, row_ids)) {
-			row_ids.clear();
-			return false;
+			// Check if we can use an index scan, and already retrieve the matching row ids.
+			if (!art_to_scan.Scan(*scan_state, max_count, row_ids)) {
+				row_ids.clear();
+				return false;
+			}
 		}
 	}
 	return true;
@@ -675,13 +685,14 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	set<row_t> row_ids;
 
 	info->BindIndexes(context, ART::TYPE_NAME);
-	info->GetIndexes().Scan([&](Index &index) {
+	info->GetIndexes().ScanEntries([&](IndexEntry &entry) {
+		auto &index = *entry.index;
 		if (index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
 		D_ASSERT(index.IsBound());
 		auto &art = index.Cast<ART>();
-		index_scan = TryScanIndex(art, column_list, input, filter_set, max_count, row_ids);
+		index_scan = TryScanIndex(art, entry, column_list, input, filter_set, max_count, row_ids);
 		return index_scan;
 	});
 

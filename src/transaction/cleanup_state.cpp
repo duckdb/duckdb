@@ -10,15 +10,14 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {
 
-CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction)
-    : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
-}
-
-CleanupState::~CleanupState() {
-	Flush();
+CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction,
+                           ActiveTransactionState transaction_state)
+    : lowest_active_transaction(lowest_active_transaction), transaction_state(transaction_state),
+      index_data_remover(context, IndexRemovalType::DELETED_ROWS_IN_USE) {
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
@@ -58,55 +57,12 @@ void CleanupState::CleanupUpdate(UpdateInfo &info) {
 }
 
 void CleanupState::CleanupDelete(DeleteInfo &info) {
-	auto version_table = info.table;
-	if (!version_table->HasIndexes()) {
-		// this table has no indexes: no cleanup to be done
+	if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
+		// if there are no active transactions we don't need to do any clean-up, as we haven't written to
+		// deleted_rows_in_use
 		return;
 	}
-
-	if (current_table != version_table) {
-		// table for this entry differs from previous table: flush and switch to the new table
-		Flush();
-		current_table = version_table;
-	}
-
-	// possibly vacuum any indexes in this table later
-	indexed_tables[current_table->GetTableName()] = current_table;
-
-	count = 0;
-	if (info.is_consecutive) {
-		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
-		}
-	} else {
-		auto rows = info.GetRows();
-		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
-		}
-	}
-	Flush();
-}
-
-void CleanupState::Flush() {
-	if (count == 0) {
-		return;
-	}
-
-	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
-
-	// delete the tuples from all the indexes.
-	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
-	// data, hence the transaction cannot be guaranteed.
-	try {
-		current_table->RemoveFromIndexes(context, row_identifiers, count);
-	} catch (std::exception &ex) {
-		throw FatalException(ErrorData(ex).Message());
-	} catch (...) {
-		throw FatalException("unknown failure in CleanupState::Flush");
-	}
-
-	count = 0;
+	index_data_remover.PushDelete(info);
 }
 
 } // namespace duckdb
