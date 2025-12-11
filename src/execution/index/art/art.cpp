@@ -1224,7 +1224,7 @@ string ART::ToString(IndexLock &l, bool display_ascii) {
 
 string ART::ToStringInternal(bool display_ascii) {
 	if (tree.HasMetadata()) {
-		return "\nART: \n" + tree.ToString(*this, 0, false, display_ascii);
+		return "\nART: \n" + tree.ToString(*this, ToStringOptions(0, false, display_ascii, nullptr, 0, 0, true, false));
 	}
 	return "[empty]";
 }

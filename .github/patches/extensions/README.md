@@ -24,10 +24,30 @@ Imagine a change to DuckDB is introduced that breaks compatibility with extensio
 workflow for this is as follows:
 
 ### PR #1: breaking change to DuckDB
-- Commit breaking change to DuckDB
-- Fix breakage in extension X, producing a patch with fix (be wary of already existing patches)
-- Commit patch in `.github/patches/extensions/x/*.patch` using a descriptive name
-- enable APPLY_PATCHES for extension X in `.github/config/out_of_tree_extensions.cmake` (if not already enabled)
+1. Commit breaking change to DuckDB
+2. Git clone extension.
+3. In DuckDB repo, go to .github/config/extensions/your_extension.cmake
+4. If APPLY_PATCHES is not set in duckdb_extension_load, set it.
+5. In cloned extension, checkout the GIT_TAG from the your_extension.cmake file.
+6. In cloned extension, apply existing patches found in .github/patches/extensions
+    ```bash 
+    git apply [path to duckdb]/.github/patches/extensions/[your_extension]/fix.patch
+    ```
+7. Make necessary changes to extension.
+8. Generate diff in cloned extension, and forward it to the original fix.patch location (or create the directory if it does not exist):
+    ```bash
+    git diff > [path to duckdb]/.github/patches/extensions/[your_extension]/fix.patch
+
+9. Commit patch in `.github/patches/extensions/[your_extension]/*.patch` using a descriptive name
+
+> [!TIP]
+> If the changes you made are very minor, you can skip the next two steps. (PR #2, PR #3)
+>
+> The next two steps are for the following scenarios:
+>
+> 1. You are the extension developer, and either the changes are big, or the patches have accumulated and you want to bump the extension.
+> 2. You are not the extension developer, but the changes to the extension are big, so you should follow the next two steps so that it is not so cumbersome for the extension developer to bump the extension.
+
 
 ### PR #2: patch to extension X
 - Apply (all) the patch(es) in `.github/patches/extensions/x/*.patch` to extension X.
@@ -36,7 +56,3 @@ workflow for this is as follows:
 - Remove patches in `.github/patches/extensions/x/*.patch`
 - Remove `APPLY_PATCHES` flag from config
 - Update hash of extension in config
-
-
-
-
