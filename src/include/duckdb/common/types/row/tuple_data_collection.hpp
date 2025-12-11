@@ -270,6 +270,8 @@ private:
 	void Verify() const;
 
 private:
+	//! Database instance ref for parallel destruction
+	DatabaseInstance &db;
 	//! Shared allocator for STL allocations
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
