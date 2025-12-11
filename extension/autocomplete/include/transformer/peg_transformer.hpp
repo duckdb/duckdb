@@ -288,7 +288,8 @@ private:
 	                                                    optional_ptr<ParseResult> parse_result);
 
 	// analyze.gram
-	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformNameList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 

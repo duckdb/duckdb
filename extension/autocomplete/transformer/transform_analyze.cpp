@@ -5,7 +5,7 @@
 
 namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	VacuumOptions vacuum_options;
 	vacuum_options.analyze = true;
@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 }
 
 AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	AnalyzeTarget result;
 	result.ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
@@ -28,7 +28,7 @@ AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &tran
 
 // TODO(Dtenwolde) Move this to transform_vacuum.cpp
 vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                        optional_ptr<ParseResult> parse_result) {
 	throw NotImplementedException("TransformName has not yet been implemented");
 }
 
