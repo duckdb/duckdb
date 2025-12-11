@@ -242,8 +242,8 @@ vector<unique_ptr<IndexStorageInfo>> TableIndexList::SerializeToDisk(QueryContex
 		auto &index = *entry->index;
 		if (index.IsBound()) {
 			auto info = index.Cast<BoundIndex>().SerializeToDisk(context, options);
-			D_ASSERT(info.IsValid() && !info.name.empty());
-			infos.push_back(make_uniq<IndexStorageInfo>(std::move(info)));
+			D_ASSERT(info->IsValid() && !info->name.empty());
+			infos.push_back(std::move(info));
 			continue;
 		}
 

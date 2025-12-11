@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class BufferedIndexReplays;
+struct BufferedIndexReplays;
 class ColumnDataCollection;
 
 class UnboundIndex final : public Index {

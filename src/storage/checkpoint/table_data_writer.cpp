@@ -128,7 +128,6 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 	// FIXME: IndexStorageInfos are taken from UnboundIndex here, which will contain buffered operations that need
 	//		  to be serialized along with the IndexStorageInfo.
-
 	vector<unique_ptr<IndexStorageInfo>> index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
 
 	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());

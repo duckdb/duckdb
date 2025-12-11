@@ -56,6 +56,7 @@ struct IndexStorageInfo {
 	IndexStorageInfo &operator=(IndexStorageInfo &&other) noexcept;
 	IndexStorageInfo(const IndexStorageInfo &) = delete;
 	IndexStorageInfo &operator=(const IndexStorageInfo &) = delete;
+	~IndexStorageInfo();
 
 	//! The name.
 	string name;
@@ -94,7 +95,6 @@ struct IndexStorageInfo {
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<IndexStorageInfo> Deserialize(Deserializer &deserializer);
-	~IndexStorageInfo();
 };
 
 //! Additional index information for tables
