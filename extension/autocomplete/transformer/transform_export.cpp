@@ -22,7 +22,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(PEGTran
 				info->format = option.children[0].GetValue<string>();
 				info->is_format_auto_detected = false;
 			} else {
-				option_result[option.name] = option.children;
+					option_result[StringUtil::Upper(option.name)] = option.children;
 			}
 		}
 		info->options = option_result;

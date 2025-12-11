@@ -566,7 +566,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 		throw NotImplementedException("Escape is not yet implemented.");
 	}
 	auto result = make_uniq<FunctionExpression>(like_variation, std::move(like_children));
-	result->is_operator = true;
+	if (like_variation != "regexp_full_match") {
+		result->is_operator = true;
+	}
 	return std::move(result);
 }
 
