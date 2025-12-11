@@ -73,3 +73,26 @@ query IT
 EXPLAIN FROM items QUALIFY count(*) OVER(PARTITION BY category) = 1;
 ----
 physical_plan	<REGEX>:.*Join Type: SEMI.*
+
+# 8. Case with NULL partition keys
+# This tests that COMPARE_NOT_DISTINCT_FROM is used for join conditions
+# NULL = NULL returns NULL (falsy), but NULL IS NOT DISTINCT FROM NULL returns TRUE
+statement ok
+CREATE TABLE null_partition_test (id INT, category VARCHAR);
+
+statement ok
+INSERT INTO null_partition_test VALUES (1, 'A'), (2, 'A'), (3, NULL), (4, NULL), (5, 'B');
+
+# Row id=5 is the only row with category='B' (count=1)
+# Row id=3 and id=4 both have category=NULL, so count=2, they should NOT be returned
+# This verifies that NULL partition keys are correctly grouped together
+query II
+FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
+----
+5	B
+
+# Verify the optimization is applied (SEMI JOIN instead of WINDOW)
+query II
+EXPLAIN FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: SEMI.*
