@@ -4,66 +4,111 @@
 
 namespace duckdb {
 
-static void EnableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	context.EnableProfiling();
-}
-
-static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
-	auto config = ClientConfig::GetConfig(context);
-
-	string format = "";
-	bool format_set = false;
-	string save_location = "";
-	bool save_location_set = false;
-
-	for (const auto &named_param : input.named_parameters) {
-		auto key = StringUtil::Lower(named_param.first);
-		if (key == "format") {
-			format = StringUtil::Lower(named_param.second.ToString());
-			format_set = true;
-		} else if (key == "coverage") {
-			ProfilingCoverageSetting::SetLocal(context, named_param.second);
-		} else if (key == "save_location") {
-			save_location = StringUtil::Lower(named_param.second.ToString());
-			save_location_set = true;
-		} else if (key == "mode") {
-			ProfilingModeSetting::SetLocal(context, named_param.second);
-		} else if (key == "enabled_metrics") {
-			if (named_param.second.type().id() != LogicalTypeId::STRUCT) {
-				throw InvalidInputException("EnableProfiling: enabled_metrics must be a struct");
-			}
-			CustomProfilingSettingsSetting::SetLocal(context, named_param.second);
-		} else {
-			throw InvalidInputException("EnableProfiling: unknown parameter: %s", key.c_str());
-		}
+class EnableProfilingBindData : public TableFunctionData {
+public:
+	EnableProfilingBindData() {
 	}
 
-	if (format_set && save_location_set) {
+	Value format;
+	Value coverage;
+	Value save_location;
+	Value mode;
+	Value metrics;
+};
+
+static void EnableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto bind_data = data.bind_data->Cast<EnableProfilingBindData>();
+
+	auto &client_config = ClientConfig::GetConfig(context);
+	client_config.enable_profiler = true;
+	client_config.emit_profiler_output = true;
+
+	if (!bind_data.format.IsNull() && !bind_data.save_location.IsNull()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
-		const auto file_type = file_system.ExtractExtension(save_location);
-		if (file_type != "txt" && file_type != format) {
+		const auto file_type = file_system.ExtractExtension(bind_data.save_location.ToString());
+		if (file_type != "txt" && file_type != bind_data.format.ToString()) {
 			throw InvalidInputException(
 			    "EnableProfiling: the save_location must be a .txt file or match the specified format.");
 		}
 	}
 
-	if (format_set) {
-		EnableProfilingSetting::SetLocal(context, input.named_parameters.at("format"));
+	if (!bind_data.format.IsNull()) {
+		EnableProfilingSetting::SetLocal(context, bind_data.format);
 	}
 
-	if (save_location_set) {
-		ProfileOutputSetting::SetLocal(context, input.named_parameters.at("save_location"));
+	if (!bind_data.coverage.IsNull()) {
+		ProfilingCoverageSetting::SetLocal(context, bind_data.coverage);
+	}
+
+	if (!bind_data.save_location.IsNull()) {
+		ProfileOutputSetting::SetLocal(context, bind_data.save_location);
+	}
+
+	if (!bind_data.mode.IsNull()) {
+		ProfilingModeSetting::SetLocal(context, bind_data.mode);
+	}
+
+	if (!bind_data.metrics.IsNull()) {
+		CustomProfilingSettingsSetting::SetLocal(context, bind_data.metrics);
+	}
+}
+
+static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, TableFunctionBindInput &input,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs.size() > 1) {
+		throw InvalidInputException("EnableProfiling: expected 0 or 1 parameter");
+	}
+
+	auto bind_data = make_uniq<EnableProfilingBindData>();
+
+	auto config = ClientConfig::GetConfig(context);
+
+	bool metrics_set = false;
+
+	for (const auto &named_param : input.named_parameters) {
+		auto key = StringUtil::Lower(named_param.first);
+		if (key == "format") {
+			bind_data->format = StringUtil::Lower(named_param.second.ToString());
+		} else if (key == "coverage") {
+			bind_data->coverage = named_param.second;
+		} else if (key == "save_location") {
+			bind_data->save_location = StringUtil::Lower(named_param.second.ToString());
+		} else if (key == "mode") {
+			ProfilingModeSetting::SetLocal(context, named_param.second);
+		} else if (key == "metrics") {
+			if (named_param.second.type() != LogicalType::LIST(LogicalType::VARCHAR) &&
+			    named_param.second.type().id() != LogicalTypeId::STRUCT) {
+				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+			}
+
+			bind_data->metrics = named_param.second;
+			metrics_set = true;
+		}
+	}
+
+	// Process positional param: metrics configs
+	if (!input.inputs.empty()) {
+		if (metrics_set) {
+			throw InvalidInputException("EnableProfiling: cannot specify both metrics and positional parameters");
+		}
+		if (input.inputs[0].type() != LogicalType::LIST(LogicalType::VARCHAR) &&
+		    input.inputs[0].type().id() != LogicalTypeId::STRUCT) {
+			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+		}
+
+		bind_data->metrics = input.inputs[0];
 	}
 
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 
-	return nullptr;
+	return std::move(bind_data);
 }
 
 static void DisableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	context.DisableProfiling();
+	auto &client_config = ClientConfig::GetConfig(context);
+	client_config.enable_profiler = false;
+	client_config.emit_profiler_output = false;
 }
 
 static unique_ptr<FunctionData> BindDisableProfiling(ClientContext &context, TableFunctionBindInput &input,
@@ -81,9 +126,9 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 	enable_fun.named_parameters.emplace("coverage", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("save_location", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("mode", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("enabled_metrics", LogicalType::ANY);
+	enable_fun.named_parameters.emplace("metrics", LogicalType::ANY);
 
-	enable_fun.varargs = LogicalType::ANY;
+	enable_fun.varargs = LogicalType::LIST(LogicalType::VARCHAR);
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_profiling", {}, DisableProfiling, BindDisableProfiling, nullptr, nullptr);
