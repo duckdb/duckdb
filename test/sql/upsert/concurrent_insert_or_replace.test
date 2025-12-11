@@ -1,0 +1,57 @@
+# name: test/sql/upsert/concurrent_insert_or_replace.test
+# group: [upsert]
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS schema__test
+
+
+# run INSERT OR REPLACE concurrently on different tables
+concurrentloop threadid 0 3
+
+statement ok
+CREATE OR REPLACE TABLE schema__test.test_table${threadid} (
+	id VARCHAR PRIMARY KEY,
+	available_actions VARCHAR[],
+	subscriber_ids VARCHAR[]
+)
+
+loop i 0 5
+
+statement ok
+INSERT OR REPLACE INTO schema__test.test_table${threadid}
+VALUES ('test:scope/test-worker-${threadid}:test-id-0', ['read', 'write', 'delete'], ['sub-{threadid}', 'sub-{threadid}+${i}'])
+
+query I
+SELECT subscriber_ids=['sub-{threadid}', 'sub-{threadid}+${i}'] FROM schema__test.test_table${threadid} WHERE id='test:scope/test-worker-${threadid}:test-id-0'
+----
+true
+
+endloop
+
+endloop
+
+# run INSERT OR REPLACE concurrently on one table, while other threads read the others
+concurrentloop threadid 0 3
+
+loop i 10 15
+
+onlyif threadid=0
+statement ok
+INSERT OR REPLACE INTO schema__test.test_table${threadid}
+VALUES ('test:scope/test-worker-${threadid}:test-id-0', ['read', 'write', 'delete'], ['sub-{threadid}', 'sub-{threadid}+${i}'])
+
+onlyif threadid=0
+query I
+SELECT subscriber_ids=['sub-{threadid}', 'sub-{threadid}+${i}'] FROM schema__test.test_table${threadid} WHERE id='test:scope/test-worker-${threadid}:test-id-0'
+----
+true
+
+onlyif threadid<>0
+query I
+SELECT subscriber_ids=['sub-{threadid}', 'sub-{threadid}+4'] FROM schema__test.test_table${threadid} WHERE id='test:scope/test-worker-${threadid}:test-id-0'
+----
+true
+
+endloop
+
+endloop
