@@ -784,6 +784,24 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
+/**
+ ** This routine may be called from the signal handler,
+ ** POSIX 'write' and WinAPI 'WriteConsole' are supposed
+ ** to be safe to be used from there.
+ */
+static void PrintCtrlDHint() {
+	string msg = "Interrupted, use Ctrl+D to exit\n";
+#if (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
+	HANDLE hc = GetStdHandle(STD_ERROR_HANDLE);
+	if (hc == INVALID_HANDLE_VALUE) {
+		return;
+	}
+	WriteConsoleA(hc, msg.c_str(), msg.length(), nullptr, nullptr);
+#else  // !_WIN32
+	write(STDERR_FILENO, msg.c_str(), msg.length());
+#endif // _WIN32
+}
+
 /*
 ** This routine runs when the user presses Ctrl-C
 */
@@ -791,11 +809,11 @@ static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
-	if (state.seenInterrupt > 2) {
-		exit(1);
-	}
 	if (state.conn) {
 		state.conn->Interrupt();
+	}
+	if (state.seenInterrupt > 2) {
+		PrintCtrlDHint();
 	}
 }
 
@@ -2773,7 +2791,7 @@ int ShellState::ProcessInput(InputMode mode) {
 				// on an empty line, we exit
 				numCtrlC++;
 				if (numCtrlC >= 2) {
-					break;
+					PrintCtrlDHint();
 				}
 			}
 			nSql = 0;
