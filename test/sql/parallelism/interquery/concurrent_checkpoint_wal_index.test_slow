@@ -35,6 +35,13 @@ onlyif threadid<>10
 statement ok
 INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
 
+# inserting the same data we just inserted conflicts
+onlyif threadid<>10
+statement error
+INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+----
+key
+
 # we can find the data we just inserted
 onlyif threadid<>10
 query I
