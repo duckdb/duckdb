@@ -30,6 +30,9 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 			throw InvalidInputException(
 			    "EnableProfiling: the save_location must be a .txt file or match the specified format.");
 		}
+
+		EnableProfilingSetting::ResetLocal(context);
+		ProfileOutputSetting::ResetLocal(context);
 	}
 
 	if (!bind_data.format.IsNull()) {
@@ -77,7 +80,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			ProfilingModeSetting::SetLocal(context, named_param.second);
 		} else if (key == "metrics") {
 			if (named_param.second.type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-			    named_param.second.type().id() != LogicalTypeId::STRUCT) {
+			    named_param.second.type().id() != LogicalTypeId::STRUCT &&
+			    named_param.second.type() != LogicalType::VARCHAR) {
 				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
 			}
 
@@ -92,7 +96,7 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			throw InvalidInputException("EnableProfiling: cannot specify both metrics and positional parameters");
 		}
 		if (input.inputs[0].type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-		    input.inputs[0].type().id() != LogicalTypeId::STRUCT) {
+		    input.inputs[0].type().id() != LogicalTypeId::STRUCT && input.inputs[0].type() != LogicalType::VARCHAR) {
 			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
 		}
 
