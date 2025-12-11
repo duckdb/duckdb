@@ -47,7 +47,7 @@ public:
 
 //! Hash function used in out state machine cache, it hashes and combines all options used to generate a state machine
 struct HashCSVStateMachineConfig {
-	size_t operator()(CSVStateMachineOptions const &config) const noexcept {
+	hash_t operator()(CSVStateMachineOptions const &config) const noexcept {
 		auto h_delimiter = Hash(config.delimiter.GetValue().c_str());
 		auto h_quote = Hash(config.quote.GetValue());
 		auto h_escape = Hash(config.escape.GetValue());

@@ -983,6 +983,17 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	config.enable_profiler = true;
 	config.emit_profiler_output = true;
 
+	if (parameter != "no_output" && !config.profiler_save_location.empty()) {
+		auto &file_system = FileSystem::GetFileSystem(context);
+		const auto file_type = file_system.ExtractExtension(config.profiler_save_location);
+		if (file_type != parameter && file_type != "txt") {
+			throw ParserException(
+			    "Profiler file type (%s) must either have the same file extension as the profiling output type (%s), "
+			    "or be a '.txt' file. Set 'profiling_output' to a '%s' file or run \"RESET profiling_output\" first.",
+			    config.profiler_save_location, parameter, parameter);
+		}
+	}
+
 	if (parameter == "json") {
 		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
@@ -1009,9 +1020,9 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 	} else if (parameter == "graphviz") {
 		config.profiler_print_format = ProfilerPrintFormat::GRAPHVIZ;
 	} else {
-		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer, no_output]",
-		    parameter);
+		throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree, "
+		                      "query_tree_optimizer, no_output, html, graphviz]",
+		                      parameter);
 	}
 }
 
@@ -1403,6 +1414,26 @@ void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
+
+	if (!parameter.empty() && config.profiler_print_format != ProfilerPrintFormat::NO_OUTPUT) {
+		auto &file_system = FileSystem::GetFileSystem(context);
+		const auto file_type = file_system.ExtractExtension(parameter);
+		if (file_type != "txt") {
+			try {
+				EnumUtil::FromString<ProfilerPrintFormat>(file_type);
+			} catch (std::exception &e) {
+				throw ParserException("Invalid output file type: %s", file_type);
+			}
+		}
+
+		const auto printer_format = StringUtil::Lower(EnumUtil::ToString(config.profiler_print_format));
+		if (file_type != printer_format && file_type != "txt") {
+			throw ParserException("Profiler file type (%s) must either have the same file extension as the profiling "
+			                      "output type (%s), or be a '.txt' file. Set \"enable_profiling = \'%s\'\" first.",
+			                      parameter, printer_format, file_type);
+		}
+	}
+
 	config.profiler_save_location = parameter;
 }
 
