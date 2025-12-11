@@ -126,6 +126,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	// Vacuum excess memory and verify.
 	bound_index->Vacuum();
 
+	bound_index->Verify();
+
+	D_ASSERT(!bound_index->ToString(true).empty());
+
 	bound_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
