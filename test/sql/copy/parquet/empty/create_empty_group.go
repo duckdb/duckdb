@@ -24,9 +24,9 @@ import (
 // New fixed code: if (!__isset.type) -> inner node (CORRECTLY handles empty group)
 
 type Row struct {
-	ID           int64 `parquet:"id,optional"`
+	ID           int64  `parquet:"id,optional"`
 	Nested       Nested `parquet:"nested,optional"`
-	OptionalData int32 `parquet:"optional_data,optional"`
+	OptionalData int32  `parquet:"optional_data,optional"`
 }
 
 // Nested struct with an empty inner group
