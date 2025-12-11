@@ -589,6 +589,11 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
+	if (arg[0] == '-' || arg == "null" || arg == "none") {
+		// infinite
+		return NumericLimits<idx_t>::Maximum();
+	}
+
 	try {
 		return StringUtil::ParseFormattedBytes(arg);
 	} catch (NonNumericMemoryException &e) {

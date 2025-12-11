@@ -268,10 +268,6 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 }
 
 idx_t StringUtil::ParseFormattedBytes(const string &arg) {
-	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		// infinite
-		return NumericLimits<idx_t>::Maximum();
-	}
 	// split based on the number/non-number
 	idx_t idx = 0;
 	while (StringUtil::CharacterIsSpace(arg[idx])) {
