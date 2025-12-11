@@ -176,8 +176,13 @@ struct RLECompressState : public CompressionState {
 		entry_count++;
 
 		// update meta data
-		if (WRITE_STATISTICS && !is_null) {
-			current_segment->stats.statistics.UpdateNumericStats<T>(value);
+		if (WRITE_STATISTICS) {
+			if (!is_null) {
+				current_segment->stats.statistics.SetHasNoNullFast();
+				current_segment->stats.statistics.UpdateNumericStats<T>(value);
+			} else {
+				current_segment->stats.statistics.SetHasNullFast();
+			}
 		}
 		current_segment->count += count;
 

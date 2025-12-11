@@ -466,8 +466,8 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			// We're approaching the memory limit, unpin the data
 			if (!lstate.abandoned_data) {
 				lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
-				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(), config.GetRadixBits(),
-				    gstate.radix_ht.GetLayout().ColumnCount() - 1);
+				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE,
+				    config.GetRadixBits(), gstate.radix_ht.GetLayout().ColumnCount() - 1);
 			}
 			ht.SetRadixBits(gstate.config.GetRadixBits());
 			ht.AcquirePartitionedData()->Repartition(context, *lstate.abandoned_data);
@@ -826,8 +826,8 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.progress = 1;
 
 	// Move the combined data back to the partition
-	partition.data =
-	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayoutPtr());
+	partition.data = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context),
+	                                                sink.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE);
 	partition.data->Combine(*ht->AcquirePartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
@@ -947,14 +947,16 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
 				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-				auto aggr_state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.state_size(aggr.function));
-				aggr.function.initialize(aggr.function, aggr_state.get());
+				auto aggr_state =
+				    make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
+				aggr.function.GetStateInitCallback()(aggr.function, aggr_state.get());
 
 				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
-				aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
-				if (aggr.function.destructor) {
-					aggr.function.destructor(state_vector, aggr_input_data, 1);
+				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
+				                                         chunk.data[null_groups.size() + i], 1, 0);
+				if (aggr.function.HasStateDestructorCallback()) {
+					aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
 				}
 			}
 			// Place the grouping values (all the groups of the grouping_set condensed into a single value)

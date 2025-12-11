@@ -45,7 +45,7 @@ public:
 
 	//! Concatenates parent -> prev_node4 -> child.
 	static void Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-	                   const GateStatus node4_status);
+	                   const GateStatus node4_status, const GateStatus status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
@@ -73,7 +73,7 @@ private:
 	static Prefix GetTail(ART &art, const Node &node);
 
 	static void ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-	                           const bool inside_gate);
+	                           const GateStatus status);
 	static void ConcatNode4WasGate(ART &art, Node &node4, const Node child, uint8_t byte);
 	static void ConcatChildIsGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
 	static void ConcatOutsideGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);

@@ -21,7 +21,7 @@ class ContinuousIdSet;
 
 struct TupleDataBlock {
 public:
-	TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p);
+	TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p);
 
 	//! Disable copy constructors
 	TupleDataBlock(const TupleDataBlock &other) = delete;
@@ -54,7 +54,7 @@ public:
 
 class TupleDataAllocator {
 public:
-	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
 	                   shared_ptr<ArenaAllocator> stl_allocator);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
@@ -84,7 +84,8 @@ public:
 	                   const idx_t append_offset, const idx_t append_count);
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-	                          idx_t chunk_idx, bool init_heap);
+	                          idx_t chunk_idx, bool init_heap,
+	                          optional_ptr<SortKeyPayloadState> sort_key_payload_state = nullptr);
 	static void RecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
 	                                  const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
 	                                  const idx_t count, const TupleDataLayout &layout, const idx_t base_col_offset);
@@ -109,7 +110,8 @@ private:
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
 	                                  bool recompute, bool init_heap_pointers, bool init_heap_sizes,
-	                                  unsafe_vector<reference<TupleDataChunkPart>> &parts);
+	                                  unsafe_vector<reference<TupleDataChunkPart>> &parts,
+	                                  optional_ptr<SortKeyPayloadState> sort_key_payload_state = nullptr);
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
 	                                          unsafe_arena_vector<BufferHandle> &pinned_row_handles,
@@ -136,6 +138,8 @@ private:
 	//! The layout of the data
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
+	//! Memory tag (for keeping track what the allocated memory belongs to)
+	const MemoryTag tag;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows

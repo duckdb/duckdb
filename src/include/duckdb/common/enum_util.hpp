@@ -100,6 +100,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CachingMode : uint8_t;
+
 enum class CatalogLookupBehavior : uint8_t;
 
 enum class CatalogType : uint8_t;
@@ -264,7 +266,9 @@ enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
 
-enum class MetricsType : uint8_t;
+enum class MetricGroup : uint8_t;
+
+enum class MetricType : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -444,6 +448,10 @@ enum class VariantChildLookupMode : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
 
+enum class VariantStatsShreddingState : uint8_t;
+
+enum class VariantValueType : uint8_t;
+
 enum class VectorAuxiliaryDataType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
@@ -568,6 +576,9 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
+
+template<>
+const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
 
 template<>
 const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
@@ -816,7 +827,10 @@ template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
-const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
+
+template<>
+const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1086,6 +1100,12 @@ template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
+const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
+
+template<>
+const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
+
+template<>
 const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
 template<>
@@ -1220,6 +1240,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
+
+template<>
+CachingMode EnumUtil::FromString<CachingMode>(const char *value);
 
 template<>
 CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
@@ -1468,7 +1491,10 @@ template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
-MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
+
+template<>
+MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
@@ -1736,6 +1762,12 @@ VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
+
+template<>
+VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
+
+template<>
+VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
 
 template<>
 VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);

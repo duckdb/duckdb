@@ -102,7 +102,7 @@ jobs:
 
  linux-release:
     name: Linux Release (full suite)
-    needs: check-draft
+    needs: linux-debug
     runs-on: ubuntu-24.04
     env:
       GEN: ninja
@@ -111,7 +111,7 @@ jobs:
       DISABLE_SANITIZER: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install
       shell: bash
@@ -134,7 +134,7 @@ jobs:
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-24.04
-    needs: linux-configs
+    needs: linux-debug
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -146,9 +146,11 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
@@ -171,7 +173,7 @@ jobs:
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
-    needs: linux-configs
+    needs: linux-debug
     env:
       CC: gcc-10
       CXX: g++-10
@@ -179,18 +181,11 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - name: Clean up the disc space
-        shell: bash
-        run: |
-          echo "Disk usage before clean up:"
-          df -h
-          rm -rf /opt/hostedtoolcache/CodeQL Java* Pypy Ruby go node
-          echo "Disk usage after clean up:"
-          df -h
-
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
@@ -215,7 +210,7 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
-    needs: linux-configs
+    needs: linux-debug
     env:
       CC: clang
       CXX: clang++
@@ -251,7 +246,7 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
-    needs: linux-configs
+    needs: linux-debug
     runs-on: ubuntu-24.04
     env:
       CC: clang
@@ -263,7 +258,7 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -295,13 +290,13 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     runs-on: ubuntu-22.04
-    needs: check-draft
+    needs: linux-debug
     env:
       CC: clang
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ github.ref }}
@@ -321,51 +316,17 @@ jobs:
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
 
- force-blocking-sink-source:
-    name: Forcing async Sinks/Sources
-    runs-on: ubuntu-24.04
-    needs: check-draft
-    env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      FORCE_ASYNC_SINK_SOURCE: 1
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
-
-
-
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
     runs-on: ubuntu-24.04
-    needs: check-draft
+    needs: linux-debug
     env:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 

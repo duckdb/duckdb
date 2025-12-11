@@ -945,6 +945,8 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 }
 
 IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	lock_guard<mutex> guard(lock);
+
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");
@@ -1048,6 +1050,15 @@ idx_t ART::GetInMemorySize(IndexLock &index_lock) {
 		in_memory_size += allocator->GetInMemorySize();
 	}
 	return in_memory_size;
+}
+
+bool ART::RequiresTransactionality() const {
+	return true;
+}
+
+unique_ptr<BoundIndex> ART::CreateEmptyCopy(const string &name_prefix, IndexConstraintType constraint_type) const {
+	return make_uniq<ART>(name_prefix + name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions,
+	                      db);
 }
 
 //===-------------------------------------------------------------------===//

@@ -96,7 +96,8 @@
         "test/sql/logging/logging_csv.test",
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
-        "test/sql/pragma/test_query_log.test"
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
       ]
     },
     {
@@ -132,6 +133,9 @@
         "test/sql/types/list/list_stats.test",
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/types/struct/struct_stats.test",
+        "test/sql/storage/types/variant/variant_shredding.test",
+        "test/sql/storage/types/variant/variant_stats_merging.test",
+        "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/vacuum/test_analyze.test"
       ]
     },

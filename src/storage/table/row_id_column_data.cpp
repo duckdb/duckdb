@@ -7,10 +7,11 @@ namespace duckdb {
 RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &info)
     : ColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_ID, LogicalType(LogicalTypeId::BIGINT),
                  ColumnDataType::MAIN_TABLE, nullptr) {
+	stats->statistics.SetHasNoNullFast();
 }
 
 FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	return RowGroup::CheckRowIdFilter(filter, row_start, row_start + count);
 }
 
@@ -50,7 +51,7 @@ void RowIdColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_
 }
 
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	if (result_offset != 0) {
 		throw InternalException("RowIdColumnData result_offset must be 0");
 	}
@@ -62,7 +63,7 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t &count, const TableFilter &filter,
                              TableFilterState &filter_state) {
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	auto current_row = row_start + state.offset_in_column;
 	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
@@ -104,7 +105,7 @@ void RowIdColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state
                                       idx_t count, bool allow_updates) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<row_t>(result);
-	auto row_start = state.parent->row_group->row_start;
+	auto row_start = state.parent->row_group->GetRowStart();
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
 	}
@@ -119,7 +120,7 @@ void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
                                idx_t result_idx) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetData<row_t>(result);
-	auto row_start = state.row_group->row_start;
+	auto row_start = state.row_group->GetRowStart();
 	data[result_idx] = UnsafeNumericCast<row_t>(row_start) + row_id;
 }
 
@@ -156,20 +157,21 @@ void RowIdColumnData::UpdateColumn(TransactionData transaction, DataTable &data_
 	throw InternalException("RowIdColumnData cannot be updated");
 }
 
-void RowIdColumnData::CommitDropColumn() {
-	throw InternalException("RowIdColumnData cannot be dropped");
+void RowIdColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	throw InternalException("VisitBlockIds not supported for rowid");
 }
 
-unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                          PartialBlockManager &partial_block_manager) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) {
+unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) {
+void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+                                     Vector &scan_vector) const {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

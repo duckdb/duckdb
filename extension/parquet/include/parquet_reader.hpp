@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
@@ -178,10 +179,15 @@ public:
 	idx_t NumRowGroups() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
+	string static GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
+	uint32_t ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
+	                       CryptoMetaData &aad_crypto_metadata) const;
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
 	                  const uint32_t buffer_size);
+	uint32_t ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+	                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const;
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 
@@ -194,6 +200,8 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(const ParquetUnionData &union_data, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
+	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &options,
+	                                     ParquetColumnSchema &schema);
 
 	void AddVirtualColumn(column_t virtual_column_id) override;
 
@@ -229,6 +237,8 @@ private:
 
 	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
 	                                                ParquetColumnSchema &element);
+	unique_ptr<AdditionalAuthenticatedData> GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
+	                                                    uint16_t column_ordinal, uint16_t page_ordinal) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;

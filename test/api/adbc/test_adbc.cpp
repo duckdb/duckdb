@@ -155,6 +155,41 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
 }
 
+TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create Arrow Result
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("my_table", input_data);
+
+	// Append data with extra column
+	input_data = db.QueryArrow("SELECT 42 as value1, 29 as value2");
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &db.adbc_error)));
+	// We need to use append mode
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	REQUIRE(!SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error)));
+	REQUIRE((std::strcmp(db.adbc_error.message, "incorrect column count in AppendDataChunk, expected 1, got 2") == 0));
+	// Release error
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	// Release the statement
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+}
+
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -2447,4 +2482,197 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		adbc_error.release(&adbc_error);
 	}
 }
+
+TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Test CREATE mode (default)
+	{
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
+		db.CreateTable("test_table", input_data);
+		auto result = db.Query("SELECT * FROM test_table");
+		REQUIRE(result->RowCount() == 1);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 42);
+	}
+
+	// Test CREATE mode error (table already exists)
+	{
+		auto &input_data = db.QueryArrow("SELECT 43 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_CREATE,
+		                                       &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test APPEND mode
+	{
+		auto &input_data = db.QueryArrow("SELECT 43 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+		                                       &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table ORDER BY value");
+		REQUIRE(result->RowCount() == 2);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 42);
+		REQUIRE(result->GetValue(0, 1).GetValue<int32_t>() == 43);
+	}
+
+	// Test REPLACE mode
+	{
+		auto &input_data = db.QueryArrow("SELECT 44 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+		                                       ADBC_INGEST_OPTION_MODE_REPLACE, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table");
+		REQUIRE(result->RowCount() == 1);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 44);
+	}
+
+	// Test CREATE_APPEND mode (table exists)
+	{
+		auto &input_data = db.QueryArrow("SELECT 45 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+		                                       ADBC_INGEST_OPTION_MODE_CREATE_APPEND, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table ORDER BY value");
+		REQUIRE(result->RowCount() == 2);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 44);
+		REQUIRE(result->GetValue(0, 1).GetValue<int32_t>() == 45);
+	}
+
+	// Test CREATE_APPEND mode (table does not exist)
+	{
+		auto &input_data = db.QueryArrow("SELECT 46 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table2", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+		                                       ADBC_INGEST_OPTION_MODE_CREATE_APPEND, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table2");
+		REQUIRE(result->RowCount() == 1);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 46);
+	}
+}
+
+TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Create a test table
+	db.Query("CREATE TABLE test_rows (value INTEGER)");
+	db.Query("INSERT INTO test_rows VALUES (1), (2), (3)");
+
+	// Test rows_affected for INSERT
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "INSERT INTO test_rows VALUES (4), (5)", &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 2);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for UPDATE
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetSqlQuery(&adbc_statement, "UPDATE test_rows SET value = 10 WHERE value < 3", &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 2);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for DELETE
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "DELETE FROM test_rows WHERE value = 10", &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 2);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for SELECT (should return -1)
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT * FROM test_rows", &adbc_error)));
+		int64_t rows_affected = -999;
+		ArrowArrayStream stream;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == -1);
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for ingestion
+	{
+		auto &input_data = db.QueryArrow("SELECT 100 as value UNION ALL SELECT 101 UNION ALL SELECT 102");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_ingest", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 3);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+}
+
 } // namespace duckdb

@@ -364,16 +364,16 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, Ag
 	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function.name = "reservoir_quantile";
-	function.serialize = ReservoirQuantileBindData::Serialize;
-	function.deserialize = ReservoirQuantileBindData::Deserialize;
+	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
+	function.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	return bind_data;
 }
 
 AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	auto fun = GetReservoirQuantileAggregateFunction(type);
-	fun.bind = BindReservoirQuantile;
-	fun.serialize = ReservoirQuantileBindData::Serialize;
-	fun.deserialize = ReservoirQuantileBindData::Deserialize;
+	fun.SetBindCallback(BindReservoirQuantile);
+	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
+	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
@@ -381,9 +381,9 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 
 AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetReservoirQuantileListAggregateFunction(type);
-	fun.bind = BindReservoirQuantile;
-	fun.serialize = ReservoirQuantileBindData::Serialize;
-	fun.deserialize = ReservoirQuantileBindData::Deserialize;
+	fun.SetBindCallback(BindReservoirQuantile);
+	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
+	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -410,8 +410,8 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
                                          const LogicalType &return_value) {
 	AggregateFunction fun(arguments, return_value, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      BindReservoirQuantileDecimal);
-	fun.serialize = ReservoirQuantileBindData::Serialize;
-	fun.deserialize = ReservoirQuantileBindData::Deserialize;
+	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
+	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	set.AddFunction(fun);
 
 	fun.arguments.emplace_back(LogicalType::INTEGER);

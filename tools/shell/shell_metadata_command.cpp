@@ -109,9 +109,6 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 		}
 	}
 
-	/* When playing back a "dump", the content might appear in an order
-	** which causes immediate foreign key constraints to be violated.
-	** So disable foreign-key constraint enforcement to prevent problems. */
 	state.PrintF("BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
@@ -186,6 +183,23 @@ MetadataResult SetHighlightColors(ShellState &state, const vector<string> &args)
 
 MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &args) {
 	state.highlight_errors = state.StringToBool(args[1]) ? OptionType::ON : OptionType::OFF;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleHighlightMode(ShellState &state, const vector<string> &args) {
+	if (args[1] == "mixed") {
+		state.highlight_mode = HighlightMode::MIXED_MODE;
+	} else if (args[1] == "dark") {
+		state.highlight_mode = HighlightMode::DARK_MODE;
+	} else if (args[1] == "light") {
+		state.highlight_mode = HighlightMode::LIGHT_MODE;
+	} else if (args[1] == "auto") {
+		state.highlight_mode = HighlightMode::AUTOMATIC;
+	} else {
+		return MetadataResult::PRINT_USAGE;
+	}
+	ShellHighlight highlight(state);
+	highlight.ToggleMode(state.highlight_mode);
 	return MetadataResult::SUCCESS;
 }
 
@@ -699,24 +713,25 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 		}
 		state.PrintF("Pager mode: %s\n", mode_str);
 		if (state.pager_mode == PagerMode::PAGER_AUTOMATIC) {
-			state.PrintF("Trigger pager when rows exceed %d or columns exceed %d\n", state.pager_min_rows,
-			             state.pager_min_columns);
+			string page_mode = StringUtil::Format("Trigger pager when rows exceed %d", state.pager_min_rows);
+			if (state.max_width == 0) {
+				page_mode += " or result set is wider than terminal";
+			} else {
+				page_mode += StringUtil::Format(" or result set is wider than %d characters", state.max_width);
+			}
+			state.Print(page_mode);
 		}
 		if (state.pager_mode != PagerMode::PAGER_OFF || !state.pager_command.empty()) {
 			state.PrintF("Pager command: %s\n", state.pager_command);
 		}
 		return MetadataResult::SUCCESS;
 	}
-	if (args[1] == "set_row_threshold" || args[1] == "set_column_threshold") {
+	if (args[1] == "set_row_threshold") {
 		if (args.size() != 3) {
 			return MetadataResult::PRINT_USAGE;
 		}
 		idx_t limit = (idx_t)state.StringToInt(args[2]);
-		if (args[1] == "set_row_threshold") {
-			state.pager_min_rows = limit;
-		} else {
-			state.pager_min_columns = limit;
-		}
+		state.pager_min_rows = limit;
 		return MetadataResult::SUCCESS;
 	}
 	if (args.size() != 2) {
@@ -784,6 +799,8 @@ static const MetadataCommand metadata_commands[] = {
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
+    {"highlight_mode", 2, ToggleHighlightMode, "mixed|dark|light", "Toggle the highlight mode to dark or light mode", 0,
+     ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
      "Options:\n\t--csv\tImport data from CSV (read_csv)\n\t--json\tImport data from JSON "

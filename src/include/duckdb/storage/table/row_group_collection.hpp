@@ -13,6 +13,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/enums/index_removal_type.hpp"
 
 namespace duckdb {
 
@@ -59,6 +60,8 @@ public:
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	optional_ptr<RowGroup> GetRowGroup(int64_t index);
+	//! Overrides a row group - should only be used if you know what you're doing (will likely be removed in the future)
+	void SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row_group);
 	void Verify();
 	void Destroy();
 
@@ -99,7 +102,8 @@ public:
 	                  optional_ptr<StorageCommitState> commit_state);
 	bool IsPersistent() const;
 
-	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
@@ -109,8 +113,7 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-	                           vector<unique_ptr<SegmentNode<RowGroup>>> &segments);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
@@ -129,6 +132,7 @@ public:
 	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
+	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	unique_ptr<BlockingSample> GetSample();
@@ -150,13 +154,14 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	idx_t GetBaseRowId() const;
 	void SetAppendRequiresNewRowGroup();
 
 private:
-	bool IsEmpty(SegmentLock &) const;
+	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
+	                                                       idx_t count) const;
 
-	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
+	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
+	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
 
 private:
 	//! BlockManager
@@ -169,8 +174,10 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection
 	vector<LogicalType> types;
-	//! The segment trees holding the various row_groups of the table
-	shared_ptr<RowGroupSegmentTree> row_groups;
+	//! Lock held when accessing or modifying the owned_row_groups pointer
+	mutable mutex row_group_pointer_lock;
+	//! The owning pointer of the segment tree
+	shared_ptr<RowGroupSegmentTree> owned_row_groups;
 	//! Table statistics
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends

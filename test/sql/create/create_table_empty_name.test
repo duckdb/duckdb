@@ -1,0 +1,15 @@
+# name: test/sql/create/create_table_empty_name.test
+# group: [create]
+
+statement error
+CREATE TABLE '' AS SELECT 42;
+----
+Empty table name not supported
+
+statement ok
+create schema s1;
+
+statement error
+CREATE TABLE s1.""(i INTEGER);
+----
+Parser Error: zero-length delimited identifier at or near """"

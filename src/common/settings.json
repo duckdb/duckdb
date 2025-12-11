@@ -226,6 +226,13 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_checkpoint_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep before a checkpoint",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -506,6 +513,13 @@
         "internal_setting": "explain_output_type"
     },
     {
+        "name": "extension_directories",
+        "description": "Set the directories to store extensions in",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
@@ -540,6 +554,14 @@
         "description": "DEBUG SETTING: forces a specific compression method to be used",
         "type": "VARCHAR",
         "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "force_variant_shredding",
+        "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "ForceVariantShredding",
         "custom_implementation": true
     },
     {
@@ -935,6 +957,14 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "variant_minimum_shredding_size",
+        "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "30000",
+        "struct": "VariantMinimumShreddingSize"
     },
     {
         "name": "write_buffer_row_group_count",

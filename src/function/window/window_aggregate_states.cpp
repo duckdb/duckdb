@@ -3,7 +3,7 @@
 namespace duckdb {
 
 WindowAggregateStates::WindowAggregateStates(ClientContext &client, const AggregateObject &aggr)
-    : client(client), aggr(aggr), state_size(aggr.function.state_size(aggr.function)),
+    : client(client), aggr(aggr), state_size(aggr.function.GetStateSizeCallback()(aggr.function)),
       allocator(Allocator::Get(client)) {
 }
 
@@ -19,7 +19,7 @@ void WindowAggregateStates::Initialize(idx_t count) {
 
 	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
 		state_f_data[i] = state_ptr;
-		aggr.function.initialize(aggr.function, state_ptr);
+		aggr.function.GetStateInitCallback()(aggr.function, state_ptr);
 	}
 
 	// Prevent conversion of results to constants
@@ -28,12 +28,12 @@ void WindowAggregateStates::Initialize(idx_t count) {
 
 void WindowAggregateStates::Combine(WindowAggregateStates &target) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
-	aggr.function.combine(*statef, *target.statef, aggr_input_data, GetCount());
+	aggr.function.GetStateCombineCallback()(*statef, *target.statef, aggr_input_data, GetCount());
 }
 
 void WindowAggregateStates::Finalize(Vector &result) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.finalize(*statef, aggr_input_data, result, GetCount(), 0);
+	aggr.function.GetStateFinalizeCallback()(*statef, aggr_input_data, result, GetCount(), 0);
 }
 
 void WindowAggregateStates::Destroy() {
@@ -42,8 +42,8 @@ void WindowAggregateStates::Destroy() {
 	}
 
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	if (aggr.function.destructor) {
-		aggr.function.destructor(*statef, aggr_input_data, GetCount());
+	if (aggr.function.HasStateDestructorCallback()) {
+		aggr.function.GetStateDestructorCallback()(*statef, aggr_input_data, GetCount());
 	}
 
 	states.clear();

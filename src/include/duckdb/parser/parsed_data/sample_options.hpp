@@ -22,6 +22,10 @@ string SampleMethodToString(SampleMethod method);
 
 class SampleOptions {
 public:
+	// 1 billion rows should be enough.
+	static constexpr idx_t MAX_SAMPLE_ROWS = 1000000000;
+
+public:
 	explicit SampleOptions(int64_t seed_ = -1);
 
 	Value sample_size;

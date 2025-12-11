@@ -19,11 +19,6 @@ public:
 	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	//! The child-column of the list
-	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the array
-	ValidityColumnData validity;
-
 public:
 	void SetDataType(ColumnDataType data_type) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
@@ -55,11 +50,11 @@ public:
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
-	void CommitDropColumn() override;
+	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -70,6 +65,15 @@ public:
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	void Verify(RowGroup &parent) override;
+
+	void SetValidityData(shared_ptr<ValidityColumnData> validity);
+	void SetChildData(shared_ptr<ColumnData> child_column);
+
+protected:
+	//! The child-column of the list
+	shared_ptr<ColumnData> child_column;
+	//! The validity column data of the array
+	shared_ptr<ValidityColumnData> validity;
 };
 
 } // namespace duckdb
