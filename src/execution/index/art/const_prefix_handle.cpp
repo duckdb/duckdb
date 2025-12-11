@@ -20,30 +20,30 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 	return data[pos];
 }
 
-string ConstPrefixHandle::ToString(ART &art, const Node &node, const idx_t indent_level, const bool inside_gate,
-                                   const bool display_ascii) {
-	auto indent = [](string &str, const idx_t n) {
-		for (idx_t i = 0; i < n; ++i) {
-			str += " ";
-		}
-	};
+string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOptions &options) {
+	auto indent = [](string &str, const idx_t n) { str.append(n, ' '); };
 	auto format_byte = [&](const uint8_t byte) {
-		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);
 	};
+
 	string str = "";
-	indent(str, indent_level);
+	indent(str, options.indent_level);
 	reference<const Node> ref(node);
+	ToStringOptions child_options = options;
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
 		str += "Prefix: |";
 		for (idx_t i = 0; i < handle.data[art.PrefixCount()]; i++) {
 			str += format_byte(handle.data[i]) + "|";
+			if (options.key_path) {
+				child_options.key_depth++;
+			}
 		}
 	});
 
-	auto child = ref.get().ToString(art, indent_level, inside_gate, display_ascii);
+	auto child = ref.get().ToString(art, child_options);
 	return str + "\n" + child;
 }
 
