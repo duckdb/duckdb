@@ -5,6 +5,7 @@ foreach cipher GCM CTR
 
 require tpch
 
+# we need httpfs for writing encrypted out-of-core
 require httpfs
 
 statement ok

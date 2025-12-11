@@ -2,7 +2,6 @@
 # description: test encrypted wal debug PRAGMAS
 # group: [wal]
 
-# We need httpfs to do encrypted writes
 require httpfs
 
 foreach cipher GCM CTR

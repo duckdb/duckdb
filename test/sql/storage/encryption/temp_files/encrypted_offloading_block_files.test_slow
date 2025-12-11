@@ -1,7 +1,7 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
 # group: [temp_files]
 
-# We need httpfs to do encrypted writes
+# We need httpfs to do encrypted writes for out-of-core
 require httpfs
 
 foreach cipher GCM CTR
