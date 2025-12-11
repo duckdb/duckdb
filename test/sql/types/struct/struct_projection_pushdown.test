@@ -76,6 +76,15 @@ NULL	NULL
 NULL	{'a': 84, 'b': NULL}
 false	{'a': NULL, 'b': false}
 
+# Add a cast
+query II
+SELECT s['b']::INTEGER, s FROM ${source}
+----
+1	{'a': 42, 'b': true}
+NULL	NULL
+NULL	{'a': 84, 'b': NULL}
+0	{'a': NULL, 'b': false}
+
 query II
 SELECT s.b, s.a FROM ${source}
 ----
@@ -83,6 +92,15 @@ true	42
 NULL	NULL
 NULL	84
 false	NULL
+
+# Add a cast
+query II
+SELECT s.b::INTEGER, s.a::BIGINT FROM ${source}
+----
+1	42
+NULL	NULL
+NULL	84
+0	NULL
 
 query I
 SELECT s FROM ${source} WHERE s.b

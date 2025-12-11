@@ -126,6 +126,14 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 	return *children[index];
 }
 
+static bool CastIsPushedDown(ColumnData &child, ColumnScanState &child_state) {
+	if (!child_state.storage_index.HasType()) {
+		return false;
+	}
+	auto &scan_type = child_state.storage_index.GetType();
+	return child.GetType() != scan_type;
+}
+
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
@@ -140,7 +148,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 		    }
 		    auto &field = *sub_columns[child_index];
 		    auto &child_type = StructType::GetChildTypes(type)[child_index].second;
-		    if (DUCKDB_UNLIKELY(child_type != target_vector.GetType())) {
+		    if (CastIsPushedDown(field, field_state)) {
 			    D_ASSERT(state.storage_index.IsPushdownExtract());
 			    Vector intermediate(child_type, target_count);
 			    field.Scan(transaction, vector_index, field_state, intermediate, target_count);
@@ -316,7 +324,17 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 		auto &child_storage_index = index_children[0];
 		auto child_index = child_storage_index.GetPrimaryIndex();
 		auto &sub_column = *sub_columns[child_index];
-		return sub_column.FetchRow(transaction, state, child_storage_index, row_id, result, result_idx);
+		auto &child_type = StructType::GetChildTypes(type)[child_index].second;
+		if (child_type != result.GetType()) {
+			Vector intermediate(child_type, 1);
+			sub_column.FetchRow(transaction, state, child_storage_index, row_id, intermediate, 0);
+			auto fetched_row = intermediate.GetValue(0).CastAs(*state.context.GetClientContext(), result.GetType());
+			result.SetValue(result_idx, fetched_row);
+			return;
+		} else {
+			sub_column.FetchRow(transaction, state, child_storage_index, row_id, result, result_idx);
+			return;
+		}
 	}
 
 	auto &child_entries = StructVector::GetEntries(result);

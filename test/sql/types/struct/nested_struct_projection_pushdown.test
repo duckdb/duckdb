@@ -9,7 +9,19 @@ PRAGMA enable_verification
 
 # 2 layers of nesting
 statement ok
-CREATE TABLE test_structs(id INT, s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool)));
+CREATE TABLE test_structs(
+	id INT,
+	s STRUCT(
+		name STRUCT(
+			v VARCHAR,
+			id INT
+		),
+		nested_struct STRUCT(
+			a integer,
+			b bool
+		)
+	)
+);
 
 statement ok
 INSERT INTO test_structs
@@ -30,6 +42,15 @@ SELECT s.nested_struct FROM ${source}
 NULL
 {'a': 84, 'b': NULL}
 {'a': NULL, 'b': false}
+
+# Add a cast to shuffle the fields
+query I
+SELECT s.nested_struct::STRUCT(b BOOL, a INTEGER) FROM ${source}
+----
+{'b': true, 'a': 42}
+NULL
+{'b': NULL, 'a': 84}
+{'b': false, 'a': NULL}
 
 query I
 SELECT s.nested_struct.a FROM ${source}
