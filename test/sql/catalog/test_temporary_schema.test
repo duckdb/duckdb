@@ -2,8 +2,6 @@
 # description: Test temporary schemas and search path shadowing
 # group: [catalog]
 
-require noforcestorage
-
 # =============================================================================
 # Part 1: Create temp schemas and objects
 # =============================================================================

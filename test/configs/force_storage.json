@@ -9,6 +9,7 @@
         "test/sql/show_select/test_describe_all.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_temporary.test",
+        "test/sql/catalog/test_temporary_schema.test",
         "test/sql/pragma/test_show_tables_temp_views.test",
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/pg_catalog/sqlalchemy.test",
