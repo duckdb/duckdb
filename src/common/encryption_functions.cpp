@@ -74,8 +74,9 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 
 	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(
 	    /* only for random generator */ EncryptionTypes::GCM, length);
-	encryption_state->GenerateRandomData(temp_key, length);
+	encryption_state->GenerateRandomKey(temp_key, length);
 
+	// FIXME: create different temp keys for different temp files (temp key cache?)
 	string key_id = "temp_key";
 	AddKeyToCache(db, temp_key, key_id);
 }

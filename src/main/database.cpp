@@ -515,7 +515,7 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Va
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() {
-	if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+	if (!config.encryption_util || !config.encryption_util->SupportsAllEncryption()) {
 		ExtensionHelper::TryAutoLoadExtension(*this, "httpfs");
 	}
 

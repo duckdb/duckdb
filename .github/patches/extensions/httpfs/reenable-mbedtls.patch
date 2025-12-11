@@ -1,0 +1,72 @@
+diff --git a/src/crypto.cpp b/src/crypto.cpp
+index 69fb347..3d9ffa3 100644
+--- a/src/crypto.cpp
++++ b/src/crypto.cpp
+@@ -79,13 +79,21 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
+ 	}
+ }
+ 
+-void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
++void AESStateSSL::GenerateRandomDataInternal(data_ptr_t data, idx_t len) {
+ 	auto res = RAND_bytes(data, len);
+ 	if (res != 1) {
+ 		throw duckdb::InternalException("Failed to generate random data from RAND_bytes");
+ 	}
+ }
+ 
++void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
++	GenerateRandomDataInternal(data, len);
++}
++
++void AESStateSSL::GenerateRandomKey(data_ptr_t data, idx_t len) {
++	GenerateRandomDataInternal(data, len);
++}
++
+ void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len_p,
+                                        const_data_ptr_t aad, idx_t aad_len) {
+ 	mode = EncryptionTypes::ENCRYPT;
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index a11af95..270adc7 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -438,6 +438,9 @@ bool HTTPFileSystem::ReadInternal(FileHandle &handle, void *buffer, int64_t nr_b
+ 		if (!hfh.cached_file_handle->Initialized()) {
+ 			throw InternalException("Cached file not initialized properly");
+ 		}
++		if (hfh.cached_file_handle->GetSize() < location + nr_bytes) {
++			throw InternalException("Cached file length can't satisfy the requested Read");
++		}
+ 		memcpy(buffer, hfh.cached_file_handle->GetData() + location, nr_bytes);
+ 		DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
+ 		hfh.file_offset = location + nr_bytes;
+diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
+index cf1b854..ef6ce98 100644
+--- a/src/httpfs_httplib_client.cpp
++++ b/src/httpfs_httplib_client.cpp
+@@ -106,8 +106,12 @@ public:
+ 			info.buffer_out += string(data, data_length);
+ 			return true;
+ 		};
++		// First assign body, this is the body that will be uploaded
+ 		req.body.assign(const_char_ptr_cast(info.buffer_in), info.buffer_in_len);
+-		return TransformResult(client->send(req));
++		auto transformed_req = TransformResult(client->send(req));
++		// Then, after actual re-quest, re-assign body to the response value of the POST request
++		transformed_req->body.assign(const_char_ptr_cast(info.buffer_in), info.buffer_in_len);
++		return std::move(transformed_req);
+ 	}
+ 
+ private:
+diff --git a/src/include/crypto.hpp b/src/include/crypto.hpp
+index a6fa268..c295003 100644
+--- a/src/include/crypto.hpp
++++ b/src/include/crypto.hpp
+@@ -36,6 +36,8 @@ public:
+ 	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
+ 	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
+ 	void GenerateRandomData(data_ptr_t data, idx_t len) override;
++	void GenerateRandomKey(data_ptr_t data, idx_t len) override;
++	static void GenerateRandomDataInternal(data_ptr_t data, idx_t len);
+ 
+ 	const EVP_CIPHER *GetCipher(idx_t key_len);
+ 	size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);

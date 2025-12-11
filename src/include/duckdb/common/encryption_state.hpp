@@ -62,8 +62,8 @@ public:
 	virtual ~EncryptionUtil() {
 	}
 
-	//! Whether the EncryptionUtil supports encryption (some may only support decryption)
-	DUCKDB_API virtual bool SupportsEncryption() {
+	//! Whether the EncryptionUtil supports all encryption (some may not support temp file encryption)
+	DUCKDB_API virtual bool SupportsAllEncryption() {
 		return true;
 	}
 };

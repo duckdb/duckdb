@@ -99,8 +99,8 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 
 		~AESStateMBEDTLSFactory() override {} //
 
-		DUCKDB_API bool SupportsEncryption() override {
-			return false;
+		DUCKDB_API bool SupportsAllEncryption() override {
+			return true;
 		}
 	};
 };

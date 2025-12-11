@@ -363,13 +363,6 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
-	if (encryption_enabled) {
-		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
-			throw InvalidConfigurationException(
-			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
-			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
-		}
-	}
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
@@ -497,7 +490,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			//! Encryption is set
 
 			//! Check if our encryption module can write, if not, we should throw here
-			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+			if (!db.GetDatabase().GetEncryptionUtil()->SupportsAllEncryption() && !options.read_only) {
 				throw InvalidConfigurationException(
 				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
 				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
