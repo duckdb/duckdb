@@ -55,7 +55,7 @@ SELECT my_cool_filename FROM read_parquet('{DATA_DIR}/parquet-testing/enum.parqu
 {DATA_DIR}/parquet-testing/enum.parquet
 
 query III
-SELECT parse_filename(file_name), row_group_id, bloom_filter_excludes FROM parquet_bloom_probe('{DATA_DIR}/parquet-testing/multi_bloom_*.parquet', 'a', 1)
+SELECT parse_filename(file_name), row_group_id, bloom_filter_excludes FROM parquet_bloom_probe('{DATA_DIR}/parquet-testing/multi_bloom_*.parquet', 'a', 1) ORDER BY file_name
 ----
 multi_bloom_a.parquet	0	false
 multi_bloom_b.parquet	0	true

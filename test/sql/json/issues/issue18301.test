@@ -30,4 +30,4 @@ SELECT info->>'$.outcome.by' as outcome_by
 FROM cricket_staging
 WHERE info->>'$.city' = 'Colombo';
 ----
-{"runs":175,"wickets":null,"innings":1}
+{"wickets":null,"innings":1,"runs":175}
