@@ -65,9 +65,9 @@
     },
     {
         "name": "switch",
-        "parameters": "key,map",
+        "parameters": "key,map,value",
         "description": "Creates a switch statement similar to CASE WHEN/THEN",
-        "example": "switch(x, map({1 : 1})",
+        "example": "switch(x, map({1 : 1}, default)",
         "type": "scalar_function_set"
     }
 ]

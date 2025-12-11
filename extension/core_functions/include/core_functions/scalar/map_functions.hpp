@@ -113,9 +113,9 @@ struct MapValuesFun {
 
 struct SwitchFun {
 	static constexpr const char *Name = "switch";
-	static constexpr const char *Parameters = "key,map";
+	static constexpr const char *Parameters = "key,map,value";
 	static constexpr const char *Description = "Creates a switch statement similar to CASE WHEN/THEN";
-	static constexpr const char *Example = "switch(x, map({1 : 1})";
+	static constexpr const char *Example = "switch(x, map({1 : 1}, default)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
