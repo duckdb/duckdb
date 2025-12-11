@@ -15,7 +15,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/complex_json.hpp"
-#include "exception/parser_exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 #include <cstring>
 

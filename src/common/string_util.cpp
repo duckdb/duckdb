@@ -17,7 +17,6 @@
 #include <cctype>
 #include <iomanip>
 #include <memory>
-#include <cmath>
 #include <stdarg.h>
 #include <string.h>
 #include <stack>
