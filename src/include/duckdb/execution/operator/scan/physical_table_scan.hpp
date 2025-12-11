@@ -61,6 +61,10 @@ public:
 
 	bool Equals(const PhysicalOperator &other) const override;
 
+	OrderPreservationType SourceOrder() const override {
+		return function.order_preservation_type;
+	}
+
 public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
