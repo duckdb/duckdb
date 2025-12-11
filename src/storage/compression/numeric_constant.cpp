@@ -156,7 +156,8 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		Value val(type);
-		filters_nulls = expr_filter.EvaluateWithConstant(state.executor, val);
+		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
+		filters_nulls = !expr_filter.EvaluateWithConstant(state.executor, val);
 		filters_valid_values = false;
 		break;
 	}
