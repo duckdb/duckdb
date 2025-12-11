@@ -35,6 +35,9 @@ public:
 
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) override;
 
+	//! Check if the tree has any elements
+	bool IsEmpty() const;
+
 	//! Find the Nth index in the set of subframes
 	//! Returns {nth index, 0} or {nth offset, overflow}
 	pair<idx_t, idx_t> SelectNth(const SubFrames &frames, idx_t n) const;

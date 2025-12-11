@@ -457,6 +457,12 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
+			// Check if tree is empty (all values were NULL with IGNORE NULLS)
+			if (gvstate.value_tree->IsEmpty()) {
+				FlatVector::SetNull(result, i, true);
+				return;
+			}
+
 			idx_t frame_width = 0;
 			for (const auto &frame : frames) {
 				frame_width += frame.end - frame.start;
@@ -506,6 +512,12 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
+			// Check if tree is empty (all values were NULL with IGNORE NULLS)
+			if (gvstate.value_tree->IsEmpty()) {
+				FlatVector::SetNull(result, i, true);
+				return;
+			}
+
 			idx_t frame_width = 0;
 			for (const auto &frame : frames) {
 				frame_width += frame.end - frame.start;
@@ -582,6 +594,12 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 		auto n = idx_t(n_param);
 
 		if (gvstate.value_tree) {
+			// Check if tree is empty (all values were NULL with IGNORE NULLS)
+			if (gvstate.value_tree->IsEmpty()) {
+				FlatVector::SetNull(result, i, true);
+				return;
+			}
+
 			idx_t frame_width = 0;
 			for (const auto &frame : frames) {
 				frame_width += frame.end - frame.start;

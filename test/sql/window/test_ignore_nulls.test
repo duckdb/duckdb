@@ -325,6 +325,34 @@ NULL	3	3
 3	NULL	NULL
 NULL	NULL	NULL
 
+# Issue #20136: IGNORE NULLS with ORDER BY when all values are NULL
+statement ok
+CREATE TABLE bug_20136 (order_col int, value_col float, partition_col int);
+
+statement ok
+INSERT INTO bug_20136 VALUES (2, NULL, 10), (1, NULL, 10);
+
+query I
+SELECT first_value(value_col ORDER BY order_col IGNORE NULLS) OVER (PARTITION BY partition_col) FROM bug_20136;
+----
+NULL
+NULL
+
+query I
+SELECT last_value(value_col ORDER BY order_col IGNORE NULLS) OVER (PARTITION BY partition_col) FROM bug_20136;
+----
+NULL
+NULL
+
+query I
+SELECT nth_value(value_col, 1 ORDER BY order_col IGNORE NULLS) OVER (PARTITION BY partition_col) FROM bug_20136;
+----
+NULL
+NULL
+
+statement ok
+DROP TABLE bug_20136;
+
 #
 # Unsupported
 #

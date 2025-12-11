@@ -61,6 +61,14 @@ void WindowIndexTreeLocalState::BuildLeaves() {
 	}
 }
 
+bool WindowIndexTree::IsEmpty() const {
+	if (mst32) {
+		return mst32->LowestLevel().empty();
+	} else {
+		return mst64->LowestLevel().empty();
+	}
+}
+
 pair<idx_t, idx_t> WindowIndexTree::SelectNth(const SubFrames &frames, idx_t n) const {
 	if (mst32) {
 		const auto nth = mst32->SelectNth(frames, n);
