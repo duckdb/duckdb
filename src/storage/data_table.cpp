@@ -1748,7 +1748,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 		physical_ids.push_back(col.Physical().index);
 	}
 
-	// Create an ART around the expressions. Transfer ownership of index_info to the ART.
+	// Create an ART around the expressions.
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info->name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          *index_info);
