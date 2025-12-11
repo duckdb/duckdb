@@ -45,8 +45,13 @@ static HighlightElement highlight_elements[] = {
     {"prompt", PrintColor::DARKORANGE, PrintIntensity::BOLD},
     {"error_emphasis", PrintColor::RED, PrintIntensity::BOLD},
     {"error_suggestion", PrintColor::RED, PrintIntensity::BOLD},
+    {"log_trace", PrintColor::BLUE, PrintIntensity::BOLD},
+    {"log_debug", PrintColor::YELLOW, PrintIntensity::BOLD},
+    {"log_info", PrintColor::GREEN, PrintIntensity::BOLD},
+    {"log_warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
-    {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
+    {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD},
+};
 
 const HighlightElement &ShellHighlight::GetHighlightElement(HighlightElementType type) {
 	auto index = static_cast<uint32_t>(type);

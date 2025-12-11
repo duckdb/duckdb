@@ -53,6 +53,10 @@ enum class HighlightElementType : uint32_t {
 	PROMPT,
 	ERROR_EMPHASIS,
 	ERROR_SUGGESTION,
+	LOG_TRACE,
+	LOG_DEBUG,
+	LOG_INFO,
+	LOG_WARNING,
 	NONE
 };
 

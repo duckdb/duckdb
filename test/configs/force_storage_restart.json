@@ -9,7 +9,8 @@
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
-        "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow"
+        "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow",
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
       ]
     }
   ]
