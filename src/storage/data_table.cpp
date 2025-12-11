@@ -1202,7 +1202,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
                                      DataChunk &table_chunk, DataChunk &index_chunk,
                                      const vector<StorageIndex> &mapped_column_ids, row_t row_start,
-                                     const IndexAppendMode index_append_mode) {
+                                     const IndexAppendMode index_append_mode, optional_idx active_checkpoint) {
 	// Generate the vector of row identifiers.
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, table_chunk.size(), row_start, 1);
@@ -1212,7 +1212,9 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 
 	// Append the entries to the indexes.
 	ErrorData error;
-	indexes.Scan([&](Index &index) {
+	indexes.ScanEntries([&](IndexEntry &entry) {
+		lock_guard<mutex> guard(entry.lock);
+		auto &index = *entry.index;
 		if (!index.IsBound()) {
 			// Buffer only the key columns, and store their mapping.
 			auto &unbound_index = index.Cast<UnboundIndex>();
@@ -1229,11 +1231,39 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 				delete_index = delete_indexes->Find(bound_index.name);
 			}
 		}
+		optional_ptr<BoundIndex> append_index = bound_index;
+		optional_ptr<BoundIndex> lookup_index;
+		// check if there's an on-going checkpoint
+		if (active_checkpoint.IsValid() && bound_index.RequiresTransactionality()) {
+			// check if we've already written this index during the on-going checkpoint
+			if (!entry.last_written_checkpoint.IsValid() ||
+			    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
+				// there's an on-going checkpoint and we haven't written the index to disk yet
+				// we need to append to the "added_data_during_checkpoint" instead
+				// create it if it does not exist
+				if (!entry.added_data_during_checkpoint) {
+					entry.added_data_during_checkpoint =
+					    bound_index.CreateEmptyCopy("added_during_checkpoint_", bound_index.index_constraint_type);
+				}
+				if (bound_index.IsUnique()) {
+					// before appending we still need to look-up in the main index to verify there are no conflicts
+					lookup_index = bound_index;
+				}
+				append_index = entry.added_data_during_checkpoint;
+			}
+		}
 
 		try {
+			if (lookup_index) {
+				// if there's a look-up index - first verify we can append to that index before actually appending to
+				// the main index
+				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, nullptr);
+				lookup_index->VerifyAppend(table_chunk, index_append_info, nullptr);
+			}
+
 			// Append the mock chunk containing empty columns for non-key columns.
 			IndexAppendInfo index_append_info(index_append_mode, delete_index);
-			error = bound_index.Append(table_chunk, row_ids, index_append_info);
+			error = append_index->Append(table_chunk, row_ids, index_append_info);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1243,7 +1273,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			return true;
 		}
 
-		already_appended.push_back(bound_index);
+		already_appended.push_back(*append_index);
 		return false;
 	});
 
@@ -1260,8 +1290,10 @@ ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes
                                      DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids,
                                      row_t row_start, const IndexAppendMode index_append_mode) {
 	D_ASSERT(IsMainTable());
+	auto active_checkpoint = GetAttached().GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
 	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, index_chunk, mapped_column_ids, row_start,
-	                       index_append_mode);
+	                       index_append_mode, checkpoint_id);
 }
 
 void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start) {

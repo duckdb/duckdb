@@ -179,6 +179,8 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		mapped_column_ids.emplace_back(col);
 	}
 	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
 
 	// However, because the bound expressions of the indexes (and their bound
 	// column references) are in relation to ALL table columns, we create an
@@ -201,7 +203,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		// We need the table chunk for the bound indexes,
 		// and the index chunk for the unbound indexes (to buffer it).
 		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, index_chunk, mapped_column_ids,
-		                                   start_row, index_append_mode);
+		                                   start_row, index_append_mode, checkpoint_id);
 		if (error.HasError()) {
 			return false;
 		}
@@ -497,9 +499,9 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &table_chunk, DataT
 			TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
 		}
 
-		auto error =
-		    DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk, index_chunk,
-		                               mapped_column_ids, NumericCast<row_t>(base_id), storage->index_append_mode);
+		auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
+		                                        index_chunk, mapped_column_ids, NumericCast<row_t>(base_id),
+		                                        storage->index_append_mode, optional_idx());
 		if (error.HasError()) {
 			error.Throw();
 		}

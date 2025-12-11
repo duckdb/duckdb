@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_checkpoint_wal_index.test
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_wal_index.test_slow
 # description: Test concurrent appends to persistent while checkpointing with an index
 # group: [interquery]
 
@@ -8,13 +8,21 @@ SET checkpoint_threshold='1TB'
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
+statement ok
+SET index_scan_max_count=999999999
+
+statement ok
+SET index_scan_percentage=1
+
+foreach storage_version latest v0.10.3
+
 foreach sleep_time 0 25 50 75 100
 
 statement ok
 SET debug_checkpoint_sleep_ms=${sleep_time}
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}.db' AS concurrent_checkpoint_wal
+ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}_${storage_version}.db' AS concurrent_checkpoint_wal (STORAGE_VERSION '${storage_version}')
 
 statement ok
 CREATE TABLE concurrent_checkpoint_wal.integers(i INTEGER PRIMARY KEY)
@@ -26,6 +34,13 @@ loop x 0 10
 onlyif threadid<>10
 statement ok
 INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
+
+# we can find the data we just inserted
+onlyif threadid<>10
+query I
+SELECT COUNT(*) FROM  concurrent_checkpoint_wal.integers WHERE i >=(${x} * 2000) + ${threadid} * 100 AND i < (${x} * 2000) + (${threadid} + 1) * 100
+----
+100
 
 onlyif threadid=10
 statement ok
@@ -44,12 +59,17 @@ statement ok
 DETACH concurrent_checkpoint_wal
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}.db' AS concurrent_checkpoint_wal
+ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}_${storage_version}.db' AS concurrent_checkpoint_wal
 
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers
 ----
 19000	189940500
+
+query I
+SELECT COUNT(*) FROM  concurrent_checkpoint_wal.integers WHERE i < 19999
+----
+18999
 
 statement ok
 DELETE FROM concurrent_checkpoint_wal.integers
@@ -59,5 +79,7 @@ INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(0, 20000);
 
 statement ok
 DETACH concurrent_checkpoint_wal
+
+endloop
 
 endloop

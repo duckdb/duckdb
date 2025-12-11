@@ -32,6 +32,15 @@ struct IndexEntry {
 	mutex lock;
 	unique_ptr<Index> index;
 	unique_ptr<BoundIndex> deleted_rows_in_use;
+	//! Data that was added to the index during the last checkpoint
+	unique_ptr<BoundIndex> added_data_during_checkpoint;
+	//! The last checkpoint index that was written with this index
+	optional_idx last_written_checkpoint;
+};
+
+struct IndexSerializationInfo {
+	case_insensitive_map_t<Value> options;
+	transaction_t checkpoint_id;
 };
 
 class TableIndexList {
@@ -97,7 +106,7 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of the table.
-	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
 public:
 	//! Initialize an index_chunk from a table.

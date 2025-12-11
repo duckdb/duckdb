@@ -624,6 +624,9 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	if (entry.deleted_rows_in_use) {
 		arts_to_scan.push_back(entry.deleted_rows_in_use->Cast<ART>());
 	}
+	if (entry.added_data_during_checkpoint) {
+		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
+	}
 
 	auto expressions = ExtractFilterExpressions(col, filter->second, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {

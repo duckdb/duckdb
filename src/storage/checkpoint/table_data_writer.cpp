@@ -118,12 +118,13 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
-	case_insensitive_map_t<Value> options;
+	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
-		options.emplace("v1_0_0_storage", v1_0_0_storage);
+		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
+	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
+	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
 	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
 	if (debug_verify_blocks) {
