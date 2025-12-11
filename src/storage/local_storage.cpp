@@ -174,6 +174,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	// 2) If we are in an unbound state (i.e., WAL replay is happening right now), this mapping and the index_chunk
 	//	  are buffered in unbound_index. However, there can also be buffered deletes happening, so it is important
 	//    to maintain a canonical representation of the mapping, which is just sorting.
+	D_ASSERT(!index_list.Empty());
 	auto indexed_columns = index_list.GetRequiredColumns();
 	vector<StorageIndex> mapped_column_ids;
 	for (auto &col : indexed_columns) {
@@ -232,6 +233,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	auto &table = table_ref.get();
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
+	if (index_list.Empty()) {
+		// no indexes to append to
+		return;
+	}
 	auto &collection = *row_groups->collection;
 	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
 	if (error.HasError()) {
