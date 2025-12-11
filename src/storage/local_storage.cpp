@@ -231,12 +231,12 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	// In this function, we might scan all table columns,
 	// as we might also append to the table itself (append_to_table).
 	auto &table = table_ref.get();
-	auto data_table_info = table.GetDataTableInfo();
-	auto &index_list = data_table_info->GetIndexes();
-	if (index_list.Empty()) {
+	if (!table.HasIndexes()) {
 		// no indexes to append to
 		return;
 	}
+	auto data_table_info = table.GetDataTableInfo();
+	auto &index_list = data_table_info->GetIndexes();
 	auto &collection = *row_groups->collection;
 	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
 	if (error.HasError()) {
@@ -586,9 +586,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
 		// Append to the indexes.
-		if (table.HasIndexes()) {
-			storage.AppendToIndexes(transaction, append_state);
-		}
+		storage.AppendToIndexes(transaction, append_state);
 		// finally move over the row groups
 		table.MergeStorage(storage.GetCollection(), storage.append_indexes, commit_state);
 	} else {
