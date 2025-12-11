@@ -15,10 +15,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(PEGTran
 	auto &parens = list_pr.Child<OptionalParseResult>(4);
 	if (parens.HasResult()) {
 		auto &generic_copy_option_list = parens.optional_result->Cast<ListParseResult>().Child<ListParseResult>(1);
-		auto option_list = transformer.Transform<unordered_map<string, vector<Value>>>(generic_copy_option_list);
+		auto option_list = transformer.Transform<vector<GenericCopyOption>>(generic_copy_option_list);
 		case_insensitive_map_t<vector<Value>> option_result;
 		for (auto &option : option_list) {
-			option_result[option.first] = option.second;
+			if (option.name == "format") {
+				info->format = option.children[0].GetValue<string>();
+				info->is_format_auto_detected = false;
+			} else {
+				option_result[option.name] = option.children;
+			}
 		}
 		info->options = option_result;
 	}
