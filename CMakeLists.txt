@@ -462,6 +462,7 @@ option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code pat
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
+option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -763,16 +764,28 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+# Capture the current dir so the below function also works when included in a different project
+set(_DUCKDB_PROJECT_SRC_DIR ${PROJECT_SOURCE_DIR})
+set(_DUCKDB_PROJECT_BIN_DIR ${PROJECT_BINARY_DIR})
 
 function(add_third_party NAME)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/${NAME} ${CMAKE_BINARY_DIR}/third_party/${NAME})
+    add_subdirectory(${_DUCKDB_PROJECT_SRC_DIR}/third_party/${NAME} ${_DUCKDB_PROJECT_BIN_DIR}/third_party/${NAME})
 endfunction()
 
 # this depends on disable_target_warnings so the order matters
-include(extension/extension_build_tools.cmake)
+include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
- add_subdirectory(src)
+ if(PREBUILT_BINARY)
+   message("Using pre-built static library from file ${PREBUILT_BINARY}")
+   add_library(duckdb_static STATIC IMPORTED GLOBAL)
+   file(COPY ${PREBUILT_BINARY} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+   file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/${PREBUILT_BINARY} ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+   set_property(TARGET duckdb_static PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+ else()
+   add_subdirectory(src)
+ endif()
+
  add_subdirectory(tools)
  add_subdirectory(extension)
 endif()
@@ -788,7 +801,6 @@ add_third_party(re2)
 add_third_party(utf8proc)
 add_third_party(yyjson)
 add_third_party(zstd)
-
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)

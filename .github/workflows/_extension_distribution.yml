@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: ''
+      opt_in_archs:
+        required: false
+        type: string
+        default: ''
       extra_toolchains:
         required: false
         type: string
@@ -55,6 +59,7 @@ jobs:
       ci_tools_version: main
 
       exclude_archs: ${{ inputs.exclude_archs }}
+      opt_in_archs: ${{ inputs.opt_in_archs }}
 
       extra_toolchains: ${{ inputs.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'

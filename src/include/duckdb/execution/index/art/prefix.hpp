@@ -48,7 +48,7 @@ public:
 
 	//! Concatenates parent -> prev_node4 -> child.
 	static void Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-	                   const GateStatus node4_status);
+	                   const GateStatus node4_status, const GateStatus status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
@@ -66,9 +66,8 @@ public:
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 
-	//! Returns the string representation of the node at indentation level.
-	static string ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate = false,
-	                       bool display_ascii = false);
+	//! Returns the string representation of the node using ToStringOptions.
+	static string ToString(ART &art, const Node &node, const ToStringOptions &options);
 
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
@@ -76,7 +75,7 @@ private:
 	static Prefix GetTail(ART &art, const Node &node);
 
 	static void ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
-	                           const bool inside_gate);
+	                           const GateStatus status);
 	static void ConcatNode4WasGate(ART &art, Node &node4, const Node child, uint8_t byte);
 	static void ConcatChildIsGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
 	static void ConcatOutsideGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);

@@ -228,6 +228,17 @@ bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
 	return disabled_file_systems.find(name) != disabled_file_systems.end();
 }
 
+bool VirtualFileSystem::IsDisabledForPath(const string &path) {
+	if (disabled_file_systems.empty()) {
+		return false;
+	}
+	auto fs = FindFileSystemInternal(path);
+	if (!fs) {
+		fs = default_fs.get();
+	}
+	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
+}
+
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
 	return FindFileSystem(path, FileOpener::TryGetDatabase(opener));
 }

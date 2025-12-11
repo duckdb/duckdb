@@ -273,21 +273,31 @@ from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (for
 ----
 Binder Error
 
-# test some repeated large strings
-# this should give dictionary
+# test some repeated large strings (with default parquet_version v1)
+# this should give PLAIN_DICTIONARY dictionary
 statement ok
 copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet';
 
 query I
 select encodings from parquet_metadata('__TEST_DIR__/my.parquet');
 ----
+PLAIN_DICTIONARY
+
+# test some repeated large strings with parquet_version v2
+# this should give RLE_DICTIONARY dictionary
+statement ok
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet' (parquet_version v2);
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/my.parquet');
+----
 RLE_DICTIONARY
 
-# this cannot do dictionary because the strings exceed the limit
+# this cannot do any dictionaries because the strings exceed the limit
 statement ok
 copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet' (STRING_DICTIONARY_PAGE_SIZE_LIMIT 4_000_000);
 
 query I
-select encodings = 'RLE_DICTIONARY' from parquet_metadata('__TEST_DIR__/my.parquet');
+select encodings in ('PLAIN_DICTIONARY', 'RLE_DICTIONARY') from parquet_metadata('__TEST_DIR__/my.parquet');
 ----
 false
