@@ -41,6 +41,8 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
+	//! The number of scanned rows.
+	idx_t rows_scanned = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -323,6 +325,9 @@ public:
 			if (output.size() > 0) {
 				return;
 			}
+
+			// We have processed a row group. Add to scanned_rows
+			l_state.rows_scanned += l_state.scan_state.local_state.row_group->GetCount();
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {

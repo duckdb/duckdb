@@ -14,6 +14,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
@@ -441,6 +442,11 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 					info.extra_info.insert(std::move(new_info));
 				}
 			}
+		}
+		if (ProfilingInfo::Enabled(settings, MetricsType::OPERATOR_ROWS_SCANNED) &&
+		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
+			// TODO: Use local source to add rows_scanned
+			// TODO: Maybe custom function.get_rows_scanned(lstate) ?
 		}
 	}
 }
