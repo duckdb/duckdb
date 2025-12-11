@@ -21,7 +21,9 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 }
 
 string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOptions &options) {
-	auto indent = [](string &str, const idx_t n) { str.append(n, ' '); };
+	auto indent = [](string &str, const idx_t n) {
+		str.append(n, ' ');
+	};
 	auto format_byte = [&](const uint8_t byte) {
 		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
 			return string(1, static_cast<char>(byte));

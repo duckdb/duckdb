@@ -85,12 +85,12 @@ public:
 private:
 	//! Data holds all the information contained in an IndexPointer (64-bit value)
 	//! Bit layout:
-	//! MSB                                                                          LSB
-	//! 63      56 55                              32 31                               0
-	//! +---------+----------------------------------+---------------------------------+
-	//! |Metadata |            Offset                |           Buffer ID             |
-	//! | 8 bits  |           24 bits                |            32 bits              |
-	//! +---------+----------------------------------+---------------------------------+
+	//! MSB                                                                        LSB
+	//! 63         56 55                      32 31                                  0
+	//! +------------+--------------------------+------------------------------------+
+	//! |  Metadata  |           Offset         |           Buffer ID                |
+	//! |   8 bits   |          24 bits         |            32 bits                 |
+	//! +------------+--------------------------+------------------------------------+
 	//! NOTE: we do not use bit fields because when using bit fields Windows compiles
 	//! the IndexPointer class into 16 bytes instead of the intended 8 bytes, doubling the
 	//! space requirements
