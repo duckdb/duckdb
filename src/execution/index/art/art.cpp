@@ -911,12 +911,12 @@ void ART::TransformToDeprecated() {
 
 	// Replace the prefix allocator with the deprecated allocator.
 	if (state->HasAllocator()) {
-		auto taken_allocator = state->TakeAllocator();
+		deprecated_allocator = state->TakeAllocator();
 		prefix_count = Prefix::DEPRECATED_COUNT;
 
 		D_ASSERT((*allocators)[idx]->Empty());
 		(*allocators)[idx]->Reset();
-		(*allocators)[idx] = std::move(taken_allocator);
+		(*allocators)[idx] = std::move(deprecated_allocator);
 	}
 }
 
