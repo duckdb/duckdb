@@ -109,6 +109,23 @@ select * from (select distinct range from range(10))
 ----
 logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){3}.*
 
+# same as above but with 3 levels of nested CTEs that are recognized
+query II
+explain
+select distinct range from range(10)
+union all
+select distinct range from range(10)
+union all
+select range % 2 as range from (select distinct range from range(10)) group by range
+union all
+select range % 2 as range from (select distinct range from range(10)) group by range
+union all
+select count(*) from (select range % 2 as range from (select distinct range from range(10)) group by range)
+union all
+select count(*) from (select range % 2 as range from (select distinct range from range(10)) group by range)
+----
+logical_opt	<REGEX>:(?:.*CTE){3}.*(?:.*CTE_SCAN){6}.*
+
 # A subplan inside a materialized CTE that is common with a subplan outside of the CTE, should also work
 # this also tests that we don't reorder materialized CTEs that were created by hand
 query II

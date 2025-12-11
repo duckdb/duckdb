@@ -618,7 +618,7 @@ private:
 	};
 
 public:
-	vector<reference<subplan_map_t::value_type>> FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
+	void FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
 			root = root.get()->children[0];
@@ -682,21 +682,20 @@ public:
 			// Done with current
 			stack.pop_back();
 		}
+	}
 
+	void FilterSubplans() {
 		// Filter out redundant or ineligible subplans before returning
-		const auto subplan_infos = GetSortedSubplans();
 		vector<subplan_map_t::key_type> to_remove;
-		for (auto &entry : subplan_infos) {
-			const auto it = subplans.find(entry.get().first);
-			D_ASSERT(it != subplans.end());
-			const auto &signature = it->first.get();
-			auto &subplan_info = it->second;
+		for (auto &entry : subplans) {
+			auto &signature = entry.first.get();
+			auto &subplan_info = entry.second;
 			if (signature.OperatorCount() == 1) {
-				to_remove.push_back(it->first); // Just one operator in this subplan
+				to_remove.push_back(signature); // Just one operator in this subplan
 				continue;
 			}
 			if (subplan_info.subplans.size() == 1) {
-				to_remove.push_back(it->first); // No other identical subplan
+				to_remove.push_back(signature); // No other identical subplan
 				continue;
 			}
 
@@ -705,10 +704,10 @@ public:
 			if (parent_signature) {
 				auto parent_it = subplans.find(*parent_signature);
 				if (parent_it != subplans.end()) {
-					const auto subplan_count = it->second.subplans.size() * signature.OperatorCount();
+					const auto subplan_count = subplan_info.subplans.size() * signature.OperatorCount();
 					const auto parent_count = parent_it->second.subplans.size() * parent_signature->OperatorCount();
 					if (parent_count >= subplan_count) {
-						to_remove.push_back(it->first); // Parent is better, this one is redundant
+						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
 				}
@@ -751,13 +750,9 @@ public:
 				}
 			}
 
-			auto &subplan = subplan_info.subplans[0].op.get();
-			if (!CTEInlining::EndsInAggregateOrDistinct(*subplan) && !IsSelectiveMultiTablePlan(subplan)) {
-				bail = true; // Does not end in agg or distinct, and is not a selective multi table plan
-			}
-
+			bail = !ShouldMaterialize(subplan_info);
 			if (bail) {
-				to_remove.push_back(it->first);
+				to_remove.push_back(signature);
 			}
 		}
 
@@ -765,8 +760,109 @@ public:
 		for (auto &signature : to_remove) {
 			subplans.erase(signature);
 		}
+	}
 
-		return GetSortedSubplans();
+	void ConvertSubplansToCTEs(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
+		const auto sorted_subplans = GetSortedSubplans();
+		idx_t index = 1;
+		for (auto &entry : sorted_subplans) {
+			auto &subplan_info = entry.get().second;
+			if (!ShouldMaterialize(subplan_info)) {
+				continue; // No longer worth materializing due to other materializations
+			}
+
+			const auto cte_index = optimizer.binder.GenerateTableIndex();
+			const auto cte_name = StringUtil::Format("__common_subplan_%llu", index++);
+			if (!min_cte_idx.IsValid()) {
+				min_cte_idx = cte_index;
+			}
+
+			// Resolve types to be used for creating the materialized CTE and refs
+			op->ResolveOperatorTypes();
+
+			// Get types and names
+			const auto &primary_subplan = subplan_info.subplans[0];
+			const auto &types = primary_subplan.op.get()->types;
+			vector<string> col_names;
+			for (idx_t i = 0; i < types.size(); i++) {
+				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
+			}
+			const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
+
+			// Create CTE refs and figure out column binding replacements
+			vector<unique_ptr<LogicalOperator>> cte_refs;
+			ColumnBindingReplacer replacer;
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+				const auto &subplan = subplan_info.subplans[subplan_idx];
+				const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
+				cte_refs.emplace_back(make_uniq<LogicalCTERef>(cte_ref_index, cte_index, types, col_names));
+				const auto old_bindings = subplan.op.get()->GetColumnBindings();
+				auto new_bindings = cte_refs.back()->GetColumnBindings();
+				if (old_bindings.size() != new_bindings.size()) {
+					// Different number of output columns - project columns out
+					const auto &canonical_bindings = subplan.canonical_bindings;
+					vector<unique_ptr<Expression>> select_list;
+					for (auto &cb : canonical_bindings) {
+						idx_t cte_col_idx = 0;
+						for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
+							if (cb == primary_subplan_bindings[cte_col_idx]) {
+								break;
+							}
+						}
+						D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+						select_list.emplace_back(make_uniq<BoundColumnRefExpression>(
+						    types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
+					}
+
+					// Place the projection on top
+					auto proj =
+					    make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(select_list));
+					proj->children.emplace_back(std::move(cte_refs.back()));
+					cte_refs.back() = std::move(proj);
+					new_bindings = cte_refs.back()->GetColumnBindings();
+				}
+				D_ASSERT(old_bindings.size() == new_bindings.size());
+				for (idx_t i = 0; i < old_bindings.size(); i++) {
+					replacer.replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
+				}
+			}
+
+			// Create the materialized CTE and replace the common subplans with references to it
+			auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
+			auto cte = make_uniq<LogicalMaterializedCTE>(
+			    cte_name, cte_index, types.size(), std::move(primary_subplan.op.get()),
+			    std::move(lowest_common_ancestor), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+				const auto &subplan = subplan_info.subplans[subplan_idx];
+				subplan.op.get() = std::move(cte_refs[subplan_idx]);
+			}
+			lowest_common_ancestor = std::move(cte);
+
+			// Replace bindings of subplans with those of the CTE refs
+			replacer.stop_operator = lowest_common_ancestor.get();
+			replacer.VisitOperator(*op);                                  // Replace from the root until CTE
+			replacer.VisitOperator(*lowest_common_ancestor->children[1]); // Replace in CTE child
+
+			// We have to be careful with the order in which we place the CTEs created by this optimizer
+			// Pipeline dependencies cannot be set up if CTEs are in the wrong order
+			// This performs "CTE pushdown" until the CTEs are in the correct order
+			reference<unique_ptr<LogicalOperator>> current_op = lowest_common_ancestor;
+			while (true) {
+				auto &rhs_child = current_op.get()->children[1];
+				if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+					const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
+					if (child_table_index >= min_cte_idx.GetIndex() && child_table_index < cte_index) {
+						auto tmp = std::move(rhs_child->children[1]);
+						rhs_child->children[1] = std::move(current_op.get());
+						current_op.get() = std::move(rhs_child);
+						rhs_child = std::move(tmp);
+						current_op = current_op.get()->children[1];
+						continue;
+					}
+				}
+				break;
+			}
+		}
 	}
 
 private:
@@ -832,6 +928,11 @@ private:
 		return a.get();
 	}
 
+	bool ShouldMaterialize(const SubplanInfo &subplan_info) const {
+		auto &subplan = subplan_info.subplans[0].op.get();
+		return CTEInlining::EndsInAggregateOrDistinct(*subplan) || IsSelectiveMultiTablePlan(subplan);
+	}
+
 	bool IsSelectiveMultiTablePlan(unique_ptr<LogicalOperator> &op) const {
 		static constexpr idx_t CARDINALITY_THRESHOLD = 2048;
 		static constexpr idx_t CARDINALITY_RATIO = 2;
@@ -878,6 +979,8 @@ private:
 	subplan_map_t subplans;
 	//! Mapping from original table index to canonical table index
 	unordered_map<idx_t, idx_t> to_canonical_table_index;
+	//! Minimum CTE index created by this optimizer
+	optional_idx min_cte_idx;
 };
 
 //===--------------------------------------------------------------------===//
@@ -886,104 +989,12 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-static idx_t ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info,
-                                  idx_t index, optional_idx min_cte_idx) {
-	const auto cte_index = optimizer.binder.GenerateTableIndex();
-	const auto cte_name = StringUtil::Format("__common_subplan_%llu", index + 1);
-
-	// Resolve types to be used for creating the materialized CTE and refs
-	op->ResolveOperatorTypes();
-
-	// Get types and names
-	const auto &primary_subplan = subplan_info.subplans[0];
-	const auto &types = primary_subplan.op.get()->types;
-	vector<string> col_names;
-	for (idx_t i = 0; i < types.size(); i++) {
-		col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i));
-	}
-	const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
-
-	// Create CTE refs and figure out column binding replacements
-	vector<unique_ptr<LogicalOperator>> cte_refs;
-	ColumnBindingReplacer replacer;
-	for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
-		const auto &subplan = subplan_info.subplans[subplan_idx];
-		const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
-		cte_refs.emplace_back(make_uniq<LogicalCTERef>(cte_ref_index, cte_index, types, col_names));
-		const auto old_bindings = subplan.op.get()->GetColumnBindings();
-		auto new_bindings = cte_refs.back()->GetColumnBindings();
-		if (old_bindings.size() != new_bindings.size()) {
-			// Different number of output columns - project columns out
-			const auto &canonical_bindings = subplan.canonical_bindings;
-			vector<unique_ptr<Expression>> select_list;
-			for (auto &cb : canonical_bindings) {
-				idx_t cte_col_idx = 0;
-				for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
-					if (cb == primary_subplan_bindings[cte_col_idx]) {
-						break;
-					}
-				}
-				D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
-				select_list.emplace_back(
-				    make_uniq<BoundColumnRefExpression>(types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
-			}
-
-			// Place the projection on top
-			auto proj = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(select_list));
-			proj->children.emplace_back(std::move(cte_refs.back()));
-			cte_refs.back() = std::move(proj);
-			new_bindings = cte_refs.back()->GetColumnBindings();
-		}
-		D_ASSERT(old_bindings.size() == new_bindings.size());
-		for (idx_t i = 0; i < old_bindings.size(); i++) {
-			replacer.replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
-		}
-	}
-
-	// Create the materialized CTE and replace the common subplans with references to it
-	auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
-	auto cte =
-	    make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, types.size(), std::move(primary_subplan.op.get()),
-	                                      std::move(lowest_common_ancestor), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
-		const auto &subplan = subplan_info.subplans[subplan_idx];
-		subplan.op.get() = std::move(cte_refs[subplan_idx]);
-	}
-	lowest_common_ancestor = std::move(cte);
-
-	// Replace bindings of subplans with those of the CTE refs
-	replacer.stop_operator = lowest_common_ancestor.get();
-	replacer.VisitOperator(*op);                                  // Replace from the root until CTE
-	replacer.VisitOperator(*lowest_common_ancestor->children[1]); // Replace in CTE child
-
-	auto &rhs_child = lowest_common_ancestor->children[1];
-	if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		// We have to be careful with the order in which we place the CTEs created by this optimizer
-		const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
-		if (min_cte_idx.IsValid() && child_table_index >= min_cte_idx.GetIndex() && child_table_index < cte_index) {
-			// CTEs are in the wrong order - pipeline dependencies cannot be set up, swap previous and current CTE
-			auto tmp = std::move(rhs_child->children[1]);
-			rhs_child->children[1] = std::move(lowest_common_ancestor);
-			lowest_common_ancestor = std::move(rhs_child);
-			rhs_child = std::move(tmp);
-		}
-	}
-
-	return cte_index;
-}
-
 unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
 	// Bottom-up identification of identical subplans
 	CommonSubplanFinder finder(optimizer.context);
-	auto subplans = finder.FindCommonSubplans(op);
-
-	// Convert all subplans to CTEs
-	optional_idx min_cte_idx;
-	for (idx_t i = 0; i < subplans.size(); i++) {
-		auto cte_index = ConvertSubplansToCTE(optimizer, op, subplans[i].get().second, i, min_cte_idx);
-		min_cte_idx = min_cte_idx.IsValid() ? min_cte_idx : cte_index;
-	}
-
+	finder.FindCommonSubplans(op);
+	finder.FilterSubplans();
+	finder.ConvertSubplansToCTEs(optimizer, op);
 	return op;
 }
 
