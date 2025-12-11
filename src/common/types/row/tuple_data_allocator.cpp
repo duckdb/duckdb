@@ -307,7 +307,8 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 }
 
 void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state,
-                                              TupleDataChunkState &chunk_state, idx_t chunk_idx, bool init_heap) {
+                                              TupleDataChunkState &chunk_state, idx_t chunk_idx, bool init_heap,
+                                              optional_ptr<SortKeyPayloadState> sort_key_payload_state) {
 	D_ASSERT(this == segment.allocator.get());
 	D_ASSERT(chunk_idx < segment.ChunkCount());
 	auto &chunk = *segment.chunks[chunk_idx];
@@ -323,7 +324,10 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 		chunk_state.chunk_parts.emplace_back(*segment.chunk_parts[part_id]);
 	}
 
-	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts);
+	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts,
+	                             sort_key_payload_state);
+
+	chunk_state.chunk_lock = &chunk.lock.get();
 }
 
 static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t heap_sizes[], const idx_t offset,
@@ -345,13 +349,56 @@ static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t h
 #endif
 }
 
+template <SortKeyType SORT_KEY_TYPE>
+void TemplatedSortKeySetPayload(const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
+                                TupleDataChunkState &sort_key_chunk_state) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	const auto sort_keys = FlatVector::GetData<SORT_KEY *const>(sort_key_chunk_state.row_locations);
+
+	lock_guard<mutex> guard(*sort_key_chunk_state.chunk_lock);
+	if (sort_keys[offset]->GetPayload() == row_locations[offset]) {
+		return; // Still the same
+	}
+
+	// Changed: set new pointers
+	for (idx_t i = offset; i < offset + count; i++) {
+		sort_keys[i]->SetPayload(row_locations[i]);
+	}
+}
+
+void SortKeySetPayload(const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
+                       const SortKeyPayloadState &sort_key_payload_state) {
+	switch (sort_key_payload_state.sort_key_type) {
+	case SortKeyType::PAYLOAD_FIXED_16:
+		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_16>(row_locations, offset, count,
+		                                                          sort_key_payload_state.sort_key_chunk_state);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_24:
+		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_24>(row_locations, offset, count,
+		                                                          sort_key_payload_state.sort_key_chunk_state);
+		break;
+	case SortKeyType::PAYLOAD_FIXED_32:
+		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_32>(row_locations, offset, count,
+		                                                          sort_key_payload_state.sort_key_chunk_state);
+		break;
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_VARIABLE_32>(row_locations, offset, count,
+		                                                             sort_key_payload_state.sort_key_chunk_state);
+		break;
+	default:
+		throw NotImplementedException("SortKeySetPayload for %s",
+		                              EnumUtil::ToString(sort_key_payload_state.sort_key_type));
+	}
+}
+
 void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                                       idx_t offset, bool recompute, bool init_heap_pointers,
                                                       bool init_heap_sizes,
-                                                      unsafe_vector<reference<TupleDataChunkPart>> &parts) {
-	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-	auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+                                                      unsafe_vector<reference<TupleDataChunkPart>> &parts,
+                                                      optional_ptr<SortKeyPayloadState> sort_key_payload_state) {
+	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 
 	for (auto &part_ref : parts) {
 		auto &part = part_ref.get();
@@ -362,6 +409,12 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 		const auto base_row_ptr = GetRowPointer(pin_state, part);
 		for (idx_t i = 0; i < next; i++) {
 			row_locations[offset + i] = base_row_ptr + i * row_width;
+		}
+
+		if (sort_key_payload_state) {
+			D_ASSERT(!layout.IsSortKeyLayout());
+			lock_guard<mutex> guard(part.lock);
+			SortKeySetPayload(row_locations, offset, next, *sort_key_payload_state);
 		}
 
 		if (layout.AllConstant()) { // Can't have a heap

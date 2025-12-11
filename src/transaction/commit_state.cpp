@@ -50,10 +50,26 @@ void IndexDataRemover::PushDelete(DeleteInfo &info) {
 	Flush(version_table, row_numbers, count);
 }
 
+void IndexDataRemover::Verify() {
+#ifdef DEBUG
+	// Verify that our index memory is stable.
+	for (auto &table : verify_indexes) {
+		table.second->VerifyIndexBuffers();
+	}
+#endif
+}
+
+void CommitState::Verify() {
+	index_data_remover.Verify();
+}
+
 void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) {
 	if (count == 0) {
 		return;
 	}
+#ifdef DEBUG
+	verify_indexes.insert(make_pair(reference<DataTable>(table), table.GetDataTableInfo()));
+#endif
 
 	// set up the row identifiers vector
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
@@ -82,7 +98,7 @@ CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
-	if (commit_mode == CommitMode::PERFORM_COMMIT) {
+	if (commit_mode == CommitMode::COMMIT) {
 		if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
 			// if there are no other active transactions we don't need to store removed rows in deleted_rows_in_use
 			return IndexRemovalType::MAIN_INDEX_ONLY;
@@ -91,9 +107,9 @@ IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transac
 	}
 	// revert the appends to the indexes
 	if (transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS) {
-		return IndexRemovalType::REVERT_MAIN_INDEX_ONLY_APPEND;
+		return IndexRemovalType::REVERT_MAIN_INDEX_ONLY;
 	}
-	return IndexRemovalType::REVERT_MAIN_INDEX_APPEND;
+	return IndexRemovalType::REVERT_MAIN_INDEX;
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {

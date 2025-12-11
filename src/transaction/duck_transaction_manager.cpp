@@ -313,7 +313,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// commit the UndoBuffer of the transaction
 	if (!error.HasError()) {
 		if (HasOtherTransactions(transaction)) {
-			info.active_transactions = ActiveTransactionState::OTHER_ACTIVE_TRANSACTIONS;
+			info.active_transactions = ActiveTransactionState::OTHER_TRANSACTIONS;
 		} else {
 			info.active_transactions = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 		}

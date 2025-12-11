@@ -10,6 +10,6 @@
 
 namespace duckdb {
 
-enum class ActiveTransactionState { UNSET, OTHER_ACTIVE_TRANSACTIONS, NO_OTHER_TRANSACTIONS };
+enum class ActiveTransactionState { UNSET, OTHER_TRANSACTIONS, NO_OTHER_TRANSACTIONS };
 
 } // namespace duckdb
