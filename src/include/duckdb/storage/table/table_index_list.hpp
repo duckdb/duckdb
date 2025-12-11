@@ -101,7 +101,7 @@ public:
 	void MergeCheckpointDeltas(transaction_t checkpoint_id);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
-	optional_ptr<Index> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
+	optional_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);

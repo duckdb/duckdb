@@ -45,6 +45,12 @@ key
 # we can find the data we just inserted
 onlyif threadid<>10
 query I
+SELECT COUNT(*) FROM concurrent_checkpoint_wal.integers WHERE i =((${x} * 2000) + ${threadid} * 100 + ${threadid} + ${x} * 7)
+----
+1
+
+onlyif threadid<>10
+query I
 SELECT COUNT(*) FROM  concurrent_checkpoint_wal.integers WHERE i >=(${x} * 2000) + ${threadid} * 100 AND i < (${x} * 2000) + (${threadid} + 1) * 100
 ----
 100

@@ -193,12 +193,13 @@ bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, Forei
 	return true;
 }
 
-optional_ptr<Index> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
-                                                        const ForeignKeyType fk_type) {
+optional_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
+                                                             const ForeignKeyType fk_type) {
+	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
-			return index;
+			return entry;
 		}
 	}
 	return nullptr;
@@ -211,15 +212,22 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
-	auto index = FindForeignKeyIndex(fk_keys, fk_type);
-	D_ASSERT(index && index->IsBound());
+	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
+	auto &index = *entry->index;
+	D_ASSERT(index.IsBound());
+	optional_ptr<BoundIndex> delete_index;
 	if (storage) {
-		auto delete_index = storage->delete_indexes.Find(index->GetIndexName());
-		IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
-		index->Cast<BoundIndex>().VerifyConstraint(chunk, index_append_info, conflict_manager);
-	} else {
-		IndexAppendInfo index_append_info;
-		index->Cast<BoundIndex>().VerifyConstraint(chunk, index_append_info, conflict_manager);
+		delete_index = storage->delete_indexes.Find(index.GetIndexName());
+	}
+	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
+
+	lock_guard<mutex> entry_lock(entry->lock);
+	auto &main_index = index.Cast<BoundIndex>();
+	main_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
+	if (entry->added_data_during_checkpoint) {
+		// if we have added any rows during checkpoint - check in that index as well
+		IndexAppendInfo added_during_checkpoint_info;
+		entry->added_data_during_checkpoint->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
 	}
 }
 

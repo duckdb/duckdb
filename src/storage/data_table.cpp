@@ -599,20 +599,20 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Either a global or local error occurred.
 	// We construct the error message and throw.
-	optional_ptr<Index> index;
-	optional_ptr<Index> transaction_index;
+	optional_ptr<IndexEntry> index_entry;
+	optional_ptr<IndexEntry> transaction_index_entry;
 	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// Check whether we can insert into the foreign key table, or delete from the reference table.
-	index = data_table.info->indexes.FindForeignKeyIndex(dst_keys_ptr, fk_type);
+	index_entry = data_table.info->indexes.FindForeignKeyIndex(dst_keys_ptr, fk_type);
 	if (!local_verification) {
 		auto conflict = LocateErrorIndex(global_conflict_manager, is_append, count);
-		auto message = ConstructForeignKeyError(conflict, is_append, *index, dst_chunk);
+		auto message = ConstructForeignKeyError(conflict, is_append, *index_entry->index, dst_chunk);
 		throw ConstraintException(message);
 	}
 
 	auto &transact_index = local_storage.GetIndexes(context, data_table);
-	transaction_index = transact_index.FindForeignKeyIndex(dst_keys_ptr, fk_type);
+	transaction_index_entry = transact_index.FindForeignKeyIndex(dst_keys_ptr, fk_type);
 
 	if (local_error && global_error && is_append) {
 		// For appends, we throw if the foreign key neither exists in the transaction nor the local storage.
@@ -642,20 +642,20 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 			// We don't throw, every value was present in either regular or transaction storage
 			return;
 		}
-		auto message = ConstructForeignKeyError(conflict, true, *index, dst_chunk);
+		auto message = ConstructForeignKeyError(conflict, true, *index_entry->index, dst_chunk);
 		throw ConstraintException(message);
 	}
 
 	if (!is_append) {
 		if (global_error) {
 			auto conflict = LocateErrorIndex(global_conflict_manager, false, count);
-			auto message = ConstructForeignKeyError(conflict, false, *index, dst_chunk);
+			auto message = ConstructForeignKeyError(conflict, false, *index_entry->index, dst_chunk);
 			throw ConstraintException(message);
 		}
 
 		D_ASSERT(local_conflict_manager.HasConflicts());
 		auto conflict = LocateErrorIndex(local_conflict_manager, false, count);
-		auto message = ConstructForeignKeyError(conflict, false, *transaction_index, dst_chunk);
+		auto message = ConstructForeignKeyError(conflict, false, *transaction_index_entry->index, dst_chunk);
 		throw ConstraintException(message);
 	}
 }
