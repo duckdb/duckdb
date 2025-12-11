@@ -21,6 +21,33 @@ string ParquetFileMetadataCache::GetObjectType() {
 	return ObjectType();
 }
 
+idx_t ParquetFileMetadataCache::GetRoughCacheMemory() const {
+	// Base memory consumption
+	idx_t memory = sizeof(*this);
+
+	// Estimate metadata size - rough approximation
+	if (metadata) {
+		// Base metadata structure size + row groups + columns
+		memory += 1024; // Base overhead
+		// Estimate ~1KB per row group + column stats
+		memory += metadata->row_groups.size() * 1024;
+		// Column schema information
+		memory += metadata->schema.size() * 256;
+	}
+	if (geo_metadata) {
+		memory += 512;
+	}
+
+	if (crypto_metadata) {
+		memory += 256;
+	}
+
+	memory += footer_size;
+	memory += version_tag.size();
+
+	return memory;
+}
+
 bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
 	return ExternalFileCache::IsValid(validate, version_tag, last_modified, new_handle.GetVersionTag(),
 	                                  new_handle.GetLastModifiedTime());

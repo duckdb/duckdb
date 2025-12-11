@@ -80,6 +80,13 @@ public:
 		return ObjectType();
 	}
 
+	idx_t GetRoughCacheMemory() const override {
+		static constexpr idx_t STATE_MACHINE_SIZE = 2ULL * 1024;
+		lock_guard<mutex> lock(main_mutex);
+		// Base memory size + state machine entries size
+		return sizeof(*this) + (static_cast<idx_t>(state_machine_cache.size()) * STATE_MACHINE_SIZE);
+	}
+
 private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);
 	//! Cache on delimiter|quote|escape|newline
@@ -87,6 +94,6 @@ private:
 	//! Default value for options used to initialize CSV State Machine Cache
 
 	//! Because the state machine cache can be accessed in Parallel we need a mutex.
-	mutex main_mutex;
+	mutable mutex main_mutex;
 };
 } // namespace duckdb

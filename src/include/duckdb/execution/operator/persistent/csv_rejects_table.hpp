@@ -48,6 +48,10 @@ public:
 		return ObjectType();
 	}
 
+	idx_t GetRoughCacheMemory() const override {
+		return sizeof(*this) + scan_table.size() + errors_table.size() + name.size();
+	}
+
 private:
 	//! Current File Index being used in the query
 	idx_t current_file_idx = 0;
