@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index cc81600..7d1fa60 100644
+index cc81600..b1f2b03 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -231,11 +231,11 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
@@ -42,6 +42,22 @@ index cc81600..7d1fa60 100644
  
  	auto &leaf_allocator = tree->GetLeafAllocator();
  	auto &node_allocator = tree->GetNodeAllocator();
+@@ -268,11 +268,11 @@ IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value>
+ 	leaf_allocator.RemoveEmptyBuffers();
+ 	node_allocator.RemoveEmptyBuffers();
+ 
+-	info.buffers.push_back(leaf_allocator.InitSerializationToWAL());
+-	info.buffers.push_back(node_allocator.InitSerializationToWAL());
++	info->buffers.push_back(leaf_allocator.InitSerializationToWAL());
++	info->buffers.push_back(node_allocator.InitSerializationToWAL());
+ 
+-	info.allocator_infos.push_back(leaf_allocator.GetInfo());
+-	info.allocator_infos.push_back(node_allocator.GetInfo());
++	info->allocator_infos.push_back(leaf_allocator.GetInfo());
++	info->allocator_infos.push_back(node_allocator.GetInfo());
+ 
+ 	return info;
+ }
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
 index 202a6c7..8cee03f 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
