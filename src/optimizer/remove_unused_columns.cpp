@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -405,7 +406,7 @@ static ColumnIndex PathToIndex(const vector<idx_t> &path) {
 
 void RemoveUnusedColumns::WritePushdownExtractColumns(
     const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-    const std::function<idx_t(const ColumnIndex &extract_path)> &callback) {
+    const std::function<idx_t(const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type)> &callback) {
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
@@ -433,17 +434,20 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 			depth++;
 		}
 		D_ASSERT(entry != col.unique_paths.end());
-		D_ASSERT(struct_extract.expr.size() > depth);
-		auto expr = struct_extract.expr[depth];
+		D_ASSERT(struct_extract.components.size() > depth);
+		auto &component = struct_extract.components[depth];
+		auto &expr = component.cast ? *component.cast : component.extract;
 
-		auto return_type = expr.get()->return_type;
+		optional_ptr<LogicalType> cast_type;
+		auto return_type = expr->return_type;
+
 		auto &colref = col.bindings[struct_extract.bindings_idx];
 		auto colref_copy = colref.get().Copy();
-		expr.get() = std::move(colref_copy);
-		auto &new_expr = expr.get()->Cast<BoundColumnRefExpression>();
+		expr = std::move(colref_copy);
+		auto &new_expr = expr->Cast<BoundColumnRefExpression>();
 		new_expr.return_type = return_type;
 
-		auto column_index = callback(*entry);
+		auto column_index = callback(*entry, component.cast ? &(*component.cast)->return_type : nullptr);
 		new_expr.binding.column_index = column_index;
 	}
 }
@@ -504,17 +508,19 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		auto &column_type = expr.return_type;
 		idx_t start = expressions.size();
 		//! Pushdown Extract is supported, emit a column for every field
-		WritePushdownExtractColumns(
-		    entry->first, entry->second, i, column_type, [&](const ColumnIndex &extract_path) -> idx_t {
-			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
-			    target->SetAlias(expr.GetAlias());
-			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
-			    auto it = new_bindings.emplace(extract_path, expressions.size()).first;
-			    if (it->second == expressions.size()) {
-				    expressions.push_back(std::move(new_extract));
-			    }
-			    return it->second;
-		    });
+		WritePushdownExtractColumns(entry->first, entry->second, i, column_type,
+		                            [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
+			                            auto target =
+			                                make_uniq<BoundColumnRefExpression>(column_type, original_binding);
+			                            target->SetAlias(expr.GetAlias());
+			                            auto new_extract =
+			                                ConstructStructExtractFromPath(context, std::move(target), extract_path);
+			                            auto it = new_bindings.emplace(extract_path, expressions.size()).first;
+			                            if (it->second == expressions.size()) {
+				                            expressions.push_back(std::move(new_extract));
+			                            }
+			                            return it->second;
+		                            });
 		for (; start < expressions.size(); start++) {
 			VisitExpression(&expressions[start]);
 		}
@@ -686,9 +692,9 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(entry->first, entry->second, col_sel_idx, column_type,
-		                            [&](const ColumnIndex &extract_path) -> idx_t {
+		                            [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
 			                            ColumnIndex new_index(struct_column_index, {extract_path});
-			                            new_index.SetPushdownExtractType(column_type);
+			                            new_index.SetPushdownExtractType(column_type, cast_type);
 
 			                            auto column_binding_index = new_column_ids.size();
 			                            auto entry = child_map.find(new_index);
@@ -753,7 +759,7 @@ BaseColumnPrunerMode BaseColumnPruner::GetMode() const {
 bool BaseColumnPruner::HandleStructExtractRecursive(unique_ptr<Expression> &expr_p,
                                                     optional_ptr<BoundColumnRefExpression> &colref,
                                                     vector<idx_t> &indexes,
-                                                    vector<reference<unique_ptr<Expression>>> &expressions) {
+                                                    vector<ReferencedExtractComponent> &expressions) {
 	auto &expr = *expr_p;
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
@@ -780,7 +786,7 @@ bool BaseColumnPruner::HandleStructExtractRecursive(unique_ptr<Expression> &expr
 		}
 		colref = &ref;
 		indexes.push_back(bind_data.index);
-		expressions.push_back(expr_p);
+		expressions.emplace_back(expr_p);
 		return true;
 	}
 	// not a column reference - try to handle this recursively
@@ -788,17 +794,24 @@ bool BaseColumnPruner::HandleStructExtractRecursive(unique_ptr<Expression> &expr
 		return false;
 	}
 	indexes.push_back(bind_data.index);
-	expressions.push_back(expr_p);
+	expressions.emplace_back(expr_p);
 	return true;
 }
 
-bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
+bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression,
+                                           optional_ptr<unique_ptr<Expression>> cast_expression) {
 	optional_ptr<BoundColumnRefExpression> colref;
 	vector<idx_t> indexes;
-	vector<reference<unique_ptr<Expression>>> expressions;
+	vector<ReferencedExtractComponent> expressions;
+
 	if (!HandleStructExtractRecursive(*expression, colref, indexes, expressions)) {
 		return false;
 	}
+	if (cast_expression) {
+		auto &top_level = expressions.back();
+		top_level.cast = cast_expression;
+	}
+
 	auto index = PathToIndex(indexes);
 	AddBinding(*colref, std::move(index), expressions);
 	return true;
@@ -854,7 +867,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex chi
 }
 
 void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-                                  const vector<reference<unique_ptr<Expression>>> &parent) {
+                                  const vector<ReferencedExtractComponent> &parent) {
 	AddBinding(col, child_column);
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
@@ -883,7 +896,31 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
 	}
 }
 
+static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &child) {
+	if (expr->type != ExpressionType::OPERATOR_CAST) {
+		return false;
+	}
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_CAST);
+	auto &cast = expr->Cast<BoundCastExpression>();
+	if (cast.try_cast) {
+		return false;
+	}
+
+	child = cast.child;
+	return true;
+}
+
 void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
+	//! Check if this is a struct extract wrapped in a cast
+	optional_ptr<unique_ptr<Expression>> cast_child;
+	if (TryGetCastChild(*expression, cast_child)) {
+		if (HandleStructExtract(cast_child.get(), expression)) {
+			// already handled
+			return;
+		}
+	}
+
+	//! Check if this is a struct extract
 	if (HandleStructExtract(expression)) {
 		// already handled
 		return;

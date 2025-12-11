@@ -8,10 +8,35 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test_structs(id INT, s STRUCT(a integer, b bool));
+CREATE TABLE test_structs(
+	id INT,
+	s STRUCT(
+		a integer,
+		b bool
+	)
+);
 
 statement ok
-INSERT INTO test_structs VALUES (1, {'a': 42, 'b': true}), (2, NULL), (3, {'a': 84, 'b': NULL}), (4, {'a': NULL, 'b': false});
+INSERT INTO test_structs VALUES
+	(
+		1, {
+			'a': 42,
+			'b': true
+		}
+	),
+	(2, NULL),
+	(
+		3, {
+			'a': 84,
+			'b': NULL
+		}
+	),
+	(
+		4, {
+			'a': NULL,
+			'b': false
+		}
+	);
 
 statement ok
 COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
@@ -25,6 +50,15 @@ true
 NULL
 NULL
 false
+
+# Add a cast on top of the struct extract
+query I
+SELECT s.b::INTEGER FROM ${source}
+----
+1
+NULL
+NULL
+0
 
 query I
 SELECT s['b'] FROM ${source}
