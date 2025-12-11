@@ -750,7 +750,6 @@ public:
 				}
 			}
 
-			bail = !ShouldMaterialize(subplan_info);
 			if (bail) {
 				to_remove.push_back(signature);
 			}
