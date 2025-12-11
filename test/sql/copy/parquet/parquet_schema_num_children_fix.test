@@ -1,0 +1,128 @@
+# name: test/sql/copy/parquet/parquet_schema_num_children_fix.test
+# description: Test fix for Parquet schema parsing - correctly distinguish leaf vs inner nodes
+# group: [parquet]
+
+# This test validates the fix for the invalid check in parquet_reader.cpp
+#
+# BACKGROUND:
+# The Parquet format specification defines schema elements as either:
+# - Leaf nodes: Have a 'type' field set (primitive types like INT64, BYTE_ARRAY, etc.)
+# - Inner nodes (groups): Do NOT have a 'type' field set (contain child elements)
+#
+# THE BUG:
+# The original code at line 560 was:
+#   if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
+#
+# This incorrectly assumed that num_children == 0 meant the element was a leaf.
+# However, a schema element could be an inner node with num_children == 0 (an empty group).
+#
+# THE FIX:
+# We now correctly check __isset.type to determine if a node is a leaf:
+#   bool is_inner_node = !s_ele.__isset.type || (s_ele.__isset.num_children && s_ele.num_children > 0);
+#
+# This ensures we handle:
+# 1. Inner nodes with children (num_children > 0)
+# 2. Inner nodes without children (num_children == 0, no type set)
+# 3. Leaf nodes (type set)
+# 4. Backwards compatibility with non-standard Parquet files
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# Test 1: Verify the schema with EMPTY GROUP is correctly parsed
+# The file has an empty group 'inner' with num_children=0 and no type set
+# Old code would fail to recognize this as an inner node
+# New code correctly identifies it because !__isset.type
+
+# Schema structure:
+#   Row (root) - num_children=3
+#   ├─ id (INT64)
+#   ├─ nested (group) - num_children=1
+#   │  └─ inner (EMPTY GROUP) - num_children=0, no type  <-- THE KEY TEST CASE
+#   └─ optional_data (INT32)
+
+query I
+SELECT count(*) FROM parquet_schema('test/sql/copy/parquet/empty/empty_group_test.parquet');
+----
+5
+
+# Test 2: Verify the empty group is correctly identified in the schema
+query III
+SELECT name, type, num_children
+FROM parquet_schema('test/sql/copy/parquet/empty/empty_group_test.parquet')
+WHERE name = 'inner';
+----
+inner	NULL	0
+
+# Test 3: Read issue6990.parquet which has 412 columns
+# This file was failing before the fix due to the schema parsing issue
+query I
+SELECT count(*) FROM '{DATA_DIR}/parquet-testing/issue6990.parquet';
+----
+1
+
+# Test 4: Create our own nested structure and verify it round-trips
+statement ok
+CREATE TABLE test_nested AS SELECT
+    1 as id,
+    {'a': {'b': {'c': 123}}} as deep_nested,
+    {'x': 1, 'y': 2} as simple_struct;
+
+statement ok
+COPY test_nested TO '{TEMP_DIR}/test_nested.parquet' (FORMAT PARQUET);
+
+query III
+SELECT * FROM '{TEMP_DIR}/test_nested.parquet';
+----
+1	{'a': {'b': {'c': 123}}}	{'x': 1, 'y': 2}
+
+# Test 5: Verify parquet_metadata works on files with complex schemas
+query I
+SELECT count(*) > 0 FROM parquet_metadata('{TEMP_DIR}/test_nested.parquet');
+----
+true
+
+# Test 6: Test with LIST types (which create groups in Parquet schema)
+statement ok
+CREATE TABLE test_lists AS SELECT
+    [1, 2, 3] as simple_list,
+    [{'x': 1}, {'x': 2}] as list_of_structs,
+    [[1, 2], [3, 4]] as nested_list;
+
+statement ok
+COPY test_lists TO '{TEMP_DIR}/test_lists.parquet' (FORMAT PARQUET);
+
+query III
+SELECT * FROM '{TEMP_DIR}/test_lists.parquet';
+----
+[1, 2, 3]	[{'x': 1}, {'x': 2}]	[[1, 2], [3, 4]]
+
+# Test 7: Verify MAP types work (maps are represented as groups with key-value pairs)
+statement ok
+CREATE TABLE test_maps AS SELECT
+    MAP {'a': 1, 'b': 2} as simple_map,
+    MAP {'nested': {'inner': 123}} as map_of_struct;
+
+statement ok
+COPY test_maps TO '{TEMP_DIR}/test_maps.parquet' (FORMAT PARQUET);
+
+query II
+SELECT * FROM '{TEMP_DIR}/test_maps.parquet';
+----
+{a=1, b=2}	{nested={'inner': 123}}
+
+# Test 8: Ensure we handle optional/nullable groups correctly
+statement ok
+CREATE TABLE test_nullable AS SELECT
+    {'a': NULL, 'b': 2} as partial_null,
+    NULL::STRUCT(x INT, y INT) as full_null;
+
+statement ok
+COPY test_nullable TO '{TEMP_DIR}/test_nullable.parquet' (FORMAT PARQUET);
+
+query II
+SELECT * FROM '{TEMP_DIR}/test_nullable.parquet';
+----
+{'a': NULL, 'b': 2}	NULL
