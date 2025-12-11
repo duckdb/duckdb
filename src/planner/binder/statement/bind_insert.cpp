@@ -522,10 +522,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		// inserting into a non-temporary table: alters underlying database
 		auto &properties = GetStatementProperties();
 		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
-		auto storage_info = table.GetStorageInfo(context);
-		if (!storage_info.index_info.empty()) {
-			modification_type = DatabaseModificationType::INSERT_DATA_WITH_INDEX;
-		}
 		properties.RegisterDBModify(table.catalog, context, modification_type);
 	}
 
