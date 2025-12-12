@@ -152,6 +152,7 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
+	static bool TryNegateValue(Value &val);
 
 	// Registration methods
 	void RegisterAlter();

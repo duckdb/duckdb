@@ -76,13 +76,6 @@
       ]
     },
     {
-      "reason": "Conversion Error",
-      "paths": [
-        "test/sql/storage/types/struct/wal_struct_storage.test",
-        "test/sql/storage/types/struct/struct_storage.test"
-      ]
-    },
-    {
       "reason": "Error handling",
       "paths": [
         "test/sql/error/error_position.test",
