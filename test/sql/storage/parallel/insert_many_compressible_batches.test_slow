@@ -2,8 +2,6 @@
 # description: Test writing many compressible batches
 # group: [parallel]
 
-# Note that this test is fairly slow (+10 seconds).
-
 require vector_size 512
 
 require parquet
