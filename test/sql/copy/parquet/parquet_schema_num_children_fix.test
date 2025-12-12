@@ -44,14 +44,14 @@ PRAGMA enable_verification
 #   └─ optional_data (INT32)
 
 query I
-SELECT count(*) FROM parquet_schema('{DATA_DIR}/parquet-testing/empty_group_test.parquet');
+SELECT count(*) FROM parquet_schema('{DATA_DIR}/parquet-testing/empty-group/empty_group_test.parquet');
 ----
 5
 
 # Test 2: Verify the empty group is correctly identified in the schema
 query III
 SELECT name, type, num_children
-FROM parquet_schema('{DATA_DIR}/parquet-testing/empty_group_test.parquet')
+FROM parquet_schema('{DATA_DIR}/parquet-testing/empty-group/empty_group_test.parquet')
 WHERE name = 'inner';
 ----
 inner	NULL	0
