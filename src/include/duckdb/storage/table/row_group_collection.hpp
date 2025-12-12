@@ -155,6 +155,8 @@ public:
 		return row_group_size;
 	}
 	void SetAppendRequiresNewRowGroup();
+	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
+	idx_t GetSegmentCount();
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
@@ -184,9 +186,8 @@ private:
 	atomic<idx_t> allocation_size;
 	//! Root metadata pointer, if the collection is loaded from disk
 	MetaBlockPointer metadata_pointer;
-	//! The last row group index that was checkpointed
-	//! When attempting to append, we CANNOT do in-place appends to row-groups lower than this index
-	optional_idx checkpointed_row_group_idx;
+	//! Whether or not we need to append a new row group prior to appending
+	bool requires_new_row_group;
 };
 
 } // namespace duckdb

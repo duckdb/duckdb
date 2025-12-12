@@ -1020,7 +1020,7 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 	state.current_row = state.row_start;
 	auto &transaction_manager = transaction.GetTransactionManager();
 	auto active_checkpoint = transaction_manager.GetActiveCheckpoint();
-	if (info->IsUnseenCheckpoint(active_checkpoint)) {
+	if (info->AppendRequiresNewRowGroup(*row_groups, active_checkpoint)) {
 		// there is a checkpoint active while we are appending
 		// in this case we cannot just blindly append to the last row group, because we need to checkpoint that
 		// always start a new row group in this case
@@ -1028,17 +1028,21 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 	}
 }
 
-bool DataTableInfo::IsUnseenCheckpoint(transaction_t checkpoint_id) {
+bool DataTableInfo::AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id) {
 	if (checkpoint_id == MAX_TRANSACTION_ID) {
 		// no active checkpoint
 		return false;
 	}
+	auto current_segment_count = collection.GetSegmentCount();
 	if (last_seen_checkpoint.IsValid() && last_seen_checkpoint.GetIndex() == checkpoint_id) {
 		// we have already seen this checkpoint
-		return false;
+		// however, we might still need to append a new row group if a previous append was reverted
+		return current_segment_count <= checkpoint_row_group_count.GetIndex();
 	}
-	// we have not yet seen this checkpoint
+	// we have not yet seen this checkpoint - we need to append a new row group
+	// store the id and the segment count
 	last_seen_checkpoint = checkpoint_id;
+	checkpoint_row_group_count = current_segment_count;
 	return true;
 }
 
