@@ -42,8 +42,9 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
-	//! The number of scanned rows.
+
 	idx_t rows_scanned = 0;
+	idx_t rows_in_current_row_group = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -299,7 +300,7 @@ public:
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
-		storage.NextParallelScan(context.client, state, l_state->scan_state);
+		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
@@ -311,12 +312,6 @@ public:
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-		idx_t current_row_group_size = 0;
-		if (l_state.scan_state.table_state.row_group && l_state.scan_state.table_state.row_group->HasNode()) {
-			current_row_group_size = l_state.scan_state.table_state.row_group->GetCount();
-		} else if (l_state.scan_state.local_state.row_group && l_state.scan_state.local_state.row_group->HasNode()) {
-			current_row_group_size = l_state.scan_state.local_state.row_group->GetCount();
-		}
 
 		do {
 			if (bind_data.is_create_index) {
@@ -333,20 +328,20 @@ public:
 				return;
 			}
 
-			// We have processed a row group. Add to scanned_rows
-			l_state.rows_scanned += current_row_group_size;
+			// We have fully processed a row group. Add to scanned_rows
+			l_state.rows_scanned += l_state.rows_in_current_row_group;
+			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
 
-			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
-				if (!next) {
+				if (l_state.rows_in_current_row_group == 0) {
 					data_p.async_result = AsyncResultType::FINISHED;
 				} else {
 					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
 				}
 				return;
 			}
-			if (!next) {
+			if (l_state.rows_in_current_row_group == 0) {
 				return;
 			}
 
