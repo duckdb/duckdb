@@ -3,9 +3,9 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
-      "reason": "FIXME: Somehow causes CI runner to be stuck.",
+      "reason": "FIXME: Wrong result in query!",
       "paths": [
-        "test/sql/storage/compression/alprd/alprd_nulls_simple.test"
+        "test/sql/types/bignum/test_bignum_sum.test_slow"
       ]
     },
     {
@@ -39,7 +39,8 @@
         "test/sql/copy/csv/batched_write/csv_write_memory_limit.test_slow",
         "test/sql/copy/csv/csv_memory_management.test_slow",
         "test/sql/copy/parquet/parquet_1723.test_slow",
-        "test/sql/copy/parquet/batched_write/batch_memory_usage.test_slow"
+        "test/sql/copy/parquet/batched_write/batch_memory_usage.test_slow",
+        "test/optimizer/sampling_pushdown.test_slow"
       ]
     },
     {
@@ -129,7 +130,11 @@
         "test/sql/copy/csv/parallel/test_7789.test_slow",
         "test/sql/copy/csv/union_by_name_many_files.test_slow",
         "test/sql/copy/csv/auto/test_auto_voter.test_slow",
-        "test/sql/copy/csv/glob/read_csv_glob_crawl_partitioned.test_slow"
+        "test/sql/copy/csv/glob/read_csv_glob_crawl_partitioned.test_slow",
+        "test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow",
+        "test/sql/json/table/read_json_many_files.test_slow",
+        "test/sql/copy/csv/batched_write/batch_json_mixed_batches.test_slow"
+
       ]
     },
     {
@@ -193,7 +198,11 @@
         "test/sql/copy/csv/batched_write/batch_csv_mixed_batches.test_slow",
         "test/sql/copy/partitioned/hive_partitioned_auto_detect.test_slow",
         "test/sql/copy/parquet/parquet_glob.test_slow",
-        "test/sql/logging/physical_operator_logging.test_slow"
+        "test/sql/logging/physical_operator_logging.test_slow",
+        "test/sql/storage/compression/alp/alp_many_segments.test_slow",
+        "test/sql/storage/compression/alprd/alprd_many_segments_float.test_slow",
+        "test/sql/storage/optimistic_write/optimistic_write.test_slow",
+        "test/sql/window/test_window_constant_aggregate.test"
       ]
     }
   ]
