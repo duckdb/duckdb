@@ -393,13 +393,17 @@ static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t f
 	return static_cast<idx_t>(std::distance(column_ids.begin(), it));
 }
 
-static ColumnIndex PathToIndex(const vector<idx_t> &path) {
+static ColumnIndex PathToIndex(const vector<idx_t> &path, optional_ptr<unique_ptr<Expression>> cast_expression) {
 	D_ASSERT(!path.empty());
 	ColumnIndex index = ColumnIndex(path[0]);
 	reference<ColumnIndex> current(index);
 	for (idx_t i = 1; i < path.size(); i++) {
 		current.get().AddChildIndex(ColumnIndex(path[i]));
 		current = current.get().GetChildIndex(0);
+	}
+	if (cast_expression) {
+		auto &cast = *cast_expression;
+		current.get().SetType(cast->return_type);
 	}
 	return index;
 }
@@ -812,7 +816,7 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression,
 		top_level.cast = cast_expression;
 	}
 
-	auto index = PathToIndex(indexes);
+	auto index = PathToIndex(indexes, cast_expression);
 	AddBinding(*colref, std::move(index), expressions);
 	return true;
 }
