@@ -796,9 +796,11 @@ static void PrintCtrlDHint() {
 	if (hc == INVALID_HANDLE_VALUE) {
 		return;
 	}
-	WriteConsoleA(hc, msg.c_str(), msg.length(), nullptr, nullptr);
+	auto status = WriteConsoleA(hc, msg.c_str(), static_cast<DWORD>(msg.length()), nullptr, nullptr);
+	(void)status;
 #else  // !_WIN32
-	write(STDERR_FILENO, msg.c_str(), msg.length());
+	auto written = write(STDERR_FILENO, msg.c_str(), msg.length());
+	(void)written;
 #endif // _WIN32
 }
 
