@@ -409,8 +409,10 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
-	strcpy(continuePrompt, "· ");
+	strcpy(continuePrompt, "  ");
 	strcpy(continuePromptSelected, "‣ ");
+	strcpy(scrollUpPrompt, "⇡ ");
+	strcpy(scrollDownPrompt, "⇣ ");
 }
 
 ShellState::~ShellState() {
@@ -3007,7 +3009,7 @@ void ShellState::Initialize() {
 	}
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
-		linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+		linenoiseSetPrompt(continuePrompt, continuePromptSelected, scrollUpPrompt, scrollDownPrompt);
 	}
 #endif
 }

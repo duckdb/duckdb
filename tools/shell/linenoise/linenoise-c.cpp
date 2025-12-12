@@ -120,8 +120,9 @@ void linenoiseSetCompletionRendering(int enabled) {
 	}
 }
 
-void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
-	Linenoise::SetPrompt(continuation, continuationSelected);
+void linenoiseSetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUp,
+                        const char *scrollDown) {
+	Linenoise::SetPrompt(continuation, continuationSelected, scrollUp, scrollDown);
 }
 
 /* This function is used by the callback function registered by the user

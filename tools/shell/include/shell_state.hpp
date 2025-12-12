@@ -245,8 +245,14 @@ public:
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
 	unique_ptr<Prompt> main_prompt;
-	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
-	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Continuation prompt
+	char continuePrompt[MAX_PROMPT_SIZE];
+	//! Selected continuation prompt
+	char continuePromptSelected[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available up
+	char scrollUpPrompt[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available down
+	char scrollDownPrompt[MAX_PROMPT_SIZE];
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
 	//! User-configured highlight elements

@@ -68,6 +68,8 @@ struct TabCompletion {
 	vector<Completion> completions;
 };
 
+enum class RenderTruncation { NO_TRUNCATE, TRUNCATE_TOP, TRUNCATE_BOTTOM, TRUNCATE_BOTH };
+
 struct BufferedKeyPresses {
 public:
 	static BufferedKeyPresses &Get();
@@ -93,7 +95,8 @@ public:
 
 	static void SetCompletionCallback(linenoiseCompletionCallback *fn);
 
-	static void SetPrompt(const char *continuation, const char *continuationSelected);
+	static void SetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUpPrompt,
+	                      const char *scrollDownPrompt);
 	static size_t ComputeRenderWidth(const char *buf, size_t len);
 	static int GetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 
@@ -157,8 +160,8 @@ public:
 	size_t ColAndRowToPosition(int target_row, int target_col) const;
 	static bool HandleANSIEscape(const char *buf, size_t len, size_t &cpos);
 
-	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
-	                              vector<highlightToken> &tokens) const;
+	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row, idx_t rows_to_render,
+	                              vector<highlightToken> &tokens, RenderTruncation truncation) const;
 	void AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
 
 	bool AddCompletionMarker(const char *buf, idx_t len, string &result_buffer, vector<highlightToken> &tokens) const;
