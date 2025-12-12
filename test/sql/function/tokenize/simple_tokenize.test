@@ -2,6 +2,8 @@
 # description: Test sql_tokenize
 # group: [tokenize]
 
+require no_extension_autoloading "FIXME: autocomplete is not included in auto loading tests"
+
 require autocomplete
 
 query III
