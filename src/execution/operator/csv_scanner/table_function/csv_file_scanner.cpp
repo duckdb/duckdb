@@ -21,7 +21,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
 	// Initialize State Machine
-	auto &state_machine_cache = CSVStateMachineCache::Get(context);
+	auto state_machine_cache = CSVStateMachineCache::Get(context);
 
 	SetNamesAndTypes(names, types);
 	if (options.auto_detect) {
@@ -46,7 +46,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
 		options.dialect_options.state_machine_options.new_line = CSVSniffer::DetectNewLineDelimiter(*buffer_manager);
 	}
 	state_machine = make_shared_ptr<CSVStateMachine>(
-	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
+	    state_machine_cache->Get(options.dialect_options.state_machine_options), options);
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, const CSVReaderOptions &options_p,
@@ -59,7 +59,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
 	file_size = buffer_manager->file_handle->FileSize();
 	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
 	// error out during scanning)
-	auto &state_machine_cache = CSVStateMachineCache::Get(context);
+	auto state_machine_cache = CSVStateMachineCache::Get(context);
 	// We sniff file if it has not been sniffed yet and either auto-detect is on, or union by name is on
 	if ((options.auto_detect || file_options.union_by_name) && options.dialect_options.num_cols == 0) {
 		CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache);
@@ -74,7 +74,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
 	}
 	// Initialize State Machine
 	state_machine = make_shared_ptr<CSVStateMachine>(
-	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
+	    state_machine_cache->Get(options.dialect_options.state_machine_options), options);
 	SetStart();
 }
 

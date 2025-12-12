@@ -66,7 +66,7 @@ public:
 	~CSVStateMachineCache() override = default;
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
-	static CSVStateMachineCache &Get(ClientContext &context);
+	static shared_ptr<CSVStateMachineCache> Get(ClientContext &context);
 
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.

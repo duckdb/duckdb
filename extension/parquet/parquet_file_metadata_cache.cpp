@@ -25,10 +25,9 @@ idx_t ParquetFileMetadataCache::GetRoughCacheMemory() const {
 	// Base memory consumption
 	idx_t memory = sizeof(*this);
 
-	// Estimate metadata size - rough approximation
 	if (metadata) {
-		// Base metadata structure size + row groups + columns
-		memory += 1024; // Base overhead
+		// Base overhead
+		memory += 1024;
 		// Estimate ~1KB per row group + column stats
 		memory += metadata->row_groups.size() * 1024;
 		// Column schema information
