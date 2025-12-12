@@ -1,5 +1,6 @@
 #include "duckdb/main/query_profiler.hpp"
 
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
@@ -395,22 +396,22 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		auto &info = GetOperatorInfo(*active_operator);
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_TIMING)) {
 			op.End();
-			info.AddTime(op.Elapsed());
+			info.AddMetric(MetricType::OPERATOR_TIMING, op.Elapsed());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_CARDINALITY) && chunk) {
-			info.AddReturnedElements(chunk->size());
+			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
-			info.AddResultSetSize(result_set_size);
+			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
 			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
-			info.UpdateSystemPeakBufferManagerMemory(used_memory);
+			info.AddMetric(MetricType::SYSTEM_PEAK_BUFFER_MEMORY, used_memory);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
 			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
-			info.UpdateSystemPeakTempDirectorySize(used_swap);
+			info.AddMetric(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE, used_swap);
 		}
 	}
 	active_operator = nullptr;
@@ -445,7 +446,7 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 			const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
 			if (rows_scanned.IsValid()) {
 				auto &info = GetOperatorInfo(*active_operator);
-				info.AddRowsScanned(rows_scanned.GetIndex());
+				info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, rows_scanned.GetIndex());
 			}
 		}
 	}
