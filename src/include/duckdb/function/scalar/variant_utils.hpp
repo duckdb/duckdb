@@ -99,6 +99,8 @@ struct VariantUtils {
 	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
 	DUCKDB_API static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
 	                                           SelectionVector &sel, idx_t sel_size);
+	DUCKDB_API static void VariantExtract(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
+	                                      idx_t count);
 };
 
 } // namespace duckdb

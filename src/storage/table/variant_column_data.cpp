@@ -101,6 +101,9 @@ Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	if (IsShredded()) {
+		if (state.storage_index.IsPushdownExtract()) {
+			throw InternalException("TODO: PushdownExtract on shredded VARIANT not implemented yet");
+		}
 		auto intermediate = CreateUnshreddingIntermediate(target_count);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], *child_vectors[0], target_count);
@@ -110,10 +113,32 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
 		return scan_count;
 	}
-	if (state.storage_index.HasChildren()) {
+	if (state.storage_index.IsPushdownExtract()) {
 		Vector intermediate(LogicalType::VARIANT(), target_count);
 		auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], intermediate, target_count);
 		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], intermediate, target_count);
+
+		Vector extract_intermediate(LogicalType::VARIANT(), target_count);
+		vector<VariantPathComponent> components;
+		reference<const StorageIndex> path_iter(state.storage_index.GetChildIndex(0));
+
+		while (true) {
+			auto &current = path_iter.get();
+			auto &field_name = current.GetFieldName();
+			components.emplace_back(field_name);
+			if (!current.HasChildren()) {
+				break;
+			}
+			path_iter = current.GetChildIndex(0);
+		}
+		VariantUtils::VariantExtract(intermediate, components, extract_intermediate, target_count);
+
+		if (result.GetType().id() != LogicalTypeId::VARIANT) {
+			//! FIXME: this is an optional ptr.. when is it not set??
+			VectorOperations::Cast(*state.context.GetClientContext(), extract_intermediate, result, target_count);
+		} else {
+			result.Reference(extract_intermediate);
+		}
 		return scan_count;
 	}
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
