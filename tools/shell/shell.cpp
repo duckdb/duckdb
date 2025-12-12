@@ -785,9 +785,7 @@ string ShellState::EscapeCString(const string &str) {
 }
 
 /**
- ** This routine may be called from the signal handler,
- ** POSIX 'write' and WinAPI 'WriteConsole' are supposed
- ** to be safe to be used from there.
+ ** Uses non-buffered output calls (that are also signal-safe) to print the message.
  */
 static void PrintCtrlDHint() {
 	string msg = "Interrupted, use Ctrl+D to exit\n";
@@ -811,11 +809,11 @@ static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
+	if (state.seenInterrupt > 2) {
+		exit(1);
+	}
 	if (state.conn) {
 		state.conn->Interrupt();
-	}
-	if (state.seenInterrupt > 2) {
-		PrintCtrlDHint();
 	}
 }
 
