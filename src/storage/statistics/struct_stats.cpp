@@ -140,13 +140,20 @@ void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &stats, const StorageIndex &index) {
 	D_ASSERT(index.GetPrimaryIndex() < StructType::GetChildCount(stats.type));
 	auto &child_stats = GetChildStats(stats, index.GetPrimaryIndex());
+	auto &child_types = StructType::GetChildTypes(stats.type);
 
 	auto &child_indexes = index.GetChildIndexes();
 	if (child_indexes.empty()) {
 		return child_stats.ToUnique();
 	} else {
 		D_ASSERT(child_indexes.size() == 1);
-		return child_stats.PushdownExtract(child_indexes[0]);
+		auto &child_index = child_indexes[0];
+		auto res = child_stats.PushdownExtract(child_index);
+		auto &child_type = child_types[child_index.GetPrimaryIndex()].second;
+		if (child_index.GetType() != child_type) {
+			throw InternalException("CAST STAT PUSHDOWN");
+		}
+		return res;
 	}
 }
 
