@@ -171,15 +171,12 @@ vector<string> SplitQueryStringIntoStatements(const string &query) {
 	auto tokens = Parser::Tokenize(query);
 	idx_t next_statement_start = 0;
 	for (idx_t i = 1; i < tokens.size(); ++i) {
-		auto &t_prev = tokens[i - 1];
 		auto &t = tokens[i];
-		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
+		if (t.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
 			// LCOV_EXCL_START
-			for (idx_t c = t_prev.start; c <= t.start; ++c) {
-				if (query.c_str()[c] == ';') {
-					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
-					next_statement_start = tokens[i].start;
-				}
+			if (query.c_str()[t.start] == ';') {
+				query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
+				next_statement_start = tokens[i].start;
 			}
 			// LCOV_EXCL_STOP
 		}
