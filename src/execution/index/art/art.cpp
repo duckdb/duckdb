@@ -1051,6 +1051,15 @@ idx_t ART::GetInMemorySize(IndexLock &index_lock) {
 	return in_memory_size;
 }
 
+bool ART::RequiresTransactionality() const {
+	return true;
+}
+
+unique_ptr<BoundIndex> ART::CreateEmptyCopy(const string &name_prefix, IndexConstraintType constraint_type) const {
+	return make_uniq<ART>(name_prefix + name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions,
+	                      db);
+}
+
 //===-------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//

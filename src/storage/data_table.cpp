@@ -359,9 +359,17 @@ void DataTable::VacuumIndexes() {
 }
 
 void DataTable::VerifyIndexBuffers() {
-	info->indexes.Scan([&](Index &index) {
+	info->VerifyIndexBuffers();
+}
+
+void DataTableInfo::VerifyIndexBuffers() {
+	indexes.ScanEntries([&](IndexEntry &entry) {
+		auto &index = *entry.index;
 		if (index.IsBound()) {
 			index.Cast<BoundIndex>().VerifyBuffers();
+		}
+		if (entry.deleted_rows_in_use) {
+			entry.deleted_rows_in_use->VerifyBuffers();
 		}
 		return false;
 	});
@@ -1256,7 +1264,7 @@ ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes
 	                       index_append_mode);
 }
 
-void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
+void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	D_ASSERT(IsMainTable());
 	if (info->indexes.Empty()) {
 		return;
@@ -1266,24 +1274,22 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	// now remove the entries from the indices
-	RemoveFromIndexes(state, chunk, row_identifiers);
+	RevertIndexAppend(state, chunk, row_identifiers);
 }
 
-void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
+void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	D_ASSERT(IsMainTable());
 	info->indexes.Scan([&](Index &index) {
-		if (!index.IsBound()) {
-			throw InternalException("Unbound index found in DataTable::RemoveFromIndexes");
-		}
-		auto &bound_index = index.Cast<BoundIndex>();
-		bound_index.Delete(chunk, row_identifiers);
+		auto &main_index = index.Cast<BoundIndex>();
+		main_index.Delete(chunk, row_identifiers);
 		return false;
 	});
 }
 
-void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count) {
+void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
+                                  IndexRemovalType removal_type) {
 	D_ASSERT(IsMainTable());
-	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count);
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type);
 }
 
 //===--------------------------------------------------------------------===//

@@ -130,6 +130,13 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock.
 	void Vacuum();
 
+	//! Whether or not the index requires transactionality. If true we will create delta indexes
+	virtual bool RequiresTransactionality() const;
+	//! Creates an empty copy of the index with the same schema, etc, but a different constraint type
+	//! This will only be called if RequiresTransactionality returns true
+	virtual unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
+	                                               IndexConstraintType constraint_type) const;
+
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
 	virtual idx_t GetInMemorySize(IndexLock &state) = 0;
 	//! Returns the in-memory usage of the index
