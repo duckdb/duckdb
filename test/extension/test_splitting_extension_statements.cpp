@@ -33,10 +33,6 @@ TEST_CASE("Parser Extension query splitting", "[parser-extension]") {
 
 	Parser parser {options};
 	REQUIRE_NOTHROW(parser.ParseQuery(query));
-	for (uint64_t i = 0; i < parser.statements.size(); i++) {
-		auto &stmt = parser.statements[i];
-		duckdb::Printer::PrintF("Parsed query %llu: %s\n", i, stmt->query.c_str());
-	}
 	REQUIRE(parser.statements.size() == 1);
 }
 
@@ -60,11 +56,6 @@ TEST_CASE("Parser Extension multi-query splitting", "[parser-extension]") {
 
 	Parser parser {options};
 	REQUIRE_NOTHROW(parser.ParseQuery(multi_statement_query));
-
-	for (uint64_t i = 0; i < parser.statements.size(); i++) {
-		auto &stmt = parser.statements[i];
-		duckdb::Printer::PrintF("Parsed query %llu: %s\n", i, stmt->query.c_str());
-	}
 	REQUIRE(parser.statements.size() == 2);
 
 }
