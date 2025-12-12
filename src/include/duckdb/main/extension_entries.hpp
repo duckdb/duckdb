@@ -551,6 +551,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"skewness", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sleep_ms", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sql_auto_complete", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"sql_tokenize", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_attach", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_query", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_scan", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -794,6 +795,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"|", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"~", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
 }; // END_OF_EXTENSION_FUNCTIONS
+
 static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] = {
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP]>INTERVAL"},
     {"age", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY, "[TIMESTAMP,TIMESTAMP]>INTERVAL"},
