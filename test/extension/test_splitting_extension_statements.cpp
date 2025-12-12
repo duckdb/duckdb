@@ -22,13 +22,13 @@ TEST_CASE("Parser Extension query splitting", "[parser-extension]") {
 	options.extensions = &parser_extensions;
 
 	auto query = GENERATE( // Normal CTAS query
-		"create or replace table my_object as from (\n	select 1\n	where starts_with('name', "
+		"create or syntaxerror table my_object as from (\n	select 1\n	where starts_with('name', "
 		"'test_simple_share') -- ;	\n);",
 		// Extension query, replacing the table with result
 		"create or replace result my_object as from (\n	select 1\n	where starts_with('name', "
 		"'test_simple_share') -- ;	\n);",
 		// Trying other queries
-		"CREATE OR REPLACE TABLE my_object as FROM (SELECT 1); ; ; ;"
+		"CREATE OR replace result my_object as FROM (SELECT 1); -- ;"
 		);
 
 	Parser parser {options};
@@ -51,7 +51,7 @@ TEST_CASE("Parser Extension multi-query splitting", "[parser-extension]") {
 	options.extensions = &parser_extensions;
 
 	auto multi_statement_query = GENERATE( // Normal CTAS query
-		"CREATE OR REPLACE TABLE my_object as FROM (SELECT 1);SELECT 1;"
+		"CREATE OR REPLACE result my_object as FROM (SELECT 1); -- ; \n SELECT 1;"
 		);
 
 	Parser parser {options};
