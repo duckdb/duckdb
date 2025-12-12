@@ -26,7 +26,10 @@ TEST_CASE("Parser Extension query splitting", "[parser-extension]") {
 		"'test_simple_share') -- ;	\n);",
 		// Extension query, replacing the table with result
 		"create or replace result my_object as from (\n	select 1\n	where starts_with('name', "
-		"'test_simple_share') -- ;	\n);");
+		"'test_simple_share') -- ;	\n);",
+		// Trying other queries
+		"CREATE OR REPLACE TABLE my_object as FROM (SELECT 1); ; ; ;"
+		);
 
 	Parser parser {options};
 	REQUIRE_NOTHROW(parser.ParseQuery(query));
@@ -35,4 +38,33 @@ TEST_CASE("Parser Extension query splitting", "[parser-extension]") {
 		duckdb::Printer::PrintF("Parsed query %llu: %s\n", i, stmt->query.c_str());
 	}
 	REQUIRE(parser.statements.size() == 1);
+}
+
+TEST_CASE("Parser Extension multi-query splitting", "[parser-extension]") {
+	DuckDB db;
+	Connection conn(*db.instance);
+	ParserExtension parser_extension;
+	parser_extension.parse_function = [](ParserExtensionInfo *,
+										 const std::string &) -> ParserExtensionParseResult {
+		duckdb::unique_ptr<ParserExtensionParseData> empty_data {};
+		return ParserExtensionParseResult {std::move(empty_data)};
+	};
+
+	ParserOptions options;
+	duckdb::vector<ParserExtension> parser_extensions {parser_extension};
+	options.extensions = &parser_extensions;
+
+	auto multi_statement_query = GENERATE( // Normal CTAS query
+		"CREATE OR REPLACE TABLE my_object as FROM (SELECT 1);SELECT 1;"
+		);
+
+	Parser parser {options};
+	REQUIRE_NOTHROW(parser.ParseQuery(multi_statement_query));
+
+	for (uint64_t i = 0; i < parser.statements.size(); i++) {
+		auto &stmt = parser.statements[i];
+		duckdb::Printer::PrintF("Parsed query %llu: %s\n", i, stmt->query.c_str());
+	}
+	REQUIRE(parser.statements.size() == 2);
+
 }
