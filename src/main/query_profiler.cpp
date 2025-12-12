@@ -442,7 +442,7 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROWS_SCANNED) &&
 		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
-			const auto rows_scanned = table_scan.GetRowsScanned(lstate);
+			const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
 			if (rows_scanned.IsValid()) {
 				auto &info = GetOperatorInfo(*active_operator);
 				info.AddRowsScanned(rows_scanned.GetIndex());

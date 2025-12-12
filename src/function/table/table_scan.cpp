@@ -56,6 +56,7 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	//! The column IDs of the local storage scan.
 	vector<StorageIndex> column_ids;
 	bool in_charge_of_final_stretch {false};
+	idx_t rows_scanned = 0;
 };
 
 static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
@@ -103,6 +104,7 @@ public:
 	virtual double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const = 0;
 	virtual OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                        TableFunctionGetPartitionInput &input) = 0;
+	virtual idx_t TableScanRowsScanned(LocalTableFunctionState &state) = 0;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -215,6 +217,9 @@ public:
 				} else {
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
+
+				l_state.rows_scanned += scan_count;
+
 				if (output.size() == 0) {
 					if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 						// We can avoid looping, and just return as appropriate
@@ -238,6 +243,7 @@ public:
 					} else {
 						local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
 					}
+					l_state.rows_scanned += output.size();
 				}
 				return;
 			}
@@ -258,6 +264,11 @@ public:
 	                                                TableFunctionGetPartitionInput &input) override {
 		auto &l_state = input.local_state->Cast<IndexScanLocalState>();
 		return OperatorPartitionData(l_state.batch_index);
+	}
+
+	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
+		auto &l_state = state.Cast<IndexScanLocalState>();
+		return l_state.rows_scanned;
 	}
 };
 
@@ -376,6 +387,11 @@ public:
 			                             l_state.scan_state.local_state.batch_index);
 		}
 		return OperatorPartitionData(0);
+	}
+
+	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
+		auto &l_state = state.Cast<TableScanLocalState>();
+		return l_state.rows_scanned;
 	}
 };
 
@@ -765,9 +781,9 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
-idx_t TableScanRowsScanned(LocalTableFunctionState &local_state) {
-	auto &state = local_state.Cast<TableScanLocalState>();
-	return state.rows_scanned;
+idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {
+	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
+	return gstate.TableScanRowsScanned(local_state);
 }
 
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {

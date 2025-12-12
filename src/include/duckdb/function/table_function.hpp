@@ -307,7 +307,8 @@ typedef double (*table_function_progress_t)(ClientContext &context, const Functi
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
-typedef idx_t (*table_function_rows_scanned_t)(LocalTableFunctionState &local_state);
+typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
+                                               LocalTableFunctionState &local_state);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);

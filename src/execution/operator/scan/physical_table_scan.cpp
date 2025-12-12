@@ -405,10 +405,11 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalS
 	return function.dynamic_to_string(input);
 }
 
-optional_idx PhysicalTableScan::GetRowsScanned(LocalSourceState &lstate) const {
+optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
 	if (function.rows_scanned) {
+		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.rows_scanned(*state.local_state);
+		return function.rows_scanned(*gstate.global_state, *state.local_state);
 	}
 	return optional_idx();
 }
