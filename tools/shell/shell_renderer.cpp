@@ -3,6 +3,7 @@
 #include "shell_state.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "shell_highlight.hpp"
+#include "duckdb/logging/log_storage.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -281,7 +282,7 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	auto varchar_chunk = make_uniq<duckdb::DataChunk>();
 	vector<duckdb::LogicalType> all_varchar;
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		all_varchar.emplace_back(duckdb::LogicalType::VARCHAR);
+		all_varchar.emplace_back(duckdb::LogicalType(duckdb::LogicalTypeId::VARCHAR));
 	}
 	varchar_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), all_varchar);
 
@@ -1264,7 +1265,7 @@ public:
 		vector<duckdb::LogicalType> all_json;
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 			if (!RequiresJSONCast(chunk.data[c].GetType())) {
-				all_json.emplace_back(duckdb::LogicalType::VARCHAR);
+				all_json.emplace_back(duckdb::LogicalType(duckdb::LogicalTypeId::VARCHAR));
 			} else {
 				all_json.emplace_back(duckdb::LogicalType::JSON());
 			}
@@ -1740,6 +1741,39 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 	default:
 		throw std::runtime_error("Unsupported mode for GetRenderer");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Shell Logging Storage
+//===--------------------------------------------------------------------===//
+
+void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+                                    const string &log_message, const duckdb::RegisteredLoggingContext &context) {
+	HighlightElementType element_type;
+	switch (level) {
+	case (duckdb::LogLevel::LOG_TRACE):
+		element_type = HighlightElementType::LOG_TRACE;
+		break;
+	case (duckdb::LogLevel::LOG_DEBUG):
+		element_type = HighlightElementType::LOG_DEBUG;
+		break;
+	case (duckdb::LogLevel::LOG_INFO):
+		element_type = HighlightElementType::LOG_INFO;
+		break;
+	case (duckdb::LogLevel::LOG_WARNING):
+		element_type = HighlightElementType::LOG_WARNING;
+		break;
+	case (duckdb::LogLevel::LOG_ERROR):
+	case (duckdb::LogLevel::LOG_FATAL):
+		element_type = HighlightElementType::ERROR_TOKEN;
+		break;
+	default:
+		throw std::runtime_error("Unsupported log level for WriteLogEntry");
+	}
+
+	const auto log_level = duckdb::EnumUtil::ToString(level);
+	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
+	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, HighlightElementType::NONE);
 }
 
 } // namespace duckdb_shell

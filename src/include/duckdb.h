@@ -900,7 +900,7 @@ struct duckdb_extension_access {
 	//! Indicate that an error has occurred.
 	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database on which to register the extension.
-	duckdb_database *(*get_database)(duckdb_extension_info info);
+	duckdb_database (*get_database)(duckdb_extension_info info);
 	//! Fetch the API struct pointer.
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
