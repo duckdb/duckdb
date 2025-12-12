@@ -311,7 +311,7 @@ public:
 	IEJoinGlobalState &gsink;
 
 	//! The processing stage
-	IEJoinSourceStage stage = IEJoinSourceStage::INIT;
+	atomic<IEJoinSourceStage> stage;
 	//! The the number of tasks per stage.
 	vector<idx_t> stage_tasks;
 	//! The the first task in the stage.
@@ -1367,7 +1367,7 @@ bool IEJoinGlobalSourceState::TryPrepareNextStage() {
 	//	Inside lock
 	const auto stage_count = GetStageCount(stage);
 	const auto stage_next = GetStageNext(stage).load();
-	switch (stage) {
+	switch (stage.load()) {
 	case IEJoinSourceStage::INIT:
 		stage = IEJoinSourceStage::SINK_L1;
 		return true;
@@ -1482,6 +1482,7 @@ bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 }
 
 bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
+	//	Inside lock
 	if (next_task >= GetTaskCount()) {
 		return false;
 	}
@@ -1499,7 +1500,7 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 		return false;
 	}
 
-	switch (stage) {
+	switch (stage.load()) {
 	case IEJoinSourceStage::SINK_L1:
 		task.l_range.first = MinValue(task.thread_idx * per_thread, left_blocks + right_blocks);
 		task.l_range.second = MinValue(task.l_range.first + per_thread, left_blocks + right_blocks);
