@@ -263,6 +263,17 @@ public:
 	~StreamingWindowState() override {
 	}
 
+	Value GetFirstValue(ClientContext &client, DataChunk &input, BoundWindowExpression &wexpr) const {
+		// Just execute the expression once
+		ExpressionExecutor executor(client);
+		executor.AddExpression(*wexpr.children[0]);
+		DataChunk result;
+		result.Initialize(client, {wexpr.children[0]->return_type});
+		executor.Execute(input, result);
+
+		return result.GetValue(0, 0);
+	}
+
 	void Initialize(ClientContext &context, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
 		const_vectors.resize(expressions.size());
 		aggregate_states.resize(expressions.size());
@@ -275,17 +286,11 @@ public:
 			case ExpressionType::WINDOW_AGGREGATE:
 				aggregate_states[expr_idx] = make_uniq<AggregateState>(context, wexpr, allocator);
 				break;
-			case ExpressionType::WINDOW_FIRST_VALUE: {
+			case ExpressionType::WINDOW_FIRST_VALUE:
+			case ExpressionType::WINDOW_LAST_VALUE:
 				// Just execute the expression once
-				ExpressionExecutor executor(context);
-				executor.AddExpression(*wexpr.children[0]);
-				DataChunk result;
-				result.Initialize(Allocator::Get(context), {wexpr.children[0]->return_type});
-				executor.Execute(input, result);
-
-				const_vectors[expr_idx] = make_uniq<Vector>(result.GetValue(0, 0));
+				const_vectors[expr_idx] = make_uniq<Vector>(GetFirstValue(context, input, wexpr));
 				break;
-			}
 			case ExpressionType::WINDOW_PERCENT_RANK: {
 				const_vectors[expr_idx] = make_uniq<Vector>(Value((double)0));
 				break;
@@ -342,7 +347,7 @@ public:
 
 bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
 	auto &wexpr = expr->Cast<BoundWindowExpression>();
-	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls || !wexpr.arg_orders.empty() ||
+	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
@@ -355,20 +360,30 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique
 		}
 		// We can stream aggregates if they are "running totals"
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
-	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		return true;
+	case ExpressionType::WINDOW_FIRST_VALUE:
+		if (wexpr.ignore_nulls) {
+			// We can stream first values ignoring NULLs if they are "running totals"
+			return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+		}
+		return true;
+	case ExpressionType::WINDOW_LAST_VALUE:
+		// We can stream last values if they are "running totals"
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
 	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_LEAD: {
-		// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
-		Value dflt;
-		int64_t offset;
-		return StreamingWindowState::LeadLagState::ComputeDefault(context, wexpr, dflt) &&
-		       StreamingWindowState::LeadLagState::ComputeOffset(context, wexpr, offset);
-	}
+	case ExpressionType::WINDOW_LEAD:
+		if (!wexpr.ignore_nulls) {
+			// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
+			Value dflt;
+			int64_t offset;
+			return StreamingWindowState::LeadLagState::ComputeDefault(context, wexpr, dflt) &&
+			       StreamingWindowState::LeadLagState::ComputeOffset(context, wexpr, offset);
+		}
+		return false;
 	default:
 		return false;
 	}
@@ -497,17 +512,89 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 	for (column_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		column_t col_idx = input_width + expr_idx;
 		auto &expr = *select_list[expr_idx];
+		auto &wexpr = expr.Cast<BoundWindowExpression>();
 		auto &result = output.data[col_idx];
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE:
 			state.aggregate_states[expr_idx]->Execute(context, output, result);
 			break;
-		case ExpressionType::WINDOW_FIRST_VALUE:
 		case ExpressionType::WINDOW_PERCENT_RANK:
 		case ExpressionType::WINDOW_RANK:
-		case ExpressionType::WINDOW_RANK_DENSE: {
+		case ExpressionType::WINDOW_RANK_DENSE:
 			// Reference constant vector
 			output.data[col_idx].Reference(*state.const_vectors[expr_idx]);
+			break;
+		case ExpressionType::WINDOW_FIRST_VALUE:
+			// If we are ignoring NULLs and we started with a NULL,
+			// then look for a non-NULL value and update it
+			if (wexpr.ignore_nulls && ConstantVector::IsNull(*state.const_vectors[expr_idx])) {
+				//	Find the first non-NULL value
+				ExpressionExecutor executor(context.client);
+				executor.AddExpression(*wexpr.children[0]);
+				Vector raw(wexpr.children[0]->return_type);
+				executor.ExecuteExpression(output, raw);
+				UnifiedVectorFormat unified;
+				raw.ToUnifiedFormat(count, unified);
+				const auto &validity = unified.validity;
+				auto &prev = *state.const_vectors[expr_idx];
+				if (validity.AllValid()) {
+					prev.Reference(raw.GetValue(0));
+					result.Reference(prev);
+				} else {
+					SelectionVector sel(count);
+					Vector split(wexpr.children[0]->return_type);
+					split.SetValue(0, prev.GetValue(0));
+					sel_t s = 0;
+					for (sel_t i = 0; i < count; ++i) {
+						if (!s && validity.RowIsValidUnsafe(i)) {
+							auto v = raw.GetValue(i);
+							prev.Reference(v);
+							s = 1;
+							split.SetValue(s, v);
+						}
+						sel.set_index(i, s);
+					}
+					result.Slice(split, sel, count);
+				}
+			} else {
+				// Reference constant vector
+				result.Reference(*state.const_vectors[expr_idx]);
+			}
+			break;
+		case ExpressionType::WINDOW_LAST_VALUE: {
+			//	Evaluate the argument and copy the values
+			ExpressionExecutor executor(context.client);
+			executor.AddExpression(*wexpr.children[0]);
+			if (wexpr.ignore_nulls) {
+				auto &prev = *state.const_vectors[expr_idx];
+				Vector raw(wexpr.children[0]->return_type);
+				executor.ExecuteExpression(output, raw);
+				UnifiedVectorFormat unified;
+				raw.ToUnifiedFormat(count, unified);
+				const auto &validity = unified.validity;
+				if (validity.AllValid()) {
+					VectorOperations::Copy(raw, result, count, 0, 0);
+				} else {
+					//	Overwrite the previous non-NULL value if the first one is NULL
+					if (!validity.RowIsValidUnsafe(0)) {
+						VectorOperations::Copy(prev, raw, 1, 0, 0);
+					}
+					//	Select appropriate the non-NULL values to copy over
+					SelectionVector sel(count);
+					sel_t non_null = 0;
+					for (sel_t i = 0; i < count; ++i) {
+						if (validity.RowIsValidUnsafe(i)) {
+							non_null = i;
+						}
+						sel.set_index(i, non_null);
+					}
+					result.Slice(raw, sel, count);
+				}
+				//	Remember the last non-NULL value for the next iteration
+				prev.Reference(result.GetValue(count - 1));
+			} else {
+				executor.ExecuteExpression(output, result);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
