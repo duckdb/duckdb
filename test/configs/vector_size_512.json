@@ -3,6 +3,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "FIXME: Somehow causes CI runner to be stuck.",
+      "paths": [
+        "test/sql/storage/compression/alprd/alprd_nulls_simple.test"
+      ]
+    },
+    {
       "reason": "Take longer than 60s with a relassert build.",
       "paths": [
         "test/sql/join/asof/test_asof_join.test_slow",

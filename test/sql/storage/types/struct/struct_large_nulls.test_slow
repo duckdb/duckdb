@@ -2,9 +2,6 @@
 # description: Test that we reclaim space when dropping tables with struct columns
 # group: [struct]
 
-# Too slow for any smaller vector sizes.
-require exact_vector_size 2048
-
 load __TEST_DIR__/test_struct_large_nulls.db
 
 statement ok
