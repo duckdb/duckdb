@@ -398,49 +398,49 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
 }
 
 bool PEGTransformerFactory::TryNegateValue(Value &val) {
-    switch (val.type().id()) {
-    case LogicalTypeId::INTEGER:
-        if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
-             val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
-             return true;
-        }
-        val = Value::INTEGER(-val.GetValue<int32_t>());
-        return true;
+	switch (val.type().id()) {
+	case LogicalTypeId::INTEGER:
+		if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
+			val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
+			return true;
+		}
+		val = Value::INTEGER(-val.GetValue<int32_t>());
+		return true;
 
-    case LogicalTypeId::BIGINT:
-        if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
-             val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
-             return true;
-        }
-        val = Value::BIGINT(-val.GetValue<int64_t>());
-        return true;
+	case LogicalTypeId::BIGINT:
+		if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
+			val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
+			return true;
+		}
+		val = Value::BIGINT(-val.GetValue<int64_t>());
+		return true;
 
-    case LogicalTypeId::HUGEINT:
-        val = Value::HUGEINT(-val.GetValue<hugeint_t>());
-        return true;
+	case LogicalTypeId::HUGEINT:
+		val = Value::HUGEINT(-val.GetValue<hugeint_t>());
+		return true;
 
-    case LogicalTypeId::UHUGEINT: {
-        auto uval = val.GetValue<uhugeint_t>();
-        uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
+	case LogicalTypeId::UHUGEINT: {
+		auto uval = val.GetValue<uhugeint_t>();
+		uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
 
-        if (uval == abs_min_hugeint) {
-            val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
-            return true;
-        }
-        if (uval < abs_min_hugeint) {
-             val = Value::HUGEINT(-((hugeint_t)uval));
-             return true;
-        }
+		if (uval == abs_min_hugeint) {
+			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+			return true;
+		}
+		if (uval < abs_min_hugeint) {
+			val = Value::HUGEINT(-((hugeint_t)uval));
+			return true;
+		}
 
-        return false;
-    }
+		return false;
+	}
 
-    case LogicalTypeId::DOUBLE:
-        val = Value::DOUBLE(-val.GetValue<double>());
-        return true;
-    default:
-        return false;
-    }
+	case LogicalTypeId::DOUBLE:
+		val = Value::DOUBLE(-val.GetValue<double>());
+		return true;
+	default:
+		return false;
+	}
 }
 
 // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
