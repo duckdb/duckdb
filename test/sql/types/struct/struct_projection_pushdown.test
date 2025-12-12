@@ -112,6 +112,12 @@ SELECT a FROM (SELECT UNNEST(s) FROM ${source}) WHERE b
 ----
 42
 
+# Add a cast
+query I
+SELECT a::BIGINT FROM (SELECT UNNEST(s) FROM ${source}) WHERE b::INTEGER
+----
+42
+
 query I
 SELECT id FROM ${source} WHERE s.b
 ----

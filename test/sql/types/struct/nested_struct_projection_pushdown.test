@@ -52,8 +52,26 @@ NULL
 {'b': NULL, 'a': 84}
 {'b': false, 'a': NULL}
 
+# Add a cast to change the types of the shuffled fields
+query I
+select s.nested_struct::STRUCT(b INTEGER, a BIGINT) from ${source}
+----
+{'b': 1, 'a': 42}
+NULL
+{'b': NULL, 'a': 84}
+{'b': 0, 'a': NULL}
+
 query I
 SELECT s.nested_struct.a FROM ${source}
+----
+42
+NULL
+84
+NULL
+
+# Add a cast
+query I
+SELECT s.nested_struct.a::BIGINT FROM ${source}
 ----
 42
 NULL
@@ -68,13 +86,22 @@ NULL	NULL
 84	Row 3
 NULL	NULL
 
-query III
-SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct FROM ${source}
+query IIIII
+SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct.a, s.nested_struct, id FROM ${source}
 ----
-42	true	{'a': 42, 'b': true}
-NULL	NULL	NULL
-84	NULL	{'a': 84, 'b': NULL}
-NULL	false	{'a': NULL, 'b': false}
+42	true	42	{'a': 42, 'b': true}	1
+NULL	NULL	NULL	NULL	2
+84	NULL	84	{'a': 84, 'b': NULL}	3
+NULL	false	NULL	{'a': NULL, 'b': false}	4
+
+# Add a cast on the fields
+query IIII
+SELECT s.nested_struct.a::BIGINT, s.nested_struct.b, s.nested_struct.a::TINYINT, id FROM ${source}
+----
+42	true	42	1
+NULL	NULL	NULL	2
+84	NULL	84	3
+NULL	false	NULL	4
 
 query II
 SELECT s.nested_struct.a, s.nested_struct FROM ${source}
@@ -86,6 +113,15 @@ NULL	{'a': NULL, 'b': false}
 
 query II
 SELECT s.nested_struct, s.nested_struct.a FROM ${source}
+----
+{'a': 42, 'b': true}	42
+NULL	NULL
+{'a': 84, 'b': NULL}	84
+{'a': NULL, 'b': false}	NULL
+
+# Add a cast
+query II
+SELECT s.nested_struct, s.nested_struct.a::VARCHAR FROM ${source}
 ----
 {'a': 42, 'b': true}	42
 NULL	NULL

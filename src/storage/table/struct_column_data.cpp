@@ -328,7 +328,8 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 		if (child_type != result.GetType()) {
 			Vector intermediate(child_type, 1);
 			sub_column.FetchRow(transaction, state, child_storage_index, row_id, intermediate, 0);
-			auto fetched_row = intermediate.GetValue(0).CastAs(*state.context.GetClientContext(), result.GetType());
+			auto context = transaction.transaction->context.lock();
+			auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
 			result.SetValue(result_idx, fetched_row);
 			return;
 		} else {
