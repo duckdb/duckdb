@@ -784,24 +784,6 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
-/**
- ** Uses non-buffered output calls (that are also signal-safe) to print the message.
- */
-static void PrintCtrlDHint() {
-	string msg = "Interrupted, use Ctrl+D to exit\n";
-#if (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
-	HANDLE hc = GetStdHandle(STD_ERROR_HANDLE);
-	if (hc == INVALID_HANDLE_VALUE) {
-		return;
-	}
-	auto status = WriteConsoleA(hc, msg.c_str(), static_cast<DWORD>(msg.length()), nullptr, nullptr);
-	(void)status;
-#else  // !_WIN32
-	auto written = write(STDERR_FILENO, msg.c_str(), msg.length());
-	(void)written;
-#endif // _WIN32
-}
-
 /*
 ** This routine runs when the user presses Ctrl-C
 */
@@ -2784,14 +2766,23 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			break;
 		}
+		// if we are receiving input after a query was interrupted
+		// we need to clear the interrupt flag to be able to
+		// print messages again
+		if (seenInterrupt) {
+			if (in) {
+				break;
+			}
+			seenInterrupt = 0;
+		}
 		if (*zLine == '\3') {
 			// ctrl c: reset sql statement
 			if (nSql == 0 && zLine[1] == '\0' && stdin_is_interactive) {
 				// if in interactive mode and we press ctrl c twice
-				// on an empty line, we exit
+				// on an empty line, we print the ctrl d hint message
 				numCtrlC++;
 				if (numCtrlC >= 2) {
-					PrintCtrlDHint();
+					Print("Interrupted, use Ctrl+D to exit\n");
 				}
 			}
 			nSql = 0;
@@ -2807,12 +2798,6 @@ int ShellState::ProcessInput(InputMode mode) {
 				displayed_loading_resources_message = true;
 			}
 			mode = InputMode::FILE;
-		}
-		if (seenInterrupt) {
-			if (in) {
-				break;
-			}
-			seenInterrupt = 0;
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {
