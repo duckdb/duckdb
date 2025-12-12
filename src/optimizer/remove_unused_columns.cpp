@@ -368,6 +368,9 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 		reference<const ColumnIndex> path_iter(full_path);
 		reference<ColumnIndex> copy_iter(copy);
 		while (true) {
+			if (path_iter.get().HasType()) {
+				copy_iter.get().SetType(path_iter.get().GetType());
+			}
 			entry = col.unique_paths.find(copy);
 			if (entry != col.unique_paths.end()) {
 				//! Path found, we're done
@@ -456,19 +459,22 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		auto &column_type = expr.return_type;
 		idx_t start = expressions.size();
 		//! Pushdown Extract is supported, emit a column for every field
-		WritePushdownExtractColumns(entry->first, entry->second, i, column_type,
-		                            [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
-			                            auto target =
-			                                make_uniq<BoundColumnRefExpression>(column_type, original_binding);
-			                            target->SetAlias(expr.GetAlias());
-			                            auto new_extract =
-			                                ConstructStructExtractFromPath(context, std::move(target), extract_path);
-			                            auto it = new_bindings.emplace(extract_path, expressions.size()).first;
-			                            if (it->second == expressions.size()) {
-				                            expressions.push_back(std::move(new_extract));
-			                            }
-			                            return it->second;
-		                            });
+		WritePushdownExtractColumns(
+		    entry->first, entry->second, i, column_type,
+		    [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
+			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
+			    target->SetAlias(expr.GetAlias());
+			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
+			    if (cast_type) {
+				    auto cast = BoundCastExpression::AddCastToType(context, std::move(new_extract), *cast_type);
+				    new_extract = std::move(cast);
+			    }
+			    auto it = new_bindings.emplace(extract_path, expressions.size()).first;
+			    if (it->second == expressions.size()) {
+				    expressions.push_back(std::move(new_extract));
+			    }
+			    return it->second;
+		    });
 		for (; start < expressions.size(); start++) {
 			VisitExpression(&expressions[start]);
 		}
@@ -826,6 +832,9 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	reference<const ColumnIndex> path_iter(path);
 	reference<ColumnIndex> copy_iter(copy);
 	while (true) {
+		if (path_iter.get().HasType()) {
+			copy_iter.get().SetType(path_iter.get().GetType());
+		}
 		//! Create a subset of the path up to an increasing depth, so we can check if the parent path already exists
 		if (unique_paths.count(copy)) {
 			//! The parent path already exists, don't add the new path
