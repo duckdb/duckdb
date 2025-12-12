@@ -409,7 +409,7 @@ size_t Linenoise::ColAndRowToPosition(int plen, const char *buf, idx_t len, int 
 		if (cols >= ws.ws_col) {
 			// exceeded width - move to next line
 			rows++;
-			cols = plen;
+			cols = 0;
 		}
 		if (rows > target_row) {
 			// we have skipped our target row - that means "target_col" was out of range for this row
