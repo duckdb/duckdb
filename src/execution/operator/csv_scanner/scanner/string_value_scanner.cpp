@@ -1817,14 +1817,14 @@ void StringValueScanner::SetStart() {
 	}
 	if (!state_machine_strict) {
 		// We need to initialize our strict state machine
-		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
+		auto state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
 		// To set the state machine to be strict we ensure that strict_mode is set to true
 		if (!state_options.strict_mode.IsSetByUser()) {
 			state_options.strict_mode = true;
 		}
 		state_machine_strict =
-		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
+		    make_shared_ptr<CSVStateMachine>(state_machine_cache->Get(state_options), state_machine->options);
 	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line

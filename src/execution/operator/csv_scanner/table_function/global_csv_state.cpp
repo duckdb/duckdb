@@ -6,6 +6,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,10 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions 
 	single_threaded = many_csv_files || !options.parallel;
 	scanner_idx = 0;
 	initialized = false;
+	if (options.store_rejects.GetValue()) {
+		rejects_table = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
+		                                             options.rejects_table_name.GetValue());
+	}
 }
 
 void CSVGlobalState::FinishTask(CSVFileScan &scan) {
@@ -174,12 +179,11 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	auto &options = csv_data.options;
 
-	if (!options.store_rejects.GetValue()) {
+	if (!options.store_rejects.GetValue() || rejects_table != nullptr) {
 		return;
 	}
 	auto limit = options.rejects_limit;
-	auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
-	                                            options.rejects_table_name.GetValue());
+	auto rejects = rejects_table;
 	lock_guard<mutex> lock(rejects->write_lock);
 	auto &errors_table = rejects->GetErrorsTable(context);
 	auto &scans_table = rejects->GetScansTable(context);

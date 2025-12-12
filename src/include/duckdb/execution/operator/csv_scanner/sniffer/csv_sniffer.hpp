@@ -74,7 +74,7 @@ struct HasType {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
-	                    shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache,
+	                    shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachineCache> state_machine_cache,
 	                    bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
@@ -112,7 +112,7 @@ private:
 	bool all_fail_max_line_size = true;
 	CSVError line_error;
 	//! CSV State Machine Cache
-	CSVStateMachineCache &state_machine_cache;
+	shared_ptr<CSVStateMachineCache> state_machine_cache;
 	//! Highest number of columns found
 	idx_t max_columns_found = 0;
 	idx_t max_columns_found_error = 0;
