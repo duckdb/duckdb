@@ -1144,6 +1144,35 @@ void Linenoise::HandleTerminalResize() {
 	}
 }
 
+BufferedKeyPresses::BufferedKeyPresses() {
+}
+
+BufferedKeyPresses &BufferedKeyPresses::Get() {
+	static BufferedKeyPresses buffered_key_presses;
+	return buffered_key_presses;
+}
+
+void BufferedKeyPresses::BufferKeyPress(KeyPress key_press) {
+	auto &instance = Get();
+	instance.remaining_presses.push(key_press);
+}
+
+bool BufferedKeyPresses::TryGetKeyPress(KeyPress &result) {
+	auto &instance = Get();
+	if (instance.remaining_presses.empty()) {
+		return false;
+	}
+	result = instance.remaining_presses.front();
+	instance.remaining_presses.pop();
+	Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(instance.remaining_presses.size()));
+	return true;
+}
+
+bool BufferedKeyPresses::HasMoreData() {
+	auto &instance = Get();
+	return !instance.remaining_presses.empty();
+}
+
 #if defined(_WIN32) || defined(WIN32)
 struct KeyPressEntry {
 	KeyPressEntry(KeyPress key_press) : is_unicode(false), key_press(key_press) {
@@ -1162,15 +1191,12 @@ struct KeyPressEntry {
 #endif
 
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
-#if defined(_WIN32) || defined(WIN32)
-	if (!remaining_presses.empty()) {
+	if (BufferedKeyPresses::TryGetKeyPress(key_press)) {
 		// there are still characters left to consume
-		key_press = remaining_presses.back();
-		remaining_presses.pop_back();
-		Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(remaining_presses.size()));
-		has_more_data = !remaining_presses.empty();
+		has_more_data = BufferedKeyPresses::HasMoreData();
 		return true;
 	}
+#if defined(_WIN32) || defined(WIN32)
 	INPUT_RECORD rec;
 	DWORD count;
 	has_more_data = false;
@@ -1292,13 +1318,11 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 		return false;
 	}
 	// we have key actions - turn them into KeyPress objects
-	// first invert the list
-	std::reverse(key_presses.begin(), key_presses.end());
 	// now process the key presses
 	for (auto &key_action : key_presses) {
 		if (!key_action.is_unicode) {
 			// standard key press - just add it
-			remaining_presses.push_back(key_action.key_press);
+			BufferedKeyPresses::BufferKeyPress(key_action.key_press);
 			continue;
 		}
 		auto allocate_size = key_action.unicode.size() * 10;
@@ -1340,15 +1364,17 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 			} else {
 				key_press.action = c;
 			}
-			remaining_presses.push_back(key_press);
+			BufferedKeyPresses::BufferKeyPress(key_action.key_press);
 		}
 	}
 
 	// emit the first key press on the stack
-	key_press = remaining_presses.back();
-	remaining_presses.pop_back();
-	has_more_data = !remaining_presses.empty();
-	return true;
+	if (BufferedKeyPresses::TryGetKeyPress(key_press)) {
+		// there are still characters left to consume
+		has_more_data = BufferedKeyPresses::HasMoreData();
+		return true;
+	}
+	return false;
 
 #else
 	char c;

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/queue.hpp"
 #include "terminal.hpp"
 #include "linenoise.h"
 
@@ -65,6 +66,22 @@ struct Completion {
 
 struct TabCompletion {
 	vector<Completion> completions;
+};
+
+struct BufferedKeyPresses {
+public:
+	static BufferedKeyPresses &Get();
+
+	static void BufferKeyPress(KeyPress key_press);
+	static bool TryGetKeyPress(KeyPress &result);
+	static bool HasMoreData();
+
+private:
+	//! Remaining key presses that haven't been consumed yet
+	queue<KeyPress> remaining_presses;
+
+private:
+	BufferedKeyPresses();
 };
 
 class Linenoise {
@@ -215,7 +232,6 @@ public:
 	optional_idx completion_idx;             //! Index in set of tab completions
 	idx_t rendered_completion_lines;         //! The number of completion lines rendered
 	bool render_completion_suggestion;       //! Whether or not to render auto-complete suggestions
-	vector<KeyPress> remaining_presses;      //! Remaining key presses that haven't been consumed yet
 };
 
 } // namespace duckdb
