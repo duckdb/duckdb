@@ -395,12 +395,10 @@ public:
 class PlanSignature {
 public:
 	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
-	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p,
-	              idx_t base_table_count_p, idx_t max_base_table_cardinality_p)
+	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
 	    : stream(stream_p), offset(offset_p), length(length_p),
 	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
-	      operator_count(operator_count_p), base_table_count(base_table_count_p),
-	      max_base_table_cardinality(max_base_table_cardinality_p) {
+	      operator_count(operator_count_p) {
 	}
 
 public:
@@ -432,34 +430,15 @@ public:
 
 		// Collect some statistics so we can select a good candidate later
 		idx_t operator_count = 1;
-		idx_t base_table_count = 0;
-		idx_t max_base_table_cardinality = 0;
-		if (op.children.empty()) {
-			base_table_count++;
-			if (op.has_estimated_cardinality) {
-				max_base_table_cardinality = op.estimated_cardinality;
-			}
-		}
 		for (auto &child_signature : child_signatures) {
 			operator_count += child_signature.get().OperatorCount();
-			base_table_count += child_signature.get().BaseTableCount();
-			max_base_table_cardinality =
-			    MaxValue(max_base_table_cardinality, child_signature.get().MaxBaseTableCardinality());
 		}
 		return state.allocator.MakePtr<PlanSignature>(state.stream, offset, length, std::move(child_signatures),
-		                                              operator_count, base_table_count, max_base_table_cardinality);
+		                                              operator_count);
 	}
 
 	idx_t OperatorCount() const {
 		return operator_count;
-	}
-
-	idx_t BaseTableCount() const {
-		return base_table_count;
-	}
-
-	idx_t MaxBaseTableCardinality() const {
-		return max_base_table_cardinality;
 	}
 
 	hash_t HashSignature() const {
@@ -547,8 +526,6 @@ private:
 
 	const vector<reference<PlanSignature>> child_signatures;
 	const idx_t operator_count;
-	const idx_t base_table_count;
-	const idx_t max_base_table_cardinality;
 };
 
 struct PlanSignatureHash {
@@ -615,6 +592,17 @@ private:
 
 		unique_ptr<LogicalOperator> &op;
 		idx_t child_index;
+	};
+
+	struct SubplanStats {
+		idx_t base_table_count;
+		idx_t max_base_table_cardinality;
+
+		void Combine(const SubplanStats &other) {
+			this->base_table_count += other.base_table_count;
+			this->max_base_table_cardinality =
+			    MaxValue(this->max_base_table_cardinality, other.max_base_table_cardinality);
+		}
 	};
 
 public:
@@ -795,6 +783,9 @@ public:
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
 				cte_refs.emplace_back(make_uniq<LogicalCTERef>(cte_ref_index, cte_index, types, col_names));
+				if (subplan.op.get()->has_estimated_cardinality) {
+					cte_refs.back()->SetEstimatedCardinality(subplan.op.get()->estimated_cardinality);
+				}
 				const auto old_bindings = subplan.op.get()->GetColumnBindings();
 				auto new_bindings = cte_refs.back()->GetColumnBindings();
 				if (old_bindings.size() != new_bindings.size()) {
@@ -932,7 +923,21 @@ private:
 		return CTEInlining::EndsInAggregateOrDistinct(*subplan) || IsSelectiveMultiTablePlan(subplan);
 	}
 
-	bool IsSelectiveMultiTablePlan(unique_ptr<LogicalOperator> &op) const {
+	static SubplanStats GetSubplanStats(const LogicalOperator &op) {
+		SubplanStats subplan_stats;
+		if (op.children.empty()) {
+			subplan_stats.base_table_count = 1;
+			subplan_stats.max_base_table_cardinality = op.has_estimated_cardinality ? op.estimated_cardinality : 0;
+		} else {
+			subplan_stats = GetSubplanStats(*op.children[0]);
+			for (idx_t i = 1; i < op.children.size(); i++) {
+				subplan_stats.Combine(GetSubplanStats(*op.children[i]));
+			}
+		}
+		return subplan_stats;
+	}
+
+	static bool IsSelectiveMultiTablePlan(unique_ptr<LogicalOperator> &op) {
 		static constexpr idx_t CARDINALITY_THRESHOLD = 2048;
 		static constexpr idx_t CARDINALITY_RATIO = 2;
 
@@ -942,8 +947,8 @@ private:
 		}
 
 		// Must select more than 1 base table
-		const auto &signature = *operator_infos.find(op)->second.signature;
-		if (signature.BaseTableCount() <= 1) {
+		const auto subplan_stats = GetSubplanStats(*op);
+		if (subplan_stats.base_table_count < 2) {
 			return false;
 		}
 
@@ -953,7 +958,7 @@ private:
 		}
 
 		// Otherwise, materialize if it is selective enough
-		return op->estimated_cardinality < signature.MaxBaseTableCardinality() / CARDINALITY_RATIO;
+		return op->estimated_cardinality < subplan_stats.max_base_table_cardinality / CARDINALITY_RATIO;
 	}
 
 	vector<reference<subplan_map_t::value_type>> GetSortedSubplans() {

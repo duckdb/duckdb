@@ -107,7 +107,7 @@ select count(*) from (select distinct range from range(10))
 union all
 select * from (select distinct range from range(10))
 ----
-logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){3}.*
+logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){4}.*
 
 # same as above but with 3 levels of nested CTEs that are recognized
 query II
@@ -124,7 +124,28 @@ select count(*) from (select range % 2 as range from (select distinct range from
 union all
 select count(*) from (select range % 2 as range from (select distinct range from range(10)) group by range)
 ----
-logical_opt	<REGEX>:(?:.*CTE){3}.*(?:.*CTE_SCAN){6}.*
+logical_opt	<REGEX>:(?:.*CTE){3}.*(?:.*CTE_SCAN){8}.*
+
+# same as above but with joins
+# note that we use a wonky join condition here
+# otherwise statistics propagation and filter pushdown create slight plan differences
+# NOTE: if we would have projection elimination/pullup, this would have one less CTE
+# a useless projection is created, which again creates a small plan difference
+query II
+explain
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r2.range::varchar = r3.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r2.range::varchar = r3.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r1.range::varchar = r3.range::varchar) join range(3) r4 on (r3.range::varchar = r4.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r1.range::varchar = r3.range::varchar) join range(3) r4 on (r3.range::varchar = r4.range::varchar)
+----
+logical_opt	<REGEX>:(?:.*CTE){4}.*(?:.*CTE_SCAN){8}.*
 
 # A subplan inside a materialized CTE that is common with a subplan outside of the CTE, should also work
 # this also tests that we don't reorder materialized CTEs that were created by hand
