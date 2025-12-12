@@ -488,15 +488,6 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	if (main_header.IsEncrypted()) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
-
-			//! Check if our encryption module can write, if not, we should throw here
-			if (!db.GetDatabase().GetEncryptionUtil()->SupportsAllEncryption() && !options.read_only) {
-				throw InvalidConfigurationException(
-				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
-				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
-				    "httpfs`.");
-			}
-
 			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache
 			CheckAndAddEncryptionKey(main_header);

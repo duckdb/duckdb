@@ -54,6 +54,9 @@ require httpfs
 statement ok
 ATTACH '__TEST_DIR__/encrypted_temp_files_GCM2.db' AS enc2 (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'GCM');
 
+statement ok
+PRAGMA memory_limit='400M'
+
 query II
 WITH build AS (
 	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
