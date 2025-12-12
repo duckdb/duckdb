@@ -22,7 +22,7 @@ TEST_CASE("Single thread update", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -69,7 +69,7 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -181,7 +181,7 @@ TEST_CASE("Multiple concurrent updaters", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
