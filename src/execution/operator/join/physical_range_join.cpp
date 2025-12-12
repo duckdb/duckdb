@@ -101,6 +101,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(ExecutionContext &context, Lo
 void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, InterruptState &interrupt) {
 	OperatorSinkFinalizeInput finalize {*global_sink, interrupt};
 	sort->Finalize(client, finalize);
+	global_source = sort->GetGlobalSourceState(client, *global_sink);
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
@@ -193,9 +194,6 @@ public:
 		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 		vector<shared_ptr<Task>> tasks;
 
-		auto &sort = *table.sort;
-		auto &global_sink = *table.global_sink;
-		table.global_source = sort.GetGlobalSourceState(client, global_sink);
 		const auto tasks_scheduled = MinValue<idx_t>(num_threads, table.global_source->MaxThreads());
 		for (idx_t tnum = 0; tnum < tasks_scheduled; ++tnum) {
 			tasks.push_back(
@@ -212,15 +210,22 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(Pipeline &pipeline, Event
 	event.InsertEvent(std::move(sort_event));
 }
 
-void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
-	global_source = sort->GetGlobalSourceState(context.client, *global_sink);
+void PhysicalRangeJoin::GlobalSortedTable::MaterializeSortedRun(ExecutionContext &context, InterruptState &interrupt) {
 	auto local_source = sort->GetLocalSourceState(context, *global_source);
 	OperatorSourceInput source {*global_source, *local_source, interrupt};
 	sort->MaterializeSortedRun(context, source);
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::GetSortedRun(ClientContext &client) {
 	sorted = sort->GetSortedRun(*global_source);
 	if (!sorted) {
-		MaterializeEmpty(context.client);
+		MaterializeEmpty(client);
 	}
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
+	MaterializeSortedRun(context, interrupt);
+	GetSortedRun(context.client);
 }
 
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
