@@ -1,5 +1,4 @@
 #include "duckdb/function/table_function.hpp"
-#include <cstddef>
 
 namespace duckdb {
 

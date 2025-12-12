@@ -23,8 +23,6 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 
-#include <functional>
-
 namespace duckdb {
 
 class BaseStatistics;
