@@ -224,6 +224,8 @@ public:
 private:
 	//! Initializes the TupleDataCollection (called by the constructor)
 	void Initialize();
+	//! Destroys the TupleDataCollection (parallelized over segments, called by the destructor)
+	void Destroy();
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
 	//! Adds a segment to this TupleDataCollection
@@ -268,6 +270,8 @@ private:
 	void Verify() const;
 
 private:
+	//! Database instance ref for parallel destruction
+	DatabaseInstance &db;
 	//! Shared allocator for STL allocations
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
