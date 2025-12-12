@@ -133,21 +133,8 @@ static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, Scala
 	}
 }
 
-//! FIXME: it could make sense to allow a third argument: 'default'
-//! This can currently be achieved with COALESCE(TRY(<extract method>), 'default')
-static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto count = input.size();
-
-	D_ASSERT(input.ColumnCount() == 2);
-	auto &variant_vec = input.data[0];
-	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
-
-	auto &path = input.data[1];
-	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	(void)path;
-
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
+static void VariantExtractFunctionInternal(Vector &variant_vec, const VariantPathComponent &component, Vector &result,
+                                           idx_t count) {
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
@@ -168,7 +155,6 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
-	auto &component = info.component;
 	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 	                                                                               : VariantLogicalType::OBJECT;
 	auto collection_result = VariantUtils::CollectNestedData(
@@ -268,9 +254,27 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 		}
 	}
 
-	if (input.AllConstant()) {
+	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+}
+
+//! FIXME: it could make sense to allow a third argument: 'default'
+//! This can currently be achieved with COALESCE(TRY(<extract method>), 'default')
+static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto count = input.size();
+
+	D_ASSERT(input.ColumnCount() == 2);
+	auto &variant_vec = input.data[0];
+	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
+
+	auto &path = input.data[1];
+	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	(void)path;
+
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
+	VariantExtractFunctionInternal(variant_vec, info.component, result, count);
 }
 
 ScalarFunctionSet VariantExtractFun::GetFunctions() {

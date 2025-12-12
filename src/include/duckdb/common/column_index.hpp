@@ -133,16 +133,30 @@ public:
 		D_ASSERT(child_indexes.size() == 1);
 
 		auto &child = child_indexes[0];
-		auto &child_types = StructType::GetChildTypes(type);
-		auto &child_type = child_types[child.GetPrimaryIndex()].second;
-		if (child.child_indexes.empty()) {
-			if (cast_type) {
-				child.SetType(*cast_type);
+		if (child.HasPrimaryIndex()) {
+			auto &child_types = StructType::GetChildTypes(type);
+			auto &child_type = child_types[child.GetPrimaryIndex()].second;
+			if (child.child_indexes.empty()) {
+				if (cast_type) {
+					child.SetType(*cast_type);
+				} else {
+					child.SetType(child_type);
+				}
 			} else {
-				child.SetType(child_type);
+				child.SetPushdownExtractType(child_type, cast_type);
 			}
 		} else {
-			child.SetPushdownExtractType(child_type, cast_type);
+			D_ASSERT(type_information.id() == LogicalTypeId::VARIANT);
+			if (child.child_indexes.empty()) {
+				if (cast_type) {
+					child.SetType(*cast_type);
+				} else {
+					//! Without a cast, the child will always be VARIANT
+					child.SetType(type_information);
+				}
+			} else {
+				child.SetPushdownExtractType(type_information, cast_type);
+			}
 		}
 	}
 	const LogicalType &GetScanType() const {

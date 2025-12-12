@@ -110,6 +110,12 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
 		return scan_count;
 	}
+	if (state.storage_index.HasChildren()) {
+		Vector intermediate(LogicalType::VARIANT(), target_count);
+		auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], intermediate, target_count);
+		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], intermediate, target_count);
+		return scan_count;
+	}
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], result, target_count);
 	return scan_count;

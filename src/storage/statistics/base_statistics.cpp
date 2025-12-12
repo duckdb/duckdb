@@ -270,6 +270,8 @@ unique_ptr<BaseStatistics> BaseStatistics::PushdownExtract(const StorageIndex &i
 	switch (stats_type) {
 	case StatisticsType::STRUCT_STATS:
 		return StructStats::PushdownExtract(*this, index);
+	case StatisticsType::VARIANT_STATS:
+		return VariantStats::PushdownExtract(*this, index);
 	default:
 		throw InternalException("PushdownExtract not supported for StatisticsType::%s", EnumUtil::ToString(stats_type));
 	}
