@@ -20,7 +20,7 @@ TEST_CASE("Single thread delete", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -56,7 +56,7 @@ TEST_CASE("Sequential delete", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -116,7 +116,7 @@ TEST_CASE("Rollback delete", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -194,7 +194,7 @@ TEST_CASE("Concurrent delete", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 

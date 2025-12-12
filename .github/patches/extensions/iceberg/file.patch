@@ -1,3 +1,31 @@
+diff --git a/src/iceberg_logging.cpp b/src/iceberg_logging.cpp
+index f7b3fa02..6bedb2f6 100644
+--- a/src/iceberg_logging.cpp
++++ b/src/iceberg_logging.cpp
+@@ -4,7 +4,7 @@ namespace duckdb {
+ 
+ constexpr LogLevel IcebergLogType::LEVEL;
+ 
+-IcebergLogType::IcebergLogType() : LogType(NAME, LEVEL, GetLogType()) {
++IcebergLogType::IcebergLogType() : LogType(NAME, LEVEL) {
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/include/iceberg_logging.hpp b/src/include/iceberg_logging.hpp
+index 56532732..94ae600f 100644
+--- a/src/include/iceberg_logging.hpp
++++ b/src/include/iceberg_logging.hpp
+@@ -13,10 +13,6 @@ struct IcebergLogType : public LogType {
+ 	//! Construct the log type
+ 	IcebergLogType();
+ 
+-	static LogicalType GetLogType() {
+-		return LogicalType::VARCHAR;
+-	}
+-
+ 	template <typename... ARGS>
+ 	static string ConstructLogMessage(const string &str, ARGS... params) {
+ 		return StringUtil::Format(str, params...);
 diff --git a/src/include/storage/iceberg_delete.hpp b/src/include/storage/iceberg_delete.hpp
 index 43eeab28..e69c5d19 100644
 --- a/src/include/storage/iceberg_delete.hpp
@@ -38,10 +66,18 @@ index 17952f82..14f759eb 100644
  	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_deleted_count));
  	chunk.SetCardinality(1);
 diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
-index a49ac26a..2044fae6 100644
+index a49ac26a..3f5f2f25 100644
 --- a/src/storage/iceberg_insert.cpp
 +++ b/src/storage/iceberg_insert.cpp
-@@ -251,7 +251,7 @@ SinkResultType IcebergInsert::Sink(ExecutionContext &context, DataChunk &chunk,
+@@ -7,7 +7,6 @@
+ 
+ #include "iceberg_multi_file_list.hpp"
+ 
+-#include "duckdb/common/sort/partition_state.hpp"
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+@@ -251,7 +250,7 @@ SinkResultType IcebergInsert::Sink(ExecutionContext &context, DataChunk &chunk,
  //===--------------------------------------------------------------------===//
  // GetData
  //===--------------------------------------------------------------------===//

@@ -42,8 +42,8 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 }
 
 static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
-	// the first character can be between A-Z, a-z, or \200 - \377
-	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0x80;
+	// the first character can be between A-Z, a-z, underscore, or \200 - \377
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c >= 0x80;
 }
 
 static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {

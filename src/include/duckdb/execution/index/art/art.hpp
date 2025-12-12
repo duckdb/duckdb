@@ -110,6 +110,10 @@ public:
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
+	bool RequiresTransactionality() const override;
+	unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
+	                                       IndexConstraintType constraint_type) const override;
+
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);

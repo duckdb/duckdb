@@ -142,6 +142,15 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
+bool BoundIndex::RequiresTransactionality() const {
+	return false;
+}
+
+unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(const string &name_prefix,
+                                                   IndexConstraintType constraint_type) const {
+	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
+}
+
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
 }

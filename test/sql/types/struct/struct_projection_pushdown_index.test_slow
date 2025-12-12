@@ -20,6 +20,12 @@ SELECT s.c FROM test_structs WHERE id=473564
 ----
 thisisastring473564
 
+# Add a cast
+query I
+SELECT s.c::BLOB FROM test_structs WHERE id=473564
+----
+thisisastring473564
+
 query I
 SELECT s.d FROM test_structs WHERE id=473564
 ----

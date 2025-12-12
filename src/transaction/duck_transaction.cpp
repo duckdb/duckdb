@@ -246,13 +246,9 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 	return error_data;
 }
 
-ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id,
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
                                   unique_ptr<StorageCommitState> commit_state) noexcept {
-	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
-	//    true: Then this function will NOT write to the WAL or flush/persist.
-	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
-	//    false: Then this function WILL write to the WAL and Flush/Persist it.
-	this->commit_id = new_commit_id;
+	this->commit_id = commit_info.commit_id;
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
@@ -262,7 +258,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	UndoBuffer::IteratorState iterator_state;
 	try {
 		storage->Commit(commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_id);
+		undo_buffer.Commit(iterator_state, commit_info);
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();

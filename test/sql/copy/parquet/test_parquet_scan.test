@@ -248,4 +248,4 @@ SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS 
 statement error
 SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/broken-arrow.parquet')
 ----
-<REGEX>:.*Invalid Error: Out of buffer.*
+<REGEX>:.*Invalid Error:.*

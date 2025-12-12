@@ -43,6 +43,15 @@ NULL
 NULL
 false
 
+# Add a cast on top of the struct extract
+query I
+SELECT s.b::INTEGER FROM ${source}
+----
+1
+NULL
+NULL
+0
+
 query I
 SELECT s['b'] FROM ${source}
 ----
@@ -59,6 +68,15 @@ NULL	NULL
 NULL	{'a': 84, 'b': NULL}
 false	{'a': NULL, 'b': false}
 
+# Add a cast
+query II
+SELECT s['b']::INTEGER, s FROM ${source}
+----
+1	{'a': 42, 'b': true}
+NULL	NULL
+NULL	{'a': 84, 'b': NULL}
+0	{'a': NULL, 'b': false}
+
 query II
 SELECT s.b, s.a FROM ${source}
 ----
@@ -66,6 +84,15 @@ true	42
 NULL	NULL
 NULL	84
 false	NULL
+
+# Add a cast
+query II
+SELECT s.b::INTEGER, s.a::BIGINT FROM ${source}
+----
+1	42
+NULL	NULL
+NULL	84
+0	NULL
 
 query I
 SELECT s FROM ${source} WHERE s.b
@@ -83,6 +110,12 @@ statement error
 SELECT a FROM (SELECT UNNEST(s) FROM ${source}) WHERE b
 ----
 Binder Error: UNNEST() can only be applied to lists, structs and NULL, not VARIANT
+
+onlyif type=struct
+query I
+SELECT a::BIGINT FROM (SELECT UNNEST(s) FROM ${source}) WHERE b::INTEGER
+----
+42
 
 query I
 SELECT id FROM ${source} WHERE s.b

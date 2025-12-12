@@ -54,6 +54,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunct
 		child_list_t<LogicalType> children = {{"message", LogicalType::VARCHAR}};
 		bound_function.SetReturnType(LogicalType::STRUCT(children));
 	} else {
+		D_ASSERT(lookup->type.IsNested());
 		bound_function.SetReturnType(lookup->type);
 	}
 
