@@ -1,0 +1,68 @@
+# name: test/sql/attach/attach_encryption_fallback_readonly.test
+# description: Ensure the fallback crypto implementation is blocked when out-of-core and no httpfs
+# group: [attach]
+
+require vector_size 2048
+
+load __TEST_DIR__/tmp.db
+
+require no_extension_autoloading "EXPECTED: This tests what happens when autoloading is disabled"
+
+# For the test, we disable auto-loading
+statement ok
+set autoinstall_known_extensions=false
+
+# First we try to read an encrypted database out-of-core
+statement ok
+ATTACH '__TEST_DIR__/encrypted_temp_files_GCM.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'GCM');
+
+statement ok
+SET temp_file_encryption=true;
+
+statement ok
+USE enc;
+
+statement ok
+PRAGMA memory_limit='400M'
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+SET temp_directory='__TEST_DIR__/temp.tmp'
+
+# Force PhysicalAsOfJoin
+statement ok
+PRAGMA asof_loop_join_threshold = 0;
+
+statement error
+WITH build AS (
+	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
+	FROM range(3000000) t(i), range(2) tk(k)
+), probe AS (
+	SELECT k, t
+	FROM range(2) tk(k),
+		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
+) SELECT SUM(v) AS v, COUNT(*) AS n
+FROM probe ASOF JOIN build USING(k, t)
+----
+Invalid Configuration Error: DuckDB requires a secure random engine to be loaded to enable secure cryptographic keys. Normally, this will be handled automatically by DuckDB by autoloading the `httpfs` Extension, but that seems to have failed. Please ensure the httpfs extension is loaded manually using `LOAD httpfs`.
+
+# Loading httpfs will solve all problems
+require httpfs
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_temp_files_GCM2.db' AS enc2 (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'GCM');
+
+query II
+WITH build AS (
+	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
+	FROM range(3000000) t(i), range(2) tk(k)
+), probe AS (
+	SELECT k, t
+	FROM range(2) tk(k),
+		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
+) SELECT SUM(v) AS v, COUNT(*) AS n
+FROM probe ASOF JOIN build USING(k, t)
+----
+26790	1488
