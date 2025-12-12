@@ -88,6 +88,8 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
@@ -122,6 +124,9 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/cleanup_runner
+
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
@@ -156,6 +161,8 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Install
       shell: bash
@@ -199,6 +206,8 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
@@ -228,6 +237,8 @@ jobs:
        with:
          fetch-depth: 0
 
+     - uses: ./.github/actions/cleanup_runner
+
      - name: Setup Ccache
        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
        with:
@@ -256,6 +267,8 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash
@@ -350,6 +363,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: ./.github/actions/cleanup_runner
+
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -385,6 +400,8 @@ jobs:
        uses: actions/checkout@v3
        with:
          fetch-depth: 0
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Checkout tools repo
        uses: actions/checkout@v3
@@ -478,7 +495,7 @@ jobs:
         id: build
         shell: bash
         env:
-          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+          CORE_EXTENSIONS: "json;parquet"
           GEN: ninja
           STANDARD_VECTOR_SIZE: 512
         run: make relassert
@@ -619,6 +636,8 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash
