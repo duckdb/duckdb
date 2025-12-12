@@ -15,7 +15,6 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -23,16 +22,13 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/main/settings.hpp"
-#include <list>
 
 namespace duckdb {
 

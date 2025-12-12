@@ -1,14 +1,11 @@
 #include "duckdb/main/query_profiler.hpp"
 
 #include "duckdb/common/fstream.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -16,12 +13,10 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/main/profiling_info.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
 #include "yyjson_utils.hpp"
 
-#include <algorithm>
 #include <utility>
 
 using namespace duckdb_yyjson; // NOLINT
