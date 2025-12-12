@@ -1,4 +1,4 @@
-# name: test/sql/attach/attach_encryption_fallback_readonly.test
+# name: test/sql/attach/attach_encryption_fallback.test
 # description: Ensure the fallback crypto implementation is blocked when out-of-core and no httpfs
 # group: [attach]
 
