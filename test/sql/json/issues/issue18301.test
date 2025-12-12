@@ -26,8 +26,8 @@ SELECT * FROM read_json('{DATA_DIR}/json/18301/*.json',
 );
 
 query I
-SELECT info->>'$.outcome.by' as outcome_by
+SELECT list_sort(map_entries((info->'$.outcome.by')::MAP(VARCHAR, VARCHAR))) as outcome_by
 FROM cricket_staging
 WHERE info->>'$.city' = 'Colombo';
 ----
-{"wickets":null,"innings":1,"runs":175}
+[{'key': innings, 'value': 1}, {'key': runs, 'value': 175}, {'key': wickets, 'value': NULL}]
