@@ -208,15 +208,15 @@ optional_ptr<const CommandLineOption> ShellState::FindCommandLineOption(const st
 	}
 	if (!c.IsValid()) {
 		// not found
-		string error = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", option);
+		error_msg = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", option);
 		vector<string> option_names;
 		for (idx_t c = 0; command_line_options[c].option; c++) {
 			auto &option = command_line_options[c];
 			option_names.push_back(string("-") + option.option);
 		}
 		auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, "-" + option, "Did you mean");
-		error += candidates_msg + "\n";
-		error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+		error_msg += candidates_msg + "\n";
+		error_msg += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
 		return nullptr;
 	}
 	return command_line_options[c.GetIndex()];

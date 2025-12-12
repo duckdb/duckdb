@@ -1483,6 +1483,9 @@ void ShellState::PrintDatabaseError(const string &zErr) {
 		PrintF(PrintOutput::STDERR, "%s\n", zErr.c_str());
 		return;
 	}
+	// detect dark-light mode if we haven't yet
+	DetectDarkLightMode();
+	// print the error
 	ShellHighlight shell_highlight(*this);
 	shell_highlight.PrintError(zErr);
 }
@@ -3023,6 +3026,29 @@ struct ShellStateDestroyer {
 	}
 };
 
+void ShellState::DetectDarkLightMode() {
+#ifdef HAVE_LINENOISE
+	ShellHighlight highlight(*this);
+	if (highlight_mode != HighlightMode::AUTOMATIC) {
+		// highlight mode is specified by the user - avoid setting manually
+		return;
+	}
+	if (!stdout_is_console && !stderr_is_console) {
+		// not printing to console - don't auto-detect
+		return;
+	}
+	// detect terminal colors
+	auto terminal_color = linenoiseGetTerminalColorMode();
+	if (terminal_color == LINENOISE_DARK_MODE) {
+		highlight_mode = HighlightMode::DARK_MODE;
+		highlight.ToggleMode(HighlightMode::DARK_MODE);
+	} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+		highlight_mode = HighlightMode::LIGHT_MODE;
+		highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+	}
+#endif
+}
+
 #if SQLITE_SHELL_IS_UTF8
 int main(int argc, const char **argv) {
 #else
@@ -3143,18 +3169,7 @@ int wmain(int argc, wchar_t **wargv) {
 		return 1;
 	}
 
-	ShellHighlight highlight(data);
-#ifdef HAVE_LINENOISE
-	if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
-		// detect terminal colors
-		auto terminal_color = linenoiseGetTerminalColorMode();
-		if (terminal_color == LINENOISE_DARK_MODE) {
-			highlight.ToggleMode(HighlightMode::DARK_MODE);
-		} else if (terminal_color == LINENOISE_LIGHT_MODE) {
-			highlight.ToggleMode(HighlightMode::LIGHT_MODE);
-		}
-	}
-#endif
+	data.DetectDarkLightMode();
 
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
@@ -3196,6 +3211,7 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
+			ShellHighlight highlight(data);
 
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());

@@ -383,6 +383,7 @@ public:
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
 	void PrintUsage();
+	void DetectDarkLightMode();
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
