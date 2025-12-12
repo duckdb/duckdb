@@ -27,9 +27,7 @@ PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
 
 PrefixHandle &PrefixHandle::operator=(PrefixHandle &&other) noexcept {
 	if (this != &other) {
-		// Move old segment_handle to temporary so it's destroyed and decrements reader count
-		SegmentHandle old_handle = std::move(segment_handle);
-		// Now move in the new one
+		// old segment handle reader count gets decremented on this move.
 		segment_handle = std::move(other.segment_handle);
 
 		data = other.data;
