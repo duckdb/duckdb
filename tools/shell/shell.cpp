@@ -3047,6 +3047,8 @@ void ShellState::DetectDarkLightMode() {
 	} else if (terminal_color == LINENOISE_LIGHT_MODE) {
 		highlight_mode = HighlightMode::LIGHT_MODE;
 		highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+	} else {
+		highlight_mode = HighlightMode::MIXED_MODE;
 	}
 #endif
 }
