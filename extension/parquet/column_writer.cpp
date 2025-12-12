@@ -494,10 +494,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 template <>
 struct NumericLimits<float_na_equal> {
 	static constexpr float Minimum() {
-		return std::numeric_limits<float>::lowest();
+		return NumericLimits<float>::Minimum();
 	};
 	static constexpr float Maximum() {
-		return std::numeric_limits<float>::max();
+		return NumericLimits<float>::Maximum();
 	};
 	static constexpr bool IsSigned() {
 		return std::is_signed<float>::value;
@@ -510,10 +510,10 @@ struct NumericLimits<float_na_equal> {
 template <>
 struct NumericLimits<double_na_equal> {
 	static constexpr double Minimum() {
-		return std::numeric_limits<double>::lowest();
+		return NumericLimits<double>::Minimum();
 	};
 	static constexpr double Maximum() {
-		return std::numeric_limits<double>::max();
+		return NumericLimits<double>::Maximum();
 	};
 	static constexpr bool IsSigned() {
 		return std::is_signed<double>::value;

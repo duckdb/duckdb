@@ -1558,11 +1558,11 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			max_shorten_amount.push_back(max_diff);
 			total_max_shorten_amount += max_diff;
 		}
-		if (total_max_shorten_amount >= total_render_length - max_width) {
+		idx_t shorten_amount_required = total_render_length - max_width;
+		if (total_max_shorten_amount >= shorten_amount_required) {
 			// we can get below the max width by shortening
 			// try to shorten everything to the same size
 			// i.e. if we have one long column and one small column, we would prefer to shorten only the long column
-			idx_t shorten_amount_required = total_render_length - max_width;
 
 			// map of "shorten amount required -> column index"
 			map<idx_t, vector<idx_t>> shorten_amount_required_map;
@@ -1580,8 +1580,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				// shorten these columns to the next-shortest width
 				// move to the second-largest entry - this is the target entry
 				entry++;
-				auto second_largest_width =
-				    entry == shorten_amount_required_map.rend() ? config.max_col_width : entry->first;
+				auto second_largest_width = entry == shorten_amount_required_map.rend() ? 0 : entry->first;
 				auto max_shorten_width = largest_width - second_largest_width;
 				D_ASSERT(max_shorten_width > 0);
 
@@ -1592,8 +1591,8 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					idx_t shorten_amount_per_column = shorten_amount_required / column_list.size();
 					for (auto &column_idx : column_list) {
 						actual_shorten_amounts[column_idx] += shorten_amount_per_column;
+						shorten_amount_required -= shorten_amount_per_column;
 					}
-					shorten_amount_required -= shorten_amount_per_column * column_list.size();
 
 					// because of truncation, we might still need to shorten columns by a single unit
 					for (idx_t i = column_list.size(); i > 0 && shorten_amount_required > 0; i--) {
