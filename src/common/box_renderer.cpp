@@ -178,6 +178,7 @@ private:
 	                 optional_idx render_width = optional_idx());
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
+	void ConvertRenderVector(Vector &vector, idx_t count, const LogicalType &original_type);
 	list<ColumnDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
 	                                                  idx_t bottom_rows);
 	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
@@ -549,6 +550,21 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 	return BoxRenderer::TryFormatLargeNumber(numeric, config.decimal_separator);
 }
 
+void BoxRendererImplementation::ConvertRenderVector(Vector &vector, idx_t count, const LogicalType &original_type) {
+	vector.Flatten(count);
+	auto data = FlatVector::GetData<string_t>(vector);
+	auto &validity = FlatVector::Validity(vector);
+	for (idx_t r = 0; r < count; r++) {
+		if (!validity.RowIsValid(r)) {
+			// null - no need to convert
+			continue;
+		}
+		// non-null - convert value
+		auto result_str = ConvertRenderValue(data[r].GetString(), original_type);
+		data[r] = StringVector::AddString(vector, result_str);
+	}
+}
+
 list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
                                                                              idx_t top_rows, idx_t bottom_rows) {
 	auto column_count = result.ColumnCount();
@@ -592,6 +608,7 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 		// cast all columns to varchar
 		for (idx_t c = 0; c < column_count; c++) {
 			VectorOperations::Cast(context, fetch_result.data[c], insert_result.data[c], insert_count);
+			ConvertRenderVector(insert_result.data[c], insert_count, fetch_result.data[c].GetType());
 		}
 		insert_result.SetCardinality(insert_count);
 
@@ -658,6 +675,7 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 		for (idx_t c = 0; c < column_count; c++) {
 			Vector slice(fetch_result.data[c], inverted_sel, insert_count);
 			VectorOperations::Cast(context, slice, insert_result.data[c], insert_count);
+			ConvertRenderVector(insert_result.data[c], insert_count, fetch_result.data[c].GetType());
 		}
 		insert_result.SetCardinality(insert_count);
 		// construct the render collection
@@ -1461,7 +1479,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						render_value = config.null_value;
 						render_type = ResultRenderType::NULL_VALUE;
 					} else {
-						render_value = ConvertRenderValue(string_data[r].GetString(), result_types[c]);
+						render_value = string_data[r].GetString();
 						render_type = ResultRenderType::VALUE;
 					}
 					if (config.render_mode == RenderMode::ROWS) {
