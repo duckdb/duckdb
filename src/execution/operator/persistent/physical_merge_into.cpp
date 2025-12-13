@@ -477,6 +477,7 @@ SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk
 		auto &child_lstate = *lstate.local_states[lstate.index];
 		OperatorSourceInput source_input {child_gstate, child_lstate, input.interrupt_state};
 
+		lstate.scan_chunk.Reset();
 		auto result = action.op->GetData(context, lstate.scan_chunk, source_input);
 		if (lstate.scan_chunk.size() > 0) {
 			// construct the result chunk
@@ -505,9 +506,13 @@ SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk
 
 		if (result != SourceResultType::FINISHED) {
 			return result;
-		}
-		if (chunk.size() != 0) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
+		} else {
+			lstate.index++;
+			if (lstate.index < actions.size()) {
+				return SourceResultType::HAVE_MORE_OUTPUT;
+			} else {
+				return SourceResultType::FINISHED;
+			}
 		}
 	}
 	return SourceResultType::FINISHED;
