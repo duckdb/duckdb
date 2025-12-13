@@ -58,14 +58,6 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	bool in_charge_of_final_stretch {false};
 };
 
-static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
-	vector<StorageIndex> result;
-	for (auto &child_id : column_id.GetChildIndexes()) {
-		result.push_back(TransformStorageIndex(child_id));
-	}
-	return StorageIndex(column_id.GetPrimaryIndex(), std::move(result));
-}
-
 static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
 	if (column_id.IsRowIdColumn()) {
 		return StorageIndex();
@@ -75,7 +67,7 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 	// for any child indices because the indices are already the physical indices.
 	// Only the top-level can have generated columns.
 	auto &col = table.GetColumn(column_id.ToLogical());
-	auto result = TransformStorageIndex(column_id);
+	auto result = StorageIndex::FromColumnIndex(column_id);
 	result.SetIndex(col.StorageOid());
 	return result;
 }

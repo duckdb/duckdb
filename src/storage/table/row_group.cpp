@@ -977,6 +977,11 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, 
 }
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) const {
+	StorageIndex storage_index(column_idx);
+	return GetStatistics(storage_index);
+}
+
+unique_ptr<BaseStatistics> RowGroup::GetStatistics(const StorageIndex &column_idx) const {
 	auto &col_data = GetColumn(column_idx);
 	return col_data.GetStatistics();
 }
@@ -1383,8 +1388,8 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	const RowGroup &row_group;
 	const bool is_exact;
 
-	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
-		return row_group.GetStatistics(column_id);
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
+		return row_group.GetStatistics(storage_index);
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &stats) override {
