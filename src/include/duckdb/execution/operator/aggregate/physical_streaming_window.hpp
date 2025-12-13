@@ -50,13 +50,13 @@ public:
 
 private:
 	void ExecuteFunctions(ExecutionContext &context, DataChunk &chunk, DataChunk &delayed,
-	                      GlobalOperatorState &gstate_p, OperatorState &state_p) const;
+	                      GlobalOperatorState &gstate_p) const;
 	void ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
-	                  GlobalOperatorState &gstate, OperatorState &state) const;
+	                  GlobalOperatorState &gstate) const;
 	void ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
-	                    GlobalOperatorState &gstate, OperatorState &state) const;
+	                    GlobalOperatorState &gstate) const;
 	void ExecuteShifted(ExecutionContext &context, DataChunk &delayed, DataChunk &input, DataChunk &chunk,
-	                    GlobalOperatorState &gstate, OperatorState &state) const;
+	                    GlobalOperatorState &gstate) const;
 };
 
 } // namespace duckdb
