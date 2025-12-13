@@ -8,6 +8,7 @@ add_library_unity(
   test_hyperlog.cpp
   test_numeric_cast.cpp
   test_parse_logical_type.cpp
+  test_scope_guard.cpp
   test_utf.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
