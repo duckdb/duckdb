@@ -101,8 +101,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto chunk_scan = make_uniq<LogicalColumnDataGet>(chunk_index, types, std::move(collection));
 
 	// then we generate the MARK join with the chunk scan on the RHS
+	auto mark_index = optimizer.binder.GenerateTableIndex();
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
-	join->mark_index = chunk_index;
+	join->mark_index = mark_index;
 	join->AddChild(std::move(root));
 	join->AddChild(std::move(chunk_scan));
 	// create the JOIN condition
@@ -120,7 +121,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		if (filter.projection_map.empty()) {
 			auto child_bindings = root->GetColumnBindings();
 			for (idx_t i = 0; i < child_bindings.size(); i++) {
-				if (child_bindings[i].table_index != chunk_index) {
+				if (child_bindings[i].table_index != mark_index) {
 					filter.projection_map.push_back(i);
 				}
 			}
@@ -129,7 +130,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 
 	// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
 	unique_ptr<Expression> result =
-	    make_uniq<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN, ColumnBinding(chunk_index, 0));
+	    make_uniq<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN, ColumnBinding(mark_index, 0));
 	if (!is_regular_in) {
 		// NOT IN: invert
 		auto invert = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
