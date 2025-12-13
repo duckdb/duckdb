@@ -1,0 +1,92 @@
+# name: test/sql/cluster/cluster_table_order.test
+# group: [cluster]
+
+query I
+select setseed (0.42);
+----
+NULL
+
+statement ok
+CREATE TABLE t1 AS SELECT i, (random() * 250_000)::BIGINT as j FROM range(250_000) as r(i) order by i;
+
+# By default, there should be no clustering of i
+query I
+select bool_and (less)
+FROM (
+	select
+		(LAG(ma) OVER (ORDER BY mi)) <= mi as less
+	FROM (
+		select
+             row_group_id,
+             regexp_extract(stats, 'Min: (\d+)', 1)::INT as mi,
+             regexp_extract(stats, 'Max: (\d+)', 1)::INT as ma
+         from pragma_storage_info(t1)
+         where column_name='i' and segment_type != 'VALIDITY'
+         order by row_group_id
+	)
+);
+----
+true
+
+statement ok
+CLUSTER t1 ORDER BY j;
+
+# The row groups min/max should not overlap for column j after clustering by j
+query I
+select bool_and (less)
+FROM (
+	select
+		(LAG(ma) OVER (ORDER BY mi)) <= mi as less
+	FROM (
+		select
+             row_group_id,
+             regexp_extract(stats, 'Min: (\d+)', 1)::INT as mi,
+             regexp_extract(stats, 'Max: (\d+)', 1)::INT as ma
+         from pragma_storage_info(t1)
+         where column_name='j' and segment_type != 'VALIDITY'
+         order by row_group_id
+	)
+);
+----
+true
+
+statement ok
+CLUSTER t1 ORDER BY i;
+
+# After clustering by i, the row groups min/max for column i should not overlap
+query I
+select bool_and (less)
+FROM (
+	select
+		(LAG(ma) OVER (ORDER BY mi)) <= mi as less
+	FROM (
+		select
+             row_group_id,
+             regexp_extract(stats, 'Min: (\d+)', 1)::INT as mi,
+             regexp_extract(stats, 'Max: (\d+)', 1)::INT as ma
+         from pragma_storage_info(t1)
+         where column_name='i' and segment_type != 'VALIDITY'
+         order by row_group_id
+	)
+);
+----
+true
+
+# But they should for j
+query I
+select bool_and (less)
+FROM (
+	select
+		(LAG(ma) OVER (ORDER BY mi)) <= mi as less
+	FROM (
+		select
+             row_group_id,
+             regexp_extract(stats, 'Min: (\d+)', 1)::INT as mi,
+             regexp_extract(stats, 'Max: (\d+)', 1)::INT as ma
+         from pragma_storage_info(t1)
+         where column_name='j' and segment_type != 'VALIDITY'
+         order by row_group_id
+	)
+);
+----
+false

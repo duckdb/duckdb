@@ -145,6 +145,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::COPY_DATABASE_STATEMENT:
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 	case StatementType::MERGE_INTO_STATEMENT:
+	case StatementType::CLUSTER_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
