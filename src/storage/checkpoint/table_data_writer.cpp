@@ -126,13 +126,14 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		info.BindIndexes(*context);
 	}
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
-
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
+	// FIXME: IndexStorageInfos are taken from UnboundIndex here, which will contain buffered operations that need
+	//		  to be serialized along with the IndexStorageInfo.
+	vector<unique_ptr<IndexStorageInfo>> index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
 
 	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
 	if (debug_verify_blocks) {
 		for (auto &entry : index_storage_infos) {
-			for (auto &allocator : entry.allocator_infos) {
+			for (auto &allocator : entry->allocator_infos) {
 				for (auto &block : allocator.block_pointers) {
 					checkpoint_manager.verify_block_usage_count[block.block_id]++;
 				}
@@ -143,7 +144,24 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+	serializer.WriteList(104, "index_storage_infos", index_storage_infos.size(), [&](Serializer::List &list, idx_t i) {
+		list.WriteObject([&](Serializer &object) { index_storage_infos[i]->Serialize(object); });
+	});
+
+	// Restore IndexStorageInfo back to UnboundIndex objects after serialization.
+	info.GetIndexes().Scan([&](Index &index) {
+		if (!index.IsBound()) {
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			for (auto it = index_storage_infos.begin(); it != index_storage_infos.end(); ++it) {
+				if ((*it)->name == unbound_index.GetIndexName()) {
+					unbound_index.SetStorageInfo(std::move(*it));
+					index_storage_infos.erase(it);
+					break;
+				}
+			}
+		}
+		return false;
+	});
 }
 
 } // namespace duckdb
