@@ -1,4 +1,4 @@
-# name: test/sql/copy/partitioned/hive_partitioned_auto_detect.test
+# name: test/sql/copy/partitioned/hive_partitioned_auto_detect.test_slow
 # description: basic tests for the hive partition auto detection
 # group: [partitioned]
 

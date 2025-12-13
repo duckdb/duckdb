@@ -1,4 +1,4 @@
-# name: test/sql/cte/recursive_cte_key_variant.test
+# name: test/sql/cte/recursive_cte_key_variant.test_slow
 # description: Recursive CTEs with an error thrown in the pipelines
 # group: [cte]
 

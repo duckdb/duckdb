@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_glob.test
+# name: test/sql/copy/parquet/parquet_glob.test_slow
 # description: Test basic globbing of parquet files
 # group: [parquet]
 

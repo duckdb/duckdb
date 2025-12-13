@@ -1,4 +1,4 @@
-# name: test/sql/index/art/storage/test_art_buffered_replays_mod2.test
+# name: test/sql/index/art/storage/test_art_buffered_replays_mod2.test_slow
 # description: Testing inserts and deletes work for wal index operation replays.
 # group: [storage]
 
