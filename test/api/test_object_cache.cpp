@@ -8,16 +8,17 @@ using namespace std;
 
 struct TestObject : public ObjectCacheEntry {
 	int value;
-
 	TestObject(int value) : value(value) {
 	}
-
+	~TestObject() override = default;
 	string GetObjectType() override {
 		return ObjectType();
 	}
-
 	static string ObjectType() {
 		return "TestObject";
+	}
+	idx_t GetRoughCacheMemory() const override {
+		return 0;
 	}
 };
 
@@ -25,12 +26,15 @@ struct AnotherTestObject : public ObjectCacheEntry {
 	int value;
 	AnotherTestObject(int value) : value(value) {
 	}
+	~AnotherTestObject() override = default;
 	string GetObjectType() override {
 		return ObjectType();
 	}
-
 	static string ObjectType() {
 		return "AnotherTestObject";
+	}
+	idx_t GetRoughCacheMemory() const override {
+		return 0;
 	}
 };
 

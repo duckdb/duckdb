@@ -36,6 +36,9 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
+	idx_t GetRoughCacheMemory() const override {
+		return ObjectCacheEntry::NON_EVICTABLE;
+	}
 
 private:
 	unordered_map<string, string> keys;

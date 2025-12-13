@@ -119,7 +119,7 @@ struct CSVStates {
 class CSVStateMachine {
 public:
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
-	                         CSVStateMachineCache &csv_state_machine_cache_p);
+	                         shared_ptr<CSVStateMachineCache> csv_state_machine_cache_p);
 
 	explicit CSVStateMachine(const StateMachine &transition_array, const CSVReaderOptions &options);
 

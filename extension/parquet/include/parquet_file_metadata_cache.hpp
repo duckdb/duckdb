@@ -40,6 +40,7 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
+	idx_t GetRoughCacheMemory() const override;
 
 	bool IsValid(CachingFileHandle &new_handle) const;
 	//! Return if a cache entry is valid.

@@ -19,6 +19,7 @@
 
 namespace duckdb {
 struct MultiFileBindData;
+class CSVRejectsTable;
 
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
@@ -63,6 +64,9 @@ private:
 	CSVIterator current_boundary;
 
 	vector<idx_t> rejects_file_indexes;
+
+	//! CSV rejects table cache entry,m which is kept alive for the duration of the query
+	shared_ptr<CSVRejectsTable> rejects_table;
 };
 
 } // namespace duckdb

@@ -6,6 +6,7 @@ add_library_unity(
   test_file_system.cpp
   test_caching_file_system_wrapper.cpp
   test_hyperlog.cpp
+  test_lru_cache.cpp
   test_numeric_cast.cpp
   test_parse_logical_type.cpp
   test_utf.cpp
