@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+class Expression;
+class ExpressionExecutor;
+
 enum class AlterType : uint8_t {
 	INVALID = 0,
 	ALTER_TABLE = 1,
@@ -44,6 +47,8 @@ struct AlterEntryData {
 struct AlterInfo : public ParseInfo {
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
+	unique_ptr<ExpressionExecutor> default_executor;
+	unique_ptr<Expression> default_expression;
 
 public:
 	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);

@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 

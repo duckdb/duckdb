@@ -66,7 +66,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	row_groups->Verify();
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value)
+DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	// add the column definitions from this DataTable
 	for (auto &column_def : parent.column_definitions) {
@@ -76,16 +76,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 	auto &local_storage = LocalStorage::Get(context, db);
 
-	ExpressionExecutor default_executor(context);
-	default_executor.AddExpression(default_value);
-
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
+	this->row_groups = parent.row_groups->AddColumn(context, new_column);
 
 	// also add this column to client local storage
-	local_storage.AddColumn(parent, *this, new_column, default_executor);
+	local_storage.AddColumn(parent, *this, new_column);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.version = DataTableVersion::ALTERED;

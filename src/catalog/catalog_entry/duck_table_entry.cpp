@@ -1,10 +1,14 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
@@ -22,8 +26,11 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -242,6 +249,55 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 }
 
+//! Populates the newly added column with its default value for all existing rows.
+void DuckTableEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &executor) {
+	auto &duck_transaction = DuckTransaction::Get(context, catalog);
+	auto new_column_logical_idx = LogicalIndex(columns.LogicalColumnCount() - 1);
+	auto new_column_physical_idx = columns.LogicalToPhysical(new_column_logical_idx);
+
+	// Initialize scan for only row ids
+	TableScanState scan_state_for_row_ids;
+	vector<StorageIndex> column_ids;
+	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	storage->InitializeScan(context, duck_transaction, scan_state_for_row_ids, column_ids, nullptr);
+
+	// Bind constraints and create initialize a TableUpdateState
+	auto binder = Binder::CreateBinder(context);
+	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
+	auto update_state = storage->InitializeUpdate(*this, context, bound_constraints);
+
+	auto &allocator = Allocator::Get(context);
+
+	// row_ids_chunk holds row ids for the rows that exist in the table right now.  E.g.: [0, 1, 2, ... 2047]
+	DataChunk row_ids_chunk;
+	row_ids_chunk.Initialize(allocator, {LogicalType::ROW_TYPE});
+	// actual_values_chunk provides new data for the new column. E.g.: [DefaultVal, DefaultVal, DefaultVal...]
+	DataChunk actual_values_chunk;
+	actual_values_chunk.Initialize(allocator, {columns.GetColumn(new_column_logical_idx).Type()});
+
+	while (true) {
+		// This scans only row ids
+		row_ids_chunk.Reset();
+		storage->Scan(duck_transaction, row_ids_chunk, scan_state_for_row_ids);
+
+		if (row_ids_chunk.size() == 0) {
+			break; // We're done.
+		}
+
+		auto &row_ids = row_ids_chunk.data[0];
+
+		actual_values_chunk.Reset();
+		actual_values_chunk.SetCardinality(row_ids_chunk.size());
+
+		executor.SetChunk(&actual_values_chunk);
+		executor.ExecuteExpression(0, actual_values_chunk.data[0]);
+
+		// Update the newly added column with the default values
+		storage->Update(*update_state, context, row_ids, vector<PhysicalIndex> {new_column_physical_idx},
+		                actual_values_chunk);
+	}
+}
+
 void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 	D_ASSERT(info.type == AlterType::ALTER_TABLE);
@@ -364,7 +420,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
-	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
+
+	// Store the expression in AlterInfo to keep it alive (the executor only stores a pointer)
+	info.default_expression = std::move(bound_defaults.back());
+
+	info.default_executor = make_uniq<ExpressionExecutor>(context);
+	info.default_executor->AddExpression(*info.default_expression);
+
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 

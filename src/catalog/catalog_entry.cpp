@@ -36,6 +36,10 @@ unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(CatalogTransaction transaction
 	return AlterEntry(*transaction.context, info);
 }
 
+void CatalogEntry::FinalizeAlterEntry(ClientContext &context, ExpressionExecutor &exec) {
+	throw InternalException("Unsupported Finalize Alter for catalog entry!");
+}
+
 void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 }
 

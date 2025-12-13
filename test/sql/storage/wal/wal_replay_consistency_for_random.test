@@ -1,0 +1,36 @@
+# name: test/sql/storage/wal/wal_replay_consistency_for_random.test
+# group: [wal]
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint='1TB'
+
+statement ok
+ATTACH '__TEST_DIR__/wal_replay.db';
+
+statement ok
+CREATE TABLE t AS SELECT range::INT AS id FROM range(100);
+
+statement ok
+ALTER TABLE t ADD COLUMN r DOUBLE DEFAULT RANDOM();
+
+statement ok
+CREATE TABLE original AS SELECT id, r FROM t;
+
+statement ok
+DETACH wal_replay;
+
+statement ok
+ATTACH '__TEST_DIR__/wal_replay.db';
+
+query I
+SELECT COUNT(*) FROM t JOIN original ON t.id = original.id AND t.r = original.r;
+----
+100
+
+query I
+SELECT COUNT(*) != 0 FROM t JOIN original ON t.id = original.id AND t.r = original.r;
+----
+true

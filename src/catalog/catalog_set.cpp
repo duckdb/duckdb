@@ -348,7 +348,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 			return false;
 		}
 	}
-	auto new_entry = value.get();
+	CatalogEntry *new_entry = value.get();
 	map.UpdateEntry(std::move(value));
 
 	// push the old entry in the undo buffer for this transaction
@@ -369,7 +369,10 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		// in that case we are able to just directly destroy the child (if there is any)
 		entry_to_destroy = new_entry->TakeChild();
 	}
-
+	// Finalize the alter by updating existing rows with default values for newly added columns
+	if (alter_info.default_executor != nullptr) {
+		new_entry->FinalizeAlterEntry(*transaction.context, *alter_info.default_executor);
+	}
 	read_lock.unlock();
 	write_lock.unlock();
 
