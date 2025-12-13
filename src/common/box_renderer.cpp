@@ -152,7 +152,15 @@ struct BoxRenderRow {
 };
 
 struct RenderDataCollection {
+	RenderDataCollection(ClientContext &context, idx_t column_count);
+
+	ClientContext &context;
 	unique_ptr<ColumnDataCollection> render_values;
+	unique_ptr<ColumnDataCollection> render_widths;
+
+public:
+	void InitializeValueChunk(DataChunk &chunk);
+	void InitializeWidthChunk(DataChunk &chunk);
 };
 
 struct BoxRendererImplementation {
@@ -569,18 +577,31 @@ void BoxRendererImplementation::ConvertRenderVector(Vector &vector, idx_t count,
 	}
 }
 
+RenderDataCollection::RenderDataCollection(ClientContext &context, idx_t column_count) : context(context) {
+	vector<LogicalType> varchar_types;
+	vector<LogicalType> width_types;
+	for (idx_t c = 0; c < column_count; c++) {
+		varchar_types.emplace_back(LogicalType::VARCHAR);
+		width_types.emplace_back(LogicalType::UINTEGER);
+	}
+	render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
+	render_widths = make_uniq<ColumnDataCollection>(context, width_types);
+}
+
+void RenderDataCollection::InitializeValueChunk(DataChunk &chunk) {
+	chunk.Initialize(context, render_values->Types());
+}
+
+void RenderDataCollection::InitializeWidthChunk(DataChunk &chunk) {
+	chunk.Initialize(context, render_widths->Types());
+}
+
 vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
                                                                                idx_t top_rows, idx_t bottom_rows) {
 	auto column_count = result.ColumnCount();
-	vector<LogicalType> varchar_types;
-	for (idx_t c = 0; c < column_count; c++) {
-		varchar_types.emplace_back(LogicalType::VARCHAR);
-	}
 	vector<RenderDataCollection> collections;
-	collections.emplace_back();
-	collections.emplace_back();
-	collections[0].render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
-	collections[1].render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
+	collections.emplace_back(context, column_count);
+	collections.emplace_back(context, column_count);
 
 	auto &top_collection = collections.front();
 	auto &bottom_collection = collections.back();
@@ -589,7 +610,7 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 	fetch_result.Initialize(context, result.Types());
 
 	DataChunk insert_result;
-	insert_result.Initialize(context, varchar_types);
+	top_collection.InitializeValueChunk(insert_result);
 
 	if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
 		if (config.render_mode != RenderMode::ROWS || result.Count() != 1) {
@@ -698,27 +719,20 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	auto &top = input.front();
 	auto &bottom = input.back();
 
-	vector<LogicalType> varchar_types;
 	vector<string> new_names;
 	new_names.emplace_back("Column");
 	new_names.emplace_back("Type");
-	varchar_types.emplace_back(LogicalType::VARCHAR);
-	varchar_types.emplace_back(LogicalType::VARCHAR);
 	for (idx_t r = 0; r < top.render_values->Count(); r++) {
 		new_names.emplace_back("Row " + to_string(r + 1));
-		varchar_types.emplace_back(LogicalType::VARCHAR);
 	}
 	for (idx_t r = 0; r < bottom.render_values->Count(); r++) {
 		auto row_index = row_count - bottom.render_values->Count() + r + 1;
 		new_names.emplace_back("Row " + to_string(row_index));
-		varchar_types.emplace_back(LogicalType::VARCHAR);
 	}
-	//
-	DataChunk row_chunk;
-	row_chunk.Initialize(Allocator::DefaultAllocator(), varchar_types);
 	vector<RenderDataCollection> result;
-	result.emplace_back();
-	result[0].render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
+	result.emplace_back(context, new_names.size());
+	DataChunk row_chunk;
+	result.front().InitializeValueChunk(row_chunk);
 	auto &res_coll = *result.front().render_values;
 	ColumnDataAppendState append_state;
 	res_coll.InitializeAppend(append_state);
@@ -745,7 +759,7 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 		}
 	}
 	column_names = std::move(new_names);
-	result_types = std::move(varchar_types);
+	result_types = res_coll.Types();
 	return result;
 }
 
