@@ -41,6 +41,8 @@ struct ClientConfig {
 	//! The custom settings for the profiler
 	//! (empty = use the default settings)
 	profiler_settings_t profiler_settings = MetricsUtils::GetDefaultMetrics();
+	//! The input format type of the profiler settings
+	LogicalTypeId profiler_settings_type = LogicalTypeId::VARCHAR;
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
