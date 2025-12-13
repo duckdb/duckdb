@@ -141,10 +141,12 @@ unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deser
 
 void GeoTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<CoordinateReferenceSystem>(200, "crs", crs);
 }
 
 shared_ptr<ExtraTypeInfo> GeoTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<GeoTypeInfo>(new GeoTypeInfo());
+	deserializer.ReadProperty<CoordinateReferenceSystem>(200, "crs", result->crs);
 	return std::move(result);
 }
 
