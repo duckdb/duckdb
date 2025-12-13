@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   art_builder.cpp
   art.cpp
+  art_index.cpp
   art_key.cpp
   art_merger.cpp
   base_leaf.cpp
@@ -13,7 +14,6 @@ add_library_unity(
   node256.cpp
   node256_leaf.cpp
   node48.cpp
-  plan_art.cpp
   prefix.cpp)
 
 set(ALL_OBJECT_FILES
