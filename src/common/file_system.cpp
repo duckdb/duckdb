@@ -192,11 +192,14 @@ string FileSystem::GetEnvVariable(const string &env) {
 }
 
 static bool StartsWithSingleBackslash(const string &path) {
-	if (path.size() < 2) {
+	if (path.empty()) {
 		return false;
 	}
 	if (path[0] != '/' && path[0] != '\\') {
 		return false;
+	}
+	if (path.size() == 1) {
+		return true;
 	}
 	if (path[1] == '/' || path[1] == '\\') {
 		return false;
@@ -295,8 +298,137 @@ string FileSystem::GetWorkingDirectory() {
 #endif
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	// FIXME: sanitize paths
-	return a.empty() ? b : a + PathSeparator(a) + b;
+	auto has_uri_scheme = [](const string &path) {
+		if (path.empty()) {
+			return false;
+		}
+		if (StringUtil::StartsWith(path, "file:")) {
+			return true;
+		}
+		auto scheme_pos = path.find("://");
+		if (scheme_pos == string::npos) {
+			return false;
+		}
+		// avoid treating a Windows drive ("C:\") as a scheme
+		if (scheme_pos == 1 && StringUtil::CharacterIsAlpha(path[0])) {
+			return false;
+		}
+		return true;
+	};
+
+	auto trim_leading_separators = [](string &path, char separator) {
+		while (!path.empty() && path.front() == separator) {
+			path.erase(path.begin());
+		}
+	};
+
+	auto trim_trailing_separators = [](string &path, char separator) {
+		while (path.size() > 1 && path.back() == separator) {
+			path.pop_back();
+		}
+	};
+
+	auto normalize_segments = [](const string &path, const string &separator, bool is_absolute) {
+		auto parts = StringUtil::Split(path, separator);
+
+		string drive_prefix;
+		if (!parts.empty()) {
+			auto colon_pos = parts[0].find(':');
+			if (colon_pos == 1 && StringUtil::CharacterIsAlpha(parts[0][0])) {
+				// Preserve drive designator on Windows (e.g., "C:")
+				drive_prefix = parts[0].substr(0, colon_pos + 1);
+				auto remainder = parts[0].substr(colon_pos + 1);
+				if (remainder.empty()) {
+					parts.erase(parts.begin());
+				} else {
+					parts[0] = remainder;
+				}
+			}
+		}
+
+		bool drive_root =
+		    !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
+		bool clamp_to_root = is_absolute || drive_root || !drive_prefix.empty();
+		vector<string> stack;
+		for (auto &part : parts) {
+			if (part.empty() || part == ".") {
+				continue;
+			}
+			if (part == "..") {
+				if (!stack.empty() && stack.back() != "..") {
+					stack.pop_back();
+				} else if (!clamp_to_root) {
+					stack.push_back(part);
+				}
+				continue;
+			}
+			stack.push_back(part);
+		}
+
+		string result;
+		if (is_absolute || drive_root) {
+			result = drive_prefix.empty() ? separator : drive_prefix + separator;
+		} else if (!drive_prefix.empty()) {
+			result = drive_prefix;
+		}
+
+		for (idx_t i = 0; i < stack.size(); i++) {
+			bool need_separator = !result.empty() && result.back() != separator[0];
+			if (!is_absolute && !drive_root && !drive_prefix.empty() && result == drive_prefix) {
+				// drive-relative path keeps the drive prefix without an extra separator
+				need_separator = false;
+			}
+			if (need_separator) {
+				result += separator;
+			}
+			result += stack[i];
+		}
+
+		if (result.empty() && !drive_prefix.empty()) {
+			result = drive_prefix;
+			if (is_absolute || drive_root) {
+				result += separator;
+			}
+		}
+		return result.empty() ? path : result;
+	};
+
+	auto separator = PathSeparator(!a.empty() ? a : b);
+	auto separator_char = separator[0];
+
+	// if either side is a URI, fall back to a simple concatenation to avoid breaking schemes
+	if (has_uri_scheme(a) || has_uri_scheme(b)) {
+		if (a.empty()) {
+			return b;
+		}
+		if (b.empty()) {
+			return a;
+		}
+		return a + separator + b;
+	}
+
+	auto lhs = ConvertSeparators(a);
+	auto rhs = ConvertSeparators(b);
+	auto lhs_absolute = IsPathAbsolute(lhs);
+	auto rhs_absolute = IsPathAbsolute(rhs);
+
+	if (lhs.empty()) {
+		return normalize_segments(rhs, separator, rhs_absolute);
+	}
+	if (rhs.empty()) {
+		return normalize_segments(lhs, separator, lhs_absolute);
+	}
+
+	// if rhs is an absolute path, prefer it
+	if (rhs_absolute) {
+		return normalize_segments(rhs, PathSeparator(rhs), true);
+	}
+
+	trim_trailing_separators(lhs, separator_char);
+	trim_leading_separators(rhs, separator_char);
+
+	auto combined = lhs + separator + rhs;
+	return normalize_segments(combined, separator, lhs_absolute);
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
