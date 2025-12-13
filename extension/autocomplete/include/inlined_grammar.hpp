@@ -719,7 +719,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"SliceExpression <- '[' SliceBound ']'\n"
 	"SliceBound <- Expression? EndSliceBound? StepSliceBound?\n"
 	"EndSliceBound <- ':' (Expression / '-')?\n"
-	"StepSliceBOund <- ':' Expression?\n"
+	"StepSliceBound <- ':' Expression?\n"
 	"PostfixOperator <- '!'\n"
 	"SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression\n"
 	"CoalesceExpression <- 'COALESCE' Parens(List(Expression))\n"
