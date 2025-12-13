@@ -450,11 +450,13 @@ struct ChunkMergeInfo {
 	const idx_t not_null;
 	//! The current offset in the chunk
 	idx_t &entry_idx;
-	//! The offsets that match
-	SelectionVector result;
+	//! The left chunk offsets that match
+	SelectionVector lhs;
+	//! The right table offsets that match
+	vector<idx_t> rhs;
 
 	ChunkMergeInfo(ExternalBlockIteratorState &state, idx_t block_idx, idx_t &entry_idx, idx_t not_null)
-	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), result(STANDARD_VECTOR_SIZE) {
+	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), lhs(STANDARD_VECTOR_SIZE) {
 	}
 
 	idx_t GetIndex() const {
@@ -468,18 +470,19 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 
+	idx_t result_count = 0;
+	r.rhs.resize(0);
 	if (r.entry_idx >= r.not_null) {
-		return 0;
+		return result_count;
 	}
 
-	idx_t result_count = 0;
 	BLOCK_ITERATOR l_ptr(l.state);
 	BLOCK_ITERATOR r_ptr(r.state);
 	while (true) {
 		if (l.entry_idx < prev_left_index) {
 			// left side smaller: found match
-			l.result.set_index(result_count, sel_t(l.entry_idx));
-			r.result.set_index(result_count, sel_t(r.entry_idx));
+			l.lhs.set_index(result_count, sel_t(l.entry_idx));
+			r.rhs.emplace_back(r.entry_idx);
 			result_count++;
 			// move left side forward
 			l.entry_idx++;
@@ -493,8 +496,8 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 		if (l.entry_idx < l.not_null) {
 			if (MergeJoinBefore(l_ptr[l.GetIndex()], r_ptr[r.GetIndex()], strict)) {
 				// left side smaller: found match
-				l.result.set_index(result_count, sel_t(l.entry_idx));
-				r.result.set_index(result_count, sel_t(r.entry_idx));
+				l.lhs.set_index(result_count, sel_t(l.entry_idx));
+				r.rhs.emplace_back(r.entry_idx);
 				result_count++;
 				// move left side forward
 				l.entry_idx++;
@@ -610,12 +613,12 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		} else {
 			// found matches: extract them
 			SliceSortedPayload(state.rhs_input, rhs_table, rhs_iterator, state.rhs_chunk_state, right_info.block_idx,
-			                   right_info.result, result_count, *state.rhs_scan_state);
+			                   right_info.rhs, *state.rhs_scan_state);
 
 			chunk.Reset();
 			for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
 				if (col_idx < left_cols) {
-					chunk.data[col_idx].Slice(state.lhs_payload.data[col_idx], left_info.result, result_count);
+					chunk.data[col_idx].Slice(state.lhs_payload.data[col_idx], left_info.lhs, result_count);
 				} else {
 					chunk.data[col_idx].Reference(state.rhs_input.data[col_idx - left_cols]);
 				}
@@ -633,7 +636,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
 					Vector left(state.lhs_local_table->keys.data[cmp_idx]);
-					left.Slice(left_info.result, result_count);
+					left.Slice(left_info.lhs, result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
 					state.rhs_executor.ExecuteExpression(cmp_idx, right);
@@ -661,13 +664,13 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			// found matches: mark the found matches if required
 			if (state.left_outer.Enabled()) {
 				for (idx_t i = 0; i < result_count; i++) {
-					state.left_outer.SetMatch(left_info.result[sel->get_index(i)]);
+					state.left_outer.SetMatch(left_info.lhs[sel->get_index(i)]);
 				}
 			}
 			if (gstate.table->found_match) {
 				//	Absolute position of the block + start position inside that block
 				for (idx_t i = 0; i < result_count; i++) {
-					gstate.table->found_match[state.right_base + right_info.result[sel->get_index(i)]] = true;
+					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
 			chunk.SetCardinality(result_count);
