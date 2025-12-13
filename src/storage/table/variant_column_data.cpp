@@ -266,8 +266,8 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                                 idx_t result_idx) {
+void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
+                                 const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < sub_columns.size() + 1; i++) {
 		auto child_state = make_uniq<ColumnFetchState>();
@@ -278,10 +278,11 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		// fetch the validity state
-		validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+		validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 		// fetch the sub-column states
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], row_id, *child_vectors[i], result_idx);
+			sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], storage_index, row_id, *child_vectors[i],
+			                         result_idx);
 		}
 		if (result_idx) {
 			intermediate.SetValue(0, intermediate.GetValue(result_idx));
@@ -294,8 +295,8 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		return;
 	}
 
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
-	sub_columns[0]->FetchRow(transaction, *state.child_states[1], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	sub_columns[0]->FetchRow(transaction, *state.child_states[1], storage_index, row_id, result, result_idx);
 }
 
 void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {

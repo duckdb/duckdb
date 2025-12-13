@@ -123,7 +123,8 @@ void RowGroup::LoadRowIdColumnData() const {
 }
 
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
-	return GetColumn(c.GetPrimaryIndex());
+	auto &res = GetColumn(c.GetPrimaryIndex());
+	return res;
 }
 
 ColumnData &RowGroup::GetColumn(storage_t c) const {
@@ -185,12 +186,15 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 	}
 }
 
-void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
-                                 const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
+                                 optional_ptr<TableScanOptions> options) {
+	auto &children = column_id.GetChildIndexes();
 	// Register the options in the state
 	scan_options = options;
 	context = context_p;
+	storage_index = column_id;
 
+	D_ASSERT(type.id() != LogicalTypeId::INVALID);
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		// validity - nothing to initialize
 		return;
@@ -219,14 +223,21 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 				child_states[i + 1].Initialize(context, struct_children[i].second, options);
 			}
 		} else {
-			// only scan the specified subset of columns
-			scan_child_column.resize(struct_children.size(), false);
-			for (idx_t i = 0; i < children.size(); i++) {
-				auto &child = children[i];
-				auto index = child.GetPrimaryIndex();
-				auto &child_indexes = child.GetChildIndexes();
-				scan_child_column[index] = true;
-				child_states[index + 1].Initialize(context, struct_children[index].second, child_indexes, options);
+			if (storage_index.IsPushdownExtract()) {
+				scan_child_column.resize(1, true);
+				D_ASSERT(children.size() == 1);
+				auto &child = children[0];
+				auto child_index = child.GetPrimaryIndex();
+				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
+			} else {
+				// only scan the specified subset of columns
+				scan_child_column.resize(struct_children.size(), false);
+				for (idx_t i = 0; i < children.size(); i++) {
+					auto &child = children[i];
+					auto index = child.GetPrimaryIndex();
+					scan_child_column[index] = true;
+					child_states[index + 1].Initialize(context, struct_children[index].second, child, options);
+				}
 			}
 		}
 		child_states[0].scan_options = options;
@@ -253,8 +264,8 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 
 void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type,
                                  optional_ptr<TableScanOptions> options) {
-	vector<StorageIndex> children;
-	Initialize(context_p, type, children, options);
+	auto column_id = StorageIndex(0);
+	Initialize(context_p, type, column_id, options);
 }
 
 void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
@@ -268,8 +279,9 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		if (column_ids[i].IsRowIdColumn()) {
 			continue;
 		}
-		auto col_id = column_ids[i].GetPrimaryIndex();
-		column_scans[i].Initialize(context, types[col_id], column_ids[i].GetChildIndexes(), &GetOptions());
+		auto index = column_ids[i].GetPrimaryIndex();
+		auto &type = types[index];
+		column_scans[i].Initialize(context, type, column_ids[i], &GetOptions());
 	}
 }
 
@@ -480,9 +492,9 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	for (idx_t i = 0; i < filter_list.size(); i++) {
 		auto &entry = filter_list[i];
 		auto &filter = entry.filter;
-		auto base_column_index = entry.table_column_index;
+		const auto &base_column_index = entry.table_column_index;
 
-		auto prune_result = GetColumn(base_column_index).CheckZonemap(filter);
+		auto prune_result = GetColumn(base_column_index).CheckZonemap(base_column_index, filter);
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
@@ -859,7 +871,7 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
 		// regular column: fetch data from the base column
 		auto &col_data = GetColumn(column);
-		col_data.FetchRow(transaction, state, row_id, result_vector, result_idx);
+		col_data.FetchRow(transaction, state, column, row_id, result_vector, result_idx);
 	}
 }
 
@@ -977,8 +989,17 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, 
 }
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) const {
+	StorageIndex storage_index(column_idx);
+	return GetStatistics(storage_index);
+}
+
+unique_ptr<BaseStatistics> RowGroup::GetStatistics(const StorageIndex &column_idx) const {
 	auto &col_data = GetColumn(column_idx);
-	return col_data.GetStatistics();
+	auto column_stats = col_data.GetStatistics();
+	if (!column_idx.IsPushdownExtract()) {
+		return column_stats;
+	}
+	return column_stats->PushdownExtract(column_idx.GetChildIndex(0));
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
@@ -1383,8 +1404,8 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	const RowGroup &row_group;
 	const bool is_exact;
 
-	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
-		return row_group.GetStatistics(column_id);
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
+		return row_group.GetStatistics(storage_index);
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &stats) override {

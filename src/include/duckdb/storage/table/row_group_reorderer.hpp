@@ -21,14 +21,14 @@ enum class RowGroupOrderType { ASC, DESC };
 enum class OrderByColumnType { NUMERIC, STRING };
 
 struct RowGroupOrderOptions {
-	RowGroupOrderOptions(column_t column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
+	RowGroupOrderOptions(const StorageIndex &column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
 	                     OrderByColumnType column_type_p, optional_idx row_limit_p = optional_idx(),
 	                     idx_t row_group_offset_p = 0)
 	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p),
 	      row_limit(row_limit_p), row_group_offset(row_group_offset_p) {
 	}
 
-	const column_t column_idx;
+	const StorageIndex column_idx;
 	const OrderByStatistics order_by;
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
@@ -49,7 +49,7 @@ public:
 
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
 	static OffsetPruningResult GetOffsetAfterPruning(OrderByStatistics order_by, OrderByColumnType column_type,
-	                                                 RowGroupOrderType order_type, column_t column_idx,
+	                                                 RowGroupOrderType order_type, const StorageIndex &column_idx,
 	                                                 idx_t row_offset, vector<PartitionStatistics> &stats);
 
 private:
