@@ -505,6 +505,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
 		auto catalog = BindCatalog(base.catalog);
+		if (catalog == TEMP_CATALOG) {
+			base.temporary = true;
+		}
 		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
