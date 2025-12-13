@@ -26,6 +26,8 @@ class PreparedStatementData;
 
 typedef std::function<PhysicalOperator &(ClientContext &context, PreparedStatementData &data)> get_result_collector_t;
 
+typedef std::function<void(ClientContext &context, string &output)> profile_result_hook_t;
+
 struct ClientConfig {
 	//! The home directory used by the system (if any)
 	string home_directory;
@@ -45,6 +47,8 @@ struct ClientConfig {
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
 	bool emit_profiler_output = true;
+	//! Hooks that are called with the profiling result after query execution
+	vector<profile_result_hook_t> profile_result_hooks;
 
 	//! system-wide progress bar disable.
 	const char *system_progress_bar_disable_reason = nullptr;
