@@ -41,10 +41,14 @@ public:
 	BaseResultRenderer &operator<<(const string &val);
 
 	void Render(ResultRenderType render_mode, const string &val);
-	void SetValueType(const LogicalType &type);
+	void SetResultTypes(vector<LogicalType> new_column_types);
+	void SetValueColumn(optional_idx index);
+	const LogicalType &GetValueType();
 
 private:
-	LogicalType value_type;
+	vector<LogicalType> column_types;
+	LogicalType invalid_type;
+	optional_idx column_idx;
 };
 
 class StringResultRenderer : public BaseResultRenderer {

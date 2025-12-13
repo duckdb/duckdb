@@ -11,7 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Result Renderer
 //===--------------------------------------------------------------------===//
-BaseResultRenderer::BaseResultRenderer() : value_type(LogicalTypeId::INVALID) {
+BaseResultRenderer::BaseResultRenderer() : invalid_type(LogicalTypeId::INVALID) {
 }
 
 BaseResultRenderer::~BaseResultRenderer() {
@@ -39,13 +39,13 @@ void BaseResultRenderer::Render(ResultRenderType render_mode, const string &val)
 		RenderType(val);
 		break;
 	case ResultRenderType::VALUE:
-		RenderValue(val, value_type);
+		RenderValue(val, GetValueType());
 		break;
 	case ResultRenderType::NULL_VALUE:
-		RenderNull(val, value_type);
+		RenderNull(val, GetValueType());
 		break;
 	case ResultRenderType::STRING_LITERAL:
-		RenderStringLiteral(val, value_type);
+		RenderStringLiteral(val, GetValueType());
 		break;
 	case ResultRenderType::FOOTER:
 		RenderFooter(val);
@@ -55,8 +55,22 @@ void BaseResultRenderer::Render(ResultRenderType render_mode, const string &val)
 	}
 }
 
-void BaseResultRenderer::SetValueType(const LogicalType &type) {
-	value_type = type;
+void BaseResultRenderer::SetResultTypes(vector<LogicalType> new_column_types) {
+	column_types = std::move(new_column_types);
+}
+
+void BaseResultRenderer::SetValueColumn(optional_idx index) {
+	if (index.IsValid() && index.GetIndex() >= column_types.size()) {
+		throw InternalException("BaseResultRenderer::SetValueColumn - column out of range");
+	}
+	column_idx = index;
+}
+
+const LogicalType &BaseResultRenderer::GetValueType() {
+	if (!column_idx.IsValid()) {
+		return invalid_type;
+	}
+	return column_types[column_idx.GetIndex()];
 }
 
 void StringResultRenderer::RenderLayout(const string &text) {
@@ -100,8 +114,8 @@ struct HighlightingAnnotation {
 
 struct BoxRenderValue {
 	BoxRenderValue(string text_p, ResultRenderType render_mode, ValueRenderAlignment alignment,
-	               LogicalType type_p = LogicalTypeId::INVALID, optional_idx render_width = optional_idx())
-	    : text(std::move(text_p)), render_mode(render_mode), alignment(alignment), type(std::move(type_p)),
+	               optional_idx column_idx = optional_idx(), optional_idx render_width = optional_idx())
+	    : text(std::move(text_p)), render_mode(render_mode), alignment(alignment), column_idx(column_idx),
 	      render_width(render_width) {
 	}
 
@@ -109,7 +123,7 @@ struct BoxRenderValue {
 	ResultRenderType render_mode;
 	vector<HighlightingAnnotation> annotations;
 	ValueRenderAlignment alignment;
-	LogicalType type;
+	optional_idx column_idx;
 	optional_idx render_width;
 	bool decomposed = false;
 };
@@ -164,8 +178,6 @@ private:
 	                 optional_idx render_width = optional_idx());
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
-	string GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r, const LogicalType &type,
-	                      ResultRenderType &render_mode);
 	list<ColumnDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
 	                                                  idx_t bottom_rows);
 	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
@@ -184,8 +196,8 @@ private:
 	//! Try to format a large number in a readable way (e.g. 1234567 -> 1.23 million)
 	string TryFormatLargeNumber(const string &numeric);
 
-	bool CanPrettyPrint(const LogicalType &type);
-	bool CanHighlight(const LogicalType &type);
+	bool CanPrettyPrint(const BoxRenderValue &render_value);
+	bool CanHighlight(const BoxRenderValue &render_value);
 	void PrettyPrintValue(BoxRenderValue &render_value, idx_t max_rows, idx_t max_width);
 	void HighlightValue(BoxRenderValue &render_value);
 };
@@ -195,6 +207,7 @@ BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig &config, 
                                                      BaseResultRenderer &ss)
     : config(config), context(context), column_names(names), result(result), ss(ss) {
 	result_types = result.Types();
+	ss.SetResultTypes(result_types);
 }
 
 void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered_rows) {
@@ -827,22 +840,6 @@ string BoxRendererImplementation::ConvertRenderValue(const string &input, const 
 	}
 }
 
-string BoxRendererImplementation::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r,
-                                                 const LogicalType &type, ResultRenderType &render_mode) {
-	try {
-		render_mode = ResultRenderType::VALUE;
-		ss.SetValueType(type);
-		auto row = rows.GetValue(c, r);
-		if (row.IsNull()) {
-			render_mode = ResultRenderType::NULL_VALUE;
-			return config.null_value;
-		}
-		return ConvertRenderValue(StringValue::Get(row), type);
-	} catch (std::exception &ex) {
-		return "????INVALID VALUE - " + string(ex.what()) + "?????";
-	}
-}
-
 struct JSONParser {
 public:
 	virtual ~JSONParser() = default;
@@ -1382,23 +1379,31 @@ protected:
 	BoxRenderValue &render_value;
 };
 
-bool BoxRendererImplementation::CanPrettyPrint(const LogicalType &type) {
+bool BoxRendererImplementation::CanPrettyPrint(const BoxRenderValue &render_value) {
+	if (!render_value.column_idx.IsValid()) {
+		return false;
+	}
+	auto &type = result.Types()[render_value.column_idx.GetIndex()];
 	return type.IsJSONType() || type.IsNested();
 }
 
-bool BoxRendererImplementation::CanHighlight(const LogicalType &type) {
+bool BoxRendererImplementation::CanHighlight(const BoxRenderValue &render_value) {
+	if (!render_value.column_idx.IsValid()) {
+		return false;
+	}
+	auto &type = result.Types()[render_value.column_idx.GetIndex()];
 	return type.IsJSONType() || type.IsNested();
 }
 
 void BoxRendererImplementation::PrettyPrintValue(BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
-	if (!CanPrettyPrint(render_value.type)) {
+	if (!CanPrettyPrint(render_value)) {
 		return;
 	}
 	JSONFormatter::FormatValue(render_value, max_rows, max_width);
 }
 
 void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
-	if (!CanHighlight(render_value.type)) {
+	if (!CanHighlight(render_value)) {
 		return;
 	}
 	JSONHighlighter highlighter(render_value);
@@ -1451,7 +1456,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					string render_value;
 					ResultRenderType render_type;
 					ValueRenderAlignment alignment;
-					LogicalType type;
+					idx_t column_idx = c;
 					if (FlatVector::IsNull(chunk.data[c], r)) {
 						render_value = config.null_value;
 						render_type = ResultRenderType::NULL_VALUE;
@@ -1462,7 +1467,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					if (config.render_mode == RenderMode::ROWS) {
 						// in rows mode we select alignment for each column based on the type
 						alignment = TypeAlignment(result_types[c]);
-						type = result_types[c];
 					} else {
 						// in columns mode we left-align the header rows, and right-align the values
 						switch (c) {
@@ -1478,11 +1482,11 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 							render_type = ResultRenderType::VALUE;
 							alignment = ValueRenderAlignment::RIGHT;
 							// for columns rendering mode - the type for this value is determined by the row index
-							type = result.Types()[render_rows.size() + r - 2];
+							column_idx = render_rows.size() + r - 2;
 							break;
 						}
 					}
-					chunk_rows[r].values.emplace_back(std::move(render_value), render_type, alignment, std::move(type));
+					chunk_rows[r].values.emplace_back(std::move(render_value), render_type, alignment, column_idx);
 				}
 			}
 			for (auto &row : chunk_rows) {
@@ -1747,13 +1751,13 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			// check if this row has truncated columns
 			vector<BoxRenderRow> extra_rows;
 			for (idx_t c = 0; c < row.values.size(); c++) {
-				if (CanPrettyPrint(row.values[c].type)) {
+				if (CanPrettyPrint(row.values[c])) {
 					idx_t max_rows = max_rows_per_row;
 					if (need_extra_row) {
 						max_rows--;
 					}
 					PrettyPrintValue(row.values[c], max_rows, column_widths[c]);
-					if (CanHighlight(row.values[c].type)) {
+					if (CanHighlight(row.values[c])) {
 						HighlightValue(row.values[c]);
 					}
 					// FIXME: hacky
@@ -1794,7 +1798,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						extra_rows.emplace_back();
 						for (auto &current_val : row.values) {
 							extra_rows.back().values.emplace_back(string(), current_val.render_mode,
-							                                      current_val.alignment, current_val.type);
+							                                      current_val.alignment, current_val.column_idx);
 						}
 					}
 					bool can_add_extra_row =
@@ -1967,8 +1971,8 @@ void BoxRendererImplementation::RenderValues() {
 			auto render_mode = render_value.render_mode;
 			auto alignment = render_value.alignment;
 			if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
-				ss.SetValueType(render_value.type);
-				if (!render_value.decomposed && CanHighlight(render_value.type)) {
+				ss.SetValueColumn(render_value.column_idx);
+				if (!render_value.decomposed && CanHighlight(render_value)) {
 					HighlightValue(render_value);
 				}
 			}
