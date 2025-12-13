@@ -636,6 +636,29 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+FilterPushdownResult FilterCombiner::TryPushdownNullFilter(TableFilterSet &table_filters,
+                                                           const vector<ColumnIndex> &column_ids, Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &operator_expression = expr.Cast<BoundOperatorExpression>();
+	if (operator_expression.type != ExpressionType::OPERATOR_IS_NULL &&
+	    operator_expression.type != ExpressionType::OPERATOR_IS_NOT_NULL) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (operator_expression.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	const auto &column_ref = operator_expression.children[0]->Cast<BoundColumnRefExpression>();
+	const auto &column_index = column_ids[column_ref.binding.column_index];
+	if (operator_expression.type == ExpressionType::OPERATOR_IS_NULL) {
+		table_filters.PushFilter(column_index, make_uniq<IsNullFilter>());
+	} else {
+		table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
+	}
+	return FilterPushdownResult::PUSHED_DOWN_FULLY;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
 	auto pushdown_result = TryPushdownPrefixFilter(table_filters, column_ids, expr);
@@ -651,6 +674,10 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table
 		return pushdown_result;
 	}
 	pushdown_result = TryPushdownOrClause(table_filters, column_ids, expr);
+	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
+		return pushdown_result;
+	}
+	pushdown_result = TryPushdownNullFilter(table_filters, column_ids, expr);
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
 	}
