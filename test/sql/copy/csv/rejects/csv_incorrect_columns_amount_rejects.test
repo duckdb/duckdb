@@ -110,32 +110,32 @@ SELECT * FROM read_csv(
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
    store_rejects=true, auto_detect=false, header = 1, strict_mode=True);
 
-query IIIIIIIII rowsort
-SELECT * EXCLUDE (scan_id) FROM reject_errors order by all
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors order by line, line_byte_position, byte_position, column_idx ASC
 ----
-0	1814	14505	14510	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
-0	1823	14575	14576	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
-0	1823	14575	14576	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
-0	1823	14575	14576	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
-0	2378	19009	19010	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
-0	2378	19009	19010	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
-0	2378	19009	19010	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
-0	2762	22075	22078	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
-0	2762	22075	22078	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
-1	1096	8761	8768	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
-1	1096	8761	8770	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
-1	1159	9269	9276	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
-1	1159	9269	9278	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
-1	1206	9649	9656	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
-1	2769	22155	22162	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
-2	1604	12825	12826	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
-2	1604	12825	12826	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
-2	1604	12825	12826	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
-2	1671	13355	13362	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
-2	1671	13355	13364	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
-2	2751	21999	22002	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
-2	2751	21999	22002	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
-2	2768	22131	22138	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
-2	2768	22131	22140	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
-3	3	17	24	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
-3	4	27	32	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+3	17	24	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+4	27	32	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+1096	8761	8768	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+1096	8761	8770	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+1159	9269	9276	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+1159	9269	9278	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+1206	9649	9656	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+1604	12825	12826	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+1604	12825	12826	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+1604	12825	12826	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+1671	13355	13362	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+1671	13355	13364	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+1814	14505	14510	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+1823	14575	14576	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+1823	14575	14576	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+1823	14575	14576	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+2378	19009	19010	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+2378	19009	19010	2	c	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 2
+2378	19009	19010	3	d	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 3
+2751	21999	22002	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+2751	21999	22002	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
+2762	22075	22078	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+2762	22075	22078	3	d	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 3
+2768	22131	22138	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+2768	22131	22140	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+2769	22155	22162	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5

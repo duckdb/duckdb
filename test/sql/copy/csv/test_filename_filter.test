@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIII
-SELECT column1, column2, column3, parse_filename(filename) FROM read_csv('{DATA_DIR}/csv/filename_filter/*.csv', filename=true);
+SELECT column1, column2, column3, parse_filename(filename) FROM read_csv('{DATA_DIR}/csv/filename_filter/*.csv', filename=true) ORDER BY filename, column1;
 ----
 1	2	3	a.csv
 4	5	6	b.csv

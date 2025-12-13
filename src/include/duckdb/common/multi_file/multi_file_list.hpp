@@ -182,7 +182,8 @@ protected:
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	bool ExpandNextPath();
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const;
+	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
+	                        vector<unique_ptr<PaginatedResult<OpenFileInfo>>> &paginated_files) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
 
@@ -190,6 +191,8 @@ protected:
 	ClientContext &context;
 	//! The current path to expand
 	idx_t current_path;
+	//! The paginated results for each path
+	vector<unique_ptr<PaginatedResult<OpenFileInfo>>> paginated_files;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
 
