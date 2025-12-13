@@ -156,11 +156,12 @@ struct RenderDataCollection {
 
 	ClientContext &context;
 	unique_ptr<ColumnDataCollection> render_values;
-	unique_ptr<ColumnDataCollection> render_widths;
 
 public:
-	void InitializeValueChunk(DataChunk &chunk);
-	void InitializeWidthChunk(DataChunk &chunk);
+	void InitializeChunk(DataChunk &chunk);
+	Vector &Values(DataChunk &chunk, idx_t c) {
+		return chunk.data[c];
+	}
 };
 
 struct BoxRendererImplementation {
@@ -579,21 +580,14 @@ void BoxRendererImplementation::ConvertRenderVector(Vector &vector, idx_t count,
 
 RenderDataCollection::RenderDataCollection(ClientContext &context, idx_t column_count) : context(context) {
 	vector<LogicalType> varchar_types;
-	vector<LogicalType> width_types;
 	for (idx_t c = 0; c < column_count; c++) {
 		varchar_types.emplace_back(LogicalType::VARCHAR);
-		width_types.emplace_back(LogicalType::UINTEGER);
 	}
 	render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
-	render_widths = make_uniq<ColumnDataCollection>(context, width_types);
 }
 
-void RenderDataCollection::InitializeValueChunk(DataChunk &chunk) {
+void RenderDataCollection::InitializeChunk(DataChunk &chunk) {
 	chunk.Initialize(context, render_values->Types());
-}
-
-void RenderDataCollection::InitializeWidthChunk(DataChunk &chunk) {
-	chunk.Initialize(context, render_widths->Types());
 }
 
 vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
@@ -610,7 +604,7 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 	fetch_result.Initialize(context, result.Types());
 
 	DataChunk insert_result;
-	top_collection.InitializeValueChunk(insert_result);
+	top_collection.InitializeChunk(insert_result);
 
 	if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
 		if (config.render_mode != RenderMode::ROWS || result.Count() != 1) {
@@ -634,8 +628,10 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 
 		// cast all columns to varchar
 		for (idx_t c = 0; c < column_count; c++) {
-			VectorOperations::Cast(context, fetch_result.data[c], insert_result.data[c], insert_count);
-			ConvertRenderVector(insert_result.data[c], insert_count, fetch_result.data[c].GetType());
+			auto &source_vector = fetch_result.data[c];
+			auto &target_vector = top_collection.Values(insert_result, c);
+			VectorOperations::Cast(context, source_vector, target_vector, insert_count);
+			ConvertRenderVector(target_vector, insert_count, source_vector.GetType());
 		}
 		insert_result.SetCardinality(insert_count);
 
@@ -679,37 +675,60 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 		chunk_idx++;
 		row_idx += fetch_result.size();
 	}
+	if (bottom_rows == 0) {
+		return collections;
+	}
 
 	// fetch the bottom rows from the ColumnDataCollection
-	row_idx = 0;
+	// first fetch all required chunks
+	idx_t fetched_row_count = 0;
+	vector<unique_ptr<DataChunk>> chunks;
 	chunk_idx = result.ChunkCount() - 1;
-	while (row_idx < bottom_rows) {
-		if (context.IsInterrupted()) {
+	while (fetched_row_count < bottom_rows) {
+		// fetch the current chunk
+		auto fetch_chunk = make_uniq<DataChunk>();
+		fetch_chunk->Initialize(context, result.Types());
+		result.FetchChunk(chunk_idx, *fetch_chunk);
+
+		fetched_row_count += fetch_chunk->size();
+		chunks.push_back(std::move(fetch_chunk));
+		if (fetched_row_count >= bottom_rows) {
+			// fetched all required rows - break
 			break;
 		}
-		fetch_result.Reset();
-		insert_result.Reset();
-		// fetch the next chunk
-		result.FetchChunk(chunk_idx, fetch_result);
-		idx_t insert_count = MinValue<idx_t>(fetch_result.size(), bottom_rows - row_idx);
+		// fetch another chunk
+		if (chunk_idx == 0) {
+			throw InternalException("Failed to fetch enough rows");
+		}
+		chunk_idx--;
+	}
+	// invert the chunks and start converting
+	std::reverse(chunks.begin(), chunks.end());
 
-		// invert the rows
-		SelectionVector inverted_sel(insert_count);
-		for (idx_t r = 0; r < insert_count; r++) {
-			inverted_sel.set_index(r, fetch_result.size() - r - 1);
+	for (idx_t i = 0; i < chunks.size(); i++) {
+		// skip over any extra rows
+		auto &chunk = *chunks[i];
+		idx_t offset = i == 0 ? fetched_row_count - bottom_rows : 0;
+		idx_t insert_count = chunk.size() - offset;
+
+		if (offset > 0) {
+			// invert the rows
+			SelectionVector slice_sel(insert_count);
+			for (idx_t r = 0; r < insert_count; r++) {
+				slice_sel.set_index(r, offset + r);
+			}
+			chunk.Slice(slice_sel, insert_count);
+			chunk.Flatten();
 		}
 
 		for (idx_t c = 0; c < column_count; c++) {
-			Vector slice(fetch_result.data[c], inverted_sel, insert_count);
-			VectorOperations::Cast(context, slice, insert_result.data[c], insert_count);
-			ConvertRenderVector(insert_result.data[c], insert_count, fetch_result.data[c].GetType());
+			auto &source_vector = chunk.data[c];
+			VectorOperations::Cast(context, source_vector, insert_result.data[c], insert_count);
+			ConvertRenderVector(insert_result.data[c], insert_count, source_vector.GetType());
 		}
 		insert_result.SetCardinality(insert_count);
 		// construct the render collection
 		bottom_collection.render_values->Append(insert_result);
-
-		chunk_idx--;
-		row_idx += fetch_result.size();
 	}
 	return collections;
 }
@@ -732,7 +751,7 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	vector<RenderDataCollection> result;
 	result.emplace_back(context, new_names.size());
 	DataChunk row_chunk;
-	result.front().InitializeValueChunk(row_chunk);
+	result.front().InitializeChunk(row_chunk);
 	auto &res_coll = *result.front().render_values;
 	ColumnDataAppendState append_state;
 	res_coll.InitializeAppend(append_state);
@@ -1470,7 +1489,6 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 		render_rows.push_back(std::move(type_row));
 	}
 	// prepare the values
-	bool invert = false;
 	for (idx_t c = 0; c < collections.size(); c++) {
 		auto &collection = *collections[c].render_values;
 		if (collection.Count() == 0) {
@@ -1542,14 +1560,9 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 				row.render_mode = ResultRenderType::NULL_VALUE;
 			}
 		}
-		if (invert) {
-			// the bottom collection is inverted - so flip the rows
-			std::reverse(collection_rows.begin(), collection_rows.end());
-		}
 		for (auto &row : collection_rows) {
 			render_rows.push_back(std::move(row));
 		}
-		invert = true;
 	}
 
 	// now all rows are prepared - figure out the max width of each of the columns
