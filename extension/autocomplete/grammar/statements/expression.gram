@@ -24,9 +24,14 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
 CastOrTryCast <- 'CAST' / 'TRY_CAST'
 
 StarExpression <- (ColId '.')* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE' (Parens(List(ExcludeName)) / ExcludeName)
+ExcludeList <- 'EXCLUDE' ExcludeNameList / ExcludeNameSingle
+ExcludeNameList <- Parens(List(ExcludeName))
+ExcludeNameSingle <- ExcludeName
 ExcludeName <- DottedIdentifier / ColIdOrString
-ReplaceList <- 'REPLACE' (Parens(List(ReplaceEntry)) / ReplaceEntry)
+ReplaceList <- 'REPLACE' ReplaceEntries
+ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
+ReplaceEntrySingle <- ReplaceEntry
+ReplaceEntryList <- Parens(List(ReplaceEntry))
 ReplaceEntry <- Expression 'AS' ColumnReference
 RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
 RenameEntry <- ColumnReference 'AS' Identifier
@@ -35,8 +40,8 @@ CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
-IntervalLiteral <- 'INTERVAL' IntervalParameter IntervalUnit?
-IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
+IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
+IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression
 IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
@@ -71,7 +76,7 @@ ColLabelParameter <- '$' ColLabel
 PositionalExpression <- '#' NumberLiteral
 DefaultExpression <- 'DEFAULT'
 
-ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'
+ListComprehensionExpression <- '[' Expression 'FOR' List(ColIdOrString) 'IN' Expression ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF' Expression
 
 ParensExpression <- Parens(Expression)
@@ -137,7 +142,7 @@ OperatorGreaterThanEquals <- '>='
 # LEVEL 7
 BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
-LikeClause <- LikeVariations Expression EscapeClause?
+LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
 EscapeClause <- 'ESCAPE' Expression
 
 LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
@@ -150,7 +155,9 @@ NotLikeOp      <- '!~~'
 NotSimilarToOp <- '!~'
 
 InClause <- 'IN' InExpression
-InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
+InExpression <- InExpressionList / InSelectStatement / OtherOperatorExpression
+InExpressionList <- Parens(List(Expression))
+InSelectStatement <- Parens(SelectStatementInternal)
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
@@ -199,9 +206,10 @@ StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
 
-SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
+TryExpression <- 'TRY' Parens(Expression)
 ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
 ExtractExpression <- 'EXTRACT' Parens(Expression 'FROM' Expression)
 LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression

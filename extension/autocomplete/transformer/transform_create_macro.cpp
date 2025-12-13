@@ -23,9 +23,20 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGT
 	auto macro_definition_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	vector<unique_ptr<MacroFunction>> macro_functions;
 	for (auto macro_definition : macro_definition_list) {
 		info->macros.push_back(transformer.Transform<unique_ptr<MacroFunction>>(macro_definition));
 	}
+	D_ASSERT(!info->macros.empty());
+	auto macro_type = info->macros[0]->type;
+	if (info->macros.size() > 1) {
+		for (idx_t i = 1; i < macro_definition_list.size(); ++i) {
+			if (info->macros[i]->type != macro_type) {
+				throw ParserException("Cannot mix table and scalar macro function definitions");
+			}
+		}
+	}
+	info->type = macro_type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
 	result->info = std::move(info);
 	return result;
 }
