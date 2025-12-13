@@ -22,6 +22,10 @@ public:
 
 	//! The next row number.
 	std::atomic<int64_t> row_number;
+	//! Local state construction mutex
+	mutex local_lock;
+	//! The single local state
+	unique_ptr<OperatorState> local_state;
 };
 
 class StreamingWindowState : public OperatorState {
@@ -379,7 +383,12 @@ unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(
 }
 
 unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
-	return make_uniq<StreamingWindowState>(context.client);
+	auto &gstate = op_state->Cast<StreamingWindowGlobalState>();
+	lock_guard<mutex> lock(gstate.local_lock);
+	if (!gstate.local_state) {
+		gstate.local_state = make_uniq<StreamingWindowState>(context.client);
+	}
+	return PhysicalOperator::GetOperatorState(context);
 }
 
 void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, DataChunk &input, Vector &result) {
@@ -486,9 +495,9 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 }
 
 void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataChunk &output, DataChunk &delayed,
-                                               GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+                                               GlobalOperatorState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
-	auto &state = state_p.Cast<StreamingWindowState>();
+	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 
 	// Compute window functions
 	const idx_t count = output.size();
@@ -530,9 +539,9 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 }
 
 void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
-                                           DataChunk &output, GlobalOperatorState &gstate_p,
-                                           OperatorState &state_p) const {
-	auto &state = state_p.Cast<StreamingWindowState>();
+                                           DataChunk &output, GlobalOperatorState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
@@ -548,13 +557,13 @@ void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk 
 	}
 	output.SetCardinality(count);
 
-	ExecuteFunctions(context, output, state.delayed, gstate_p, state_p);
+	ExecuteFunctions(context, output, state.delayed, gstate_p);
 }
 
 void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
-                                             DataChunk &output, GlobalOperatorState &gstate_p,
-                                             OperatorState &state_p) const {
-	auto &state = state_p.Cast<StreamingWindowState>();
+                                             DataChunk &output, GlobalOperatorState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 	auto &shifted = state.shifted;
 
 	idx_t out = output.size();
@@ -576,12 +585,11 @@ void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChun
 	}
 	delayed.SetCardinality(delay - out + in);
 
-	ExecuteFunctions(context, output, delayed, gstate_p, state_p);
+	ExecuteFunctions(context, output, delayed, gstate_p);
 }
 
 void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
-                                             DataChunk &output, GlobalOperatorState &gstate_p,
-                                             OperatorState &state_p) const {
+                                             DataChunk &output, GlobalOperatorState &gstate_p) const {
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); col_idx++) {
 		output.data[col_idx].Reference(delayed.data[col_idx]);
@@ -589,12 +597,13 @@ void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChun
 	idx_t count = delayed.size();
 	output.SetCardinality(count);
 
-	ExecuteFunctions(context, output, input, gstate_p, state_p);
+	ExecuteFunctions(context, output, input, gstate_p);
 }
 
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &output,
-                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &state = state_p.Cast<StreamingWindowState>();
+                                                    GlobalOperatorState &gstate_p, OperatorState &) const {
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
 	}
@@ -615,27 +624,27 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		// If we can't consume all of the delayed values,
 		// we need to split them instead of referencing them all
 		output.SetCardinality(input.size());
-		ExecuteShifted(context, delayed, input, output, gstate_p, state_p);
+		ExecuteShifted(context, delayed, input, output, gstate_p);
 		// We delayed the unused input so ask for more
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
-		ExecuteDelayed(context, delayed, input, output, gstate_p, state_p);
+		ExecuteDelayed(context, delayed, input, output, gstate_p);
 		// Defer resetting delayed as it may be referenced.
 		delayed.SetCardinality(0);
 		// Come back to process the input
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
 		//	No delayed rows, so emit what we can and delay the rest.
-		ExecuteInput(context, delayed, input, output, gstate_p, state_p);
+		ExecuteInput(context, delayed, input, output, gstate_p);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 }
 
 OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContext &context, DataChunk &output,
-                                                                 GlobalOperatorState &gstate_p,
-                                                                 OperatorState &state_p) const {
-	auto &state = state_p.Cast<StreamingWindowState>();
+                                                                 GlobalOperatorState &gstate_p, OperatorState &) const {
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
+	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 
 	if (state.initialized && state.lead_count) {
 		auto &delayed = state.delayed;
@@ -646,10 +655,10 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		if (output.GetCapacity() < delayed.size()) {
 			//	More than one output buffer was delayed, so shift in what we can
 			output.SetCardinality(output.GetCapacity());
-			ExecuteShifted(context, delayed, input, output, gstate_p, state_p);
+			ExecuteShifted(context, delayed, input, output, gstate_p);
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}
-		ExecuteDelayed(context, delayed, input, output, gstate_p, state_p);
+		ExecuteDelayed(context, delayed, input, output, gstate_p);
 	}
 
 	return OperatorFinalizeResultType::FINISHED;
