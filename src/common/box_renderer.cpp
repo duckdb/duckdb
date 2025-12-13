@@ -151,6 +151,10 @@ struct BoxRenderRow {
 	vector<BoxRenderValue> values;
 };
 
+struct RenderDataCollection {
+	unique_ptr<ColumnDataCollection> render_values;
+};
+
 struct BoxRendererImplementation {
 	BoxRendererImplementation(BoxRendererConfig &config, ClientContext &context, const vector<string> &names,
 	                          const ColumnDataCollection &result, BaseResultRenderer &ss);
@@ -179,10 +183,10 @@ private:
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
 	void ConvertRenderVector(Vector &vector, idx_t count, const LogicalType &original_type);
-	list<ColumnDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
-	                                                  idx_t bottom_rows);
-	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
-	void ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width);
+	vector<RenderDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
+	                                                    idx_t bottom_rows);
+	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
+	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void RenderValues();
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
 	string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
@@ -565,16 +569,18 @@ void BoxRendererImplementation::ConvertRenderVector(Vector &vector, idx_t count,
 	}
 }
 
-list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
-                                                                             idx_t top_rows, idx_t bottom_rows) {
+vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
+                                                                               idx_t top_rows, idx_t bottom_rows) {
 	auto column_count = result.ColumnCount();
 	vector<LogicalType> varchar_types;
 	for (idx_t c = 0; c < column_count; c++) {
 		varchar_types.emplace_back(LogicalType::VARCHAR);
 	}
-	std::list<ColumnDataCollection> collections;
-	collections.emplace_back(context, varchar_types);
-	collections.emplace_back(context, varchar_types);
+	vector<RenderDataCollection> collections;
+	collections.emplace_back();
+	collections.emplace_back();
+	collections[0].render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
+	collections[1].render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
 
 	auto &top_collection = collections.front();
 	auto &bottom_collection = collections.back();
@@ -613,7 +619,7 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 		insert_result.SetCardinality(insert_count);
 
 		// construct the render collection
-		top_collection.Append(insert_result);
+		top_collection.render_values->Append(insert_result);
 
 		// if we have are constructing a footer
 		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
@@ -643,7 +649,7 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 					insert_result.data[c].SetValue(0, Value(readable_numbers[c]));
 				}
 				insert_result.SetCardinality(1);
-				top_collection.Append(insert_result);
+				top_collection.render_values->Append(insert_result);
 			} else {
 				config.large_number_rendering = LargeNumberRendering::NONE;
 			}
@@ -679,7 +685,7 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 		}
 		insert_result.SetCardinality(insert_count);
 		// construct the render collection
-		bottom_collection.Append(insert_result);
+		bottom_collection.render_values->Append(insert_result);
 
 		chunk_idx--;
 		row_idx += fetch_result.size();
@@ -687,8 +693,8 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 	return collections;
 }
 
-list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<ColumnDataCollection> input,
-                                                                       idx_t row_count) {
+vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<RenderDataCollection> input,
+                                                                         idx_t row_count) {
 	auto &top = input.front();
 	auto &bottom = input.back();
 
@@ -698,32 +704,32 @@ list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<Colu
 	new_names.emplace_back("Type");
 	varchar_types.emplace_back(LogicalType::VARCHAR);
 	varchar_types.emplace_back(LogicalType::VARCHAR);
-	for (idx_t r = 0; r < top.Count(); r++) {
+	for (idx_t r = 0; r < top.render_values->Count(); r++) {
 		new_names.emplace_back("Row " + to_string(r + 1));
 		varchar_types.emplace_back(LogicalType::VARCHAR);
 	}
-	for (idx_t r = 0; r < bottom.Count(); r++) {
-		auto row_index = row_count - bottom.Count() + r + 1;
+	for (idx_t r = 0; r < bottom.render_values->Count(); r++) {
+		auto row_index = row_count - bottom.render_values->Count() + r + 1;
 		new_names.emplace_back("Row " + to_string(row_index));
 		varchar_types.emplace_back(LogicalType::VARCHAR);
 	}
 	//
 	DataChunk row_chunk;
 	row_chunk.Initialize(Allocator::DefaultAllocator(), varchar_types);
-	std::list<ColumnDataCollection> result;
-	result.emplace_back(context, varchar_types);
-	result.emplace_back(context, varchar_types);
-	auto &res_coll = result.front();
+	vector<RenderDataCollection> result;
+	result.emplace_back();
+	result[0].render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
+	auto &res_coll = *result.front().render_values;
 	ColumnDataAppendState append_state;
 	res_coll.InitializeAppend(append_state);
-	for (idx_t c = 0; c < top.ColumnCount(); c++) {
+	for (idx_t c = 0; c < top.render_values->ColumnCount(); c++) {
 		vector<column_t> column_ids {c};
 		auto row_index = row_chunk.size();
 		idx_t current_index = 0;
 		row_chunk.SetValue(current_index++, row_index, column_names[c]);
 		row_chunk.SetValue(current_index++, row_index, RenderType(result_types[c]));
 		for (auto &collection : input) {
-			for (auto &chunk : collection.Chunks(column_ids)) {
+			for (auto &chunk : collection.render_values->Chunks(column_ids)) {
 				if (context.IsInterrupted()) {
 					break;
 				}
@@ -733,7 +739,7 @@ list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<Colu
 			}
 		}
 		row_chunk.SetCardinality(row_chunk.size() + 1);
-		if (row_chunk.size() == STANDARD_VECTOR_SIZE || c + 1 == top.ColumnCount()) {
+		if (row_chunk.size() == STANDARD_VECTOR_SIZE || c + 1 == top.render_values->ColumnCount()) {
 			res_coll.Append(append_state, row_chunk);
 			row_chunk.Reset();
 		}
@@ -1427,12 +1433,12 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 	JSONHighlighter highlighter(render_value);
 	highlighter.Process(render_value.text);
 }
-void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
+void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width,
                                                     idx_t max_width) {
 	auto column_count = result_types.size();
 	idx_t row_count = 0;
 	for (auto &collection : collections) {
-		row_count += collection.Count();
+		row_count += collection.render_values->Count();
 	}
 
 	// prepare all rows for rendering
@@ -1450,20 +1456,19 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		render_rows.push_back(std::move(type_row));
 	}
 	// prepare the values
-	bool first_render = true;
 	bool invert = false;
-	for (auto &collection : collections) {
+	for (idx_t c = 0; c < collections.size(); c++) {
+		auto &collection = *collections[c].render_values;
 		if (collection.Count() == 0) {
 			continue;
 		}
-		if (first_render) {
+		if (c == 0) {
 			// add a separator if there are any rows
 			render_rows.emplace_back(RenderRowType::SEPARATOR);
 		} else {
 			// render divider between top and bottom collection
 			render_rows.emplace_back(RenderRowType::DIVIDER);
 		}
-		first_render = false;
 		vector<BoxRenderRow> collection_rows;
 		for (auto &chunk : collection.Chunks()) {
 			vector<BoxRenderRow> chunk_rows;
