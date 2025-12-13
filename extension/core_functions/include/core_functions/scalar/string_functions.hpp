@@ -113,6 +113,26 @@ struct FormatreadablesizeFun {
 	static constexpr const char *Name = "formatReadableSize";
 };
 
+struct ParseFormattedBytesFun {
+	static constexpr const char *Name = "parse_formatted_bytes";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Parses a human-readable representation of a size in bytes into an integer.";
+	static constexpr const char *Example = "parse_formatted_bytes('16 KiB')";
+	static constexpr const char *Categories = "string,numeric";
+
+	static ScalarFunction GetFunction();
+};
+
+struct TryParseFormattedBytesFun {
+	static constexpr const char *Name = "try_parse_formatted_bytes";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Tries to parse a human-readable representation of a size in bytes into an integer. Returns NULL if parsing fails.";
+	static constexpr const char *Example = "try_parse_formatted_bytes('16 KiB')";
+	static constexpr const char *Categories = "string,numeric";
+
+	static ScalarFunction GetFunction();
+};
+
 struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
 	static constexpr const char *Parameters = "integer";

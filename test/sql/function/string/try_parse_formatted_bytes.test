@@ -1,0 +1,184 @@
+# name: test/sql/function/string/try_parse_formatted_bytes.test
+# description: Test the try_parse_formatted_bytes function (returns NULL instead of throwing on invalid input)
+# group: [string]
+
+# Basic bytes and aliases
+query I
+SELECT try_parse_formatted_bytes('0 B');
+----
+0
+
+query I
+SELECT try_parse_formatted_bytes('1 byte');
+----
+1
+
+query I
+SELECT try_parse_formatted_bytes('2 bytes');
+----
+2
+
+query I
+SELECT try_parse_formatted_bytes('1 b');
+----
+1
+
+# Decimal (1000^i) units
+query I
+SELECT try_parse_formatted_bytes('1 KB');
+----
+1000
+
+query I
+SELECT try_parse_formatted_bytes('1.5 KB');
+----
+1500
+
+query I
+SELECT try_parse_formatted_bytes('2 MB');
+----
+2000000
+
+query I
+SELECT try_parse_formatted_bytes('1 GB');
+----
+1000000000
+
+query I
+SELECT try_parse_formatted_bytes('1 TB');
+----
+1000000000000
+
+# Binary (1024^i) units
+query I
+SELECT try_parse_formatted_bytes('1 KiB');
+----
+1024
+
+query I
+SELECT try_parse_formatted_bytes('1.5 KiB');
+----
+1536
+
+query I
+SELECT try_parse_formatted_bytes('2 MiB');
+----
+2097152
+
+query I
+SELECT try_parse_formatted_bytes('1 GiB');
+----
+1073741824
+
+# No-space and mixed casing should work
+query I
+SELECT try_parse_formatted_bytes('5MB');
+----
+5000000
+
+query I
+SELECT try_parse_formatted_bytes('  2  mib  ');
+----
+2097152
+
+query I
+SELECT try_parse_formatted_bytes('1e3 b');
+----
+1000
+
+# NULL input propagates to NULL
+query I
+SELECT try_parse_formatted_bytes(NULL);
+----
+NULL
+
+statement ok
+SET wal_autocheckpoint='8 KiB';
+
+# parsing memory values of results of `duckdb_settings()`
+query II
+SELECT value, try_parse_formatted_bytes(value) FROM duckdb_settings() WHERE name=='wal_autocheckpoint';
+----
+8.0 KiB	8192
+
+# non-memory value yields NULL
+query I
+SELECT try_parse_formatted_bytes(value) FROM duckdb_settings() WHERE name=='access_mode';
+----
+NULL
+
+# running the function on a table column
+query II
+WITH data(value) AS (
+	VALUES
+		('1 KB'),
+		('2 MB'),
+		('3 GiB'),
+		('4 TB'),
+		(NULL),
+		('invalid value')
+)
+SELECT value, try_parse_formatted_bytes(value) AS bytes FROM data;
+----
+1 KB	1000
+2 MB	2000000
+3 GiB	3221225472
+4 TB	4000000000000
+NULL	NULL
+invalid value	NULL
+
+# Negative values are mapped to max uint64
+query I
+SELECT try_parse_formatted_bytes('-5 MB');
+----
+18446744073709551615
+
+# null string is mapped to infinite (max uint64)
+query I
+SELECT try_parse_formatted_bytes('null');
+----
+18446744073709551615
+
+# none is mapped to infinite (max uint64)
+query I
+SELECT try_parse_formatted_bytes('none');
+----
+18446744073709551615
+
+# Cases that previously errored should now yield NULL
+query I
+SELECT try_parse_formatted_bytes('5');
+----
+NULL
+
+query I
+SELECT try_parse_formatted_bytes('abc');
+----
+NULL
+
+query I
+SELECT try_parse_formatted_bytes('1 Ki');
+----
+NULL
+
+# Type mismatch should still result in a binder error
+statement error
+SELECT try_parse_formatted_bytes(1933);
+----
+Binder Error: No function matches the given name and argument types 'try_parse_formatted_bytes(INTEGER_LITERAL)'. You might need to add explicit type casts.
+
+query I
+SELECT try_parse_formatted_bytes('10000000000 TiB');
+----
+NULL
+
+# not a number
+query I
+SELECT try_parse_formatted_bytes('1.5.3 GB');
+----
+NULL
+
+query I
+SELECT try_parse_formatted_bytes('inf GiB');
+----
+NULL
