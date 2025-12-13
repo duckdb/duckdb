@@ -253,3 +253,10 @@ query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT My') LIMIT 1;
 ----
 MyColumn	7
+
+# multi statements
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT 42; SEL') LIMIT 1;
+----
+SELECT 	11
+

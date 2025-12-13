@@ -1,11 +1,13 @@
-#include "tokenizer.hpp"
-
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "parser/tokenizer/base_tokenizer.hpp"
+
+#include "keyword_helper.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
+BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens)
+    : sql(sql), tokens(tokens), keyword_helper(PEGKeywordHelper::Instance()) {
 }
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
@@ -137,12 +139,40 @@ bool BaseTokenizer::CharacterIsOperator(char c) {
 	return StringUtil::CharacterIsOperator(c);
 }
 
-void BaseTokenizer::PushToken(idx_t start, idx_t end) {
+TokenType BaseTokenizer::TokenizeStateToType(TokenizeState state) {
+	switch (state) {
+	case TokenizeState::STANDARD:
+		return TokenType::IDENTIFIER;
+	case TokenizeState::SINGLE_LINE_COMMENT:
+		return TokenType::COMMENT;
+	case TokenizeState::MULTI_LINE_COMMENT:
+		return TokenType::COMMENT;
+	case TokenizeState::QUOTED_IDENTIFIER:
+		return TokenType::IDENTIFIER;
+	case TokenizeState::STRING_LITERAL:
+		return TokenType::STRING_LITERAL;
+	case TokenizeState::KEYWORD:
+		return TokenType::KEYWORD;
+	case TokenizeState::NUMERIC:
+		return TokenType::NUMBER_LITERAL;
+	case TokenizeState::OPERATOR:
+		return TokenType::OPERATOR;
+	case TokenizeState::DOLLAR_QUOTED_STRING:
+		return TokenType::STRING_LITERAL;
+	default:
+		throw InternalException("Unknown token type");
+	}
+}
+
+void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
+	if (type == TokenType::COMMENT) {
+		return;
+	}
 	if (start >= end) {
 		return;
 	}
 	string last_token = sql.substr(start, end - start);
-	tokens.emplace_back(std::move(last_token), start);
+	tokens.emplace_back(std::move(last_token), start, type);
 }
 
 // Valid characters can be between A-Z, a-z, 0-9, underscore, or \200 - \377
@@ -171,6 +201,7 @@ bool BaseTokenizer::TokenizeInput() {
 	auto state = TokenizeState::STANDARD;
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
+	idx_t dollar_marker_start = 0;
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -222,8 +253,8 @@ bool BaseTokenizer::TokenizeInput() {
 				i = next_dollar;
 				if (i < sql.size()) {
 					// Found a complete marker, store it.
-					idx_t marker_start = last_pos + 1;
-					dollar_quote_marker = string(sql.begin() + marker_start, sql.begin() + i);
+					dollar_marker_start = last_pos + 1;
+					dollar_quote_marker = string(sql.begin() + dollar_marker_start, sql.begin() + i);
 				}
 				break;
 			}
@@ -245,14 +276,14 @@ bool BaseTokenizer::TokenizeInput() {
 			idx_t op_len;
 			if (IsSpecialOperator(i, op_len)) {
 				// special operator - push the special operator
-				tokens.emplace_back(sql.substr(i, op_len), last_pos);
+				tokens.emplace_back(sql.substr(i, op_len), last_pos, TokenType::OPERATOR);
 				i += op_len - 1;
 				last_pos = i + 1;
 				break;
 			}
 			if (IsSingleByteOperator(c)) {
 				// single-byte operator - directly push the token
-				tokens.emplace_back(string(1, c), last_pos);
+				tokens.emplace_back(string(1, c), last_pos, TokenType::OPERATOR);
 				last_pos = i + 1;
 				break;
 			}
@@ -298,7 +329,7 @@ bool BaseTokenizer::TokenizeInput() {
 			while (!CharacterIsInitialNumber(sql[i - 1])) {
 				i--;
 			}
-			PushToken(last_pos, i);
+			PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
 			state = TokenizeState::STANDARD;
 			last_pos = i;
 			i--;
@@ -307,7 +338,7 @@ bool BaseTokenizer::TokenizeInput() {
 			// operator literal - check if this is still an operator
 			if (!CharacterIsOperator(c)) {
 				// not an operator - return to standard state
-				PushToken(last_pos, i);
+				PushToken(last_pos, i, TokenType::OPERATOR);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -317,7 +348,9 @@ bool BaseTokenizer::TokenizeInput() {
 			// keyword - check if this is still a keyword
 			if (!CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
-				PushToken(last_pos, i);
+				auto word = sql.substr(last_pos, i - last_pos);
+				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
+				PushToken(last_pos, i, token_type);
 				state = TokenizeState::STANDARD;
 				last_pos = i;
 				i--;
@@ -329,7 +362,7 @@ bool BaseTokenizer::TokenizeInput() {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1);
+					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
 					last_pos = i + 1;
 					state = TokenizeState::STANDARD;
 				}
@@ -341,7 +374,7 @@ bool BaseTokenizer::TokenizeInput() {
 					// escaped - skip escape
 					i++;
 				} else {
-					PushToken(last_pos, i + 1);
+					PushToken(last_pos, i + 1, TokenType::IDENTIFIER);
 					last_pos = i + 1;
 					state = TokenizeState::STANDARD;
 				}
@@ -349,6 +382,7 @@ bool BaseTokenizer::TokenizeInput() {
 			break;
 		case TokenizeState::SINGLE_LINE_COMMENT:
 			if (c == '\n' || c == '\r') {
+				PushToken(last_pos, i + 1, TokenType::COMMENT);
 				last_pos = i + 1;
 				state = TokenizeState::STANDARD;
 			}
@@ -391,7 +425,7 @@ bool BaseTokenizer::TokenizeInput() {
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
 			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
-			tokens.emplace_back(quoted, full_marker_len);
+			tokens.emplace_back(quoted, dollar_marker_start - 1, TokenType::STRING_LITERAL);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
@@ -411,6 +445,7 @@ bool BaseTokenizer::TokenizeInput() {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 	case TokenizeState::DOLLAR_QUOTED_STRING:
+		PushToken(last_pos, sql.size(), TokenType::COMMENT);
 		// no suggestions in comments or dollar-quoted strings
 		return false;
 	default:
@@ -422,7 +457,17 @@ bool BaseTokenizer::TokenizeInput() {
 }
 
 void BaseTokenizer::OnStatementEnd(idx_t pos) {
-	tokens.clear();
+	// Default: Do nothing
+}
+
+void BaseTokenizer::OnLastToken(TokenizeState state, string last_word, idx_t last_pos) {
+	if (last_word.empty()) {
+		return;
+	}
+	if (state == TokenizeState::KEYWORD) {
+		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
+	}
+	tokens.emplace_back(std::move(last_word), last_pos, TokenizeStateToType(state));
 }
 
 } // namespace duckdb
