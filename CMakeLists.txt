@@ -157,12 +157,12 @@ endif()
 
 if(APPLE)
   set(OS_NAME "osx")
-endif()
-if(WIN32)
+elseif(WIN32)
   set(OS_NAME "windows")
-endif()
-if(UNIX AND NOT APPLE)
+elseif(UNIX)
   set(OS_NAME "linux") # sorry BSD
+else()
+  set(OS_NAME "unknown")
 endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
