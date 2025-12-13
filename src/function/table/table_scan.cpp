@@ -768,7 +768,8 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	result["Table"] = bind_data.table.name;
+	result["Table"] = ParseInfo::QualifierToString(bind_data.table.schema.catalog.GetName(),
+	                                               bind_data.table.schema.name, bind_data.table.name);
 	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequential Scan";
 	return result;
 }
