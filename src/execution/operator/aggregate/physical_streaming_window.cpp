@@ -257,7 +257,8 @@ public:
 		Vector temp;
 	};
 
-	explicit StreamingWindowState(ClientContext &client) : initialized(false), allocator(Allocator::Get(client)) {
+	explicit StreamingWindowState(ClientContext &client)
+	    : initialized(false), allocator(Allocator::Get(client)), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	~StreamingWindowState() override {
@@ -343,6 +344,8 @@ public:
 	DataChunk delayed;
 	//! A buffer for shifting delayed input
 	DataChunk shifted;
+	//! A temporary selection vector
+	SelectionVector sel;
 };
 
 bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
@@ -531,23 +534,23 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 				//	Find the first non-NULL value
 				ExpressionExecutor executor(context.client);
 				executor.AddExpression(*wexpr.children[0]);
-				Vector raw(wexpr.children[0]->return_type);
-				executor.ExecuteExpression(output, raw);
+				Vector arg(wexpr.children[0]->return_type);
+				executor.ExecuteExpression(output, arg);
 				UnifiedVectorFormat unified;
-				raw.ToUnifiedFormat(count, unified);
+				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
 				auto &prev = *state.const_vectors[expr_idx];
 				if (validity.AllValid()) {
-					prev.Reference(raw.GetValue(0));
+					prev.Reference(arg.GetValue(0));
 					result.Reference(prev);
 				} else {
-					SelectionVector sel(count);
+					auto &sel = state.sel;
 					Vector split(wexpr.children[0]->return_type);
 					split.SetValue(0, prev.GetValue(0));
 					sel_t s = 0;
 					for (sel_t i = 0; i < count; ++i) {
 						if (!s && validity.RowIsValidUnsafe(i)) {
-							auto v = raw.GetValue(i);
+							auto v = arg.GetValue(i);
 							prev.Reference(v);
 							s = 1;
 							split.SetValue(s, v);
@@ -567,20 +570,23 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 			executor.AddExpression(*wexpr.children[0]);
 			if (wexpr.ignore_nulls) {
 				auto &prev = *state.const_vectors[expr_idx];
-				Vector raw(wexpr.children[0]->return_type);
-				executor.ExecuteExpression(output, raw);
+				Vector arg(wexpr.children[0]->return_type);
+				executor.ExecuteExpression(output, arg);
 				UnifiedVectorFormat unified;
-				raw.ToUnifiedFormat(count, unified);
+				arg.ToUnifiedFormat(count, unified);
 				const auto &validity = unified.validity;
 				if (validity.AllValid()) {
-					VectorOperations::Copy(raw, result, count, 0, 0);
+					VectorOperations::Copy(arg, result, count, 0, 0);
 				} else {
+					//	Copy the data as it may be a reference to the argument
+					Vector copy(wexpr.children[0]->return_type);
+					VectorOperations::Copy(arg, copy, count, 0, 0);
 					//	Overwrite the previous non-NULL value if the first one is NULL
 					if (!validity.RowIsValidUnsafe(0)) {
-						VectorOperations::Copy(prev, raw, 1, 0, 0);
+						VectorOperations::Copy(prev, copy, 1, 0, 0);
 					}
 					//	Select appropriate the non-NULL values to copy over
-					SelectionVector sel(count);
+					auto &sel = state.sel;
 					sel_t non_null = 0;
 					for (sel_t i = 0; i < count; ++i) {
 						if (validity.RowIsValidUnsafe(i)) {
@@ -588,7 +594,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 						}
 						sel.set_index(i, non_null);
 					}
-					result.Slice(raw, sel, count);
+					result.Slice(copy, sel, count);
 				}
 				//	Remember the last non-NULL value for the next iteration
 				prev.Reference(result.GetValue(count - 1));
