@@ -808,7 +808,22 @@ public:
 	static InsertionOrderPreservingMap<string> MultiFileDynamicToString(TableFunctionDynamicToStringInput &input) {
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
 		InsertionOrderPreservingMap<string> result;
-		result.insert(make_pair("Total Files Read", std::to_string(gstate.file_index.load())));
+		auto files_loaded = gstate.file_index.load();
+		result.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
+
+		const size_t file_name_list_limit = 5;
+		auto file_paths = gstate.file_list.GetPaths();
+		if (!file_paths.empty()) {
+			vector<std::string> file_path_names;
+			for (idx_t i = 0; i < std::min(file_paths.size(), file_name_list_limit); i++) {
+				file_path_names.push_back(file_paths[i].path);
+			}
+			if (files_loaded > file_name_list_limit) {
+				file_path_names.push_back("...");
+			}
+			auto list_of_types = StringUtil::Join(file_path_names, ", ");
+			result.insert(make_pair("Filename(s)", list_of_types));
+		}
 		return result;
 	}
 
