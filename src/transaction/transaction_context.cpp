@@ -6,6 +6,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -55,11 +56,11 @@ void TransactionContext::Commit() {
 			s->TransactionRollback(*transaction, context, error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
-	} else {
-		for (auto &state : context.registered_state->States()) {
-			state->TransactionCommit(*transaction, context);
-		}
 	}
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionCommit(*transaction, context);
+	}
+	transaction->Finalize();
 }
 
 void TransactionContext::SetAutoCommit(bool value) {
@@ -94,6 +95,7 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (rollback_error.HasError()) {
 		rollback_error.Throw();
 	}
+	transaction->Finalize();
 }
 
 void TransactionContext::ClearTransaction() {
