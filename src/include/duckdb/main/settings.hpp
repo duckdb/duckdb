@@ -763,6 +763,15 @@ struct ForceBitpackingModeSetting {
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
+struct InspectRangeFilterSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "inspect_range_filter";
+	static constexpr const char *Description = "Inspect ranges when estimating cardinality during optimization";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
 
 struct ForceCompressionSetting {
 	using RETURN_TYPE = string;
