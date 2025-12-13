@@ -10,8 +10,8 @@ CREATE TABLE src("Name" VARCHAR, CreatedAt TIMESTAMP, userID VARCHAR, "Version" 
 
 statement ok
 CREATE VIEW model AS 
-	SELECT DISTINCT on(userID,  date_trunc('day', CreatedAt))
-	date_trunc('day', CreatedAt) AS CreatedAt,
+	SELECT DISTINCT on(userID,  CreatedAt::DATE)
+	CreatedAt::DATE AS CreatedAt,
 	"Version",
 	Clients,
 	HasCustomAddress, 
