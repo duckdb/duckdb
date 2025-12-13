@@ -12,6 +12,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 
@@ -38,6 +39,39 @@ enum class GateStatus : uint8_t {
 class ART;
 class Prefix;
 class ARTKey;
+class FixedSizeAllocator;
+
+//! State for TransformToDeprecated operations
+class TransformToDeprecatedState {
+public:
+	explicit TransformToDeprecatedState(unsafe_unique_ptr<FixedSizeAllocator> allocator_p)
+	    : allocator(std::move(allocator_p)) {
+	}
+
+	TransformToDeprecatedState() = delete;
+	TransformToDeprecatedState(const TransformToDeprecatedState &) = delete;
+	TransformToDeprecatedState &operator=(const TransformToDeprecatedState &) = delete;
+	TransformToDeprecatedState(TransformToDeprecatedState &&) = delete;
+	TransformToDeprecatedState &operator=(TransformToDeprecatedState &&) = delete;
+
+public:
+	bool HasAllocator() const {
+		return allocator != nullptr;
+	}
+
+	FixedSizeAllocator &GetAllocator() const {
+		D_ASSERT(HasAllocator());
+		return *allocator;
+	}
+
+	unsafe_unique_ptr<FixedSizeAllocator> TakeAllocator() {
+		return std::move(allocator);
+	}
+
+private:
+	//! Allocator for creating deprecated nodes.
+	unsafe_unique_ptr<FixedSizeAllocator> allocator;
+};
 
 //! Options for ToString printing functions
 struct ToStringOptions {
@@ -140,8 +174,7 @@ public:
 	static NType GetNodeType(const idx_t count);
 
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, Node &node,
-	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
+	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 	//! Returns the string representation of the node at indentation level.
 	//!
@@ -196,9 +229,9 @@ public:
 private:
 	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
-	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+	                                          TransformToDeprecatedState &state) {
 		if (ptr) {
-			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, allocator); });
+			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, state); });
 		}
 	}
 };
