@@ -536,7 +536,10 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			if (!index.IsUnique()) {
 				return false;
 			}
-			D_ASSERT(index.IsBound());
+			// Skip unbound indexes - they cannot be checked for conflicts
+			if (!index.IsBound()) {
+				return false;
+			}
 			if (conflict_info.ConflictTargetMatches(index)) {
 				matching_indexes.insert(index);
 			}
@@ -547,7 +550,10 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			if (!index.IsUnique()) {
 				return false;
 			}
-			D_ASSERT(index.IsBound());
+			// Skip unbound indexes - they cannot be checked for conflicts
+			if (!index.IsBound()) {
+				return false;
+			}
 			if (conflict_info.ConflictTargetMatches(index)) {
 				auto &bound_index = index.Cast<BoundIndex>();
 				matching_indexes.insert(bound_index);
