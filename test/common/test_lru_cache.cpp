@@ -68,9 +68,9 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 }
 
 TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
-	SharedLruCache<string, TestValue> cache(500);
-
 	SECTION("Evict LRU when exceeding max weight") {
+		SharedLruCache<string, TestValue> cache(500);
+
 		auto val1 = make_shared_ptr<TestValue>(1, 200);
 		auto val2 = make_shared_ptr<TestValue>(2, 200);
 		auto val3 = make_shared_ptr<TestValue>(3, 200);
@@ -88,6 +88,8 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 	}
 
 	SECTION("LRU ordering") {
+		SharedLruCache<string, TestValue> cache(300);
+
 		auto val1 = make_shared_ptr<TestValue>(1, 100);
 		auto val2 = make_shared_ptr<TestValue>(2, 100);
 		auto val3 = make_shared_ptr<TestValue>(3, 100);
