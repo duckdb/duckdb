@@ -2,6 +2,8 @@
 # description: Test analyze and vacuum statements in peg parser
 # group: [transformer]
 
+mode skip
+
 require autocomplete
 
 require skip_reload

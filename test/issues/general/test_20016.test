@@ -1,0 +1,22 @@
+# name: test/issues/general/test_20016.test
+# description: Issue 20016 - "INTERNAL Error: Failed to bind column reference" with CTE and generate_series
+# group: [general]
+
+query I
+select (
+    with cte_1 as (
+        select sum(1)
+        from generate_series(1, col_outer)
+    ), cte_2 as (
+        select (
+            select sum(1)
+            from generate_series(1, col_inner)
+        )
+        from (select 1 as col_inner) as inner_gen
+    )
+    select 1
+    from cte_1, cte_2
+) as middle
+from (select 1 as col_outer) as outer_gen;
+----
+1

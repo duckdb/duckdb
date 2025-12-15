@@ -22,6 +22,7 @@ namespace duckdb {
 
 class DatabaseInstance;
 struct MetadataHandle;
+enum class FreeBlockType { NEWLY_USED_BLOCK, CHECKPOINTED_BLOCK };
 
 struct EncryptionOptions {
 	//! indicates whether the db is encrypted
@@ -73,10 +74,14 @@ public:
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
+	//! Return the next free block id
+	block_id_t GetFreeBlockIdForCheckpoint() override;
 	//! Check the next free block id - but do not assign or allocate it
 	block_id_t PeekFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(MetaBlockPointer root) override;
+	//! Mark a block as included in a checkpoint
+	void MarkBlockACheckpointed(block_id_t block_id) override;
 	//! Mark a block as used (no longer re-writeable)
 	void MarkBlockAsUsed(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)
@@ -168,6 +173,8 @@ private:
 
 	void AddStorageVersionTag();
 
+	block_id_t GetFreeBlockIdInternal(FreeBlockType type);
+
 private:
 	AttachedDatabase &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
@@ -182,11 +189,13 @@ private:
 	set<block_id_t> free_list;
 	//! The list of blocks that have been freed, but cannot yet be re-used because they are still in-use
 	set<block_id_t> free_blocks_in_use;
+	//! The list of blocks that are in-use, but haven't been written as part of a checkpoint yet
+	set<block_id_t> newly_used_blocks;
 	//! The list of multi-use blocks (i.e. blocks that have >1 reference in the file)
 	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
 	//! Appending the block to the modified_blocks list
 	unordered_map<block_id_t, uint32_t> multi_use_blocks;
-	//! The list of blocks that will be added to the free list
+	//! The list of blocks that are no longer in-use, but cannot be re-used until the next checkpoint
 	unordered_set<block_id_t> modified_blocks;
 	//! The current meta block id
 	idx_t meta_block;

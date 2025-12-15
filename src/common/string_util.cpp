@@ -10,6 +10,7 @@
 #include "duckdb/original/std/sstream.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -32,6 +33,27 @@ string StringUtil::GenerateRandomName(idx_t length) {
 		ss << "0123456789abcdef"[engine.NextRandomInteger(0, 15)];
 	}
 	return ss.str();
+}
+
+bool StringUtil::Equals(const string_t &s1, const char *s2) {
+	auto s1_data = s1.GetData();
+	for (idx_t i = 0; i < s1.GetSize(); i++) {
+		if (s1_data[i] != s2[i]) {
+			return false;
+		}
+		if (s2[i] == '\0') {
+			return false;
+		}
+	}
+	if (s2[s1.GetSize()] != '\0') {
+		// not equal
+		return false;
+	}
+	return true;
+}
+
+bool StringUtil::Equals(const char *s1, const string_t &s2) {
+	return StringUtil::Equals(s2, s1);
 }
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {

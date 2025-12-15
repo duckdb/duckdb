@@ -10,10 +10,7 @@ SET storage_compatibility_version='v1.2.0'
 load __TEST_DIR__/test_zstd_compression_ratio.db
 
 statement ok
-set enable_logging=true;
-
-statement ok
-set logging_level='info';
+CALL enable_logging(level='trace')
 
 statement ok
 PRAGMA force_compression='zstd'

@@ -12,6 +12,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
+#include "duckdb/common/enums/active_transaction_state.hpp"
 
 namespace duckdb {
 class CheckpointLock;
@@ -22,6 +23,11 @@ class StorageLockKey;
 class StorageCommitState;
 struct DataTableInfo;
 struct UndoBufferProperties;
+
+struct CommitInfo {
+	transaction_t commit_id;
+	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
+};
 
 class DuckTransaction : public Transaction {
 public:
@@ -58,7 +64,7 @@ public:
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
-	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id,
+	ErrorData Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	                 unique_ptr<StorageCommitState> commit_state) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
@@ -77,6 +83,7 @@ public:
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
 	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries, idx_t row_group_start);
 
+	DuckTransactionManager &GetTransactionManager();
 	bool IsDuckTransaction() const override {
 		return true;
 	}
@@ -93,7 +100,6 @@ public:
 	void ModifyTable(DataTable &tbl);
 
 private:
-	DuckTransactionManager &transaction_manager;
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;

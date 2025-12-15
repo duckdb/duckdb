@@ -28,15 +28,16 @@ set(SHELL_SOURCES
     shell_render_table_metadata.cpp
     shell_windows.cpp)
 
-option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
-
 add_executable(shell ${SHELL_SOURCES})
+
 target_link_libraries(shell duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
 link_threads(shell "")
 if(STATIC_LIBCPP)
   message("Statically linking CLI")
   target_link_libraries(shell -static-libstdc++ -static-libgcc)
 endif()
+
+link_extension_libraries(shell "")
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell duckdb_utf8proc)

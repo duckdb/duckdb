@@ -566,7 +566,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 		throw NotImplementedException("Escape is not yet implemented.");
 	}
 	auto result = make_uniq<FunctionExpression>(like_variation, std::move(like_children));
-	result->is_operator = true;
+	if (like_variation != "regexp_full_match") {
+		result->is_operator = true;
+	}
 	return std::move(result);
 }
 
@@ -735,16 +737,28 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+
 	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
 	if (!prefix_opt.HasResult()) {
 		return expr;
 	}
+
 	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+
 	for (auto &prefix_expr : prefix_repeat.children) {
 		auto prefix = transformer.Transform<string>(prefix_expr);
+
+		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
+			auto &const_expr = expr->Cast<ConstantExpression>();
+			if (TryNegateValue(const_expr.value)) {
+				continue;
+			}
+		}
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
-		expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+		func_expr->is_operator = true;
+		expr = std::move(func_expr);
 	}
 	return expr;
 }

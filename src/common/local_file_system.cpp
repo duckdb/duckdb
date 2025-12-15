@@ -1303,8 +1303,9 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(source);
 	auto target_unicode = NormalizePathAndConvertToUnicode(target);
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
-	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
+	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
@@ -1327,6 +1328,28 @@ bool LocalFileSystem::CanSeek() {
 
 bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
+}
+
+string LocalFileSystem::GetVersionTag(FileHandle &handle) {
+	// TODO: Fix using FileSystem::Stats for v1.5, which should also fix it for Windows
+#ifdef _WIN32
+	return "";
+#else
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, strerror(errno));
+	}
+
+	// dev/ino should be enough, but to guard against in-place writes we also add file size and modification time
+	uint64_t version_tag[4];
+	Store(NumericCast<uint64_t>(s.st_dev), data_ptr_cast(&version_tag[0]));
+	Store(NumericCast<uint64_t>(s.st_ino), data_ptr_cast(&version_tag[1]));
+	Store(NumericCast<uint64_t>(s.st_size), data_ptr_cast(&version_tag[2]));
+	Store(Timestamp::FromEpochSeconds(s.st_mtime).value, data_ptr_cast(&version_tag[3]));
+
+	return string(char_ptr_cast(version_tag), sizeof(uint64_t) * 4);
+#endif
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {

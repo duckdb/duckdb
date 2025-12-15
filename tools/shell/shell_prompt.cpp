@@ -276,7 +276,7 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 		// max length was already exceeded - skip rendering
 		return string();
 	}
-	auto render_length = state.RenderLength(text.c_str());
+	auto render_length = state.RenderLength(text);
 	if (length + render_length <= max_length.GetIndex()) {
 		// not exceeded - render entire string
 		length += render_length;

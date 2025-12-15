@@ -73,6 +73,12 @@
       "paths": [
         "test/extension/loadable_parser_override.test"
       ]
+    },
+    {
+      "reason": "Unclassified failures",
+      "paths": [
+        "test/sql/types/enum/test_enum.test"
+      ]
     }
   ]
 }

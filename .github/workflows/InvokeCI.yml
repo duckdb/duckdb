@@ -27,6 +27,7 @@ jobs:
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
       run_all: ${{ inputs.run_all }}
+      opt_in_archs: 'windows_arm64;'
 
   osx:
     uses: ./.github/workflows/OSX.yml

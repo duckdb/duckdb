@@ -96,7 +96,8 @@
         "test/sql/logging/logging_csv.test",
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
-        "test/sql/pragma/test_query_log.test"
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
       ]
     },
     {

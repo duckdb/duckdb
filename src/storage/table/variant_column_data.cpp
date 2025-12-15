@@ -298,11 +298,11 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 	sub_columns[0]->FetchRow(transaction, *state.child_states[1], row_id, result, result_idx);
 }
 
-void VariantColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
+void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	validity->VisitBlockIds(visitor);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
-		sub_column->CommitDropColumn();
+		sub_column->VisitBlockIds(visitor);
 	}
 }
 

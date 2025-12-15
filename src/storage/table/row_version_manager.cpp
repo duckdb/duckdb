@@ -36,6 +36,53 @@ optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
 	return vector_info[vector_idx].get();
 }
 
+bool RowVersionManager::ShouldCheckpointRowGroup(transaction_t checkpoint_id, idx_t count) {
+	lock_guard<mutex> l(version_lock);
+	TransactionData checkpoint_transaction(checkpoint_id, checkpoint_id);
+
+	idx_t total_count = 0;
+	for (idx_t read_count = 0, vector_idx = 0; read_count < count; read_count += STANDARD_VECTOR_SIZE, vector_idx++) {
+		idx_t max_count = MinValue<idx_t>(count - read_count, STANDARD_VECTOR_SIZE);
+		idx_t checkpoint_count;
+		auto chunk_info = GetChunkInfo(vector_idx);
+		if (!chunk_info) {
+			checkpoint_count = max_count;
+		} else {
+			checkpoint_count = chunk_info->GetCheckpointRowCount(checkpoint_transaction, max_count);
+		}
+		if (checkpoint_count == 0) {
+			continue;
+		}
+		if (total_count != read_count) {
+			string chunk_info_text;
+			for (idx_t i = 0; i <= vector_idx; i++) {
+				auto current_info = GetChunkInfo(i);
+				chunk_info_text += "\n";
+				chunk_info_text += to_string(i) + ": ";
+				if (current_info) {
+					chunk_info_text += current_info->ToString(max_count);
+				} else {
+					chunk_info_text += "(empty)";
+				}
+			}
+			throw InternalException(
+			    "Error in RowGroup::GetCheckpointRowCount - insertions are not sequential - at vector idx %d found %d "
+			    "rows, where we have already obtained %d from the total %d, transaction start time %d%s",
+			    vector_idx, checkpoint_count, total_count, read_count, checkpoint_id, chunk_info_text);
+		}
+		total_count += checkpoint_count;
+	}
+	if (total_count == 0) {
+		return false;
+	}
+	if (total_count != count) {
+		throw InternalException("RowGroup::GetCheckpointRowCount returned a partially checkpointed entry (checkpoint "
+		                        "count %d, row group count %d)",
+		                        total_count, count);
+	}
+	return true;
+}
+
 idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                                       idx_t max_count) {
 	lock_guard<mutex> l(version_lock);

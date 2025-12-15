@@ -1104,7 +1104,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"FromOrTo <- 'FROM' / 'TO'\n"
 	"CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?\n"
 	"CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)\n"
-	"CopyOptions <- 'WITH'? (Parens(GenericCopyOptionList) / (SpecializedOptions*))\n"
+	"CopyOptions <- 'WITH'? Parens(GenericCopyOptionList) / (SpecializedOptions*)\n"
 	"SpecializedOptions <-\n"
 	"	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /\n"
 	"	SpecializedStringOption /\n"

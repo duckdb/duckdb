@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/19578.test
+# description: Test for issue #19758
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT Delimiter, Quote, Escape FROM sniff_csv("data/19578.csv");
+----
+;	"	(empty)
+
+query III
+SELECT Delimiter, Quote, Escape FROM sniff_csv("data/19578.csv",  strict_mode=false);
+----
+;	"	(empty)

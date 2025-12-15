@@ -9,6 +9,7 @@
 #pragma once
 
 #include "shell_state.hpp"
+#include "shell_highlight.hpp"
 
 namespace duckdb_shell {
 struct ShellState;
@@ -27,26 +28,25 @@ struct ResultMetadata {
 };
 
 struct RowData {
-	vector<string> data;
+	vector<duckdb::string_t> data;
 	vector<bool> is_null;
 	idx_t row_index = 0;
 };
 
 struct RenderingQueryResult {
-	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
-	    : result(result), renderer(renderer), metadata(result) {
-	}
+	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer);
 
 	duckdb::QueryResult &result;
 	ShellRenderer &renderer;
 	ResultMetadata metadata;
-	vector<vector<string>> data;
+	vector<unique_ptr<duckdb::DataChunk>> chunks;
 	bool exhausted_result = false;
+	idx_t loaded_row_count = 0;
 
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();
 	}
-	bool TryConvertChunk(ShellRenderer &renderer);
+	bool TryConvertChunk();
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
@@ -63,6 +63,12 @@ public:
 	virtual void Print(const string &str) {
 		state.Print(str);
 	}
+	virtual void Print(duckdb::string_t str) {
+		state.Print(str);
+	}
+	virtual void Print(const char *str) {
+		state.Print(str);
+	}
 	virtual void SetBinaryMode() {
 		state.SetBinaryMode();
 	}
@@ -74,6 +80,9 @@ public:
 	}
 
 	void RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
+	void RenderAlignedValue(const char *str, idx_t str_len, idx_t width,
+	                        TextAlignment alignment = TextAlignment::CENTER);
+	void RenderAlignedValue(duckdb::string_t str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
 	void PrintDashes(idx_t N);
 	void OutputQuotedIdentifier(const string &str);
 	void OutputQuotedString(const string &str);
@@ -98,10 +107,17 @@ public:
 	virtual void RenderHeader(PrintStream &out, ResultMetadata &result);
 	virtual void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row);
 	virtual void RenderFooter(PrintStream &out, ResultMetadata &result);
-	virtual string NullValue();
+	virtual const char *NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
 	virtual bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) = 0;
-	virtual string ConvertValue(const char *value);
+	virtual unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk);
+	virtual bool HasConvertValue() {
+		return false;
+	}
+	virtual bool ShouldConvertValue(const char *value, idx_t str_len) {
+		return false;
+	}
+	virtual string ConvertValue(const char *value, idx_t str_len);
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -136,6 +152,30 @@ public:
 		return false;
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
+};
+
+class ShellLogStorage : public duckdb::LogStorage {
+public:
+	explicit ShellLogStorage(ShellState &state) : shell_highlight(state) {};
+
+	~ShellLogStorage() override = default;
+
+	const string GetStorageName() override {
+		return "ShellLogStorage";
+	}
+
+protected:
+	void WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+	                   const string &log_message, const duckdb::RegisteredLoggingContext &context) override;
+	void WriteLogEntries(duckdb::DataChunk &chunk, const duckdb::RegisteredLoggingContext &context) override {};
+	void FlushAll() override {};
+	void Flush(duckdb::LoggingTargetTable table) override {};
+	bool IsEnabled(duckdb::LoggingTargetTable table) override {
+		return true;
+	};
+
+private:
+	ShellHighlight shell_highlight;
 };
 
 } // namespace duckdb_shell

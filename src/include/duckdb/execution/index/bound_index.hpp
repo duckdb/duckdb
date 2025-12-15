@@ -130,6 +130,13 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock.
 	void Vacuum();
 
+	//! Whether or not the index requires transactionality. If true we will create delta indexes
+	virtual bool RequiresTransactionality() const;
+	//! Creates an empty copy of the index with the same schema, etc, but a different constraint type
+	//! This will only be called if RequiresTransactionality returns true
+	virtual unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
+	                                               IndexConstraintType constraint_type) const;
+
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
 	virtual idx_t GetInMemorySize(IndexLock &state) = 0;
 	//! Returns the in-memory usage of the index
@@ -174,7 +181,7 @@ public:
 	//! Replay index insert and delete operations buffered during WAL replay.
 	//! table_types has the physical types of the table in the order they appear, not logical (no generated columns).
 	//! mapped_column_ids contains the sorted order of Indexed physical column ID's (see unbound_index.hpp comments).
-	void ApplyBufferedReplays(const vector<LogicalType> &table_types, vector<BufferedIndexData> &buffered_replays,
+	void ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
 	                          const vector<StorageIndex> &mapped_column_ids);
 
 protected:

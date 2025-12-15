@@ -177,7 +177,7 @@ public:
 	                          idx_t row_group_start);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
-	virtual void CommitDropColumn();
+	virtual void VisitBlockIds(BlockIdVisitor &visitor) const;
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);

@@ -245,8 +245,14 @@ public:
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
 	unique_ptr<Prompt> main_prompt;
-	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
-	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Continuation prompt
+	char continuePrompt[MAX_PROMPT_SIZE];
+	//! Selected continuation prompt
+	char continuePromptSelected[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available up
+	char scrollUpPrompt[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available down
+	char scrollDownPrompt[MAX_PROMPT_SIZE];
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
 	//! User-configured highlight elements
@@ -295,15 +301,20 @@ public:
 	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
 
-	static idx_t RenderLength(const char *z);
+	static idx_t RenderLength(const char *str, idx_t str_len);
+	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
 	static bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
+	void Print(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str);
+	void Print(PrintOutput output, duckdb::string_t str);
 	void Print(PrintOutput output, const string &str);
+	void Print(const char *str, idx_t len);
+	void Print(duckdb::string_t str);
 	void Print(const char *str);
 	void Print(const string &str);
 	template <typename... ARGS>
@@ -378,6 +389,7 @@ public:
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
 	void PrintUsage();
+	void DetectDarkLightMode();
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static string Win32UnicodeToUtf8(const std::wstring &zWideText);

@@ -101,7 +101,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"partitioned_write_flush_threshold", {123}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
-	    {"profile_output", {"test"}},
+	    {"profile_output", {"output.txt"}},
 	    {"profiling_mode", {"detailed"}},
 	    {"disabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},
@@ -125,6 +125,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
+	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"pin_threads", {"off"}}};

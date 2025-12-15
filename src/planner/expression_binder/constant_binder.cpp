@@ -19,7 +19,7 @@ BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr
 				return BindExpression(expr_ptr, depth, root_expression);
 			}
 		}
-		return BindUnsupportedExpression(expr, depth, clause + " cannot contain column names");
+		throw BinderException::Unsupported(expr, clause + " cannot contain column names");
 	}
 	case ExpressionClass::SUBQUERY:
 		throw BinderException(clause + " cannot contain subqueries");

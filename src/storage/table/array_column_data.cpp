@@ -268,9 +268,9 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 
-void ArrayColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
-	child_column->CommitDropColumn();
+void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	validity->VisitBlockIds(visitor);
+	child_column->VisitBlockIds(visitor);
 }
 
 void ArrayColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {

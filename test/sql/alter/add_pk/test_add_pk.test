@@ -80,3 +80,20 @@ query II
 SELECT * FROM scan WHERE i = 2
 ----
 2	3
+
+# test that ADD PRIMARY KEY preserves temporary flag
+statement ok
+CREATE TEMPORARY TABLE temp_pk_test(x INTEGER)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_pk_test'
+----
+temp_pk_test	temp	true
+
+statement ok
+ALTER TABLE temp_pk_test ADD PRIMARY KEY (x)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_pk_test'
+----
+temp_pk_test	temp	true
