@@ -64,7 +64,8 @@ public:
 	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
 	//! Return string representation of the linked list of leaves.
-	static string DeprecatedToString(ART &art, const Node &node);
+	//! If print_deprecated_leaves is false, returns "[deprecated leaves]" with proper indentation.
+	static string DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options);
 };
 
 } // namespace duckdb

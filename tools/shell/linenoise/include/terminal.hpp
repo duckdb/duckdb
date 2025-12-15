@@ -142,6 +142,9 @@ public:
 	static char *EditNoTTY();
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);
 
+	//! Consume all available input and store it for later consumption
+	static void BufferAvailableInput();
+
 	static EscapeSequence ReadEscapeSequence(int ifd, KeyPress &key_press);
 
 #if defined(_WIN32) || defined(WIN32)

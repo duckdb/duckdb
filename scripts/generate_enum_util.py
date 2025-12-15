@@ -55,7 +55,7 @@ overrides = {
         "LOG_TRACE": "TRACE",
         "LOG_DEBUG": "DEBUG",
         "LOG_INFO": "INFO",
-        "LOG_WARN": "WARN",
+        "LOG_WARNING": "WARNING",
         "LOG_ERROR": "ERROR",
         "LOG_FATAL": "FATAL",
     },

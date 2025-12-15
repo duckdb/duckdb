@@ -565,6 +565,13 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
+// Validate External File Cache
+//===----------------------------------------------------------------------===//
+void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CacheValidationMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Variant Minimum Shredding Size
 //===----------------------------------------------------------------------===//
 void VariantMinimumShreddingSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

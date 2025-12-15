@@ -1,3 +1,31 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 3edbbea..9dc2d66 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -1060,8 +1060,8 @@ LogLevel LoggerCallback::GetDuckDBLogLevel(ffi::Level level) {
+ 		return LogLevel::LOG_DEBUG;
+ 	case ffi::Level::INFO:
+ 		return LogLevel::LOG_INFO;
+-	case ffi::Level::WARN:
+-		return LogLevel::LOG_WARN;
++	case ffi::Level::WARNING:
++		return LogLevel::LOG_WARNING;
+ 	case ffi::Level::ERROR:
+ 		return LogLevel::LOG_ERROR;
+ 	default:
+diff --git a/src/include/delta_kernel_ffi.hpp b/src/include/delta_kernel_ffi.hpp
+index df82fe1..9f4ea0e 100644
+--- a/src/include/delta_kernel_ffi.hpp
++++ b/src/include/delta_kernel_ffi.hpp
+@@ -68,7 +68,7 @@ enum class KernelError {
+ /// Level::ERROR is the lowest, and Level::TRACE the highest.
+ enum class Level {
+   ERROR = 0,
+-  WARN = 1,
++  WARNING = 1,
+   INFO = 2,
+ 	DEBUGGING = 3,
+   TRACE = 4,
 diff --git a/src/include/storage/delta_insert.hpp b/src/include/storage/delta_insert.hpp
 index cf74ede..1cc4cb7 100644
 --- a/src/include/storage/delta_insert.hpp

@@ -1,0 +1,464 @@
+# name: test/optimizer/common_subplan.test_slow
+# description: Test the CommonSubplanOptimizer
+# group: [optimizer]
+
+statement ok
+pragma explain_output='optimized_only'
+
+# this should be automatically detected and materialized
+query I
+select t1.s + t2.s
+from (select sum(range) s from range(10)) t1,
+     (select sum(range) s from range(10)) t2
+----
+90
+
+query II
+explain select t1.s + t2.s
+from (select sum(range) s from range(10)) t1,
+     (select sum(range) s from range(10)) t2
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# this shouldn't because random() is volatile
+query II
+explain select t1.s + t2.s
+from (select sum(random()) s from range(10)) t1,
+     (select sum(random()) s from range(10)) t2
+----
+logical_opt	<!REGEX>:.*CTE.*
+
+# common subplan inside of a materialized cte and outside of it
+# should yield two ctes
+query I
+with cte as materialized (
+    select sum(range) s from range(10)
+)
+select t1.s + t2.s
+from cte t1,
+     (select sum(range) s from range(10)) t2
+----
+90
+
+query II
+explain with cte as materialized (
+    select sum(range) s from range(10)
+)
+select t1.s + t2.s
+from cte t1,
+     (select sum(range) s from range(10)) t2
+----
+logical_opt	<REGEX>:.*CTE.*CTE.*
+
+# two sides of a join with a bunch of columns
+statement ok
+create table build as
+select range a, range * 2 b, range * 3 c, range * 4 d
+from (select range::utinyint as range from range(11))
+where range % 5 = 0
+
+statement ok
+create table probe as
+select range e, range * 2 f, range * 3 g, range * 4 h
+from (select range::utinyint as range from range(11))
+
+statement ok
+create view my_view as
+from probe join build on (build.a = probe.e)
+
+# there's one subquery that selects all columns from the join
+# and 9 other subqueries that select different column combinations
+# this should result in 10 CTE scans (we only perform the join in the view once)
+# NOTE:
+# this is constructed somewhat in a specific way
+# because regrettably an empty projection map means we select all columns
+# and this results in build column "a" not being projected out (despite being equal to probe column "e")
+query II
+explain
+select greatest(a, b, c, d, e, f, g, h) from my_view
+union all
+select greatest(b, f) from my_view
+union all
+select greatest(b, g) from my_view
+union all
+select greatest(b, h) from my_view
+union all
+select greatest(c, f) from my_view
+union all
+select greatest(c, g) from my_view
+union all
+select greatest(c, h) from my_view
+union all
+select greatest(d, f) from my_view
+union all
+select greatest(d, g) from my_view
+union all
+select greatest(d, h) from my_view
+----
+logical_opt	<REGEX>:(?:.*CTE_SCAN){10}.*$
+
+# One common subplan contains another, we get 2 CTEs and 3 CTE scans
+# this also tests that we set up the CTEs in the correct order for scheduling pipeline dependencies
+query II
+explain
+select count(*) from (select distinct range from range(10))
+union all
+select count(*) from (select distinct range from range(10))
+union all
+select * from (select distinct range from range(10))
+----
+logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){4}.*
+
+# same as above but with 3 levels of nested CTEs that are recognized
+query II
+explain
+select distinct range from range(10)
+union all
+select distinct range from range(10)
+union all
+select range % 2 as range from (select distinct range from range(10)) group by range
+union all
+select range % 2 as range from (select distinct range from range(10)) group by range
+union all
+select count(*) from (select range % 2 as range from (select distinct range from range(10)) group by range)
+union all
+select count(*) from (select range % 2 as range from (select distinct range from range(10)) group by range)
+----
+logical_opt	<REGEX>:(?:.*CTE){3}.*(?:.*CTE_SCAN){8}.*
+
+# same as above but with joins
+# note that we use a wonky join condition here
+# otherwise statistics propagation and filter pushdown create slight plan differences
+# NOTE: if we would have projection elimination/pullup, this would have one less CTE
+# a useless projection is created, which again creates a small plan difference
+query II
+explain
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r2.range::varchar = r3.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r2.range::varchar = r3.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r1.range::varchar = r3.range::varchar) join range(3) r4 on (r3.range::varchar = r4.range::varchar)
+union all
+select r1.range from range(10) r1 join range(1) r2 on (r1.range::varchar = r2.range::varchar) join range(2) r3 on (r1.range::varchar = r3.range::varchar) join range(3) r4 on (r3.range::varchar = r4.range::varchar)
+----
+logical_opt	<REGEX>:(?:.*CTE){4}.*(?:.*CTE_SCAN){8}.*
+
+# A subplan inside a materialized CTE that is common with a subplan outside of the CTE, should also work
+# this also tests that we don't reorder materialized CTEs that were created by hand
+query II
+explain with cte as materialized (
+    select sum(range) s from range(10)
+)
+select * from cte
+union all
+select sum(range) s from range(10)
+----
+logical_opt	<REGEX>:(?:.*CTE){2}.*(?:.*CTE_SCAN){3}.*
+
+require tpcds
+
+statement ok
+call dsdgen(sf=0.01)
+
+# q27
+query II
+explain
+WITH results AS
+  (SELECT i_item_id,
+          s_state,
+          0 AS g_state,
+          ss_quantity agg1,
+          ss_list_price agg2,
+          ss_coupon_amt agg3,
+          ss_sales_price agg4
+   FROM store_sales,
+        customer_demographics,
+        date_dim,
+        store,
+        item
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_item_sk = i_item_sk
+     AND ss_store_sk = s_store_sk
+     AND ss_cdemo_sk = cd_demo_sk
+     AND cd_gender = 'M'
+     AND cd_marital_status = 'S'
+     AND cd_education_status = 'College'
+     AND d_year = 2002
+     AND s_state = 'TN' )
+SELECT i_item_id,
+       s_state,
+       g_state,
+       agg1,
+       agg2,
+       agg3,
+       agg4
+FROM
+  ( SELECT i_item_id,
+           s_state,
+           0 AS g_state,
+           avg(agg1) agg1,
+           avg(agg2) agg2,
+           avg(agg3) agg3,
+           avg(agg4) agg4
+   FROM results
+   GROUP BY i_item_id ,
+            s_state
+   UNION ALL SELECT i_item_id,
+                    NULL AS s_state,
+                    1 AS g_state,
+                    avg(agg1) agg1,
+                    avg(agg2) agg2,
+                    avg(agg3) agg3,
+                    avg(agg4) agg4
+   FROM results
+   GROUP BY i_item_id
+   UNION ALL SELECT NULL AS i_item_id,
+                    NULL AS s_state,
+                    1 AS g_state,
+                    avg(agg1) agg1,
+                    avg(agg2) agg2,
+                    avg(agg3) agg3,
+                    avg(agg4) agg4
+   FROM results ) foo
+ORDER BY i_item_id NULLS FIRST,
+         s_state NULLS FIRST
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# q44
+query II
+explain
+SELECT asceding.rnk,
+       i1.i_product_name best_performing,
+       i2.i_product_name worst_performing
+FROM
+  (SELECT *
+   FROM
+     (SELECT item_sk,
+             rank() OVER (
+                          ORDER BY rank_col ASC) rnk
+      FROM
+        (SELECT ss_item_sk item_sk,
+                avg(ss_net_profit) rank_col
+         FROM store_sales ss1
+         WHERE ss_store_sk = 4
+         GROUP BY ss_item_sk
+         HAVING avg(ss_net_profit) > 0.9*
+           (SELECT avg(ss_net_profit) rank_col
+            FROM store_sales
+            WHERE ss_store_sk = 4
+              AND ss_addr_sk IS NULL
+            GROUP BY ss_store_sk))V1)V11
+   WHERE rnk < 11) asceding,
+  (SELECT *
+   FROM
+     (SELECT item_sk,
+             rank() OVER (
+                          ORDER BY rank_col DESC) rnk
+      FROM
+        (SELECT ss_item_sk item_sk,
+                avg(ss_net_profit) rank_col
+         FROM store_sales ss1
+         WHERE ss_store_sk = 4
+         GROUP BY ss_item_sk
+         HAVING avg(ss_net_profit) > 0.9*
+           (SELECT avg(ss_net_profit) rank_col
+            FROM store_sales
+            WHERE ss_store_sk = 4
+              AND ss_addr_sk IS NULL
+            GROUP BY ss_store_sk))V2)V21
+   WHERE rnk < 11) descending,
+     item i1,
+     item i2
+WHERE asceding.rnk = descending.rnk
+  AND i1.i_item_sk=asceding.item_sk
+  AND i2.i_item_sk=descending.item_sk
+ORDER BY asceding.rnk
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# q61
+query II
+explain
+SELECT promotions,
+       total,
+       cast(promotions AS decimal(15,4))/cast(total AS decimal(15,4))*100
+FROM
+  (SELECT sum(ss_ext_sales_price) promotions
+   FROM store_sales,
+        store,
+        promotion,
+        date_dim,
+        customer,
+        customer_address,
+        item
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_store_sk = s_store_sk
+     AND ss_promo_sk = p_promo_sk
+     AND ss_customer_sk= c_customer_sk
+     AND ca_address_sk = c_current_addr_sk
+     AND ss_item_sk = i_item_sk
+     AND ca_gmt_offset = -5
+     AND i_category = 'Jewelry'
+     AND (p_channel_dmail = 'Y'
+          OR p_channel_email = 'Y'
+          OR p_channel_tv = 'Y')
+     AND s_gmt_offset = -5
+     AND d_year = 1998
+     AND d_moy = 11) promotional_sales,
+  (SELECT sum(ss_ext_sales_price) total
+   FROM store_sales,
+        store,
+        date_dim,
+        customer,
+        customer_address,
+        item
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_store_sk = s_store_sk
+     AND ss_customer_sk= c_customer_sk
+     AND ca_address_sk = c_current_addr_sk
+     AND ss_item_sk = i_item_sk
+     AND ca_gmt_offset = -5
+     AND i_category = 'Jewelry'
+     AND s_gmt_offset = -5
+     AND d_year = 1998
+     AND d_moy = 11) all_sales
+ORDER BY promotions,
+         total
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# q65
+query II
+explain
+SELECT s_store_name,
+       i_item_desc,
+       sc.revenue,
+       i_current_price,
+       i_wholesale_cost,
+       i_brand
+FROM store,
+     item,
+  (SELECT ss_store_sk,
+          avg(revenue) AS ave
+   FROM
+     (SELECT ss_store_sk,
+             ss_item_sk,
+             sum(ss_sales_price) AS revenue
+      FROM store_sales,
+           date_dim
+      WHERE ss_sold_date_sk = d_date_sk
+        AND d_month_seq BETWEEN 1176 AND 1176+11
+      GROUP BY ss_store_sk,
+               ss_item_sk) sa
+   GROUP BY ss_store_sk) sb,
+  (SELECT ss_store_sk,
+          ss_item_sk,
+          sum(ss_sales_price) AS revenue
+   FROM store_sales,
+        date_dim
+   WHERE ss_sold_date_sk = d_date_sk
+     AND d_month_seq BETWEEN 1176 AND 1176+11
+   GROUP BY ss_store_sk,
+            ss_item_sk) sc
+WHERE sb.ss_store_sk = sc.ss_store_sk
+  AND sc.revenue <= 0.1 * sb.ave
+  AND s_store_sk = sc.ss_store_sk
+  AND i_item_sk = sc.ss_item_sk
+ORDER BY s_store_name NULLS FIRST,
+         i_item_desc NULLS FIRST
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+query II
+explain
+SELECT sum(ss_net_profit) AS total_sum,
+       s_state,
+       s_county,
+       grouping(s_state)+grouping(s_county) AS lochierarchy,
+       rank() OVER (PARTITION BY grouping(s_state)+grouping(s_county),
+                                 CASE
+                                     WHEN grouping(s_county) = 0 THEN s_state
+                                 END
+                    ORDER BY sum(ss_net_profit) DESC) AS rank_within_parent
+FROM store_sales,
+     date_dim d1,
+     store
+WHERE d1.d_month_seq BETWEEN 1200 AND 1200+11
+  AND d1.d_date_sk = ss_sold_date_sk
+  AND s_store_sk = ss_store_sk
+  AND s_state IN
+    (SELECT s_state
+     FROM
+       (SELECT s_state AS s_state,
+               rank() OVER (PARTITION BY s_state
+                            ORDER BY sum(ss_net_profit) DESC) AS ranking
+        FROM store_sales,
+             store,
+             date_dim
+        WHERE d_month_seq BETWEEN 1200 AND 1200+11
+          AND d_date_sk = ss_sold_date_sk
+          AND s_store_sk = ss_store_sk
+        GROUP BY s_state) tmp1
+     WHERE ranking <= 5 )
+GROUP BY rollup(s_state,s_county)
+ORDER BY lochierarchy DESC ,
+         CASE
+             WHEN grouping(s_state)+grouping(s_county) = 0 THEN s_state
+         END ,
+         rank_within_parent
+LIMIT 100;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+require tpch
+
+statement ok
+create schema tpch;
+
+statement ok
+use tpch;
+
+statement ok
+call dbgen(sf=0.01, schema='tpch');
+
+# q11
+query II
+explain
+SELECT
+    ps_partkey,
+    sum(ps_supplycost * ps_availqty) AS value
+FROM
+    partsupp,
+    supplier,
+    nation
+WHERE
+    ps_suppkey = s_suppkey
+    AND s_nationkey = n_nationkey
+    AND n_name = 'GERMANY'
+GROUP BY
+    ps_partkey
+HAVING
+    sum(ps_supplycost * ps_availqty) > (
+        SELECT
+            sum(ps_supplycost * ps_availqty) * 0.0001000000
+        FROM
+            partsupp,
+            supplier,
+            nation
+        WHERE
+            ps_suppkey = s_suppkey
+            AND s_nationkey = n_nationkey
+            AND n_name = 'GERMANY')
+ORDER BY
+    value DESC;
+----
+logical_opt	<REGEX>:.*CTE.*

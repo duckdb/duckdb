@@ -959,6 +959,13 @@
         ]
     },
     {
+        "name": "validate_external_file_cache",
+        "description": "Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only remote cache entries), or NO_VALIDATION (disable cache validation).",
+        "type": "ENUM<CacheValidationMode>",
+        "default_scope": "global",
+        "default_value": "VALIDATE_ALL"
+    },
+    {
         "name": "variant_minimum_shredding_size",
         "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
         "type": "BIGINT",

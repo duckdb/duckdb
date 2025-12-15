@@ -74,7 +74,8 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
+	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);

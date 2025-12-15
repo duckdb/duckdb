@@ -10,8 +10,10 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -46,30 +48,39 @@ struct OperatorInformation {
 	idx_t result_set_size = 0;
 	idx_t system_peak_buffer_manager_memory = 0;
 	idx_t system_peak_temp_directory_size = 0;
+	idx_t rows_scanned = 0;
 
 	InsertionOrderPreservingMap<string> extra_info;
 
-	void AddTime(double n_time) {
-		time += n_time;
-	}
-
-	void AddReturnedElements(idx_t n_elements) {
-		elements_returned += n_elements;
-	}
-
-	void AddResultSetSize(idx_t n_result_set_size) {
-		result_set_size += n_result_set_size;
-	}
-
-	void UpdateSystemPeakBufferManagerMemory(idx_t used_memory) {
-		if (used_memory > system_peak_buffer_manager_memory) {
-			system_peak_buffer_manager_memory = used_memory;
+	template <typename T>
+	void AddMetric(MetricType type, T metric) {
+		switch (type) {
+		case MetricType::OPERATOR_TIMING:
+			time += metric;
+			break;
+		case MetricType::OPERATOR_CARDINALITY:
+			elements_returned += metric;
+			break;
+		case MetricType::RESULT_SET_SIZE:
+			result_set_size += metric;
+			break;
+		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
+			if (metric > system_peak_buffer_manager_memory) {
+				system_peak_buffer_manager_memory += metric;
+			}
+			break;
 		}
-	}
-
-	void UpdateSystemPeakTempDirectorySize(idx_t used_swap) {
-		if (used_swap > system_peak_temp_directory_size) {
-			system_peak_temp_directory_size = used_swap;
+		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
+			if (metric > system_peak_temp_directory_size) {
+				system_peak_temp_directory_size = metric;
+			}
+			break;
+		}
+		case MetricType::OPERATOR_ROWS_SCANNED:
+			rows_scanned = metric;
+			break;
+		default:
+			throw InternalException("OperatorProfiler: Unknown metric type");
 		}
 	}
 };

@@ -100,12 +100,7 @@ jobs:
         quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
         bash -c "
           set -e
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
-        
-          source /opt/rh/gcc-toolset-12/enable
-          export CC=gcc
-          export CXX=g++
-
+          yum install -y perl-IPC-Cmd
           git config --global --add safe.directory $PWD
           make -C $PWD
         "
