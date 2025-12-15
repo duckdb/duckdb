@@ -402,26 +402,26 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorted_run,
                                         ExternalBlockIteratorState &state, Vector &sort_key_pointers,
-                                        SortedRunScanState &scan_state, const idx_t chunk_idx, SelectionVector &result,
-                                        const idx_t result_count) {
+                                        SortedRunScanState &scan_state, const idx_t chunk_idx,
+                                        const vector<idx_t> &result) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
-	for (idx_t i = 0; i < result_count; ++i) {
-		const auto idx = state.GetIndex(chunk_idx, result.get_index(i));
+	for (idx_t i = 0; i < result.size(); ++i) {
+		const auto idx = state.GetIndex(chunk_idx, result[i]);
 		sort_keys[i] = &itr[idx];
 	}
 
 	// Scan
 	chunk.Reset();
-	scan_state.Scan(sorted_run, sort_key_pointers, result_count, chunk);
+	scan_state.Scan(sorted_run, sort_key_pointers, result.size(), chunk);
 }
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
                                            ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
-                                           const idx_t chunk_idx, SelectionVector &result, const idx_t result_count,
+                                           const idx_t chunk_idx, const vector<idx_t> &result,
                                            SortedRunScanState &scan_state) {
 	auto &sorted = *table.sorted;
 	auto &sort_keys = chunk_state.row_locations;
@@ -430,39 +430,39 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_8>(chunk, sorted, state, sort_keys, scan_state,
-		                                                             chunk_idx, result, result_count);
+		                                                             chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_16>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_24:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_24>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_VARIABLE_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                                 chunk_idx, result, result_count);
+		                                                                 chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_FIXED_16:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_16>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result, result_count);
+		                                                           chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_FIXED_24:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_24>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result, result_count);
+		                                                           chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_FIXED_32:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result, result_count);
+		                                                           chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_VARIABLE_32:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_VARIABLE_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(sort_key_type));
