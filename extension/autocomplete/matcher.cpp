@@ -433,7 +433,7 @@ public:
 
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
-			result_text = result_text.substr(1,result_text.size() - 2);
+			result_text = result_text.substr(1, result_text.size() - 2);
 		}
 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
 			result_text = result_text.substr(1, result_text.size() - 2);
