@@ -8,31 +8,69 @@
 
 #pragma once
 
-#include "split_column_data.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/validity_column_data.hpp"
 
 namespace duckdb {
 
-class GeoColumnData final : public SplitColumnData {
+class GeoColumnData final : public ColumnData {
 public:
 	GeoColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	              ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	LogicalType GetBaseType() override;
+	//! The actual column data
+	//! The "shape" of this might differ depending on if we "shred" this column or not.
+	shared_ptr<ColumnData> base_column;
 
-	void GetSplitTypes(vector<LogicalType> &result) override;
+public:
+	idx_t GetMaxEntry() override;
 
-	void Reassemble(DataChunk &split, Vector &base) override;
+	void InitializeChildScanStates(ColumnScanState &state);
 
-	void Split(Vector &base, DataChunk &split) override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
+	void InitializeScan(ColumnScanState &state) override;
+	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	shared_ptr<SplitColumnData> Create(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                   LogicalType type, ColumnDataType data_type,
-	                                   optional_ptr<ColumnData> parent) const override;
+	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	           idx_t scan_count) override;
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+	                    idx_t scan_count) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
-	void CombineStats(const vector<unique_ptr<BaseStatistics>> &source_stats, BaseStatistics &target_stats) const override;
+	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
+	void InitializeAppend(ColumnAppendState &state) override;
+	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void RevertAppend(row_t new_count) override;
+	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+	              idx_t result_idx) override;
+	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
+	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
+	                  idx_t row_group_start) override;
+	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
+
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
+	                                                        PartialBlockManager &partial_block_manager) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+
+	bool IsPersistent() override;
+	bool HasAnyChanges() const override;
+	PersistentColumnData Serialize() override;
+	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
+
+	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+	                          vector<ColumnSegmentInfo> &result) override;
+
+	void Verify(RowGroup &parent) override;
+
+private:
+	LogicalType GetLayoutType() const;
+	void Specialize(Vector &source, Vector &target, idx_t count);
+	void Reassemble(Vector &source, Vector &target, idx_t count);
+	void InterpretStats(BaseStatistics &source, BaseStatistics &target);
 };
 
 } // namespace duckdb

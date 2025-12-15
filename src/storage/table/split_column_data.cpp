@@ -288,14 +288,6 @@ void SplitColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	result.SetValue(result_idx, base_vector.GetValue(0));
 }
 
-void SplitColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
-	base_column->CommitDropColumn();
-
-	for (const auto &shredded_column : shredded_columns) {
-		shredded_column->CommitDropColumn();
-	}
-}
 void SplitColumnData::SetValidityColumnData(shared_ptr<ValidityColumnData> validity_p) {
 	if (validity) {
 		throw InternalException("SplitColumnData::SetValidityColumnData cannot be used to overwrite existing validity");
