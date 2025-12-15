@@ -466,6 +466,21 @@ void PEGTransformerFactory::RegisterLoad() {
 	REGISTER_TRANSFORM(TransformVersionNumber);
 }
 
+void PEGTransformerFactory::RegisterMergeInto() {
+	REGISTER_TRANSFORM(TransformMergeIntoStatement);
+	REGISTER_TRANSFORM(TransformMergeIntoUsingClause);
+	REGISTER_TRANSFORM(TransformMergeMatch);
+	REGISTER_TRANSFORM(TransformMatchedClause);
+	REGISTER_TRANSFORM(TransformMatchedClauseAction);
+	REGISTER_TRANSFORM(TransformUpdateMatchClause);
+	REGISTER_TRANSFORM(TransformUpdateMatchInfo);
+	REGISTER_TRANSFORM(TransformDeleteMatchClause);
+	REGISTER_TRANSFORM(TransformInsertMatchClause);
+	REGISTER_TRANSFORM(TransformDoNothingMatchClause);
+	REGISTER_TRANSFORM(TransformErrorMatchClause);
+	REGISTER_TRANSFORM(TransformUpdateMatchSetClause);
+}
+
 void PEGTransformerFactory::RegisterPragma() {
 	// pragma.gram
 	REGISTER_TRANSFORM(TransformPragmaStatement);
@@ -790,6 +805,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
+	RegisterMergeInto();
 	RegisterPragma();
 	RegisterSelect();
 	RegisterUse();

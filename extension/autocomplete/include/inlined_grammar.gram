@@ -793,12 +793,13 @@ OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
 NameList <- Parens(List(ColId))
-MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
-MergeIntoUsingClause <- 'USING' TableRef JoinQualifier
+MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
+MergeIntoUsingClause <- 'USING' TableRef
 MergeMatch <- MatchedClause / NotMatchedClause
 MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
 MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
-UpdateMatchClause <- 'UPDATE' (UpdateMatchSetClause / ByNameOrPosition?)
+UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
+UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
 DeleteMatchClause <- 'DELETE'
 InsertMatchClause <- 'INSERT' (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
 InsertByNameOrPosition <- ByNameOrPosition? '*'?
