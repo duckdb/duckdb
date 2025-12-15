@@ -493,23 +493,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		// Set the encrypted DB bit to 1.
 		main_header.SetEncrypted();
 
-		if (options.encryption_options.encryption_version == EncryptionTypes::V0_1) {
-			if (db.GetStorageManager().GetStorageVersion() <
-			    SerializationCompatibility::FromString("v1.5.0").serialization_version) {
-				throw InvalidConfigurationException(
-				    "Encryption version 1+ is incompatible with a storage version lower then v1.5.0");
-			}
-		} else if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
-			// no explicit encryption options
-			if (db.GetStorageManager().GetStorageVersion() <
-			    SerializationCompatibility::FromString("v1.5.0").serialization_version) {
-				options.encryption_options.encryption_version = EncryptionTypes::V0_0;
-			} else {
-				options.encryption_options.encryption_version = EncryptionTypes::V0_1;
-				// for the newer encrypted versions, set the storage version to 1.5.0
-				db.GetStorageManager().SetStorageVersion(
-				    SerializationCompatibility::FromString("v1.5.0").serialization_version);
-			}
+		if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
+			throw InvalidConfigurationException("No Encryption type set");
 		}
 		main_header.SetEncryptionVersion(options.encryption_options.encryption_version);
 

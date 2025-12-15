@@ -21,7 +21,6 @@
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
-
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
@@ -68,29 +67,32 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
-	if (encryption &&
-	    (!storage_version.IsValid() ||
-	     storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version)) {
-		if (!storage_version_user_provided.empty()) {
-			throw InvalidInputException(
-			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
-			    storage_version_user_provided);
+	if (encryption) {
+		if (!storage_version.IsValid() ||
+		    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+			if (!storage_version_user_provided.empty()) {
+				throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
+				                            "v1.4.0) are not compatible",
+				                            storage_version_user_provided);
+			}
 		}
 		// explicit storage version input
-		if (!storage_version_user_provided.empty() &&
-		    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version) {
-			// user input: encryption v1
+		if ((!storage_version_user_provided.empty() &&
+		     storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version)) {
+			// user input and encryption version input v1
 			if (encryption_version == EncryptionTypes::V0_1) {
 				throw InvalidConfigurationException(
 				    "Encryption version explicitly set to V1, but storage version is not compatible");
 			}
-			// no user input for encryption, but input storage version DuckDB < 1.5.0
-			if (encryption_version == EncryptionTypes::NONE) {
-				// we automatically change the encryption version to a supported version
-				encryption_version = EncryptionTypes::V0_0;
-			}
+			// keep storage version, but force encryption version to lower for compatibility
+			encryption_version = EncryptionTypes::V0_0;
 		}
-		storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+
+		if (encryption_version == EncryptionTypes::NONE || encryption_version == EncryptionTypes::V0_1) {
+			encryption_version = EncryptionTypes::V0_1;
+			// set storage version explicitly
+			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+		}
 	}
 }
 
