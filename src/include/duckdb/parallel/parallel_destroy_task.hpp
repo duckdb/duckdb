@@ -26,9 +26,6 @@ public:
 	}
 
 	static void Schedule(const weak_ptr<DatabaseInstance> &db, ITERABLE &elements) {
-		if (db.expired()) {
-			return;
-		}
 		auto db_ref = db.lock();
 		if (!db_ref) {
 			return;
