@@ -28,6 +28,7 @@ namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 const char MainHeader::CANARY[] = "DUCKKEY";
+static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
@@ -55,6 +56,30 @@ void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_p, const 
 	ser.WriteData(metadata, MainHeader::ENCRYPTION_METADATA_LEN);
 }
 
+void SerializeIV(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
+	// Zero-initialize.
+	data_t iv[MainHeader::AES_IV_LEN];
+	memset(iv, 0, MainHeader::AES_IV_LEN);
+
+	// Write metadata, if encrypted.
+	if (encrypted) {
+		memcpy(iv, metadata_p, MainHeader::AES_IV_LEN);
+	}
+	ser.WriteData(iv, MainHeader::AES_IV_LEN);
+}
+
+void SerializeTag(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
+	// Zero-initialize.
+	data_t tag[MainHeader::AES_TAG_LEN];
+	memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+	// Write metadata, if encrypted.
+	if (encrypted) {
+		memcpy(tag, metadata_p, MainHeader::AES_TAG_LEN);
+	}
+	ser.WriteData(tag, MainHeader::AES_TAG_LEN);
+}
+
 void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
 	memset(dest, 0, MainHeader::MAX_VERSION_SIZE);
 	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
@@ -74,16 +99,34 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
-
-	// we zero-out the iv and the (not yet) encrypted canary
-	uint8_t iv[MainHeader::AES_IV_LEN];
-	memset(iv, 0, MainHeader::AES_IV_LEN);
 	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
-	                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+	uint8_t iv[MainHeader::AES_IV_LEN];
+
+	switch (main_header.GetEncryptionVersion()) {
+	case 0:
+		memset(iv, 0, MainHeader::AES_IV_LEN);
+		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
+		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+		break;
+
+	case 1:
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		encryption_state->GenerateRandomData(iv, MainHeader::AES_IV_LEN);
+		main_header.SetCanaryIV(iv);
+		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
+		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->Finalize(canary_buffer, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+		main_header.SetCanaryTag(tag);
+		break;
+
+	default:
+		throw InvalidInputException("No valid encryption version found!");
+	}
 
 	main_header.SetEncryptedCanary(canary_buffer);
 }
@@ -98,11 +141,32 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
 	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	//! Decrypt the canary
-	encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
-	                          MainHeader::CANARY_BYTE_SIZE);
+	switch (main_header.GetEncryptionVersion()) {
+	case 0:
+		// zero-out the IV
+		memset(iv, 0, MainHeader::AES_IV_LEN);
+		//! Decrypt the canary
+		encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
+		                          MainHeader::CANARY_BYTE_SIZE);
+		break;
+	case 1:
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		// get the iv and tag from the mainheader
+		memcpy(iv, main_header.GetIV(), MainHeader::AES_IV_LEN);
+		memcpy(tag, main_header.GetTag(), MainHeader::AES_TAG_LEN);
+
+		//! Decrypt the canary
+		encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
+		                          MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->Finalize(decrypted_canary, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+		break;
+	default:
+		throw InvalidInputException("No valid encryption version found!");
+	}
 
 	//! compare if the decrypted canary is correct
 	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
@@ -127,6 +191,8 @@ void MainHeader::Write(WriteStream &ser) {
 	SerializeEncryptionMetadata(ser, encryption_metadata, encryption_enabled);
 	SerializeDBIdentifier(ser, db_identifier);
 	SerializeEncryptionMetadata(ser, encrypted_canary, encryption_enabled);
+	SerializeIV(ser, canary_iv, encryption_enabled);
+	SerializeTag(ser, canary_tag, encryption_enabled);
 }
 
 void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
@@ -185,6 +251,8 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	DeserializeEncryptionData(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
 	DeserializeEncryptionData(source, header.db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 	DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
+	DeserializeEncryptionData(source, header.canary_iv, MainHeader::AES_IV_LEN);
+	DeserializeEncryptionData(source, header.canary_tag, MainHeader::AES_TAG_LEN);
 
 	return header;
 }
@@ -307,26 +375,26 @@ void SingleFileBlockManager::StoreDBIdentifier(MainHeader &main_header, data_ptr
 	main_header.SetDBIdentifier(db_identifier);
 }
 
+template <typename T>
+void SingleFileBlockManager::WriteEncryptionData(MemoryStream &stream, const T &val) {
+	stream.WriteData(reinterpret_cast<const_data_ptr_t>(&val), sizeof(val));
+}
+
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
 	// The first byte is the key derivation function (kdf).
 	// The second byte is for the usage of AAD.
 	// The third byte is for the cipher.
 	// The subsequent byte is empty.
 	// The last 4 bytes are the key length.
+	auto metadata_stream = make_uniq<MemoryStream>(ENCRYPTION_METADATA_LEN);
 
-	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
-	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
-	data_ptr_t offset = metadata;
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.kdf);
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.additional_authenticated_data);
+	WriteEncryptionData<uint8_t>(*metadata_stream, db.GetStorageManager().GetCipher());
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.version);
+	WriteEncryptionData<uint32_t>(*metadata_stream, options.encryption_options.key_length);
 
-	Store<uint8_t>(options.encryption_options.kdf, offset);
-	offset++;
-	Store<uint8_t>(options.encryption_options.additional_authenticated_data, offset);
-	offset++;
-	Store<uint8_t>(db.GetStorageManager().GetCipher(), offset);
-	offset += 2;
-	Store<uint32_t>(options.encryption_options.key_length, offset);
-
-	main_header.SetEncryptionMetadata(metadata);
+	main_header.SetEncryptionMetadata(metadata_stream->GetData());
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
@@ -342,6 +410,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
 	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
@@ -405,6 +474,11 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 
 		// Set the encrypted DB bit to 1.
 		main_header.SetEncrypted();
+
+		// Set encryption version to 1
+		uint8_t encryption_version = 1;
+		options.encryption_options.version = encryption_version;
+		main_header.SetEncryptionVersion(encryption_version);
 
 		// The derived key is wiped in AddKeyToCache.
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -486,6 +560,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
+	auto can = main_header.GetEncryptedCanary();
+	auto version = main_header.GetEncryptionVersion();
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
