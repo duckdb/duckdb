@@ -435,7 +435,7 @@ public:
 		}
 		if (IsSingleQuoted(token_text) && SupportsStringLiteral()) {
 			auto string_token = token_text.substr(1, token_text.size() - 2);
-			return state.allocator.Allocate(make_uniq<IdentifierParseResult>(string_token));
+			return state.allocator.Allocate(make_uniq<StringLiteralParseResult>(string_token));
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
