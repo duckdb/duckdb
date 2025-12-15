@@ -780,17 +780,18 @@ ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'
 ShowOrDescribe <- 'SHOW' / 'DESCRIBE' / 'DESC'
 
-VacuumStatement <- 'VACUUM' (VacuumLegacyOptions AnalyzeStatement / VacuumLegacyOptions QualifiedTarget / VacuumLegacyOptions / VacuumParensOptions QualifiedTarget?)?
+VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
+VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
 
-VacuumLegacyOptions <- OptFull OptFreeze OptVerbose
 VacuumParensOptions <- Parens(List(VacuumOption))
-VacuumOption <- 'ANALYZE' / 'VERBOSE' / 'FREEZE' / 'FULL' / Identifier
+VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
+VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
 
-OptFull <- 'FULL'?
-OptFreeze <- 'FREEZE'?
-OptVerbose <- 'VERBOSE'?
+OptAnalyze <- 'ANALYZE'
+OptFull <- 'FULL'
+OptFreeze <- 'FREEZE'
+OptVerbose <- 'VERBOSE'
 
-QualifiedTarget <- QualifiedName NameList?
 NameList <- Parens(List(ColId))
 MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
 MergeIntoUsingClause <- 'USING' TableRef JoinQualifier

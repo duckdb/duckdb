@@ -28,18 +28,4 @@ AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &tran
 	transformer.TransformOptional<vector<string>>(list_pr, 1, result.columns);
 	return result;
 }
-
-// TODO(Dtenwolde) Move this to transform_vacuum.cpp
-vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer,
-                                                        optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	vector<string> result;
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto colid_list = ExtractParseResultsFromList(extract_parens);
-	for (auto &colid : colid_list) {
-		result.push_back(transformer.Transform<string>(colid));
-	}
-	return result;
-}
-
 } // namespace duckdb

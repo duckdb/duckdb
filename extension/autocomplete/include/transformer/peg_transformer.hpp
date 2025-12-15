@@ -27,6 +27,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
+#include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -293,7 +294,6 @@ private:
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
 	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<string> TransformNameList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// call.gram
 	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
@@ -1049,7 +1049,15 @@ private:
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// vacuum.gram
-	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static VacuumOptions TransformVacuumOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static VacuumOptions TransformVacuumLegacyOptions(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static VacuumOptions TransformVacuumParensOptions(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static string TransformVacuumOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformNameList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;

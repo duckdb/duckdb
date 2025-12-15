@@ -107,7 +107,6 @@ void PEGTransformerFactory::RegisterAnalyze() {
 	// analyze.gram
 	REGISTER_TRANSFORM(TransformAnalyzeStatement);
 	REGISTER_TRANSFORM(TransformAnalyzeTarget);
-	REGISTER_TRANSFORM(TransformNameList);
 }
 
 void PEGTransformerFactory::RegisterCall() {
@@ -624,6 +623,11 @@ void PEGTransformerFactory::RegisterUpdate() {
 
 void PEGTransformerFactory::RegisterVacuum() {
 	REGISTER_TRANSFORM(TransformVacuumStatement);
+	REGISTER_TRANSFORM(TransformVacuumOptions);
+	REGISTER_TRANSFORM(TransformVacuumLegacyOptions);
+	REGISTER_TRANSFORM(TransformVacuumParensOptions);
+	REGISTER_TRANSFORM(TransformVacuumOption);
+	REGISTER_TRANSFORM(TransformNameList);
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
@@ -752,6 +756,11 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("NotILikeOp", "!~~*");
 	RegisterEnum<string>("NotLikeOp", "!~~");
 	RegisterEnum<string>("NotSimilarToOp", "!~");
+
+	RegisterEnum<string>("OptAnalyze", "analyze");
+	RegisterEnum<string>("OptFreeze", "freeze");
+	RegisterEnum<string>("OptFull", "full");
+	RegisterEnum<string>("OptVerbose", "verbose");
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
