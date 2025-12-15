@@ -272,7 +272,7 @@ OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &cont
 }
 
 string PhysicalTableScan::GetName() const {
-	return StringUtil::Upper(function.name + " " + function.extra_info);
+	return StringUtil::Upper(function.name + (function.extra_info.empty() ? "" : " " + function.extra_info));
 }
 
 void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {
