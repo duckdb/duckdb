@@ -5,6 +5,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include "vergesort.h"
 #include "pdqsort.h"
@@ -818,6 +819,13 @@ SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
     : sort(sort_p), sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
       partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
+	if (!sorted_runs.empty()) {
+		db = sorted_runs[0]->context.db;
+	}
+}
+
+SortedRunMerger::~SortedRunMerger() {
+	ParallelDestroyTask<decltype(sorted_runs)>::Schedule(db, sorted_runs);
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
