@@ -66,13 +66,15 @@ public:
 	template <class T, class... ARGS>
 	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
 		auto existing = GetObject(key);
-		if (existing && existing->GetObjectType() == T::ObjectType()) {
-			return shared_ptr_cast<ObjectCacheEntry, T>(existing);
+		if (!existing) {
+			auto value = make_shared_ptr<T>(args...);
+			Put(key, value);
+			return value;
 		}
-
-		auto value = make_shared_ptr<T>(args...);
-		Put(key, value);
-		return value;
+		if (existing->GetObjectType() != T::ObjectType()) {
+			return nullptr;
+		}
+		return shared_ptr_cast<ObjectCacheEntry, T>(existing);
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
