@@ -138,8 +138,8 @@ public:
 		return static_cast<EncryptionTypes::CipherType>(encryption_metadata[2]);
 	}
 
-	uint8_t GetEncryptionVersion() const {
-		return encryption_metadata[3];
+	EncryptionTypes::EncryptionVersion GetEncryptionVersion() const {
+		return static_cast<EncryptionTypes::EncryptionVersion>(encryption_metadata[3]);
 	}
 
 	void SetDBIdentifier(data_ptr_t source) {

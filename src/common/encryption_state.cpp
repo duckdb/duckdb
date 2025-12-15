@@ -56,6 +56,16 @@ EncryptionTypes::CipherType EncryptionTypes::StringToCipher(const string &encryp
 	return INVALID;
 }
 
+EncryptionTypes::EncryptionVersion EncryptionTypes::StringToVersion(const string &encryption_version_p) {
+	if (encryption_version_p == "0") {
+		return V0_0;
+	} else if (encryption_version_p == "1") {
+		return V0_1;
+	} else {
+		throw NotImplementedException("No encryption version higher then 1 exists yet");
+	}
+}
+
 string EncryptionTypes::KDFToString(KeyDerivationFunction kdf_p) {
 	switch (kdf_p) {
 	case SHA256:

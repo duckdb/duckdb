@@ -62,6 +62,8 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			} else {
 				compress_in_memory = CompressInMemory::DO_NOT_COMPRESS;
 			}
+		} else if (entry.first == "debug_encryption_version") {
+			encryption_version = EncryptionTypes::StringToVersion(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -325,6 +327,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.user_key = std::move(storage_options.user_key);
+		options.encryption_options.encryption_version = storage_options.encryption_version;
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;

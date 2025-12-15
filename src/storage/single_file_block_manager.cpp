@@ -162,7 +162,11 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
 		                          MainHeader::CANARY_BYTE_SIZE);
-		encryption_state->Finalize(decrypted_canary, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+		try {
+			encryption_state->Finalize(decrypted_canary, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+		} catch (const std::exception &e) {
+			throw InvalidInputException("Wrong encryption key used to open the database file");
+		}
 		break;
 	default:
 		throw InvalidInputException("No valid encryption version found!");
@@ -398,7 +402,7 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.kdf);
 	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.additional_authenticated_data);
 	WriteEncryptionData<uint8_t>(*metadata_stream, db.GetStorageManager().GetCipher());
-	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.version);
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.encryption_version);
 	WriteEncryptionData<uint32_t>(*metadata_stream, options.encryption_options.key_length);
 
 	main_header.SetEncryptionMetadata(metadata_stream->GetData());
@@ -426,7 +430,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	}
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
-		throw IOException("Wrong encryption key used to open the database file");
+		throw InvalidInputException("Wrong encryption key used to open the database file");
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -489,10 +493,11 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		// Set the encrypted DB bit to 1.
 		main_header.SetEncrypted();
 
-		// Set encryption version to 1
-		uint8_t encryption_version = 1;
-		options.encryption_options.version = encryption_version;
-		main_header.SetEncryptionVersion(encryption_version);
+		// Set encryption version
+		if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
+			options.encryption_options.encryption_version = EncryptionTypes::V0_1;
+		}
+		main_header.SetEncryptionVersion(options.encryption_options.encryption_version);
 
 		// The derived key is wiped in AddKeyToCache.
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -574,8 +579,18 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
-	auto can = main_header.GetEncryptedCanary();
-	auto version = main_header.GetEncryptionVersion();
+
+	if (options.encryption_options.encryption_version != EncryptionTypes::NONE &&
+	    (options.encryption_options.encryption_version != main_header.GetEncryptionVersion())) {
+		throw InvalidInputException(
+		    "Encryption version mismatch. Database encryption version is %d, attempted to decrypt version %d",
+		    options.encryption_options.encryption_version, main_header.GetEncryptionVersion());
+	}
+
+	if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
+		// encryption version is not explicitly set on attach (default)
+		options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
+	}
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
