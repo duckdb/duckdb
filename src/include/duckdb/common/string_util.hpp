@@ -205,6 +205,8 @@ public:
 	//! Return a string that formats the give number of bytes
 	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes, idx_t multiplier = 1024);
 
+	DUCKDB_API static string TryParseFormattedBytes(const string &arg, idx_t &result);
+
 	DUCKDB_API static idx_t ParseFormattedBytes(const string &arg);
 
 	//! Convert a string to UPPERCASE
@@ -353,11 +355,4 @@ public:
 	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
 	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };
-
-class NonNumericMemoryException final : public ParserException {
-public:
-	explicit NonNumericMemoryException(const string &message) : ParserException(message) {
-	}
-};
-
 } // namespace duckdb

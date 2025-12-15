@@ -267,7 +267,7 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 	return to_string(array[0]) + (bytes == 1 ? " byte" : " bytes");
 }
 
-idx_t StringUtil::ParseFormattedBytes(const string &arg) {
+string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
 	// split based on the number/non-number
 	idx_t idx = 0;
 	while (StringUtil::CharacterIsSpace(arg[idx])) {
@@ -279,7 +279,7 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 		idx++;
 	}
 	if (idx == num_start) {
-		throw NonNumericMemoryException("Memory must have a number (e.g. 1GB)");
+		return "Memory must have a number (e.g. 1GB)";
 	}
 	string number = arg.substr(num_start, idx - num_start);
 
@@ -297,7 +297,7 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 
 	if (limit < 0) {
 		// limit < 0, set limit to infinite
-		return (idx_t)-1;
+		result = -1;
 	}
 
 	string unit = StringUtil::Lower(arg.substr(start, idx - start));
@@ -321,9 +321,9 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 	} else if (unit == "tib") {
 		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
-		                      "MiB, GiB, TiB for 1024^i units)",
-		                      unit);
+		return StringUtil::Format("Unknown unit for memory: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                          "MiB, GiB, TiB for 1024^i units)",
+		                          unit);
 	}
 
 	// Make sure the result is not greater than `idx_t` max value
@@ -331,10 +331,20 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 	const double double_multiplier = static_cast<double>(multiplier);
 
 	if (limit > (max_value / double_multiplier)) {
-		throw ParserException("Memory value out of range: value is too large");
+		return "Memory value out of range: value is too large";
 	}
 
-	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	result = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return string();
+}
+
+idx_t StringUtil::ParseFormattedBytes(const string &arg) {
+	idx_t result;
+	const string error = TryParseFormattedBytes(arg, result);
+	if (!error.empty()) {
+		throw ParserException(error);
+	}
+	return result;
 }
 
 string StringUtil::Upper(const string &str) {

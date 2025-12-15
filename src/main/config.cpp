@@ -594,13 +594,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	try {
-		return StringUtil::ParseFormattedBytes(arg);
-	} catch (NonNumericMemoryException &e) {
-		// Being more specific in the exception message (memory *limit*),
-		// and also, to preserve behavior after migrating logic to StringUtil)
-		throw ParserException("Memory limit must have a number (e.g. SET memory_limit=1GB");
-	}
+	return StringUtil::ParseFormattedBytes(arg);
 }
 
 optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
