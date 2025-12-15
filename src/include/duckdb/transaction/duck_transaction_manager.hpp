@@ -33,7 +33,10 @@ struct ActiveCheckpointWrapper {
 	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
 	~ActiveCheckpointWrapper();
 
+	void Clear();
+
 	DuckTransactionManager &manager;
+	bool is_cleared;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -109,6 +112,7 @@ private:
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
 	                                 const UndoBufferProperties &properties);
+	bool HasOtherTransactions(DuckTransaction &transaction);
 
 private:
 	//! The current start timestamp used by transactions

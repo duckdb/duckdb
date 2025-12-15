@@ -13,6 +13,8 @@
 namespace duckdb {
 static const char *continuationPrompt = "> ";
 static const char *continuationSelectedPrompt = "> ";
+static const char *scrollUpPrompt = "^ ";
+static const char *scrollDownPrompt = "v ";
 static bool enableCompletionRendering = false;
 static bool enableErrorRendering = true;
 
@@ -57,9 +59,12 @@ private:
 	std::string buffer;
 };
 
-void Linenoise::SetPrompt(const char *continuation, const char *continuationSelected) {
+void Linenoise::SetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUp,
+                          const char *scrollDown) {
 	continuationPrompt = continuation;
 	continuationSelectedPrompt = continuationSelected;
+	scrollUpPrompt = scrollUp;
+	scrollDownPrompt = scrollDown;
 }
 
 static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
@@ -230,8 +235,8 @@ void Linenoise::RefreshSearch() {
 	plen = clone.plen;
 }
 
-string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
-                                         vector<highlightToken> &tokens) const {
+string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row, idx_t rows_to_render,
+                                         vector<highlightToken> &tokens, RenderTruncation truncation) const {
 	std::string result;
 	int rows = 1;
 	int cols = plen;
@@ -241,6 +246,9 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 	size_t token_position = 0; // token position
 	vector<highlightToken> new_tokens;
 	new_tokens.reserve(tokens.size());
+	bool truncate_top = truncation == RenderTruncation::TRUNCATE_TOP || truncation == RenderTruncation::TRUNCATE_BOTH;
+	bool truncate_bottom =
+	    truncation == RenderTruncation::TRUNCATE_BOTTOM || truncation == RenderTruncation::TRUNCATE_BOTH;
 	while (cpos < len) {
 		bool is_newline = IsNewline(buf[cpos]);
 		NextPosition(buf, len, cpos, rows, cols, plen);
@@ -249,7 +257,16 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 		}
 		if (is_newline) {
 			bool is_cursor_row = rows == cursor_row;
-			const char *prompt = is_cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			const char *prompt;
+			if (is_cursor_row) {
+				prompt = continuationSelectedPrompt;
+			} else if (truncate_top && rows == 2) {
+				prompt = scrollUpPrompt;
+			} else if (truncate_bottom && rows == rows_to_render + 1) {
+				prompt = scrollDownPrompt;
+			} else {
+				prompt = continuationPrompt;
+			}
 			if (!continuation_markers) {
 				prompt = "";
 			}
@@ -485,11 +502,14 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 						next_dollar = idx;
 						break;
 					}
-					// all characters can be between A-Z, a-z or \200 - \377
+					// all characters can be between A-Z, a-z, underscore, or \200 - \377
 					if (buf[idx] >= 'A' && buf[idx] <= 'Z') {
 						continue;
 					}
 					if (buf[idx] >= 'a' && buf[idx] <= 'z') {
+						continue;
+					}
+					if (buf[idx] == '_') {
 						continue;
 					}
 					if (buf[idx] >= '\200' && buf[idx] <= '\377') {
@@ -765,6 +785,7 @@ void Linenoise::RefreshMultiLine() {
 	char seq[64];
 	int plen = GetPromptWidth();
 	// utf8 in prompt, get render width
+	RenderTruncation truncation = RenderTruncation::NO_TRUNCATE;
 	int rows, cols;
 	int new_cursor_row, new_cursor_x;
 	PositionToColAndRow(pos, new_cursor_row, new_cursor_x, rows, cols);
@@ -800,15 +821,25 @@ void Linenoise::RefreshMultiLine() {
 			y_scroll = new_cursor_row - max_rows_to_render;
 		}
 		// display only characters up to the current scroll position
+		bool truncate_top = false, truncate_bottom = false;
 		if (y_scroll == 0) {
 			render_start = 0;
 		} else {
 			render_start = ColAndRowToPosition(y_scroll, 0);
+			truncate_top = true;
 		}
 		if (int(y_scroll) + int(max_rows_to_render) >= rows) {
 			render_end = len;
 		} else {
 			render_end = ColAndRowToPosition(y_scroll + max_rows_to_render, 99999);
+			truncate_bottom = true;
+		}
+		if (truncate_top && truncate_bottom) {
+			truncation = RenderTruncation::TRUNCATE_BOTH;
+		} else if (truncate_top) {
+			truncation = RenderTruncation::TRUNCATE_TOP;
+		} else if (truncate_bottom) {
+			truncation = RenderTruncation::TRUNCATE_BOTTOM;
 		}
 		new_cursor_row -= y_scroll;
 		render_buf += render_start;
@@ -860,8 +891,9 @@ void Linenoise::RefreshMultiLine() {
 	}
 	if (rows > 1) {
 		// add continuation markers
-		highlight_buffer = AddContinuationMarkers(render_buf, render_len, plen,
-		                                          y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row, tokens);
+		highlight_buffer =
+		    AddContinuationMarkers(render_buf, render_len, plen, y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row,
+		                           y_scroll > 0 ? rows : rows - 1, tokens, truncation);
 		render_buf = (char *)highlight_buffer.c_str();
 		render_len = highlight_buffer.size();
 	}

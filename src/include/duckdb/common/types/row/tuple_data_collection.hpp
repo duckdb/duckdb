@@ -189,7 +189,8 @@ public:
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Grab the chunk state for the given chunk index, returns the count of the chunk
-	idx_t FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap);
+	idx_t FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap,
+	                 optional_ptr<SortKeyPayloadState> sort_key_payload_state = nullptr);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
@@ -223,6 +224,8 @@ public:
 private:
 	//! Initializes the TupleDataCollection (called by the constructor)
 	void Initialize();
+	//! Destroys the TupleDataCollection (parallelized over segments, called by the destructor)
+	void Destroy();
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
 	//! Adds a segment to this TupleDataCollection
@@ -267,6 +270,8 @@ private:
 	void Verify() const;
 
 private:
+	//! Database instance ref for parallel destruction
+	DatabaseInstance &db;
 	//! Shared allocator for STL allocations
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
