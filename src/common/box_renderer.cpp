@@ -186,6 +186,9 @@ private:
 	idx_t total_render_length = 0;
 	vector<BoxRenderRow> render_rows;
 	BoxRendererFooter footer;
+	unordered_set<idx_t> pruned_columns;
+	vector<optional_idx> column_map;
+	bool shortened_columns = false;
 
 private:
 	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
@@ -200,6 +203,7 @@ private:
 	                                                    idx_t bottom_rows);
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
+	void ComputeRenderValues(vector<RenderDataCollection> &collections);
 	void RenderValues();
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
 	string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
@@ -332,6 +336,8 @@ void BoxRendererImplementation::Render() {
 		}
 		column_boundary_positions.push_back(render_boundary);
 	}
+
+	ComputeRenderValues(collections);
 
 	// now begin rendering
 	// render the box
@@ -1498,29 +1504,15 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 	JSONHighlighter highlighter(render_value);
 	highlighter.Process(render_value.text);
 }
-void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width,
-                                                    idx_t max_width) {
+
+void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection> &collections) {
 	auto column_count = result_types.size();
 	idx_t row_count = 0;
 	for (auto &collection : collections) {
 		row_count += collection.render_values->Count();
 	}
 
-	// prepare all rows for rendering
-	// header / type
-	BoxRenderRow header_row;
-	BoxRenderRow type_row;
-	for (idx_t c = 0; c < column_count; c++) {
-		header_row.values.emplace_back(ConvertRenderValue(column_names[c]), ResultRenderType::COLUMN_NAME,
-		                               ValueRenderAlignment::MIDDLE);
-		type_row.values.emplace_back(RenderType(result_types[c]), ResultRenderType::COLUMN_TYPE,
-		                             ValueRenderAlignment::MIDDLE);
-	}
-	render_rows.push_back(std::move(header_row));
-	if (config.render_mode == RenderMode::ROWS) {
-		render_rows.push_back(std::move(type_row));
-	}
-	// prepare the values
+	// prepare the values for rendering
 	for (idx_t c = 0; c < collections.size(); c++) {
 		auto &render_collection = collections[c];
 		auto &collection = *render_collection.render_values;
@@ -1603,205 +1595,6 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 			render_rows.push_back(std::move(row));
 		}
 	}
-
-	// now all rows are prepared - figure out the max width of each of the columns
-	column_widths.resize(column_count, 0);
-	for (auto &row : render_rows) {
-		if (row.row_type != RenderRowType::ROW_VALUES) {
-			continue;
-		}
-		D_ASSERT(row.values.size() == column_count);
-		for (idx_t c = 0; c < column_count; c++) {
-			if (!row.values[c].render_width.IsValid()) {
-				row.values[c].render_width = Utf8Proc::RenderWidth(row.values[c].text);
-			}
-			auto render_width = row.values[c].render_width.GetIndex();
-			if (render_width > column_widths[c]) {
-				column_widths[c] = render_width;
-			}
-		}
-	}
-
-	// figure out the total length
-	// we start off with a pipe (|)
-	total_render_length = 1;
-	for (idx_t c = 0; c < column_widths.size(); c++) {
-		// each column has a space at the beginning, and a space plus a pipe (|) at the end
-		// hence + 3
-		total_render_length += column_widths[c] + 3;
-	}
-	if (total_render_length < min_width) {
-		// if there are hidden rows we should always display that
-		// stretch up the first column until we have space to show the row count
-		column_widths[0] += min_width - total_render_length;
-		total_render_length = min_width;
-	}
-	// now we need to constrain the length
-	unordered_set<idx_t> pruned_columns;
-	bool shortened_columns = false;
-	if (total_render_length > max_width) {
-		auto original_widths = column_widths;
-		// before we remove columns, check if we can just reduce the size of columns
-		vector<idx_t> max_shorten_amount;
-		idx_t total_max_shorten_amount = 0;
-		for (auto &w : column_widths) {
-			if (w <= config.max_col_width) {
-				max_shorten_amount.push_back(0);
-				continue;
-			}
-			auto max_diff = w - config.max_col_width;
-			max_shorten_amount.push_back(max_diff);
-			total_max_shorten_amount += max_diff;
-		}
-		idx_t shorten_amount_required = total_render_length - max_width;
-		if (total_max_shorten_amount >= shorten_amount_required) {
-			// we can get below the max width by shortening
-			// try to shorten everything to the same size
-			// i.e. if we have one long column and one small column, we would prefer to shorten only the long column
-
-			// map of "shorten amount required -> column index"
-			map<idx_t, vector<idx_t>> shorten_amount_required_map;
-			for (idx_t col_idx = 0; col_idx < max_shorten_amount.size(); col_idx++) {
-				shorten_amount_required_map[max_shorten_amount[col_idx]].push_back(col_idx);
-			}
-			vector<idx_t> actual_shorten_amounts;
-			actual_shorten_amounts.resize(max_shorten_amount.size());
-
-			while (shorten_amount_required > 0) {
-				// find the columns with the longest width
-				auto entry = shorten_amount_required_map.rbegin();
-				auto largest_width = entry->first;
-				auto &column_list = entry->second;
-				// shorten these columns to the next-shortest width
-				// move to the second-largest entry - this is the target entry
-				entry++;
-				auto second_largest_width = entry == shorten_amount_required_map.rend() ? 0 : entry->first;
-				auto max_shorten_width = largest_width - second_largest_width;
-				D_ASSERT(max_shorten_width > 0);
-
-				auto total_potential_shorten_width = max_shorten_width * column_list.size();
-				if (total_potential_shorten_width >= shorten_amount_required) {
-					// we can reach the shorten amount required just by shortening this set of columns
-					// shorten the columns equally
-					idx_t shorten_amount_per_column = shorten_amount_required / column_list.size();
-					for (auto &column_idx : column_list) {
-						actual_shorten_amounts[column_idx] += shorten_amount_per_column;
-						shorten_amount_required -= shorten_amount_per_column;
-					}
-
-					// because of truncation, we might still need to shorten columns by a single unit
-					for (idx_t i = column_list.size(); i > 0 && shorten_amount_required > 0; i--) {
-						actual_shorten_amounts[column_list[i - 1]]++;
-						shorten_amount_required--;
-					}
-					if (shorten_amount_required != 0) {
-						throw InternalException("Shorten amount required has tob e zero now");
-					}
-
-					// we are now done
-					break;
-				}
-				if (entry == shorten_amount_required_map.rend()) {
-					throw InternalException(
-					    "ColumnRenderer - we could not reach the shorten amount required but we ran out of columns?");
-				}
-				// we need to shorten all columns to the width of the next-largest column
-				for (auto &column_idx : column_list) {
-					actual_shorten_amounts[column_idx] += max_shorten_width;
-				}
-				// add all columns to the second-largest list of columns
-				auto &second_largest_column_list = entry->second;
-				second_largest_column_list.insert(second_largest_column_list.end(), column_list.begin(),
-				                                  column_list.end());
-				// delete this entry from the shorten map and continue
-				shorten_amount_required_map.erase(largest_width);
-				shorten_amount_required -= total_potential_shorten_width;
-			}
-
-			// now perform the shortening
-			for (idx_t c = 0; c < actual_shorten_amounts.size(); c++) {
-				if (actual_shorten_amounts[c] == 0) {
-					continue;
-				}
-				D_ASSERT(actual_shorten_amounts[c] < column_widths[c]);
-				column_widths[c] -= actual_shorten_amounts[c];
-				total_render_length -= actual_shorten_amounts[c];
-				shortened_columns = true;
-			}
-		} else {
-			// we cannot get below the max width by shortening
-			// set everything that is wider than the col width to the max col width
-			// afterwards - we need to prune columns
-			for (auto &w : column_widths) {
-				if (w <= config.max_col_width) {
-					continue;
-				}
-				total_render_length -= w - config.max_col_width;
-				w = config.max_col_width;
-				shortened_columns = true;
-			}
-			D_ASSERT(total_render_length > max_width);
-		}
-
-		if (total_render_length > max_width) {
-			// the total length is still too large
-			// we need to remove columns!
-			// first, we add 6 characters to the total length
-			// this is what we need to add the "..." in the middle
-			total_render_length += 3 + config.DOTDOTDOT_LENGTH;
-			// now select columns to prune
-			// we select columns in zig-zag order starting from the middle
-			// e.g. if we have 10 columns, we remove #5, then #4, then #6, then #3, then #7, etc
-			int64_t offset = 0;
-			while (total_render_length > max_width) {
-				auto c = NumericCast<idx_t>(NumericCast<int64_t>(column_count) / 2 + offset);
-				total_render_length -= column_widths[c] + 3;
-				pruned_columns.insert(c);
-				if (offset >= 0) {
-					offset = -offset - 1;
-				} else {
-					offset = -offset;
-				}
-			}
-
-			// if we have any space left after truncating columns we can try to increase the size of columns again
-			idx_t space_left = max_width - total_render_length;
-			for (idx_t c = 0; c < column_widths.size() && space_left > 0; c++) {
-				if (pruned_columns.find(c) != pruned_columns.end()) {
-					// only increase size of visible columns
-					continue;
-				}
-				if (column_widths[c] >= original_widths[c]) {
-					continue;
-				}
-				idx_t increase_amount = MinValue<idx_t>(space_left, original_widths[c] - column_widths[c]);
-				column_widths[c] += increase_amount;
-				space_left -= increase_amount;
-				total_render_length += increase_amount;
-			}
-		}
-	}
-
-	// update the footer with the column counts
-	UpdateColumnCountFooter(column_count, pruned_columns);
-
-	bool added_split_column = false;
-	vector<idx_t> new_widths;
-	vector<optional_idx> column_map;
-	for (idx_t c = 0; c < column_count; c++) {
-		if (pruned_columns.find(c) == pruned_columns.end()) {
-			column_map.push_back(c);
-			new_widths.push_back(column_widths[c]);
-		} else if (!added_split_column) {
-			// "..."
-			column_map.push_back(optional_idx());
-			new_widths.push_back(config.DOTDOTDOT_LENGTH);
-			added_split_column = true;
-		}
-	}
-	column_widths = std::move(new_widths);
-	column_count = column_widths.size();
-
 	// update the values based on the columns that were pruned
 	for (auto &row : render_rows) {
 		if (row.row_type != RenderRowType::ROW_VALUES) {
@@ -1823,7 +1616,7 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 	// check if we shortened any columns that would be rendered and if we can expand them
 	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
 	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows &&
-	    !added_split_column) {
+	    pruned_columns.empty()) {
 		// if we have shortened any columns - try to expand them
 		// how many rows do we have left to expand before we hit the max row limit?
 		idx_t max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
@@ -2022,6 +1815,230 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r), std::move(divider_rows[d]));
 		}
 	}
+}
+
+void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width,
+                                                    idx_t max_width) {
+	auto column_count = result_types.size();
+
+	// prepare the header / type for rendering
+	// header / type
+	BoxRenderRow header_row;
+	BoxRenderRow type_row;
+	for (idx_t c = 0; c < column_count; c++) {
+		auto column_name = ConvertRenderValue(column_names[c]);
+		idx_t column_name_width = Utf8Proc::RenderWidth(column_name);
+		idx_t column_type_width = 0;
+
+		header_row.values.emplace_back(column_name, ResultRenderType::COLUMN_NAME, ValueRenderAlignment::MIDDLE,
+		                               optional_idx(), column_name_width);
+		if (config.render_mode == RenderMode::ROWS) {
+			auto column_type = RenderType(result_types[c]);
+			column_type_width = Utf8Proc::RenderWidth(RenderType(result_types[c]));
+			type_row.values.emplace_back(column_type, ResultRenderType::COLUMN_TYPE, ValueRenderAlignment::MIDDLE,
+			                             optional_idx(), column_type_width);
+		}
+		column_widths.push_back(MaxValue<idx_t>(column_name_width, column_type_width));
+	}
+	render_rows.push_back(std::move(header_row));
+	if (config.render_mode == RenderMode::ROWS) {
+		render_rows.push_back(std::move(type_row));
+	}
+
+	// scan the render widths in the collection to figure out the
+	vector<column_t> column_ids;
+	for (idx_t c = 0; c < column_count; c++) {
+		column_ids.push_back(c * 2 + 1);
+	}
+	for (auto &collection : collections) {
+		for (auto &chunk : collection.render_values->Chunks(column_ids)) {
+			for (idx_t c = 0; c < column_count; c++) {
+				auto render_widths = FlatVector::GetData<uint64_t>(chunk.data[c]);
+				for (idx_t r = 0; r < chunk.size(); r++) {
+					if (render_widths[r] > column_widths[c]) {
+						column_widths[c] = render_widths[r];
+					}
+				}
+			}
+		}
+	}
+
+	// figure out the total length
+	// we start off with a pipe (|)
+	total_render_length = 1;
+	for (idx_t c = 0; c < column_widths.size(); c++) {
+		// each column has a space at the beginning, and a space plus a pipe (|) at the end
+		// hence + 3
+		total_render_length += column_widths[c] + 3;
+	}
+	if (total_render_length < min_width) {
+		// if there are hidden rows we should always display that
+		// stretch up the first column until we have space to show the row count
+		column_widths[0] += min_width - total_render_length;
+		total_render_length = min_width;
+	}
+	// now we need to constrain the length
+	if (total_render_length > max_width) {
+		auto original_widths = column_widths;
+		// before we remove columns, check if we can just reduce the size of columns
+		vector<idx_t> max_shorten_amount;
+		idx_t total_max_shorten_amount = 0;
+		for (auto &w : column_widths) {
+			if (w <= config.max_col_width) {
+				max_shorten_amount.push_back(0);
+				continue;
+			}
+			auto max_diff = w - config.max_col_width;
+			max_shorten_amount.push_back(max_diff);
+			total_max_shorten_amount += max_diff;
+		}
+		idx_t shorten_amount_required = total_render_length - max_width;
+		if (total_max_shorten_amount >= shorten_amount_required) {
+			// we can get below the max width by shortening
+			// try to shorten everything to the same size
+			// i.e. if we have one long column and one small column, we would prefer to shorten only the long column
+
+			// map of "shorten amount required -> column index"
+			map<idx_t, vector<idx_t>> shorten_amount_required_map;
+			for (idx_t col_idx = 0; col_idx < max_shorten_amount.size(); col_idx++) {
+				shorten_amount_required_map[max_shorten_amount[col_idx]].push_back(col_idx);
+			}
+			vector<idx_t> actual_shorten_amounts;
+			actual_shorten_amounts.resize(max_shorten_amount.size());
+
+			while (shorten_amount_required > 0) {
+				// find the columns with the longest width
+				auto entry = shorten_amount_required_map.rbegin();
+				auto largest_width = entry->first;
+				auto &column_list = entry->second;
+				// shorten these columns to the next-shortest width
+				// move to the second-largest entry - this is the target entry
+				entry++;
+				auto second_largest_width = entry == shorten_amount_required_map.rend() ? 0 : entry->first;
+				auto max_shorten_width = largest_width - second_largest_width;
+				D_ASSERT(max_shorten_width > 0);
+
+				auto total_potential_shorten_width = max_shorten_width * column_list.size();
+				if (total_potential_shorten_width >= shorten_amount_required) {
+					// we can reach the shorten amount required just by shortening this set of columns
+					// shorten the columns equally
+					idx_t shorten_amount_per_column = shorten_amount_required / column_list.size();
+					for (auto &column_idx : column_list) {
+						actual_shorten_amounts[column_idx] += shorten_amount_per_column;
+						shorten_amount_required -= shorten_amount_per_column;
+					}
+
+					// because of truncation, we might still need to shorten columns by a single unit
+					for (idx_t i = column_list.size(); i > 0 && shorten_amount_required > 0; i--) {
+						actual_shorten_amounts[column_list[i - 1]]++;
+						shorten_amount_required--;
+					}
+					if (shorten_amount_required != 0) {
+						throw InternalException("Shorten amount required has tob e zero now");
+					}
+
+					// we are now done
+					break;
+				}
+				if (entry == shorten_amount_required_map.rend()) {
+					throw InternalException(
+					    "ColumnRenderer - we could not reach the shorten amount required but we ran out of columns?");
+				}
+				// we need to shorten all columns to the width of the next-largest column
+				for (auto &column_idx : column_list) {
+					actual_shorten_amounts[column_idx] += max_shorten_width;
+				}
+				// add all columns to the second-largest list of columns
+				auto &second_largest_column_list = entry->second;
+				second_largest_column_list.insert(second_largest_column_list.end(), column_list.begin(),
+				                                  column_list.end());
+				// delete this entry from the shorten map and continue
+				shorten_amount_required_map.erase(largest_width);
+				shorten_amount_required -= total_potential_shorten_width;
+			}
+
+			// now perform the shortening
+			for (idx_t c = 0; c < actual_shorten_amounts.size(); c++) {
+				if (actual_shorten_amounts[c] == 0) {
+					continue;
+				}
+				D_ASSERT(actual_shorten_amounts[c] < column_widths[c]);
+				column_widths[c] -= actual_shorten_amounts[c];
+				total_render_length -= actual_shorten_amounts[c];
+				shortened_columns = true;
+			}
+		} else {
+			// we cannot get below the max width by shortening
+			// set everything that is wider than the col width to the max col width
+			// afterwards - we need to prune columns
+			for (auto &w : column_widths) {
+				if (w <= config.max_col_width) {
+					continue;
+				}
+				total_render_length -= w - config.max_col_width;
+				w = config.max_col_width;
+				shortened_columns = true;
+			}
+			D_ASSERT(total_render_length > max_width);
+		}
+
+		if (total_render_length > max_width) {
+			// the total length is still too large
+			// we need to remove columns!
+			// first, we add 6 characters to the total length
+			// this is what we need to add the "..." in the middle
+			total_render_length += 3 + config.DOTDOTDOT_LENGTH;
+			// now select columns to prune
+			// we select columns in zig-zag order starting from the middle
+			// e.g. if we have 10 columns, we remove #5, then #4, then #6, then #3, then #7, etc
+			int64_t offset = 0;
+			while (total_render_length > max_width) {
+				auto c = NumericCast<idx_t>(NumericCast<int64_t>(column_count) / 2 + offset);
+				total_render_length -= column_widths[c] + 3;
+				pruned_columns.insert(c);
+				if (offset >= 0) {
+					offset = -offset - 1;
+				} else {
+					offset = -offset;
+				}
+			}
+
+			// if we have any space left after truncating columns we can try to increase the size of columns again
+			idx_t space_left = max_width - total_render_length;
+			for (idx_t c = 0; c < column_widths.size() && space_left > 0; c++) {
+				if (pruned_columns.find(c) != pruned_columns.end()) {
+					// only increase size of visible columns
+					continue;
+				}
+				if (column_widths[c] >= original_widths[c]) {
+					continue;
+				}
+				idx_t increase_amount = MinValue<idx_t>(space_left, original_widths[c] - column_widths[c]);
+				column_widths[c] += increase_amount;
+				space_left -= increase_amount;
+				total_render_length += increase_amount;
+			}
+		}
+	}
+
+	// update the footer with the column counts
+	UpdateColumnCountFooter(column_count, pruned_columns);
+
+	bool added_split_column = false;
+	vector<idx_t> new_widths;
+	for (idx_t c = 0; c < column_count; c++) {
+		if (pruned_columns.find(c) == pruned_columns.end()) {
+			column_map.push_back(c);
+			new_widths.push_back(column_widths[c]);
+		} else if (!added_split_column) {
+			// "..."
+			column_map.push_back(optional_idx());
+			new_widths.push_back(config.DOTDOTDOT_LENGTH);
+			added_split_column = true;
+		}
+	}
+	column_widths = std::move(new_widths);
+	column_count = column_widths.size();
 }
 
 void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner,
