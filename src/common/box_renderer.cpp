@@ -205,6 +205,9 @@ private:
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void ComputeRenderValues(vector<RenderDataCollection> &collections);
 	void RenderValues();
+	void RenderRow(BoxRenderRow &row, idx_t row_idx);
+	vector<BoxRenderRow> GenerateDividerRows(idx_t row_idx);
+
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
 	string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
 
@@ -1729,92 +1732,6 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 			r += extra_rows.size();
 		}
 	}
-	// handle the row dividers
-	for (idx_t r = 0; r < render_rows.size(); r++) {
-		auto &row = render_rows[r];
-		if (row.row_type != RenderRowType::DIVIDER) {
-			continue;
-		}
-		// generate three new rows
-		const idx_t divider_row_count = 3;
-		vector<BoxRenderRow> divider_rows;
-		for (idx_t d = 0; d < divider_row_count; d++) {
-			divider_rows.emplace_back(RenderRowType::ROW_VALUES);
-		}
-
-		// find the prev/next rows
-		idx_t prev_row_idx, next_row_idx;
-		for (prev_row_idx = r; r > 0; r--) {
-			if (render_rows[prev_row_idx - 1].row_type == RenderRowType::ROW_VALUES) {
-				break;
-			}
-		}
-		for (next_row_idx = r + 1; r < render_rows.size(); r++) {
-			if (render_rows[next_row_idx].row_type == RenderRowType::ROW_VALUES) {
-				break;
-			}
-		}
-		if (prev_row_idx == 0 || next_row_idx >= render_rows.size()) {
-			throw InternalException("No prev/next row found");
-		}
-		prev_row_idx--;
-		auto &prev_row = render_rows[prev_row_idx];
-		auto &next_row = render_rows[next_row_idx];
-		// now generate the dividers for each of the columns
-
-		for (idx_t c = 0; c < column_count; c++) {
-			string str;
-			auto &prev_value = prev_row.values[c];
-			auto &next_value = next_row.values[c];
-			ValueRenderAlignment alignment = prev_value.alignment;
-			if (alignment == ValueRenderAlignment::MIDDLE) {
-				// for middle alignment we don't have to do anything - just push a dot
-				str = config.DOT;
-			} else {
-				// for left / right alignment we want to be in the middle of the prev / next value
-				auto top_length = MinValue<idx_t>(column_widths[c], Utf8Proc::RenderWidth(prev_value.text));
-				auto bottom_length = MinValue<idx_t>(column_widths[c], Utf8Proc::RenderWidth(next_value.text));
-				auto dot_length = MinValue<idx_t>(top_length, bottom_length);
-				if (top_length == 0) {
-					dot_length = bottom_length;
-				} else if (bottom_length == 0) {
-					dot_length = top_length;
-				}
-				if (dot_length > 1) {
-					auto padding = dot_length - 1;
-					idx_t left_padding, right_padding;
-					switch (alignment) {
-					case ValueRenderAlignment::LEFT:
-						left_padding = padding / 2;
-						right_padding = padding - left_padding;
-						break;
-					case ValueRenderAlignment::RIGHT:
-						right_padding = padding / 2;
-						left_padding = padding - right_padding;
-						break;
-					default:
-						throw InternalException("Unrecognized value renderer alignment");
-					}
-					str = string(left_padding, ' ') + config.DOT + string(right_padding, ' ');
-				} else {
-					if (dot_length == 0) {
-						// everything is empty
-						alignment = ValueRenderAlignment::MIDDLE;
-					}
-					str = config.DOT;
-				}
-			}
-			for (idx_t d = 0; d < divider_row_count; d++) {
-				divider_rows[d].values.emplace_back(str, ResultRenderType::LAYOUT, alignment);
-			}
-		}
-		// override the divider row with the row values
-		render_rows[r] = std::move(divider_rows[0]);
-		// insert the extra divider rows
-		for (idx_t d = 1; d < divider_row_count; d++) {
-			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r), std::move(divider_rows[d]));
-		}
-	}
 }
 
 void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width,
@@ -2058,37 +1975,123 @@ void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char 
 	ss << '\n';
 }
 
-void BoxRendererImplementation::RenderValues() {
+vector<BoxRenderRow> BoxRendererImplementation::GenerateDividerRows(idx_t row_idx) {
 	auto column_count = column_widths.size();
+	// generate three new rows
+	const idx_t divider_row_count = 3;
+	vector<BoxRenderRow> divider_rows;
+	for (idx_t d = 0; d < divider_row_count; d++) {
+		divider_rows.emplace_back(RenderRowType::ROW_VALUES);
+	}
+
+	// find the prev/next rows
+	idx_t prev_row_idx, next_row_idx;
+	for (prev_row_idx = row_idx; prev_row_idx > 0; prev_row_idx--) {
+		if (render_rows[prev_row_idx - 1].row_type == RenderRowType::ROW_VALUES) {
+			break;
+		}
+	}
+	for (next_row_idx = row_idx + 1; next_row_idx < render_rows.size(); next_row_idx++) {
+		if (render_rows[next_row_idx].row_type == RenderRowType::ROW_VALUES) {
+			break;
+		}
+	}
+	if (prev_row_idx == 0 || next_row_idx >= render_rows.size()) {
+		throw InternalException("No prev/next row found");
+	}
+	prev_row_idx--;
+	auto &prev_row = render_rows[prev_row_idx];
+	auto &next_row = render_rows[next_row_idx];
+	// now generate the dividers for each of the columns
+
+	for (idx_t c = 0; c < column_count; c++) {
+		string str;
+		auto &prev_value = prev_row.values[c];
+		auto &next_value = next_row.values[c];
+		ValueRenderAlignment alignment = prev_value.alignment;
+		if (alignment == ValueRenderAlignment::MIDDLE) {
+			// for middle alignment we don't have to do anything - just push a dot
+			str = config.DOT;
+		} else {
+			// for left / right alignment we want to be in the middle of the prev / next value
+			auto top_length = MinValue<idx_t>(column_widths[c], Utf8Proc::RenderWidth(prev_value.text));
+			auto bottom_length = MinValue<idx_t>(column_widths[c], Utf8Proc::RenderWidth(next_value.text));
+			auto dot_length = MinValue<idx_t>(top_length, bottom_length);
+			if (top_length == 0) {
+				dot_length = bottom_length;
+			} else if (bottom_length == 0) {
+				dot_length = top_length;
+			}
+			if (dot_length > 1) {
+				auto padding = dot_length - 1;
+				idx_t left_padding, right_padding;
+				switch (alignment) {
+				case ValueRenderAlignment::LEFT:
+					left_padding = padding / 2;
+					right_padding = padding - left_padding;
+					break;
+				case ValueRenderAlignment::RIGHT:
+					right_padding = padding / 2;
+					left_padding = padding - right_padding;
+					break;
+				default:
+					throw InternalException("Unrecognized value renderer alignment");
+				}
+				str = string(left_padding, ' ') + config.DOT + string(right_padding, ' ');
+			} else {
+				if (dot_length == 0) {
+					// everything is empty
+					alignment = ValueRenderAlignment::MIDDLE;
+				}
+				str = config.DOT;
+			}
+		}
+		for (idx_t d = 0; d < divider_row_count; d++) {
+			divider_rows[d].values.emplace_back(str, ResultRenderType::LAYOUT, alignment);
+		}
+	}
+	return divider_rows;
+}
+
+void BoxRendererImplementation::RenderRow(BoxRenderRow &row, idx_t row_idx) {
+	auto column_count = column_widths.size();
+	if (row.row_type == RenderRowType::SEPARATOR) {
+		// render separator
+		RenderLayoutLine(config.HORIZONTAL, config.MIDDLE, config.LMIDDLE, config.RMIDDLE);
+		return;
+	}
+	if (row.row_type == RenderRowType::DIVIDER) {
+		auto divider_rows = GenerateDividerRows(row_idx);
+		for (auto &divider_row : divider_rows) {
+			RenderRow(divider_row, 0);
+		}
+		return;
+	}
+	// render row values
+	for (idx_t column_idx = 0; column_idx < column_count; column_idx++) {
+		auto &render_value = row.values[column_idx];
+		auto render_mode = render_value.render_mode;
+		auto alignment = render_value.alignment;
+		if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
+			ss.SetValueColumn(render_value.column_idx);
+			if (!render_value.decomposed && CanHighlight(render_value)) {
+				HighlightValue(render_value);
+			}
+		}
+		RenderValue(render_value.text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
+		            render_value.render_width);
+	}
+	ss << config.VERTICAL;
+	ss << '\n';
+}
+
+void BoxRendererImplementation::RenderValues() {
 	// render the top line
 	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
 	for (idx_t r = 0; r < render_rows.size(); r++) {
 		auto &row = render_rows[r];
-		if (row.row_type == RenderRowType::SEPARATOR) {
-			// render separator
-			RenderLayoutLine(config.HORIZONTAL, config.MIDDLE, config.LMIDDLE, config.RMIDDLE);
-			continue;
-		}
-		if (row.row_type == RenderRowType::DIVIDER) {
-			throw InternalException("Dividers should have been handled before");
-		}
-		// render row values
-		for (idx_t column_idx = 0; column_idx < column_count; column_idx++) {
-			auto &render_value = row.values[column_idx];
-			auto render_mode = render_value.render_mode;
-			auto alignment = render_value.alignment;
-			if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
-				ss.SetValueColumn(render_value.column_idx);
-				if (!render_value.decomposed && CanHighlight(render_value)) {
-					HighlightValue(render_value);
-				}
-			}
-			RenderValue(render_value.text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
-			            render_value.render_width);
-		}
-		ss << config.VERTICAL;
-		ss << '\n';
+		RenderRow(row, r);
 	}
 }
 
