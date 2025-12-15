@@ -579,17 +579,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
 
-	if (options.encryption_options.encryption_version != EncryptionTypes::NONE &&
-	    (options.encryption_options.encryption_version != main_header.GetEncryptionVersion())) {
-		throw InvalidInputException(
-		    "Encryption version mismatch. Database encryption version is %d, attempted to decrypt version %d",
-		    options.encryption_options.encryption_version, main_header.GetEncryptionVersion());
-	}
-
-	if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
-		// encryption version is not explicitly set on attach (default)
-		options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
-	}
+	// encryption version can be overridden by the real encryption version
+	options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);

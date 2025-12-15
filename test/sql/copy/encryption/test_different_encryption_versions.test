@@ -66,26 +66,17 @@ DETACH encrypted_v0
 statement ok
 DETACH encrypted_v1
 
-statement error
+# the setting of debug_encryption_version gets overridden
+# if the (de)serialized encryption version differs
+statement ok
 ATTACH '__TEST_DIR__/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
-----
-Invalid Input Error: Encryption version mismatch. Database encryption version is 1, attempted to decrypt version 0
 
-statement error
-ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
-----
-Invalid Input Error: Encryption version mismatch. Database encryption version is 1, attempted to decrypt version 0
-
-statement error
+statement ok
 ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
-----
-Invalid Input Error: Encryption version mismatch. Database encryption version is 0, attempted to decrypt version 1
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 
-statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
 
 query I
 SELECT l_suppkey FROM encrypted_v0.lineitem limit 10;
