@@ -98,11 +98,26 @@ Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
 	return intermediate;
 }
 
+optional_ptr<const ColumnData> VariantColumnData::FindShreddedColumnData(const StorageIndex &path) const {
+	D_ASSERT(IsShredded());
+	auto &shredded = *sub_columns[1];
+	D_ASSERT(shredded.type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(StructType::GetChildCount(shredded.type) == 2);
+	D_ASSERT(StructType::GetChildTypes(shredded.type)[0].second.id() == LogicalTypeId::UINTEGER);
+
+	auto &struct_column = shredded.Cast<StructColumnData>();
+	//! TODO: add method to return child based on provided path
+	return nullptr;
+}
+
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	if (IsShredded()) {
 		if (state.storage_index.IsPushdownExtract()) {
 			throw InternalException("TODO: PushdownExtract on shredded VARIANT not implemented yet");
+			//! Find the column in the 'typed_value' to directly scan
+			//! If it's not there: fall back to unshredded pushdown extract behavior
+			//! If it is there: check the stats to see if it's fully shredded
 		}
 		auto intermediate = CreateUnshreddingIntermediate(target_count);
 		auto &child_vectors = StructVector::GetEntries(intermediate);

@@ -449,6 +449,18 @@ FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableF
 	return filter.CheckStatistics(stats->statistics);
 }
 
+const BaseStatistics &ColumnData::GetStatisticsRef() const {
+	if (stats) {
+		return stats->statistics;
+	}
+	D_ASSERT(HasParent());
+	return parent->GetChildStats(*this);
+}
+
+const BaseStatistics &ColumnData::GetChildStats(const ColumnData &child) const {
+	throw InternalException("GetChildStats not implemented for ColumnData of type %s", type.ToString());
+}
+
 unique_ptr<BaseStatistics> ColumnData::GetStatistics() const {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");

@@ -80,6 +80,7 @@ public:
 private:
 	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type,
 	                                                 BaseStatistics &stats);
+	optional_ptr<const ColumnData> FindShreddedColumnData(const StorageIndex &path) const;
 	void CreateScanStates(ColumnScanState &state);
 	LogicalType GetShreddedType();
 };

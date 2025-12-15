@@ -368,6 +368,24 @@ void StructColumnData::SetChildData(idx_t i, shared_ptr<ColumnData> child_column
 	this->sub_columns[i] = std::move(child_column_p);
 }
 
+const BaseStatistics &StructColumnData::GetChildStats(const ColumnData &child) const {
+	optional_idx index;
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		if (RefersToSameObject(child, *sub_columns[i])) {
+			index = i;
+			break;
+		}
+	}
+	if (!index.IsValid()) {
+		throw InternalException("StructColumnData::GetChildStats: Could not find a matching child index for the "
+		                        "provided child (of type %s)",
+		                        child.type.ToString());
+	}
+	auto idx = index.GetIndex();
+	auto &stats = GetStatisticsRef();
+	return StructStats::GetChildStats(stats, idx);
+}
+
 struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
 	                            PartialBlockManager &partial_block_manager)
