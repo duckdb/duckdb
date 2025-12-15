@@ -1773,7 +1773,7 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 
 	const auto log_level = duckdb::EnumUtil::ToString(level);
 	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
-	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, HighlightElementType::NONE);
+	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, element_type);
 }
 
 } // namespace duckdb_shell

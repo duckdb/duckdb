@@ -53,11 +53,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
+	bool is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	               op.Cast<LogicalComparisonJoin>().join_type == JoinType::MARK;
 	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		get_all_child_bindings = !op.children.empty();
 	}
-	if (table_indexes.empty()) {
+	if (table_indexes.empty() || is_mark) {
 		// relation represents a non-reorderable relation, most likely a join relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.

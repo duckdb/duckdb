@@ -307,6 +307,12 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 4) {
 		ShellState::SetPrompt(state.continuePromptSelected, args[3]);
 	}
+	if (args.size() >= 5) {
+		ShellState::SetPrompt(state.scrollUpPrompt, args[4]);
+	}
+	if (args.size() >= 6) {
+		ShellState::SetPrompt(state.scrollDownPrompt, args[5]);
+	}
 	return MetadataResult::SUCCESS;
 }
 
