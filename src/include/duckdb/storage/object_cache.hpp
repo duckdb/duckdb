@@ -19,25 +19,24 @@ namespace duckdb {
 //! ObjectCache is the base class for objects caches in DuckDB
 class ObjectCacheEntry {
 public:
-	//! Constant used to indicate the entry should never be evicted
-	static constexpr idx_t NON_EVICTABLE = NumericLimits<idx_t>::Maximum();
-
 	virtual ~ObjectCacheEntry() {
 	}
 
 	virtual string GetObjectType() = 0;
 
 	//! Get the rough cache memory usage in bytes for this entry.
-	//! Used for eviction decisions. Return ObjectCacheEntry::NON_EVICTABLE to prevent eviction.
-	virtual idx_t GetRoughCacheMemory() const = 0;
+	//! Used for eviction decisions. Return invalid index to prevent eviction.
+	virtual optional_idx GetEstimatedCacheMemory() const = 0;
 };
 
 class ObjectCache {
 public:
-	//! Default max memory 2GiB for non-evictable cache entries.
+	//! Default max memory 8GiB for non-evictable cache entries.
 	//
 	// TODO(hjiang): Hard-code a large enough memory consumption upper bound, which is likely a non-regression change.
 	// I will followup with another PR before v1.5.0 release to provide a user option to tune.
+	//
+	// A few consideration here: should we cap object cache memory consumption with duckdb max memory or separate.
 	static constexpr idx_t DEFAULT_MAX_MEMORY = 8ULL * 1024 * 1024 * 1024;
 
 	ObjectCache() : ObjectCache(DEFAULT_MAX_MEMORY) {
@@ -81,8 +80,8 @@ public:
 			return;
 		}
 		const lock_guard<mutex> lock(lock_mutex);
-		bool is_non_evictable = value->GetRoughCacheMemory() == ObjectCacheEntry::NON_EVICTABLE;
-		if (is_non_evictable) {
+		const bool is_evictable = value->GetEstimatedCacheMemory().IsValid();
+		if (!is_evictable) {
 			non_evictable_entries[std::move(key)] = std::move(value);
 			return;
 		}

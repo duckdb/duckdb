@@ -4,8 +4,8 @@
 namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
-                       shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachineCache> state_machine_cache_p,
-                       bool default_null_to_varchar_p)
+                       shared_ptr<CSVBufferManager> buffer_manager_p,
+                       shared_ptr<CSVStateMachineCache> state_machine_cache_p, bool default_null_to_varchar_p)
     : state_machine_cache(std::move(state_machine_cache_p)), options(options_p), file_options(file_options),
       buffer_manager(std::move(buffer_manager_p)), lines_sniffed(0),
       default_null_to_varchar(default_null_to_varchar_p) {

@@ -55,8 +55,8 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
-	idx_t GetRoughCacheMemory() const override {
-		return ObjectCacheEntry::NON_EVICTABLE;
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
 	}
 
 public:

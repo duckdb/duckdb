@@ -7,7 +7,7 @@
 namespace duckdb {
 
 CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options_p,
-                                 shared_ptr<CSVStateMachineCache> csv_state_machine_cache)
+                                 const shared_ptr<CSVStateMachineCache> &csv_state_machine_cache)
     : transition_array(csv_state_machine_cache->Get(state_machine_options_p)),
       state_machine_options(state_machine_options_p), options(options_p) {
 	dialect_options.state_machine_options = state_machine_options;

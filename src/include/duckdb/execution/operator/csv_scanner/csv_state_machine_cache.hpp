@@ -80,7 +80,7 @@ public:
 		return ObjectType();
 	}
 
-	idx_t GetRoughCacheMemory() const override {
+	optional_idx GetEstimatedCacheMemory() const override {
 		static constexpr idx_t STATE_MACHINE_SIZE = 2ULL * 1024;
 		lock_guard<mutex> lock(main_mutex);
 		// Base memory size + state machine entries size

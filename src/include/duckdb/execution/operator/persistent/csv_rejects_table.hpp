@@ -48,7 +48,7 @@ public:
 		return ObjectType();
 	}
 
-	idx_t GetRoughCacheMemory() const override {
+	optional_idx GetEstimatedCacheMemory() const override {
 		return sizeof(*this) + scan_table.size() + errors_table.size() + name.size();
 	}
 

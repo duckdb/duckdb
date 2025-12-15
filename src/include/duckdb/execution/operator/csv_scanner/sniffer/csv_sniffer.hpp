@@ -74,8 +74,8 @@ struct HasType {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
-	                    shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachineCache> state_machine_cache,
-	                    bool default_null_to_varchar = true);
+	                    shared_ptr<CSVBufferManager> buffer_manager_p,
+	                    shared_ptr<CSVStateMachineCache> state_machine_cache, bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:

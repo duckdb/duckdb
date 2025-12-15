@@ -23,24 +23,22 @@ string ParquetFileMetadataCache::GetObjectType() {
 	return ObjectType();
 }
 
-idx_t ParquetFileMetadataCache::GetRoughCacheMemory() const {
+optional_idx ParquetFileMetadataCache::GetEstimatedCacheMemory() const {
 	// Base memory consumption
 	idx_t memory = sizeof(*this);
 
 	if (metadata) {
-		// Base overhead
-		memory += 1024;
-		// Estimate ~1KB per row group + column stats
-		memory += metadata->row_groups.size() * 1024;
-		// Column schema information
-		memory += metadata->schema.size() * 256;
+		const auto num_cols = metadata->schema.size();
+		memory += sizeof(FileMetaData);
+		memory += num_cols * sizeof(SchemaElement);
+		memory += metadata->row_groups.size() * sizeof(RowGroup) + num_cols * sizeof(ColumnChunk);
 	}
 	if (geo_metadata) {
-		memory += 512;
+		memory +=
+		    sizeof(GeoParquetFileMetadata) + geo_metadata->GetColumnMeta().size() * sizeof(GeoParquetColumnMetadata);
 	}
-
 	if (crypto_metadata) {
-		memory += 256;
+		memory += sizeof(FileCryptoMetaData);
 	}
 
 	memory += footer_size;

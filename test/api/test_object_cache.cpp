@@ -17,7 +17,7 @@ struct TestObject : public ObjectCacheEntry {
 	static string ObjectType() {
 		return "TestObject";
 	}
-	idx_t GetRoughCacheMemory() const override {
+	optional_idx GetEstimatedCacheMemory() const override {
 		return 0;
 	}
 };
@@ -33,7 +33,7 @@ struct AnotherTestObject : public ObjectCacheEntry {
 	static string ObjectType() {
 		return "AnotherTestObject";
 	}
-	idx_t GetRoughCacheMemory() const override {
+	optional_idx GetEstimatedCacheMemory() const override {
 		return 0;
 	}
 };

@@ -9,10 +9,10 @@
 #pragma once
 
 #include <functional>
-#include <list>
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/hash_utils.hpp"
+#include "duckdb/common/list.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/string.hpp"
@@ -46,8 +46,9 @@ public:
 		if (!value) {
 			return;
 		}
-		auto memory = value->GetRoughCacheMemory();
-		Put(std::move(key), std::move(value), memory);
+		const auto memory = value->GetEstimatedCacheMemory();
+		const auto estimated_memory = memory.IsValid() ? memory.GetIndex() : 0;
+		Put(std::move(key), std::move(value), estimated_memory);
 	}
 
 	// Insert `value` with key `key` and explicit memory size. This will replace any previous entry with the same key.
@@ -121,7 +122,7 @@ private:
 	struct Entry {
 		shared_ptr<Val> value;
 		idx_t memory;
-		typename std::list<Key>::iterator lru_iterator;
+		typename list<Key>::iterator lru_iterator;
 	};
 
 	using KeyConstRef = std::reference_wrapper<const Key>;
@@ -154,7 +155,7 @@ private:
 	const idx_t max_memory;
 	idx_t current_memory;
 	EntryMap entry_map;
-	std::list<Key> lru_list;
+	list<Key> lru_list;
 };
 
 } // namespace duckdb

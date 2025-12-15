@@ -1,7 +1,8 @@
-#include "duckdb/common/lru_cache.hpp"
 #include "catch.hpp"
+#include "duckdb/common/lru_cache.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
-using namespace duckdb;
+using namespace duckdb; // NOLINT
 
 namespace {
 
@@ -12,7 +13,7 @@ struct TestValue {
 
 	TestValue(int val, idx_t sz = 100) : value(val), size(sz) {
 	}
-	idx_t GetRoughCacheMemory() const {
+	optional_idx GetEstimatedCacheMemory() const {
 		return size;
 	}
 };
@@ -142,18 +143,18 @@ TEST_CASE("LRU Cache Put with Explicit Size", "[lru_cache]") {
 
 	SECTION("Put with explicit size") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		// Use explicit size API - override the value's GetRoughCacheMemory()
+		// Use explicit size API, which overrides the value's GetEstimatedCacheMemory
 		cache.Put("key1", val1, 200);
 
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
 		REQUIRE(result->value == 42);
-		REQUIRE(cache.CurrentMemory() == 200); // Uses explicit size, not value->GetRoughCacheMemory()
+		REQUIRE(cache.CurrentMemory() == 200); // Uses explicit size, not value->GetEstimatedCacheMemory
 	}
 
-	SECTION("Put with GetRoughCacheMemory vs explicit size") {
+	SECTION("Put with GetEstimatedCacheMemory vs explicit size") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		// First use GetRoughCacheMemory API
+		// First use GetEstimatedCacheMemory API
 		cache.Put("key1", val1);
 		REQUIRE(cache.CurrentMemory() == 100);
 
