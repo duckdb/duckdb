@@ -366,8 +366,15 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id) {
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
-	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	shared_ptr<EncryptionState> encryption_state;
+	if (main_header.GetEncryptionVersion() > 0) {
+		// From Encryption Version 1+, always encrypt canary with GCM
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	} else {
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	}
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -408,8 +415,15 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
-	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	shared_ptr<EncryptionState> encryption_state;
+	if (main_header.GetEncryptionVersion() > 0) {
+		// From Encryption Version 1+, always encrypt canary with GCM
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	} else {
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	}
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
