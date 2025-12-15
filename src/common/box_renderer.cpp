@@ -160,7 +160,10 @@ struct RenderDataCollection {
 public:
 	void InitializeChunk(DataChunk &chunk);
 	Vector &Values(DataChunk &chunk, idx_t c) {
-		return chunk.data[c];
+		return chunk.data[c * 2];
+	}
+	Vector &RenderLengths(DataChunk &chunk, idx_t c) {
+		return chunk.data[c * 2 + 1];
 	}
 };
 
@@ -191,7 +194,8 @@ private:
 	                 optional_idx render_width = optional_idx());
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
-	void ConvertRenderVector(Vector &vector, idx_t count, const LogicalType &original_type);
+	void ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count, const LogicalType &original_type,
+	                         idx_t null_render_length);
 	vector<RenderDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
 	                                                    idx_t bottom_rows);
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
@@ -563,27 +567,33 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 	return BoxRenderer::TryFormatLargeNumber(numeric, config.decimal_separator);
 }
 
-void BoxRendererImplementation::ConvertRenderVector(Vector &vector, idx_t count, const LogicalType &original_type) {
+void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
+                                                    const LogicalType &original_type, idx_t null_render_length) {
 	vector.Flatten(count);
 	auto data = FlatVector::GetData<string_t>(vector);
 	auto &validity = FlatVector::Validity(vector);
+	auto render_length_data = FlatVector::GetData<uint64_t>(render_lengths);
 	for (idx_t r = 0; r < count; r++) {
 		if (!validity.RowIsValid(r)) {
 			// null - no need to convert
+			// set render length to render length of NULL
+			render_length_data[r] = null_render_length;
 			continue;
 		}
 		// non-null - convert value
 		auto result_str = ConvertRenderValue(data[r].GetString(), original_type);
+		render_length_data[r] = Utf8Proc::RenderWidth(result_str);
 		data[r] = StringVector::AddString(vector, result_str);
 	}
 }
 
 RenderDataCollection::RenderDataCollection(ClientContext &context, idx_t column_count) : context(context) {
-	vector<LogicalType> varchar_types;
+	vector<LogicalType> render_value_types;
 	for (idx_t c = 0; c < column_count; c++) {
-		varchar_types.emplace_back(LogicalType::VARCHAR);
+		render_value_types.emplace_back(LogicalType::VARCHAR);
+		render_value_types.emplace_back(LogicalType::UBIGINT);
 	}
-	render_values = make_uniq<ColumnDataCollection>(context, varchar_types);
+	render_values = make_uniq<ColumnDataCollection>(context, render_value_types);
 }
 
 void RenderDataCollection::InitializeChunk(DataChunk &chunk) {
@@ -616,6 +626,7 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 	// fetch the top rows from the ColumnDataCollection
 	idx_t chunk_idx = 0;
 	idx_t row_idx = 0;
+	idx_t null_render_length = Utf8Proc::RenderWidth(config.null_value);
 	while (row_idx < top_rows) {
 		if (context.IsInterrupted()) {
 			break;
@@ -630,8 +641,10 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 		for (idx_t c = 0; c < column_count; c++) {
 			auto &source_vector = fetch_result.data[c];
 			auto &target_vector = top_collection.Values(insert_result, c);
+			auto &render_lengths = top_collection.RenderLengths(insert_result, c);
 			VectorOperations::Cast(context, source_vector, target_vector, insert_count);
-			ConvertRenderVector(target_vector, insert_count, source_vector.GetType());
+			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
+			                    null_render_length);
 		}
 		insert_result.SetCardinality(insert_count);
 
@@ -652,7 +665,8 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 				}
 				// add a readable rendering of the value (i.e. "1234567" becomes "1.23 million")
 				// we only add the rendering if the string is big
-				auto numeric_val = insert_result.data[c].GetValue(0).ToString();
+				auto &values = top_collection.Values(insert_result, c);
+				auto numeric_val = values.GetValue(0).ToString();
 				readable_numbers[c] = TryFormatLargeNumber(numeric_val);
 				if (readable_numbers[c].empty()) {
 					all_readable = false;
@@ -663,7 +677,10 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 			insert_result.Reset();
 			if (all_readable) {
 				for (idx_t c = 0; c < column_count; c++) {
-					insert_result.data[c].SetValue(0, Value(readable_numbers[c]));
+					auto &values = top_collection.Values(insert_result, c);
+					auto &render_widths = top_collection.RenderLengths(insert_result, c);
+					values.SetValue(0, Value(readable_numbers[c]));
+					render_widths.SetValue(0, Value::UBIGINT(Utf8Proc::RenderWidth(readable_numbers[c])));
 				}
 				insert_result.SetCardinality(1);
 				top_collection.render_values->Append(insert_result);
@@ -723,8 +740,11 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 
 		for (idx_t c = 0; c < column_count; c++) {
 			auto &source_vector = chunk.data[c];
-			VectorOperations::Cast(context, source_vector, insert_result.data[c], insert_count);
-			ConvertRenderVector(insert_result.data[c], insert_count, source_vector.GetType());
+			auto &target_vector = bottom_collection.Values(insert_result, c);
+			auto &render_lengths = bottom_collection.RenderLengths(insert_result, c);
+			VectorOperations::Cast(context, source_vector, target_vector, insert_count);
+			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
+			                    null_render_length);
 		}
 		insert_result.SetCardinality(insert_count);
 		// construct the render collection
@@ -738,15 +758,20 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	auto &top = input.front();
 	auto &bottom = input.back();
 
+	vector<LogicalType> new_types;
 	vector<string> new_names;
 	new_names.emplace_back("Column");
 	new_names.emplace_back("Type");
+	new_types.emplace_back(LogicalType::VARCHAR);
+	new_types.emplace_back(LogicalType::VARCHAR);
 	for (idx_t r = 0; r < top.render_values->Count(); r++) {
 		new_names.emplace_back("Row " + to_string(r + 1));
+		new_types.emplace_back(LogicalType::VARCHAR);
 	}
 	for (idx_t r = 0; r < bottom.render_values->Count(); r++) {
 		auto row_index = row_count - bottom.render_values->Count() + r + 1;
 		new_names.emplace_back("Row " + to_string(row_index));
+		new_types.emplace_back(LogicalType::VARCHAR);
 	}
 	vector<RenderDataCollection> result;
 	result.emplace_back(context, new_names.size());
@@ -755,30 +780,37 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	auto &res_coll = *result.front().render_values;
 	ColumnDataAppendState append_state;
 	res_coll.InitializeAppend(append_state);
-	for (idx_t c = 0; c < top.render_values->ColumnCount(); c++) {
-		vector<column_t> column_ids {c};
+	for (idx_t c = 0; c < column_names.size(); c++) {
+		vector<column_t> column_ids {c * 2, c * 2 + 1};
 		auto row_index = row_chunk.size();
 		idx_t current_index = 0;
-		row_chunk.SetValue(current_index++, row_index, column_names[c]);
-		row_chunk.SetValue(current_index++, row_index, RenderType(result_types[c]));
+		auto &column_name = column_names[c];
+		auto type_name = RenderType(result_types[c]);
+		row_chunk.SetValue(current_index++, row_index, column_name);
+		row_chunk.SetValue(current_index++, row_index, Value::UBIGINT(Utf8Proc::RenderWidth(column_name)));
+		row_chunk.SetValue(current_index++, row_index, type_name);
+		row_chunk.SetValue(current_index++, row_index, Value::UBIGINT(Utf8Proc::RenderWidth(type_name)));
 		for (auto &collection : input) {
 			for (auto &chunk : collection.render_values->Chunks(column_ids)) {
 				if (context.IsInterrupted()) {
 					break;
 				}
 				for (idx_t r = 0; r < chunk.size(); r++) {
-					row_chunk.SetValue(current_index++, row_index, chunk.GetValue(0, r));
+					auto val = chunk.GetValue(0, r);
+					auto length = chunk.GetValue(1, r);
+					row_chunk.SetValue(current_index++, row_index, val);
+					row_chunk.SetValue(current_index++, row_index, length);
 				}
 			}
 		}
 		row_chunk.SetCardinality(row_chunk.size() + 1);
-		if (row_chunk.size() == STANDARD_VECTOR_SIZE || c + 1 == top.render_values->ColumnCount()) {
+		if (row_chunk.size() == STANDARD_VECTOR_SIZE || c + 1 == column_names.size()) {
 			res_coll.Append(append_state, row_chunk);
 			row_chunk.Reset();
 		}
 	}
 	column_names = std::move(new_names);
-	result_types = res_coll.Types();
+	result_types = std::move(new_types);
 	return result;
 }
 
@@ -1490,7 +1522,8 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 	}
 	// prepare the values
 	for (idx_t c = 0; c < collections.size(); c++) {
-		auto &collection = *collections[c].render_values;
+		auto &render_collection = collections[c];
+		auto &collection = *render_collection.render_values;
 		if (collection.Count() == 0) {
 			continue;
 		}
@@ -1506,13 +1539,17 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 			vector<BoxRenderRow> chunk_rows;
 			chunk_rows.resize(chunk.size());
 			for (idx_t c = 0; c < column_count; c++) {
-				auto string_data = FlatVector::GetData<string_t>(chunk.data[c]);
+				auto &string_vector = render_collection.Values(chunk, c);
+				auto &render_lengths_vector = render_collection.RenderLengths(chunk, c);
+
+				auto string_data = FlatVector::GetData<string_t>(string_vector);
+				auto render_length_data = FlatVector::GetData<uint64_t>(render_lengths_vector);
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					string render_value;
 					ResultRenderType render_type;
 					ValueRenderAlignment alignment;
 					idx_t column_idx = c;
-					if (FlatVector::IsNull(chunk.data[c], r)) {
+					if (FlatVector::IsNull(string_vector, r)) {
 						render_value = config.null_value;
 						render_type = ResultRenderType::NULL_VALUE;
 					} else {
@@ -1541,7 +1578,9 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 							break;
 						}
 					}
-					chunk_rows[r].values.emplace_back(std::move(render_value), render_type, alignment, column_idx);
+					auto render_length = render_length_data[r];
+					chunk_rows[r].values.emplace_back(std::move(render_value), render_type, alignment, column_idx,
+					                                  render_length);
 				}
 			}
 			for (auto &row : chunk_rows) {
@@ -1573,11 +1612,13 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 		}
 		D_ASSERT(row.values.size() == column_count);
 		for (idx_t c = 0; c < column_count; c++) {
-			auto render_width = Utf8Proc::RenderWidth(row.values[c].text);
+			if (!row.values[c].render_width.IsValid()) {
+				row.values[c].render_width = Utf8Proc::RenderWidth(row.values[c].text);
+			}
+			auto render_width = row.values[c].render_width.GetIndex();
 			if (render_width > column_widths[c]) {
 				column_widths[c] = render_width;
 			}
-			row.values[c].render_width = render_width;
 		}
 	}
 
