@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
@@ -24,7 +25,7 @@ public:
 		elem.reset();
 	}
 
-	static void Schedule(weak_ptr<DatabaseInstance> db, ITERABLE &elements) {
+	static void Schedule(const weak_ptr<DatabaseInstance> &db, ITERABLE &elements) {
 		auto db_ref = db.lock();
 		if (!db_ref) {
 			return;
