@@ -7,8 +7,13 @@
 # Otherwise we run out of memory
 require 64bit
 
+require ram 8gb
+
 statement ok
 PRAGMA verify_parallelism
+
+statement ok
+PRAGMA memory_limit='8GB'
 
 statement ok
 SET merge_join_threshold=0

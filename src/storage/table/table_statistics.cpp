@@ -194,11 +194,14 @@ void TableStatistics::SetStats(TableStatistics &other) {
 	table_sample = std::move(other.table_sample);
 }
 
-unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
+unique_ptr<BaseStatistics> TableStatistics::CopyStats(const StorageIndex &index) {
 	lock_guard<mutex> l(*stats_lock);
-	auto result = column_stats[i]->Statistics().Copy();
-	if (column_stats[i]->HasDistinctStats()) {
-		result.SetDistinctCount(column_stats[i]->DistinctStats().GetCount());
+
+	auto column_index = index.GetPrimaryIndex();
+	auto &stats = *column_stats[column_index];
+	auto result = stats.Statistics().Copy();
+	if (stats.HasDistinctStats()) {
+		result.SetDistinctCount(stats.DistinctStats().GetCount());
 	}
 	return result.ToUnique();
 }

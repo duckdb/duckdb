@@ -8,6 +8,16 @@ from conftest import ShellTest
 import os
 from pathlib import Path
 
+def test_missing_arg(shell):
+    test = (
+        ShellTest(shell)
+        .statement("SELECT 42")
+        .add_argument("-xyz")
+    )
+    result = test.run()
+    result.check_stderr("Unrecognized option")
+    result.check_stderr("xyz")
+
 def test_headers(shell):
     test = (
         ShellTest(shell)
