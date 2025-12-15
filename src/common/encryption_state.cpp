@@ -29,6 +29,8 @@ void EncryptionState::GenerateRandomData(data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
+static constexpr EncryptionTypes::EncryptionVersion MAX_VERSION = EncryptionTypes::V0_1;
+
 string EncryptionTypes::CipherToString(CipherType cipher_p) {
 	switch (cipher_p) {
 	case GCM:
@@ -57,12 +59,13 @@ EncryptionTypes::CipherType EncryptionTypes::StringToCipher(const string &encryp
 }
 
 EncryptionTypes::EncryptionVersion EncryptionTypes::StringToVersion(const string &encryption_version_p) {
-	if (encryption_version_p == "0") {
+	if (encryption_version_p == "v0") {
 		return V0_0;
-	} else if (encryption_version_p == "1") {
+	} else if (encryption_version_p == "v1") {
 		return V0_1;
 	} else {
-		throw NotImplementedException("No encryption version higher then 1 exists yet");
+		throw NotImplementedException("No encryption version higher then v%d is supported yet in this DuckDB version",
+		                              MAX_VERSION);
 	}
 }
 

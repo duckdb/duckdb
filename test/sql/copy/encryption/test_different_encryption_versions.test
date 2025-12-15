@@ -11,11 +11,24 @@ require httpfs
 statement ok
 PRAGMA enable_verification
 
-statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version '0');
+statement error
+ATTACH '__TEST_DIR__/encrypted_invalid.duckdb' AS encrypted_invalid (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0', debug_encryption_version 'v1');
+----
+Encryption version 1+ is incompatible with a storage version lower then v1.5.0
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version '1');
+ATTACH '__TEST_DIR__/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
+
+statement error
+ATTACH '__TEST_DIR__/encrypted_error.duckdb' AS encrypted_error (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v2');
+----
+Not implemented Error: No encryption version higher then v1 is supported yet in this DuckDB version
 
 statement ok
 ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
@@ -25,6 +38,9 @@ USE unencrypted;
 
 statement ok
 CALL dbgen(sf=0.01);
+
+statement ok
+COPY FROM DATABASE unencrypted to encrypted_storage_version;
 
 statement ok
 COPY FROM DATABASE unencrypted to encrypted_v0;
@@ -39,6 +55,9 @@ statement ok
 USE other;
 
 statement ok
+DETACH encrypted_storage_version;
+
+statement ok
 DETACH unencrypted
 
 statement ok
@@ -48,20 +67,25 @@ statement ok
 DETACH encrypted_v1
 
 statement error
-ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version '1');
+ATTACH '__TEST_DIR__/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
 ----
 Invalid Input Error: Encryption version mismatch. Database encryption version is 1, attempted to decrypt version 0
 
 statement error
-ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version '0');
+ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
+----
+Invalid Input Error: Encryption version mismatch. Database encryption version is 1, attempted to decrypt version 0
+
+statement error
+ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 ----
 Invalid Input Error: Encryption version mismatch. Database encryption version is 0, attempted to decrypt version 1
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version '0');
+ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version '1');
+ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
 
 query I
 SELECT l_suppkey FROM encrypted_v0.lineitem limit 10;
