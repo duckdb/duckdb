@@ -383,7 +383,7 @@ std::pair<column_index_set::iterator, idx_t> FindShortestMatchingPath(column_ind
 
 void RemoveUnusedColumns::WritePushdownExtractColumns(
     const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-    const std::function<idx_t(const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type)> &callback) {
+    const std::function<idx_t(const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type)> &callback) {
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
@@ -472,7 +472,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
 		    entry->first, entry->second, i, column_type,
-		    [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
+		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> idx_t {
 			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
 			    target->SetAlias(expr.GetAlias());
 			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
@@ -656,23 +656,24 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
 
 		//! Pushdown Extract is supported, emit a column for every field
-		WritePushdownExtractColumns(entry->first, entry->second, col_sel_idx, column_type,
-		                            [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
-			                            ColumnIndex new_index(struct_column_index, {extract_path});
-			                            new_index.SetPushdownExtractType(column_type, cast_type);
+		WritePushdownExtractColumns(
+		    entry->first, entry->second, col_sel_idx, column_type,
+		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> idx_t {
+			    ColumnIndex new_index(struct_column_index, {extract_path});
+			    new_index.SetPushdownExtractType(column_type, cast_type);
 
-			                            auto column_binding_index = new_column_ids.size();
-			                            auto entry = child_map.find(new_index);
-			                            if (entry == child_map.end()) {
-				                            //! Adds the binding for the child only if it doesn't exist yet
-				                            entry = child_map.emplace(new_index, column_binding_index).first;
-				                            created_bindings[new_index.GetPrimaryIndex()]++;
+			    auto column_binding_index = new_column_ids.size();
+			    auto entry = child_map.find(new_index);
+			    if (entry == child_map.end()) {
+				    //! Adds the binding for the child only if it doesn't exist yet
+				    entry = child_map.emplace(new_index, column_binding_index).first;
+				    created_bindings[new_index.GetPrimaryIndex()]++;
 
-				                            new_column_ids.emplace_back(std::move(new_index));
-				                            original_ids.emplace_back(col_sel_idx);
-			                            }
-			                            return entry->second;
-		                            });
+				    new_column_ids.emplace_back(std::move(new_index));
+				    original_ids.emplace_back(col_sel_idx);
+			    }
+			    return entry->second;
+		    });
 	}
 	if (new_column_ids.empty()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.

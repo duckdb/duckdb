@@ -368,6 +368,11 @@ void StructColumnData::SetChildData(idx_t i, shared_ptr<ColumnData> child_column
 	this->sub_columns[i] = std::move(child_column_p);
 }
 
+const ColumnData &StructColumnData::GetChildColumn(idx_t index) const {
+	D_ASSERT(index < sub_columns.size());
+	return *sub_columns[index];
+}
+
 const BaseStatistics &StructColumnData::GetChildStats(const ColumnData &child) const {
 	optional_idx index;
 	for (idx_t i = 0; i < sub_columns.size(); i++) {

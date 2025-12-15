@@ -69,6 +69,7 @@ public:
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(idx_t i, shared_ptr<ColumnData> child_column_p);
+	const ColumnData &GetChildColumn(idx_t index) const;
 
 	const BaseStatistics &GetChildStats(const ColumnData &child) const override;
 

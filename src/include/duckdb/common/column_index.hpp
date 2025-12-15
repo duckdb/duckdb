@@ -126,7 +126,8 @@ public:
 	void SetType(const LogicalType &type_information) {
 		type = type_information;
 	}
-	void SetPushdownExtractType(const LogicalType &type_information, optional_ptr<LogicalType> cast_type = nullptr) {
+	void SetPushdownExtractType(const LogicalType &type_information,
+	                            optional_ptr<const LogicalType> cast_type = nullptr) {
 		//! We can upgrade the optional prune hint to a PUSHDOWN_EXTRACT, which is no longer optional
 		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 		type = type_information;

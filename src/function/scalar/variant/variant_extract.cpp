@@ -101,6 +101,9 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	auto child_variant_stats = VariantStats::CreateShredded(found_stats->GetType());
 	VariantStats::SetUnshreddedStats(child_variant_stats, unshredded_stats);
 	VariantStats::SetShreddedStats(child_variant_stats, *found_stats);
+	//! FIXME: these stats are too wide
+	child_variant_stats.SetHasNoNull();
+	child_variant_stats.SetHasNull();
 
 	return child_variant_stats.ToUnique();
 }

@@ -575,9 +575,9 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 	auto &child_type = typed_value_stats.type;
 	if (last_index.HasType() && child_type != last_index.GetType()) {
 		//! FIXME: support try_cast
-		return StatisticsPropagator::TryPropagateCast(child_stats, child_type, index.GetType());
+		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, index.GetType());
 	}
-	return child_stats.ToUnique();
+	return typed_value_stats.ToUnique();
 }
 
 } // namespace duckdb
