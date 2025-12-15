@@ -55,8 +55,6 @@ public:
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
-	void CommitDropColumn() override;
-
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
