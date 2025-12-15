@@ -284,7 +284,11 @@ string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
 	string number = arg.substr(num_start, idx - num_start);
 
 	// try to parse the number
-	double limit = Cast::Operation<string_t, double>(string_t(number));
+	double limit;
+	bool success = TryCast::Operation<string_t, double>(string_t(number), limit);
+	if (!success) {
+		return StringUtil::Format("Invalid memory limit: '%s'", number);
+	}
 
 	// now parse the memory limit unit (e.g. bytes, gb, etc)
 	while (StringUtil::CharacterIsSpace(arg[idx])) {

@@ -151,7 +151,7 @@ Parser Error: Memory value out of range: value is too large
 statement error
 SELECT parse_formatted_bytes('1.5.3 GB');
 ----
-Invalid Input Error: Could not convert string '1.5.3' to DOUBLE
+Parser Error: Invalid memory limit: '1.5.3'
 
 statement error
 SELECT parse_formatted_bytes('inf GiB');
