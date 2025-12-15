@@ -426,18 +426,19 @@ public:
 		if (state.token_index >= state.tokens.size()) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+		const auto &token_text = state.tokens[state.token_index].text;
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
-		if (IsQuoted(token_text)) {
-			token_text = token_text.substr(1, token_text.size() - 2);
+
+		string result_text = token_text;
+		if (IsQuoted(result_text)) {
+			result_text = result_text.substr(1,result_text.size() - 2);
 		}
-		if (IsSingleQuoted(token_text) && SupportsStringLiteral()) {
-			auto string_token = token_text.substr(1, token_text.size() - 2);
-			return state.allocator.Allocate(make_uniq<StringLiteralParseResult>(string_token));
+		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
+			result_text = result_text.substr(1, result_text.size() - 2);
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
 
 	bool SupportsStringLiteral() const {

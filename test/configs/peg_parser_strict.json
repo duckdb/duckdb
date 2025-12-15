@@ -156,20 +156,13 @@
     {
       "reason": "Quotations",
       "paths": [
-        "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/table_function/sqlite_master_quotes.test",
         "test/sql/keywords/escaped_quotes_expressions.test",
-        "test/sql/keywords/keywords_in_expressions.test",
-        "test/sql/show_select/test_describe_quoted.test",
-        "test/sql/show_select/test_summarize_quoted.test",
-        "test/sql/pragma/test_show_tables.test",
         "test/sql/export/export_quoted_enum.test",
-        "test/sql/catalog/test_quoted_column_name.test",
-        "test/sql/catalog/function/query_function.test",
         "test/sql/json/issues/large_quoted_string_constant.test",
-        "test/sql/storage/types/variant/test_all_types_single_table.test",
-        "test/sql/cast/string_to_struct_cast.test"
+        "test/sql/attach/attach_dbname_quotes.test",
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/catalog/test_quoted_column_name.test"
       ]
     },
     {
