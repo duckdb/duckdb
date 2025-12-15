@@ -187,6 +187,7 @@ public:
 	void RegisterSet();
 	void RegisterTransaction();
 	void RegisterUpdate();
+	void RegisterVacuum();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterEnums();
 
@@ -1046,6 +1047,9 @@ private:
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// vacuum.gram
+	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;

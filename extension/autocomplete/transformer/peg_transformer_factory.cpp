@@ -622,6 +622,10 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetElement);
 }
 
+void PEGTransformerFactory::RegisterVacuum() {
+	REGISTER_TRANSFORM(TransformVacuumStatement);
+}
+
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
@@ -783,6 +787,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterSet();
 	RegisterTransaction();
 	RegisterUpdate();
+	RegisterVacuum();
 	RegisterKeywordsAndIdentifiers();
 	RegisterEnums();
 }
