@@ -17,13 +17,10 @@ PhysicalStreamingWindow::PhysicalStreamingWindow(PhysicalPlan &physical_plan, ve
 
 class StreamingWindowGlobalState : public GlobalOperatorState {
 public:
-	StreamingWindowGlobalState() : row_number(1) {
-	}
+	explicit StreamingWindowGlobalState(ClientContext &client);
 
 	//! The next row number.
 	std::atomic<int64_t> row_number;
-	//! Local state construction mutex
-	mutex local_lock;
 	//! The single local state
 	unique_ptr<OperatorState> local_state;
 };
@@ -344,6 +341,10 @@ public:
 	DataChunk shifted;
 };
 
+StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) : row_number(1) {
+	local_state = make_uniq<StreamingWindowState>(client);
+}
+
 bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
 	auto &wexpr = expr->Cast<BoundWindowExpression>();
 	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls || !wexpr.arg_orders.empty() ||
@@ -378,17 +379,8 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique
 	}
 }
 
-unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(ClientContext &context) const {
-	return make_uniq<StreamingWindowGlobalState>();
-}
-
-unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
-	auto &gstate = op_state->Cast<StreamingWindowGlobalState>();
-	lock_guard<mutex> lock(gstate.local_lock);
-	if (!gstate.local_state) {
-		gstate.local_state = make_uniq<StreamingWindowState>(context.client);
-	}
-	return PhysicalOperator::GetOperatorState(context);
+unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(ClientContext &client) const {
+	return make_uniq<StreamingWindowGlobalState>(client);
 }
 
 void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, DataChunk &input, Vector &result) {
