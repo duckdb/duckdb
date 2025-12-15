@@ -2,6 +2,8 @@
 # description: Test Top-N Window Elimination Rule
 # group: [optimizer]
 
+require parquet
+
 statement ok
 PRAGMA enable_verification
 
