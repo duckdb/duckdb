@@ -594,7 +594,18 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 
-	return StringUtil::ParseFormattedBytes(arg);
+	idx_t result;
+	string error = StringUtil::TryParseFormattedBytes(arg, result);
+
+	if (!error.empty()) {
+		if (error == "Memory cannot be negative") {
+			result = -1;
+		} else {
+			throw ParserException(error);
+		}
+	}
+
+	return result;
 }
 
 optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {

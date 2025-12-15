@@ -296,8 +296,7 @@ string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
 	}
 
 	if (limit < 0) {
-		// limit < 0, set limit to infinite
-		result = -1;
+		return "Memory cannot be negative";
 	}
 
 	string unit = StringUtil::Lower(arg.substr(start, idx - start));
