@@ -13,6 +13,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 	auto target_opt = list_pr.Child<OptionalParseResult>(2);
 	if (target_opt.HasResult()) {
 		auto target = transformer.Transform<AnalyzeTarget>(target_opt.optional_result);
+		result->info->columns = target.columns;
+		result->info->ref = std::move(target.ref);
+		result->info->has_table = true;
 	}
 	return result;
 }
@@ -21,7 +24,7 @@ AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &tran
                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	AnalyzeTarget result;
-	result.ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
+	result.ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<vector<string>>(list_pr, 1, result.columns);
 	return result;
 }
@@ -29,7 +32,14 @@ AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &tran
 // TODO(Dtenwolde) Move this to transform_vacuum.cpp
 vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("TransformName has not yet been implemented");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<string> result;
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto colid_list = ExtractParseResultsFromList(extract_parens);
+	for (auto &colid : colid_list) {
+		result.push_back(transformer.Transform<string>(colid));
+	}
+	return result;
 }
 
 } // namespace duckdb
