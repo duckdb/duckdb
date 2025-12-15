@@ -18,7 +18,7 @@ struct TestObject : public ObjectCacheEntry {
 		return "TestObject";
 	}
 	optional_idx GetEstimatedCacheMemory() const override {
-		return 0;
+		return optional_idx {};
 	}
 };
 
@@ -34,7 +34,7 @@ struct AnotherTestObject : public ObjectCacheEntry {
 		return "AnotherTestObject";
 	}
 	optional_idx GetEstimatedCacheMemory() const override {
-		return 0;
+		return optional_idx {};
 	}
 };
 
