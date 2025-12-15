@@ -110,23 +110,16 @@ SELECT value, parse_formatted_bytes(value) AS bytes FROM data;
 4 TB	4000000000000
 NULL	NULL
 
-# Negative values are mapped to max uint64
-query I
-SELECT parse_formatted_bytes('-5 MB');
-----
-18446744073709551615
-
-# null string is mapped to inifinte (max uint64)
-query I
+# Missing number cases
+statement error
 SELECT parse_formatted_bytes('null');
 ----
-18446744073709551615
+Parser Error: Memory must have a number (e.g. 1GB)
 
-# none is mapped to infinite (max uint64)
-query I
+statement error
 SELECT parse_formatted_bytes('none');
 ----
-18446744073709551615
+Parser Error: Memory must have a number (e.g. 1GB)
 
 # Error cases
 statement error
@@ -164,3 +157,14 @@ statement error
 SELECT parse_formatted_bytes('inf GiB');
 ----
 Parser Error: Memory must have a number (e.g. 1GB)
+
+# Negative values are mapped to max uint64
+statement error
+SELECT parse_formatted_bytes('-5 MB');
+----
+Parser Error: Memory cannot be negative
+
+statement error
+SELECT parse_formatted_bytes(' -1 KiB');
+----
+Parser Error: Memory cannot be negative

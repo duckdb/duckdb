@@ -127,23 +127,29 @@ SELECT value, try_parse_formatted_bytes(value) AS bytes FROM data;
 NULL	NULL
 invalid value	NULL
 
-# Negative values are mapped to max uint64
+# Negative values are not supported, yield NULL
 query I
 SELECT try_parse_formatted_bytes('-5 MB');
 ----
-18446744073709551615
+NULL
 
-# null string is mapped to infinite (max uint64)
+# negative number with preceding space
+query I
+SELECT try_parse_formatted_bytes(' -1 GiB');
+----
+NULL
+
+# null is not supported
 query I
 SELECT try_parse_formatted_bytes('null');
 ----
-18446744073709551615
+NULL
 
-# none is mapped to infinite (max uint64)
+# not a number
 query I
 SELECT try_parse_formatted_bytes('none');
 ----
-18446744073709551615
+NULL
 
 # Cases that previously errored should now yield NULL
 query I
