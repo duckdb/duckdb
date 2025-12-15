@@ -155,6 +155,8 @@ public:
 		return row_group_size;
 	}
 	void SetAppendRequiresNewRowGroup();
+	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
+	idx_t GetSegmentCount();
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "shell_state.hpp"
+#include "shell_highlight.hpp"
 
 namespace duckdb_shell {
 struct ShellState;
@@ -151,6 +152,30 @@ public:
 		return false;
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
+};
+
+class ShellLogStorage : public duckdb::LogStorage {
+public:
+	explicit ShellLogStorage(ShellState &state) : shell_highlight(state) {};
+
+	~ShellLogStorage() override = default;
+
+	const string GetStorageName() override {
+		return "ShellLogStorage";
+	}
+
+protected:
+	void WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
+	                   const string &log_message, const duckdb::RegisteredLoggingContext &context) override;
+	void WriteLogEntries(duckdb::DataChunk &chunk, const duckdb::RegisteredLoggingContext &context) override {};
+	void FlushAll() override {};
+	void Flush(duckdb::LoggingTargetTable table) override {};
+	bool IsEnabled(duckdb::LoggingTargetTable table) override {
+		return true;
+	};
+
+private:
+	ShellHighlight shell_highlight;
 };
 
 } // namespace duckdb_shell
