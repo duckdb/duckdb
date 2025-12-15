@@ -29,6 +29,28 @@ EXCLUDED_RULES = {
     "Transaction",
     "VariableAssign",
     "MacroOrFunction",
+    "SettingScope",
+    "ColLabel",
+    "MacroOrFunction",
+
+    # found in matcher.cpp
+    "ReservedIdentifier",
+    "CatalogName",
+    "SchemaName",
+    "ReservedSchemaName",
+    "ReservedIdentifier",
+    "TableName",
+    "ReservedTableName",
+    "ColumnName",
+    "ReservedColumnName",
+    "FunctionName",
+    "ReservedFunctionName",
+    "TableFunctionName",
+    "TypeName",
+    "PragmaName",
+    "SettingName",
+    "CopyOptionName",
+
 }
 
 
