@@ -100,8 +100,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=${{ matrix.config.cmake_platform }} -DDUCKDB_EXPLICIT_PLATFORM=windows_${{ matrix.config.arch }} -DDUCKDB_CUSTOM_PLATFORM=windows_${{ matrix.config.arch }}  -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=${{ matrix.config.cmake_platform }} -DDUCKDB_EXPLICIT_PLATFORM=windows_${{ matrix.config.arch }} -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
@@ -179,6 +178,28 @@ jobs:
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
+ win-packaged-upload:
+   runs-on: windows-latest
+   needs:
+     - windows-release-cli
+   steps:
+     - uses: actions/download-artifact@v4
+       with:
+         name: duckdb-binaries-windows-arm64
+
+     - uses: actions/download-artifact@v4
+       with:
+         name: duckdb-binaries-windows-amd64
+
+     - uses: actions/upload-artifact@v4
+       with:
+         name: duckdb-binaries-windows
+         path: |
+           libduckdb-windows-amd64.zip
+           duckdb_cli-windows-amd64.zip
+           libduckdb-windows-arm64.zip
+           duckdb_cli-windows-arm64.zip
+
  mingw:
      name: MinGW (amd64)
      needs:
@@ -221,25 +242,3 @@ jobs:
            cp src/libduckdb.dll .
            test/unittest.exe
 
-
- win-packaged-upload:
-   runs-on: windows-latest
-   needs:
-     - windows-release-cli
-   steps:
-    - uses: actions/download-artifact@v4
-      with:
-        name: duckdb-binaries-windows-arm64
-
-    - uses: actions/download-artifact@v4
-      with:
-        name: duckdb-binaries-windows-amd64
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-          libduckdb-windows-arm64.zip
-          duckdb_cli-windows-arm64.zip
