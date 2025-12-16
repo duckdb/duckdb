@@ -116,11 +116,16 @@ jobs:
         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
         timestamp-digest:             SHA256
 
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: pwsh
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
+      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
+
     - name: Test
       shell: bash
       if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
       run: |
-        export DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)
+        echo $DUCKDB_INSTALL_LIB
         test/Release/unittest.exe
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
