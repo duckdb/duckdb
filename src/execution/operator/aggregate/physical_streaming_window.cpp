@@ -549,7 +549,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 					split.SetValue(0, prev.GetValue(0));
 					sel_t s = 0;
 					for (sel_t i = 0; i < count; ++i) {
-						if (!s && validity.RowIsValidUnsafe(i)) {
+						if (!s && validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 							auto v = arg.GetValue(i);
 							prev.Reference(v);
 							s = 1;
@@ -589,7 +589,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 					auto &sel = state.sel;
 					sel_t non_null = 0;
 					for (sel_t i = 0; i < count; ++i) {
-						if (validity.RowIsValidUnsafe(i)) {
+						if (validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 							non_null = i;
 						}
 						sel.set_index(i, non_null);
