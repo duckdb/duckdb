@@ -8,19 +8,13 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/constraint.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
-#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-#include <cstring>
 
 namespace duckdb {
 
@@ -117,6 +111,7 @@ void ValidateKeyStructType(const Expression &key_expr) {
 	}
 }
 
+// Returns a mapping from the struct field name to its offset in the struct type.
 case_insensitive_map_t<idx_t> BuildFieldLookup(const LogicalType &key_type) {
 	const auto &child_types = StructType::GetChildTypes(key_type);
 	case_insensitive_map_t<idx_t> field_lookup;
@@ -126,6 +121,8 @@ case_insensitive_map_t<idx_t> BuildFieldLookup(const LogicalType &key_type) {
 	return field_lookup;
 }
 
+// Return a mapping from the logical offset of the index column (not physical) to its corresponding offset in
+// the struct, and also perform type checking to see that they are compatible.
 vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalType &key_type,
                             const vector<LogicalType> &key_types, const string &index_name) {
 	const auto &child_types = StructType::GetChildTypes(key_type);
@@ -155,12 +152,13 @@ vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalTyp
 
 struct IndexKeyBindData : public FunctionData {
 	IndexKeyBindData(string catalog, string schema, string table, string index,
-	                 optional_ptr<TableCatalogEntry> table_entry_p, LogicalType key_type)
+	                 optional_ptr<TableCatalogEntry> table_entry_p, LogicalType key_type, optional_ptr<ART> art_index_p,
+	                 vector<LogicalType> key_types_p, vector<idx_t> field_map_p, vector<string> column_names_p)
 	    : catalog(std::move(catalog)), schema(std::move(schema)), table(std::move(table)), index_name(std::move(index)),
-	      table_entry(table_entry_p), key_type(std::move(key_type)) {
+	      table_entry(table_entry_p), key_type(std::move(key_type)), art_index(art_index_p),
+	      key_types(std::move(key_types_p)), field_map(std::move(field_map_p)),
+	      column_names(std::move(column_names_p)) {
 	}
-
-	IndexKeyBindData(const IndexKeyBindData &other) = default;
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<IndexKeyBindData>(*this);
@@ -181,7 +179,9 @@ struct IndexKeyBindData : public FunctionData {
 	LogicalType key_type;
 
 	optional_ptr<ART> art_index;
+	// The types of each column in the index.
 	vector<LogicalType> key_types;
+	// Mapping from offset in key_types (a column in the index) to its corresponding offset in the struct.
 	vector<idx_t> field_map;
 	vector<string> column_names;
 };
@@ -225,14 +225,9 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	LogicalType key_type = key_expr.return_type;
 	vector<idx_t> field_map = BuildFieldMap(column_names, key_type, key_types, index_name);
 
-	auto result = make_uniq<IndexKeyBindData>(catalog_name, schema_name, table_name, index_name, &table_entry,
-	                                          std::move(key_type));
-	auto &bind_data = result->Cast<IndexKeyBindData>();
-	bind_data.art_index = &art_index;
-	bind_data.key_types = std::move(key_types);
-	bind_data.field_map = std::move(field_map);
-	bind_data.column_names = std::move(column_names);
-	return result;
+	return make_uniq<IndexKeyBindData>(catalog_name, schema_name, table_name, index_name, &table_entry,
+	                                   std::move(key_type), &art_index, std::move(key_types), std::move(field_map),
+	                                   std::move(column_names));
 }
 
 void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -240,27 +235,18 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
-	if (count == 0) {
-		return;
-	}
-	result.Flatten(count);
 	auto &key_struct = args.data[4];
 
 	DataChunk key_chunk;
 	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.key_types);
 	key_chunk.SetCardinality(count);
 
+	auto &struct_children = StructVector::GetEntries(key_struct);
+
 	for (idx_t col_idx = 0; col_idx < bind_data.key_types.size(); col_idx++) {
 		auto field_idx = bind_data.field_map[col_idx];
-		for (idx_t row = 0; row < count; row++) {
-			Value struct_val = key_struct.GetValue(row);
-			if (struct_val.IsNull()) {
-				key_chunk.data[col_idx].SetValue(row, Value());
-			} else {
-				const auto &child_values = StructValue::GetChildren(struct_val);
-				key_chunk.data[col_idx].SetValue(row, child_values[field_idx]);
-			}
-		}
+		D_ASSERT(field_idx < struct_children.size());
+		key_chunk.data[col_idx].Reference(*struct_children[field_idx]);
 	}
 
 	unsafe_vector<ARTKey> key_buffer;
@@ -283,6 +269,7 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	result.Verify(count);
 }
 
 } // namespace
@@ -292,7 +279,6 @@ ScalarFunctionSet IndexKeyFun::GetFunctions() {
 	ScalarFunction index_key_fun(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
 	    LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
-	index_key_fun.stability = FunctionStability::CONSISTENT;
 	set.AddFunction(index_key_fun);
 	return set;
 }

@@ -1,6 +1,6 @@
-# name: test/index_key.test
+# name: test/sql/function/index/index_key.test
 # description: Test the index_key scalar function for generating ART index keys
-# group: [test]
+# group: [index]
 
 statement ok
 CREATE TABLE tbl1(
@@ -23,6 +23,9 @@ CREATE UNIQUE INDEX tbl1_idx_composite ON tbl1(id, txt);
 
 statement ok
 CREATE UNIQUE INDEX tbl1_idx_txt ON tbl1(txt);
+
+statement ok
+INSERT INTO tbl1 (id, uid, txt) VALUES (1, 10, 'alpha'), (2, 20, 'beta'), (3, 30, 'gamma');
 
 query I
 SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', struct_pack(id := 1, txt := 'alpha'));
@@ -57,6 +60,16 @@ FROM (VALUES (1, 'alpha'), (2, 'beta')) AS v(id, txt);
 ----
 \x80\x00\x00\x01alpha\x00	\x80\x00\x00\x01
 \x80\x00\x00\x02beta\x00	\x80\x00\x00\x02
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', struct_pack(id := id, txt := txt))
+FROM tbl1
+WHERE id IN (1, 2, 3)
+ORDER BY txt DESC;
+----
+\x80\x00\x00\x03gamma\x00
+\x80\x00\x00\x02beta\x00
+\x80\x00\x00\x01alpha\x00
 
 query I
 SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := v.id))
@@ -105,3 +118,18 @@ query I
 SELECT index_key('', 'main', 'tbl1', 'PRIMARY_' || 'tbl1_0', struct_pack(id := 1));
 ----
 \x80\x00\x00\x01
+
+statement error
+SELECT index_key('', 'main', 'nonexistent_table', 'PRIMARY_tbl1_0', struct_pack(id := 1));
+----
+Catalog Error: Table with name nonexistent_table does not exist!
+
+statement error
+SELECT index_key('', 'main', 'tbl1', 'nonexistent_index', struct_pack(id := 1));
+----
+Catalog Error: index_key: index 'nonexistent_index' was not found on table .main.tbl1. Available indexes: PRIMARY_tbl1_0, UNIQUE_tbl1_1, tbl1_idx_composite, tbl1_idx_txt
+
+statement error
+SELECT index_key('', 'main', 'tbl2', 'FOREIGN_tbl2_2', struct_pack(tbl1_id := 1));
+----
+Catalog Error: index_key: index 'FOREIGN_tbl2_2' was not found on table .main.tbl2. Available indexes: PRIMARY_tbl2_0, FOREIGN_tbl2_1
