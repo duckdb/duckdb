@@ -54,3 +54,31 @@ select [x.a::INTEGER for x in col] from variant_list offset 50 limit 10
 [57, 57, 57]
 [58, 58, 58]
 [59, 59, 59]
+
+statement ok
+delete from variant_list
+
+statement ok
+insert into variant_list select [{'a': i::INTEGER}, {'a': i::INTEGER}, {'a': i::INTEGER}] from range(122881) t(i)
+
+statement ok
+checkpoint
+
+query I
+select [x.a::INTEGER for x in col] from variant_list offset 122880
+----
+[122880, 122880, 122880]
+
+statement ok
+delete from variant_list
+
+statement ok
+insert into variant_list select [{'a': i::INTEGER} for i in range(122881)]
+
+statement ok
+checkpoint
+
+query I
+select list_aggr([x.a::INTEGER for x in col], 'max') from variant_list
+----
+122880
