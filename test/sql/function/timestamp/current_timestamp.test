@@ -34,3 +34,14 @@ SELECT SUFFIX(${func}()::VARCHAR, '-06');
 True
 
 endloop
+
+# Ago is a macro based on current_timestamp
+
+foreach unit millennia century decade year month day hour minute second
+
+query I
+select current_timestamp + interval 1 ${unit} = ago(interval 1 ${unit});
+----
+True
+
+endloop
