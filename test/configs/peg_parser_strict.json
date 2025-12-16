@@ -162,7 +162,8 @@
         "test/sql/json/issues/large_quoted_string_constant.test",
         "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/catalog/test_quoted_column_name.test"
+        "test/sql/catalog/test_quoted_column_name.test",
+        "test/sql/cast/string_to_struct_cast.test"
       ]
     },
     {
