@@ -786,10 +786,12 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
+extern "C" {
+
 /*
 ** This routine runs when the user presses Ctrl-C
 */
-static void interrupt_handler(int NotUsed) {
+static void InterruptHandler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
@@ -800,6 +802,7 @@ static void interrupt_handler(int NotUsed) {
 		state.conn->Interrupt();
 	}
 }
+}
 
 #if (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 /*
@@ -808,7 +811,7 @@ static void interrupt_handler(int NotUsed) {
 static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVENT constants */
 ) {
 	if (dwCtrlType == CTRL_C_EVENT) {
-		interrupt_handler(0);
+		InterruptHandler(0);
 		return TRUE;
 	}
 	return FALSE;
@@ -1393,20 +1396,11 @@ bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &r
 	return renderer.ShouldUsePager(result, pager_mode);
 }
 
-extern "C" {
-
-void HandlePagerExit(int sig) {
-	// Pager is gone; interrupt the process to stop printing
-	auto &state = ShellState::Get();
-	++state.seenInterrupt;
-}
-}
-
 void ShellState::StartPagerDisplay() {
 #if !defined(_WIN32) && !defined(WIN32)
 	// turn sigpipe trap into an interrupt while displaying the pager
 	// this allows us to interrupt display after the pager is exited by the user
-	signal(SIGPIPE, HandlePagerExit);
+	signal(SIGPIPE, InterruptHandler);
 #endif
 }
 
@@ -3092,7 +3086,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** else is done.
 	*/
 #ifdef SIGINT
-	signal(SIGINT, interrupt_handler);
+	signal(SIGINT, InterruptHandler);
 #elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #endif

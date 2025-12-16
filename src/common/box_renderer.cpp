@@ -2010,6 +2010,9 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 				auto string_data = FlatVector::GetData<string_t>(string_vector);
 				auto render_length_data = FlatVector::GetData<uint64_t>(render_lengths_vector);
 				for (idx_t r = 0; r < chunk.size(); r++) {
+					if (context.IsInterrupted()) {
+						return;
+					}
 					string render_value;
 					ResultRenderType render_type;
 					ValueRenderAlignment alignment;
@@ -2060,6 +2063,9 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 			row_idx += chunk.size();
 			vector<BoxRenderRow> rows_to_render;
 			for (auto &row : chunk_rows) {
+				if (context.IsInterrupted()) {
+					return;
+				}
 				if (render_divider) {
 					RenderDivider(last_rendered_rows.back(), row);
 					render_divider = false;
@@ -2072,6 +2078,9 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 				is_first_row = false;
 			}
 			for (auto &row : rows_to_render) {
+				if (context.IsInterrupted()) {
+					return;
+				}
 				RenderRow(row);
 			}
 			last_rendered_rows = std::move(rows_to_render);
