@@ -1602,7 +1602,6 @@ void BoxRendererImplementation::PotentiallyExpandRow(BoxRenderRow &row, vector<B
 }
 
 void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection> &collections) {
-	auto column_count = result_types.size();
 	idx_t row_count = 0;
 	for (auto &collection : collections) {
 		row_count += collection.render_values->Count();
@@ -1618,6 +1617,22 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 		if (max_rows_per_row > 1) {
 			// we can expand rows - check if we should expand any rows
 			expand_rows = true;
+		}
+	}
+
+	vector<column_t> columns_to_scan;
+	vector<column_t> scan_indexes;
+	optional_idx split_column_index;
+	for (idx_t c = 0; c < column_map.size(); c++) {
+		auto column_idx = column_map[c];
+		if (!column_idx.IsValid()) {
+			// insert the split column
+			split_column_index = columns_to_scan.size();
+		} else {
+			auto scan_column_idx = column_idx.GetIndex();
+			columns_to_scan.push_back(scan_column_idx);
+			scan_indexes.push_back(scan_column_idx * 2);
+			scan_indexes.push_back(scan_column_idx * 2 + 1);
 		}
 	}
 
@@ -1639,10 +1654,17 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 		is_first_collection = false;
 
 		vector<BoxRenderRow> collection_rows;
-		for (auto &chunk : collection.Chunks()) {
+		for (auto &chunk : collection.Chunks(scan_indexes)) {
 			vector<BoxRenderRow> chunk_rows;
 			chunk_rows.resize(chunk.size());
-			for (idx_t c = 0; c < column_count; c++) {
+			for (idx_t c = 0; c < columns_to_scan.size(); c++) {
+				if (split_column_index.IsValid() && c == split_column_index.GetIndex()) {
+					// add the split column at this position
+					for (idx_t r = 0; r < chunk.size(); r++) {
+						chunk_rows[r].values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT,
+						                                  ValueRenderAlignment::MIDDLE, optional_idx(), 1);
+					}
+				}
 				auto &string_vector = render_collection.Values(chunk, c);
 				auto &render_lengths_vector = render_collection.RenderLengths(chunk, c);
 
@@ -1652,7 +1674,7 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 					string render_value;
 					ResultRenderType render_type;
 					ValueRenderAlignment alignment;
-					idx_t column_idx = c;
+					idx_t column_idx = columns_to_scan[c];
 					if (FlatVector::IsNull(string_vector, r)) {
 						render_value = config.null_value;
 						render_type = ResultRenderType::NULL_VALUE;
@@ -1662,7 +1684,7 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 					}
 					if (config.render_mode == RenderMode::ROWS) {
 						// in rows mode we select alignment for each column based on the type
-						alignment = TypeAlignment(result_types[c]);
+						alignment = TypeAlignment(result_types[column_idx]);
 					} else {
 						// in columns mode we left-align the header rows, and right-align the values
 						switch (c) {
@@ -1711,24 +1733,6 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 		for (auto &row : collection_rows) {
 			render_rows.push_back(std::move(row));
 		}
-	}
-	// update the values based on the columns that were pruned
-	for (auto &row : render_rows) {
-		if (row.row_type != RenderRowType::ROW_VALUES) {
-			continue;
-		}
-		vector<BoxRenderValue> values;
-		for (idx_t c = 0; c < column_map.size(); c++) {
-			auto column_idx = column_map[c];
-			if (!column_idx.IsValid()) {
-				// insert the split column
-				values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT, ValueRenderAlignment::MIDDLE);
-				values.back().render_width = 1;
-			} else {
-				values.push_back(std::move(row.values[column_idx.GetIndex()]));
-			}
-		}
-		row.values = std::move(values);
 	}
 }
 
