@@ -343,6 +343,10 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 	DropSegments();
 }
 
+bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
+	return col_data.HasAnyChanges();
+}
+
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
