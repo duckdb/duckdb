@@ -31,7 +31,7 @@ void AddToMultiStatement(unique_ptr<MultiStatement> &multi_statement, unique_ptr
 }
 
 void AddUpdateToMultiStatement(const TemplatedUniqueIf<MultiStatement>::templated_unique_single_t &result,
-                                            const string & column_name, const string &table_name,
+                               const string &column_name, const string &table_name,
                                const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
 
@@ -90,13 +90,17 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			column_entry.SetName(column_names.back());
 			if (column_names.size() == 1) {
 				// ADD COLUMN
-				
+				if (column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+					AddToMultiStatement(result, make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry),
+					                                                     command->missing_ok));
+					break;
+				}
 				/* Here we do a workaround that consists of the following statements:
 				 *	 1. ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
 				 *	 2. UPDATE t SET u = <expression>;
 				 *	 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
-				 * This workaround exists because when an `ALTER TABLE ... ADD COLUMN ... DEFAULT ...` takes place, the
-				 * WAL replay would re-run the default expression, and with expressions such as RANDOM or
+				 * This workaround exists because when an `ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>` takes
+				 *place, the WAL replay would re-run the default expression, and with expressions such as RANDOM or
 				 * CURRENT_TIMESTAMP, the value would be different than that of the original run. By now doing an
 				 * UPDATE, we force materialization of these values, which makes WAL replays consistent.
 				 */
@@ -116,7 +120,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				                    make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok));
 
 				// 2. UPDATE t SET u = <expression>;
-				AddUpdateToMultiStatement(result, column_entry.GetName(),  stmt.relation->relname, original_expression);
+				AddUpdateToMultiStatement(result, column_entry.GetName(), stmt.relation->relname, original_expression);
 
 				// 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
 				// Reinstate the original default expression.
