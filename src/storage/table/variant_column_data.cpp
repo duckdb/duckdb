@@ -101,12 +101,18 @@ bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant
 	D_ASSERT(shredded.type.id() == LogicalTypeId::STRUCT);
 	D_ASSERT(StructType::GetChildCount(shredded.type) == 2);
 	D_ASSERT(StructType::GetChildTypes(shredded.type)[0].second.id() == LogicalTypeId::UINTEGER);
-	auto &stats = GetStatisticsRef();
+	auto &variant_stats = GetStatisticsRef();
+
+	if (!VariantStats::IsShredded(variant_stats)) {
+		//! FIXME: this happens when we Checkpoint but don't restart, the stats of the ColumnData aren't updated by
+		//! Checkpoint The variant is shredded, but there are no stats / the stats are cluttered (?)
+		return false;
+	}
 
 	//! shredded.typed_value
 	ColumnIndex column_index(0);
 	auto &struct_column = shredded.Cast<StructColumnData>();
-	auto &shredded_stats = VariantStats::GetShreddedStats(stats);
+	auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
 
 	reference<const StorageIndex> path_iter(variant_extract);
 	if (!FindShreddedColumnInternal(struct_column, shredded_stats, path_iter, column_index)) {
