@@ -220,7 +220,14 @@ public:
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		return inner_column_state->ToPersistentData();
+		auto inner_data = inner_column_state->ToPersistentData();
+
+		// If this is a shredded column, record it in the peristent data!
+		if (inner_column->type.id() != LogicalTypeId::GEOMETRY) {
+			inner_data.shredded_type = inner_column->type;
+		}
+
+		return inner_data;
 	}
 };
 
@@ -309,12 +316,37 @@ bool GeoColumnData::HasAnyChanges() const {
 
 PersistentColumnData GeoColumnData::Serialize() {
 	// TODO: might want to write shredding state...
-	return base_column->Serialize();
+	// If this is a shredded column, record it in the peristent data!
+	auto inner_data = base_column->Serialize();
+	if (base_column->type.id() != LogicalTypeId::GEOMETRY) {
+		inner_data.shredded_type = base_column->type;
+	}
+	return inner_data;
 }
 
 void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
-	base_column->InitializeColumn(column_data, target_stats);
+	// TODO: Check what we actually deserialized here,
+	// and make new base column data if it differs
+
+	// TODO: This is not a great way to detect shredded columns
+	if (column_data.child_columns.empty()) {
+		base_column->InitializeColumn(column_data, target_stats);
+		count = base_column->count.load();
+		return;
+	}
+
+	// Else, this is a shredded point
+	auto layout_type = LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
+	auto new_column =
+	    CreateColumn(block_manager, this->info, base_column->column_index, layout_type, GetDataType(), this);
+
+	base_column = new_column;
+	auto dummy_stats = BaseStatistics::CreateEmpty(layout_type);
+	base_column->InitializeColumn(column_data, dummy_stats);
 	count = base_column->count.load();
+
+	// Interpret the stats
+	InterpretStats(dummy_stats, target_stats);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -346,14 +378,6 @@ LogicalType GeoColumnData::GetLayoutType() const {
 		// Push POINT_XY type
 		return LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
 	}
-
-	/*
-	if (types.HasOnly(GeometryType::POLYGON, VertexType::XY)) {
-	    // Push POLYGON_XY type
-	    return LogicalType::LIST(
-	        LogicalType::LIST(LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}})));
-	}
-	*/
 
 	return LogicalTypeId::INVALID;
 }
