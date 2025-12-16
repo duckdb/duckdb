@@ -70,9 +70,15 @@ jobs:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
- win-release-amd64:
-    # Builds binaries for windows_amd64
-    name: Windows (amd64)
+
+ windows-release-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [ { arch: amd64, cmake_platform: x64}, {arch: arm64, cmake_platform: ARM64}]
+
+    name: Windows CLI (${{ matrix.config.arch }})
+
     needs: check-draft
     runs-on: windows-latest
     steps:
@@ -88,33 +94,34 @@ jobs:
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
       with:
-        key: ${{ github.job }}
+        key: ${{ github.job }}${{ matrix.config.arch }}
         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM={{ matrix.config.cmake_platform }}  -DDUCKDB_EXPLICIT_PLATFORM=windows_{{ matrix.config.arch }} -DDUCKDB_CUSTOM_PLATFORM=windows_{{ matrix.config.arch }}  -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
       shell: pwsh
       run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
+      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
       shell: bash
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
-      run: |
-        test/Release/unittest.exe
+      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
+      run: test/Release/unittest.exe
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
       run: |
         choco install wget -y --no-progress
         wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
@@ -124,7 +131,7 @@ jobs:
 
     - name: Tools Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
       run: |
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
@@ -155,94 +162,27 @@ jobs:
       run: |
         python scripts/amalgamation.py
         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
+        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-${{ matrix.config.arch }}.zip Release/duckdb.exe
+        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-${{ matrix.config.arch }}.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-${{ matrix.config.arch }}.zip duckdb_cli-windows-${{ matrix.config.arch }}.zip
 
     - uses: actions/upload-artifact@v4
       with:
-        name: duckdb-binaries-windows-amd64
+        name: duckdb-binaries-windows-${{ matrix.config.arch }}
         path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
+          libduckdb-windows-${{ matrix.config.arch }}.zip
+          duckdb_cli-windows-${{ matrix.config.arch }}.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
+      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
-
-
- win-release-arm64:
-   name: Windows (arm64)
-   needs:
-    - win-release-amd64
-    - check-draft
-   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
-   runs-on: windows-latest
-
-   steps:
-     - uses: actions/checkout@v4
-       with:
-         fetch-depth: 0
-         ref: ${{ inputs.git_ref }}
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.12'
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-     - name: Build
-       shell: bash
-       run: |
-         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
-         cmake --build . --config Release --parallel
-
-     - name: Sign files with Azure Trusted Signing (TM)
-       if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
-       uses: azure/trusted-signing-action@v0
-       with:
-         azure-tenant-id:              ${{ secrets.AZURE_CODESIGN_TENANT_ID }}
-         azure-client-id:              ${{ secrets.AZURE_CODESIGN_CLIENT_ID }}
-         azure-client-secret:          ${{ secrets.AZURE_CODESIGN_CLIENT_SECRET }}
-         endpoint:                     ${{ env.AZURE_CODESIGN_ENDPOINT }}
-         trusted-signing-account-name: ${{ env.AZURE_CODESIGN_ACCOUNT }}
-         certificate-profile-name:     ${{ env.AZURE_CODESIGN_PROFILE }}
-         files-folder:                 ${{ github.workspace }}
-         files-folder-filter:          exe,dll
-         files-folder-recurse:         true
-         file-digest:                  SHA256
-         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
-         timestamp-digest:             SHA256
-
-     - name: Deploy
-       shell: bash
-       env:
-         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-       run: |
-         python scripts/amalgamation.py
-         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
-         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
-
-     - uses: actions/upload-artifact@v4
-       with:
-         name: duckdb-binaries-windows-arm64
-         path: |
-           libduckdb-windows-arm64.zip
-           duckdb_cli-windows-arm64.zip
 
  mingw:
      name: MinGW (amd64)
      needs:
-      - win-release-amd64
+      - windows-release-cli
       - check-draft
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
@@ -281,11 +221,11 @@ jobs:
            cp src/libduckdb.dll .
            test/unittest.exe
 
+
  win-packaged-upload:
    runs-on: windows-latest
    needs:
-     - win-release-amd64
-     - win-release-arm64
+     - windows-release-cli
    steps:
     - uses: actions/download-artifact@v4
       with:
