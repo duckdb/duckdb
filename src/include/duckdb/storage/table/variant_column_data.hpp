@@ -33,7 +33,6 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	Vector CreateUnshreddingIntermediate(idx_t count);
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
@@ -78,10 +77,15 @@ public:
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
 
 private:
+	Vector CreateUnshreddingIntermediate(idx_t count) const;
 	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type,
 	                                                 BaseStatistics &stats);
 	bool PushdownShreddedFieldExtract(const StorageIndex &variant_extract, StorageIndex &out_struct_extract) const;
 	void CreateScanStates(ColumnScanState &state);
+	idx_t ScanWithCallback(
+	    ColumnScanState &state, Vector &result, idx_t target_count,
+	    std::function<idx_t(ColumnData &column, ColumnScanState &child_state, Vector &target_vector, idx_t count)>
+	        callback) const;
 	LogicalType GetShreddedType();
 };
 
