@@ -1829,7 +1829,7 @@ void StringValueScanner::SetStart() {
 			state_options.strict_mode = true;
 		}
 		state_machine_strict =
-		    make_shared_ptr<CSVStateMachine>(state_machine_cache->Get(state_options), state_machine->options);
+		    make_shared_ptr<CSVStateMachine>(state_machine->options, state_options, state_machine_cache);
 	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line
