@@ -26,12 +26,17 @@ public:
 	}
 
 	static void Schedule(const shared_ptr<DatabaseInstance> &db, ITERABLE &elements) {
-		TaskExecutor executor(TaskScheduler::GetScheduler(*db));
-		for (auto &segment : elements) {
-			auto destroy_task = make_uniq<ParallelDestroyTask>(executor, std::move(segment));
-			executor.ScheduleTask(std::move(destroy_task));
+		// This is used in destructors and is therefore not allowed to throw
+		// Similar approach to AttachedDatabase::Close(), just swallow the exception
+		try {
+			TaskExecutor executor(TaskScheduler::GetScheduler(*db));
+			for (auto &segment : elements) {
+				auto destroy_task = make_uniq<ParallelDestroyTask>(executor, std::move(segment));
+				executor.ScheduleTask(std::move(destroy_task));
+			}
+			executor.WorkOnTasks();
+		} catch (...) { // NOLINT
 		}
-		executor.WorkOnTasks();
 	}
 
 private:
