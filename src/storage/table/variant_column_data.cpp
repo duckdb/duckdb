@@ -420,10 +420,85 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 
 void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	validity->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
 	if (storage_index.IsPushdownExtract()) {
-		throw InternalException("VARIANT FETCHROW PUSHDOWN");
+		if (IsShredded()) {
+			StorageIndex struct_extract;
+			if (PushdownShreddedFieldExtract(storage_index.GetChildIndex(0), struct_extract)) {
+				//! Shredded field exists and is fully shredded,
+				//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
+				sub_columns[1]->FetchRow(transaction, state, struct_extract, row_id, result, result_idx);
+				return;
+			}
+			//! Can't push down a struct_extract into the shredded data, have to unshred
+			//! Then perform a variant extract and then finally (optionally) a cast
+			auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
+			auto &child_vectors = StructVector::GetEntries(intermediate);
+			validity->FetchRow(transaction, state, storage_index, row_id, intermediate, result_idx);
+			for (idx_t i = 0; i < sub_columns.size(); i++) {
+				sub_columns[i]->FetchRow(transaction, state, storage_index.GetChildIndex(0), row_id, *child_vectors[i],
+				                         result_idx);
+			}
+			if (result_idx) {
+				intermediate.SetValue(0, intermediate.GetValue(result_idx));
+			}
+
+			Vector unshredded(LogicalType::VARIANT(), 1);
+			VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
+
+			Vector extract_intermediate(unshredded.GetType(), 1);
+			vector<VariantPathComponent> components;
+			reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
+
+			while (true) {
+				auto &current = path_iter.get();
+				auto &field_name = current.GetFieldName();
+				components.emplace_back(field_name);
+				if (!current.HasChildren()) {
+					break;
+				}
+				path_iter = current.GetChildIndex(0);
+			}
+			VariantUtils::VariantExtract(unshredded, components, extract_intermediate, 1);
+			if (result.GetType().id() != LogicalTypeId::VARIANT) {
+				//! Need to perform the cast here as well
+				auto context = transaction.transaction->context.lock();
+				auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
+				result.SetValue(result_idx, fetched_row);
+			} else {
+				result.SetValue(result_idx, unshredded.GetValue(0));
+			}
+			return;
+		}
+		//! VARIANT isn't shredded
+		Vector intermediate(LogicalType::VARIANT(), 1);
+		validity->FetchRow(transaction, state, storage_index, row_id, intermediate, result_idx);
+		sub_columns[0]->FetchRow(transaction, state, storage_index.GetChildIndex(0), row_id, intermediate, result_idx);
+
+		Vector extract_intermediate(intermediate.GetType(), 1);
+		vector<VariantPathComponent> components;
+		reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
+
+		while (true) {
+			auto &current = path_iter.get();
+			auto &field_name = current.GetFieldName();
+			components.emplace_back(field_name);
+			if (!current.HasChildren()) {
+				break;
+			}
+			path_iter = current.GetChildIndex(0);
+		}
+		VariantUtils::VariantExtract(intermediate, components, extract_intermediate, 1);
+		if (result.GetType().id() != LogicalTypeId::VARIANT) {
+			//! Need to perform the cast here as well
+			auto context = transaction.transaction->context.lock();
+			auto fetched_row = extract_intermediate.GetValue(0).CastAs(*context, result.GetType());
+			result.SetValue(result_idx, fetched_row);
+		} else {
+			result.SetValue(result_idx, extract_intermediate.GetValue(0));
+		}
+		return;
 	} else {
+		validity->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
 		if (IsShredded()) {
 			auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
 			auto &child_vectors = StructVector::GetEntries(intermediate);
