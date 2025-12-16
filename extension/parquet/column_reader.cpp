@@ -390,7 +390,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	}
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		if (compressed_page_size != page_hdr.uncompressed_page_size) {
+		if (compressed_page_size != static_cast<uint32_t>(page_hdr.uncompressed_page_size)) {
 			throw std::runtime_error("Page size mismatch");
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
