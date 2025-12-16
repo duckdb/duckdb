@@ -431,7 +431,16 @@ PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transfo
 	if (!is_test_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("IsDistinctFromOp has not yet been implemented");
+	auto is_distinct_repeat = is_test_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &is_distinct : is_distinct_repeat.children) {
+		auto &distinct_list = is_distinct->Cast<ListParseResult>();
+		auto distinct_type = transformer.Transform<ExpressionType>(distinct_list.Child<ListParseResult>(0));
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(distinct_list.Child<ListParseResult>(1));
+		auto distinct_operator = make_uniq<ComparisonExpression>(distinct_type, std::move(expr), std::move(right_expr));
+		expr = std::move(distinct_operator);
+
+	}
+	return expr;
 }
 
 // ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
@@ -1572,6 +1581,15 @@ PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer, option
 	auto &col_ref = column_reference->Cast<ColumnRefExpression>();
 	auto column_name = col_ref.GetColumnName();
 	return make_pair(column_name, std::move(expr));
+}
+
+ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	if (list_pr.Child<OptionalParseResult>(1).HasResult()) {
+		return ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	}
+	return ExpressionType::COMPARE_DISTINCT_FROM;
 }
 
 } // namespace duckdb
