@@ -66,7 +66,7 @@ public:
 	~CSVStateMachineCache() override = default;
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
-	static shared_ptr<CSVStateMachineCache> Get(ClientContext &context);
+	static CSVStateMachineCache &Get(ClientContext &context);
 
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
@@ -81,10 +81,7 @@ public:
 	}
 
 	optional_idx GetEstimatedCacheMemory() const override {
-		static constexpr idx_t STATE_MACHINE_SIZE = 2ULL * 1024;
-		lock_guard<mutex> lock(main_mutex);
-		// Base memory size + state machine entries size
-		return sizeof(*this) + (static_cast<idx_t>(state_machine_cache.size()) * STATE_MACHINE_SIZE);
+		return optional_idx {};
 	}
 
 private:
@@ -94,6 +91,6 @@ private:
 	//! Default value for options used to initialize CSV State Machine Cache
 
 	//! Because the state machine cache can be accessed in Parallel we need a mutex.
-	mutable mutex main_mutex;
+	mutex main_mutex;
 };
 } // namespace duckdb

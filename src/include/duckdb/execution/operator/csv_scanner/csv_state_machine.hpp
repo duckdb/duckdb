@@ -118,10 +118,10 @@ struct CSVStates {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(const CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options_p,
-	                         shared_ptr<CSVStateMachineCache> csv_state_machine_cache_p);
+	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
+	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
-	explicit CSVStateMachine(const StateMachine &transition_array_p, const CSVReaderOptions &options_p);
+	explicit CSVStateMachine(const StateMachine &transition_array, const CSVReaderOptions &options);
 
 	//! Transition all states to next state, that depends on the current char
 	inline void Transition(CSVStates &states, char current_char) const {
@@ -137,9 +137,6 @@ public:
 		Printer::Print(OutputStream::STREAM_STDOUT, string("Comment: ") + state_machine_options.comment.FormatValue());
 		Printer::Print(OutputStream::STREAM_STDOUT, string("---------------------"));
 	}
-
-	//! Use shared pointer to keep the state machine cache alive, so the transition array is kept alive as well.
-	shared_ptr<CSVStateMachineCache> state_machine_cache;
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	const StateMachine &transition_array;

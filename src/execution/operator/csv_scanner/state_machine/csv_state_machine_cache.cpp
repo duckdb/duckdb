@@ -486,7 +486,7 @@ CSVStateMachineCache::CSVStateMachineCache() {
 
 const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &state_machine_options) {
 	// Custom State Machine, we need to create it and cache it first
-	lock_guard<mutex> parallel_lock(main_mutex);
+	const lock_guard<mutex> parallel_lock(main_mutex);
 	if (state_machine_cache.find(state_machine_options) == state_machine_cache.end()) {
 		Insert(state_machine_options);
 	}
@@ -494,9 +494,9 @@ const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &stat
 	return transition_array;
 }
 
-shared_ptr<CSVStateMachineCache> CSVStateMachineCache::Get(ClientContext &context) {
+CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::ObjectType());
+	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::ObjectType());
 }
 
 } // namespace duckdb
