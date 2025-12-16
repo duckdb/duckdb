@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<MergeIntoStatement>();
 	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, result->cte_map);
@@ -20,7 +20,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 	auto merge_match_repeat = list_pr.Child<RepeatParseResult>(6);
 	map<MergeActionCondition, unique_ptr<MergeIntoAction>> unconditional_actions;
 	for (auto merge_match : merge_match_repeat.children) {
-		auto merge_match_result = transformer.Transform<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>>(merge_match);
+		auto merge_match_result =
+		    transformer.Transform<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>>(merge_match);
 		auto action_condition = merge_match_result.first;
 		auto &action = merge_match_result.second;
 		if (!action->condition) {
@@ -28,8 +29,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 			if (entry != unconditional_actions.end()) {
 				string action_condition_str = MergeIntoStatement::ActionConditionToString(action_condition);
 				throw ParserException(
-					"Unconditional %s clause was already defined - only one unconditional %s clause is supported",
-					action_condition_str, action_condition_str);
+				    "Unconditional %s clause was already defined - only one unconditional %s clause is supported",
+				    action_condition_str, action_condition_str);
 			}
 			unconditional_actions.emplace(action_condition, std::move(action));
 			continue;
@@ -45,19 +46,20 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformMergeIntoUsingClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(1));
 }
 
-pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::TransformMergeMatch(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+PEGTransformerFactory::TransformMergeMatch(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>>(
+	    list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::TransformMatchedClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+PEGTransformerFactory::TransformMatchedClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto condition = MergeActionCondition::WHEN_MATCHED;
 	auto merge_into_action = transformer.Transform<unique_ptr<MergeIntoAction>>(list_pr.Child<ListParseResult>(4));
@@ -65,14 +67,15 @@ pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::T
 	return pair<MergeActionCondition, unique_ptr<MergeIntoAction>>(condition, std::move(merge_into_action));
 }
 
-unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformMatchedClauseAction(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+unique_ptr<MergeIntoAction>
+PEGTransformerFactory::TransformMatchedClauseAction(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<MergeIntoAction>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformUpdateMatchClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	unique_ptr<MergeIntoAction> result;
 	auto update_info = list_pr.Child<OptionalParseResult>(1);
@@ -86,7 +89,7 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformUpdateMatchClause(PE
 }
 
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformUpdateMatchInfo(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<MergeIntoAction>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
@@ -99,7 +102,7 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformUpdateMatchInfo(PEGT
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateMatchSetClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &inner_list = list_pr.Child<ListParseResult>(1);
 	auto choice_pr = inner_list.Child<ChoiceParseResult>(0).result;
@@ -110,16 +113,15 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateMatchSetClause(P
 	return transformer.Transform<unique_ptr<UpdateSetInfo>>(choice_pr);
 }
 
-
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformDeleteMatchClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto result = make_uniq<MergeIntoAction>();
 	result->action_type = MergeActionType::MERGE_DELETE;
 	return result;
 }
 
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertMatchClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	unique_ptr<MergeIntoAction> result;
 	auto insert_info = list_pr.Child<OptionalParseResult>(1);
@@ -133,20 +135,22 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertMatchClause(PE
 }
 
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertMatchInfo(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<MergeIntoAction>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertDefaultValues(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+unique_ptr<MergeIntoAction>
+PEGTransformerFactory::TransformInsertDefaultValues(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto result = make_uniq<MergeIntoAction>();
 	result->default_values = true;
 	return result;
 }
 
-unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertByNameOrPosition(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+unique_ptr<MergeIntoAction>
+PEGTransformerFactory::TransformInsertByNameOrPosition(PEGTransformer &transformer,
+                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<MergeIntoAction>();
 	transformer.TransformOptional<InsertColumnOrder>(list_pr, 0, result->column_order);
@@ -154,7 +158,7 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertByNameOrPositi
 }
 
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertValuesList(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<MergeIntoAction>();
 	transformer.TransformOptional<vector<string>>(list_pr, 0, result->insert_columns);
@@ -166,34 +170,35 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertValuesList(PEG
 	return result;
 }
 
-
-unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformDoNothingMatchClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+unique_ptr<MergeIntoAction>
+PEGTransformerFactory::TransformDoNothingMatchClause(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
 	auto result = make_uniq<MergeIntoAction>();
 	result->action_type = MergeActionType::MERGE_DO_NOTHING;
 	return result;
 }
 
 unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformErrorMatchClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<MergeIntoAction>();
 	result->action_type = MergeActionType::MERGE_ERROR;
 	auto expression_opt = list_pr.Child<OptionalParseResult>(1);
 	if (expression_opt.HasResult()) {
-		result->expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.optional_result));
+		result->expressions.push_back(
+		    transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.optional_result));
 	}
 	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAndExpression(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
-pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::TransformNotMatchedClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+PEGTransformerFactory::TransformNotMatchedClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = transformer.Transform<unique_ptr<MergeIntoAction>>(list_pr.Child<ListParseResult>(6));
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 4, result->condition);
@@ -203,8 +208,8 @@ pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::T
 }
 
 MergeActionCondition PEGTransformerFactory::TransformBySourceOrTarget(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<MergeActionCondition>(list_pr.Child<ChoiceParseResult>(0).result);
 }
-}
+} // namespace duckdb

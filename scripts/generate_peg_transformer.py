@@ -49,7 +49,6 @@ EXCLUDED_RULES = {
     "PragmaName",
     "SettingName",
     "CopyOptionName",
-
 }
 
 

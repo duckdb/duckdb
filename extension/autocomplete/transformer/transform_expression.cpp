@@ -438,7 +438,6 @@ PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transfo
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(distinct_list.Child<ListParseResult>(1));
 		auto distinct_operator = make_uniq<ComparisonExpression>(distinct_type, std::move(expr), std::move(right_expr));
 		expr = std::move(distinct_operator);
-
 	}
 	return expr;
 }
@@ -1584,7 +1583,7 @@ PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer, option
 }
 
 ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	if (list_pr.Child<OptionalParseResult>(1).HasResult()) {
 		return ExpressionType::COMPARE_NOT_DISTINCT_FROM;
