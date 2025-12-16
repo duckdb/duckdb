@@ -188,7 +188,8 @@ private:
 	BoxRendererFooter footer;
 	unordered_set<idx_t> pruned_columns;
 	vector<optional_idx> column_map;
-	bool shortened_columns = false;
+	bool expand_rows = false;
+	idx_t max_rows_per_row = 1;
 
 private:
 	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
@@ -203,8 +204,7 @@ private:
 	                                                    idx_t bottom_rows);
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
-	void ComputeRenderValues(vector<RenderDataCollection> &collections);
-	void RenderValues();
+	void RenderValues(vector<RenderDataCollection> &collections);
 	void RenderRow(BoxRenderRow &row, idx_t row_idx);
 	vector<BoxRenderRow> GenerateDividerRows(idx_t row_idx);
 	void PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows, idx_t max_rows_per_row, bool is_first_row);
@@ -341,11 +341,8 @@ void BoxRendererImplementation::Render() {
 		column_boundary_positions.push_back(render_boundary);
 	}
 
-	ComputeRenderValues(collections);
-
-	// now begin rendering
-	// render the box
-	RenderValues();
+	// now render the values
+	RenderValues(collections);
 
 	// render the row count and column count
 	idx_t column_count = result_types.size();
@@ -1601,141 +1598,6 @@ void BoxRendererImplementation::PotentiallyExpandRow(BoxRenderRow &row, vector<B
 	}
 }
 
-void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection> &collections) {
-	idx_t row_count = 0;
-	for (auto &collection : collections) {
-		row_count += collection.render_values->Count();
-	}
-
-	bool expand_rows = false;
-	idx_t max_rows_per_row = 1;
-	// check if we shortened any columns that would be rendered and if we can expand them
-	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
-	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count + 5 < config.max_rows &&
-	    pruned_columns.empty()) {
-		max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
-		if (max_rows_per_row > 1) {
-			// we can expand rows - check if we should expand any rows
-			expand_rows = true;
-		}
-	}
-
-	vector<column_t> columns_to_scan;
-	vector<column_t> scan_indexes;
-	optional_idx split_column_index;
-	for (idx_t c = 0; c < column_map.size(); c++) {
-		auto column_idx = column_map[c];
-		if (!column_idx.IsValid()) {
-			// insert the split column
-			split_column_index = columns_to_scan.size();
-		} else {
-			auto scan_column_idx = column_idx.GetIndex();
-			columns_to_scan.push_back(scan_column_idx);
-			scan_indexes.push_back(scan_column_idx * 2);
-			scan_indexes.push_back(scan_column_idx * 2 + 1);
-		}
-	}
-
-	// prepare the values for rendering
-	bool is_first_collection = true;
-	bool is_first_row = true;
-	for (auto &render_collection : collections) {
-		auto &collection = *render_collection.render_values;
-		if (collection.Count() == 0) {
-			continue;
-		}
-		if (is_first_collection) {
-			// add a separator if there are any rows
-			render_rows.emplace_back(RenderRowType::SEPARATOR);
-		} else {
-			// render divider between top and bottom collection
-			render_rows.emplace_back(RenderRowType::DIVIDER);
-		}
-		is_first_collection = false;
-
-		vector<BoxRenderRow> collection_rows;
-		for (auto &chunk : collection.Chunks(scan_indexes)) {
-			vector<BoxRenderRow> chunk_rows;
-			chunk_rows.resize(chunk.size());
-			for (idx_t c = 0; c < columns_to_scan.size(); c++) {
-				if (split_column_index.IsValid() && c == split_column_index.GetIndex()) {
-					// add the split column at this position
-					for (idx_t r = 0; r < chunk.size(); r++) {
-						chunk_rows[r].values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT,
-						                                  ValueRenderAlignment::MIDDLE, optional_idx(), 1);
-					}
-				}
-				auto &string_vector = render_collection.Values(chunk, c);
-				auto &render_lengths_vector = render_collection.RenderLengths(chunk, c);
-
-				auto string_data = FlatVector::GetData<string_t>(string_vector);
-				auto render_length_data = FlatVector::GetData<uint64_t>(render_lengths_vector);
-				for (idx_t r = 0; r < chunk.size(); r++) {
-					string render_value;
-					ResultRenderType render_type;
-					ValueRenderAlignment alignment;
-					idx_t column_idx = columns_to_scan[c];
-					if (FlatVector::IsNull(string_vector, r)) {
-						render_value = config.null_value;
-						render_type = ResultRenderType::NULL_VALUE;
-					} else {
-						render_value = string_data[r].GetString();
-						render_type = ResultRenderType::VALUE;
-					}
-					if (config.render_mode == RenderMode::ROWS) {
-						// in rows mode we select alignment for each column based on the type
-						alignment = TypeAlignment(result_types[column_idx]);
-					} else {
-						// in columns mode we left-align the header rows, and right-align the values
-						switch (c) {
-						case 0:
-							render_type = ResultRenderType::COLUMN_NAME;
-							alignment = ValueRenderAlignment::LEFT;
-							break;
-						case 1:
-							render_type = ResultRenderType::COLUMN_TYPE;
-							alignment = ValueRenderAlignment::LEFT;
-							break;
-						default:
-							render_type = ResultRenderType::VALUE;
-							alignment = ValueRenderAlignment::RIGHT;
-							// for columns rendering mode - the type for this value is determined by the row index
-							column_idx = render_rows.size() + r - 2;
-							break;
-						}
-					}
-					auto render_length = render_length_data[r];
-					chunk_rows[r].values.emplace_back(std::move(render_value), render_type, alignment, column_idx,
-					                                  render_length);
-				}
-			}
-			for (auto &row : chunk_rows) {
-				if (expand_rows) {
-					PotentiallyExpandRow(row, collection_rows, max_rows_per_row, is_first_row);
-				} else {
-					collection_rows.push_back(std::move(row));
-				}
-				is_first_row = false;
-			}
-		}
-		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
-			// when rendering the large number footer we align to the middle
-			for (auto &row : collection_rows) {
-				for (auto &value : row.values) {
-					value.alignment = ValueRenderAlignment::MIDDLE;
-				}
-			}
-			// large number footers should be rendered as NULL values
-			for (auto &row : collection_rows[1].values) {
-				row.render_mode = ResultRenderType::NULL_VALUE;
-			}
-		}
-		for (auto &row : collection_rows) {
-			render_rows.push_back(std::move(row));
-		}
-	}
-}
-
 void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width,
                                                     idx_t max_width) {
 	auto column_count = result_types.size();
@@ -1782,6 +1644,7 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 		}
 	}
 
+	bool shortened_columns = false;
 	// figure out the total length
 	// we start off with a pipe (|)
 	total_render_length = 1;
@@ -1958,6 +1821,22 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 	}
 	column_widths = std::move(new_widths);
 	column_count = column_widths.size();
+
+	idx_t row_count = 0;
+	for (auto &collection : collections) {
+		row_count += collection.render_values->Count();
+	}
+
+	// check if we shortened any columns that would be rendered and if we can expand them
+	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count + 5 < config.max_rows &&
+	    pruned_columns.empty()) {
+		max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
+		if (max_rows_per_row > 1) {
+			// we can expand rows - check if we should expand any rows
+			expand_rows = true;
+		}
+	}
 }
 
 void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner,
@@ -2087,13 +1966,126 @@ void BoxRendererImplementation::RenderRow(BoxRenderRow &row, idx_t row_idx) {
 	ss << '\n';
 }
 
-void BoxRendererImplementation::RenderValues() {
+void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &collections) {
 	// render the top line
 	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
+	vector<column_t> columns_to_scan;
+	vector<column_t> scan_indexes;
+	optional_idx split_column_index;
+	for (idx_t c = 0; c < column_map.size(); c++) {
+		auto column_idx = column_map[c];
+		if (!column_idx.IsValid()) {
+			// insert the split column
+			split_column_index = columns_to_scan.size();
+		} else {
+			auto scan_column_idx = column_idx.GetIndex();
+			columns_to_scan.push_back(scan_column_idx);
+			scan_indexes.push_back(scan_column_idx * 2);
+			scan_indexes.push_back(scan_column_idx * 2 + 1);
+		}
+	}
+
+	// prepare the values for rendering
+	bool is_first_collection = true;
+	bool is_first_row = true;
+	for (auto &render_collection : collections) {
+		auto &collection = *render_collection.render_values;
+		if (collection.Count() == 0) {
+			continue;
+		}
+		if (is_first_collection) {
+			// add a separator if there are any rows
+			render_rows.emplace_back(RenderRowType::SEPARATOR);
+		} else {
+			// render divider between top and bottom collection
+			render_rows.emplace_back(RenderRowType::DIVIDER);
+		}
+		is_first_collection = false;
+
+		vector<BoxRenderRow> collection_rows;
+		for (auto &chunk : collection.Chunks(scan_indexes)) {
+			vector<BoxRenderRow> chunk_rows;
+			chunk_rows.resize(chunk.size());
+			for (idx_t c = 0; c < columns_to_scan.size(); c++) {
+				if (split_column_index.IsValid() && c == split_column_index.GetIndex()) {
+					// add the split column at this position
+					for (idx_t r = 0; r < chunk.size(); r++) {
+						chunk_rows[r].values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT,
+						                                  ValueRenderAlignment::MIDDLE, optional_idx(), 1);
+					}
+				}
+				auto &string_vector = render_collection.Values(chunk, c);
+				auto &render_lengths_vector = render_collection.RenderLengths(chunk, c);
+
+				auto string_data = FlatVector::GetData<string_t>(string_vector);
+				auto render_length_data = FlatVector::GetData<uint64_t>(render_lengths_vector);
+				for (idx_t r = 0; r < chunk.size(); r++) {
+					string render_value;
+					ResultRenderType render_type;
+					ValueRenderAlignment alignment;
+					idx_t column_idx = columns_to_scan[c];
+					if (FlatVector::IsNull(string_vector, r)) {
+						render_value = config.null_value;
+						render_type = ResultRenderType::NULL_VALUE;
+					} else {
+						render_value = string_data[r].GetString();
+						render_type = ResultRenderType::VALUE;
+					}
+					if (config.render_mode == RenderMode::ROWS) {
+						// in rows mode we select alignment for each column based on the type
+						alignment = TypeAlignment(result_types[column_idx]);
+					} else {
+						// in columns mode we left-align the header rows, and right-align the values
+						switch (c) {
+						case 0:
+							render_type = ResultRenderType::COLUMN_NAME;
+							alignment = ValueRenderAlignment::LEFT;
+							break;
+						case 1:
+							render_type = ResultRenderType::COLUMN_TYPE;
+							alignment = ValueRenderAlignment::LEFT;
+							break;
+						default:
+							render_type = ResultRenderType::VALUE;
+							alignment = ValueRenderAlignment::RIGHT;
+							// for columns rendering mode - the type for this value is determined by the row index
+							column_idx = render_rows.size() + r - 2;
+							break;
+						}
+					}
+					auto render_length = render_length_data[r];
+					chunk_rows[r].values.emplace_back(std::move(render_value), render_type, alignment, column_idx,
+					                                  render_length);
+				}
+			}
+			for (auto &row : chunk_rows) {
+				if (expand_rows) {
+					PotentiallyExpandRow(row, collection_rows, max_rows_per_row, is_first_row);
+				} else {
+					collection_rows.push_back(std::move(row));
+				}
+				is_first_row = false;
+			}
+		}
+		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
+			// when rendering the large number footer we align to the middle
+			for (auto &row : collection_rows) {
+				for (auto &value : row.values) {
+					value.alignment = ValueRenderAlignment::MIDDLE;
+				}
+			}
+			// large number footers should be rendered as NULL values
+			for (auto &row : collection_rows[1].values) {
+				row.render_mode = ResultRenderType::NULL_VALUE;
+			}
+		}
+		for (auto &row : collection_rows) {
+			render_rows.push_back(std::move(row));
+		}
+	}
 	for (idx_t r = 0; r < render_rows.size(); r++) {
-		auto &row = render_rows[r];
-		RenderRow(row, r);
+		RenderRow(render_rows[r], r);
 	}
 }
 
