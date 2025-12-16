@@ -26,7 +26,16 @@ public:
 	}
 
 	static void Schedule(const weak_ptr<DatabaseInstance> &db, ITERABLE &elements) {
-		auto db_ref = db.lock();
+		shared_ptr<DatabaseInstance> db_ref;
+		try {
+			// Defensive programming: this could throw std::bad_weak_ptr,
+			// but this method is made to be called in destructors (noexcept),
+			// so we try/catch it to be safe
+			db_ref = db.lock();
+		} catch (...) {
+			return;
+		}
+
 		if (!db_ref) {
 			return;
 		}
