@@ -70,9 +70,9 @@ jobs:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
- win-release-64:
+ win-release-amd64:
     # Builds binaries for windows_amd64
-    name: Windows (64 Bit)
+    name: Windows (amd64)
     needs: check-draft
     runs-on: windows-latest
     steps:
@@ -95,7 +95,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DCMAKE_LTO='1' -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
@@ -171,51 +171,11 @@ jobs:
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
- win-release-32:
-    name: Windows (32 Bit)
-    needs:
-      - win-release-64
-      - check-draft
-    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
-    runs-on: windows-latest
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-    - name: Build
-      shell: bash
-      run: |
-        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32  -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release --parallel
-
-    - name: Test
-      shell: bash
-      run: test/Release/unittest.exe
-
-    - name: Tools Test
-      shell: bash
-      run: |
-        python -m pip install pytest
-        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-
 
  win-release-arm64:
-   name: Windows (ARM64)
+   name: Windows (arm64)
    needs:
-    - win-release-64
+    - win-release-amd64
     - check-draft
    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
    runs-on: windows-latest
@@ -239,7 +199,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE -DCMAKE_LTO='1'
+         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
          cmake --build . --config Release --parallel
 
      - name: Sign files with Azure Trusted Signing (TM)
@@ -280,9 +240,9 @@ jobs:
            duckdb_cli-windows-arm64.zip
 
  mingw:
-     name: MinGW (64 Bit)
+     name: MinGW (amd64)
      needs:
-      - win-release-64
+      - win-release-amd64
       - check-draft
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
@@ -324,7 +284,7 @@ jobs:
  win-packaged-upload:
    runs-on: windows-latest
    needs:
-     - win-release-64
+     - win-release-amd64
      - win-release-arm64
    steps:
     - uses: actions/download-artifact@v4
