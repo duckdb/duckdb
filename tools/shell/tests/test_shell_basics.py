@@ -1051,6 +1051,19 @@ def test_columnar_mode_truncate(shell):
     result.check_stdout('Row 98')
     result.check_stdout('198')
 
+def test_empty_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement("select 42 empty_result where 1=0;")
+    )
+    result = test.run()
+    result.check_stdout('''┌──────────────┐
+│ empty_result │
+│    int32     │
+├──────────────┤
+│    0 rows    │
+└──────────────┘''')
+
 def test_columnar_mode_constant(shell):
     columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
     test = (

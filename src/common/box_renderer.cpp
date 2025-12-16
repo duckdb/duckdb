@@ -2031,8 +2031,10 @@ void BoxRendererImplementation::RenderHeader(BaseResultRenderer &ss) {
 	for (auto &row : header_rows) {
 		RenderRow(ss, row);
 	}
-	BoxRenderRow separator(RenderRowType::SEPARATOR);
-	RenderRow(ss, separator);
+	if (result.Count() > 0) {
+		BoxRenderRow separator(RenderRowType::SEPARATOR);
+		RenderRow(ss, separator);
+	}
 }
 
 void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<RenderDataCollection> &collections) {
