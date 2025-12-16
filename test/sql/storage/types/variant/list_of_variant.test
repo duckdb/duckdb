@@ -41,6 +41,8 @@ insert into variant_list select [{'a': i::INTEGER}, {'a': i::INTEGER}, {'a': i::
 statement ok
 checkpoint
 
+restart
+
 query I
 select [x.a::INTEGER for x in col] from variant_list offset 50 limit 10
 ----
@@ -64,6 +66,8 @@ insert into variant_list select [{'a': i::INTEGER}, {'a': i::INTEGER}, {'a': i::
 statement ok
 checkpoint
 
+restart
+
 query I
 select [x.a::INTEGER for x in col] from variant_list offset 122880
 ----
@@ -77,6 +81,8 @@ insert into variant_list select [{'a': i::INTEGER} for i in range(122881)]
 
 statement ok
 checkpoint
+
+restart
 
 query I
 select list_aggr([x.a::INTEGER for x in col], 'max') from variant_list
