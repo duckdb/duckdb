@@ -135,12 +135,21 @@ struct BoxRendererConfig {
 #endif
 };
 
+struct BoxRendererState {
+	virtual ~BoxRendererState() = default;
+
+	virtual idx_t TotalRenderWidth() = 0;
+	virtual void Render(BaseResultRenderer &ss) = 0;
+};
+
 class BoxRenderer {
 public:
 	explicit BoxRenderer(BoxRendererConfig config_p = BoxRendererConfig());
 
 	string ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
+	unique_ptr<BoxRendererState> Prepare(ClientContext &context, const vector<string> &names,
+	                                     const ColumnDataCollection &op);
 	void Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op,
 	            BaseResultRenderer &ss);
 	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);

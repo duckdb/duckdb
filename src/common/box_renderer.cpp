@@ -167,20 +167,22 @@ public:
 	}
 };
 
-struct BoxRendererImplementation {
-	BoxRendererImplementation(BoxRendererConfig &config, ClientContext &context, const vector<string> &names,
-	                          const ColumnDataCollection &result, BaseResultRenderer &ss);
+struct BoxRendererImplementation : public BoxRendererState {
+	BoxRendererImplementation(BoxRendererConfig config, ClientContext &context, const vector<string> &names,
+	                          const ColumnDataCollection &result);
 
 public:
-	void Render();
+	idx_t TotalRenderWidth() override {
+		return total_render_length;
+	}
+	void Render(BaseResultRenderer &ss) override;
 
 private:
-	BoxRendererConfig &config;
+	BoxRendererConfig config;
 	ClientContext &context;
 	vector<string> column_names;
 	vector<LogicalType> result_types;
 	const ColumnDataCollection &result;
-	BaseResultRenderer &ss;
 	vector<idx_t> column_widths;
 	vector<idx_t> column_boundary_positions;
 	idx_t total_render_length = 0;
@@ -190,9 +192,11 @@ private:
 	vector<optional_idx> column_map;
 	bool expand_rows = false;
 	idx_t max_rows_per_row = 1;
+	vector<RenderDataCollection> render_collections;
 
 private:
-	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
+	void Initialize();
+	void RenderValue(BaseResultRenderer &ss, const string &value, idx_t column_width, ResultRenderType render_mode,
 	                 const vector<HighlightingAnnotation> &annotations,
 	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE,
 	                 optional_idx render_width = optional_idx());
@@ -204,21 +208,22 @@ private:
 	                                                    idx_t bottom_rows);
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
-	void RenderValues(vector<RenderDataCollection> &collections);
-	void RenderRow(BoxRenderRow &row);
-	void RenderDivider(const BoxRenderRow &prev_row, const BoxRenderRow &next_row);
+	void RenderValues(BaseResultRenderer &ss, vector<RenderDataCollection> &collections);
+	void RenderRow(BaseResultRenderer &ss, BoxRenderRow &row);
+	void RenderDivider(BaseResultRenderer &ss, const BoxRenderRow &prev_row, const BoxRenderRow &next_row);
 	void PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows, idx_t max_rows_per_row, bool is_first_row);
 
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
 	string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
 
 	void ComputeRowFooter(idx_t row_count, idx_t rendered_rows);
-	void RenderFooter(idx_t row_count, idx_t column_count);
+	void RenderFooter(BaseResultRenderer &ss, idx_t row_count, idx_t column_count);
 
 	string FormatNumber(const string &input);
 	string ConvertRenderValue(const string &input, const LogicalType &type);
 	string ConvertRenderValue(const string &input);
-	void RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner, const char *right_corner);
+	void RenderLayoutLine(BaseResultRenderer &ss, const char *layout, const char *boundary, const char *left_corner,
+	                      const char *right_corner);
 	//! Try to format a large number in a readable way (e.g. 1234567 -> 1.23 million)
 	string TryFormatLargeNumber(const string &numeric);
 
@@ -228,12 +233,11 @@ private:
 	void HighlightValue(BoxRenderValue &render_value);
 };
 
-BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig &config, ClientContext &context,
-                                                     const vector<string> &names, const ColumnDataCollection &result,
-                                                     BaseResultRenderer &ss)
-    : config(config), context(context), column_names(names), result(result), ss(ss) {
+BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig config, ClientContext &context,
+                                                     const vector<string> &names, const ColumnDataCollection &result)
+    : config(config), context(context), column_names(names), result(result) {
 	result_types = result.Types();
-	ss.SetResultTypes(result_types);
+	Initialize();
 }
 
 void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered_rows) {
@@ -283,7 +287,7 @@ void BoxRendererImplementation::UpdateColumnCountFooter(idx_t column_count,
 	}
 }
 
-void BoxRendererImplementation::Render() {
+void BoxRendererImplementation::Initialize() {
 	if (result.ColumnCount() != column_names.size()) {
 		throw InternalException("Error in BoxRenderer::Render - unaligned columns and names");
 	}
@@ -320,15 +324,15 @@ void BoxRendererImplementation::Render() {
 	ComputeRowFooter(row_count, top_rows + bottom_rows);
 
 	// fetch the top and bottom render collections from the result
-	auto collections = FetchRenderCollections(result, top_rows, bottom_rows);
+	render_collections = FetchRenderCollections(result, top_rows, bottom_rows);
 	if (config.render_mode == RenderMode::COLUMNS && rows_to_render > 0) {
-		collections = PivotCollections(std::move(collections), row_count);
+		render_collections = PivotCollections(std::move(render_collections), row_count);
 	}
 
 	// for each column, figure out the width
 	// start off by figuring out the name of the header by looking at the column name and column type
 	idx_t min_width = footer.must_show_footer ? footer.render_length : 0;
-	ComputeRenderWidths(collections, min_width, max_width);
+	ComputeRenderWidths(render_collections, min_width, max_width);
 
 	// render boundaries for the individual columns
 	for (idx_t c = 0; c < column_widths.size(); c++) {
@@ -340,13 +344,17 @@ void BoxRendererImplementation::Render() {
 		}
 		column_boundary_positions.push_back(render_boundary);
 	}
+}
+
+void BoxRendererImplementation::Render(BaseResultRenderer &ss) {
+	ss.SetResultTypes(result_types);
 
 	// now render the values
-	RenderValues(collections);
+	RenderValues(ss, render_collections);
 
 	// render the row count and column count
 	idx_t column_count = result_types.size();
-	RenderFooter(row_count, column_count);
+	RenderFooter(ss, result.Count(), column_count);
 }
 
 string BoxRenderer::TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width) {
@@ -376,7 +384,8 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 	return BoxRenderer::TruncateValue(value, column_width, pos, current_render_width);
 }
 
-void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
+void BoxRendererImplementation::RenderValue(BaseResultRenderer &ss, const string &value, idx_t column_width,
+                                            ResultRenderType render_mode,
                                             const vector<HighlightingAnnotation> &annotations,
                                             ValueRenderAlignment alignment, optional_idx render_width_input) {
 	idx_t render_width;
@@ -1852,8 +1861,8 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 	}
 }
 
-void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner,
-                                                 const char *right_corner) {
+void BoxRendererImplementation::RenderLayoutLine(BaseResultRenderer &ss, const char *layout, const char *boundary,
+                                                 const char *left_corner, const char *right_corner) {
 	// render the top line
 	ss << left_corner;
 	idx_t column_index = 0;
@@ -1869,7 +1878,8 @@ void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char 
 	ss << '\n';
 }
 
-void BoxRendererImplementation::RenderDivider(const BoxRenderRow &prev_row, const BoxRenderRow &next_row) {
+void BoxRendererImplementation::RenderDivider(BaseResultRenderer &ss, const BoxRenderRow &prev_row,
+                                              const BoxRenderRow &next_row) {
 	// generate three new rows
 	const idx_t divider_row_count = 3;
 	vector<BoxRenderRow> divider_rows;
@@ -1925,15 +1935,15 @@ void BoxRendererImplementation::RenderDivider(const BoxRenderRow &prev_row, cons
 		}
 	}
 	for (auto &divider : divider_rows) {
-		RenderRow(divider);
+		RenderRow(ss, divider);
 	}
 }
 
-void BoxRendererImplementation::RenderRow(BoxRenderRow &row) {
+void BoxRendererImplementation::RenderRow(BaseResultRenderer &ss, BoxRenderRow &row) {
 	auto column_count = column_widths.size();
 	if (row.row_type == RenderRowType::SEPARATOR) {
 		// render separator
-		RenderLayoutLine(config.HORIZONTAL, config.MIDDLE, config.LMIDDLE, config.RMIDDLE);
+		RenderLayoutLine(ss, config.HORIZONTAL, config.MIDDLE, config.LMIDDLE, config.RMIDDLE);
 		return;
 	}
 	if (row.row_type == RenderRowType::DIVIDER) {
@@ -1953,22 +1963,22 @@ void BoxRendererImplementation::RenderRow(BoxRenderRow &row) {
 				HighlightValue(render_value);
 			}
 		}
-		RenderValue(render_value.text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
+		RenderValue(ss, render_value.text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
 		            render_value.render_width);
 	}
 	ss << config.VERTICAL;
 	ss << '\n';
 }
 
-void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &collections) {
+void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<RenderDataCollection> &collections) {
 	// render the header
-	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
+	RenderLayoutLine(ss, config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
 	for (auto &row : header_rows) {
-		RenderRow(row);
+		RenderRow(ss, row);
 	}
 	BoxRenderRow separator(RenderRowType::SEPARATOR);
-	RenderRow(separator);
+	RenderRow(ss, separator);
 
 	// render the values
 
@@ -2067,7 +2077,7 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 					return;
 				}
 				if (render_divider) {
-					RenderDivider(last_rendered_rows.back(), row);
+					RenderDivider(ss, last_rendered_rows.back(), row);
 					render_divider = false;
 				}
 				if (expand_rows) {
@@ -2081,14 +2091,14 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 				if (context.IsInterrupted()) {
 					return;
 				}
-				RenderRow(row);
+				RenderRow(ss, row);
 			}
 			last_rendered_rows = std::move(rows_to_render);
 		}
 	}
 }
 
-void BoxRendererImplementation::RenderFooter(idx_t row_count, idx_t column_count) {
+void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_count, idx_t column_count) {
 	auto &row_count_str = footer.row_count_str;
 	auto &column_count_str = footer.column_count_str;
 	auto &readable_rows_str = footer.readable_rows_str;
@@ -2105,7 +2115,7 @@ void BoxRendererImplementation::RenderFooter(idx_t row_count, idx_t column_count
 		render_anything = false;
 	}
 	// render the bottom of the result values, if there are any
-	RenderLayoutLine(config.HORIZONTAL, config.DMIDDLE, render_anything ? config.LMIDDLE : config.LDCORNER,
+	RenderLayoutLine(ss, config.HORIZONTAL, config.DMIDDLE, render_anything ? config.LMIDDLE : config.LDCORNER,
 	                 render_anything ? config.RMIDDLE : config.RDCORNER);
 	if (!render_anything) {
 		return;
@@ -2174,20 +2184,20 @@ void BoxRendererImplementation::RenderFooter(idx_t row_count, idx_t column_count
 		    render_rows_and_columns ? ValueRenderAlignment::LEFT : ValueRenderAlignment::MIDDLE;
 		vector<HighlightingAnnotation> annotations;
 		if (!readable_rows_str.empty()) {
-			RenderValue("(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE,
+			RenderValue(ss, "(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE,
 			            annotations, alignment);
 			ss << config.VERTICAL;
 			ss << '\n';
 		}
 		if (!shown_str.empty()) {
-			RenderValue("(" + shown_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE, annotations,
+			RenderValue(ss, "(" + shown_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE, annotations,
 			            alignment);
 			ss << config.VERTICAL;
 			ss << '\n';
 		}
 	}
 	// render the bottom line
-	RenderLayoutLine(config.HORIZONTAL, config.HORIZONTAL, config.LDCORNER, config.RDCORNER);
+	RenderLayoutLine(ss, config.HORIZONTAL, config.HORIZONTAL, config.LDCORNER, config.RDCORNER);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2206,10 +2216,15 @@ void BoxRenderer::Print(ClientContext &context, const vector<string> &names, con
 	Printer::Print(ToString(context, names, result));
 }
 
+unique_ptr<BoxRendererState> BoxRenderer::Prepare(ClientContext &context, const vector<string> &names,
+                                                  const ColumnDataCollection &result) {
+	return make_uniq<BoxRendererImplementation>(config, context, names, result);
+}
+
 void BoxRenderer::Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &result,
                          BaseResultRenderer &ss) {
-	BoxRendererImplementation implementation(config, context, names, result, ss);
-	implementation.Render();
+	auto state = Prepare(context, names, result);
+	state->Render(ss);
 }
 
 } // namespace duckdb
