@@ -473,6 +473,8 @@ SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk
 			// no action to scan from
 			continue;
 		}
+		// found a good one
+		break;
 	}
 	if (lstate.index < actions.size()) {
 		auto &action = *actions[lstate.index];
