@@ -1,0 +1,107 @@
+# name: test/sql/function/index/index_key.test
+# description: Test the index_key scalar function for generating ART index keys
+# group: [index]
+
+statement ok
+CREATE TABLE tbl1(
+    id INTEGER PRIMARY KEY,
+    uid BIGINT UNIQUE,
+    d DATE AS (DATE '2000-01-01'),
+    txt VARCHAR
+);
+
+statement ok
+CREATE TABLE tbl2(
+    ref_id INTEGER PRIMARY KEY,
+    ref_txt VARCHAR,
+    tbl1_id INTEGER,
+    FOREIGN KEY (tbl1_id) REFERENCES tbl1(id)
+);
+
+statement ok
+CREATE UNIQUE INDEX tbl1_idx_composite ON tbl1(id, txt);
+
+statement ok
+CREATE UNIQUE INDEX tbl1_idx_txt ON tbl1(txt);
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', struct_pack(id := 1, txt := 'alpha'));
+----
+\x80\x00\x00\x01alpha\x00
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := 1));
+----
+\x80\x00\x00\x01
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'UNIQUE_tbl1_1', struct_pack(uid := 20::BIGINT));
+----
+\x80\x00\x00\x00\x00\x00\x00\x14
+
+query I
+SELECT index_key('', 'main', 'tbl2', 'FOREIGN_tbl2_1', struct_pack(tbl1_id := 1));
+----
+\x80\x00\x00\x01
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', struct_pack(id := NULL::INTEGER, txt := NULL::VARCHAR));
+----
+NULL
+
+query II
+SELECT
+    index_key('', 'main', 'tbl1', 'tbl1_idx_composite', struct_pack(id := v.id, txt := v.txt)) AS composite_key,
+    index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := v.id)) AS pkey_key
+FROM (VALUES (1, 'alpha'), (2, 'beta')) AS v(id, txt);
+----
+\x80\x00\x00\x01alpha\x00	\x80\x00\x00\x01
+\x80\x00\x00\x02beta\x00	\x80\x00\x00\x02
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := v.id))
+FROM (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10), (11), (12)) AS v(id);
+----
+\x80\x00\x00\x01
+\x80\x00\x00\x02
+\x80\x00\x00\x03
+\x80\x00\x00\x04
+\x80\x00\x00\x05
+\x80\x00\x00\x06
+\x80\x00\x00\x07
+\x80\x00\x00\x08
+\x80\x00\x00\x09
+\x80\x00\x00\x0A
+\x80\x00\x00\x0B
+\x80\x00\x00\x0C
+
+statement ok
+ATTACH ':memory:' AS other;
+
+statement ok
+CREATE TABLE other.tbl1(id INTEGER PRIMARY KEY);
+
+query I
+SELECT index_key('other', 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := 42));
+----
+\x80\x00\x00*
+
+statement error
+SELECT index_key('', 'main', 'tbl1', txt, struct_pack(id := 1)) FROM tbl1;
+----
+index_key parameter 'index_or_constraint' must be a foldable
+
+statement error
+SELECT index_key($1, 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := 1));
+----
+Binder Error: index_key parameter 'catalog' must be a foldable
+
+query I
+SELECT index_key('', 'main', 'tbl' || '1', 'PRIMARY_tbl1_0', struct_pack(id := 1));
+----
+\x80\x00\x00\x01
+
+query I
+SELECT index_key('', 'main', 'tbl1', 'PRIMARY_' || 'tbl1_0', struct_pack(id := 1));
+----
+\x80\x00\x00\x01
