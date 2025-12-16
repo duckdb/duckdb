@@ -44,7 +44,7 @@ public:
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
-	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
+	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges();

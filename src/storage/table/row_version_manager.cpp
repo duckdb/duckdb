@@ -253,8 +253,10 @@ void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, 
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
-vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
+vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 	lock_guard<mutex> lock(version_lock);
+	auto &manager = *writer.GetMetadataManager();
+	auto options = writer.GetCheckpointOptions();
 	if (!has_unserialized_changes) {
 		// we can write the current pointer as-is
 		// ensure the blocks we are pointing to are not marked as free
@@ -269,7 +271,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 		if (!chunk_info) {
 			continue;
 		}
-		if (!chunk_info->HasDeletes()) {
+		if (!chunk_info->HasDeletes(options.transaction_id)) {
 			continue;
 		}
 		to_serialize.emplace_back(vector_idx, *chunk_info);
@@ -278,16 +280,16 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 	storage_pointers.clear();
 
 	if (!to_serialize.empty()) {
-		MetadataWriter writer(manager, &storage_pointers);
+		MetadataWriter metadata_writer(manager, &storage_pointers);
 		// now serialize the actual version information
-		writer.Write<idx_t>(to_serialize.size());
+		metadata_writer.Write<idx_t>(to_serialize.size());
 		for (auto &entry : to_serialize) {
 			auto &vector_idx = entry.first;
 			auto &chunk_info = entry.second.get();
-			writer.Write<idx_t>(vector_idx);
-			chunk_info.Write(writer);
+			metadata_writer.Write<idx_t>(vector_idx);
+			chunk_info.Write(metadata_writer, options.transaction_id);
 		}
-		writer.Flush();
+		metadata_writer.Flush();
 	}
 
 	has_unserialized_changes = false;

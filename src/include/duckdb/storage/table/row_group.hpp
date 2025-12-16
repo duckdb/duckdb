@@ -219,7 +219,7 @@ public:
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 	idx_t GetColumnCount() const;
 
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
+	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();

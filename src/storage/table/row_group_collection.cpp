@@ -1403,7 +1403,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 					extra_metadata_block_pointers.emplace_back(block_pointer, 0);
 				}
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
-				row_group.CheckpointDeletes(metadata_manager);
+				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
+				row_group.CheckpointDeletes(*row_group_writer);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
 
