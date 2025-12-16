@@ -468,7 +468,7 @@ jobs:
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
   vector-and-block-sizes:
-    name: Tests different vector and block sizes
+    name: Tests non-default vector and block size
     runs-on: ubuntu-24.04
     env:
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
@@ -500,11 +500,11 @@ jobs:
           STANDARD_VECTOR_SIZE: 512
         run: make relassert
 
-      - name: Fast and storage tests with default block size
+      - name: All tests with 512 vector size and default block size
         shell: bash
         run: ./build/relassert/test/unittest "*" --test-config test/configs/vector_size_512.json
 
-      - name: Fast and storage tests with small block size
+      - name: All tests with 512 vector size and 16kB block size
         shell: bash
         run: ./build/relassert/test/unittest "*" --test-config test/configs/block_size_16kB.json
 
