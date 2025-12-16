@@ -47,6 +47,8 @@ public:
 	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 
 public:
+	shared_ptr<DatabaseInstance> db;
+
 	const Sort &sort;
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	const idx_t total_count;
@@ -54,9 +56,6 @@ public:
 	const idx_t partition_size;
 	const bool external;
 	const bool is_index_sort;
-
-private:
-	weak_ptr<DatabaseInstance> db;
 };
 
 } // namespace duckdb

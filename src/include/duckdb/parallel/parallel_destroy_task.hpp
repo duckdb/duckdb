@@ -25,22 +25,8 @@ public:
 		elem.reset();
 	}
 
-	static void Schedule(const weak_ptr<DatabaseInstance> &db, ITERABLE &elements) {
-		shared_ptr<DatabaseInstance> db_ref;
-		try {
-			// Defensive programming: this could throw std::bad_weak_ptr,
-			// but this method is made to be called in destructors (noexcept),
-			// so we try/catch it to be safe
-			db_ref = db.lock();
-		} catch (...) {
-			return;
-		}
-
-		if (!db_ref) {
-			return;
-		}
-
-		TaskExecutor executor(TaskScheduler::GetScheduler(*db_ref));
+	static void Schedule(const shared_ptr<DatabaseInstance> &db, ITERABLE &elements) {
+		TaskExecutor executor(TaskScheduler::GetScheduler(*db));
 		for (auto &segment : elements) {
 			auto destroy_task = make_uniq<ParallelDestroyTask>(executor, std::move(segment));
 			executor.ScheduleTask(std::move(destroy_task));

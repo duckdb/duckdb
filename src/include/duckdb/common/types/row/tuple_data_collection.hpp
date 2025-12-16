@@ -269,7 +269,7 @@ private:
 
 private:
 	//! Database instance ref for parallel destruction
-	weak_ptr<DatabaseInstance> db;
+	shared_ptr<DatabaseInstance> db;
 	//! Shared allocator for STL allocations
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
