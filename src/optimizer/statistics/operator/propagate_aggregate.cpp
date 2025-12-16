@@ -177,11 +177,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (get.table_filters.filters.empty()) {
 		remaining_partition_stats = std::move(partition_stats);
 	} else {
+		// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
 		for (auto &stats : partition_stats) {
-			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			if (!stats.partition_row_group) {
 				return;
 			}
+			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 			for (auto &entry : get.table_filters.filters) {
 				auto col_idx = entry.first;
 				auto &filter = entry.second;
@@ -195,6 +196,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				}
 				auto col_filter_result = filter->CheckStatistics(*column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					break;
 				}
@@ -204,11 +206,13 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			switch (filter_result) {
 			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
+				// all filters passed - this partition should keep execute eager aggregate
 				remaining_partition_stats.push_back(std::move(stats));
 				break;
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				break;
 			default:
+				// any filter that is not always true/false - bail
 				return;
 			}
 		}
