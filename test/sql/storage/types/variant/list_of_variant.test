@@ -1,0 +1,33 @@
+# name: test/sql/storage/types/variant/list_of_variant.test
+# group: [variant]
+
+load __TEST_DIR__/list_of_variant.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE variant_list(col VARIANT[]);
+
+statement ok
+insert into variant_list select [{'a': 42, 'b': [1,2,3]}::VARIANT, NULL, 84] from range(122881)
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select list_aggr([x.a::INTEGER for x in col if variant_typeof(x).starts_with('OBJECT')], 'sum') from variant_list limit 10
+----
+42
+42
+42
+42
+42
+42
+42
+42
+42
+42
