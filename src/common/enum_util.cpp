@@ -16,6 +16,7 @@
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
@@ -864,6 +865,25 @@ const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value) {
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	return static_cast<CTEMaterialize>(StringUtil::StringToEnum(GetCTEMaterializeValues(), 3, "CTEMaterialize", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCacheValidationModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CacheValidationMode::VALIDATE_ALL), "VALIDATE_ALL" },
+		{ static_cast<uint32_t>(CacheValidationMode::VALIDATE_REMOTE), "VALIDATE_REMOTE" },
+		{ static_cast<uint32_t>(CacheValidationMode::NO_VALIDATION), "NO_VALIDATION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value) {
+	return StringUtil::EnumToString(GetCacheValidationModeValues(), 3, "CacheValidationMode", static_cast<uint32_t>(value));
+}
+
+template<>
+CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value) {
+	return static_cast<CacheValidationMode>(StringUtil::StringToEnum(GetCacheValidationModeValues(), 3, "CacheValidationMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCachingModeValues() {
@@ -2536,7 +2556,7 @@ const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 		{ static_cast<uint32_t>(LogLevel::LOG_TRACE), "TRACE" },
 		{ static_cast<uint32_t>(LogLevel::LOG_DEBUG), "DEBUG" },
 		{ static_cast<uint32_t>(LogLevel::LOG_INFO), "INFO" },
-		{ static_cast<uint32_t>(LogLevel::LOG_WARN), "WARN" },
+		{ static_cast<uint32_t>(LogLevel::LOG_WARNING), "WARNING" },
 		{ static_cast<uint32_t>(LogLevel::LOG_ERROR), "ERROR" },
 		{ static_cast<uint32_t>(LogLevel::LOG_FATAL), "FATAL" }
 	};
@@ -4203,19 +4223,21 @@ const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR), "SIMPLIFIED_TOKEN_OPERATOR" },
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD), "SIMPLIFIED_TOKEN_KEYWORD" },
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" },
-		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR), "SIMPLIFIED_TOKEN_ERROR" }
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR), "SIMPLIFIED_TOKEN_ERROR" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS), "SIMPLIFIED_TOKEN_ERROR_EMPHASIS" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION), "SIMPLIFIED_TOKEN_ERROR_SUGGESTION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value) {
-	return StringUtil::EnumToString(GetSimplifiedTokenTypeValues(), 7, "SimplifiedTokenType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSimplifiedTokenTypeValues(), 9, "SimplifiedTokenType", static_cast<uint32_t>(value));
 }
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value) {
-	return static_cast<SimplifiedTokenType>(StringUtil::StringToEnum(GetSimplifiedTokenTypeValues(), 7, "SimplifiedTokenType", value));
+	return static_cast<SimplifiedTokenType>(StringUtil::StringToEnum(GetSimplifiedTokenTypeValues(), 9, "SimplifiedTokenType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSinkCombineResultTypeValues() {

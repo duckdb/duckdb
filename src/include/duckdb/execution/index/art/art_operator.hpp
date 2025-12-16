@@ -256,6 +256,8 @@ public:
 				if (parent.get().GetType() == NType::PREFIX) {
 					// We might have to compress:
 					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
+					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
+					// Then, when we delete that child, we also free it.
 					Node::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth], status,
 					                  row_id);
 					return;

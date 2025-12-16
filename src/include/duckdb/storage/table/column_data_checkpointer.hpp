@@ -72,6 +72,7 @@ private:
 	vector<CheckpointAnalyzeResult> DetectBestCompressionMethod();
 	void WriteToDisk();
 	void WritePersistentSegments(ColumnCheckpointState &state);
+	bool HasChanges(ColumnData &col_data);
 	void InitAnalyze();
 	void DropSegments();
 	bool ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result);

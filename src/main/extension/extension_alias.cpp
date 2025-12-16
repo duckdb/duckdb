@@ -10,6 +10,7 @@ static const ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
                                                   {"postgres", "postgres_scanner"}, // postgres
                                                   {"sqlite", "sqlite_scanner"},     // sqlite
                                                   {"sqlite3", "sqlite_scanner"},
+                                                  {"uc_catalog", "unity_catalog"}, // old name for compatibility
                                                   {nullptr, nullptr}};
 
 idx_t ExtensionHelper::ExtensionAliasCount() {

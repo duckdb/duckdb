@@ -86,7 +86,7 @@ public:
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context) const;
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -187,16 +187,17 @@ public:
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
 	                                 DataChunk &table_chunk, DataChunk &index_chunk,
 	                                 const vector<StorageIndex> &mapped_column_ids, row_t row_start,
-	                                 const IndexAppendMode index_append_mode);
+	                                 const IndexAppendMode index_append_mode, optional_idx active_checkpoint);
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
 	                          DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
-	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
-	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
-	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
-	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
+	//! Revert a previous append made to indexes in a chunk with the row ids [row_start, ..., row_start + chunk.size()]
+	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start);
+	//! Revert a previous append made to indexes with the given row-ids
+	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type);
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
@@ -215,7 +216,7 @@ public:
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();
