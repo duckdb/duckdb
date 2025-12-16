@@ -505,9 +505,12 @@ public:
 		PersistentColumnData data(original_column.type);
 		auto &variant_column_data = GetResultColumn().Cast<VariantColumnData>();
 		if (child_states.size() == 2) {
-			D_ASSERT(variant_column_data.sub_columns.size() == 2);
-			D_ASSERT(variant_column_data.sub_columns[1]->type.id() == LogicalTypeId::STRUCT);
-			data.SetVariantShreddedType(variant_column_data.sub_columns[1]->type);
+			//! Use the type of the column data we used to create the Checkpoint
+			//! This will either be a pointer to shredded_data[1] if we decided to shred
+			//! Or to the existing shredded column data if we didn't decide to reshred
+			auto &shredded_state = child_states[1];
+			D_ASSERT(shredded_state->original_column.type.id() == LogicalTypeId::STRUCT);
+			data.SetVariantShreddedType(shredded_state->original_column.type);
 		}
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
