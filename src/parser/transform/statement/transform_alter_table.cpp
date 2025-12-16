@@ -24,15 +24,14 @@ vector<string> Transformer::TransformNameList(duckdb_libpgquery::PGList &list) {
 	return result;
 }
 
-void AddToMultiStatement(unique_ptr<MultiStatement> &multi_statement, unique_ptr<AlterInfo> alter_info) {
+void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, unique_ptr<AlterInfo> alter_info) {
 	auto alter_statement = make_uniq<AlterStatement>();
 	alter_statement->info = std::move(alter_info);
 	multi_statement->statements.push_back(std::move(alter_statement));
 }
 
-void AddUpdateToMultiStatement(const TemplatedUniqueIf<MultiStatement>::templated_unique_single_t &result,
-                               const string &column_name, const string &table_name,
-                               const unique_ptr<ParsedExpression> &original_expression) {
+void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,
+                               const string &table_name, const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
 
 	auto table_ref = make_uniq<BaseTableRef>();
@@ -45,7 +44,7 @@ void AddUpdateToMultiStatement(const TemplatedUniqueIf<MultiStatement>::template
 	set_info->expressions.push_back(original_expression->Copy());
 	update_statement->set_info = std::move(set_info);
 
-	result->statements.push_back(std::move(update_statement));
+	multi_statement->statements.push_back(std::move(update_statement));
 }
 unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
 	D_ASSERT(stmt.relation);
@@ -90,7 +89,8 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			column_entry.SetName(column_names.back());
 			if (column_names.size() == 1) {
 				// ADD COLUMN
-				if (column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+				if (!column_entry.HasDefaultValue() ||
+				    column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
 					AddToMultiStatement(result, make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry),
 					                                                     command->missing_ok));
 					break;
@@ -100,7 +100,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				 *	 2. UPDATE t SET u = <expression>;
 				 *	 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
 				 * This workaround exists because when an `ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>` takes
-				 *place, the WAL replay would re-run the default expression, and with expressions such as RANDOM or
+				 * place, the WAL replay would re-run the default expression, and with expressions such as RANDOM or
 				 * CURRENT_TIMESTAMP, the value would be different than that of the original run. By now doing an
 				 * UPDATE, we force materialization of these values, which makes WAL replays consistent.
 				 */
@@ -109,13 +109,12 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				auto original_expression = column_entry.DefaultValue().Copy();
 
 				// 1.  ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
-
-				// Here we're not writing the actual values yet, just inserting NULL as a placeholder.The actual values
-				// will be handled by the UPDATE statement that follows
 				Value null_value = Value(nullptr);
 				auto null_expression = ConstantExpression(null_value);
 				auto null_column = column_entry.Copy();
 				null_column.SetDefaultValue(make_uniq<ConstantExpression>(null_expression));
+				// Here we're not writing the actual values yet, just inserting NULL as a placeholder.The actual values
+				// will be handled by the UPDATE statement that follows
 				AddToMultiStatement(result,
 				                    make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok));
 
