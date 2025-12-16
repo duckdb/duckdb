@@ -103,9 +103,11 @@ public:
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
 
 	idx_t GetMaxMemory() const {
+		const lock_guard<mutex> lock(lock_mutex);
 		return lru_cache.MaxMemory();
 	}
 	idx_t GetCurrentMemory() const {
+		const lock_guard<mutex> lock(lock_mutex);
 		return lru_cache.CurrentMemory();
 	}
 	size_t GetEntryCount() const {
