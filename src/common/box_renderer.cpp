@@ -184,7 +184,7 @@ private:
 	vector<idx_t> column_widths;
 	vector<idx_t> column_boundary_positions;
 	idx_t total_render_length = 0;
-	vector<BoxRenderRow> render_rows;
+	vector<BoxRenderRow> header_rows;
 	BoxRendererFooter footer;
 	unordered_set<idx_t> pruned_columns;
 	vector<optional_idx> column_map;
@@ -205,8 +205,8 @@ private:
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void RenderValues(vector<RenderDataCollection> &collections);
-	void RenderRow(BoxRenderRow &row, idx_t row_idx);
-	vector<BoxRenderRow> GenerateDividerRows(idx_t row_idx);
+	void RenderRow(BoxRenderRow &row);
+	void RenderDivider(const BoxRenderRow &prev_row, const BoxRenderRow &next_row);
 	void PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows, idx_t max_rows_per_row, bool is_first_row);
 
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
@@ -1621,9 +1621,9 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 		}
 		column_widths.push_back(MaxValue<idx_t>(column_name_width, column_type_width));
 	}
-	render_rows.push_back(std::move(header_row));
+	header_rows.push_back(std::move(header_row));
 	if (config.render_mode == RenderMode::ROWS) {
-		render_rows.push_back(std::move(type_row));
+		header_rows.push_back(std::move(type_row));
 	}
 
 	// scan the render widths in the collection to figure out the
@@ -1822,6 +1822,19 @@ void BoxRendererImplementation::ComputeRenderWidths(vector<RenderDataCollection>
 	column_widths = std::move(new_widths);
 	column_count = column_widths.size();
 
+	// prune columns from the header rows
+	for (auto &header_row : header_rows) {
+		vector<BoxRenderValue> new_rows;
+		for (auto &c : column_map) {
+			if (!c.IsValid()) {
+				// split column - skip
+				continue;
+			}
+			new_rows.push_back(std::move(header_row.values[c.GetIndex()]));
+		}
+		header_row.values = std::move(new_rows);
+	}
+
 	idx_t row_count = 0;
 	for (auto &collection : collections) {
 		row_count += collection.render_values->Count();
@@ -1856,8 +1869,7 @@ void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char 
 	ss << '\n';
 }
 
-vector<BoxRenderRow> BoxRendererImplementation::GenerateDividerRows(idx_t row_idx) {
-	auto column_count = column_widths.size();
+void BoxRendererImplementation::RenderDivider(const BoxRenderRow &prev_row, const BoxRenderRow &next_row) {
 	// generate three new rows
 	const idx_t divider_row_count = 3;
 	vector<BoxRenderRow> divider_rows;
@@ -1865,27 +1877,8 @@ vector<BoxRenderRow> BoxRendererImplementation::GenerateDividerRows(idx_t row_id
 		divider_rows.emplace_back(RenderRowType::ROW_VALUES);
 	}
 
-	// find the prev/next rows
-	idx_t prev_row_idx, next_row_idx;
-	for (prev_row_idx = row_idx; prev_row_idx > 0; prev_row_idx--) {
-		if (render_rows[prev_row_idx - 1].row_type == RenderRowType::ROW_VALUES) {
-			break;
-		}
-	}
-	for (next_row_idx = row_idx + 1; next_row_idx < render_rows.size(); next_row_idx++) {
-		if (render_rows[next_row_idx].row_type == RenderRowType::ROW_VALUES) {
-			break;
-		}
-	}
-	if (prev_row_idx == 0 || next_row_idx >= render_rows.size()) {
-		throw InternalException("No prev/next row found");
-	}
-	prev_row_idx--;
-	auto &prev_row = render_rows[prev_row_idx];
-	auto &next_row = render_rows[next_row_idx];
 	// now generate the dividers for each of the columns
-
-	for (idx_t c = 0; c < column_count; c++) {
+	for (idx_t c = 0; c < prev_row.values.size(); c++) {
 		string str;
 		auto &prev_value = prev_row.values[c];
 		auto &next_value = next_row.values[c];
@@ -1931,10 +1924,12 @@ vector<BoxRenderRow> BoxRendererImplementation::GenerateDividerRows(idx_t row_id
 			divider_rows[d].values.emplace_back(str, ResultRenderType::LAYOUT, alignment);
 		}
 	}
-	return divider_rows;
+	for (auto &divider : divider_rows) {
+		RenderRow(divider);
+	}
 }
 
-void BoxRendererImplementation::RenderRow(BoxRenderRow &row, idx_t row_idx) {
+void BoxRendererImplementation::RenderRow(BoxRenderRow &row) {
 	auto column_count = column_widths.size();
 	if (row.row_type == RenderRowType::SEPARATOR) {
 		// render separator
@@ -1942,15 +1937,14 @@ void BoxRendererImplementation::RenderRow(BoxRenderRow &row, idx_t row_idx) {
 		return;
 	}
 	if (row.row_type == RenderRowType::DIVIDER) {
-		auto divider_rows = GenerateDividerRows(row_idx);
-		for (auto &divider_row : divider_rows) {
-			RenderRow(divider_row, 0);
-		}
-		return;
+		throw InternalException("Divider should be rendered before");
 	}
 	// render row values
+	idx_t value_idx = 0;
+	BoxRenderValue split_value(config.DOTDOTDOT, ResultRenderType::LAYOUT, ValueRenderAlignment::MIDDLE, optional_idx(),
+	                           1);
 	for (idx_t column_idx = 0; column_idx < column_count; column_idx++) {
-		auto &render_value = row.values[column_idx];
+		auto &render_value = column_map[column_idx].IsValid() ? row.values[value_idx++] : split_value;
 		auto render_mode = render_value.render_mode;
 		auto alignment = render_value.alignment;
 		if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
@@ -1967,18 +1961,22 @@ void BoxRendererImplementation::RenderRow(BoxRenderRow &row, idx_t row_idx) {
 }
 
 void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &collections) {
-	// render the top line
+	// render the header
 	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
+
+	for (auto &row : header_rows) {
+		RenderRow(row);
+	}
+	BoxRenderRow separator(RenderRowType::SEPARATOR);
+	RenderRow(separator);
+
+	// render the values
 
 	vector<column_t> columns_to_scan;
 	vector<column_t> scan_indexes;
-	optional_idx split_column_index;
 	for (idx_t c = 0; c < column_map.size(); c++) {
 		auto column_idx = column_map[c];
-		if (!column_idx.IsValid()) {
-			// insert the split column
-			split_column_index = columns_to_scan.size();
-		} else {
+		if (column_idx.IsValid()) {
 			auto scan_column_idx = column_idx.GetIndex();
 			columns_to_scan.push_back(scan_column_idx);
 			scan_indexes.push_back(scan_column_idx * 2);
@@ -1988,33 +1986,24 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 
 	// prepare the values for rendering
 	bool is_first_collection = true;
+	bool render_divider = false;
 	bool is_first_row = true;
+	vector<BoxRenderRow> last_rendered_rows;
+	idx_t row_idx = 0;
 	for (auto &render_collection : collections) {
 		auto &collection = *render_collection.render_values;
 		if (collection.Count() == 0) {
 			continue;
 		}
-		if (is_first_collection) {
-			// add a separator if there are any rows
-			render_rows.emplace_back(RenderRowType::SEPARATOR);
-		} else {
-			// render divider between top and bottom collection
-			render_rows.emplace_back(RenderRowType::DIVIDER);
+		if (!is_first_collection) {
+			render_divider = true;
 		}
 		is_first_collection = false;
 
-		vector<BoxRenderRow> collection_rows;
 		for (auto &chunk : collection.Chunks(scan_indexes)) {
 			vector<BoxRenderRow> chunk_rows;
 			chunk_rows.resize(chunk.size());
 			for (idx_t c = 0; c < columns_to_scan.size(); c++) {
-				if (split_column_index.IsValid() && c == split_column_index.GetIndex()) {
-					// add the split column at this position
-					for (idx_t r = 0; r < chunk.size(); r++) {
-						chunk_rows[r].values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT,
-						                                  ValueRenderAlignment::MIDDLE, optional_idx(), 1);
-					}
-				}
 				auto &string_vector = render_collection.Values(chunk, c);
 				auto &render_lengths_vector = render_collection.RenderLengths(chunk, c);
 
@@ -2024,7 +2013,7 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 					string render_value;
 					ResultRenderType render_type;
 					ValueRenderAlignment alignment;
-					idx_t column_idx = columns_to_scan[c];
+					optional_idx column_idx;
 					if (FlatVector::IsNull(string_vector, r)) {
 						render_value = config.null_value;
 						render_type = ResultRenderType::NULL_VALUE;
@@ -2034,7 +2023,8 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 					}
 					if (config.render_mode == RenderMode::ROWS) {
 						// in rows mode we select alignment for each column based on the type
-						alignment = TypeAlignment(result_types[column_idx]);
+						column_idx = columns_to_scan[c];
+						alignment = TypeAlignment(result_types[column_idx.GetIndex()]);
 					} else {
 						// in columns mode we left-align the header rows, and right-align the values
 						switch (c) {
@@ -2050,8 +2040,16 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 							render_type = ResultRenderType::VALUE;
 							alignment = ValueRenderAlignment::RIGHT;
 							// for columns rendering mode - the type for this value is determined by the row index
-							column_idx = render_rows.size() + r - 2;
+							column_idx = row_idx + r;
 							break;
+						}
+					}
+					if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
+						// when rendering the large number footer we align to the middle
+						alignment = ValueRenderAlignment::MIDDLE;
+						if (row_idx == 1) {
+							// large number footers should be rendered as NULL values
+							render_type = ResultRenderType::NULL_VALUE;
 						}
 					}
 					auto render_length = render_length_data[r];
@@ -2059,33 +2057,25 @@ void BoxRendererImplementation::RenderValues(vector<RenderDataCollection> &colle
 					                                  render_length);
 				}
 			}
+			row_idx += chunk.size();
+			vector<BoxRenderRow> rows_to_render;
 			for (auto &row : chunk_rows) {
+				if (render_divider) {
+					RenderDivider(last_rendered_rows.back(), row);
+					render_divider = false;
+				}
 				if (expand_rows) {
-					PotentiallyExpandRow(row, collection_rows, max_rows_per_row, is_first_row);
+					PotentiallyExpandRow(row, rows_to_render, max_rows_per_row, is_first_row);
 				} else {
-					collection_rows.push_back(std::move(row));
+					rows_to_render.push_back(std::move(row));
 				}
 				is_first_row = false;
 			}
-		}
-		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
-			// when rendering the large number footer we align to the middle
-			for (auto &row : collection_rows) {
-				for (auto &value : row.values) {
-					value.alignment = ValueRenderAlignment::MIDDLE;
-				}
+			for (auto &row : rows_to_render) {
+				RenderRow(row);
 			}
-			// large number footers should be rendered as NULL values
-			for (auto &row : collection_rows[1].values) {
-				row.render_mode = ResultRenderType::NULL_VALUE;
-			}
+			last_rendered_rows = std::move(rows_to_render);
 		}
-		for (auto &row : collection_rows) {
-			render_rows.push_back(std::move(row));
-		}
-	}
-	for (idx_t r = 0; r < render_rows.size(); r++) {
-		RenderRow(render_rows[r], r);
 	}
 }
 

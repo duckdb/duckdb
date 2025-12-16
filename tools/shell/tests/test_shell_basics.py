@@ -1040,6 +1040,17 @@ def test_columnar_mode(shell):
     result = test.run()
     result.check_stdout('Row 1')
 
+def test_columnar_mode_truncate(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".col")
+        .statement(".maxwidth 100")
+        .statement("select * from range(100,200);")
+    )
+    result = test.run()
+    result.check_stdout('Row 98')
+    result.check_stdout('198')
+
 def test_columnar_mode_constant(shell):
     columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
     test = (
