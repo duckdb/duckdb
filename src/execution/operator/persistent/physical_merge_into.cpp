@@ -473,6 +473,10 @@ SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk
 			// no action to scan from
 			continue;
 		}
+	}
+	if (lstate.index < actions.size()) {
+		auto &action = *actions[lstate.index];
+
 		auto &child_gstate = *gstate.global_states[lstate.index];
 		auto &child_lstate = *lstate.local_states[lstate.index];
 		OperatorSourceInput source_input {child_gstate, child_lstate, input.interrupt_state};
