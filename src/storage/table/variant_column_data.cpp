@@ -802,7 +802,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 
-		auto &shredded_type = column_data.variant_shredded_type;
+		auto &shredded_type = column_data.shredded_type;
 		if (!IsShredded()) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
 			sub_columns.push_back(ColumnData::CreateColumn(block_manager, info, 2, shredded_type, GetDataType(), this));

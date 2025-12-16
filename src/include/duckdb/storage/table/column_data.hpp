@@ -302,9 +302,9 @@ public:
 	vector<DataPointer> pointers;
 	vector<PersistentColumnData> child_columns;
 	bool has_updates = false;
-	LogicalType variant_shredded_type;
 
-	vector<LogicalType> split_types;
+	// Alternative logical type used for this segment
+	LogicalType shredded_type;
 };
 
 struct PersistentRowGroupData {
