@@ -634,6 +634,9 @@ else()
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
+  if(CMAKE_LTO)
+    set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /LTCG")
+  endif()
   # remove warning from CXX flags
   string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
