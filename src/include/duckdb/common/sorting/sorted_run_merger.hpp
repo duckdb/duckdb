@@ -47,8 +47,6 @@ public:
 	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 
 public:
-	shared_ptr<DatabaseInstance> db;
-
 	const Sort &sort;
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	const idx_t total_count;

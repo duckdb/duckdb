@@ -824,13 +824,12 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 //===--------------------------------------------------------------------===//
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
-    : db(sort_p.context.db), sort(sort_p), sorted_runs(std::move(sorted_runs_p)),
-      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
-      is_index_sort(is_index_sort_p) {
+    : sort(sort_p), sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
+      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
 }
 
 SortedRunMerger::~SortedRunMerger() {
-	ParallelDestroyTask<decltype(sorted_runs)>::Schedule(db, sorted_runs);
+	ParallelDestroyTask<decltype(sorted_runs)>::Schedule(*sort.context.db, sorted_runs);
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
