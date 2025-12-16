@@ -207,6 +207,7 @@ private:
 	void RenderValues();
 	void RenderRow(BoxRenderRow &row, idx_t row_idx);
 	vector<BoxRenderRow> GenerateDividerRows(idx_t row_idx);
+	void PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows, idx_t max_rows_per_row, bool is_first_row);
 
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
 	string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
@@ -1508,6 +1509,98 @@ void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
 	highlighter.Process(render_value.text);
 }
 
+void BoxRendererImplementation::PotentiallyExpandRow(BoxRenderRow &row, vector<BoxRenderRow> &rows,
+                                                     idx_t max_rows_per_row, bool is_first_row) {
+	// check if this row has truncated columns
+	vector<BoxRenderRow> extra_rows;
+	for (idx_t c = 0; c < row.values.size(); c++) {
+		if (CanPrettyPrint(row.values[c])) {
+			PrettyPrintValue(row.values[c], max_rows_per_row, column_widths[c]);
+			if (CanHighlight(row.values[c])) {
+				HighlightValue(row.values[c]);
+			}
+			// FIXME: hacky
+			row.values[c].render_width = column_widths[c] + 1;
+		}
+		auto render_width = row.values[c].render_width.GetIndex();
+		if (render_width <= column_widths[c]) {
+			// not shortened - skip
+			continue;
+		}
+		// this value was shortened! try to stretch it out
+		// first truncate what appears on the first row
+		idx_t current_row = 0;
+		idx_t current_pos = 0;
+		idx_t current_render_width = 0;
+		auto full_value = row.values[c].text;
+		auto annotations = row.values[c].annotations;
+		idx_t annotation_idx = 0;
+		ResultRenderType active_render_mode = ResultRenderType::VALUE;
+		row.values[c].annotations.clear();
+		row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+		row.values[c].render_width = current_render_width;
+		row.values[c].decomposed = true;
+		// copy over annotations
+		for (; annotation_idx < annotations.size(); annotation_idx++) {
+			if (annotations[annotation_idx].start >= current_pos) {
+				break;
+			}
+			row.values[c].annotations.push_back(annotations[annotation_idx]);
+		}
+		while (current_pos < full_value.size()) {
+			if (current_row >= extra_rows.size()) {
+				if (extra_rows.size() >= max_rows_per_row + 1) {
+					// we need to add an extra row but there's no space anymore - break
+					break;
+				}
+				// add a new row with empty values
+				extra_rows.emplace_back();
+				for (auto &current_val : row.values) {
+					extra_rows.back().values.emplace_back(string(), current_val.render_mode, current_val.alignment,
+					                                      current_val.column_idx);
+				}
+			}
+			bool can_add_extra_row = current_row + 1 < extra_rows.size() || extra_rows.size() < max_rows_per_row;
+			auto &extra_row = extra_rows[current_row++];
+			idx_t start_pos = current_pos;
+			// stretch out the remainder on this row
+			current_render_width = 0;
+			if (can_add_extra_row) {
+				// if we can add an extra row after this row truncate it
+				extra_row.values[c].text =
+				    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+			} else {
+				// if we cannot add an extra row after this just throw all remaining text on this row
+				extra_row.values[c].text = full_value.substr(current_pos);
+				current_render_width = Utf8Proc::RenderWidth(extra_row.values[c].text);
+				current_pos = full_value.size();
+			}
+			extra_row.values[c].render_width = current_render_width;
+			extra_row.values[c].decomposed = true;
+			// copy over annotations
+			if (active_render_mode != ResultRenderType::VALUE) {
+				extra_row.values[c].annotations.emplace_back(active_render_mode, 0);
+			}
+			for (; annotation_idx < annotations.size(); annotation_idx++) {
+				if (annotations[annotation_idx].start >= current_pos) {
+					break;
+				}
+				annotations[annotation_idx].start -= start_pos;
+				extra_row.values[c].annotations.push_back(annotations[annotation_idx]);
+				active_render_mode = annotations[annotation_idx].render_mode;
+			}
+		}
+	}
+	// add an extra separator for all but the first row
+	if (!is_first_row) {
+		rows.emplace_back(RenderRowType::SEPARATOR);
+	}
+	rows.push_back(std::move(row));
+	for (auto &extra_row : extra_rows) {
+		rows.push_back(std::move(extra_row));
+	}
+}
+
 void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection> &collections) {
 	auto column_count = result_types.size();
 	idx_t row_count = 0;
@@ -1515,20 +1608,36 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 		row_count += collection.render_values->Count();
 	}
 
+	bool expand_rows = false;
+	idx_t max_rows_per_row = 1;
+	// check if we shortened any columns that would be rendered and if we can expand them
+	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && row_count + 5 < config.max_rows &&
+	    pruned_columns.empty()) {
+		max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
+		if (max_rows_per_row > 1) {
+			// we can expand rows - check if we should expand any rows
+			expand_rows = true;
+		}
+	}
+
 	// prepare the values for rendering
-	for (idx_t c = 0; c < collections.size(); c++) {
-		auto &render_collection = collections[c];
+	bool is_first_collection = true;
+	bool is_first_row = true;
+	for (auto &render_collection : collections) {
 		auto &collection = *render_collection.render_values;
 		if (collection.Count() == 0) {
 			continue;
 		}
-		if (c == 0) {
+		if (is_first_collection) {
 			// add a separator if there are any rows
 			render_rows.emplace_back(RenderRowType::SEPARATOR);
 		} else {
 			// render divider between top and bottom collection
 			render_rows.emplace_back(RenderRowType::DIVIDER);
 		}
+		is_first_collection = false;
+
 		vector<BoxRenderRow> collection_rows;
 		for (auto &chunk : collection.Chunks()) {
 			vector<BoxRenderRow> chunk_rows;
@@ -1579,7 +1688,12 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 				}
 			}
 			for (auto &row : chunk_rows) {
-				collection_rows.push_back(std::move(row));
+				if (expand_rows) {
+					PotentiallyExpandRow(row, collection_rows, max_rows_per_row, is_first_row);
+				} else {
+					collection_rows.push_back(std::move(row));
+				}
+				is_first_row = false;
 			}
 		}
 		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
@@ -1615,122 +1729,6 @@ void BoxRendererImplementation::ComputeRenderValues(vector<RenderDataCollection>
 			}
 		}
 		row.values = std::move(values);
-	}
-	// check if we shortened any columns that would be rendered and if we can expand them
-	// we only expand columns in the ".mode rows", and only if we haven't hidden any columns
-	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows &&
-	    pruned_columns.empty()) {
-		// if we have shortened any columns - try to expand them
-		// how many rows do we have left to expand before we hit the max row limit?
-		idx_t max_rows_per_row = MaxValue<idx_t>(1, config.max_rows <= 5 ? 0 : (config.max_rows - 5) / row_count);
-		// for each row - figure out if we can "expand" the row
-		for (idx_t r = 0; r < render_rows.size(); r++) {
-			auto &row = render_rows[r];
-			if (row.row_type != RenderRowType::ROW_VALUES) {
-				continue;
-			}
-			bool need_extra_row = r + 1 != render_rows.size() && r != 1;
-			idx_t min_rows = 2;
-			if (min_rows > max_rows_per_row) {
-				// no rows left to expand
-				continue;
-			}
-			// check if this row has truncated columns
-			vector<BoxRenderRow> extra_rows;
-			for (idx_t c = 0; c < row.values.size(); c++) {
-				if (CanPrettyPrint(row.values[c])) {
-					idx_t max_rows = max_rows_per_row;
-					if (need_extra_row) {
-						max_rows--;
-					}
-					PrettyPrintValue(row.values[c], max_rows, column_widths[c]);
-					if (CanHighlight(row.values[c])) {
-						HighlightValue(row.values[c]);
-					}
-					// FIXME: hacky
-					row.values[c].render_width = column_widths[c] + 1;
-				}
-				auto render_width = row.values[c].render_width.GetIndex();
-				if (render_width <= column_widths[c]) {
-					// not shortened - skip
-					continue;
-				}
-				// this value was shortened! try to stretch it out
-				// first truncate what appears on the first row
-				idx_t current_row = 0;
-				idx_t current_pos = 0;
-				idx_t current_render_width = 0;
-				auto full_value = row.values[c].text;
-				auto annotations = row.values[c].annotations;
-				idx_t annotation_idx = 0;
-				ResultRenderType active_render_mode = ResultRenderType::VALUE;
-				row.values[c].annotations.clear();
-				row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
-				row.values[c].render_width = current_render_width;
-				row.values[c].decomposed = true;
-				// copy over annotations
-				for (; annotation_idx < annotations.size(); annotation_idx++) {
-					if (annotations[annotation_idx].start >= current_pos) {
-						break;
-					}
-					row.values[c].annotations.push_back(annotations[annotation_idx]);
-				}
-				while (current_pos < full_value.size()) {
-					if (current_row >= extra_rows.size()) {
-						if (extra_rows.size() >= max_rows_per_row + 1) {
-							// we need to add an extra row but there's no space anymore - break
-							break;
-						}
-						// add a new row with empty values
-						extra_rows.emplace_back();
-						for (auto &current_val : row.values) {
-							extra_rows.back().values.emplace_back(string(), current_val.render_mode,
-							                                      current_val.alignment, current_val.column_idx);
-						}
-					}
-					bool can_add_extra_row =
-					    current_row + 1 < extra_rows.size() || extra_rows.size() < max_rows_per_row;
-					auto &extra_row = extra_rows[current_row++];
-					idx_t start_pos = current_pos;
-					// stretch out the remainder on this row
-					current_render_width = 0;
-					if (can_add_extra_row) {
-						// if we can add an extra row after this row truncate it
-						extra_row.values[c].text =
-						    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
-					} else {
-						// if we cannot add an extra row after this just throw all remaining text on this row
-						extra_row.values[c].text = full_value.substr(current_pos);
-						current_render_width = Utf8Proc::RenderWidth(extra_row.values[c].text);
-						current_pos = full_value.size();
-					}
-					extra_row.values[c].render_width = current_render_width;
-					extra_row.values[c].decomposed = true;
-					// copy over annotations
-					if (active_render_mode != ResultRenderType::VALUE) {
-						extra_row.values[c].annotations.emplace_back(active_render_mode, 0);
-					}
-					for (; annotation_idx < annotations.size(); annotation_idx++) {
-						if (annotations[annotation_idx].start >= current_pos) {
-							break;
-						}
-						annotations[annotation_idx].start -= start_pos;
-						extra_row.values[c].annotations.push_back(annotations[annotation_idx]);
-						active_render_mode = annotations[annotation_idx].render_mode;
-					}
-				}
-			}
-			if (extra_rows.empty()) {
-				continue;
-			}
-			// if we added extra rows we need to add a separator if this is not the last row
-			if (need_extra_row) {
-				extra_rows.emplace_back(RenderRowType::SEPARATOR);
-			}
-			// add the extra rows at the current position
-			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r) + 1, extra_rows.begin(), extra_rows.end());
-			r += extra_rows.size();
-		}
 	}
 }
 

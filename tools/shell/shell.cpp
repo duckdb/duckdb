@@ -3035,7 +3035,7 @@ void ShellState::DetectDarkLightMode() {
 		// highlight mode is specified by the user - avoid setting manually
 		return;
 	}
-	if (!stdout_is_console && !stderr_is_console) {
+	if (!stdout_is_console) {
 		// not printing to console - don't auto-detect
 		return;
 	}
