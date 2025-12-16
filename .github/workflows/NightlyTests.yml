@@ -636,7 +636,7 @@ jobs:
      - name: Test
        shell: bash
        run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
-    
+
 
   mingw:
     name: MinGW (amd64)

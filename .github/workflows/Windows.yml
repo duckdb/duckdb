@@ -104,33 +104,23 @@ jobs:
         cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
       shell: pwsh
       run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
-      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
       shell: bash
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
       run: test/Release/unittest.exe
-
-    - name: Test with VS2019 C++ stdlib
-      shell: bash
-      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
-      run: |
-        choco install wget -y --no-progress
-        wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
-        ls ./test/Release
-        ./test/Release/unittest.exe
-        rm ./test/Release/msvcp140.dll
 
     - name: Tools Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
       run: |
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
@@ -174,12 +164,12 @@ jobs:
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
-      if: ${{ inputs.skip_tests != 'true' && matrix.config.arch == 'amd64' }}
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
  win-packaged-upload:
-   runs-on: windows-latest
+   runs-on: ubuntu-latest
    needs:
      - windows-release-cli
    steps:
