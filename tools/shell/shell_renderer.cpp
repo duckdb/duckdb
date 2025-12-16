@@ -1580,6 +1580,7 @@ class ModeDuckBoxRenderer : public ShellRenderer {
 public:
 	explicit ModeDuckBoxRenderer(ShellState &state);
 
+	void RemoveRenderLimits() override;
 	void Analyze(RenderingQueryResult &result) override;
 	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override;
 	bool RequireMaterializedResult() const override {
@@ -1588,15 +1589,12 @@ public:
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 
 private:
+	duckdb::BoxRendererConfig config;
 	unique_ptr<duckdb::BoxRendererState> render_state;
 	string error_str;
 };
 
 ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
-}
-
-void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
-	duckdb::BoxRendererConfig config;
 	config.max_rows = state.max_rows;
 	config.max_width = state.max_width;
 	if (config.max_width == 0) {
@@ -1620,7 +1618,14 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+}
 
+void ModeDuckBoxRenderer::RemoveRenderLimits() {
+	config.max_rows = (size_t)-1;
+	config.max_width = (size_t)-1;
+}
+
+void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	duckdb::BoxRenderer renderer(config);
 	auto &query_result = result.result;
 	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
@@ -1639,7 +1644,7 @@ bool ModeDuckBoxRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode
 	}
 	// in duckbox mode the output is automatically truncated to the terminal width if max_width = 0
 	// if max_width is set - check the render width - we use the pager if it exceeds the max render width
-	if (state.max_width != 0) {
+	if (config.max_width != 0) {
 		idx_t max_render_width = state.GetMaxRenderWidth();
 		if (render_state->TotalRenderWidth() > max_render_width) {
 			return true;
@@ -1647,7 +1652,7 @@ bool ModeDuckBoxRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode
 	}
 	// in duckbox mode the output is truncated to max_rows
 	// if this is larger than pager_min_rows - we actually check the row count of the result
-	if (state.max_rows >= state.pager_min_rows) {
+	if (config.max_rows >= state.pager_min_rows) {
 		// show the pager if the row count exceeds the min rows
 		if (result.result.Cast<MaterializedQueryResult>().RowCount() >= state.pager_min_rows) {
 			return true;

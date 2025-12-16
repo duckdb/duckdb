@@ -2,6 +2,7 @@
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
+#include "shell_renderer.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -216,6 +217,18 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 		}
 	} else {
 		state.PrintHelp(0);
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
+	if (state.last_result) {
+		auto renderer = state.GetRenderer();
+		renderer->RemoveRenderLimits();
+		auto res = state.RenderQueryResult(*renderer, *state.last_result);
+		if (res == SuccessState::FAILURE) {
+			return MetadataResult::FAIL;
+		}
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -820,6 +833,7 @@ static const MetadataCommand metadata_commands[] = {
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
 #endif
+    {"last", 1, RenderLastResult, "", "Render the last result without truncating", 0, ""},
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
