@@ -144,4 +144,26 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformErrorMatchClause(PEG
 	return result;
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAndExpression(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+}
+
+pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::TransformNotMatchedClause(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = transformer.Transform<unique_ptr<MergeIntoAction>>(list_pr.Child<ListParseResult>(6));
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 4, result->condition);
+	MergeActionCondition action_condition = MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET;
+	transformer.TransformOptional<MergeActionCondition>(list_pr, 3, action_condition);
+
+	return pair<MergeActionCondition, unique_ptr<MergeIntoAction>>(action_condition, std::move(result));
+}
+
+MergeActionCondition PEGTransformerFactory::TransformBySourceOrTarget(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<MergeActionCondition>(list_pr.Child<ChoiceParseResult>(0).result);
+}
 }

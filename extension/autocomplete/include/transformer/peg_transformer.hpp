@@ -827,6 +827,10 @@ private:
 	static unique_ptr<MergeIntoAction> TransformDoNothingMatchClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<MergeIntoAction> TransformErrorMatchClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<UpdateSetInfo> TransformUpdateMatchSetClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformAndExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<MergeActionCondition, unique_ptr<MergeIntoAction>> TransformNotMatchedClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static MergeActionCondition TransformBySourceOrTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 	// pragma.gram
 	static unique_ptr<SQLStatement> TransformPragmaStatement(PEGTransformer &transformer,

@@ -809,7 +809,9 @@ ErrorMatchClause <- 'ERROR' Expression?
 UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
 AndExpression <- 'AND' Expression
 NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
-BySourceOrTarget <- 'BY' ('SOURCE' / 'TARGET')
+BySourceOrTarget <- BySource / ByTarget
+BySource <- 'BY' 'SOURCE'
+ByTarget <- 'BY' 'TARGET'
 
 
 

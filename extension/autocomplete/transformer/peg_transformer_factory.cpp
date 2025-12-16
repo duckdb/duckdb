@@ -4,6 +4,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
@@ -50,6 +51,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	Printer::Print(result->ToString());
 	return result;
 }
 
@@ -479,6 +481,10 @@ void PEGTransformerFactory::RegisterMergeInto() {
 	REGISTER_TRANSFORM(TransformDoNothingMatchClause);
 	REGISTER_TRANSFORM(TransformErrorMatchClause);
 	REGISTER_TRANSFORM(TransformUpdateMatchSetClause);
+	REGISTER_TRANSFORM(TransformAndExpression);
+	REGISTER_TRANSFORM(TransformNotMatchedClause);
+	REGISTER_TRANSFORM(TransformBySourceOrTarget);
+
 }
 
 void PEGTransformerFactory::RegisterPragma() {
@@ -777,6 +783,9 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("OptFreeze", "freeze");
 	RegisterEnum<string>("OptFull", "full");
 	RegisterEnum<string>("OptVerbose", "verbose");
+
+	RegisterEnum<MergeActionCondition>("BySource", MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE);
+	RegisterEnum<MergeActionCondition>("ByTarget", MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
