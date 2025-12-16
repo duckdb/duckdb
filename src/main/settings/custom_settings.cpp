@@ -505,7 +505,7 @@ Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	string profiling_settings_str;
-	auto &quote = config.profiler_settings_type == LogicalTypeId::LIST ? "\'" : "\"";
+	const auto quote = config.profiler_settings_type == LogicalTypeId::LIST ? "\'" : "\"";
 
 	for (auto &entry : config.profiler_settings) {
 		if (!profiling_settings_str.empty()) {
