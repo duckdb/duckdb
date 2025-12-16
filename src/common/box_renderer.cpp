@@ -193,6 +193,11 @@ private:
 	bool expand_rows = false;
 	idx_t max_rows_per_row = 1;
 	vector<RenderDataCollection> render_collections;
+	idx_t top_rows = 0;
+	idx_t bottom_rows = 0;
+	// if we haven't exhausted the result yet - the current chunk idx to resume scanning from
+	optional_idx current_chunk_idx;
+	optional_idx current_row_idx;
 
 private:
 	void Initialize();
@@ -204,10 +209,16 @@ private:
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
 	void ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count, const LogicalType &original_type,
 	                         idx_t null_render_length);
+	void FetchTopCollection(RenderDataCollection &top_collection, const ColumnDataCollection &result, idx_t chunk_idx,
+	                        idx_t row_idx, idx_t top_rows, idx_t bottom_rows);
+	void FetchBottomCollection(RenderDataCollection &bottom_collection, const ColumnDataCollection &result,
+	                           idx_t bottom_rows);
 	vector<RenderDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
 	                                                    idx_t bottom_rows);
 	vector<RenderDataCollection> PivotCollections(vector<RenderDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(vector<RenderDataCollection> &collections, idx_t min_width, idx_t max_width);
+
+	void RenderHeader(BaseResultRenderer &ss);
 	void RenderValues(BaseResultRenderer &ss, vector<RenderDataCollection> &collections);
 	void RenderRow(BaseResultRenderer &ss, BoxRenderRow &row);
 	void RenderDivider(BaseResultRenderer &ss, const BoxRenderRow &prev_row, const BoxRenderRow &next_row);
@@ -312,8 +323,6 @@ void BoxRendererImplementation::Initialize() {
 		// in this case render all the rows
 		rows_to_render = row_count;
 	}
-	idx_t top_rows;
-	idx_t bottom_rows;
 	if (rows_to_render == row_count) {
 		top_rows = row_count;
 		bottom_rows = 0;
@@ -349,8 +358,23 @@ void BoxRendererImplementation::Initialize() {
 void BoxRendererImplementation::Render(BaseResultRenderer &ss) {
 	ss.SetResultTypes(result_types);
 
-	// now render the values
-	RenderValues(ss, render_collections);
+	RenderHeader(ss);
+	while (true) {
+		// render the values
+		RenderValues(ss, render_collections);
+
+		if (!current_chunk_idx.IsValid()) {
+			// we are done - render the footer
+			break;
+		}
+		// we have more data to fetch
+		render_collections.clear();
+		auto column_count = result.ColumnCount();
+		render_collections.emplace_back(context, column_count);
+		render_collections.emplace_back(context, column_count);
+		FetchTopCollection(render_collections[0], result, current_chunk_idx.GetIndex(), current_row_idx.GetIndex(),
+		                   top_rows, bottom_rows);
+	}
 
 	// render the row count and column count
 	idx_t column_count = result_types.size();
@@ -616,15 +640,10 @@ void RenderDataCollection::InitializeChunk(DataChunk &chunk) {
 	chunk.Initialize(context, render_values->Types());
 }
 
-vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
-                                                                               idx_t top_rows, idx_t bottom_rows) {
+void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_collection,
+                                                   const ColumnDataCollection &result, idx_t chunk_idx, idx_t row_idx,
+                                                   idx_t top_rows, idx_t bottom_rows) {
 	auto column_count = result.ColumnCount();
-	vector<RenderDataCollection> collections;
-	collections.emplace_back(context, column_count);
-	collections.emplace_back(context, column_count);
-
-	auto &top_collection = collections.front();
-	auto &bottom_collection = collections.back();
 
 	DataChunk fetch_result;
 	fetch_result.Initialize(context, result.Types());
@@ -632,17 +651,10 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 	DataChunk insert_result;
 	top_collection.InitializeChunk(insert_result);
 
-	if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
-		if (config.render_mode != RenderMode::ROWS || result.Count() != 1) {
-			// large number footer can only be constructed (1) if we have a single row, and (2) in ROWS mode
-			config.large_number_rendering = LargeNumberRendering::NONE;
-		}
-	}
-
-	// fetch the top rows from the ColumnDataCollection
-	idx_t chunk_idx = 0;
-	idx_t row_idx = 0;
 	idx_t null_render_length = Utf8Proc::RenderWidth(config.null_value);
+
+	current_chunk_idx = optional_idx();
+	current_row_idx = optional_idx();
 	while (row_idx < top_rows) {
 		if (context.IsInterrupted()) {
 			break;
@@ -707,16 +719,34 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 
 		chunk_idx++;
 		row_idx += fetch_result.size();
+		if (bottom_rows == 0 && row_idx >= config.max_analyze_rows && config.render_mode == RenderMode::ROWS) {
+			// stop fetching for now - store current position
+			current_chunk_idx = chunk_idx;
+			current_row_idx = row_idx;
+			break;
+		}
 	}
-	if (bottom_rows == 0) {
-		return collections;
-	}
+}
 
+void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bottom_collection,
+                                                      const ColumnDataCollection &result, idx_t bottom_rows) {
+	if (bottom_rows == 0) {
+		return;
+	}
+	auto column_count = result.ColumnCount();
+
+	DataChunk fetch_result;
+	fetch_result.Initialize(context, result.Types());
+
+	DataChunk insert_result;
+	bottom_collection.InitializeChunk(insert_result);
+
+	idx_t null_render_length = Utf8Proc::RenderWidth(config.null_value);
 	// fetch the bottom rows from the ColumnDataCollection
 	// first fetch all required chunks
 	idx_t fetched_row_count = 0;
 	vector<unique_ptr<DataChunk>> chunks;
-	chunk_idx = result.ChunkCount() - 1;
+	idx_t chunk_idx = result.ChunkCount() - 1;
 	while (fetched_row_count < bottom_rows) {
 		// fetch the current chunk
 		auto fetch_chunk = make_uniq<DataChunk>();
@@ -766,6 +796,29 @@ vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(c
 		// construct the render collection
 		bottom_collection.render_values->Append(insert_result);
 	}
+}
+
+vector<RenderDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,
+                                                                               idx_t top_rows, idx_t bottom_rows) {
+	auto column_count = result.ColumnCount();
+	vector<RenderDataCollection> collections;
+	collections.emplace_back(context, column_count);
+	collections.emplace_back(context, column_count);
+
+	auto &top_collection = collections.front();
+	auto &bottom_collection = collections.back();
+
+	if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
+		if (config.render_mode != RenderMode::ROWS || result.Count() != 1) {
+			// large number footer can only be constructed (1) if we have a single row, and (2) in ROWS mode
+			config.large_number_rendering = LargeNumberRendering::NONE;
+		}
+	}
+
+	// fetch the top rows from the ColumnDataCollection
+	FetchTopCollection(top_collection, result, 0, 0, top_rows, bottom_rows);
+	// fetch the bottom rows (if any)
+	FetchBottomCollection(bottom_collection, result, bottom_rows);
 	return collections;
 }
 
@@ -1970,7 +2023,7 @@ void BoxRendererImplementation::RenderRow(BaseResultRenderer &ss, BoxRenderRow &
 	ss << '\n';
 }
 
-void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<RenderDataCollection> &collections) {
+void BoxRendererImplementation::RenderHeader(BaseResultRenderer &ss) {
 	// render the header
 	RenderLayoutLine(ss, config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
@@ -1979,9 +2032,10 @@ void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<Rend
 	}
 	BoxRenderRow separator(RenderRowType::SEPARATOR);
 	RenderRow(ss, separator);
+}
 
+void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<RenderDataCollection> &collections) {
 	// render the values
-
 	vector<column_t> columns_to_scan;
 	vector<column_t> scan_indexes;
 	for (idx_t c = 0; c < column_map.size(); c++) {

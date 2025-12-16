@@ -818,6 +818,13 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 }
 #endif
 
+void ShellState::ClearInterrupt() {
+	seenInterrupt = 0;
+	if (conn) {
+		conn->context->ClearInterrupt();
+	}
+}
+
 string ShellState::GetSchemaLine(const string &str, const string &tail) {
 	return str + tail;
 }
@@ -1724,7 +1731,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	if (function == "read_csv" && generic_parameters.find("ignore_errors") == generic_parameters.end()) {
 		generic_parameters["ignore_errors"] = "true";
 	}
-	seenInterrupt = 0;
+	ClearInterrupt();
 	// check if the table exists
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
@@ -2780,7 +2787,7 @@ int ShellState::ProcessInput(InputMode mode) {
 			if (in) {
 				break;
 			}
-			seenInterrupt = 0;
+			ClearInterrupt();
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {

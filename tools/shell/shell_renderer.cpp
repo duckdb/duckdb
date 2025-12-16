@@ -1597,6 +1597,15 @@ private:
 ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
 	config.max_rows = state.max_rows;
 	config.max_width = state.max_width;
+	if (state.max_analyze_rows == 0) {
+		// if max_analyze_rows is set to 0 (auto) - set max_analyze_rows to 100K if we are rendering to the console
+		if (state.stdout_is_console) {
+			// if we are
+			config.max_analyze_rows = 100000;
+		}
+	} else {
+		config.max_analyze_rows = state.max_analyze_rows;
+	}
 	if (config.max_width == 0) {
 		// if max_width is set to 0 (auto) - set it to infinite if we are writing to a file
 		if (!state.outfile.empty() && state.outfile[0] != '|') {

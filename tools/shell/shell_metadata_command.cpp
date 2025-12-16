@@ -245,13 +245,16 @@ MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
-	if (args.size() > 2) {
+	if (args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	if (args.size() == 1) {
 		state.PrintF("current max rows: %zu\n", state.max_rows);
-	} else {
-		state.max_rows = (size_t)ShellState::StringToInt(args[1]);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_rows = (size_t)ShellState::StringToInt(args[1]);
+	if (args.size() > 2) {
+		state.max_analyze_rows = (size_t)ShellState::StringToInt(args[2]);
 	}
 	return MetadataResult::SUCCESS;
 }

@@ -77,6 +77,8 @@ struct BoxRendererConfig {
 	idx_t max_width = 0;
 	// the maximum amount of rows to render
 	idx_t max_rows = 20;
+	//! The maximum number of rows to analyze in order to determine column widths
+	idx_t max_analyze_rows = (idx_t)-1;
 	// the limit that is applied prior to rendering
 	// if we are rendering exactly "limit" rows then a question mark is rendered instead
 	idx_t limit = 0;
