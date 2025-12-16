@@ -269,8 +269,10 @@ idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &stat
 }
 
 idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto scan_count = sub_columns[0]->ScanCount(state.child_states[1], result, count, result_offset);
-	return scan_count;
+	return ScanWithCallback(state, result, count,
+	                        [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
+		                        return col.ScanCount(child_state, target_vector, count, result_offset);
+	                        });
 }
 
 void VariantColumnData::Skip(ColumnScanState &state, idx_t count) {
@@ -503,7 +505,6 @@ public:
 
 	PersistentColumnData ToPersistentData() override {
 		PersistentColumnData data(original_column.type);
-		auto &variant_column_data = GetResultColumn().Cast<VariantColumnData>();
 		if (child_states.size() == 2) {
 			//! Use the type of the column data we used to create the Checkpoint
 			//! This will either be a pointer to shredded_data[1] if we decided to shred
