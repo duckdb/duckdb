@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/lru_cache.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -65,16 +66,37 @@ public:
 
 	template <class T, class... ARGS>
 	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
-		auto existing = GetObject(key);
-		if (!existing) {
-			auto value = make_shared_ptr<T>(args...);
-			Put(key, value);
-			return value;
+		const lock_guard<mutex> lock(lock_mutex);
+
+		// Check non-evictable entries first
+		auto non_evictable_it = non_evictable_entries.find(key);
+		if (non_evictable_it != non_evictable_entries.end()) {
+			auto &existing = non_evictable_it->second;
+			if (existing->GetObjectType() != T::ObjectType()) {
+				return nullptr;
+			}
+			return shared_ptr_cast<ObjectCacheEntry, T>(existing);
 		}
-		if (existing->GetObjectType() != T::ObjectType()) {
-			return nullptr;
+
+		// Check evictable cache
+		auto existing = lru_cache.Get(key);
+		if (existing) {
+			if (existing->GetObjectType() != T::ObjectType()) {
+				return nullptr;
+			}
+			return shared_ptr_cast<ObjectCacheEntry, T>(existing);
 		}
-		return shared_ptr_cast<ObjectCacheEntry, T>(existing);
+
+		// Create new entry while holding lock
+		auto value = make_shared_ptr<T>(args...);
+		const bool is_evictable = value->GetEstimatedCacheMemory().IsValid();
+		if (!is_evictable) {
+			non_evictable_entries[key] = value;
+		} else {
+			lru_cache.Put(key, value);
+		}
+
+		return value;
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
