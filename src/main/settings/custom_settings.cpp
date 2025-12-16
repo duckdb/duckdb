@@ -1511,6 +1511,31 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Query Memory Limit
+//===----------------------------------------------------------------------===//
+void QueryMemoryLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (input.IsNull()) {
+		config.query_memory_limit = DConstants::INVALID_INDEX;
+	} else {
+		config.query_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void QueryMemoryLimitSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.query_memory_limit = DConstants::INVALID_INDEX;
+}
+
+Value QueryMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (config.query_memory_limit == DConstants::INVALID_INDEX) {
+		return Value();
+	}
+	return Value(StringUtil::BytesToHumanReadableString(config.query_memory_limit));
+}
+
+//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

@@ -1338,6 +1338,17 @@ struct ProgressBarTimeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct QueryMemoryLimitSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "query_memory_limit";
+	static constexpr const char *Description =
+	    "The maximum memory for query intermediates (sorts, hash tables) per connection (e.g. 256MB)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
