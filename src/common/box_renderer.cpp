@@ -2028,7 +2028,18 @@ void BoxRendererImplementation::RenderHeader(BaseResultRenderer &ss) {
 	// render the header
 	RenderLayoutLine(ss, config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
+	vector<BoxRenderRow> rows_to_render;
 	for (auto &row : header_rows) {
+		if (expand_rows) {
+			PotentiallyExpandRow(row, rows_to_render, max_rows_per_row, is_first_row);
+		} else {
+			rows_to_render.push_back(std::move(row));
+		}
+	}
+	for (auto &row : rows_to_render) {
+		if (context.IsInterrupted()) {
+			return;
+		}
 		RenderRow(ss, row);
 	}
 	if (result.Count() > 0) {
