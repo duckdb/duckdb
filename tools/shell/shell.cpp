@@ -409,8 +409,10 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
-	strcpy(continuePrompt, "· ");
+	strcpy(continuePrompt, "  ");
 	strcpy(continuePromptSelected, "‣ ");
+	strcpy(scrollUpPrompt, "⇡ ");
+	strcpy(scrollDownPrompt, "⇣ ");
 }
 
 ShellState::~ShellState() {
@@ -1483,6 +1485,9 @@ void ShellState::PrintDatabaseError(const string &zErr) {
 		PrintF(PrintOutput::STDERR, "%s\n", zErr.c_str());
 		return;
 	}
+	// detect dark-light mode if we haven't yet
+	DetectDarkLightMode();
+	// print the error
 	ShellHighlight shell_highlight(*this);
 	shell_highlight.PrintError(zErr);
 }
@@ -2766,14 +2771,23 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			break;
 		}
+		// if we are receiving input after a query was interrupted
+		// we need to clear the interrupt flag to be able to
+		// print messages again
+		if (seenInterrupt) {
+			if (in) {
+				break;
+			}
+			seenInterrupt = 0;
+		}
 		if (*zLine == '\3') {
 			// ctrl c: reset sql statement
 			if (nSql == 0 && zLine[1] == '\0' && stdin_is_interactive) {
 				// if in interactive mode and we press ctrl c twice
-				// on an empty line, we exit
+				// on an empty line, we print the ctrl d hint message
 				numCtrlC++;
 				if (numCtrlC >= 2) {
-					break;
+					Print("Interrupted, use Ctrl+D to exit\n");
 				}
 			}
 			nSql = 0;
@@ -2789,12 +2803,6 @@ int ShellState::ProcessInput(InputMode mode) {
 				displayed_loading_resources_message = true;
 			}
 			mode = InputMode::FILE;
-		}
-		if (seenInterrupt) {
-			if (in) {
-				break;
-			}
-			seenInterrupt = 0;
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {
@@ -3004,7 +3012,7 @@ void ShellState::Initialize() {
 	}
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
-		linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+		linenoiseSetPrompt(continuePrompt, continuePromptSelected, scrollUpPrompt, scrollDownPrompt);
 	}
 #endif
 }
@@ -3022,6 +3030,31 @@ struct ShellStateDestroyer {
 		ShellState::Get().Destroy();
 	}
 };
+
+void ShellState::DetectDarkLightMode() {
+#ifdef HAVE_LINENOISE
+	ShellHighlight highlight(*this);
+	if (highlight_mode != HighlightMode::AUTOMATIC) {
+		// highlight mode is specified by the user - avoid setting manually
+		return;
+	}
+	if (!stdout_is_console && !stderr_is_console) {
+		// not printing to console - don't auto-detect
+		return;
+	}
+	// detect terminal colors
+	auto terminal_color = linenoiseGetTerminalColorMode();
+	if (terminal_color == LINENOISE_DARK_MODE) {
+		highlight_mode = HighlightMode::DARK_MODE;
+		highlight.ToggleMode(HighlightMode::DARK_MODE);
+	} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+		highlight_mode = HighlightMode::LIGHT_MODE;
+		highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+	} else {
+		highlight_mode = HighlightMode::MIXED_MODE;
+	}
+#endif
+}
 
 #if SQLITE_SHELL_IS_UTF8
 int main(int argc, const char **argv) {
@@ -3143,6 +3176,8 @@ int wmain(int argc, wchar_t **wargv) {
 		return 1;
 	}
 
+	data.DetectDarkLightMode();
+
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
 	** file is processed so that the command-line arguments will override
@@ -3184,17 +3219,6 @@ int wmain(int argc, wchar_t **wargv) {
 			string zHome;
 			const char *zHistory;
 			ShellHighlight highlight(data);
-#ifdef HAVE_LINENOISE
-			if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
-				// detect terminal colors
-				auto terminal_color = linenoiseGetTerminalColorMode();
-				if (terminal_color == LINENOISE_DARK_MODE) {
-					highlight.ToggleMode(HighlightMode::DARK_MODE);
-				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
-					highlight.ToggleMode(HighlightMode::LIGHT_MODE);
-				}
-			}
-#endif
 
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());

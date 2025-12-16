@@ -415,6 +415,18 @@ bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 	return true;
 }
 
+void Terminal::BufferAvailableInput() {
+	// consume available input and add it to the buffer
+	int ifd = STDIN_FILENO;
+	while (HasMoreData(ifd)) {
+		char buf[1];
+		if (read(ifd, buf, 1) != 1) {
+			break;
+		}
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[0]);
+	}
+}
+
 bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;

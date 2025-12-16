@@ -86,7 +86,7 @@ public:
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context) const;
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -216,7 +216,7 @@ public:
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();
