@@ -82,6 +82,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::STRING_LITERAL;
 	case DUCKDB_TYPE_INTEGER_LITERAL:
 		return LogicalTypeId::INTEGER_LITERAL;
+	case DUCKDB_TYPE_VARIANT:
+		return LogicalTypeId::VARIANT;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -170,6 +172,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_STRING_LITERAL;
 	case LogicalTypeId::INTEGER_LITERAL:
 		return DUCKDB_TYPE_INTEGER_LITERAL;
+	case LogicalTypeId::VARIANT:
+		return DUCKDB_TYPE_VARIANT;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
