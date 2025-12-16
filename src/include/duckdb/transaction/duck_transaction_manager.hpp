@@ -33,7 +33,10 @@ struct ActiveCheckpointWrapper {
 	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
 	~ActiveCheckpointWrapper();
 
+	void Clear();
+
 	DuckTransactionManager &manager;
+	bool is_cleared;
 };
 
 //! The Transaction Manager is responsible for creating and managing

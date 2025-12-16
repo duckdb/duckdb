@@ -162,6 +162,11 @@ optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
 	return result->GetNode();
 }
 
+idx_t RowGroupCollection::GetSegmentCount() {
+	auto row_groups = GetRowGroups();
+	return row_groups->GetSegmentCount();
+}
+
 void RowGroupCollection::SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row_group) {
 	auto result = owned_row_groups->GetSegmentByIndex(index);
 	if (!result) {
@@ -543,8 +548,7 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 	}
 }
 
-void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
-	total_rows = start_row;
+void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	auto row_groups = GetRowGroups();
 
 	auto l = row_groups->Lock();
@@ -553,30 +557,24 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		// we have no segments to revert
 		return;
 	}
-	idx_t segment_index;
-	// find the segment index that the start row belongs to
-	if (!row_groups->TryGetSegmentIndex(l, start_row, segment_index)) {
-		// revert from the last segment
-		segment_index = segment_count - 1;
-	}
-	auto &segment = *row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	if (segment.GetRowStart() == start_row) {
-		// we are truncating exactly this row group - erase it entirely
-		row_groups->EraseSegments(l, segment_index);
-
-		if (segment_index > 0) {
-			// if we have a previous segment, we need to update the next pointer
-			auto previous_segment = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index - 1));
-			previous_segment->SetNext(nullptr);
+	auto reverted_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
+	auto rlock = reverted_row_groups->Lock();
+	for (auto &entry : row_groups->SegmentNodes(l)) {
+		idx_t row_start = entry.GetRowStart();
+		idx_t row_end = row_start + entry.GetCount();
+		if (row_start >= new_end_idx) {
+			// this row group does not belong to the new row group set
+			break;
 		}
-	} else {
-		// we need to truncate within a row group
-		// remove any segments AFTER this segment: they should be deleted entirely
-		row_groups->EraseSegments(l, segment_index + 1);
-
-		segment.SetNext(nullptr);
-		segment.GetNode().RevertAppend(start_row - segment.GetRowStart());
+		// this row group - at least partially - belongs to the new set
+		if (row_end > new_end_idx) {
+			// this is the last row group - have to revert WITHIN it
+			entry.GetNode().RevertAppend(new_end_idx - row_start);
+		}
+		reverted_row_groups->AppendSegment(rlock, entry.ReferenceNode());
 	}
+	SetRowGroups(std::move(reverted_row_groups));
+	total_rows = new_end_idx;
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
@@ -1841,7 +1839,7 @@ void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
 
-unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
+unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(const StorageIndex &column_id) {
 	return stats.CopyStats(column_id);
 }
 

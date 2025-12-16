@@ -67,12 +67,12 @@ unique_ptr<ValueComparator> GetComparator(const string &fun_name, const LogicalT
 	return nullptr;
 }
 
-bool TryGetValueFromStats(const PartitionStatistics &stats, const column_t column_index,
+bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &storage_index,
                           const ValueComparator &comparator, Value &result) {
 	if (!stats.partition_row_group) {
 		return false;
 	}
-	auto column_stats = stats.partition_row_group->GetColumnStatistics(column_index);
+	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats)) {
 		return false;
 	}
@@ -171,6 +171,17 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 
+	vector<StorageIndex> min_max_storage_indexes(min_max_bindings.size());
+	for (idx_t i = 0; i < min_max_bindings.size(); i++) {
+		auto &binding = min_max_bindings[i];
+		auto &column_index = get.GetColumnIds()[binding.column_index];
+		if (!get.TryGetStorageIndex(column_index, min_max_storage_indexes[i])) {
+			//! Can't get a storage index for this column, so it doesn't have stats we can use
+			//! This happens when we're dealing with a generated column for example
+			return;
+		}
+	}
+
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
 	vector<PartitionStatistics> remaining_partition_stats;
@@ -220,9 +231,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 
 	if (!min_max_bindings.empty()) {
 		// Execute min/max aggregates on partition statistics
-		for (idx_t agg_idx = 0; agg_idx < min_max_bindings.size(); agg_idx++) {
-			const auto &binding = min_max_bindings[agg_idx];
-			const column_t column_index = get.GetColumnIds()[binding.column_index].GetPrimaryIndex();
+		for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {
+			const auto &storage_index = min_max_storage_indexes[agg_idx];
 			auto &comparator = comparators[agg_idx];
 
 			Value agg_result;
