@@ -101,7 +101,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM={{ matrix.config.cmake_platform }}  -DDUCKDB_EXPLICIT_PLATFORM=windows_{{ matrix.config.arch }} -DDUCKDB_CUSTOM_PLATFORM=windows_{{ matrix.config.arch }}  -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=${{ matrix.config.cmake_platform }} -DDUCKDB_EXPLICIT_PLATFORM=windows_${{ matrix.config.arch }} -DDUCKDB_CUSTOM_PLATFORM=windows_${{ matrix.config.arch }}  -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
