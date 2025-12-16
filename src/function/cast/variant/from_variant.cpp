@@ -474,6 +474,9 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		}
 		};
 
+		// Fallback: try to convert to Value and then cast
+		// This may throw bind-time exceptions for incompatible type combinations
+		// In those cases, we should fail gracefully
 		bool all_valid = true;
 		for (idx_t i = 0; i < count; i++) {
 			auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -481,11 +484,18 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			//! Get the index into 'values'
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
-			if (!value.DefaultTryCastAs(target_type, true)) {
-				value = Value(target_type);
+			try {
+				if (!value.DefaultTryCastAs(target_type, true)) {
+					value = Value(target_type);
+					all_valid = false;
+				}
+				result.SetValue(i + offset, value);
+			} catch (const BinderException &) {
+				// Bind-time exceptions (e.g., incompatible struct layouts) should be treated as conversion failures
+				// Set the value to NULL and mark as failed
+				FlatVector::SetNull(result, offset + i, true);
 				all_valid = false;
 			}
-			result.SetValue(i + offset, value);
 		}
 		return all_valid;
 	} else {
