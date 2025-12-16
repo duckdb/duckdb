@@ -6,7 +6,9 @@ MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause
 UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
 UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
 DeleteMatchClause <- 'DELETE'
-InsertMatchClause <- 'INSERT' (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
+InsertMatchClause <- 'INSERT' InsertMatchInfo?
+InsertMatchInfo <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
+InsertDefaultValues <- 'DEFAULT' 'VALUES'
 InsertByNameOrPosition <- ByNameOrPosition? '*'?
 InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
 DoNothingMatchClause <- 'DO' 'NOTHING'

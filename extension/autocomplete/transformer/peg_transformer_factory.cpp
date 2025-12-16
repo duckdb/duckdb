@@ -51,7 +51,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
-	Printer::Print(result->ToString());
 	return result;
 }
 
@@ -484,7 +483,10 @@ void PEGTransformerFactory::RegisterMergeInto() {
 	REGISTER_TRANSFORM(TransformAndExpression);
 	REGISTER_TRANSFORM(TransformNotMatchedClause);
 	REGISTER_TRANSFORM(TransformBySourceOrTarget);
-
+	REGISTER_TRANSFORM(TransformInsertMatchInfo);
+	REGISTER_TRANSFORM(TransformInsertDefaultValues);
+	REGISTER_TRANSFORM(TransformInsertByNameOrPosition);
+	REGISTER_TRANSFORM(TransformInsertValuesList);
 }
 
 void PEGTransformerFactory::RegisterPragma() {
