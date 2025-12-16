@@ -1036,6 +1036,8 @@ private:
 	                                                                  optional_ptr<ParseResult> parse_result);
 	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
+	static TransactionModifierType TransformReadOnlyOrReadWrite(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 	static unique_ptr<TransactionStatement> TransformRollbackTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 
