@@ -26,6 +26,7 @@ class SortedRunMerger {
 public:
 	SortedRunMerger(const Sort &sort, vector<unique_ptr<SortedRun>> &&sorted_runs, idx_t partition_size, bool external,
 	                bool is_index_sort);
+	~SortedRunMerger();
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -46,6 +47,8 @@ public:
 	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 
 public:
+	shared_ptr<DatabaseInstance> db;
+
 	const Sort &sort;
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	const idx_t total_count;
