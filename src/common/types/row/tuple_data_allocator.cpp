@@ -353,16 +353,16 @@ template <SortKeyType SORT_KEY_TYPE>
 void TemplatedSortKeySetPayload(const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
                                 TupleDataChunkState &sort_key_chunk_state) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	const auto sort_keys =
-	    reinterpret_cast<SORT_KEY **const>(FlatVector::GetData<data_ptr_t>(sort_key_chunk_state.row_locations));
+	const auto sort_keys = FlatVector::GetData<SORT_KEY *const>(sort_key_chunk_state.row_locations);
 
 	lock_guard<mutex> guard(*sort_key_chunk_state.chunk_lock);
-	// Set new pointers
-	for (idx_t i = 0; i < count; i++) {
-		auto &sort_key = sort_keys[offset + i];
-		if (sort_key->GetPayload() != row_locations[offset + i]) {
-			sort_key->SetPayload(row_locations[offset + i]);
-		}
+	if (sort_keys[offset]->GetPayload() == row_locations[offset]) {
+		return; // Still the same
+	}
+
+	// Changed: set new pointers
+	for (idx_t i = offset; i < offset + count; i++) {
+		sort_keys[i]->SetPayload(row_locations[i]);
 	}
 }
 

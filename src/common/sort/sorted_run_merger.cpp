@@ -783,12 +783,6 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			}
 		}
 
-		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
-		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
-		                            count);
-		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
-		                               *FlatVector::IncrementalSelectionVector(), count);
-
 		if (SORT_KEY::HAS_PAYLOAD) {
 			if (!sorted_run->payload_data->GetLayout().AllConstant()) {
 				sorted_run->payload_data->FindHeapPointers(payload_data_input, count);
@@ -798,7 +792,20 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			                                sorted_run->payload_append_state.chunk_state, 0, count);
 			sorted_run->payload_data->CopyRows(sorted_run->payload_append_state.chunk_state, payload_data_input,
 			                                   *FlatVector::IncrementalSelectionVector(), count);
+
+			const auto new_payload_locations =
+			    FlatVector::GetData<const data_ptr_t>(sorted_run->payload_append_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < count; i++) {
+				auto &key = merged_partition_keys[merged_partition_index + i];
+				key.SetPayload(new_payload_locations[i]);
+			}
 		}
+
+		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
+		                            count);
+		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
+		                               *FlatVector::IncrementalSelectionVector(), count);
 
 		merged_partition_index += count;
 	}
