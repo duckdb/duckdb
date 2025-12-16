@@ -22,7 +22,6 @@ public:
 	static constexpr idx_t DROP_CATALOG_ENTRY = 1ULL << 5ULL;
 	static constexpr idx_t SEQUENCE = 1ULL << 6ULL;
 	static constexpr idx_t CREATE_INDEX = 1ULL << 7ULL;
-	static constexpr idx_t INSERT_DATA_WITH_INDEX = 1ULL << 8ULL;
 
 	constexpr DatabaseModificationType() : value(0) {
 	}
@@ -39,9 +38,6 @@ public:
 
 	bool InsertData() const {
 		return value & INSERT_DATA;
-	}
-	bool InsertDataWithIndex() const {
-		return value & INSERT_DATA_WITH_INDEX;
 	}
 	bool DeleteData() const {
 		return value & DELETE_DATA;

@@ -2759,14 +2759,23 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			break;
 		}
+		// if we are receiving input after a query was interrupted
+		// we need to clear the interrupt flag to be able to
+		// print messages again
+		if (seenInterrupt) {
+			if (in) {
+				break;
+			}
+			ClearInterrupt();
+		}
 		if (*zLine == '\3') {
 			// ctrl c: reset sql statement
 			if (nSql == 0 && zLine[1] == '\0' && stdin_is_interactive) {
 				// if in interactive mode and we press ctrl c twice
-				// on an empty line, we exit
+				// on an empty line, we print the ctrl d hint message
 				numCtrlC++;
 				if (numCtrlC >= 2) {
-					break;
+					Print("Interrupted, use Ctrl+D to exit\n");
 				}
 			}
 			nSql = 0;
@@ -2782,12 +2791,6 @@ int ShellState::ProcessInput(InputMode mode) {
 				displayed_loading_resources_message = true;
 			}
 			mode = InputMode::FILE;
-		}
-		if (seenInterrupt) {
-			if (in) {
-				break;
-			}
-			ClearInterrupt();
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {
