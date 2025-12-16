@@ -39,6 +39,8 @@ INSERT INTO test_structs
 statement ok
 checkpoint
 
+restart
+
 statement ok
 COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
 

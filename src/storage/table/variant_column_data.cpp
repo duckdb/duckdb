@@ -214,8 +214,20 @@ idx_t VariantColumnData::ScanWithCallback(
 		}
 		//! Fall back to unshredding
 		Vector intermediate(LogicalType::VARIANT(), target_count);
-		auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
-		callback(*sub_columns[0], state.child_states[1], intermediate, target_count);
+		idx_t scan_count;
+		if (IsShredded()) {
+			auto unshredding_intermediate = CreateUnshreddingIntermediate(target_count);
+			auto &child_vectors = StructVector::GetEntries(unshredding_intermediate);
+
+			callback(*sub_columns[0], state.child_states[1], *child_vectors[0], target_count);
+			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
+			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
+
+			VariantColumnData::UnshredVariantData(unshredding_intermediate, intermediate, target_count);
+		} else {
+			scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
+			callback(*sub_columns[0], state.child_states[1], intermediate, target_count);
+		}
 
 		Vector extract_intermediate(LogicalType::VARIANT(), target_count);
 		vector<VariantPathComponent> components;
@@ -408,35 +420,30 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 
 void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	// insert any child states that are required
-	for (idx_t i = state.child_states.size(); i < sub_columns.size() + 1; i++) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
-	}
+	validity->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+	if (storage_index.IsPushdownExtract()) {
+		throw InternalException("VARIANT FETCHROW PUSHDOWN");
+	} else {
+		if (IsShredded()) {
+			auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
+			auto &child_vectors = StructVector::GetEntries(intermediate);
+			// fetch the validity state
+			// fetch the sub-column states
+			for (idx_t i = 0; i < sub_columns.size(); i++) {
+				sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, *child_vectors[i], result_idx);
+			}
+			if (result_idx) {
+				intermediate.SetValue(0, intermediate.GetValue(result_idx));
+			}
 
-	if (IsShredded()) {
-		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
-		auto &child_vectors = StructVector::GetEntries(intermediate);
-		// fetch the validity state
-		validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
-		// fetch the sub-column states
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], storage_index, row_id, *child_vectors[i],
-			                         result_idx);
+			//! FIXME: adjust UnshredVariantData so we can write the value in place into 'result' directly.
+			Vector unshredded(result.GetType(), 1);
+			VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
+			result.SetValue(result_idx, unshredded.GetValue(0));
+			return;
 		}
-		if (result_idx) {
-			intermediate.SetValue(0, intermediate.GetValue(result_idx));
-		}
-
-		//! FIXME: adjust UnshredVariantData so we can write the value in place into 'result' directly.
-		Vector unshredded(result.GetType(), 1);
-		VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
-		result.SetValue(result_idx, unshredded.GetValue(0));
-		return;
+		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
 	}
-
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
-	sub_columns[0]->FetchRow(transaction, *state.child_states[1], storage_index, row_id, result, result_idx);
 }
 
 void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
