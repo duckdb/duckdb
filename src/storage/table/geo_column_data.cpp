@@ -10,12 +10,14 @@ namespace duckdb {
 //----------------------------------------------------------------------------------------------------------------------
 // GeoColumnData
 //----------------------------------------------------------------------------------------------------------------------
+// TODO: Override ::Filter to push down bounding box filters.
 
 GeoColumnData::GeoColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
                              ColumnDataType data_type, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent) {
 	if (data_type != ColumnDataType::CHECKPOINT_TARGET) {
-		base_column = make_shared_ptr<ColumnData>(block_manager, info, column_index, std::move(type), data_type, this);
+		base_column =
+		    make_shared_ptr<StandardColumnData>(block_manager, info, column_index, std::move(type), data_type, this);
 	}
 }
 
@@ -28,17 +30,19 @@ void GeoColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScan
 }
 
 void GeoColumnData::InitializeChildScanStates(ColumnScanState &state) {
+	// Reset, inner layout might be different
+	state.child_states.clear();
+
+	// Validity
+	state.child_states.emplace_back(state.parent);
+	state.child_states[0].scan_options = state.scan_options;
+
 	if (base_column->type.id() == LogicalTypeId::GEOMETRY) {
 		// No need to reshape the child scan states
 		return;
 	}
 
 	// Initialize point XY sub columns
-	state.child_states.clear();
-
-	// Validity
-	state.child_states.emplace_back(state.parent);
-	state.child_states[0].scan_options = state.scan_options;
 
 	// X
 	state.child_states.emplace_back(state.parent);
@@ -97,8 +101,7 @@ idx_t GeoColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, V
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, target_count);
 
-	const auto scan_count =
-	    base_column->ScanCommitted(vector_index, state.child_states[0], scan_chunk.data[0], target_count);
+	const auto scan_count = base_column->ScanCommitted(vector_index, state, scan_chunk.data[0], target_count);
 
 	// Now reassemble
 	Reassemble(scan_chunk.data[0], result, scan_count);
@@ -184,15 +187,24 @@ public:
 	// The checkpoint state for the inner column.
 	unique_ptr<ColumnCheckpointState> inner_column_state;
 
+	shared_ptr<ColumnData> CreateEmptyColumnData() override {
+		auto new_column = make_shared_ptr<GeoColumnData>(
+		    original_column.GetBlockManager(), original_column.GetTableInfo(), original_column.column_index,
+		    original_column.type, ColumnDataType::CHECKPOINT_TARGET, nullptr);
+		return std::move(new_column);
+	}
+
 	shared_ptr<ColumnData> GetFinalResult() override {
 		if (!result_column) {
-			result_column = make_shared_ptr<GeoColumnData>(
-			    original_column.GetBlockManager(), original_column.GetTableInfo(), original_column.column_index,
-			    original_column.type, ColumnDataType::CHECKPOINT_TARGET, nullptr);
+			result_column = CreateEmptyColumnData();
 		}
 
 		auto &column_data = result_column->Cast<GeoColumnData>();
-		column_data.base_column = inner_column_state->GetFinalResult();
+
+		auto new_inner = inner_column_state->GetFinalResult();
+		new_inner->SetParent(column_data);
+		column_data.base_column = std::move(new_inner);
+		;
 
 		return ColumnCheckpointState::GetFinalResult();
 	}
@@ -246,7 +258,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	DataChunk scan_chunk;
 	ColumnScanState scan_state(nullptr);
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {base_column->type}, STANDARD_VECTOR_SIZE);
-	base_column->InitializeScan(scan_state);
+	InitializeScan(scan_state);
 
 	// Setup append to the new column
 	DataChunk append_chunk;
