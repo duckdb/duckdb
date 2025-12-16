@@ -160,7 +160,7 @@ idx_t ARTKey::GetMismatchPos(const ARTKey &other, const idx_t start) const {
 			return i;
 		}
 	}
-	return DConstants::INVALID_INDEX;
+	throw InternalException("ARTKey::GetMismatchPos: INVALID INDEX");
 }
 
 } // namespace duckdb
