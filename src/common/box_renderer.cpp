@@ -245,9 +245,9 @@ private:
 	void HighlightValue(BoxRenderValue &render_value);
 };
 
-BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig config, ClientContext &context,
+BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig config_p, ClientContext &context,
                                                      const vector<string> &names, const ColumnDataCollection &result)
-    : config(config), context(context), column_names(names), result(result) {
+    : config(std::move(config_p)), context(context), column_names(names), result(result) {
 	result_types = result.Types();
 	Initialize();
 }
