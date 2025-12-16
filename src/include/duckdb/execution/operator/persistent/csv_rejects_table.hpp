@@ -48,8 +48,9 @@ public:
 		return ObjectType();
 	}
 
+	// Rejects table records the overall error counts, which is relatively small and should not be evicted.
 	optional_idx GetEstimatedCacheMemory() const override {
-		return sizeof(*this) + scan_table.size() + errors_table.size() + name.size();
+		return optional_idx {};
 	}
 
 private:

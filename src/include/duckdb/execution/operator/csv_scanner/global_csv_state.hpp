@@ -64,9 +64,6 @@ private:
 	CSVIterator current_boundary;
 
 	vector<idx_t> rejects_file_indexes;
-
-	//! CSV rejects table cache entry, which is kept alive for the duration of the query
-	shared_ptr<CSVRejectsTable> rejects_table;
 };
 
 } // namespace duckdb
