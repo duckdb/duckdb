@@ -193,12 +193,27 @@ RenderingResultIterator RenderingQueryResult::end() {
 	return RenderingResultIterator(nullptr);
 }
 
-SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result) {
-	RenderingQueryResult result(query_result, renderer);
+SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result,
+                                           PagerMode pager_overwrite) {
+	RenderingQueryResult render_result(query_result, renderer);
+	renderer.Analyze(render_result);
+	if (seenInterrupt) {
+		return SuccessState::FAILURE;
+	}
 
-	renderer.Analyze(result);
+	// check if we need to use the pager for the rendering
+	unique_ptr<PagerState> pager_setup;
+	if (pager_overwrite == PagerMode::PAGER_AUTOMATIC) {
+		if (ShouldUsePager(renderer, render_result)) {
+			pager_overwrite = PagerMode::PAGER_ON;
+		}
+	}
+	if (pager_overwrite == PagerMode::PAGER_ON) {
+		pager_setup = SetupPager();
+	}
+	// render the query result
 	PrintStream print_stream(*this);
-	return renderer.RenderQueryResult(print_stream, *this, result);
+	return renderer.RenderQueryResult(print_stream, *this, render_result);
 }
 
 SuccessState ShellRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) {

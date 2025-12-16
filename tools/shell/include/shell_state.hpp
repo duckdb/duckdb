@@ -408,8 +408,9 @@ public:
 	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
-	SuccessState RenderQuery(ShellRenderer &renderer, const string &query);
-	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result);
+	SuccessState RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite);
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result,
+	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 

@@ -837,14 +837,14 @@ void ShellState::SetTextMode() {
 	setTextMode(out, 1);
 }
 
-SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query) {
+SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite) {
 	auto &con = *conn;
 	auto result = con.SendQuery(query);
 	if (result->HasError()) {
 		PrintDatabaseError(result->GetError());
 		return SuccessState::FAILURE;
 	}
-	return RenderQueryResult(renderer, *result);
+	return RenderQueryResult(renderer, *result, pager_overwrite);
 }
 
 /*
@@ -969,20 +969,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 	// analyze the query result so we know how long/wide the result will be
-	RenderingQueryResult render_result(res, *renderer);
-	renderer->Analyze(render_result);
-	if (seenInterrupt) {
-		return SuccessState::FAILURE;
-	}
-
-	// check if we need to use the pager for the rendering
-	unique_ptr<PagerState> pager_setup;
-	if (ShouldUsePager(*renderer, render_result)) {
-		pager_setup = SetupPager();
-	}
-	// render the query result
-	PrintStream print_stream(*this);
-	return renderer->RenderQueryResult(print_stream, *this, render_result);
+	return RenderQueryResult(*renderer, res);
 }
 
 /*
@@ -2088,7 +2075,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	if (bDebug) {
 		PrintF("SQL: %s;\n", sSelect.c_str());
 	} else {
-		rc = RenderQuery(*renderer, sSelect);
+		rc = RenderQuery(*renderer, sSelect, PagerMode::PAGER_OFF);
 	}
 	if (rc == SuccessState::FAILURE) {
 		PrintF(PrintOutput::STDERR, "Error: querying schema information\n");
