@@ -191,6 +191,7 @@ private:
 	unordered_set<idx_t> pruned_columns;
 	vector<optional_idx> column_map;
 	bool expand_rows = false;
+	bool is_first_row = true;
 	idx_t max_rows_per_row = 1;
 	vector<RenderDataCollection> render_collections;
 	idx_t top_rows = 0;
@@ -356,7 +357,7 @@ void BoxRendererImplementation::Initialize() {
 }
 
 void BoxRendererImplementation::Render(BaseResultRenderer &ss) {
-	ss.SetResultTypes(result_types);
+	ss.SetResultTypes(result.Types());
 
 	RenderHeader(ss);
 	while (true) {
@@ -2049,11 +2050,10 @@ void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<Rend
 	}
 
 	// prepare the values for rendering
-	bool is_first_collection = true;
 	bool render_divider = false;
-	bool is_first_row = true;
 	vector<BoxRenderRow> last_rendered_rows;
 	idx_t row_idx = 0;
+	bool is_first_collection = true;
 	for (auto &render_collection : collections) {
 		auto &collection = *render_collection.render_values;
 		if (collection.Count() == 0) {
