@@ -57,9 +57,6 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  AZURE_CODESIGN_ENDPOINT: https://eus.codesigning.azure.net/
-  AZURE_CODESIGN_ACCOUNT: duckdb-signing-2
-  AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
 
 jobs:
  check-draft:
@@ -69,7 +66,6 @@ jobs:
     steps:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
-
 
  windows-release-cli:
     strategy:
@@ -103,28 +99,6 @@ jobs:
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=${{ matrix.config.cmake_platform }} -DDUCKDB_EXPLICIT_PLATFORM=windows_${{ matrix.config.arch }} -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
 
-    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
-      shell: pwsh
-      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
-
-    - name: Test DUCKDB_INSTALL_LIB variable
-      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
-      shell: bash
-      run: echo $DUCKDB_INSTALL_LIB
-
-    - name: Test
-      shell: bash
-      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
-      run: test/Release/unittest.exe
-
-    - name: Tools Test
-      shell: bash
-      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
-      run: |
-        python -m pip install pytest
-        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-
     - name: Sign files with Azure Trusted Signing (TM)
       if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
       uses: azure/trusted-signing-action@v0
@@ -132,15 +106,31 @@ jobs:
         azure-tenant-id:              ${{ secrets.AZURE_CODESIGN_TENANT_ID }}
         azure-client-id:              ${{ secrets.AZURE_CODESIGN_CLIENT_ID }}
         azure-client-secret:          ${{ secrets.AZURE_CODESIGN_CLIENT_SECRET }}
-        endpoint:                     ${{ env.AZURE_CODESIGN_ENDPOINT }}
-        trusted-signing-account-name: ${{ env.AZURE_CODESIGN_ACCOUNT }}
-        certificate-profile-name:     ${{ env.AZURE_CODESIGN_PROFILE }}
+        endpoint:                     https://eus.codesigning.azure.net/
+        trusted-signing-account-name: duckdb-signing-2
+        certificate-profile-name:     duckdb-certificate-profile
         files-folder:                 ${{ github.workspace }}
         files-folder-filter:          exe,dll
         files-folder-recurse:         true
         file-digest:                  SHA256
         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
         timestamp-digest:             SHA256
+
+    - name: Test
+      shell: bash
+      if: inputs.skip_tests != 'true' && matrix.config.arch == 'amd64'
+      run: |
+        export DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)
+        test/Release/unittest.exe
+        python -m pip install pytest
+        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: duckdb-binaries-windows-${{ matrix.config.arch }}
+        path: |
+          libduckdb-windows-${{ matrix.config.arch }}.zip
+          duckdb_cli-windows-${{ matrix.config.arch }}.zip
 
     - name: Deploy
       shell: bash
@@ -154,13 +144,6 @@ jobs:
         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-${{ matrix.config.arch }}.zip Release/duckdb.exe
         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-${{ matrix.config.arch }}.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-${{ matrix.config.arch }}.zip duckdb_cli-windows-${{ matrix.config.arch }}.zip
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: duckdb-binaries-windows-${{ matrix.config.arch }}
-        path: |
-          libduckdb-windows-${{ matrix.config.arch }}.zip
-          duckdb_cli-windows-${{ matrix.config.arch }}.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
