@@ -5,7 +5,10 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -21,11 +24,28 @@ vector<string> Transformer::TransformNameList(duckdb_libpgquery::PGList &list) {
 	return result;
 }
 
-void AddToMultiStatement(unique_ptr<MultiStatement> &multi_statement,
-	unique_ptr<AlterInfo> alter_info ) {
+void AddToMultiStatement(unique_ptr<MultiStatement> &multi_statement, unique_ptr<AlterInfo> alter_info) {
 	auto alter_statement = make_uniq<AlterStatement>();
 	alter_statement->info = std::move(alter_info);
 	multi_statement->statements.push_back(std::move(alter_statement));
+}
+
+void AddUpdateToMultiStatement(const TemplatedUniqueIf<MultiStatement>::templated_unique_single_t &result,
+                                            const string & column_name, const string &table_name,
+                               const unique_ptr<ParsedExpression> &original_expression) {
+	auto update_statement = make_uniq<UpdateStatement>();
+
+	auto table_ref = make_uniq<BaseTableRef>();
+
+	table_ref->table_name = table_name;
+	update_statement->table = std::move(table_ref);
+
+	auto set_info = make_uniq<UpdateSetInfo>();
+	set_info->columns.push_back(column_name);
+	set_info->expressions.push_back(original_expression->Copy());
+	update_statement->set_info = std::move(set_info);
+
+	result->statements.push_back(std::move(update_statement));
 }
 unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
 	D_ASSERT(stmt.relation);
@@ -70,12 +90,43 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			column_entry.SetName(column_names.back());
 			if (column_names.size() == 1) {
 				// ADD COLUMN
-				AddToMultiStatement(result, make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok));
+				
+				/* Here we do a workaround that consists of the following statements:
+				 *	 1. ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
+				 *	 2. UPDATE t SET u = <expression>;
+				 *	 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
+				 * This workaround exists because when an `ALTER TABLE ... ADD COLUMN ... DEFAULT ...` takes place, the
+				 * WAL replay would re-run the default expression, and with expressions such as RANDOM or
+				 * CURRENT_TIMESTAMP, the value would be different than that of the original run. By now doing an
+				 * UPDATE, we force materialization of these values, which makes WAL replays consistent.
+				 */
+
+				// Keep a copy of the original expression before we change it, to be able to reinstate it at the end.
+				auto original_expression = column_entry.DefaultValue().Copy();
+
+				// 1.  ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
+
+				// Here we're not writing the actual values yet, just inserting NULL as a placeholder.The actual values
+				// will be handled by the UPDATE statement that follows
+				Value null_value = Value(nullptr);
+				auto null_expression = ConstantExpression(null_value);
+				auto null_column = column_entry.Copy();
+				null_column.SetDefaultValue(make_uniq<ConstantExpression>(null_expression));
+				AddToMultiStatement(result,
+				                    make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok));
+
+				// 2. UPDATE t SET u = <expression>;
+				AddUpdateToMultiStatement(result, column_entry.GetName(),  stmt.relation->relname, original_expression);
+
+				// 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
+				// Reinstate the original default expression.
+				AddToMultiStatement(
+				    result, make_uniq<SetDefaultInfo>(data, column_entry.GetName(), std::move(original_expression)));
 			} else {
 				// ADD FIELD
 				column_names.pop_back();
-				AddToMultiStatement(result, make_uniq<AddFieldInfo>(std::move(data), std::move(column_names),
-													   std::move(column_entry), command->missing_ok));
+				AddToMultiStatement(result, make_uniq<AddFieldInfo>(data, std::move(column_names),
+				                                                    std::move(column_entry), command->missing_ok));
 			}
 			break;
 		}
@@ -89,9 +140,11 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				throw InternalException("Expected a name");
 			}
 			if (column_names.size() == 1) {
-				AddToMultiStatement(result, make_uniq<RemoveColumnInfo>(std::move(data), column_names[0], command->missing_ok, cascade));
+				AddToMultiStatement(result, make_uniq<RemoveColumnInfo>(std::move(data), column_names[0],
+				                                                        command->missing_ok, cascade));
 			} else {
-				AddToMultiStatement(result, make_uniq<RemoveFieldInfo>(std::move(data), std::move(column_names), command->missing_ok, cascade));
+				AddToMultiStatement(result, make_uniq<RemoveFieldInfo>(std::move(data), std::move(column_names),
+				                                                       command->missing_ok, cascade));
 			}
 			break;
 		}
@@ -122,7 +175,8 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				auto col_ref = make_uniq<ColumnRefExpression>(command->name);
 				expr = make_uniq<CastExpression>(column_entry.Type(), std::move(col_ref));
 			}
-			AddToMultiStatement(result, make_uniq<ChangeColumnTypeInfo>(std::move(data), command->name, column_entry.Type(), std::move(expr)));
+			AddToMultiStatement(result, make_uniq<ChangeColumnTypeInfo>(std::move(data), command->name,
+			                                                            column_entry.Type(), std::move(expr)));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_SetNotNull: {
@@ -140,7 +194,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			}
 
 			auto constraint = TransformConstraint(pg_constraint);
-			AddToMultiStatement(result,  make_uniq<AddConstraintInfo>(std::move(data), std::move(constraint)));
+			AddToMultiStatement(result, make_uniq<AddConstraintInfo>(std::move(data), std::move(constraint)));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_SetPartitionedBy: {
@@ -148,7 +202,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			if (command->def_list) {
 				TransformExpressionList(*command->def_list, partition_keys);
 			}
-			AddToMultiStatement(result,  make_uniq<SetPartitionedByInfo>(std::move(data), std::move(partition_keys)));
+			AddToMultiStatement(result, make_uniq<SetPartitionedByInfo>(std::move(data), std::move(partition_keys)));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_SetSortedBy: {
@@ -156,7 +210,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			if (command->def_list) {
 				TransformOrderBy(command->def_list, orders);
 			}
-			AddToMultiStatement(result,  make_uniq<SetSortedByInfo>(std::move(data), std::move(orders)));
+			AddToMultiStatement(result, make_uniq<SetSortedByInfo>(std::move(data), std::move(orders)));
 			break;
 		}
 		default:
