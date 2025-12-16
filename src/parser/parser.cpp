@@ -165,24 +165,29 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
-vector<string> SplitQueryStringIntoStatements(const string &query) {
-	// Break sql string down into sql statements using the tokenizer
-	vector<string> query_statements;
-	auto tokens = Parser::Tokenize(query);
-	idx_t next_statement_start = 0;
-	for (idx_t i = 1; i < tokens.size(); ++i) {
-		auto &t = tokens[i];
-		if (t.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-			// LCOV_EXCL_START
-			if (query.c_str()[t.start] == ';') {
-				query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
-				next_statement_start = tokens[i].start;
+vector<string> SplitQueries(const string &input_query) {
+	vector<string> queries;
+	auto tokenized_input = Parser::Tokenize(input_query);
+	size_t last_split = 0;
+
+	for (const auto &token : tokenized_input) {
+		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR && input_query[token.start] == ';') {
+			string segment = input_query.substr(last_split, token.start - last_split);
+			StringUtil::Trim(segment);
+			if (!segment.empty()) {
+				segment.append(";");
+				queries.push_back(std::move(segment));
 			}
-			// LCOV_EXCL_STOP
+			last_split = token.start + 1;
 		}
 	}
-	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-	return query_statements;
+	string final_segment = input_query.substr(last_split);
+	StringUtil::Trim(final_segment);
+	if (!final_segment.empty()) {
+		final_segment.append(";");
+		queries.push_back(std::move(final_segment));
+	}
+	return queries;
 }
 
 void Parser::ParseQuery(const string &query) {
@@ -233,7 +238,7 @@ void Parser::ParseQuery(const string &query) {
 			throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 		} else {
 			// split sql string into statements and re-parse using extension
-			auto query_statements = SplitQueryStringIntoStatements(query);
+			auto query_statements = SplitQueries(query);
 			idx_t stmt_loc = 0;
 			for (auto const &query_statement : query_statements) {
 				ErrorData another_parser_error;
