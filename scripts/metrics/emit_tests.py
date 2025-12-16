@@ -27,7 +27,7 @@ def _write_default_query(f):
 
 def _write_get_custom_profiling_settings(f):
     query = """
-SELECT unnest(res) FROM (q
+SELECT unnest(res) FROM (
     SELECT current_setting('custom_profiling_settings') AS raw_setting,
     raw_setting.trim('{}') AS setting,
     string_split(setting, ', ') AS res
