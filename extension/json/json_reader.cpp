@@ -368,11 +368,14 @@ bool JSONReader::HasThrown() {
 
 double JSONReader::GetProgress() const {
 	lock_guard<mutex> guard(lock);
-	if (HasFileHandle()) {
-		return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
-	} else {
+	if (!HasFileHandle()) {
 		return 0;
 	}
+	const auto file_size = file_handle->FileSize();
+	if (file_size == 0) {
+		return 0;
+	}
+	return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_size);
 }
 
 static inline void TrimWhitespace(JSONString &line) {
