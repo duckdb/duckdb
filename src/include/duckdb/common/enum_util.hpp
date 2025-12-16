@@ -102,6 +102,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CacheValidationMode : uint8_t;
+
 enum class CachingMode : uint8_t;
 
 enum class CatalogLookupBehavior : uint8_t;
@@ -587,6 +589,9 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
+
+template<>
+const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value);
 
 template<>
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value);
@@ -1263,6 +1268,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
+
+template<>
+CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value);
 
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value);

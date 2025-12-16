@@ -6,3 +6,4 @@ race:duckdb_moodycamel
 race:*duckdb/extension/jemalloc/jemalloc/*
 race:AddToEvictionQueue
 race:ValidityAppend
+race:ResolveComplexJoin
