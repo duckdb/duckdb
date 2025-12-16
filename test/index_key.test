@@ -1,6 +1,6 @@
-# name: test/sql/function/index/index_key.test
+# name: test/index_key.test
 # description: Test the index_key scalar function for generating ART index keys
-# group: [index]
+# group: [test]
 
 statement ok
 CREATE TABLE tbl1(
