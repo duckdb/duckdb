@@ -158,12 +158,12 @@ endif()
 
 if(APPLE)
   set(OS_NAME "osx")
-endif()
-if(WIN32)
+elseif(WIN32)
   set(OS_NAME "windows")
-endif()
-if(UNIX AND NOT APPLE)
+elseif(UNIX)
   set(OS_NAME "linux") # sorry BSD
+else()
+  set(OS_NAME "unknown")
 endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
@@ -196,8 +196,7 @@ elseif(${ENABLE_SANITIZER})
   endif()
 endif()
 
-if (${DISABLE_VPTR_SANITIZER})
-else()
+if (NOT ${DISABLE_VPTR_SANITIZER})
   if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_GREATER 14.0)
       message(
