@@ -2,6 +2,8 @@
 # description: Test enable_profiling() function.
 # group: [profiling]
 
+require json
+
 statement ok
 PRAGMA profiling_output = '__TEST_DIR__/test.txt'
 
@@ -13,7 +15,7 @@ statement ok
 CALL disable_profiling();
 
 query I
-SELECT current_setting('enable_profiling');
+SELECT CURRENT_SETTING('enable_profiling');
 ----
 NULL
 
@@ -25,7 +27,7 @@ statement ok
 CALL enable_profiling();
 
 query I
-SELECT current_setting('enable_profiling');
+SELECT CURRENT_SETTING('enable_profiling');
 ----
 query_tree
 
@@ -37,7 +39,7 @@ statement ok
 CALL enable_profiling(format='json')
 
 query I
-SELECT current_setting('enable_profiling');
+SELECT CURRENT_SETTING('enable_profiling');
 ----
 json
 
@@ -51,7 +53,7 @@ Parser Error: Unrecognized print format
 #########################################################################################################################
 
 query I
-SELECT current_setting('profiling_coverage');
+SELECT CURRENT_SETTING('profiling_coverage');
 ----
 SELECT
 
@@ -59,7 +61,7 @@ statement ok
 CALL enable_profiling(coverage='all')
 
 query I
-SELECT current_setting('profiling_coverage');
+SELECT CURRENT_SETTING('profiling_coverage');
 ----
 ALL
 
@@ -73,7 +75,7 @@ Not implemented Error
 #########################################################################################################################
 
 query I
-SELECT current_setting('profiling_output');
+SELECT CURRENT_SETTING('profiling_output');
 ----
 __TEST_DIR__/test.txt
 
@@ -81,7 +83,7 @@ statement ok
 CALL enable_profiling(save_location='__TEST_DIR__/other_file.txt')
 
 query I
-SELECT current_setting('profiling_output');
+SELECT CURRENT_SETTING('profiling_output');
 ----
 __TEST_DIR__/other_file.txt
 
@@ -96,7 +98,7 @@ Parser Error: Invalid output file type: db
 #########################################################################################################################
 
 query I
-SELECT current_setting('profiling_mode');
+SELECT CURRENT_SETTING('profiling_mode');
 ----
 standard
 
@@ -104,7 +106,7 @@ statement ok
 CALL enable_profiling(mode='detailed')
 
 query I
-SELECT current_setting('profiling_mode');
+SELECT CURRENT_SETTING('profiling_mode');
 ----
 detailed
 
@@ -132,36 +134,42 @@ statement ok
 CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"})
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
 ----
-{"OPERATOR_CARDINALITY": true, "CUMULATIVE_CARDINALITY": true, "OPERATOR_ROWS_SCANNED": true, "CUMULATIVE_ROWS_SCANNED": true}
+CUMULATIVE_CARDINALITY
+CUMULATIVE_ROWS_SCANNED
+OPERATOR_CARDINALITY
+OPERATOR_ROWS_SCANNED
 
 # Set metrics from STRUCT
 statement ok
 CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
 ----
-{"QUERY_NAME": true, "EXTRA_INFO": true}
+EXTRA_INFO
+QUERY_NAME
 
 # Set metrics from LIST
 statement ok
 CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE']);
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
 ----
-['LATENCY', 'RESULT_SET_SIZE']
+LATENCY
+RESULT_SET_SIZE
 
 # Set metrics from JSON STRING
 statement ok
 CALL enable_profiling(metrics = '{"CPU_TIME": "true", "BLOCKED_THREAD_TIME": "true"}');
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
 ----
-{"CPU_TIME": "true", "BLOCKED_THREAD_TIME": "true"}
+BLOCKED_THREAD_TIME
+CPU_TIME
 
 # Can't mix types though
 statement error
@@ -178,30 +186,57 @@ statement ok
 RESET custom_profiling_settings;
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
 ----
-{"WRITE_TO_WAL_LATENCY": "true", "WAL_REPLAY_ENTRY_COUNT": "true", "WAITING_TO_ATTACH_LATENCY": "true", "TOTAL_MEMORY_ALLOCATED": "true", "TOTAL_BYTES_WRITTEN": "true", "TOTAL_BYTES_READ": "true", "SYSTEM_PEAK_TEMP_DIR_SIZE": "true", "SYSTEM_PEAK_BUFFER_MEMORY": "true", "ROWS_RETURNED": "true", "RESULT_SET_SIZE": "true", "QUERY_NAME": "true", "OPERATOR_NAME": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CPU_TIME": "true", "LATENCY": "true", "COMMIT_LOCAL_STORAGE_LATENCY": "true", "EXTRA_INFO": "true", "CHECKPOINT_LATENCY": "true", "BLOCKED_THREAD_TIME": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROWS_SCANNED": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "OPERATOR_TIMING": "true", "CUMULATIVE_CARDINALITY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true"}
+ATTACH_LOAD_STORAGE_LATENCY
+ATTACH_REPLAY_WAL_LATENCY
+BLOCKED_THREAD_TIME
+CHECKPOINT_LATENCY
+COMMIT_LOCAL_STORAGE_LATENCY
+CPU_TIME
+CUMULATIVE_CARDINALITY
+CUMULATIVE_ROWS_SCANNED
+EXTRA_INFO
+LATENCY
+OPERATOR_CARDINALITY
+OPERATOR_NAME
+OPERATOR_ROWS_SCANNED
+OPERATOR_TIMING
+OPERATOR_TYPE
+QUERY_NAME
+RESULT_SET_SIZE
+ROWS_RETURNED
+SYSTEM_PEAK_BUFFER_MEMORY
+SYSTEM_PEAK_TEMP_DIR_SIZE
+TOTAL_BYTES_READ
+TOTAL_BYTES_WRITTEN
+TOTAL_MEMORY_ALLOCATED
+WAITING_TO_ATTACH_LATENCY
+WAL_REPLAY_ENTRY_COUNT
+WRITE_TO_WAL_LATENCY
 
 # Set metrics straight into function
 statement ok
 CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE']);
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
 ----
-['LATENCY', 'RESULT_SET_SIZE']
+LATENCY
+RESULT_SET_SIZE
 
 # Set metrics straight into function with other settings too
 statement ok
-CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE'], mode = 'detailed');
+CALL enable_profiling(['TOTAL_BYTES_READ', 'TOTAL_BYTES_WRITTEN'], mode = 'detailed');
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
 ----
-['LATENCY', 'RESULT_SET_SIZE']
+TOTAL_BYTES_READ
+TOTAL_BYTES_WRITTEN
 
 query I
-SELECT current_setting('profiling_mode');
+SELECT CURRENT_SETTING('profiling_mode');
 ----
 detailed
 
@@ -220,12 +255,12 @@ statement ok
 CALL enable_profiling(format='json', save_location='__TEST_DIR__/test.json')
 
 query I
-SELECT current_setting('enable_profiling');
+SELECT CURRENT_SETTING('enable_profiling');
 ----
 json
 
 query I
-SELECT current_setting('profiling_output');
+SELECT CURRENT_SETTING('profiling_output');
 ----
 __TEST_DIR__/test.json
 
@@ -243,29 +278,30 @@ statement ok
 CALL enable_profiling(format='query_tree', save_location='__TEST_DIR__/test.txt', coverage='select', mode='standard', metrics=['QUERY_NAME', 'LATENCY'])
 
 query I
-SELECT current_setting('enable_profiling');
+SELECT CURRENT_SETTING('enable_profiling');
 ----
 query_tree
 
 query I
-SELECT current_setting('profiling_output');
+SELECT CURRENT_SETTING('profiling_output');
 ----
 __TEST_DIR__/test.txt
 
 query I
-SELECT current_setting('profiling_coverage');
+SELECT CURRENT_SETTING('profiling_coverage');
 ----
 SELECT
 
 query I
-SELECT current_setting('profiling_mode');
+SELECT CURRENT_SETTING('profiling_mode');
 ----
 standard
 
 query I
-SELECT current_setting('custom_profiling_settings');
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
 ----
-['QUERY_NAME', 'LATENCY']
+LATENCY
+QUERY_NAME
 
 #########################################################################################################################
 #            Invalid input		
