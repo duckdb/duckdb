@@ -128,8 +128,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			stats = get.function.statistics_extended(context, input);
 		} else {
 			stats = get.function.statistics(context, get.bind_data.get(), column_ids[i].GetPrimaryIndex());
-			//! FIXME: propagate if it's a PushdownExtract() ?
-			//! Or require it implicitly to let the function support pushdown_extract?
 		}
 
 		if (stats) {
