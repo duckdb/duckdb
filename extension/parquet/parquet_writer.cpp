@@ -406,6 +406,11 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	file_meta_data.created_by =
 	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
+	duckdb_parquet::ColumnOrder column_order;
+	column_order.__set_TYPE_ORDER(duckdb_parquet::TypeDefinedOrder());
+	file_meta_data.column_orders.resize(column_names.size(), column_order);
+	file_meta_data.__isset.column_orders = true;
+
 	for (auto &kv_pair : kv_metadata) {
 		duckdb_parquet::KeyValue kv;
 		kv.__set_key(kv_pair.first);
