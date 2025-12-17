@@ -94,8 +94,9 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				// ADD COLUMN
 				if (!column_entry.HasDefaultValue() ||
 				    column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
-					AddToMultiStatement(multi_statement, make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry),
-					                                                     command->missing_ok));
+					AddToMultiStatement(
+					    multi_statement,
+					    make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok));
 					break;
 				}
 				/* Here we do a workaround that consists of the following statements:
@@ -122,12 +123,13 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				                    make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok));
 
 				// 2. UPDATE t SET u = <expression>;
-				AddUpdateToMultiStatement(multi_statement, column_entry.GetName(), stmt.relation->relname, original_expression);
+				AddUpdateToMultiStatement(multi_statement, column_entry.GetName(), stmt.relation->relname,
+				                          original_expression);
 
 				// 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
 				// Reinstate the original default expression.
-				AddToMultiStatement(
-				    multi_statement, make_uniq<SetDefaultInfo>(data, column_entry.GetName(), std::move(original_expression)));
+				AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_entry.GetName(),
+				                                                               std::move(original_expression)));
 				return multi_statement;
 			} else {
 				// ADD FIELD

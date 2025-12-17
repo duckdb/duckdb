@@ -147,13 +147,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::MERGE_INTO_STATEMENT:
 		CreatePlan(*statement);
 		break;
-	case StatementType::MULTI_STATEMENT: {
-		MultiStatement &multi_statement = statement->Cast<MultiStatement>();
-		for (auto &sub_statement : multi_statement.statements) {
-			CreatePlan(*sub_statement);
-		}
-		break;
-	}
 	default:
 		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type));
 	}

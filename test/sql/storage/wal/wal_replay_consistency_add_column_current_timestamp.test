@@ -1,4 +1,4 @@
-# name: test/sql/storage/wal/wal_replay_consistency_for_random.test
+# name: test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test
 # group: [wal]
 
 statement ok
@@ -13,24 +13,24 @@ statement ok
 CREATE TABLE t AS SELECT range::INT AS id FROM range(10);
 
 statement ok
-ALTER TABLE t ADD COLUMN r DOUBLE DEFAULT RANDOM();
+ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 
 statement ok
-CREATE TABLE original AS SELECT id, r FROM t;
+CREATE TABLE original AS SELECT d FROM t;
 
 restart
 
 # there is a result
 query I
-select COUNT(r) != 0 from t;
+select COUNT(d) != 0 from t;
 ----
 true
 
 # result is consistent
 query I sort r1
-select r from t;
+select d from t;
 ----
 
 query I sort r1
-select r from original;
+select d from original;
 ----
