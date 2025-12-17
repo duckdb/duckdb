@@ -57,28 +57,28 @@ struct OperatorInformation {
 	void AddMetric(MetricType type, T metric) {
 		switch (type) {
 		case MetricType::OPERATOR_TIMING:
-			time += NumericCast<idx_t>(metric);
+			time += LossyNumericCast<idx_t>(metric);
 			break;
 		case MetricType::OPERATOR_CARDINALITY:
-			elements_returned += NumericCast<idx_t>(metric);
+			elements_returned += LossyNumericCast<idx_t>(metric);
 			break;
 		case MetricType::RESULT_SET_SIZE:
-			result_set_size += NumericCast<idx_t>(metric);
+			result_set_size += LossyNumericCast<idx_t>(metric);
 			break;
 		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
 			if (metric > system_peak_buffer_manager_memory) {
-				system_peak_buffer_manager_memory += NumericCast<idx_t>(metric);
+				system_peak_buffer_manager_memory += LossyNumericCast<idx_t>(metric);
 			}
 			break;
 		}
 		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
 			if (metric > system_peak_temp_directory_size) {
-				system_peak_temp_directory_size = NumericCast<idx_t>(metric);
+				system_peak_temp_directory_size = LossyNumericCast<idx_t>(metric);
 			}
 			break;
 		}
 		case MetricType::OPERATOR_ROWS_SCANNED:
-			rows_scanned = NumericCast<idx_t>(metric);
+			rows_scanned = LossyNumericCast<idx_t>(metric);
 			break;
 		default:
 			throw InternalException("OperatorProfiler: Unknown metric type");

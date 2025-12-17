@@ -131,7 +131,7 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 
 	// Test 1: Read the same content multiple times, which should only hit underlying FS once
 	{
-		tracking_fs_ptr->Reset();
+		tracking_fs_ptr->Clear();
 
 		// Create OpenFileInfo with validation disabled to allow caching to work
 		OpenFileInfo file_info(test_file.GetPath());
@@ -172,7 +172,7 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 		const string test_content2 = "This is test content for chunked read testing. It has enough content.";
 		TestFileGuard test_file2("test_caching_file2.txt", test_content2);
 
-		tracking_fs_ptr->Reset();
+		tracking_fs_ptr->Clear();
 
 		// Create OpenFileInfo with validation disabled
 		OpenFileInfo file_info(test_file2.GetPath());
@@ -214,7 +214,7 @@ TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]")
 
 	// Test sequential reads using location-based reads
 	{
-		tracking_fs_ptr->Reset();
+		tracking_fs_ptr->Clear();
 
 		auto handle = caching_wrapper.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
 		string buffer(TEST_BUFFER_SIZE, '\0');
