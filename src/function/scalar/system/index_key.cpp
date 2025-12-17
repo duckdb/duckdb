@@ -73,22 +73,19 @@ optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &in
 	return found_index;
 }
 
-void ValidateIndexIsBound(const Index &index, const string &catalog_name, const string &schema_name,
-                          const string &table_name, const string &index_name) {
+void ValidateIndex(const Index &index, const string &catalog_name, const string &schema_name, const string &table_name,
+                   const string &index_name) {
 	if (!index.IsBound()) {
 		throw CatalogException("index_key: index '%s' on table %s.%s.%s is not yet bound", index_name, catalog_name,
 		                       schema_name, table_name);
 	}
-}
-
-void ValidateIndexIsART(const Index &index) {
 	if (index.GetIndexType() != ART::TYPE_NAME) {
 		throw NotImplementedException(
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index.GetIndexType());
 	}
 }
 
-vector<string> ExtractColumnNames(const BoundIndex &bound_index, const ColumnList &columns) {
+vector<string> GetColumnNames(const BoundIndex &bound_index, const ColumnList &columns) {
 	const auto &column_ids = bound_index.GetColumnIds();
 	vector<string> column_names;
 	column_names.reserve(column_ids.size());
@@ -189,8 +186,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	auto &columns = duck_table.GetColumns();
 
 	auto found_index = FindIndexByName(index_list, index_name, catalog_name, schema_name, table_entry.name);
-	ValidateIndexIsBound(*found_index, catalog_name, schema_name, table_entry.name, index_name);
-	ValidateIndexIsART(*found_index);
+	ValidateIndex(*found_index, catalog_name, schema_name, table_entry.name, index_name);
 
 	auto &bound_index = found_index->Cast<BoundIndex>();
 	auto &art_index = bound_index.Cast<ART>();
@@ -198,7 +194,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	if (key_types.empty()) {
 		throw CatalogException("index_key: index '%s' has no key columns", index_name);
 	}
-	vector<string> column_names = ExtractColumnNames(bound_index, columns);
+	vector<string> column_names = GetColumnNames(bound_index, columns);
 
 	auto &key_expr = *arguments[4];
 	ValidateKeyStructType(key_expr);
