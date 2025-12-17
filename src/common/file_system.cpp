@@ -350,6 +350,9 @@ ParsedPath ParsePathWithScheme(const string &input) {
 }
 
 string NormalizeSegments(const string &path, const string &separator, bool is_absolute) {
+	if (path.empty()) {
+		return path;
+	}
 	auto parts = StringUtil::Split(path, separator);
 
 	string drive_prefix;
