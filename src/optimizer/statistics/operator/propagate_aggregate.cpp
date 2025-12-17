@@ -1,6 +1,6 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
@@ -18,6 +18,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
@@ -184,28 +185,37 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
-	vector<PartitionStatistics> remaining_partition_stats;
-	if (get.table_filters.filters.empty()) {
-		remaining_partition_stats = std::move(partition_stats);
-	} else {
-		// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
+	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
+	if (!get.table_filters.filters.empty()) {
+		map<StorageIndex, reference<unique_ptr<TableFilter>>> filter_storage_index_map;
+		for (auto &entry : get.table_filters.filters) {
+			auto col_idx = entry.first;
+			auto &filter = entry.second;
+			auto column_index = ColumnIndex(col_idx);
+			StorageIndex storage_index;
+			if (!get.TryGetStorageIndex(column_index, storage_index)) {
+				return;
+			}
+			filter_storage_index_map.emplace(storage_index, filter);
+		}
+		vector<PartitionStatistics> remaining_partition_stats;
 		for (auto &stats : partition_stats) {
 			if (!stats.partition_row_group) {
 				return;
 			}
 			auto filter_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-			for (auto &entry : get.table_filters.filters) {
-				auto col_idx = entry.first;
+			for (auto &entry : filter_storage_index_map) {
+				auto &storage_index = entry.first;
 				auto &filter = entry.second;
 				auto prg = stats.partition_row_group;
 				if (!prg) {
 					return;
 				}
-				auto column_stats = prg->GetColumnStatistics(col_idx);
+				auto column_stats = prg->GetColumnStatistics(storage_index);
 				if (!column_stats) {
 					return;
 				}
-				auto col_filter_result = filter->CheckStatistics(*column_stats);
+				auto col_filter_result = filter.get()->CheckStatistics(*column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -227,6 +237,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				return;
 			}
 		}
+		partition_stats = std::move(remaining_partition_stats);
 	}
 
 	if (!min_max_bindings.empty()) {
@@ -236,12 +247,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			auto &comparator = comparators[agg_idx];
 
 			Value agg_result;
-			if (!TryGetValueFromStats(remaining_partition_stats[0], column_index, *comparator, agg_result)) {
+			if (!TryGetValueFromStats(partition_stats[0], storage_index, *comparator, agg_result)) {
 				return;
 			}
-			for (idx_t partition_idx = 1; partition_idx < remaining_partition_stats.size(); partition_idx++) {
+			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
 				Value rhs;
-				if (!TryGetValueFromStats(remaining_partition_stats[partition_idx], column_index, *comparator, rhs)) {
+				if (!TryGetValueFromStats(partition_stats[partition_idx], storage_index, *comparator, rhs)) {
 					return;
 				}
 				if (!comparator->Compare(agg_result, rhs)) {
@@ -256,7 +267,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	if (!count_star_idxs.empty()) {
 		// Execute count_star aggregates on partition statistics
 		idx_t count = 0;
-		for (const auto &stats : remaining_partition_stats) {
+		for (const auto &stats : partition_stats) {
 			if (stats.count_type == CountType::COUNT_APPROXIMATE) {
 				// we cannot get an exact count
 				return;
