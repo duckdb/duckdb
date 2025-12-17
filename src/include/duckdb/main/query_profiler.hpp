@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -56,28 +57,28 @@ struct OperatorInformation {
 	void AddMetric(MetricType type, T metric) {
 		switch (type) {
 		case MetricType::OPERATOR_TIMING:
-			time += metric;
+			time += NumericCast<idx_t>(metric);
 			break;
 		case MetricType::OPERATOR_CARDINALITY:
-			elements_returned += metric;
+			elements_returned += NumericCast<idx_t>(metric);
 			break;
 		case MetricType::RESULT_SET_SIZE:
-			result_set_size += metric;
+			result_set_size += NumericCast<idx_t>(metric);
 			break;
 		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
 			if (metric > system_peak_buffer_manager_memory) {
-				system_peak_buffer_manager_memory += metric;
+				system_peak_buffer_manager_memory += NumericCast<idx_t>(metric);
 			}
 			break;
 		}
 		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
 			if (metric > system_peak_temp_directory_size) {
-				system_peak_temp_directory_size = metric;
+				system_peak_temp_directory_size = NumericCast<idx_t>(metric);
 			}
 			break;
 		}
 		case MetricType::OPERATOR_ROWS_SCANNED:
-			rows_scanned = metric;
+			rows_scanned = NumericCast<idx_t>(metric);
 			break;
 		default:
 			throw InternalException("OperatorProfiler: Unknown metric type");

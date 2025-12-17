@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
@@ -8,7 +9,6 @@
 #include "test_helpers.hpp"
 
 #include <thread>
-#include <mutex>
 
 namespace {
 constexpr idx_t TEST_BUFFER_SIZE = 200;
@@ -52,19 +52,20 @@ public:
 	vector<ReadCall> read_calls;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		std::lock_guard<std::mutex> lock(read_calls_mutex);
+		const lock_guard<mutex> lock(read_calls_mutex);
 		read_calls.push_back({handle.GetPath(), location, UnsafeNumericCast<idx_t>(nr_bytes)});
 		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
-	void Reset() {
-		std::lock_guard<std::mutex> lock(read_calls_mutex);
+	// Clear all read invocations track.
+	void Clear() {
+		const lock_guard<mutex> lock(read_calls_mutex);
 		read_calls.clear();
 	}
 
 	// Get read operation counts with the given operation to match.
 	size_t GetReadCount(const string &path, idx_t location, idx_t size) const {
-		std::lock_guard<std::mutex> lock(read_calls_mutex);
+		const lock_guard<mutex> lock(read_calls_mutex);
 		size_t count = 0;
 		for (const auto &call : read_calls) {
 			if (call.path == path && call.location == location && call.size == size) {
@@ -235,7 +236,6 @@ TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") 
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
-	auto tracking_fs_ptr = tracking_fs.get();
 	CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -386,7 +386,7 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 			shared_handle->Read(QueryContext(), &buffer[0], chunk_size, read_location);
 			bool result = (buffer.substr(0, chunk_size) == test_content.substr(read_location, chunk_size));
 			{
-				std::lock_guard<std::mutex> lock(results_mutex);
+				const lock_guard<mutex> lock(results_mutex);
 				results[idx] = result;
 			}
 		});
