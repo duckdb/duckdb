@@ -117,7 +117,7 @@ case_insensitive_map_t<idx_t> BuildFieldLookup(const LogicalType &key_type) {
 // to the corresponding offset in the struct. This also performs validation to make sure the types and number of
 // columns match.
 vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalType &key_type,
-                            const vector<LogicalType> &key_types, const string &index_name) {
+                            const vector<LogicalType> &index_types, const string &index_name) {
 	const auto &child_types = StructType::GetChildTypes(key_type);
 	auto field_lookup = BuildFieldLookup(key_type);
 
@@ -135,17 +135,17 @@ vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalTyp
 		}
 		field_map.push_back(entry->second);
 		const auto &struct_child_type = child_types[entry->second].second;
-		if (struct_child_type != key_types[i]) {
+		if (struct_child_type != index_types[i]) {
 			throw BinderException("index_key key_struct field '%s' has type %s but index expects %s", column_names[i],
-			                      struct_child_type.ToString().c_str(), key_types[i].ToString().c_str());
+			                      struct_child_type.ToString().c_str(), index_types[i].ToString().c_str());
 		}
 	}
 	return field_map;
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> key_types, vector<idx_t> field_map)
-	    : art_index(art_index_p), key_types(std::move(key_types)), field_map(std::move(field_map)) {
+	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> index_types, vector<idx_t> field_map)
+	    : art_index(art_index_p), index_types(std::move(index_types)), field_map(std::move(field_map)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -154,11 +154,11 @@ struct IndexKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return art_index == other.art_index && key_types == other.key_types && field_map == other.field_map;
+		return art_index == other.art_index && index_types == other.index_types && field_map == other.field_map;
 	}
 
 	optional_ptr<ART> art_index;
-	vector<LogicalType> key_types;
+	vector<LogicalType> index_types;
 	// Mapping from offset in key_types (a column in the index) to its corresponding offset in the struct.
 	vector<idx_t> field_map;
 };
@@ -191,19 +191,19 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 
 	auto &bound_index = found_index->Cast<BoundIndex>();
 	auto &art_index = bound_index.Cast<ART>();
-	vector<LogicalType> key_types = art_index.logical_types;
-	if (key_types.empty()) {
+	vector<LogicalType> index_types = art_index.logical_types;
+	if (index_types.empty()) {
 		throw CatalogException("index_key: index '%s' has no key columns", index_name);
 	}
 	vector<string> column_names = GetColumnNames(bound_index, columns);
 
 	auto &key_expr = *arguments[4];
 	ValidateKeyStructType(key_expr);
-	LogicalType key_type = key_expr.return_type;
-	bound_function.arguments[4] = key_type;
-	vector<idx_t> field_map = BuildFieldMap(column_names, key_type, key_types, index_name);
+	LogicalType key_struct = key_expr.return_type;
+	bound_function.arguments[4] = key_struct;
+	vector<idx_t> field_map = BuildFieldMap(column_names, key_struct, index_types, index_name);
 
-	return make_uniq<IndexKeyBindData>(&art_index, std::move(key_types), std::move(field_map));
+	return make_uniq<IndexKeyBindData>(&art_index, std::move(index_types), std::move(field_map));
 }
 
 void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -214,12 +214,12 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &key_struct = args.data[4];
 
 	DataChunk key_chunk;
-	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.key_types);
+	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.index_types);
 	key_chunk.SetCardinality(count);
 
 	auto &struct_children = StructVector::GetEntries(key_struct);
 
-	for (idx_t col_idx = 0; col_idx < bind_data.key_types.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < bind_data.index_types.size(); col_idx++) {
 		auto field_idx = bind_data.field_map[col_idx];
 		D_ASSERT(field_idx < struct_children.size());
 		key_chunk.data[col_idx].Reference(*struct_children[field_idx]);
