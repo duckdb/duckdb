@@ -14,6 +14,34 @@
 
 namespace duckdb {
 
+PhysicalPlan::PhysicalPlan(Allocator &allocator) : arena(allocator) {
+}
+
+PhysicalPlan::~PhysicalPlan() {
+	// Call the destructor of each physical operator.
+	for (auto &op : ops) {
+		auto &op_ref = op.get();
+#ifdef D_ASSERT_IS_ENABLED
+		{
+			lock_guard<mutex> guard(op_ref.lock);
+			D_ASSERT(!op_ref.op_state && !op_ref.sink_state);
+		}
+#endif
+		op_ref.~PhysicalOperator();
+	}
+}
+
+void PhysicalPlan::CleanupStates() {
+	for (auto &op : ops) {
+		auto &op_ref = op.get();
+		{
+			lock_guard<mutex> guard(op_ref.lock);
+			op_ref.op_state.reset();
+			op_ref.sink_state.reset();
+		}
+	}
+}
+
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
 }
 

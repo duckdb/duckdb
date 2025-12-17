@@ -16,7 +16,8 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
                                          MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
-    : stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
+    : db(buffer_manager.GetDatabase()),
+      stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
                                     : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
       layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p),
       allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator)),
@@ -31,7 +32,7 @@ TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<Tupl
 }
 
 TupleDataCollection::~TupleDataCollection() {
-	ParallelDestroyTask<decltype(segments)>::Schedule(allocator->GetBufferManager().GetDatabase(), segments);
+	ParallelDestroyTask<decltype(segments)>::Schedule(db, segments);
 }
 
 void TupleDataCollection::Initialize() {
