@@ -422,8 +422,11 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction) const {
 }
 
 bool ChunkVectorInfo::HasDeletes(transaction_t transaction_id) const {
+	if (!AnyDeleted()) {
+		return false;
+	}
 	if (transaction_id == MAX_TRANSACTION_ID) {
-		return AnyDeleted();
+		return true;
 	}
 	auto segment = allocator.GetHandle(deleted_data);
 	auto deleted = segment.GetPtr<transaction_t>();
