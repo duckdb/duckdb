@@ -89,16 +89,15 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			}
 			column_entry.SetName(column_names.back());
 			if (column_names.size() == 1) {
-				auto multi_statement = make_uniq<MultiStatement>();
 
 				// ADD COLUMN
 				if (!column_entry.HasDefaultValue() ||
 				    column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
-					AddToMultiStatement(
-					    multi_statement,
-					    make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok));
+					result->info = make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
 					break;
 				}
+				auto multi_statement = make_uniq<MultiStatement>();
+
 				/* Here we do a workaround that consists of the following statements:
 				 *	 1. ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
 				 *	 2. UPDATE t SET u = <expression>;
