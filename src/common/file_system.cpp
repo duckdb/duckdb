@@ -580,7 +580,8 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	}
 	strip_leading(rhs, string(1, separator_char));
 
-	auto combined = lhs + separator + rhs;
+	// Avoid introducing a second leading separator when lhs is already the root
+	auto combined = (lhs == separator) ? lhs + rhs : lhs + separator + rhs;
 	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
 	return attach_scheme(lhs_parsed, normalized, lhs_scheme_absolute);
 }
