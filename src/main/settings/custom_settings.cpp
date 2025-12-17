@@ -1516,7 +1516,7 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 void QueryMemoryLimitSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	if (input.IsNull()) {
-		config.query_memory_limit = DConstants::INVALID_INDEX;
+		config.query_memory_limit.SetInvalid();
 	} else {
 		config.query_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	}
@@ -1524,15 +1524,15 @@ void QueryMemoryLimitSetting::SetLocal(ClientContext &context, const Value &inpu
 
 void QueryMemoryLimitSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.query_memory_limit = DConstants::INVALID_INDEX;
+	config.query_memory_limit.SetInvalid();
 }
 
 Value QueryMemoryLimitSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	if (config.query_memory_limit == DConstants::INVALID_INDEX) {
+	if (!config.query_memory_limit.IsValid()) {
 		return Value();
 	}
-	return Value(StringUtil::BytesToHumanReadableString(config.query_memory_limit));
+	return Value(StringUtil::BytesToHumanReadableString(config.query_memory_limit.GetIndex()));
 }
 
 //===----------------------------------------------------------------------===//
