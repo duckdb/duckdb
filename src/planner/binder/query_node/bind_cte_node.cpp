@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
@@ -62,6 +63,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	// we are lazily binding the CTE
 	// we need to bind it as if we were binding it during PrepareCTE
 	query_binder = Binder::CreateBinder(parent_binder.context, parent_binder);
+	query_binder->SetCanContainNulls(true);
 
 	// we clear any expression binders that were added in the mean-time, to ensure we are not binding to any newly added
 	// correlated columns
@@ -95,19 +97,7 @@ void CTEBindState::Bind(CTEBinding &binding) {
 	}
 
 	// Rename columns if duplicate names are detected
-	idx_t index = 1;
-	vector<string> new_names;
-	// Use a case-insensitive set to track names
-	case_insensitive_set_t ci_names;
-	for (auto &n : names) {
-		string name = n;
-		while (ci_names.find(name) != ci_names.end()) {
-			name = n + "_" + std::to_string(index++);
-		}
-		new_names.push_back(name);
-		ci_names.insert(name);
-	}
-	names = std::move(new_names);
+	QueryResult::DeduplicateColumns(names);
 }
 
 BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement) {

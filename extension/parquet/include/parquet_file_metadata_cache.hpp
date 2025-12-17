@@ -14,13 +14,15 @@
 
 namespace duckdb {
 struct CachingFileHandle;
+using duckdb_parquet::FileCryptoMetaData;
 
 enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
 
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
 	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
-	                         unique_ptr<GeoParquetFileMetadata> geo_metadata, idx_t footer_size);
+	                         unique_ptr<GeoParquetFileMetadata> geo_metadata,
+	                         unique_ptr<FileCryptoMetaData> crypto_metadata, idx_t footer_size);
 	~ParquetFileMetadataCache() override = default;
 
 	//! Parquet file metadata
@@ -28,6 +30,9 @@ public:
 
 	//! GeoParquet metadata
 	unique_ptr<GeoParquetFileMetadata> geo_metadata;
+
+	//! Crypto metadata
+	unique_ptr<FileCryptoMetaData> crypto_metadata;
 
 	//! Parquet footer size
 	idx_t footer_size;
@@ -37,9 +42,8 @@ public:
 	string GetObjectType() override;
 
 	bool IsValid(CachingFileHandle &new_handle) const;
-	//! Check if a cache entry is valid based ONLY on the OpenFileInfo (without doing any file system calls)
-	//! If the OpenFileInfo does not have enough information this can return UNKNOWN
-	ParquetCacheValidity IsValid(const OpenFileInfo &info) const;
+	//! Return if a cache entry is valid.
+	ParquetCacheValidity IsValid(const OpenFileInfo &info, ClientContext &context) const;
 
 private:
 	bool validate;

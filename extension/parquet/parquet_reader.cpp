@@ -30,6 +30,8 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -156,14 +158,25 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
+	auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+
 	if (footer_encrypted) {
-		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
+
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
 		}
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
+		auto file_aad = crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique;
+		CryptoMetaData aad_crypto_metadata = CryptoMetaData(allocator);
+
+		if (!file_aad.empty()) {
+			aad_crypto_metadata.Initialize(file_aad);
+			aad_crypto_metadata.SetModule(ParquetCrypto::FOOTER);
+		}
+		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
+		                    std::move(aad_crypto_metadata));
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -171,7 +184,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	                                                 footer_len);
+	                                                 std::move(crypto_metadata), footer_len);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
@@ -916,22 +929,37 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData 
 	                              file_col_idx);
 }
 
-uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
-	if (parquet_options.encryption_config) {
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util);
+string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
+	if (encryption_algorithm.__isset.AES_GCM_V1) {
+		return encryption_algorithm.AES_GCM_V1.aad_file_unique;
+	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		throw InternalException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
 	} else {
-		return object.read(&iprot);
+		throw InternalException("File is encrypted but no encryption algorithm is set");
 	}
+}
+
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+	return object.read(&iprot);
+}
+
+uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
+                                      CryptoMetaData &aad_crypto_metadata) const {
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
+	                           aad_crypto_metadata);
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                  const uint32_t buffer_size) {
-	if (parquet_options.encryption_config) {
-		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
-		                               *encryption_util);
-	} else {
-		return iprot.getTransport()->read(buffer, buffer_size);
-	}
+	return iprot.getTransport()->read(buffer, buffer_size);
+}
+
+uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+                                          const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const {
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
+	                               *encryption_util, aad_crypto_metadata);
 }
 
 static idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
@@ -1075,6 +1103,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	auto col_idx = MultiFileLocalIndex(i);
 	auto column_id = column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
+
+	// keep track of column and row group ordinal if data is encrypted
+	if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+		                                       GetGroup(state).ordinal);
+	}
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
@@ -1366,6 +1400,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			}
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
+			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+				                                      GetGroup(state).ordinal);
+			}
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
@@ -1377,6 +1415,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto file_col_idx = column_ids[col_idx];
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
+			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+				                                      GetGroup(state).ordinal);
+			}
 			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

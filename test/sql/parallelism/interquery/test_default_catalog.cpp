@@ -85,7 +85,7 @@ TEST_CASE("Concurrent default catalog using Scan", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -108,7 +108,7 @@ TEST_CASE("Concurrent default catalog using Queries", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -131,7 +131,7 @@ TEST_CASE("Concurrent default function creation", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
