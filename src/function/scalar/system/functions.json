@@ -55,7 +55,7 @@
         "parameters": "catalog,schema,table,index_or_constraint,key_struct",
         "description": "Generate an ART index key from a struct",
         "example": "index_key('', 'main', 'tbl1', 'tbl1_id_pkey', struct_pack(id := 1))",
-        "type": "scalar_function_set",
+        "type": "scalar_function",
         "struct": "IndexKeyFun"
     }
 ]

@@ -255,13 +255,10 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 } // namespace
 
-ScalarFunctionSet IndexKeyFun::GetFunctions() {
-	ScalarFunctionSet set("index_key");
-	ScalarFunction index_key_fun(
+ScalarFunction IndexKeyFun::GetFunction() {
+	return ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalTypeId::STRUCT},
 	    LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
-	set.AddFunction(index_key_fun);
-	return set;
 }
 
 } // namespace duckdb

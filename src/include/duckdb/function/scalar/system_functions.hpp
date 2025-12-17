@@ -92,7 +92,7 @@ struct IndexKeyFun {
 	static constexpr const char *Example = "index_key('', 'main', 'tbl1', 'tbl1_id_pkey', struct_pack(id := 1))";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb
