@@ -297,138 +297,221 @@ string FileSystem::GetWorkingDirectory() {
 
 #endif
 
-string FileSystem::JoinPath(const string &a, const string &b) {
-	auto has_uri_scheme = [](const string &path) {
-		if (path.empty()) {
-			return false;
-		}
-		if (StringUtil::StartsWith(path, "file:")) {
-			return true;
-		}
-		auto scheme_pos = path.find("://");
-		if (scheme_pos == string::npos) {
-			return false;
-		}
-		// avoid treating a Windows drive ("C:\") as a scheme
-		if (scheme_pos == 1 && StringUtil::CharacterIsAlpha(path[0])) {
-			return false;
-		}
-		return true;
-	};
+namespace {
 
-	auto trim_leading_separators = [](string &path, char separator) {
-		while (!path.empty() && path.front() == separator) {
-			path.erase(path.begin());
-		}
-	};
+struct ParsedPath {
+	string scheme;
+	string path;
+	string authority;
+	bool has_scheme = false;
+};
 
-	auto trim_trailing_separators = [](string &path, char separator) {
-		while (path.size() > 1 && path.back() == separator) {
-			path.pop_back();
-		}
-	};
-
-	auto normalize_segments = [](const string &path, const string &separator, bool is_absolute) {
-		auto parts = StringUtil::Split(path, separator);
-
-		string drive_prefix;
-		if (!parts.empty()) {
-			auto colon_pos = parts[0].find(':');
-			if (colon_pos == 1 && StringUtil::CharacterIsAlpha(parts[0][0])) {
-				// Preserve drive designator on Windows (e.g., "C:")
-				drive_prefix = parts[0].substr(0, colon_pos + 1);
-				auto remainder = parts[0].substr(colon_pos + 1);
-				if (remainder.empty()) {
-					parts.erase(parts.begin());
-				} else {
-					parts[0] = remainder;
-				}
+ParsedPath ParsePathWithScheme(const string &input) {
+	ParsedPath result;
+	result.path = input;
+	if (input.empty()) {
+		return result;
+	}
+	if (StringUtil::StartsWith(input, "file://")) {
+		result.scheme = "file://";
+		result.path = input.substr(7);
+		result.has_scheme = true;
+		// capture optional authority (e.g., file://localhost/path)
+		if (!result.path.empty() && result.path[0] != '/' && result.path[0] != '\\') {
+			auto sep_pos = result.path.find_first_of("/\\");
+			if (sep_pos == string::npos) {
+				result.authority = result.path;
+				result.path.clear();
+			} else {
+				result.authority = result.path.substr(0, sep_pos);
+				result.path = result.path.substr(sep_pos);
 			}
 		}
+		return result;
+	}
+	if (StringUtil::StartsWith(input, "file:")) {
+		result.scheme = "file:";
+		result.path = input.substr(5);
+		result.has_scheme = true;
+		return result;
+	}
+	auto scheme_pos = input.find("://");
+	if (scheme_pos == string::npos) {
+		return result;
+	}
+	// avoid treating a Windows drive ("C:\") as a scheme
+	if (scheme_pos == 1 && StringUtil::CharacterIsAlpha(input[0])) {
+		return result;
+	}
+	result.scheme = input.substr(0, scheme_pos + 3);
+	result.path = input.substr(scheme_pos + 3);
+	result.has_scheme = true;
+	return result;
+}
 
-		bool drive_root =
-		    !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
-		bool clamp_to_root = is_absolute || drive_root || !drive_prefix.empty();
-		vector<string> stack;
-		for (auto &part : parts) {
-			if (part.empty() || part == ".") {
-				continue;
+string NormalizeSegments(const string &path, const string &separator, bool is_absolute) {
+	auto parts = StringUtil::Split(path, separator);
+
+	string drive_prefix;
+#ifdef _WIN32
+	if (!parts.empty()) {
+		auto colon_pos = parts[0].find(':');
+		if (colon_pos == 1 && StringUtil::CharacterIsAlpha(parts[0][0])) {
+			// Preserve drive designator on Windows (e.g., "C:")
+			drive_prefix = parts[0].substr(0, colon_pos + 1);
+			auto remainder = parts[0].substr(colon_pos + 1);
+			if (remainder.empty()) {
+				parts.erase(parts.begin());
+			} else {
+				parts[0] = remainder;
 			}
-			if (part == "..") {
-				if (!stack.empty() && stack.back() != "..") {
-					stack.pop_back();
-				} else if (!clamp_to_root) {
-					stack.push_back(part);
-				}
-				continue;
-			}
-			stack.push_back(part);
 		}
+	}
+#endif
 
-		string result;
+	bool drive_root =
+	    !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
+	bool clamp_to_root = is_absolute || drive_root || !drive_prefix.empty();
+	vector<string> stack;
+	for (auto &part : parts) {
+		if (part.empty() || part == ".") {
+			continue;
+		}
+		if (part == "..") {
+			if (!stack.empty() && stack.back() != "..") {
+				stack.pop_back();
+			} else if (!clamp_to_root) {
+				stack.push_back(part);
+			}
+			continue;
+		}
+		stack.push_back(part);
+	}
+
+	string result;
+	if (is_absolute || drive_root) {
+		result = drive_prefix.empty() ? separator : drive_prefix + separator;
+	} else if (!drive_prefix.empty()) {
+		result = drive_prefix;
+	}
+
+	for (idx_t i = 0; i < stack.size(); i++) {
+		bool need_separator = !result.empty() && result.back() != separator[0];
+		if (!is_absolute && !drive_root && !drive_prefix.empty() && result == drive_prefix) {
+			// drive-relative path keeps the drive prefix without an extra separator
+			need_separator = false;
+		}
+		if (need_separator) {
+			result += separator;
+		}
+		result += stack[i];
+	}
+
+	if (result.empty() && !drive_prefix.empty()) {
+		result = drive_prefix;
 		if (is_absolute || drive_root) {
-			result = drive_prefix.empty() ? separator : drive_prefix + separator;
-		} else if (!drive_prefix.empty()) {
-			result = drive_prefix;
+			result += separator;
 		}
+	}
+	return result.empty() ? path : result;
+}
 
-		for (idx_t i = 0; i < stack.size(); i++) {
-			bool need_separator = !result.empty() && result.back() != separator[0];
-			if (!is_absolute && !drive_root && !drive_prefix.empty() && result == drive_prefix) {
-				// drive-relative path keeps the drive prefix without an extra separator
-				need_separator = false;
-			}
-			if (need_separator) {
-				result += separator;
-			}
-			result += stack[i];
-		}
+} // namespace
 
-		if (result.empty() && !drive_prefix.empty()) {
-			result = drive_prefix;
-			if (is_absolute || drive_root) {
-				result += separator;
-			}
-		}
-		return result.empty() ? path : result;
-	};
-
+string FileSystem::JoinPath(const string &a, const string &b) {
 	auto separator = PathSeparator(!a.empty() ? a : b);
 	auto separator_char = separator[0];
 
-	// if either side is a URI, fall back to a simple concatenation to avoid breaking schemes
-	if (has_uri_scheme(a) || has_uri_scheme(b)) {
-		if (a.empty()) {
-			return b;
+	auto lhs_parsed = ParsePathWithScheme(a);
+	auto rhs_parsed = ParsePathWithScheme(b);
+	auto lhs = ConvertSeparators(lhs_parsed.path);
+	auto rhs = ConvertSeparators(rhs_parsed.path);
+	bool lhs_is_file_scheme = lhs_parsed.scheme == "file://" || lhs_parsed.scheme == "file:";
+	bool rhs_is_file_scheme = rhs_parsed.scheme == "file://" || rhs_parsed.scheme == "file:";
+	auto lhs_scheme_absolute =
+	    lhs_parsed.has_scheme && (lhs_is_file_scheme || (!lhs.empty() && lhs[0] == separator_char));
+	auto rhs_scheme_absolute =
+	    rhs_parsed.has_scheme && (rhs_is_file_scheme || (!rhs.empty() && rhs[0] == separator_char));
+	auto lhs_normalize_absolute =
+	    (!lhs_parsed.has_scheme && IsPathAbsolute(lhs)) || lhs_scheme_absolute || lhs_is_file_scheme;
+	auto rhs_normalize_absolute =
+	    (!rhs_parsed.has_scheme && IsPathAbsolute(rhs)) || rhs_scheme_absolute || rhs_is_file_scheme;
+	auto lhs_absolute = lhs_parsed.has_scheme || lhs_normalize_absolute;
+	auto rhs_absolute = rhs_parsed.has_scheme || rhs_normalize_absolute;
+
+	auto attach_scheme = [&](const ParsedPath &parsed, string normalized, bool scheme_absolute) {
+		if (!parsed.has_scheme) {
+			return normalized;
 		}
-		if (b.empty()) {
-			return a;
+		bool is_file_scheme = parsed.scheme == "file://" || parsed.scheme == "file:";
+		if (is_file_scheme) {
+			// ensure a single leading separator on the path portion
+			while (!normalized.empty() && (normalized.front() == '/' || normalized.front() == '\\')) {
+				normalized.erase(normalized.begin());
+			}
+			normalized = separator + normalized;
+			if (parsed.scheme == "file://") {
+				if (!parsed.authority.empty()) {
+					// file://host + /abs -> file://host/abs
+					return string("file://") + parsed.authority + normalized;
+				}
+				// file:// + /abs -> file:///abs
+				return string("file://") + normalized;
+			}
+			// file:/ + /abs -> file:/abs
+			return string("file:") + normalized;
 		}
-		return a + separator + b;
+		if (!scheme_absolute) {
+			while (!normalized.empty() && normalized.front() == separator_char) {
+				normalized.erase(normalized.begin());
+			}
+		}
+		return parsed.scheme + normalized;
+	};
+
+	if (lhs_parsed.has_scheme && rhs_parsed.has_scheme && lhs_parsed.scheme != rhs_parsed.scheme) {
+		throw IOException("JoinPath: incompatible URI schemes \"%s\" and \"%s\"", lhs_parsed.scheme, rhs_parsed.scheme);
+	}
+	if (lhs_parsed.has_scheme != rhs_parsed.has_scheme && rhs_parsed.has_scheme && lhs_absolute) {
+		throw IOException("JoinPath: cannot join absolute URI \"%s\" onto local path \"%s\"", b, a);
 	}
 
-	auto lhs = ConvertSeparators(a);
-	auto rhs = ConvertSeparators(b);
-	auto lhs_absolute = IsPathAbsolute(lhs);
-	auto rhs_absolute = IsPathAbsolute(rhs);
-
-	if (lhs.empty()) {
-		return normalize_segments(rhs, separator, rhs_absolute);
+	if (lhs.empty() && !lhs_parsed.has_scheme) {
+		auto normalized_rhs = NormalizeSegments(rhs, separator, rhs_normalize_absolute);
+		return attach_scheme(rhs_parsed, normalized_rhs, rhs_scheme_absolute);
 	}
 	if (rhs.empty()) {
-		return normalize_segments(lhs, separator, lhs_absolute);
+		auto normalized_lhs = NormalizeSegments(lhs, separator, lhs_normalize_absolute);
+		return attach_scheme(lhs_parsed, normalized_lhs, lhs_scheme_absolute);
 	}
 
-	// if rhs is an absolute path, prefer it
 	if (rhs_absolute) {
-		return normalize_segments(rhs, PathSeparator(rhs), true);
+		auto normalized_rhs = NormalizeSegments(rhs, separator, rhs_normalize_absolute);
+		auto normalized_lhs = NormalizeSegments(lhs, separator, lhs_normalize_absolute);
+		if (!normalized_lhs.empty()) {
+			bool prefix = StringUtil::StartsWith(normalized_rhs, normalized_lhs);
+			bool separator_ok = normalized_rhs.size() == normalized_lhs.size() ||
+			                    normalized_rhs[normalized_lhs.size()] == separator_char;
+			if (!prefix || !separator_ok) {
+				throw IOException("JoinPath: absolute RHS \"%s\" is not compatible with LHS \"%s\"", b, a);
+			}
+		}
+		if (lhs_is_file_scheme && !rhs_parsed.has_scheme) {
+			return attach_scheme(lhs_parsed, normalized_rhs, true);
+		}
+		return attach_scheme(rhs_parsed, normalized_rhs, rhs_scheme_absolute);
 	}
 
-	trim_trailing_separators(lhs, separator_char);
-	trim_leading_separators(rhs, separator_char);
+	while (lhs.size() > 1 && lhs.back() == separator_char) {
+		lhs.pop_back();
+	}
+	while (!rhs.empty() && rhs.front() == separator_char) {
+		rhs.erase(rhs.begin());
+	}
 
 	auto combined = lhs + separator + rhs;
-	return normalize_segments(combined, separator, lhs_absolute);
+	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
+	return attach_scheme(lhs_parsed, normalized, lhs_scheme_absolute);
 }
 
 string FileSystem::ConvertSeparators(const string &path) {

@@ -156,8 +156,7 @@ TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
 	auto parent = fs->JoinPath("dir/subdir", "../sibling");
 	REQUIRE(parent == collapse("dir/sibling"));
 
-	auto abs_override = fs->JoinPath("dir", "/abs/path");
-	REQUIRE(abs_override == fs->ConvertSeparators("/abs/path"));
+	REQUIRE_THROWS(fs->JoinPath("dir", "/abs/path"));
 
 	auto dedup = fs->JoinPath("dir///", "nested///child");
 	REQUIRE(dedup == collapse("dir/nested/child"));
@@ -189,7 +188,17 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	REQUIRE(past_root == fs->ConvertSeparators("/"));
 
 	auto uri_join = fs->JoinPath("file:/usr/local", "../bin");
-	REQUIRE(uri_join == "file:/usr/local/../bin");
+	REQUIRE(uri_join == "file:/usr/bin");
+
+	auto s3_join = fs->JoinPath("s3://foo", "bar/baz");
+	REQUIRE(s3_join == "s3://foo/bar/baz");
+
+	REQUIRE_THROWS(fs->JoinPath("s3://foo", "az://foo"));
+	REQUIRE_THROWS(fs->JoinPath("s3://foo", "/foo/bar/baz"));
+
+	auto absolute_child = fs->JoinPath("/usr/local", "/usr/local/bin");
+	REQUIRE(absolute_child == fs->ConvertSeparators("/usr/local/bin"));
+	REQUIRE_THROWS(fs->JoinPath("/usr/local", "/var/log"));
 
 #ifdef _WIN32
 	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
@@ -209,6 +218,8 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 
 	auto drive_relative_parent = fs->JoinPath("C:drive_relative_path", R"(..\path)");
 	REQUIRE(drive_relative_parent == "C:path");
+
+	REQUIRE_THROWS(fs->JoinPath(R"(C:\\foo)", R"(D:\\bar)"));
 #endif
 }
 

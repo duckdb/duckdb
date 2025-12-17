@@ -11,10 +11,10 @@ SELECT replace(path_join('dir/subdir', '../sibling'), chr(92), '/');
 ----
 dir/sibling
 
-query I
+statement error
 SELECT replace(path_join('dir', '/abs/path'), chr(92), '/');
 ----
-/abs/path
+JoinPath: absolute RHS
 
 query I
 SELECT replace(path_join('dir///', 'nested///child'), chr(92), '/');
@@ -44,4 +44,39 @@ SELECT replace(path_join('/', 'usr/local'), chr(92), '/');
 query I
 SELECT path_join('file:/usr/local', '../bin');
 ----
-file:/usr/local/../bin
+file:/usr/bin
+
+query I
+SELECT path_join('s3://foo', 'bar/baz');
+----
+s3://foo/bar/baz
+
+statement error
+SELECT path_join('s3://foo', 'az://foo');
+----
+incompatible URI schemes
+
+statement error
+SELECT path_join('dir', '/abs/path');
+----
+absolute RHS
+
+query I
+SELECT path_join('dir', '/abs/path', FALSE);
+----
+NULL
+
+query I
+SELECT path_join('s3://foo', 'az://foo', FALSE);
+----
+NULL
+
+statement error
+SELECT path_join(NULL, 'dir');
+----
+NULL argument in strict mode
+
+query I
+SELECT path_join(NULL, 'dir', FALSE);
+----
+NULL
