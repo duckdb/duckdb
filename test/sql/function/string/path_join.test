@@ -51,6 +51,16 @@ SELECT path_join('s3://foo', 'bar/baz');
 ----
 s3://foo/bar/baz
 
+query I
+SELECT path_join('s3://foo', '..');
+----
+s3://
+
+query I
+SELECT path_join('s3://foo', '../..');
+----
+s3://
+
 statement error
 SELECT path_join('s3://foo', 'az://foo');
 ----
@@ -61,22 +71,7 @@ SELECT path_join('dir', '/abs/path');
 ----
 absolute RHS
 
-query I
-SELECT path_join('dir', '/abs/path', FALSE);
-----
-NULL
-
-query I
-SELECT path_join('s3://foo', 'az://foo', FALSE);
-----
-NULL
-
 statement error
 SELECT path_join(NULL, 'dir');
 ----
-NULL argument in strict mode
-
-query I
-SELECT path_join(NULL, 'dir', FALSE);
-----
-NULL
+NULL argument

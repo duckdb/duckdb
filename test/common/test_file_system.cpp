@@ -160,6 +160,9 @@ TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
 
 	auto dedup = fs->JoinPath("dir///", "nested///child");
 	REQUIRE(dedup == collapse("dir/nested/child"));
+
+	auto zero_rel = fs->JoinPath("foo/bar", "../..");
+	REQUIRE(zero_rel == fs->ConvertSeparators("."));
 }
 
 TEST_CASE("JoinPath handles edge cases", "[file_system]") {
@@ -193,6 +196,12 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	auto s3_join = fs->JoinPath("s3://foo", "bar/baz");
 	REQUIRE(s3_join == "s3://foo/bar/baz");
 
+	auto s3_parent = fs->JoinPath("s3://foo", "..");
+	REQUIRE(s3_parent == "s3://");
+
+	auto s3_parent_twice = fs->JoinPath("s3://foo", "../..");
+	REQUIRE(s3_parent_twice == "s3://");
+
 	REQUIRE_THROWS(fs->JoinPath("s3://foo", "az://foo"));
 	REQUIRE_THROWS(fs->JoinPath("s3://foo", "/foo/bar/baz"));
 
@@ -219,6 +228,18 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	auto drive_relative_parent = fs->JoinPath("C:drive_relative_path", R"(..\path)");
 	REQUIRE(drive_relative_parent == "C:path");
 
+	auto unc_path = fs->JoinPath(R"(\\server\share)", R"(child)");
+	REQUIRE(unc_path == fs->ConvertSeparators(R"(\\server\share\child)"));
+
+	auto unc_long_path = fs->JoinPath(R"(\\?\UNC\server\share)", R"(nested\dir)");
+	REQUIRE(unc_long_path == fs->ConvertSeparators(R"(\\?\UNC\server\share\nested\dir)"));
+
+	auto long_drive_path = fs->JoinPath(R"(\\?\C:\base)", R"(folder)");
+	REQUIRE(long_drive_path == fs->ConvertSeparators(R"(\\?\C:\base\folder)"));
+
+	auto ci_prefix = fs->JoinPath(R"(C:\Data)", R"(C:\data\file)");
+	REQUIRE(ci_prefix == fs->ConvertSeparators(R"(C:\data\file)"));
+
 	REQUIRE_THROWS(fs->JoinPath(R"(C:\\foo)", R"(D:\\bar)"));
 #endif
 }
@@ -227,6 +248,7 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 TEST_CASE("Glob handles absolute drive paths", "[file_system]") {
 	auto fs = FileSystem::CreateLocal();
 	auto base_dir = fs->NormalizeAbsolutePath(TestCreatePath("glob_drive"));
+	// base_dir resolves to an absolute drive path (e.g., C:\...\glob_drive) to ensure globbing works from a drive root
 	if (fs->DirectoryExists(base_dir)) {
 		fs->RemoveDirectory(base_dir);
 	}
