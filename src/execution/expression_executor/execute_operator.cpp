@@ -113,8 +113,14 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
 		auto &child_state = *state->child_states[0];
+		Vector try_result(result.GetType());
 		try {
-			Execute(*expr.children[0], &child_state, sel, count, result);
+			Execute(*expr.children[0], &child_state, sel, count, try_result);
+			if (sel) {
+				VectorOperations::Copy(try_result, result, *sel, count, 0, 0, count);
+			} else {
+				VectorOperations::Copy(try_result, result, count, 0, 0);
+			}
 			return;
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
