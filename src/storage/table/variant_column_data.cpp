@@ -149,6 +149,14 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 		}
 		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
 	}
+
+	if (!state.storage_index.IsPushdownExtract()) {
+		return;
+	}
+	auto &child = state.storage_index.GetChildIndex(0);
+	if (!child.HasChildren() && child.HasType() && child.GetType().id() != LogicalTypeId::VARIANT) {
+		state.PushDownCast(type, child.GetType());
+	}
 }
 
 idx_t VariantColumnData::GetMaxEntry() {
@@ -244,6 +252,17 @@ idx_t VariantColumnData::ScanWithCallback(
 		}
 		VariantUtils::VariantExtract(intermediate, components, extract_intermediate, target_count);
 
+		if (state.expression_state) {
+			auto &expression_state = *state.expression_state;
+
+			auto &input = expression_state.input;
+			auto &target = expression_state.target;
+			input.Reset();
+			target.Reset();
+			input.data[0].Reference(input);
+			input.SetCardinality(scan_count);
+			result.Reference()
+		}
 		if (result.GetType().id() != LogicalTypeId::VARIANT) {
 			//! FIXME: this is an optional ptr.. when is it not set??
 			VectorOperations::Cast(*state.context.GetClientContext(), extract_intermediate, result, target_count);

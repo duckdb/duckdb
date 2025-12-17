@@ -191,14 +191,20 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 
 static unique_ptr<PushedDownExpressionState> CreateCast(ClientContext &context, const LogicalType &original_type,
                                                         const LogicalType &cast_type) {
+}
+
+void ColumnScanState::PushDownCast(const LogicalType &original_type, const LogicalType &cast_type) {
+	D_ASSERT(context.Valid());
+	D_ASSERT(!expression_state);
+	auto &client_context = *context.GetClientContext();
+
 	auto input = make_uniq<BoundReferenceExpression>(original_type, 0);
-	auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), cast_type);
-	auto res = make_uniq<PushedDownExpressionState>(context);
-	res->target.Initialize(context, {cast_type});
-	res->input.Initialize(context, {original_type});
-	res->executor.AddExpression(*cast_expression);
-	res->expression = std::move(cast_expression);
-	return res;
+	auto cast_expression = BoundCastExpression::AddCastToType(client_context, std::move(input), cast_type);
+	expression_state = make_uniq<PushedDownExpressionState>(client_context);
+	expression_state->target.Initialize(client_context, {cast_type});
+	expression_state->input.Initialize(client_context, {original_type});
+	expression_state->executor.AddExpression(*cast_expression);
+	expression_state->expression = std::move(cast_expression);
 }
 
 void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
@@ -246,7 +252,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 				auto child_index = child.GetPrimaryIndex();
 				auto &child_type = StructType::GetChildTypes(type)[child_index].second;
 				if (!child.HasChildren() && child_type != child.GetType()) {
-					expression_state = CreateCast(*context.GetClientContext(), child_type, child.GetType());
+					PushDownCast(*context.GetClientContext(), child_type, child.GetType());
 				}
 				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
 			} else {
