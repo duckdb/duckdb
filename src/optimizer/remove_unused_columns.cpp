@@ -838,6 +838,7 @@ bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expressio
 	if (cast_expression) {
 		auto &top_level = expressions.back();
 		top_level.cast = cast_expression;
+		path_ref.get().SetType((*cast_expression)->return_type);
 	}
 
 	AddBinding(*colref, path.GetChildIndex(0), expressions);
