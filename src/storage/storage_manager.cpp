@@ -23,6 +23,57 @@
 namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
+void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
+	switch (encryption_version) {
+	case EncryptionTypes::NONE:
+		// no explicit encryption type input
+		if (!storage_version.IsValid() ||
+		    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+			if (!storage_version_user_provided.empty()) {
+				// if user provided a version < "1.4.0", we throw an error
+				throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
+				                            "v1.4.0) are not compatible",
+				                            storage_version_user_provided);
+			}
+		} else if (storage_version.GetIndex() <
+		           SerializationCompatibility::FromString("v1.5.0").serialization_version) {
+			// user provided 1.4.0 < storage version < 1.5.0
+			if (!storage_version_user_provided.empty()) {
+				// we lower the encryption version to a compatible one
+				encryption_version = EncryptionTypes::V0_0;
+				break;
+			}
+		}
+		encryption_version = EncryptionTypes::V0_1;
+		break;
+	case EncryptionTypes::V0_1:
+		encryption_version = EncryptionTypes::V0_1;
+		if (!storage_version.IsValid() ||
+		    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version) {
+			if (!storage_version_user_provided.empty()) {
+				throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") is not compatible with "
+				                            "'debug_encryption_version=v1' (storage >= "
+				                            "v1.5.0)",
+				                            storage_version_user_provided);
+			}
+			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+		}
+		break;
+	case EncryptionTypes::V0_0:
+		if (!storage_version.IsValid() ||
+		    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+			// storage version < 1.4.0 explicitly provided
+			if (!storage_version_user_provided.empty()) {
+				throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
+				                            "v1.4.0) are not compatible",
+				                            storage_version_user_provided);
+			}
+			// storage version not explicitly provided, but invalid or < 1.4.0
+			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+		}
+	}
+}
+
 void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 	string storage_version_user_provided = "";
 	for (auto &entry : options) {
@@ -68,35 +119,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 		}
 	}
 	if (encryption) {
-		if (!storage_version.IsValid() ||
-		    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
-			if (!storage_version_user_provided.empty()) {
-				throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
-				                            "v1.4.0) are not compatible",
-				                            storage_version_user_provided);
-			}
-		}
-		// explicit storage version input
-		if ((!storage_version_user_provided.empty() &&
-		     storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version)) {
-			// user input and encryption version input v1
-			if (encryption_version == EncryptionTypes::V0_1) {
-				throw InvalidConfigurationException(
-				    "Encryption version explicitly set to V1, but storage version is not compatible");
-			}
-			// keep storage version, but force encryption version to lower for compatibility
-			encryption_version = EncryptionTypes::V0_0;
-		}
-
-		if (storage_version_user_provided.empty()) {
-			// set storage version explicitly
-			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
-		}
-
-		if (encryption_version == EncryptionTypes::NONE) {
-			// set default to encryption version v1
-			encryption_version = EncryptionTypes::V0_1;
-		}
+		SetEncryptionVersion(storage_version_user_provided);
 	}
 }
 
