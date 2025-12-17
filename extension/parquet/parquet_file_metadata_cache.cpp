@@ -29,9 +29,10 @@ optional_idx ParquetFileMetadataCache::GetEstimatedCacheMemory() const {
 
 	if (metadata) {
 		const auto num_cols = metadata->schema.size();
-		memory += sizeof(FileMetaData);
-		memory += num_cols * sizeof(SchemaElement);
-		memory += metadata->row_groups.size() * sizeof(RowGroup) + num_cols * sizeof(ColumnChunk);
+		memory += sizeof(duckdb_parquet::FileMetaData);
+		memory += num_cols * sizeof(duckdb_parquet::SchemaElement);
+		memory += metadata->row_groups.size() * sizeof(duckdb_parquet::RowGroup) +
+		          num_cols * sizeof(duckdb_parquet::ColumnChunk);
 	}
 	if (geo_metadata) {
 		memory +=
