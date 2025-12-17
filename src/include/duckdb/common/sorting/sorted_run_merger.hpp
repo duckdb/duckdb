@@ -46,6 +46,9 @@ public:
 	SourceResultType MaterializeSortedRun(ExecutionContext &context, OperatorSourceInput &input) const;
 	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 
+private:
+	DatabaseInstance &db;
+
 public:
 	const Sort &sort;
 	vector<unique_ptr<SortedRun>> sorted_runs;

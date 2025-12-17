@@ -30,6 +30,13 @@ public:
 		// Call the destructor of each physical operator.
 		for (auto &op : ops) {
 			auto &op_ref = op.get();
+			if (op_ref.op_state || op_ref.sink_state) {
+				// Threadsan will complain if this is not done under lock
+				// Pipeline::ResetSink() and Pipeline::Reset() also grab this lock
+				lock_guard<mutex> guard(op_ref.lock);
+				op_ref.op_state.reset();
+				op_ref.sink_state.reset();
+			}
 			op_ref.~PhysicalOperator();
 		}
 	}
