@@ -1062,16 +1062,34 @@ PEGTransformerFactory::TransformGroupingSetsClause(PEGTransformer &transformer,
 CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto recursive_opt = list_pr.Child<OptionalParseResult>(1);
-	if (recursive_opt.HasResult()) {
-		throw NotImplementedException("Recursive CTEs are not yet implemented");
-	}
+	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	CommonTableExpressionMap result;
 
 	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
 		auto with_entry =
 		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
+		if (is_recursive) {
+			auto recursive_node = make_uniq<RecursiveCTENode>();
+			recursive_node->ctename = with_entry.first;
+			auto &query_node = with_entry.second->query->node;
+			if (query_node->type == QueryNodeType::SET_OPERATION_NODE) {
+				auto set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(query_node));
+				if (set_node->children.size() != 2) {
+					throw ParserException("Expected exactly two children to set operation node");
+				}
+				if (set_node->setop_type != SetOperationType::UNION) {
+					throw ParserException("Expected a union operation node");
+				}
+				recursive_node->left = std::move(set_node->children[0]);
+				recursive_node->right = std::move(set_node->children[1]);
+				recursive_node->aliases = with_entry.second->aliases;
+				recursive_node->union_all = set_node->setop_all;
+				with_entry.second->query->node = std::move(recursive_node);
+			} else {
+				throw NotImplementedException("Unexpected node encountered for recursive CTE: %s", EnumUtil::ToString(query_node->type));
+			}
+		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
 	return result;
@@ -1086,7 +1104,7 @@ PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, optio
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 2, result->key_targets);
 	auto materialized_opt = list_pr.Child<OptionalParseResult>(4);
 	if (materialized_opt.HasResult()) {
-		// If this has a result, we know it either NEVER or ALWAYS
+		// If this has a result, we know it is either NEVER or ALWAYS
 		bool not_materialized = transformer.Transform<bool>(materialized_opt.optional_result);
 		if (not_materialized) {
 			result->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
@@ -1106,5 +1124,20 @@ bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, o
 	auto not_opt = list_pr.Child<OptionalParseResult>(0);
 	return not_opt.HasResult();
 }
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformHavingClause(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+}
+
+LimitPercentResult PEGTransformerFactory::TransformOffsetValue(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	LimitPercentResult result;
+	result.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	return result;
+}
+
 
 } // namespace duckdb

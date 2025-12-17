@@ -172,6 +172,13 @@
       ]
     },
     {
+      "reason": "PivotStatement",
+      "paths": [
+        "test/sql/pivot/top_level_pivot_syntax.test",
+        "test/sql/pivot/pivot_storage.test"
+      ]
+    },
+    {
       "reason": "Timeout",
       "paths": [
         "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",

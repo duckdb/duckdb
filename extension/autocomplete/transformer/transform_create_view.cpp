@@ -1,12 +1,60 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
+
+void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node) {
+	if (node->type == QueryNodeType::SELECT_NODE) {
+		auto outer_select = make_uniq<SelectNode>();
+		auto cte_info = make_uniq<CommonTableExpressionInfo>();
+		auto cte_select = make_uniq<SelectStatement>();
+		cte_info->aliases = info->aliases;
+		cte_select->node = std::move(node);
+		cte_info->query = std::move(cte_select);
+		outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
+		for (const auto& column : info->aliases) {
+			outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
+		}
+		auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
+		outer_select->from_table = make_uniq<BaseTableRef>(table_description);
+		auto outer_select_statement = make_uniq<SelectStatement>();
+		outer_select_statement->node = std::move(outer_select);
+		info->query = std::move(outer_select_statement);
+	} else if (node->type == QueryNodeType::SET_OPERATION_NODE) {
+		auto set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(node));
+		if (set_node->children.size() != 2) {
+			throw InvalidInputException("Expected two children");
+		}
+		auto recursive_node = make_uniq<RecursiveCTENode>();
+		recursive_node->ctename = info->view_name;
+		recursive_node->aliases = info->aliases;
+		recursive_node->left = std::move(set_node->children[0]);
+		recursive_node->right = std::move(set_node->children[1]);
+		recursive_node->union_all = set_node->setop_all;
+		auto outer_select = make_uniq<SelectNode>();
+		auto cte_info = make_uniq<CommonTableExpressionInfo>();
+		auto cte_select = make_uniq<SelectStatement>();
+		cte_info->aliases = info->aliases;
+		cte_select->node = std::move(recursive_node);
+		cte_info->query = std::move(cte_select);
+		outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
+		for (const auto& column : info->aliases) {
+			outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
+		}
+		auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
+		outer_select->from_table = make_uniq<BaseTableRef>(table_description);
+		auto outer_select_statement = make_uniq<SelectStatement>();
+		outer_select_statement->node = std::move(outer_select);
+		info->query = std::move(outer_select_statement);
+	} else {
+		throw NotImplementedException("This type of select in a recursive view is not yet implemented");
+	}
+}
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer,
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("TransformCreateViewStmt");
 	// TODO(Dtenwolde) handle recursive views
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
@@ -22,7 +70,12 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTr
 	info->schema = qualified_name.schema;
 	info->view_name = qualified_name.name;
 	info->aliases = column_list;
-	info->query = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(6));
+	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(6));
+	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
+		ConvertToRecursiveView(info, select_statement->node);
+	} else {
+		info->query = std::move(select_statement);
+	}
 	result->info = std::move(info);
 	return result;
 }

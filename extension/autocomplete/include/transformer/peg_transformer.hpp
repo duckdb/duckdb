@@ -1020,6 +1020,7 @@ private:
 	                                                   optional_ptr<ParseResult> parse_result);
 	static LimitPercentResult TransformOffsetClause(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformOffsetValue(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -1038,6 +1039,8 @@ private:
 	static pair<string, unique_ptr<CommonTableExpressionInfo>>
 	TransformWithStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
