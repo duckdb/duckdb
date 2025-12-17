@@ -419,11 +419,11 @@ string NormalizeSegments(const string &path, const string &separator, bool is_ab
 } // namespace
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	auto separator = PathSeparator(!a.empty() ? a : b);
-	auto separator_char = separator[0];
-
 	auto lhs_parsed = ParsePathWithScheme(a);
 	auto rhs_parsed = ParsePathWithScheme(b);
+	auto separator = (lhs_parsed.has_scheme || rhs_parsed.has_scheme) ? string("/") : PathSeparator(!a.empty() ? a : b);
+	auto separator_char = separator[0];
+
 	bool force_forward_slash = separator_char == '/' || lhs_parsed.has_scheme || rhs_parsed.has_scheme;
 	auto normalize_scheme_path = [&](const ParsedPath &parsed) {
 		if (parsed.has_scheme || force_forward_slash) {
