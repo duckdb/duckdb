@@ -495,7 +495,7 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
 
 void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	transaction_t start_time = checkpoint_id == MAX_TRANSACTION_ID ? TRANSACTION_ID_START - 1 : checkpoint_id;
+	transaction_t start_time = checkpoint_id == MAX_TRANSACTION_ID ? TRANSACTION_ID_START - 1 : checkpoint_id + 1;
 	transaction_t transaction_id = DConstants::INVALID_INDEX;
 	idx_t count = GetSelVector(start_time, transaction_id, sel, STANDARD_VECTOR_SIZE);
 	if (count == STANDARD_VECTOR_SIZE) {
