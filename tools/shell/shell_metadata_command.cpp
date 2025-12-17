@@ -2,6 +2,7 @@
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
+#include "shell_renderer.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -220,6 +221,18 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
+	if (state.last_result) {
+		auto renderer = state.GetRenderer();
+		renderer->RemoveRenderLimits();
+		auto res = state.RenderQueryResult(*renderer, *state.last_result);
+		if (res == SuccessState::FAILURE) {
+			return MetadataResult::FAIL;
+		}
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	if (state.safe_mode) {
 		state.PrintF(PrintOutput::STDERR, ".log cannot be used in -safe mode\n");
@@ -232,13 +245,16 @@ MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
-	if (args.size() > 2) {
+	if (args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	if (args.size() == 1) {
 		state.PrintF("current max rows: %zu\n", state.max_rows);
-	} else {
-		state.max_rows = (size_t)ShellState::StringToInt(args[1]);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_rows = (size_t)ShellState::StringToInt(args[1]);
+	if (args.size() > 2) {
+		state.max_analyze_rows = (size_t)ShellState::StringToInt(args[2]);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -820,6 +836,7 @@ static const MetadataCommand metadata_commands[] = {
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
 #endif
+    {"last", 1, RenderLastResult, "", "Render the last result without truncating", 0, ""},
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
