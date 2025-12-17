@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -211,11 +212,6 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
-
-		// Merge stats!
-		// Actually, we might not need to do this here, but do it
-		// when we scan/append into then we split data instead.
-
 		return std::move(global_stats);
 	}
 
@@ -460,7 +456,6 @@ void GeoColumnData::InterpretStats(BaseStatistics &source, BaseStatistics &targe
 	// TODO: We need to track what we shredded to
 
 	// Copy base stats
-	// TODO: Think about DISTINCT stats and how they affect shredding
 	target.CopyBase(source);
 
 	// Set extent
