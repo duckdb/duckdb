@@ -16,6 +16,7 @@ namespace duckdb {
 class LogicalOperator;
 class LogicalGet;
 class LogicalLimit;
+class LogicalComparisonJoin;
 class Optimizer;
 
 //! Transform
@@ -27,6 +28,8 @@ public:
 
 private:
 	bool TryLateMaterialization(unique_ptr<LogicalOperator> &op);
+	//! Try late materialization for semi-joins with expensive columns on probe side
+	bool TryLateMaterializationSemiJoin(unique_ptr<LogicalOperator> &op);
 
 	unique_ptr<LogicalGet> ConstructLHS(LogicalGet &get);
 	vector<ColumnBinding> ConstructRHS(unique_ptr<LogicalOperator> &op);
@@ -37,6 +40,16 @@ private:
 	unique_ptr<Expression> GetExpression(LogicalOperator &op, idx_t column_index);
 	void ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr);
 	bool OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset);
+
+	//! Check if a column type is considered "expensive" to project
+	static bool IsExpensiveColumnType(const LogicalType &type);
+	//! Find the LogicalGet in the probe side of a join, traversing through filters/projections
+	LogicalGet *FindProbeGet(LogicalOperator &op, vector<reference<LogicalOperator>> &path);
+	//! Get column bindings that are used in join conditions
+	column_binding_set_t GetJoinConditionBindings(LogicalComparisonJoin &join);
+	//! Check if the probe side has expensive columns not needed for join
+	bool HasExpensiveNonJoinColumns(LogicalGet &get, const column_binding_set_t &join_bindings,
+	                                vector<idx_t> &expensive_column_indices);
 
 private:
 	Optimizer &optimizer;

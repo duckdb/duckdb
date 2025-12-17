@@ -17,6 +17,14 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+
+// Debug logging macros for late materialization optimization
+#ifdef DEBUG
+#define LATE_MAT_LOG(msg, ...) fprintf(stderr, "[LateMaterialization] " msg "\n", ##__VA_ARGS__)
+#else
+#define LATE_MAT_LOG(msg, ...)
+#endif
 
 namespace duckdb {
 
@@ -370,6 +378,426 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	return true;
 }
 
+//===--------------------------------------------------------------------===//
+// Semi-Join Late Materialization - Helper Functions
+//===--------------------------------------------------------------------===//
+
+bool LateMaterialization::IsExpensiveColumnType(const LogicalType &type) {
+	// Consider BLOB, VARCHAR, and nested types as "expensive" to project
+	switch (type.id()) {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+		return true;
+	default:
+		return false;
+	}
+}
+
+LogicalGet *LateMaterialization::FindProbeGet(LogicalOperator &op, vector<reference<LogicalOperator>> &path) {
+	// Traverse through filters and projections to find the LogicalGet
+	reference<LogicalOperator> current = op;
+	while (true) {
+		switch (current.get().type) {
+		case LogicalOperatorType::LOGICAL_GET:
+			return &current.get().Cast<LogicalGet>();
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			path.push_back(current);
+			if (current.get().children.empty()) {
+				return nullptr;
+			}
+			current = *current.get().children[0];
+			break;
+		default:
+			// Unsupported operator type in path
+			return nullptr;
+		}
+	}
+}
+
+column_binding_set_t LateMaterialization::GetJoinConditionBindings(LogicalComparisonJoin &join) {
+	column_binding_set_t bindings;
+	for (auto &condition : join.conditions) {
+		// Extract column bindings from the left side of the condition (probe side)
+		ExpressionIterator::EnumerateExpression(condition.left, [&](Expression &expr) {
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+				auto &colref = expr.Cast<BoundColumnRefExpression>();
+				bindings.insert(colref.binding);
+			}
+		});
+	}
+	return bindings;
+}
+
+bool LateMaterialization::HasExpensiveNonJoinColumns(LogicalGet &get, const column_binding_set_t &join_bindings,
+                                                     vector<idx_t> &expensive_column_indices) {
+	expensive_column_indices.clear();
+	auto &column_ids = get.GetColumnIds();
+
+	LATE_MAT_LOG("HasExpensiveNonJoinColumns: checking %llu columns", static_cast<unsigned long long>(column_ids.size()));
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		ColumnBinding binding(get.table_index, i);
+
+		// Check if this column is used in the join condition
+		bool in_join = join_bindings.find(binding) != join_bindings.end();
+		
+		// Get the column type using the column_id, not the index
+		auto &col_id = column_ids[i];
+		string col_name = get.GetColumnName(col_id);
+		auto &column_type = get.GetColumnType(col_id);
+		
+		LATE_MAT_LOG("  Column %llu: name='%s', type='%s', binding=(%llu,%llu), in_join=%d, is_expensive=%d",
+		             static_cast<unsigned long long>(i),
+		             col_name.c_str(), column_type.ToString().c_str(),
+		             static_cast<unsigned long long>(binding.table_index),
+		             static_cast<unsigned long long>(binding.column_index),
+		             in_join, IsExpensiveColumnType(column_type));
+		
+		if (in_join) {
+			continue; // This column is needed for the join
+		}
+
+		// Check if this column type is expensive
+		if (IsExpensiveColumnType(column_type)) {
+			expensive_column_indices.push_back(i);
+			LATE_MAT_LOG("  -> Found expensive non-join column at index %llu", static_cast<unsigned long long>(i));
+		}
+	}
+
+	LATE_MAT_LOG("HasExpensiveNonJoinColumns: found %llu expensive columns", 
+	             static_cast<unsigned long long>(expensive_column_indices.size()));
+	return !expensive_column_indices.empty();
+}
+
+//===--------------------------------------------------------------------===//
+// TryLateMaterializationSemiJoin
+//===--------------------------------------------------------------------===//
+
+bool LateMaterialization::TryLateMaterializationSemiJoin(unique_ptr<LogicalOperator> &op) {
+	// This method handles semi-joins where the probe side has expensive columns
+	// that are not needed for the join condition.
+	//
+	// Original plan:
+	//   PROJECTION [item_id, large_blob]
+	//     SEMI_JOIN (item_id = id)
+	//       TABLE_SCAN [item_id, large_blob, timestamp]  <- expensive blob projected for all rows
+	//       (build side)
+	//
+	// Transformed plan:
+	//   PROJECTION [item_id, large_blob]
+	//     INNER_JOIN (rowid = rowid)  <- late fetch join
+	//       TABLE_SCAN [item_id, large_blob, rowid]  <- fetch scan (for output)
+	//       SEMI_JOIN (item_id = id)
+	//         TABLE_SCAN [item_id, rowid, timestamp]  <- filtered scan (no blob)
+	//         (build side)
+
+	auto &join = op->Cast<LogicalComparisonJoin>();
+	LATE_MAT_LOG("Examining semi-join for late materialization, join_type=%d", static_cast<int>(join.join_type));
+
+	// Only handle SEMI and ANTI joins
+	if (join.join_type != JoinType::SEMI && join.join_type != JoinType::ANTI) {
+		LATE_MAT_LOG("Not a SEMI/ANTI join, skipping");
+		return false;
+	}
+
+	// Find the LogicalGet on the probe side (left child)
+	vector<reference<LogicalOperator>> probe_path;
+	auto probe_get = FindProbeGet(*join.children[0], probe_path);
+	if (!probe_get) {
+		LATE_MAT_LOG("Could not find LogicalGet on probe side");
+		return false;
+	}
+
+	LATE_MAT_LOG("Found probe LogicalGet with table_index=%llu, %zu columns, probe_path size=%zu",
+	             static_cast<unsigned long long>(probe_get->table_index), probe_get->GetColumnIds().size(),
+	             probe_path.size());
+
+
+	// Check if the table supports late materialization
+	if (!probe_get->function.late_materialization) {
+		LATE_MAT_LOG("Table function does not support late materialization");
+		return false;
+	}
+
+	if (!probe_get->function.get_row_id_columns) {
+		LATE_MAT_LOG("Table function does not support get_row_id_columns");
+		return false;
+	}
+
+	// Get the column bindings used in join conditions
+	auto join_bindings = GetJoinConditionBindings(join);
+	LATE_MAT_LOG("Join condition uses %zu column bindings", join_bindings.size());
+
+	// Check if there are expensive columns not used in the join
+	vector<idx_t> expensive_columns;
+	if (!HasExpensiveNonJoinColumns(*probe_get, join_bindings, expensive_columns)) {
+		LATE_MAT_LOG("No expensive non-join columns found, skipping optimization");
+		return false;
+	}
+
+	LATE_MAT_LOG("Found %zu expensive columns to defer", expensive_columns.size());
+
+	// Get row-id column information
+	row_id_column_ids = probe_get->function.get_row_id_columns(optimizer.context, probe_get->bind_data.get());
+	if (row_id_column_ids.empty()) {
+		LATE_MAT_LOG("Row ID columns are empty, cannot proceed");
+		return false;
+	}
+
+	row_id_columns.clear();
+	for (auto &col_id : row_id_column_ids) {
+		auto entry = probe_get->virtual_columns.find(col_id);
+		if (entry == probe_get->virtual_columns.end()) {
+			LATE_MAT_LOG("Row id column id %llu not found in virtual column list",
+			             static_cast<unsigned long long>(col_id));
+			return false;
+		}
+		row_id_columns.push_back(entry->second);
+	}
+
+	LATE_MAT_LOG("Using %zu row-id columns for late materialization", row_id_columns.size());
+
+	// === Construct the transformation ===
+
+	// 1. Create the "fetch" scan (LHS of late-fetch join) - contains all original columns + rowid
+	auto fetch_get = LateMaterializationHelper::CreateLHSGet(*probe_get, optimizer.binder);
+	auto fetch_index = fetch_get->table_index;
+	auto fetch_row_indexes = LateMaterializationHelper::GetOrInsertRowIds(*fetch_get, row_id_column_ids, row_id_columns);
+
+	LATE_MAT_LOG("Created fetch scan with table_index=%llu", static_cast<unsigned long long>(fetch_index));
+
+	vector<ColumnBinding> fetch_rowid_bindings;
+	for (auto &idx : fetch_row_indexes) {
+		fetch_rowid_bindings.emplace_back(fetch_index, idx);
+	}
+
+	// 2. Add rowid to the probe side (the existing probe_get)
+	auto probe_row_indexes =
+	    LateMaterializationHelper::GetOrInsertRowIds(*probe_get, row_id_column_ids, row_id_columns);
+
+	LATE_MAT_LOG("Added rowid to probe scan, rowid index=%llu", static_cast<unsigned long long>(probe_row_indexes[0]));
+
+	// Determine the "top-level" operator of the probe side - this is what the semi-join outputs
+	// If probe_path is empty, it's probe_get. Otherwise it's the first operator in probe_path.
+	idx_t original_top_index;
+	if (probe_path.empty()) {
+		original_top_index = probe_get->table_index;
+	} else {
+		// The first operator in probe_path is closest to the semi-join (outermost)
+		auto &top_op = probe_path[0].get();
+		if (top_op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			original_top_index = top_op.Cast<LogicalProjection>().table_index;
+		} else {
+			// Filters pass through the bindings from their child
+			// So we need to look at what the filter outputs
+			original_top_index = probe_get->table_index;
+		}
+	}
+
+	// Give probe_get a NEW table_index to avoid conflict with final_proj
+	auto new_probe_index = optimizer.binder.GenerateTableIndex();
+	auto old_probe_index = probe_get->table_index;
+	probe_get->table_index = new_probe_index;
+
+	LATE_MAT_LOG("Changed probe_get table_index from %llu to %llu",
+	             static_cast<unsigned long long>(old_probe_index),
+	             static_cast<unsigned long long>(new_probe_index));
+
+	// Update intermediate operators to reference the new probe_get table_index
+	// Process path from innermost (closest to GET) to outermost (closest to JOIN)
+	idx_t column_count = probe_get->projection_ids.empty() ? probe_get->GetColumnIds().size()
+	                                                       : probe_get->projection_ids.size();
+	
+	// Keep track of what table_index the top-level operator will have after our modifications
+	idx_t new_top_index = new_probe_index;
+
+	for (idx_t path_idx = probe_path.size(); path_idx > 0; path_idx--) {
+		auto &path_op = probe_path[path_idx - 1].get();
+		if (path_op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &proj = path_op.Cast<LogicalProjection>();
+			
+			// Update projection expressions to reference the new child table_index
+			for (auto &expr : proj.expressions) {
+				ReplaceTableReferences(expr, new_top_index);
+			}
+			
+			// Give this projection a new table_index
+			auto old_proj_index = proj.table_index;
+			auto new_proj_index = optimizer.binder.GenerateTableIndex();
+			proj.table_index = new_proj_index;
+			new_top_index = new_proj_index;
+			
+			column_count = proj.expressions.size();
+			
+			LATE_MAT_LOG("Updated projection table_index from %llu to %llu",
+			             static_cast<unsigned long long>(old_proj_index),
+			             static_cast<unsigned long long>(new_proj_index));
+		} else if (path_op.type == LogicalOperatorType::LOGICAL_FILTER) {
+			auto &filter = path_op.Cast<LogicalFilter>();
+			// Update filter expressions to reference the new child table_index
+			for (auto &expr : filter.expressions) {
+				ReplaceTableReferences(expr, new_top_index);
+			}
+			// Filters pass through bindings, so new_top_index stays the same
+			LATE_MAT_LOG("Updated filter to reference table_index %llu",
+			             static_cast<unsigned long long>(new_top_index));
+		}
+	}
+
+	// Update semi-join conditions to reference the new top-level table index
+	for (auto &condition : join.conditions) {
+		ReplaceTableReferences(condition.left, new_top_index);
+	}
+
+	// probe_rowid_bindings reference the top-level output of the probe side
+	// This is probe_get if probe_path is empty, otherwise we need to project rowid through the path
+	vector<ColumnBinding> probe_rowid_bindings;
+	for (auto &idx : probe_row_indexes) {
+		probe_rowid_bindings.emplace_back(new_probe_index, idx);
+	}
+
+	// Now project rowid through the intermediate operators
+	for (idx_t path_idx = probe_path.size(); path_idx > 0; path_idx--) {
+		auto &path_op = probe_path[path_idx - 1].get();
+		if (path_op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &proj = path_op.Cast<LogicalProjection>();
+			// Add rowid expressions to the projection
+			for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+				auto &r_col = row_id_columns[r_idx];
+				proj.expressions.push_back(
+				    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, probe_rowid_bindings[r_idx]));
+				// Update binding to reference the projection's output
+				probe_rowid_bindings[r_idx] = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			}
+			column_count = proj.expressions.size();
+			LATE_MAT_LOG("Projected rowid through projection, new binding: (%llu, %llu)",
+			             static_cast<unsigned long long>(probe_rowid_bindings[0].table_index),
+			             static_cast<unsigned long long>(probe_rowid_bindings[0].column_index));
+		} else if (path_op.type == LogicalOperatorType::LOGICAL_FILTER) {
+			auto &filter = path_op.Cast<LogicalFilter>();
+			if (filter.HasProjectionMap()) {
+				// Add rowid to the filter's projection map
+				filter.projection_map.push_back(column_count - 1);
+			}
+			// Filters pass through bindings unchanged
+		}
+	}
+
+	LATE_MAT_LOG("Final probe rowid binding: (%llu, %llu)",
+	             static_cast<unsigned long long>(probe_rowid_bindings[0].table_index),
+	             static_cast<unsigned long long>(probe_rowid_bindings[0].column_index));
+
+	// Use original_top_index for the final projection output
+	auto original_probe_index = original_top_index;
+
+	// 3. Create a projection above the semi-join that explicitly passes rowid
+	// This ensures RemoveUnusedColumns sees the direct reference
+	auto rhs_wrapper_index = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> rhs_wrapper_exprs;
+	
+	// Add all the original semi-join output columns (from probe side) plus rowid at the end
+	// For now, just add the rowid expression - RemoveUnusedColumns will prune unused columns
+	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+		auto &r_col = row_id_columns[r_idx];
+		rhs_wrapper_exprs.push_back(
+		    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, probe_rowid_bindings[r_idx]));
+	}
+	
+	auto rhs_wrapper_proj = make_uniq<LogicalProjection>(rhs_wrapper_index, std::move(rhs_wrapper_exprs));
+	if (op->has_estimated_cardinality) {
+		rhs_wrapper_proj->SetEstimatedCardinality(op->estimated_cardinality);
+	}
+	rhs_wrapper_proj->children.push_back(std::move(op));
+	
+	// Update the probe rowid bindings to reference the wrapper projection
+	vector<ColumnBinding> wrapper_rowid_bindings;
+	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+		wrapper_rowid_bindings.emplace_back(rhs_wrapper_index, r_idx);
+	}
+	
+	LATE_MAT_LOG("Created RHS wrapper projection with table_index=%llu, rowid at binding (%llu, 0)",
+	             static_cast<unsigned long long>(rhs_wrapper_index),
+	             static_cast<unsigned long long>(rhs_wrapper_index));
+
+	// 4. Create the late-fetch INNER join on rowid
+	auto late_fetch_join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+
+	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
+		auto &row_id_col = row_id_columns[r_idx];
+		JoinCondition condition;
+		condition.comparison = ExpressionType::COMPARE_EQUAL;
+		condition.left =
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, fetch_rowid_bindings[r_idx]);
+		condition.right =
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, wrapper_rowid_bindings[r_idx]);
+		late_fetch_join->conditions.push_back(std::move(condition));
+	}
+
+	if (rhs_wrapper_proj->has_estimated_cardinality) {
+		late_fetch_join->SetEstimatedCardinality(rhs_wrapper_proj->estimated_cardinality);
+	}
+
+	// 5. Wire up the plan:
+	// late_fetch_join->children[0] = fetch_get (LHS - contains all columns)
+	// late_fetch_join->children[1] = rhs_wrapper_proj (RHS - projects just rowid from semi-join)
+	late_fetch_join->children.push_back(std::move(fetch_get));
+	late_fetch_join->children.push_back(std::move(rhs_wrapper_proj));
+
+	// 6. Create final projection to restore original column bindings
+	// The output should reference the fetch_get columns (not the rowid)
+	auto final_proj_index = original_probe_index;
+	vector<unique_ptr<Expression>> final_proj_list;
+
+	auto &fetch_get_ref = late_fetch_join->children[0]->Cast<LogicalGet>();
+	auto &fetch_column_ids = fetch_get_ref.GetColumnIds();
+	idx_t fetch_num_cols = fetch_get_ref.projection_ids.empty() ? fetch_column_ids.size()
+	                                                            : fetch_get_ref.projection_ids.size();
+
+	// Project all non-rowid columns from the fetch get
+	for (idx_t i = 0; i < fetch_num_cols; i++) {
+		// Skip rowid columns
+		bool is_rowid = false;
+		for (auto &rowid_idx : fetch_row_indexes) {
+			if (i == rowid_idx) {
+				is_rowid = true;
+				break;
+			}
+		}
+		if (is_rowid) {
+			continue;
+		}
+
+		auto &col_id = fetch_column_ids[i];
+		auto &col_type = fetch_get_ref.returned_types[i];
+		string col_name = fetch_get_ref.GetColumnName(col_id);
+		auto col_expr = make_uniq<BoundColumnRefExpression>(col_name, col_type, ColumnBinding(fetch_index, i));
+		final_proj_list.push_back(std::move(col_expr));
+	}
+
+	auto final_proj = make_uniq<LogicalProjection>(final_proj_index, std::move(final_proj_list));
+	if (late_fetch_join->has_estimated_cardinality) {
+		final_proj->SetEstimatedCardinality(late_fetch_join->estimated_cardinality);
+	}
+	final_proj->children.push_back(std::move(late_fetch_join));
+
+	op = std::move(final_proj);
+
+	LATE_MAT_LOG("Successfully applied semi-join late materialization");
+
+	// Run RemoveUnusedColumns with everything_referenced=true to lock in all column bindings
+	// This prevents later RemoveUnusedColumns passes from incorrectly pruning rowid columns
+	// from intermediate projections in the probe path
+	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
+	unused_optimizer.VisitOperator(*op);
+
+	return true;
+}
+
 bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
 	if (!has_offset && !DBConfig::GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
 		// we avoid optimizing large limits if preserve insertion order is false
@@ -447,6 +875,21 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		}
 		if (TryLateMaterialization(op)) {
 			return op;
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		// Try late materialization for semi-joins with expensive columns on probe side
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			LATE_MAT_LOG("Found SEMI/ANTI join, attempting late materialization");
+			if (TryLateMaterializationSemiJoin(op)) {
+				LATE_MAT_LOG("Successfully optimized semi-join with late materialization");
+				// Don't recurse into children - the wrapped semi-join should not be
+				// re-optimized. Subsequent optimizer passes will handle any nested
+				// structures that might benefit from optimization.
+				return op;
+			}
 		}
 		break;
 	}

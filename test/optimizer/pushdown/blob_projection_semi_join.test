@@ -1,0 +1,85 @@
+# name: test/optimizer/unused_columns/blob_projection_semi_join.test
+# description: Test that BLOB columns are not projected before selective semi-join filters
+# group: [unused_columns]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE items (
+  id INTEGER PRIMARY KEY,
+  category VARCHAR,
+  name VARCHAR
+);
+
+statement ok
+CREATE TABLE data_chunks (
+  id INTEGER PRIMARY KEY,
+  item_id INTEGER,
+  timestamp TIMESTAMP,
+  large_blob BLOB
+);
+
+# Insert test data - smaller dataset for testing
+statement ok
+INSERT INTO items 
+SELECT 
+  i as id,
+  'category_' || (i % 10) as category,
+  'item_' || i as name
+FROM range(1, 1001) t(i);
+
+statement ok
+INSERT INTO data_chunks
+SELECT 
+  i as id,
+  (i % 1000) + 1 as item_id,
+  '2024-01-01'::TIMESTAMP + INTERVAL (i) MINUTE as timestamp,
+  repeat('x', 1000)::BLOB as large_blob
+FROM range(1, 100001) t(i);
+
+# Test query: The BLOB column should NOT be projected in the initial table scan
+# The semi-join should reduce rows first, then the blob should be fetched
+query II
+EXPLAIN 
+WITH matching_items AS (
+  SELECT id 
+  FROM items 
+  WHERE name LIKE 'item_51%'
+)
+SELECT 
+  dc.item_id,
+  dc.large_blob
+FROM data_chunks dc
+WHERE dc.timestamp BETWEEN '2024-01-03'::TIMESTAMP AND '2024-01-04'::TIMESTAMP
+  AND dc.item_id IN (SELECT id FROM matching_items);
+----
+logical_opt	<!REGEX>:.*TABLE_SCAN.*data_chunks.*large_blob.*HASH_JOIN.*
+
+# The query should still return correct results
+query I
+WITH matching_items AS (
+  SELECT id 
+  FROM items 
+  WHERE name LIKE 'item_51%'
+)
+SELECT COUNT(*)
+FROM data_chunks dc
+WHERE dc.timestamp BETWEEN '2024-02-01'::TIMESTAMP AND '2024-03-01'::TIMESTAMP
+  AND dc.item_id IN (SELECT id FROM matching_items);
+----
+259
+
+# Verify the actual query works
+statement ok
+WITH matching_items AS (
+  SELECT id 
+  FROM items 
+  WHERE name LIKE 'item_51%'
+)
+SELECT 
+  dc.item_id,
+  dc.large_blob
+FROM data_chunks dc
+WHERE dc.timestamp BETWEEN '2024-02-01'::TIMESTAMP AND '2024-03-01'::TIMESTAMP
+  AND dc.item_id IN (SELECT id FROM matching_items);
