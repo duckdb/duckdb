@@ -12,24 +12,53 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/column_index_map.hpp"
 
 namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 
-struct ReferencedColumn {
+struct ReferencedStructExtract {
+public:
+	ReferencedStructExtract(vector<reference<unique_ptr<Expression>>> expressions, idx_t bindings_idx,
+	                        ColumnIndex &&path)
+	    : bindings_idx(bindings_idx), expr(std::move(expressions)), extract_path(std::move(path)) {
+	}
+
+public:
+	//! The index into the 'bindings' of the ReferencedColumn that is the child of this struct_extract
+	idx_t bindings_idx;
+	//! The struct extract expressions, in order from root to leaf
+	vector<reference<unique_ptr<Expression>>> expr;
+	//! The ColumnIndex with a path that matches this struct extract
+	ColumnIndex extract_path;
+};
+
+enum class PushdownExtractSupport : uint8_t { UNCHECKED, DISABLED, ENABLED };
+
+class ReferencedColumn {
+public:
+	void AddPath(const ColumnIndex &path);
+
+public:
+	//! The BoundColumnRefExpressions in the operator that reference the same ColumnBinding
 	vector<reference<BoundColumnRefExpression>> bindings;
+	vector<ReferencedStructExtract> struct_extracts;
 	vector<ColumnIndex> child_columns;
+	//! Whether we can create a pushdown extract for the children of this column (if any)
+	PushdownExtractSupport supports_pushdown_extract = PushdownExtractSupport::UNCHECKED;
+	//! Map from extract path to the binding created for it (if pushdown extract)
+	column_index_set unique_paths;
+};
+
+enum class BaseColumnPrunerMode : uint8_t {
+	DEFAULT,
+	//! Any child reference disables PUSHDOWN_EXTRACT for the parent column
+	DISABLE_PUSHDOWN_EXTRACT
 };
 
 class BaseColumnPruner : public LogicalOperatorVisitor {
-protected:
-	//! The map of column references
-	column_binding_map_t<ReferencedColumn> column_references;
-
-	vector<ColumnIndex> deliver_child;
-
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
@@ -41,16 +70,32 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col);
 	//! Add a reference to a sub-section of the column
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
+	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
+	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
+	                const vector<reference<unique_ptr<Expression>>> &parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
-	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
+	//! ret: The amount of bindings created
+	idx_t ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
-	bool HandleStructExtract(Expression &expr);
+	bool HandleStructExtract(unique_ptr<Expression> *expression);
 
-	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
-	                                  vector<idx_t> &indexes);
-
+	bool HandleStructExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	                                  vector<idx_t> &indexes, vector<reference<unique_ptr<Expression>>> &expressions);
+	void SetMode(BaseColumnPrunerMode mode);
 	bool HandleStructPack(Expression &expr);
+	BaseColumnPrunerMode GetMode() const;
+
+private:
+	void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column);
+
+protected:
+	//! The map of column references
+	column_binding_map_t<ReferencedColumn> column_references;
+
+private:
+	//! The current mode of the pruner, enables/disables certain behaviors
+	BaseColumnPrunerMode mode = BaseColumnPrunerMode::DEFAULT;
 };
 
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
@@ -73,5 +118,10 @@ private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get);
+	void CheckPushdownExtract(LogicalOperator &op);
+	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
+	void WritePushdownExtractColumns(const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx,
+	                                 const LogicalType &column_type,
+	                                 const std::function<idx_t(const ColumnIndex &new_index)> &callback);
 };
 } // namespace duckdb
