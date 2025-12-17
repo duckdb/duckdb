@@ -57,17 +57,6 @@ namespace duckdb {
 
 struct ActiveQueryContext {
 public:
-	void End() {
-		if (executor) {
-			executor->CancelTasks();
-		}
-		progress_bar.reset();
-		if (prepared && prepared->physical_plan) {
-			prepared->physical_plan->CleanupStates();
-		}
-	}
-
-public:
 	//! The query that is currently being executed
 	string query;
 	//! Prepared statement data
@@ -243,7 +232,10 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
                                           optional_ptr<ErrorData> previous_error) {
-	active_query->End();
+	if (active_query->executor) {
+		active_query->executor->CancelTasks();
+	}
+	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();

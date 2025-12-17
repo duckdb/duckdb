@@ -24,9 +24,15 @@ class ColumnDataCollection;
 
 class PhysicalPlan {
 public:
-	explicit PhysicalPlan(Allocator &allocator);
+	explicit PhysicalPlan(Allocator &allocator) : arena(allocator) {};
 
-	~PhysicalPlan();
+	~PhysicalPlan() {
+		// Call the destructor of each physical operator.
+		for (auto &op : ops) {
+			auto &op_ref = op.get();
+			op_ref.~PhysicalOperator();
+		}
+	}
 
 public:
 	template <class T, class... ARGS>
@@ -48,8 +54,6 @@ public:
 	ArenaAllocator &ArenaRef() {
 		return arena;
 	}
-
-	void CleanupStates();
 
 private:
 	//! The arena allocator storing the physical operator memory.
