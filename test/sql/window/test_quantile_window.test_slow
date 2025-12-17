@@ -1,4 +1,4 @@
-# name: test/sql/window/test_quantile_window.test_coverage
+# name: test/sql/window/test_quantile_window.test_slow
 # description: Moving QUANTILE coverage, fixed or variable 100 element frame for MEDIAN, IQR, and MAD
 # group: [window]
 
