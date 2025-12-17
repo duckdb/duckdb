@@ -16,7 +16,8 @@ class BlobWriter {
 public:
 	template <class T>
 	void Write(const T &value) {
-		auto ptr = reinterpret_cast<const char *>(&value);
+		auto le_value = BSwapIfBE(value);
+		auto ptr = reinterpret_cast<const char *>(&le_value);
 		buffer.insert(buffer.end(), ptr, ptr + sizeof(T));
 	}
 
@@ -38,14 +39,10 @@ public:
 		if (reserved.offset + sizeof(T) > buffer.size()) {
 			throw InternalException("Write out of bounds in BinaryWriter");
 		}
-		auto ptr = reinterpret_cast<const char *>(&reserved.value);
+		auto le_value = BSwapIfBE(reserved.value);
+		auto ptr = reinterpret_cast<const char *>(&le_value);
 		// We've reserved 0 bytes, so we can safely memcpy
 		memcpy(buffer.data() + reserved.offset, ptr, sizeof(T));
-	}
-
-	void Write(const char *data, size_t size) {
-		D_ASSERT(data != nullptr);
-		buffer.insert(buffer.end(), data, data + size);
 	}
 
 	const vector<char> &GetBuffer() const {
@@ -70,16 +67,9 @@ public:
 		if (pos + sizeof(T) > end) {
 			throw InvalidInputException("Writing beyond end of binary data at position %zu", pos - beg);
 		}
-		memcpy(pos, &value, sizeof(T));
+		auto le_value = BSwapIfBE(value);
+		memcpy(pos, &le_value, sizeof(T));
 		pos += sizeof(T);
-	}
-
-	void Write(const char *data, size_t size) {
-		if (pos + size > end) {
-			throw InvalidInputException("Writing beyond end of binary data at position %zu", pos - beg);
-		}
-		memcpy(pos, data, size);
-		pos += size;
 	}
 
 	size_t GetPosition() const {
@@ -112,17 +102,9 @@ public:
 			throw InvalidInputException("Unexpected end of binary data at position %zu", pos - beg);
 		}
 		T value;
-		if (LE) {
-			memcpy(&value, pos, sizeof(T));
-			pos += sizeof(T);
-		} else {
-			char temp[sizeof(T)];
-			for (size_t i = 0; i < sizeof(T); ++i) {
-				temp[i] = pos[sizeof(T) - 1 - i];
-			}
-			memcpy(&value, temp, sizeof(T));
-			pos += sizeof(T);
-		}
+		memcpy(&value, pos, sizeof(T));
+		value = LE ? BSwapIfBE(value) : BSwapIfLE(value);
+		pos += sizeof(T);
 		return value;
 	}
 
@@ -1060,9 +1042,21 @@ static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent
 
 	// Issue a single .Reserve() for all vertices, to minimize bounds checking overhead
 	const auto ptr = const_data_ptr_cast(reader.Reserve(vert_count * sizeof(VERTEX_TYPE)));
-
+#if DUCKDB_IS_BIG_ENDIAN
+	double be_buffer[sizeof(VERTEX_TYPE)];
+	auto be_ptr = reinterpret_cast<const_data_ptr_t>(be_buffer);
+#endif
 	for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+#if DUCKDB_IS_BIG_ENDIAN
+		auto vert_ofs = vert_idx * sizeof(VERTEX_TYPE);
+		for (idx_t i = 0; i < sizeof(VERTEX_TYPE) / sizeof(double); ++i) {
+			auto le_value = Load<double>(ptr + vert_ofs + i * sizeof(double));
+			be_buffer[i] = BSwapIfBE(le_value);
+		}
+		VERTEX_TYPE vertex = Load<VERTEX_TYPE>(be_ptr);
+#else
 		VERTEX_TYPE vertex = Load<VERTEX_TYPE>(ptr + vert_idx * sizeof(VERTEX_TYPE));
+#endif
 		if (check_nan && vertex.AllNan()) {
 			continue;
 		}
