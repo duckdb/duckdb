@@ -13,24 +13,27 @@ statement ok
 CREATE TABLE t AS SELECT range::INT AS id FROM range(10);
 
 statement ok
-ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+CHECKPOINT
 
 statement ok
-CREATE TABLE original AS SELECT d FROM t;
+ALTER TABLE t ALTER id SET TYPE TIMESTAMP USING NOW();
+
+statement ok
+CREATE TABLE original AS SELECT id FROM t;
 
 restart
 
 # there is a result
 query I
-select COUNT(d) != 0 from t;
+select COUNT(id) != 0 from t;
 ----
 true
 
 # result is consistent
 query I sort r1
-select d from t;
+select id from t;
 ----
 
 query I sort r1
-select d from original;
+select id from original;
 ----
