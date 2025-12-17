@@ -203,6 +203,9 @@ unique_ptr<BaseStatistics> TableStatistics::CopyStats(const StorageIndex &index)
 	if (stats.HasDistinctStats()) {
 		result.SetDistinctCount(stats.DistinctStats().GetCount());
 	}
+	if (index.IsPushdownExtract()) {
+		return result.PushdownExtract(index.GetChildIndexes()[0]);
+	}
 	return result.ToUnique();
 }
 

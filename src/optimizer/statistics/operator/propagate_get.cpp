@@ -116,13 +116,20 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	if (get.function.cardinality) {
 		node_stats = get.function.cardinality(context, get.bind_data.get());
 	}
-	if (!get.function.statistics) {
+	if (!get.function.statistics && !get.function.statistics_extended) {
 		// no column statistics to get
 		return std::move(node_stats);
 	}
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto stats = get.function.statistics(context, get.bind_data.get(), column_ids[i].GetPrimaryIndex());
+		unique_ptr<BaseStatistics> stats;
+		if (get.function.statistics_extended) {
+			TableFunctionGetStatisticsInput input(get.bind_data.get(), column_ids[i]);
+			stats = get.function.statistics_extended(context, input);
+		} else {
+			stats = get.function.statistics(context, get.bind_data.get(), column_ids[i].GetPrimaryIndex());
+		}
+
 		if (stats) {
 			ColumnBinding binding(get.table_index, i);
 			statistics_map.insert(make_pair(binding, std::move(stats)));
