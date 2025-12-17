@@ -40,17 +40,6 @@ public:
 
 	~SharedLruCache() = default;
 
-	// Insert `value` with key `key`. This will replace any previous entry with the same key.
-	// Rough memory consumption is fetched from the given value, which is used in eviction.
-	void Put(Key key, shared_ptr<Val> value) {
-		if (!value) {
-			return;
-		}
-		const auto memory = value->GetEstimatedCacheMemory();
-		const auto estimated_memory = memory.IsValid() ? memory.GetIndex() : 0;
-		Put(std::move(key), std::move(value), estimated_memory);
-	}
-
 	// Insert `value` with key `key` and explicit memory size. This will replace any previous entry with the same key.
 	void Put(Key key, shared_ptr<Val> value, idx_t memory_size) {
 		// Remove existing entry if present

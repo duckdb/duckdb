@@ -13,9 +13,6 @@ struct TestValue {
 
 	TestValue(int val, idx_t sz = 100) : value(val), size(sz) {
 	}
-	optional_idx GetEstimatedCacheMemory() const {
-		return size;
-	}
 };
 
 } // namespace
@@ -25,7 +22,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 
 	SECTION("Put and Get") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		cache.Put("key1", val1);
+		cache.Put("key1", val1, /*memory_size=*/100);
 
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
@@ -43,8 +40,8 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		auto val1 = make_shared_ptr<TestValue>(1, 100);
 		auto val2 = make_shared_ptr<TestValue>(2, 150);
 
-		cache.Put("key1", val1);
-		cache.Put("key1", val2);
+		cache.Put("key1", val1, /*memory_size=*/100);
+		cache.Put("key1", val2, /*memory_size=*/150);
 
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
@@ -54,7 +51,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 
 	SECTION("Delete") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		cache.Put("key1", val1);
+		cache.Put("key1", val1, /*memory_size=*/100);
 
 		bool deleted = cache.Delete("key1");
 		REQUIRE(deleted == true);
@@ -75,9 +72,9 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		auto val2 = make_shared_ptr<TestValue>(2, 200);
 		auto val3 = make_shared_ptr<TestValue>(3, 200);
 
-		cache.Put("key1", val1);
-		cache.Put("key2", val2);
-		cache.Put("key3", val3);
+		cache.Put("key1", val1, /*memory_size=*/200);
+		cache.Put("key2", val2, /*memory_size=*/200);
+		cache.Put("key3", val3, /*memory_size=*/200);
 
 		// Should evict key1 (LRU) to make room
 		REQUIRE(cache.Get("key1") == nullptr);
@@ -95,15 +92,15 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		auto val3 = make_shared_ptr<TestValue>(3, 100);
 		auto val4 = make_shared_ptr<TestValue>(4, 100);
 
-		cache.Put("key1", val1);
-		cache.Put("key2", val2);
-		cache.Put("key3", val3);
+		cache.Put("key1", val1, /*memory_size=*/100);
+		cache.Put("key2", val2, /*memory_size=*/100);
+		cache.Put("key3", val3, /*memory_size=*/100);
 
 		// Access key1 to make it MRU
 		cache.Get("key1");
 
 		// Add key4 - should evict key2 (LRU, not key1)
-		cache.Put("key4", val4);
+		cache.Put("key4", val4, /*memory_size=*/100);
 
 		REQUIRE(cache.Get("key1") != nullptr);
 		REQUIRE(cache.Get("key2") == nullptr);
@@ -118,7 +115,7 @@ TEST_CASE("LRU Cache Unlimited Memory", "[lru_cache]") {
 	// Should not evict anything
 	for (int idx = 0; idx < 100; ++idx) {
 		auto val = make_shared_ptr<TestValue>(idx, 100);
-		cache.Put("key" + std::to_string(idx), val);
+		cache.Put("key" + std::to_string(idx), val, /*memory_size=*/100);
 	}
 
 	REQUIRE(cache.Size() == 100);
@@ -129,8 +126,8 @@ TEST_CASE("LRU Cache Clear", "[lru_cache]") {
 
 	auto val1 = make_shared_ptr<TestValue>(1, 100);
 	auto val2 = make_shared_ptr<TestValue>(2, 100);
-	cache.Put("key1", val1);
-	cache.Put("key2", val2);
+	cache.Put("key1", val1, /*memory_size=*/100);
+	cache.Put("key2", val2, /*memory_size=*/100);
 
 	cache.Clear();
 
@@ -138,30 +135,4 @@ TEST_CASE("LRU Cache Clear", "[lru_cache]") {
 	REQUIRE(cache.CurrentMemory() == 0);
 	REQUIRE(cache.Get("key1") == nullptr);
 	REQUIRE(cache.Get("key2") == nullptr);
-}
-
-TEST_CASE("LRU Cache Put with Explicit Size", "[lru_cache]") {
-	SharedLruCache<string, TestValue> cache(1000);
-
-	SECTION("Put with explicit size") {
-		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		// Use explicit size API, which overrides the value's GetEstimatedCacheMemory
-		cache.Put("key1", val1, 200);
-
-		auto result = cache.Get("key1");
-		REQUIRE(result != nullptr);
-		REQUIRE(result->value == 42);
-		REQUIRE(cache.CurrentMemory() == 200); // Uses explicit size, not value->GetEstimatedCacheMemory
-	}
-
-	SECTION("Put with GetEstimatedCacheMemory vs explicit size") {
-		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		// First use GetEstimatedCacheMemory API
-		cache.Put("key1", val1);
-		REQUIRE(cache.CurrentMemory() == 100);
-
-		// Then replace with explicit size
-		cache.Put("key1", val1, 300);
-		REQUIRE(cache.CurrentMemory() == 300);
-	}
 }

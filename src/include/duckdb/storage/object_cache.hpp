@@ -90,11 +90,12 @@ public:
 
 		// Create new entry while holding lock
 		auto value = make_shared_ptr<T>(args...);
-		const bool is_evictable = value->GetEstimatedCacheMemory().IsValid();
+		const auto estimated_memory = value->GetEstimatedCacheMemory();
+		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {
 			non_evictable_entries[key] = value;
 		} else {
-			lru_cache.Put(key, value);
+			lru_cache.Put(key, value, estimated_memory.GetIndex());
 		}
 
 		return value;
@@ -104,13 +105,15 @@ public:
 		if (!value) {
 			return;
 		}
+
 		const lock_guard<mutex> lock(lock_mutex);
-		const bool is_evictable = value->GetEstimatedCacheMemory().IsValid();
+		const auto estimated_memory = value->GetEstimatedCacheMemory();
+		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {
 			non_evictable_entries[std::move(key)] = std::move(value);
 			return;
 		}
-		lru_cache.Put(key, std::move(value));
+		lru_cache.Put(key, std::move(value), estimated_memory.GetIndex());
 	}
 
 	void Delete(const string &key) {
