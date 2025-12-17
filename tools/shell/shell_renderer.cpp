@@ -193,12 +193,27 @@ RenderingResultIterator RenderingQueryResult::end() {
 	return RenderingResultIterator(nullptr);
 }
 
-SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result) {
-	RenderingQueryResult result(query_result, renderer);
+SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result,
+                                           PagerMode pager_overwrite) {
+	RenderingQueryResult render_result(query_result, renderer);
+	renderer.Analyze(render_result);
+	if (seenInterrupt) {
+		return SuccessState::FAILURE;
+	}
 
-	renderer.Analyze(result);
+	// check if we need to use the pager for the rendering
+	unique_ptr<PagerState> pager_setup;
+	if (pager_overwrite == PagerMode::PAGER_AUTOMATIC) {
+		if (ShouldUsePager(renderer, render_result)) {
+			pager_overwrite = PagerMode::PAGER_ON;
+		}
+	}
+	if (pager_overwrite == PagerMode::PAGER_ON) {
+		pager_setup = SetupPager();
+	}
+	// render the query result
 	PrintStream print_stream(*this);
-	return renderer.RenderQueryResult(print_stream, *this, result);
+	return renderer.RenderQueryResult(print_stream, *this, render_result);
 }
 
 SuccessState ShellRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) {
@@ -289,6 +304,8 @@ unique_ptr<duckdb::DataChunk> ShellRenderer::ConvertChunk(duckdb::DataChunk &chu
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], varchar_chunk->data[c], chunk.size());
 	}
+	varchar_chunk->SetCardinality(chunk.size());
+	varchar_chunk->Flatten();
 	return varchar_chunk;
 }
 
@@ -302,7 +319,6 @@ bool RenderingQueryResult::TryConvertChunk() {
 		return false;
 	}
 	auto varchar_chunk = renderer.ConvertChunk(*chunk);
-	varchar_chunk->SetCardinality(chunk->size());
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
@@ -1275,6 +1291,8 @@ public:
 		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 			duckdb::VectorOperations::Cast(*state.conn->context, chunk.data[c], json_chunk.data[c], chunk.size());
 		}
+		json_chunk.SetCardinality(chunk.size());
+		json_chunk.Flatten();
 		// now convert the JSON chunk to VARCHAR
 		return ShellRenderer::ConvertChunk(json_chunk);
 	}
@@ -1563,59 +1581,105 @@ private:
 
 class ModeDuckBoxRenderer : public ShellRenderer {
 public:
-	explicit ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
-	}
+	explicit ModeDuckBoxRenderer(ShellState &state);
 
+	void RemoveRenderLimits() override;
+	void Analyze(RenderingQueryResult &result) override;
 	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override;
 	bool RequireMaterializedResult() const override {
 		return true;
 	}
-	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		if (global_mode == PagerMode::PAGER_ON) {
-			return true;
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
+
+private:
+	duckdb::BoxRendererConfig config;
+	unique_ptr<duckdb::BoxRendererState> render_state;
+	string error_str;
+};
+
+ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
+	config.max_rows = state.max_rows;
+	config.max_width = state.max_width;
+	if (state.max_analyze_rows == 0) {
+		// if max_analyze_rows is set to 0 (auto) - set max_analyze_rows to 100K if we are rendering to the console
+		if (state.stdout_is_console) {
+			// if we are
+			config.max_analyze_rows = 100000;
 		}
-		// in duckbox mode the output is automatically truncated to "max_rows"
-		// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
-		if (state.max_rows < state.pager_min_rows && state.max_width == 0) {
-			return false;
+	} else {
+		config.max_analyze_rows = state.max_analyze_rows;
+	}
+	if (config.max_width == 0) {
+		// if max_width is set to 0 (auto) - set it to infinite if we are writing to a file
+		if (!state.outfile.empty() && state.outfile[0] != '|') {
+			config.max_rows = (size_t)-1;
+			config.max_width = (size_t)-1;
 		}
-		// FIXME: actually look at row count / render width?
+		if (!state.stdout_is_console) {
+			config.max_width = (size_t)-1;
+		}
+	}
+	LargeNumberRendering large_rendering = state.large_number_rendering;
+	if (large_rendering == LargeNumberRendering::DEFAULT) {
+		large_rendering = state.stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
+	}
+	config.null_value = state.nullValue;
+	if (state.columns) {
+		config.render_mode = duckdb::RenderMode::COLUMNS;
+	}
+	config.decimal_separator = state.decimal_separator;
+	config.thousand_separator = state.thousand_separator;
+	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+}
+
+void ModeDuckBoxRenderer::RemoveRenderLimits() {
+	config.max_rows = (size_t)-1;
+	config.max_width = (size_t)-1;
+}
+
+void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
+	duckdb::BoxRenderer renderer(config);
+	auto &query_result = result.result;
+	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
+	auto &con = *state.conn;
+	try {
+		render_state = renderer.Prepare(*con.context, result.metadata.column_names, materialized.Collection());
+	} catch (std::exception &ex) {
+		// store the error - throw on render
+		error_str = ex.what();
+	}
+}
+
+bool ModeDuckBoxRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) {
+	if (global_mode == PagerMode::PAGER_ON) {
 		return true;
 	}
-};
+	// in duckbox mode the output is automatically truncated to the terminal width if max_width = 0
+	// if max_width is set - check the render width - we use the pager if it exceeds the max render width
+	if (config.max_width != 0) {
+		idx_t max_render_width = state.GetMaxRenderWidth();
+		if (render_state->TotalRenderWidth() > max_render_width) {
+			return true;
+		}
+	}
+	// in duckbox mode the output is truncated to max_rows
+	// if this is larger than pager_min_rows - we actually check the row count of the result
+	if (config.max_rows >= state.pager_min_rows) {
+		// show the pager if the row count exceeds the min rows
+		if (result.result.Cast<MaterializedQueryResult>().RowCount() >= state.pager_min_rows) {
+			return true;
+		}
+	}
+	return false;
+}
 
 SuccessState ModeDuckBoxRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) {
 	DuckBoxRenderer result_renderer(out, state, state.HighlightResults() && out.SupportsHighlight());
 	try {
-		duckdb::BoxRendererConfig config;
-		config.max_rows = state.max_rows;
-		config.max_width = state.max_width;
-		if (config.max_width == 0) {
-			// if max_width is set to 0 (auto) - set it to infinite if we are writing to a file
-			if (!state.outfile.empty() && state.outfile[0] != '|') {
-				config.max_rows = (size_t)-1;
-				config.max_width = (size_t)-1;
-			}
-			if (!state.stdout_is_console) {
-				config.max_width = (size_t)-1;
-			}
+		if (!error_str.empty()) {
+			throw std::runtime_error(error_str);
 		}
-		LargeNumberRendering large_rendering = state.large_number_rendering;
-		if (large_rendering == LargeNumberRendering::DEFAULT) {
-			large_rendering = state.stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
-		}
-		config.null_value = state.nullValue;
-		if (state.columns) {
-			config.render_mode = duckdb::RenderMode::COLUMNS;
-		}
-		config.decimal_separator = state.decimal_separator;
-		config.thousand_separator = state.thousand_separator;
-		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
-		duckdb::BoxRenderer renderer(config);
-		auto &query_result = result.result;
-		auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
-		auto &con = *state.conn;
-		renderer.Render(*con.context, result.metadata.column_names, materialized.Collection(), result_renderer);
+		render_state->Render(result_renderer);
 		return SuccessState::SUCCESS;
 	} catch (std::exception &ex) {
 		string error_str = duckdb::ErrorData(ex).Message() + "\n";
