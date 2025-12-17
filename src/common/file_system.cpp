@@ -371,7 +371,7 @@ string NormalizeSegments(const string &path, const string &separator, bool is_ab
 
 	bool drive_root =
 	    !drive_prefix.empty() && path.size() > drive_prefix.size() && path[drive_prefix.size()] == separator[0];
-	bool clamp_to_root = is_absolute || drive_root || !drive_prefix.empty();
+	bool clamp_to_root = is_absolute || drive_root;
 	vector<string> stack;
 	for (auto &part : parts) {
 		if (part.empty() || part == ".") {
@@ -438,6 +438,14 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	    (!rhs_parsed.has_scheme && IsPathAbsolute(rhs)) || rhs_scheme_absolute || rhs_is_file_scheme;
 	auto lhs_absolute = lhs_parsed.has_scheme || lhs_normalize_absolute;
 	auto rhs_absolute = rhs_parsed.has_scheme || rhs_normalize_absolute;
+	auto strip_leading = [](string &value, const string &chars) {
+		auto pos = value.find_first_not_of(chars);
+		if (pos == string::npos) {
+			value.clear();
+		} else if (pos > 0) {
+			value.erase(0, pos);
+		}
+	};
 
 	auto attach_scheme = [&](const ParsedPath &parsed, string normalized, bool scheme_absolute) {
 		if (!parsed.has_scheme) {
@@ -446,9 +454,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 		bool is_file_scheme = parsed.scheme == "file://" || parsed.scheme == "file:";
 		if (is_file_scheme) {
 			// ensure a single leading separator on the path portion
-			while (!normalized.empty() && (normalized.front() == '/' || normalized.front() == '\\')) {
-				normalized.erase(normalized.begin());
-			}
+			strip_leading(normalized, "/\\");
 			normalized = separator + normalized;
 			if (parsed.scheme == "file://") {
 				if (!parsed.authority.empty()) {
@@ -462,9 +468,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 			return string("file:") + normalized;
 		}
 		if (!scheme_absolute) {
-			while (!normalized.empty() && normalized.front() == separator_char) {
-				normalized.erase(normalized.begin());
-			}
+			strip_leading(normalized, string(1, separator_char));
 		}
 		return parsed.scheme + normalized;
 	};
@@ -505,9 +509,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	while (lhs.size() > 1 && lhs.back() == separator_char) {
 		lhs.pop_back();
 	}
-	while (!rhs.empty() && rhs.front() == separator_char) {
-		rhs.erase(rhs.begin());
-	}
+	strip_leading(rhs, string(1, separator_char));
 
 	auto combined = lhs + separator + rhs;
 	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
