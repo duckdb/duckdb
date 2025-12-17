@@ -42,7 +42,8 @@ string GetStringArgument(ClientContext &context, const Expression &expr, const s
 	return result_str;
 }
 
-optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &index_name) {
+optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &index_name, const string &catalog_name,
+                                    const string &schema_name, const string &table_name) {
 	optional_ptr<Index> found_index = nullptr;
 	index_list.Scan([&](Index &candidate) {
 		if (candidate.GetIndexName() == index_name) {
@@ -51,29 +52,25 @@ optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &in
 		}
 		return false;
 	});
-	return found_index;
-}
 
-vector<string> CollectAvailableIndexNames(TableIndexList &index_list) {
-	vector<string> available_names;
-	index_list.Scan([&](Index &idx) {
-		available_names.push_back(idx.GetIndexName());
-		return false;
-	});
-	return available_names;
-}
+	if (!found_index) {
+		vector<string> available_names;
+		index_list.Scan([&](Index &idx) {
+			available_names.push_back(idx.GetIndexName());
+			return false;
+		});
+		string available_list = StringUtil::Join(available_names, ", ");
 
-void ThrowIndexNotFoundError(const string &index_name, const string &catalog_name, const string &schema_name,
-                             const string &table_name, TableIndexList &index_list) {
-	auto available_names = CollectAvailableIndexNames(index_list);
-	string available_list = StringUtil::Join(available_names, ", ");
-
-	if (available_names.empty()) {
-		throw CatalogException("index_key: index '%s' was not found on table %s.%s.%s. No indexes found on this table.",
-		                       index_name, catalog_name, schema_name, table_name);
+		if (available_names.empty()) {
+			throw CatalogException(
+			    "index_key: index '%s' was not found on table %s.%s.%s. No indexes found on this table.", index_name,
+			    catalog_name, schema_name, table_name);
+		}
+		throw CatalogException("index_key: index '%s' was not found on table %s.%s.%s. Available indexes: %s",
+		                       index_name, catalog_name, schema_name, table_name, available_list);
 	}
-	throw CatalogException("index_key: index '%s' was not found on table %s.%s.%s. Available indexes: %s", index_name,
-	                       catalog_name, schema_name, table_name, available_list);
+
+	return found_index;
 }
 
 void ValidateIndexIsBound(const Index &index, const string &catalog_name, const string &schema_name,
@@ -202,13 +199,14 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	                        .Cast<TableCatalogEntry>();
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
-	auto &index_list = data_table.GetDataTableInfo()->GetIndexes();
+	auto &data_table_info = *data_table.GetDataTableInfo();
+
+	data_table_info.BindIndexes(context, ART::TYPE_NAME);
+
+	auto &index_list = data_table_info.GetIndexes();
 	auto &columns = duck_table.GetColumns();
 
-	auto found_index = FindIndexByName(index_list, index_name);
-	if (!found_index) {
-		ThrowIndexNotFoundError(index_name, catalog_name, schema_name, table_entry.name, index_list);
-	}
+	auto found_index = FindIndexByName(index_list, index_name, catalog_name, schema_name, table_entry.name);
 	ValidateIndexIsBound(*found_index, catalog_name, schema_name, table_entry.name, index_name);
 	ValidateIndexIsART(*found_index);
 
@@ -223,6 +221,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	auto &key_expr = *arguments[4];
 	ValidateKeyStructType(key_expr);
 	LogicalType key_type = key_expr.return_type;
+	bound_function.arguments[4] = key_type;
 	vector<idx_t> field_map = BuildFieldMap(column_names, key_type, key_types, index_name);
 
 	return make_uniq<IndexKeyBindData>(catalog_name, schema_name, table_name, index_name, &table_entry,
@@ -277,7 +276,7 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 ScalarFunctionSet IndexKeyFun::GetFunctions() {
 	ScalarFunctionSet set("index_key");
 	ScalarFunction index_key_fun(
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalTypeId::STRUCT},
 	    LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
 	set.AddFunction(index_key_fun);
 	return set;
