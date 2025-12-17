@@ -103,9 +103,7 @@ void ValidateKeyStructType(const Expression &key_expr) {
 	if (key_expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (key_expr.return_type.id() != LogicalTypeId::STRUCT) {
-		throw BinderException("index_key argument 'key_struct' must be a STRUCT");
-	}
+	D_ASSERT(key_expr.return_type.id() == LogicalTypeId::STRUCT);
 }
 
 // Returns a mapping from the struct field name to its offset in the struct type.
