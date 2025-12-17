@@ -113,8 +113,9 @@ case_insensitive_map_t<idx_t> BuildFieldLookup(const LogicalType &key_type) {
 	return field_lookup;
 }
 
-// Return a mapping from the logical offset of the index column (not physical) to its corresponding offset in
-// the struct, and also perform type checking to see that they are compatible.
+// Return a mapping from the Index column offset (in the list of index columns, not the whole table),
+// to the corresponding offset in the struct. This also performs validation to make sure the types and number of
+// columns match.
 vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalType &key_type,
                             const vector<LogicalType> &key_types, const string &index_name) {
 	const auto &child_types = StructType::GetChildTypes(key_type);
