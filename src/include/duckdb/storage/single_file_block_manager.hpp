@@ -61,6 +61,7 @@ class SingleFileBlockManager : public BlockManager {
 
 public:
 	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
+	~SingleFileBlockManager();
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
