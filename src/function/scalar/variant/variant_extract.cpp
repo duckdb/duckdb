@@ -179,6 +179,12 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 		//! Look up the value_index of the child we're extracting
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data, count);
+		for (idx_t i = 0; i < count; i++) {
+			if (nested_data[i].is_null) {
+				output_indices[i] = input_indices[i];
+			}
+		}
+
 		if (!lookup_validity.AllValid()) {
 			optional_idx index;
 			for (idx_t i = 0; i < count; i++) {
