@@ -9,8 +9,7 @@ namespace duckdb {
 
 RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
     : allocator(STANDARD_VECTOR_SIZE * sizeof(transaction_t), buffer_manager_p.GetTemporaryBlockManager(),
-                MemoryTag::BASE_TABLE),
-      has_unserialized_changes(false) {
+                MemoryTag::BASE_TABLE) {
 }
 
 idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
@@ -126,7 +125,6 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
                                           idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
-	has_unserialized_changes = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 
@@ -179,7 +177,6 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		auto &info = *vector_info[vector_idx];
-		D_ASSERT(has_unserialized_changes);
 		info.CommitAppend(commit_id, vstart, vend);
 	}
 }
@@ -208,9 +205,6 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		// if we wrote the entire chunk info try to compress it
 		auto cleanup = info.Cleanup(lowest_active_transaction);
 		if (cleanup) {
-			if (info.HasDeletes()) {
-				has_unserialized_changes = true;
-			}
 			vector_info[vector_idx].reset();
 		}
 	}
@@ -243,13 +237,14 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
-	has_unserialized_changes = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
-	has_unserialized_changes = true;
+	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
+		uncheckpointed_delete_commit = commit_id;
+	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
@@ -257,7 +252,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 	lock_guard<mutex> lock(version_lock);
 	auto &manager = *writer.GetMetadataManager();
 	auto options = writer.GetCheckpointOptions();
-	if (!has_unserialized_changes) {
+	if (!uncheckpointed_delete_commit.IsValid()) {
 		// we can write the current pointer as-is
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
@@ -292,7 +287,11 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 		metadata_writer.Flush();
 	}
 
-	has_unserialized_changes = false;
+	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() <= options.transaction_id) {
+		// the last checkpointed id was either before or on the transaction we are checkpointing
+		// nothing to checkpoint in future commits until more deletes appear
+		uncheckpointed_delete_commit = optional_idx();
+	}
 	return storage_pointers;
 }
 
@@ -316,18 +315,18 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		version_info->FillVectorInfo(vector_index);
 		version_info->vector_info[vector_index] = ChunkInfo::Read(version_info->GetAllocator(), source);
 	}
-	version_info->has_unserialized_changes = false;
+	version_info->uncheckpointed_delete_commit = optional_idx();
 	return version_info;
 }
 
 bool RowVersionManager::HasUnserializedChanges() {
 	lock_guard<mutex> lock(version_lock);
-	return has_unserialized_changes;
+	return uncheckpointed_delete_commit.IsValid();
 }
 
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
-	D_ASSERT(!has_unserialized_changes);
+	D_ASSERT(!uncheckpointed_delete_commit.IsValid());
 	return storage_pointers;
 }
 

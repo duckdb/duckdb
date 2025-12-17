@@ -51,7 +51,7 @@ private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkInfo>> vector_info;
-	bool has_unserialized_changes;
+	optional_idx uncheckpointed_delete_commit;
 	vector<MetaBlockPointer> storage_pointers;
 
 private:
