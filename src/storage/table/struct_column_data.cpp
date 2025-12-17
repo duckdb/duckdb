@@ -148,12 +148,19 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 		    }
 		    auto &field = *sub_columns[child_index];
 		    auto &child_type = StructType::GetChildTypes(type)[child_index].second;
-		    if (CastIsPushedDown(field, field_state)) {
-			    D_ASSERT(state.storage_index.IsPushdownExtract());
-			    Vector intermediate(child_type, target_count);
-			    field.Scan(transaction, vector_index, field_state, intermediate, target_count);
-			    //! FIXME: this is an optional ptr.. when is it not set??
-			    VectorOperations::Cast(*state.context.GetClientContext(), intermediate, target_vector, target_count);
+		    if (state.expression_state) {
+			    auto &expression_state = *state.expression_state;
+			    D_ASSERT(state.context.Valid());
+			    auto &executor = expression_state.executor;
+			    auto &target = expression_state.target;
+			    auto &input = expression_state.input;
+
+			    target.Reset();
+			    input.Reset();
+			    auto scan_count = field.Scan(transaction, vector_index, field_state, input.data[0], target_count);
+			    input.SetCardinality(scan_count);
+			    executor.Execute(input, target);
+			    target_vector.Reference(target.data[0]);
 		    } else {
 			    field.Scan(transaction, vector_index, field_state, target_vector, target_count);
 		    }
