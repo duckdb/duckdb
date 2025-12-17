@@ -148,13 +148,8 @@ vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalTyp
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(string catalog, string schema, string table, string index,
-	                 optional_ptr<TableCatalogEntry> table_entry_p, LogicalType key_type, optional_ptr<ART> art_index_p,
-	                 vector<LogicalType> key_types_p, vector<idx_t> field_map_p, vector<string> column_names_p)
-	    : catalog(std::move(catalog)), schema(std::move(schema)), table(std::move(table)), index_name(std::move(index)),
-	      table_entry(table_entry_p), key_type(std::move(key_type)), art_index(art_index_p),
-	      key_types(std::move(key_types_p)), field_map(std::move(field_map_p)),
-	      column_names(std::move(column_names_p)) {
+	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> key_types, vector<idx_t> field_map)
+	    : art_index(art_index_p), key_types(std::move(key_types)), field_map(std::move(field_map)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -163,24 +158,13 @@ struct IndexKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return catalog == other.catalog && schema == other.schema && table == other.table &&
-		       index_name == other.index_name && key_type == other.key_type;
+		return art_index == other.art_index && key_types == other.key_types && field_map == other.field_map;
 	}
 
-	string catalog;
-	string schema;
-	string table;
-	string index_name;
-	optional_ptr<TableCatalogEntry> table_entry;
-
-	LogicalType key_type;
-
 	optional_ptr<ART> art_index;
-	// The types of each column in the index.
 	vector<LogicalType> key_types;
 	// Mapping from offset in key_types (a column in the index) to its corresponding offset in the struct.
 	vector<idx_t> field_map;
-	vector<string> column_names;
 };
 
 unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
@@ -224,9 +208,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	bound_function.arguments[4] = key_type;
 	vector<idx_t> field_map = BuildFieldMap(column_names, key_type, key_types, index_name);
 
-	return make_uniq<IndexKeyBindData>(catalog_name, schema_name, table_name, index_name, &table_entry,
-	                                   std::move(key_type), &art_index, std::move(key_types), std::move(field_map),
-	                                   std::move(column_names));
+	return make_uniq<IndexKeyBindData>(&art_index, std::move(key_types), std::move(field_map));
 }
 
 void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
