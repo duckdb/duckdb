@@ -1382,12 +1382,14 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 
 unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	auto &transaction = DuckTransaction::Get(context, db);
 	// Bind all indexes.
 	info->BindIndexes(context);
 
 	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> types;
 	auto result = make_uniq<TableDeleteState>();
+	result->table_lock = transaction.SharedLockTable(*info);
 	result->has_delete_constraints = TableHasDeleteConstraints(table);
 	if (result->has_delete_constraints) {
 		// initialize the chunk if there are any constraints to verify

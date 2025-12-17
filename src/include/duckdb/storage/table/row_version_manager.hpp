@@ -25,9 +25,6 @@ class RowVersionManager {
 public:
 	explicit RowVersionManager(BufferManager &buffer_manager) noexcept;
 
-	FixedSizeAllocator &GetAllocator() {
-		return allocator;
-	}
 	idx_t GetCommittedDeletedCount(idx_t count);
 
 	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id, idx_t count);
@@ -58,6 +55,9 @@ private:
 	vector<MetaBlockPointer> storage_pointers;
 
 private:
+	FixedSizeAllocator &GetAllocator() {
+		return allocator;
+	}
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
 	void FillVectorInfo(idx_t vector_idx);
