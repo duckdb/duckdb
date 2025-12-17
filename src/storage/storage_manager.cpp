@@ -88,10 +88,14 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			encryption_version = EncryptionTypes::V0_0;
 		}
 
-		if (encryption_version == EncryptionTypes::NONE || encryption_version == EncryptionTypes::V0_1) {
-			encryption_version = EncryptionTypes::V0_1;
+		if (storage_version_user_provided.empty()) {
 			// set storage version explicitly
 			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+		}
+
+		if (encryption_version == EncryptionTypes::NONE) {
+			// set default to encryption version v1
+			encryption_version = EncryptionTypes::V0_1;
 		}
 	}
 }
