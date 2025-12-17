@@ -186,7 +186,6 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			high_value = constant_value;
 			high_comparison_type = comparison_type;
 		}
-
 	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		auto &between = filter_expr.Cast<BoundBetweenExpression>();
 		if (!between.input->Equals(expr)) {
@@ -1187,6 +1186,13 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	}
 
 	if (other_art.owns_data) {
+		if (prefix_count != other_art.prefix_count) {
+			// this ART uses the deprecated form and the other one does not - transform the other one prior to merging
+			if (prefix_count != Prefix::DEPRECATED_COUNT) {
+				throw InternalException("Failed to merge ARTs - other ART is deprecated but this one is not");
+			}
+			other_art.TransformToDeprecated();
+		}
 		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.
 			unsafe_vector<idx_t> upper_bounds;

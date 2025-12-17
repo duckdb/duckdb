@@ -409,8 +409,10 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
-	strcpy(continuePrompt, "· ");
+	strcpy(continuePrompt, "  ");
 	strcpy(continuePromptSelected, "‣ ");
+	strcpy(scrollUpPrompt, "⇡ ");
+	strcpy(scrollDownPrompt, "⇣ ");
 }
 
 ShellState::~ShellState() {
@@ -784,10 +786,12 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
+extern "C" {
+
 /*
 ** This routine runs when the user presses Ctrl-C
 */
-static void interrupt_handler(int NotUsed) {
+static void InterruptHandler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
@@ -798,6 +802,7 @@ static void interrupt_handler(int NotUsed) {
 		state.conn->Interrupt();
 	}
 }
+}
 
 #if (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 /*
@@ -806,12 +811,19 @@ static void interrupt_handler(int NotUsed) {
 static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVENT constants */
 ) {
 	if (dwCtrlType == CTRL_C_EVENT) {
-		interrupt_handler(0);
+		InterruptHandler(0);
 		return TRUE;
 	}
 	return FALSE;
 }
 #endif
+
+void ShellState::ClearInterrupt() {
+	seenInterrupt = 0;
+	if (conn) {
+		conn->context->ClearInterrupt();
+	}
+}
 
 string ShellState::GetSchemaLine(const string &str, const string &tail) {
 	return str + tail;
@@ -832,14 +844,14 @@ void ShellState::SetTextMode() {
 	setTextMode(out, 1);
 }
 
-SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query) {
+SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite) {
 	auto &con = *conn;
 	auto result = con.SendQuery(query);
 	if (result->HasError()) {
 		PrintDatabaseError(result->GetError());
 		return SuccessState::FAILURE;
 	}
-	return RenderQueryResult(renderer, *result);
+	return RenderQueryResult(renderer, *result, pager_overwrite);
 }
 
 /*
@@ -964,20 +976,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 	// analyze the query result so we know how long/wide the result will be
-	RenderingQueryResult render_result(res, *renderer);
-	renderer->Analyze(render_result);
-	if (seenInterrupt) {
-		return SuccessState::FAILURE;
-	}
-
-	// check if we need to use the pager for the rendering
-	unique_ptr<PagerState> pager_setup;
-	if (ShouldUsePager(*renderer, render_result)) {
-		pager_setup = SetupPager();
-	}
-	// render the query result
-	PrintStream print_stream(*this);
-	return renderer->RenderQueryResult(print_stream, *this, render_result);
+	return RenderQueryResult(*renderer, res);
 }
 
 /*
@@ -1391,20 +1390,11 @@ bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &r
 	return renderer.ShouldUsePager(result, pager_mode);
 }
 
-extern "C" {
-
-void HandlePagerExit(int sig) {
-	// Pager is gone; interrupt the process to stop printing
-	auto &state = ShellState::Get();
-	++state.seenInterrupt;
-}
-}
-
 void ShellState::StartPagerDisplay() {
 #if !defined(_WIN32) && !defined(WIN32)
 	// turn sigpipe trap into an interrupt while displaying the pager
 	// this allows us to interrupt display after the pager is exited by the user
-	signal(SIGPIPE, HandlePagerExit);
+	signal(SIGPIPE, InterruptHandler);
 #endif
 }
 
@@ -1483,6 +1473,9 @@ void ShellState::PrintDatabaseError(const string &zErr) {
 		PrintF(PrintOutput::STDERR, "%s\n", zErr.c_str());
 		return;
 	}
+	// detect dark-light mode if we haven't yet
+	DetectDarkLightMode();
+	// print the error
 	ShellHighlight shell_highlight(*this);
 	shell_highlight.PrintError(zErr);
 }
@@ -1738,7 +1731,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	if (function == "read_csv" && generic_parameters.find("ignore_errors") == generic_parameters.end()) {
 		generic_parameters["ignore_errors"] = "true";
 	}
-	seenInterrupt = 0;
+	ClearInterrupt();
 	// check if the table exists
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
@@ -2089,7 +2082,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	if (bDebug) {
 		PrintF("SQL: %s;\n", sSelect.c_str());
 	} else {
-		rc = RenderQuery(*renderer, sSelect);
+		rc = RenderQuery(*renderer, sSelect, PagerMode::PAGER_OFF);
 	}
 	if (rc == SuccessState::FAILURE) {
 		PrintF(PrintOutput::STDERR, "Error: querying schema information\n");
@@ -2454,7 +2447,7 @@ int ShellState::DoMetaCommand(const string &zLine) {
 				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
 				       command.command);
 				result = MetadataResult::FAIL;
-			} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
+			} else if (command.argument_count == 0 || command.argument_count == args.size()) {
 				result = command.callback(*this, args);
 			}
 			if (result == MetadataResult::PRINT_USAGE) {
@@ -2766,14 +2759,23 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			break;
 		}
+		// if we are receiving input after a query was interrupted
+		// we need to clear the interrupt flag to be able to
+		// print messages again
+		if (seenInterrupt) {
+			if (in) {
+				break;
+			}
+			ClearInterrupt();
+		}
 		if (*zLine == '\3') {
 			// ctrl c: reset sql statement
 			if (nSql == 0 && zLine[1] == '\0' && stdin_is_interactive) {
 				// if in interactive mode and we press ctrl c twice
-				// on an empty line, we exit
+				// on an empty line, we print the ctrl d hint message
 				numCtrlC++;
 				if (numCtrlC >= 2) {
-					break;
+					Print("Interrupted, use Ctrl+D to exit\n");
 				}
 			}
 			nSql = 0;
@@ -2789,12 +2791,6 @@ int ShellState::ProcessInput(InputMode mode) {
 				displayed_loading_resources_message = true;
 			}
 			mode = InputMode::FILE;
-		}
-		if (seenInterrupt) {
-			if (in) {
-				break;
-			}
-			seenInterrupt = 0;
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {
@@ -3004,7 +3000,7 @@ void ShellState::Initialize() {
 	}
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
-		linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+		linenoiseSetPrompt(continuePrompt, continuePromptSelected, scrollUpPrompt, scrollDownPrompt);
 	}
 #endif
 }
@@ -3022,6 +3018,31 @@ struct ShellStateDestroyer {
 		ShellState::Get().Destroy();
 	}
 };
+
+void ShellState::DetectDarkLightMode() {
+#ifdef HAVE_LINENOISE
+	ShellHighlight highlight(*this);
+	if (highlight_mode != HighlightMode::AUTOMATIC) {
+		// highlight mode is specified by the user - avoid setting manually
+		return;
+	}
+	if (!stdout_is_console) {
+		// not printing to console - don't auto-detect
+		return;
+	}
+	// detect terminal colors
+	auto terminal_color = linenoiseGetTerminalColorMode();
+	if (terminal_color == LINENOISE_DARK_MODE) {
+		highlight_mode = HighlightMode::DARK_MODE;
+		highlight.ToggleMode(HighlightMode::DARK_MODE);
+	} else if (terminal_color == LINENOISE_LIGHT_MODE) {
+		highlight_mode = HighlightMode::LIGHT_MODE;
+		highlight.ToggleMode(HighlightMode::LIGHT_MODE);
+	} else {
+		highlight_mode = HighlightMode::MIXED_MODE;
+	}
+#endif
+}
 
 #if SQLITE_SHELL_IS_UTF8
 int main(int argc, const char **argv) {
@@ -3062,7 +3083,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** else is done.
 	*/
 #ifdef SIGINT
-	signal(SIGINT, interrupt_handler);
+	signal(SIGINT, InterruptHandler);
 #elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 #endif
@@ -3143,6 +3164,8 @@ int wmain(int argc, wchar_t **wargv) {
 		return 1;
 	}
 
+	data.DetectDarkLightMode();
+
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
 	** file is processed so that the command-line arguments will override
@@ -3184,17 +3207,6 @@ int wmain(int argc, wchar_t **wargv) {
 			string zHome;
 			const char *zHistory;
 			ShellHighlight highlight(data);
-#ifdef HAVE_LINENOISE
-			if (data.highlight_mode == HighlightMode::AUTOMATIC && data.stdout_is_console && data.stderr_is_console) {
-				// detect terminal colors
-				auto terminal_color = linenoiseGetTerminalColorMode();
-				if (terminal_color == LINENOISE_DARK_MODE) {
-					highlight.ToggleMode(HighlightMode::DARK_MODE);
-				} else if (terminal_color == LINENOISE_LIGHT_MODE) {
-					highlight.ToggleMode(HighlightMode::LIGHT_MODE);
-				}
-			}
-#endif
 
 			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
 			                                          duckdb::DuckDB::ReleaseCodename());
