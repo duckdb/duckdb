@@ -428,7 +428,7 @@ struct PathJoinFun {
 	static constexpr const char *Parameters = "path,...";
 	static constexpr const char *Description =
 	    "Joins path components using the platform separator, normalizing duplicate separators and dot segments. "
-	    "Absolute RHS components must be compatible (same scheme/parent) or return an error.";
+	    "Absolute RHS components must be compatible (same scheme/parent) or raise an error.";
 	static constexpr const char *Example = "path_join('dir', 'subdir', 'file')";
 	static constexpr const char *Categories = "string";
 
