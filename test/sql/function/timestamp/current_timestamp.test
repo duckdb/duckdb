@@ -40,7 +40,7 @@ endloop
 foreach unit millennia century decade year month day hour minute second
 
 query I
-select current_timestamp + interval 1 ${unit} = ago(interval 1 ${unit});
+select current_timestamp - interval 1 ${unit} = ago(interval 1 ${unit});
 ----
 True
 
