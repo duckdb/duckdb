@@ -27,6 +27,9 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
+	void IterateFields(ColumnScanState &state,
+	                   const std::function<void(ColumnData &, optional_idx, ColumnScanState &, bool)> &callback);
+
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
@@ -39,8 +42,8 @@ public:
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-	              idx_t result_idx) override;
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
+	              Vector &result, idx_t result_idx) override;
 	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
