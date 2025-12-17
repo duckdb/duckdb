@@ -57,7 +57,7 @@ struct OperatorInformation {
 	void AddMetric(MetricType type, T metric) {
 		switch (type) {
 		case MetricType::OPERATOR_TIMING:
-			time += LossyNumericCast<idx_t>(metric);
+			time += metric;
 			break;
 		case MetricType::OPERATOR_CARDINALITY:
 			elements_returned += LossyNumericCast<idx_t>(metric);
