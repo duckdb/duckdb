@@ -424,8 +424,16 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 
 	auto lhs_parsed = ParsePathWithScheme(a);
 	auto rhs_parsed = ParsePathWithScheme(b);
-	auto lhs = ConvertSeparators(lhs_parsed.path);
-	auto rhs = ConvertSeparators(rhs_parsed.path);
+	auto normalize_scheme_path = [&](const ParsedPath &parsed) {
+		if (parsed.has_scheme) {
+			// keep URI semantics: always use forward slashes inside the path portion
+			return StringUtil::Replace(parsed.path, "\\", "/");
+		}
+		return ConvertSeparators(parsed.path);
+	};
+
+	auto lhs = normalize_scheme_path(lhs_parsed);
+	auto rhs = normalize_scheme_path(rhs_parsed);
 	bool lhs_is_file_scheme = lhs_parsed.scheme == "file://" || lhs_parsed.scheme == "file:";
 	bool rhs_is_file_scheme = rhs_parsed.scheme == "file://" || rhs_parsed.scheme == "file:";
 	auto lhs_scheme_absolute =
