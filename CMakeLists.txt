@@ -36,6 +36,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
     find_program(COMPILER_LAUNCHER NAMES ccache sccache)
@@ -157,12 +158,12 @@ endif()
 
 if(APPLE)
   set(OS_NAME "osx")
-endif()
-if(WIN32)
+elseif(WIN32)
   set(OS_NAME "windows")
-endif()
-if(UNIX AND NOT APPLE)
+elseif(UNIX)
   set(OS_NAME "linux") # sorry BSD
+else()
+  set(OS_NAME "unknown")
 endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
@@ -195,8 +196,7 @@ elseif(${ENABLE_SANITIZER})
   endif()
 endif()
 
-if (${DISABLE_VPTR_SANITIZER})
-else()
+if (NOT ${DISABLE_VPTR_SANITIZER})
   if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_GREATER 14.0)
       message(
@@ -626,11 +626,8 @@ if(NOT MSVC)
     message(WARNING "Please use a recent compiler for debug builds")
   endif()
 else()
-  # we don't use "constexpr static std::mutex", so we can use the
-  # _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR definition that is required
-  # to keep the compatibility with C++ stdlib version 14.29 from MSVC 2019
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR /utf-8")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
