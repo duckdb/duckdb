@@ -11,7 +11,6 @@
 #include <functional>
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/hash_utils.hpp"
 #include "duckdb/common/list.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
@@ -61,8 +60,7 @@ public:
 		new_entry.memory = memory_size;
 		new_entry.lru_iterator = lru_list.begin();
 
-		auto key_cref = std::cref(lru_list.front());
-		entry_map[key_cref] = std::move(new_entry);
+		entry_map[std::move(key)] = std::move(new_entry);
 		current_memory += memory_size;
 	}
 
@@ -114,8 +112,7 @@ private:
 		typename list<Key>::iterator lru_iterator;
 	};
 
-	using KeyConstRef = std::reference_wrapper<const Key>;
-	using EntryMap = unordered_map<KeyConstRef, Entry, RefHash<KeyHash>, RefEq<KeyEqual>>;
+	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
 		lru_list.erase(iter->second.lru_iterator);
