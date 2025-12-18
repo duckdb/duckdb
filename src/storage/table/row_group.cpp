@@ -189,10 +189,6 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 	}
 }
 
-static unique_ptr<PushedDownExpressionState> CreateCast(ClientContext &context, const LogicalType &original_type,
-                                                        const LogicalType &cast_type) {
-}
-
 void ColumnScanState::PushDownCast(const LogicalType &original_type, const LogicalType &cast_type) {
 	D_ASSERT(context.Valid());
 	D_ASSERT(!expression_state);
@@ -252,7 +248,7 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 				auto child_index = child.GetPrimaryIndex();
 				auto &child_type = StructType::GetChildTypes(type)[child_index].second;
 				if (!child.HasChildren() && child_type != child.GetType()) {
-					PushDownCast(*context.GetClientContext(), child_type, child.GetType());
+					PushDownCast(child_type, child.GetType());
 				}
 				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
 			} else {

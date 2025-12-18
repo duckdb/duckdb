@@ -259,13 +259,9 @@ idx_t VariantColumnData::ScanWithCallback(
 			auto &target = expression_state.target;
 			input.Reset();
 			target.Reset();
-			input.data[0].Reference(input);
+			input.data[0].Reference(extract_intermediate);
 			input.SetCardinality(scan_count);
-			result.Reference()
-		}
-		if (result.GetType().id() != LogicalTypeId::VARIANT) {
-			//! FIXME: this is an optional ptr.. when is it not set??
-			VectorOperations::Cast(*state.context.GetClientContext(), extract_intermediate, result, target_count);
+			result.Reference(target.data[0]);
 		} else {
 			result.Reference(extract_intermediate);
 		}
