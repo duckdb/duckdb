@@ -32,6 +32,7 @@ EXCLUDED_RULES = {
     "SettingScope",
     "ColLabel",
     "MacroOrFunction",
+    "GroupingOrGroupingId",
     # found in matcher.cpp
     "ReservedIdentifier",
     "CatalogName",

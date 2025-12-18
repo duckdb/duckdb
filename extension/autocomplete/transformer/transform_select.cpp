@@ -1014,10 +1014,15 @@ GroupByNode PEGTransformerFactory::TransformGroupByClause(PEGTransformer &transf
 	return transformer.Transform<GroupByNode>(list_pr.Child<ListParseResult>(2));
 }
 
+struct GroupingExpressionMap {
+	parsed_expression_map_t<idx_t> map;
+};
+
 GroupByNode PEGTransformerFactory::TransformGroupByExpressions(PEGTransformer &transformer,
                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = transformer.Transform<GroupByNode>(list_pr.Child<ChoiceParseResult>(0).result);
+	return result;
 }
 
 GroupByNode PEGTransformerFactory::TransformGroupByAll(PEGTransformer &transformer,
@@ -1027,13 +1032,95 @@ GroupByNode PEGTransformerFactory::TransformGroupByAll(PEGTransformer &transform
 	return result;
 }
 
+static void CheckGroupingSetMax(idx_t count) {
+	static constexpr const idx_t MAX_GROUPING_SETS = 65535;
+	if (count > MAX_GROUPING_SETS) {
+		throw ParserException("Maximum grouping set count of %d exceeded", MAX_GROUPING_SETS);
+	}
+}
+
+static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
+	idx_t combinations = 1;
+	for (idx_t i = 0; i < cube_count; i++) {
+		combinations *= 2;
+		CheckGroupingSetMax(current_count + combinations);
+	}
+}
+
+static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
+	CheckGroupingSetMax(result.size() + other.size());
+	result.insert(other.begin(), other.end());
+}
+
+static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
+	GroupingSet result;
+	for (idx_t i = 0; i < indexes.size(); i++) {
+		result.insert(indexes[i]);
+	}
+	return result;
+}
+void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
+                                       GroupByNode &result, vector<idx_t> &result_set) {
+	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &func = expression->Cast<FunctionExpression>();
+		if (func.function_name == "row") {
+			for (auto &child : func.children) {
+				AddGroupByExpression(std::move(child), map, result, result_set);
+			}
+			return;
+		}
+	}
+	auto entry = map.map.find(*expression);
+	idx_t result_idx;
+	if (entry == map.map.end()) {
+		result_idx = result.group_expressions.size();
+		map.map[*expression] = result_idx;
+		result.group_expressions.push_back(std::move(expression));
+	} else {
+		result_idx = entry->second;
+	}
+	result_set.push_back(result_idx);
+}
+
 GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto group_by_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	GroupByNode result;
-	for (auto group_by_expr : group_by_list) {
-		result.group_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr));
+	GroupingExpressionMap map;
+	for (auto group_by_child : group_by_list) {
+		auto group_by_expr_child_list = group_by_child->Cast<ListParseResult>();
+		auto group_by_expr = group_by_expr_child_list.Child<ChoiceParseResult>(0).result;
+		vector<GroupingSet> result_sets;
+		if (StringUtil::CIEquals(group_by_expr->name, "EmptyGroupingItem")) {
+			result_sets.emplace_back();
+		} else if (StringUtil::CIEquals(group_by_expr->name, "Expression")) {
+			vector<idx_t> indexes;
+			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr);
+			AddGroupByExpression(std::move(expr), map, result, indexes);
+			result_sets.push_back(VectorToGroupingSet(indexes));
+		} else {
+			throw NotImplementedException(group_by_expr->name);
+		}
+		if (result.grouping_sets.empty()) {
+			result.grouping_sets = std::move(result_sets);
+		} else {
+			vector<GroupingSet> new_sets;
+			idx_t grouping_set_count = result.grouping_sets.size() * result_sets.size();
+			CheckGroupingSetMax(grouping_set_count);
+			new_sets.reserve(grouping_set_count);
+			for (idx_t current_idx = 0; current_idx < result.grouping_sets.size(); current_idx++) {
+				auto &current_set = result.grouping_sets[current_idx];
+				for (idx_t new_idx = 0; new_idx < result_sets.size(); new_idx++) {
+					auto &new_set = result_sets[new_idx];
+					GroupingSet set;
+					set.insert(current_set.begin(), current_set.end());
+					set.insert(new_set.begin(), new_set.end());
+					new_sets.push_back(std::move(set));
+				}
+			}
+			result.grouping_sets = std::move(new_sets);
+		}
 	}
 	return result;
 }

@@ -1591,4 +1591,16 @@ ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &
 	return ExpressionType::COMPARE_DISTINCT_FROM;
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupingExpression(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	vector<unique_ptr<ParsedExpression>> grouping_expressions;
+	for (auto expr : expr_list) {
+		grouping_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	auto result = make_uniq<OperatorExpression>(ExpressionType::GROUPING_FUNCTION, std::move(grouping_expressions));
+	return result;
+}
 } // namespace duckdb

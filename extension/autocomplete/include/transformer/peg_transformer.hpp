@@ -44,6 +44,7 @@ namespace duckdb {
 // Forward declare
 struct QualifiedName;
 struct MatcherToken;
+struct GroupingExpressionMap;
 
 struct PEGTransformerState {
 	explicit PEGTransformerState(const vector<MatcherToken> &tokens_p) : tokens(tokens_p), token_index(0) {
@@ -155,6 +156,8 @@ public:
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
 	static bool TryNegateValue(Value &val);
+	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
+                                       GroupByNode &result, vector<idx_t> &result_set);
 
 	// Registration methods
 	void RegisterAlter();
@@ -774,6 +777,8 @@ private:
 	                                                                         optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
+
+	static unique_ptr<ParsedExpression> TransformGroupingExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
