@@ -655,7 +655,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	auto table_function_arguments =
 	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
-	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
+	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
+	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
@@ -679,7 +680,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
 
 	auto result = make_uniq<TableFunctionRef>();
-	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
+	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
+	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
@@ -1060,7 +1062,7 @@ static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 	return result;
 }
 void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
-                                       GroupByNode &result, vector<idx_t> &result_set) {
+                                                 GroupByNode &result, vector<idx_t> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
@@ -1082,41 +1084,65 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
 	result_set.push_back(result_idx);
 }
 
+vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> group_by_expr,
+                                                                      GroupingExpressionMap &map, GroupByNode &result) {
+	vector<GroupingSet> result_sets;
+	if (StringUtil::CIEquals(group_by_expr->name, "EmptyGroupingItem")) {
+		result_sets.emplace_back();
+
+	} else if (StringUtil::CIEquals(group_by_expr->name, "Expression")) {
+		vector<idx_t> indexes;
+		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr);
+		AddGroupByExpression(std::move(expr), map, result, indexes);
+		result_sets.push_back(VectorToGroupingSet(indexes));
+	} else if (StringUtil::CIEquals(group_by_expr->name, "GroupingSetsClause")) {
+		auto grouping_set_list = group_by_expr->Cast<ListParseResult>();
+		auto inner_group_by_list = ExtractResultFromParens(grouping_set_list.Child<ListParseResult>(2));
+		auto &list_pr = inner_group_by_list->Cast<ListParseResult>();
+		auto group_by_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+		for (auto &child_wrapper : group_by_list) {
+			auto child_list_pr = child_wrapper->Cast<ListParseResult>();
+			auto child_expr = child_list_pr.Child<ChoiceParseResult>(0).result;
+			auto child_sets = GroupByExpressionUnfolding(transformer, std::move(child_expr), map, result);
+			result_sets.insert(result_sets.end(), child_sets.begin(), child_sets.end());
+		}
+
+	} else {
+		throw NotImplementedException("Unsupported GroupBy Expression: " + group_by_expr->name);
+	}
+
+	return result_sets;
+}
+
 GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto group_by_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+
 	GroupByNode result;
 	GroupingExpressionMap map;
+
 	for (auto group_by_child : group_by_list) {
 		auto group_by_expr_child_list = group_by_child->Cast<ListParseResult>();
 		auto group_by_expr = group_by_expr_child_list.Child<ChoiceParseResult>(0).result;
-		vector<GroupingSet> result_sets;
-		if (StringUtil::CIEquals(group_by_expr->name, "EmptyGroupingItem")) {
-			result_sets.emplace_back();
-		} else if (StringUtil::CIEquals(group_by_expr->name, "Expression")) {
-			vector<idx_t> indexes;
-			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr);
-			AddGroupByExpression(std::move(expr), map, result, indexes);
-			result_sets.push_back(VectorToGroupingSet(indexes));
-		} else {
-			throw NotImplementedException(group_by_expr->name);
-		}
+
+		vector<GroupingSet> next_sets = GroupByExpressionUnfolding(transformer, group_by_expr, map, result);
+
 		if (result.grouping_sets.empty()) {
-			result.grouping_sets = std::move(result_sets);
+			result.grouping_sets = std::move(next_sets);
 		} else {
 			vector<GroupingSet> new_sets;
-			idx_t grouping_set_count = result.grouping_sets.size() * result_sets.size();
+			idx_t grouping_set_count = result.grouping_sets.size() * next_sets.size();
 			CheckGroupingSetMax(grouping_set_count);
 			new_sets.reserve(grouping_set_count);
-			for (idx_t current_idx = 0; current_idx < result.grouping_sets.size(); current_idx++) {
-				auto &current_set = result.grouping_sets[current_idx];
-				for (idx_t new_idx = 0; new_idx < result_sets.size(); new_idx++) {
-					auto &new_set = result_sets[new_idx];
-					GroupingSet set;
-					set.insert(current_set.begin(), current_set.end());
-					set.insert(new_set.begin(), new_set.end());
-					new_sets.push_back(std::move(set));
+
+			for (auto &current_set : result.grouping_sets) {
+				for (auto &next_set : next_sets) {
+					GroupingSet combined_set;
+					combined_set.insert(current_set.begin(), current_set.end());
+					combined_set.insert(next_set.begin(), next_set.end());
+					new_sets.push_back(std::move(combined_set));
 				}
 			}
 			result.grouping_sets = std::move(new_sets);
@@ -1176,7 +1202,8 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 				recursive_node->union_all = set_node->setop_all;
 				with_entry.second->query->node = std::move(recursive_node);
 			} else {
-				throw NotImplementedException("Unexpected node encountered for recursive CTE: %s", EnumUtil::ToString(query_node->type));
+				throw NotImplementedException("Unexpected node encountered for recursive CTE: %s",
+				                              EnumUtil::ToString(query_node->type));
 			}
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
@@ -1215,18 +1242,17 @@ bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, o
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformHavingClause(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
 LimitPercentResult PEGTransformerFactory::TransformOffsetValue(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	LimitPercentResult result;
 	result.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	return result;
 }
-
 
 } // namespace duckdb

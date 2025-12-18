@@ -1591,8 +1591,9 @@ ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &
 	return ExpressionType::COMPARE_DISTINCT_FROM;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupingExpression(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformGroupingExpression(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto expr_list = ExtractParseResultsFromList(extract_parens);

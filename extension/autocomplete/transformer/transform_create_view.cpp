@@ -13,7 +13,7 @@ void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNo
 		cte_select->node = std::move(node);
 		cte_info->query = std::move(cte_select);
 		outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
-		for (const auto& column : info->aliases) {
+		for (const auto &column : info->aliases) {
 			outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
 		}
 		auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
@@ -39,7 +39,7 @@ void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNo
 		cte_select->node = std::move(recursive_node);
 		cte_info->query = std::move(cte_select);
 		outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
-		for (const auto& column : info->aliases) {
+		for (const auto &column : info->aliases) {
 			outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
 		}
 		auto table_description = TableDescription(info->catalog, info->schema, info->view_name);

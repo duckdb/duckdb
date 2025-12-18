@@ -157,7 +157,10 @@ public:
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
 	static bool TryNegateValue(Value &val);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
-                                       GroupByNode &result, vector<idx_t> &result_set);
+	                                 GroupByNode &result, vector<idx_t> &result_set);
+	static vector<GroupingSet> GroupByExpressionUnfolding(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> group_by_expr,
+	                                                      GroupingExpressionMap &map, GroupByNode &result);
 
 	// Registration methods
 	void RegisterAlter();
@@ -778,7 +781,8 @@ private:
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
 
-	static unique_ptr<ParsedExpression> TransformGroupingExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformGroupingExpression(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
@@ -1044,8 +1048,8 @@ private:
 	static pair<string, unique_ptr<CommonTableExpressionInfo>>
 	TransformWithStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
+	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
