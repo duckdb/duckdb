@@ -223,8 +223,14 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
-	// Default to 1 for version 64, else read from file.
-	header.storage_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
+	header.storage_compatibility = main_header.version_number;
+	// V1.3.0 is written with main header version number 65 (V1.2.0), even though it should be 66
+	if (main_header.version_number == StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
+		auto old_serialization_number = source.Read<idx_t>();
+		if (old_serialization_number == 5) {
+			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0);
+		}
+	}
 
 	return header;
 }
@@ -288,6 +294,7 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	auto storage_version = options.storage_version.GetIndex();
 	// this is the serialization version, not the storage version
 	if (storage_version < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
+		// returned is the storage version
 		return VERSION_NUMBER;
 	}
 	return storage_version;
