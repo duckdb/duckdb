@@ -632,6 +632,15 @@ typedef struct {
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
 	void (*duckdb_scalar_function_set_bind_data_copy)(duckdb_bind_info info, duckdb_copy_callback_t copy);
+	// New functions to configure local states for scalar functions
+
+	void *(*duckdb_scalar_function_get_state)(duckdb_function_info info);
+	void (*duckdb_scalar_function_set_init)(duckdb_scalar_function scalar_function, duckdb_scalar_function_init_t init);
+	void (*duckdb_scalar_function_init_set_error)(duckdb_init_info info, const char *error);
+	void (*duckdb_scalar_function_init_set_state)(duckdb_init_info info, void *state, duckdb_delete_callback_t destroy);
+	void (*duckdb_scalar_function_init_get_client_context)(duckdb_init_info info, duckdb_client_context *out_context);
+	void *(*duckdb_scalar_function_init_get_bind_data)(duckdb_init_info info);
+	void *(*duckdb_scalar_function_init_get_extra_info)(duckdb_init_info info);
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
@@ -1188,6 +1197,13 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_bind_get_argument_count = duckdb_scalar_function_bind_get_argument_count;
 	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
 	result.duckdb_scalar_function_set_bind_data_copy = duckdb_scalar_function_set_bind_data_copy;
+	result.duckdb_scalar_function_get_state = duckdb_scalar_function_get_state;
+	result.duckdb_scalar_function_set_init = duckdb_scalar_function_set_init;
+	result.duckdb_scalar_function_init_set_error = duckdb_scalar_function_init_set_error;
+	result.duckdb_scalar_function_init_set_state = duckdb_scalar_function_init_set_state;
+	result.duckdb_scalar_function_init_get_client_context = duckdb_scalar_function_init_get_client_context;
+	result.duckdb_scalar_function_init_get_bind_data = duckdb_scalar_function_init_get_bind_data;
+	result.duckdb_scalar_function_init_get_extra_info = duckdb_scalar_function_init_get_extra_info;
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_table_description_get_column_count = duckdb_table_description_get_column_count;
 	result.duckdb_table_description_get_column_type = duckdb_table_description_get_column_type;
