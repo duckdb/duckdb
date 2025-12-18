@@ -18,6 +18,7 @@ struct BoundOrderByNode;
 struct ProgressData;
 class SortedRun;
 enum class SortKeyType : uint8_t;
+class TaskScheduler;
 
 class SortedRunMerger {
 	friend class SortedRunMergerLocalState;
@@ -47,7 +48,7 @@ public:
 	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 
 private:
-	DatabaseInstance &db;
+	TaskScheduler &scheduler;
 
 public:
 	const Sort &sort;
