@@ -34,6 +34,8 @@ struct IndexEntry {
 	unique_ptr<BoundIndex> deleted_rows_in_use;
 	//! Data that was added to the index during the last checkpoint
 	unique_ptr<BoundIndex> added_data_during_checkpoint;
+	//! Data that was removed from the index during the last checkpoint
+	unique_ptr<BoundIndex> removed_data_during_checkpoint;
 	//! The last checkpoint index that was written with this index
 	optional_idx last_written_checkpoint;
 };

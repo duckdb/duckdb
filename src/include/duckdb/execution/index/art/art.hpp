@@ -70,6 +70,7 @@ public:
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
+	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
@@ -131,6 +132,7 @@ public:
 	string ToString(IndexLock &l, bool display_ascii = false) override;
 
 private:
+	bool FullScan(idx_t max_count, set<row_t> &row_ids);
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);

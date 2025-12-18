@@ -23,14 +23,13 @@ struct UpdateInfo;
 
 class CleanupState {
 public:
-	explicit CleanupState(const QueryContext &context, transaction_t lowest_active_transaction,
+	explicit CleanupState(DuckTransaction &transaction, transaction_t lowest_active_transaction,
 	                      ActiveTransactionState transaction_state);
 
 public:
 	void CleanupEntry(UndoFlags type, data_ptr_t data);
 
 private:
-	QueryContext context;
 	//! Lowest active transaction
 	transaction_t lowest_active_transaction;
 	ActiveTransactionState transaction_state;

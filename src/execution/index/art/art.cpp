@@ -231,6 +231,9 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 	return InitializeScanSinglePredicate(high_value, high_comparison_type);
 }
 
+unique_ptr<IndexScanState> ART::InitializeFullScan() {
+	return make_uniq<ARTIndexScanState>();
+}
 //===--------------------------------------------------------------------===//
 // ART Keys
 //===--------------------------------------------------------------------===//
@@ -613,6 +616,12 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
+bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
+	Iterator it(*this);
+	it.FindMinimum(tree);
+	ARTKey empty_key = ARTKey();
+	return it.Scan(empty_key, max_count, row_ids, false);
+}
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
@@ -678,15 +687,20 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 
 bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
+	if (scan_state.values[0].IsNull()) {
+		// full scan
+		lock_guard<mutex> l(lock);
+		return FullScan(max_count, row_ids);
+	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 	auto key = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[0]);
 	auto max_len = MAX_KEY_LEN * prefix_count;
 	key.VerifyKeyLength(max_len);
 
+	lock_guard<mutex> l(lock);
 	if (scan_state.values[1].IsNull()) {
 		// Single predicate.
-		lock_guard<mutex> l(lock);
 		switch (scan_state.expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
 			return SearchEqual(key, max_count, row_ids);
@@ -704,7 +718,6 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	}
 
 	// Two predicates.
-	lock_guard<mutex> l(lock);
 	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
 	auto upper_bound = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[1]);
 	upper_bound.VerifyKeyLength(max_len);

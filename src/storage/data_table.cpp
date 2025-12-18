@@ -1246,10 +1246,10 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		optional_ptr<BoundIndex> lookup_index;
 		// check if there's an on-going checkpoint
 		if (active_checkpoint.IsValid() && bound_index.RequiresTransactionality()) {
-			// check if we've already written this index during the on-going checkpoint
+			// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main index
 			if (!entry.last_written_checkpoint.IsValid() ||
 			    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
-				// there's an on-going checkpoint and we haven't written the index to disk yet
+				// there's an on-going checkpoint and we haven't flushed the index yet
 				// we need to append to the "added_data_during_checkpoint" instead
 				// create it if it does not exist
 				if (!entry.added_data_during_checkpoint) {
@@ -1268,7 +1268,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			if (lookup_index) {
 				// if there's a look-up index - first verify we can append to that index before actually appending to
 				// the main index
-				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, nullptr);
+				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, entry.removed_data_during_checkpoint.get());
 				lookup_index->VerifyAppend(table_chunk, index_append_info, nullptr);
 			}
 
@@ -1330,9 +1330,9 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 }
 
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-                                  IndexRemovalType removal_type) {
+                                  IndexRemovalType removal_type, optional_idx active_checkpoint) {
 	D_ASSERT(IsMainTable());
-	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type);
+	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
 //===--------------------------------------------------------------------===//

@@ -103,7 +103,7 @@ public:
 	bool IsPersistent() const;
 
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
-	                       IndexRemovalType removal_type);
+	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,

@@ -208,8 +208,8 @@ optional_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<Physic
 void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
                                       DataChunk &chunk, ConflictManager &conflict_manager) {
 	auto fk_type = conflict_manager.GetVerifyExistenceType() == VerifyExistenceType::APPEND_FK
-	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
-	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+					   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
+					   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
 	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
@@ -218,6 +218,11 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	optional_ptr<BoundIndex> delete_index;
 	if (storage) {
 		delete_index = storage->delete_indexes.Find(index.GetIndexName());
+	}
+	if (!delete_index) {
+		delete_index = entry->removed_data_during_checkpoint.get();
+	} else if (entry->removed_data_during_checkpoint.get()) {
+		throw InternalException("TableIndexList::VerifyForeignKey - transaction-local deletes AND deletes during checkpoint not handled yet");
 	}
 	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 
@@ -272,9 +277,20 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 			continue;
 		}
 		lock_guard<mutex> guard(entry->lock);
+		auto &bound_index = index.Cast<BoundIndex>();
+		if (entry->removed_data_during_checkpoint) {
+			// FIXME: this should use an optimized removal merge instead of doing fetches in the base table
+			auto &art = entry->removed_data_during_checkpoint->Cast<ART>();
+			auto scan_state = art.InitializeFullScan();
+			set<row_t> row_ids;
+			art.Scan(*scan_state, NumericLimits<idx_t>::Maximum(), row_ids);
+
+
+
+			throw InternalException("Remove data from ART");
+		}
 		if (entry->added_data_during_checkpoint) {
 			// we have written data here while checkpointing - merge it into the main index
-			auto &bound_index = index.Cast<BoundIndex>();
 			bound_index.MergeIndexes(*entry->added_data_during_checkpoint);
 			entry->added_data_during_checkpoint.reset();
 		}

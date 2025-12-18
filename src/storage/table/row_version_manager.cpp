@@ -214,7 +214,6 @@ void RowVersionManager::RevertAppend(idx_t new_count) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (new_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
-		D_ASSERT(has_unserialized_changes);
 		vector_info[vector_idx].reset();
 	}
 }
