@@ -745,6 +745,10 @@ private:
 	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformRowExpression(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformSubstringExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringArguments(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformTrimExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static string TransformTrimDirection(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

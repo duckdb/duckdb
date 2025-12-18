@@ -416,6 +416,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLambdaExpression);
 	REGISTER_TRANSFORM(TransformNullIfExpression);
 	REGISTER_TRANSFORM(TransformRowExpression);
+	REGISTER_TRANSFORM(TransformSubstringExpression);
+	REGISTER_TRANSFORM(TransformSubstringArguments);
+	REGISTER_TRANSFORM(TransformSubstringExpressionList);
+	REGISTER_TRANSFORM(TransformSubstringParameters);
 	REGISTER_TRANSFORM(TransformTrimExpression);
 	REGISTER_TRANSFORM(TransformTrimDirection);
 	REGISTER_TRANSFORM(TransformTrimSource);

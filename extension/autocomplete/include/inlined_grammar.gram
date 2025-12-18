@@ -755,7 +755,9 @@ LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF' Parens(Expression ',' Expression)
 PositionExpression <- 'POSITION' Parens(Expression)
 RowExpression <- 'ROW' Parens(List(Expression))
-SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
+SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
+SubstringArguments <- SubstringParameters / SubstringExpressionList
+SubstringExpressionList <- List(Expression)
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
