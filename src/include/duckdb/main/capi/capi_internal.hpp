@@ -53,6 +53,7 @@ struct PreparedStatementWrapper {
 	unique_ptr<PreparedStatement> statement;
 	bool success = true;
 	ErrorData error_data;
+	std::vector<std::string> param_index_to_name;
 };
 
 struct ExtractStatementsWrapper {
