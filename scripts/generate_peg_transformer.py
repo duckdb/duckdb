@@ -23,6 +23,7 @@ REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)
 EXCLUDED_RULES = {
     "FunctionType",
     "IfExists",
+    "Database",
     "AbortOrRollback",
     "CommitOrEnd",
     "StartOrBegin",
