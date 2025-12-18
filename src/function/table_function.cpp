@@ -19,14 +19,14 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
                              table_function_init_local_t init_local)
     : SimpleNamedParameterFunction(std::move(name), arguments), bind(bind), bind_replace(nullptr),
       bind_operator(nullptr), init_global(init_global), init_local(init_local), function(function_),
-      in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), dependency(nullptr),
-      cardinality(nullptr), pushdown_complex_filter(nullptr), pushdown_expression(nullptr), to_string(nullptr),
-      dynamic_to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
-      type_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
-      get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr),
-      get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr), deserialize(nullptr),
-      projection_pushdown(false), filter_pushdown(false), filter_prune(false), sampling_pushdown(false),
-      late_materialization(false) {
+      in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
+      dependency(nullptr), cardinality(nullptr), rows_scanned(nullptr), pushdown_complex_filter(nullptr),
+      pushdown_expression(nullptr), to_string(nullptr), dynamic_to_string(nullptr), table_scan_progress(nullptr),
+      get_partition_data(nullptr), get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr),
+      supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), get_partition_info(nullptr),
+      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
+      serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
+      sampling_pushdown(false), late_materialization(false) {
 }
 
 TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function_,
@@ -34,13 +34,14 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
                              table_function_init_local_t init_local)
     : SimpleNamedParameterFunction(std::move(name), arguments), bind(bind), bind_replace(nullptr),
       bind_operator(nullptr), init_global(init_global), init_local(init_local), function(nullptr),
-      in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), dependency(nullptr),
-      cardinality(nullptr), pushdown_complex_filter(nullptr), pushdown_expression(nullptr), to_string(nullptr),
-      dynamic_to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr), get_bind_info(nullptr),
-      type_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
-      get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr),
-      get_row_id_columns(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
-      filter_pushdown(false), filter_prune(false), sampling_pushdown(false), late_materialization(false) {
+      in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
+      dependency(nullptr), cardinality(nullptr), rows_scanned(nullptr), pushdown_complex_filter(nullptr),
+      pushdown_expression(nullptr), to_string(nullptr), dynamic_to_string(nullptr), table_scan_progress(nullptr),
+      get_partition_data(nullptr), get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr),
+      supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), get_partition_info(nullptr),
+      get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), serialize(nullptr),
+      deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
+      sampling_pushdown(false), late_materialization(false) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function_,
