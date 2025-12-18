@@ -148,13 +148,13 @@ SELECT SUM(num) FROM read_csv(
 ----
 11044
 
-query IIIIIIIII
-SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY line, line_byte_position, byte_position, column_idx ASC;
 ----
-0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
-0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
-1	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
-1	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
