@@ -126,14 +126,6 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 	return *children[index];
 }
 
-static bool CastIsPushedDown(ColumnData &child, ColumnScanState &child_state) {
-	if (!child_state.storage_index.HasType()) {
-		return false;
-	}
-	auto &scan_type = child_state.storage_index.GetType();
-	return child.GetType() != scan_type;
-}
-
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
@@ -147,7 +139,6 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			    return;
 		    }
 		    auto &field = *sub_columns[child_index];
-		    auto &child_type = StructType::GetChildTypes(type)[child_index].second;
 		    if (state.expression_state) {
 			    auto &expression_state = *state.expression_state;
 			    D_ASSERT(state.context.Valid());
