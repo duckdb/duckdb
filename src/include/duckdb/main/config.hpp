@@ -142,6 +142,10 @@ struct DBConfigOptions {
 	bool disable_database_invalidation = false;
 	//! enable COPY and related commands
 	bool enable_external_access = true;
+	//! Enable mbedtls explicitly (overrides OpenSSL if available)
+	bool enable_mbedtls = false;
+	//! Enabl OpenSSL explicitly (overrides mbedtls setting)
+	bool enable_openssl = false;
 	//! Whether or not the global http metadata cache is used
 	bool http_metadata_cache_enable = false;
 	//! HTTP Proxy config as 'hostname:port'
@@ -280,7 +284,7 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
-	//! Encryption Util for OpenSSL
+	//! Encryption Util for OpenSSL and MbedTLS
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! HTTP Request utility functions
 	shared_ptr<HTTPUtil> http_util;

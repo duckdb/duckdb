@@ -62,6 +62,7 @@ public:
 
 	private:
 		void *sha_context;
+		bool is_enabled;
 	};
 
 class AESStateMBEDTLS : public duckdb::EncryptionState {

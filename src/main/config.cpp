@@ -114,7 +114,9 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
     DUCKDB_GLOBAL(EnableLogging),
     DUCKDB_SETTING(EnableMacroDependenciesSetting),
+    DUCKDB_GLOBAL(EnableMbedtlsSetting),
     DUCKDB_SETTING(EnableObjectCacheSetting),
+    DUCKDB_GLOBAL(EnableOpensslSetting),
     DUCKDB_LOCAL(EnableProfilingSetting),
     DUCKDB_LOCAL(EnableProgressBarSetting),
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
@@ -189,12 +191,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 90),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 92),
                                                      DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 109),
-                                                     DUCKDB_SETTING_ALIAS("user", 124),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 111),
+                                                     DUCKDB_SETTING_ALIAS("user", 126),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 123),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 125),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

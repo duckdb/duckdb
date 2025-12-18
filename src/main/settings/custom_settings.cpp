@@ -23,6 +23,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -37,6 +38,8 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -1233,6 +1236,30 @@ void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
 Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.enable_http_logging);
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Mbedtls
+//===----------------------------------------------------------------------===//
+
+void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_mbedtls = input.GetValue<bool>();
+
+	if (config.options.enable_mbedtls) {
+		// this overrides OpenSSL, even when httpfs is loaded
+		config.encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	}
+}
+
+void EnableMbedtlsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	// if encryption is initialized, httpfs will be attempted to autoload again
+	config.encryption_util = nullptr;
+	config.options.enable_mbedtls = false;
+}
+
+Value EnableMbedtlsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_mbedtls);
 }
 
 //===----------------------------------------------------------------------===//
