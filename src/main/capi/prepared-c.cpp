@@ -113,19 +113,22 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return duckdb::string();
 	}
-	if (index > wrapper->statement->named_param_map.size()) {
+	auto &named = wrapper->statement->named_param_map;
+	if (index == 0 || index > named.size()) {
 		return duckdb::string();
 	}
-	for (auto &item : wrapper->statement->named_param_map) {
-		auto &identifier = item.first;
-		auto &param_idx = item.second;
-		if (param_idx == index) {
-			// Found the matching parameter
-			return identifier;
+
+	auto &cache = wrapper->param_index_to_name;
+	if (cache.size() != named.size() + 1) {
+		cache.assign(named.size() + 1, duckdb::string());
+		for (auto &kv : named) {
+			auto idx = kv.second;
+			if (idx < cache.size() && cache[idx].empty()) {
+				cache[idx] = kv.first;
+			}
 		}
 	}
-	// No parameter was found with this index
-	return duckdb::string();
+	return cache[index];
 }
 
 const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
