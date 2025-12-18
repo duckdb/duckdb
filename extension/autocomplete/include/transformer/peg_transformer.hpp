@@ -509,11 +509,16 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 
 	// describe.gram
-	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static ShowType TransformShowOrDescribeOrSummarize(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static ShowType TransformShowOrDescribeOrSummarize(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
 	static ShowType TransformShowOrDescribe(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ShowType TransformSummarize(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
@@ -756,10 +761,14 @@ private:
 	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformRowExpression(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformSubstringExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformSubstringParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformSubstringArguments(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformSubstringExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformSubstringExpression(PEGTransformer &transformer,
+	                                                                 optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringParameters(PEGTransformer &transformer,
+	                                                                         optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringArguments(PEGTransformer &transformer,
+	                                                                        optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformSubstringExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformTrimExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static string TransformTrimDirection(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

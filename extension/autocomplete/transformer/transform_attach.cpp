@@ -127,7 +127,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 }
 
 string PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 }

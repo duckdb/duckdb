@@ -535,7 +535,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpression(PEGTra
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	if (StringUtil::CIEquals(choice_pr->name, "InExpressionList") ||
-		StringUtil::CIEquals(choice_pr->name, "InSelectStatement")) {
+	    StringUtil::CIEquals(choice_pr->name, "InSelectStatement")) {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 	}
 	auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
@@ -1287,22 +1287,25 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTr
 	return std::move(func_expr);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSubstringExpression(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformSubstringExpression(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto substring_arguments = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_parens);
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "substring", std::move(substring_arguments));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringArguments(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSubstringArguments(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringExpressionList(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSubstringExpressionList(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
 	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
@@ -1312,8 +1315,9 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringEx
 	return results;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
