@@ -126,6 +126,25 @@ static Vector &GetFieldVectorForScan(Vector &result, optional_idx field_index) {
 	return *children[index];
 }
 
+static void ScanChild(ColumnScanState &state, Vector &result, const std::function<idx_t(Vector &target)> &callback) {
+	if (state.expression_state) {
+		auto &expression_state = *state.expression_state;
+		D_ASSERT(state.context.Valid());
+		auto &executor = expression_state.executor;
+		auto &target = expression_state.target;
+		auto &input = expression_state.input;
+
+		target.Reset();
+		input.Reset();
+		auto scan_count = callback(input.data[0]);
+		input.SetCardinality(scan_count);
+		executor.Execute(input, target);
+		result.Reference(target.data[0]);
+	} else {
+		callback(result);
+	}
+}
+
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_count) {
 	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
@@ -139,22 +158,9 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			    return;
 		    }
 		    auto &field = *sub_columns[child_index];
-		    if (state.expression_state) {
-			    auto &expression_state = *state.expression_state;
-			    D_ASSERT(state.context.Valid());
-			    auto &executor = expression_state.executor;
-			    auto &target = expression_state.target;
-			    auto &input = expression_state.input;
-
-			    target.Reset();
-			    input.Reset();
-			    auto scan_count = field.Scan(transaction, vector_index, field_state, input.data[0], target_count);
-			    input.SetCardinality(scan_count);
-			    executor.Execute(input, target);
-			    target_vector.Reference(target.data[0]);
-		    } else {
-			    field.Scan(transaction, vector_index, field_state, target_vector, target_count);
-		    }
+		    ScanChild(state, target_vector, [&](Vector &child_result) {
+			    return field.Scan(transaction, vector_index, field_state, child_result, target_count);
+		    });
 	    });
 	return scan_count;
 }
@@ -172,23 +178,9 @@ idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state
 			    return;
 		    }
 		    auto &field = *sub_columns[child_index];
-		    if (state.expression_state) {
-			    auto &expression_state = *state.expression_state;
-			    D_ASSERT(state.context.Valid());
-			    auto &executor = expression_state.executor;
-			    auto &target = expression_state.target;
-			    auto &input = expression_state.input;
-
-			    target.Reset();
-			    input.Reset();
-			    auto scan_count =
-			        field.ScanCommitted(vector_index, field_state, input.data[0], allow_updates, target_count);
-			    input.SetCardinality(scan_count);
-			    executor.Execute(input, target);
-			    target_vector.Reference(target.data[0]);
-		    } else {
-			    field.ScanCommitted(vector_index, field_state, target_vector, allow_updates, target_count);
-		    }
+		    ScanChild(state, target_vector, [&](Vector &child_result) {
+			    return field.ScanCommitted(vector_index, field_state, child_result, allow_updates, target_count);
+		    });
 	    });
 	return scan_count;
 }
@@ -205,22 +197,9 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 			    return;
 		    }
 		    auto &field = *sub_columns[child_index];
-		    if (state.expression_state) {
-			    auto &expression_state = *state.expression_state;
-			    D_ASSERT(state.context.Valid());
-			    auto &executor = expression_state.executor;
-			    auto &target = expression_state.target;
-			    auto &input = expression_state.input;
-
-			    target.Reset();
-			    input.Reset();
-			    auto scan_count = field.ScanCount(field_state, input.data[0], count, result_offset);
-			    input.SetCardinality(scan_count);
-			    executor.Execute(input, target);
-			    target_vector.Reference(target.data[0]);
-		    } else {
-			    field.ScanCount(field_state, target_vector, count, result_offset);
-		    }
+		    ScanChild(state, target_vector, [&](Vector &child_result) {
+			    return field.ScanCount(field_state, child_result, count, result_offset);
+		    });
 	    });
 	return scan_count;
 }
