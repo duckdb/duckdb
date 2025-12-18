@@ -208,8 +208,8 @@ optional_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<Physic
 void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
                                       DataChunk &chunk, ConflictManager &conflict_manager) {
 	auto fk_type = conflict_manager.GetVerifyExistenceType() == VerifyExistenceType::APPEND_FK
-					   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
-					   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
+	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
 	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
@@ -222,7 +222,8 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	if (!delete_index) {
 		delete_index = entry->removed_data_during_checkpoint.get();
 	} else if (entry->removed_data_during_checkpoint.get()) {
-		throw InternalException("TableIndexList::VerifyForeignKey - transaction-local deletes AND deletes during checkpoint not handled yet");
+		throw InternalException("TableIndexList::VerifyForeignKey - transaction-local deletes AND deletes during "
+		                        "checkpoint not handled yet");
 	}
 	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 
@@ -284,8 +285,6 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 			auto scan_state = art.InitializeFullScan();
 			set<row_t> row_ids;
 			art.Scan(*scan_state, NumericLimits<idx_t>::Maximum(), row_ids);
-
-
 
 			throw InternalException("Remove data from ART");
 		}

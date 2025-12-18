@@ -1246,7 +1246,8 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		optional_ptr<BoundIndex> lookup_index;
 		// check if there's an on-going checkpoint
 		if (active_checkpoint.IsValid() && bound_index.RequiresTransactionality()) {
-			// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main index
+			// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main
+			// index
 			if (!entry.last_written_checkpoint.IsValid() ||
 			    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
 				// there's an on-going checkpoint and we haven't flushed the index yet

@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_checkpoint_deletes.test_slow
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_deletes_index.test_slow
 # description: Test concurrent checkpoints while deleting
 # group: [interquery]
 
