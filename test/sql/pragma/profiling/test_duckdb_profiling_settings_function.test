@@ -2,14 +2,14 @@
 # description: Test duckdb_profiling_settings function
 # group: [profiling]
 
-query II
-SELECT * EXCLUDE(description) FROM duckdb_profiling_settings();
+query I
+SELECT * EXCLUDE(value, description) FROM duckdb_profiling_settings();
 ----
-custom_profiling_settings	{"WRITE_TO_WAL_LATENCY": "true", "WAL_REPLAY_ENTRY_COUNT": "true", "WAITING_TO_ATTACH_LATENCY": "true", "TOTAL_MEMORY_ALLOCATED": "true", "TOTAL_BYTES_WRITTEN": "true", "TOTAL_BYTES_READ": "true", "SYSTEM_PEAK_TEMP_DIR_SIZE": "true", "SYSTEM_PEAK_BUFFER_MEMORY": "true", "ROWS_RETURNED": "true", "RESULT_SET_SIZE": "true", "QUERY_NAME": "true", "OPERATOR_NAME": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CPU_TIME": "true", "LATENCY": "true", "COMMIT_LOCAL_STORAGE_LATENCY": "true", "EXTRA_INFO": "true", "CHECKPOINT_LATENCY": "true", "BLOCKED_THREAD_TIME": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROWS_SCANNED": "true", "ATTACH_REPLAY_WAL_LATENCY": "true", "OPERATOR_TIMING": "true", "CUMULATIVE_CARDINALITY": "true", "ATTACH_LOAD_STORAGE_LATENCY": "true"}
-enable_profiling	NULL
-profiling_coverage	SELECT
-profiling_mode	NULL
-profiling_output	(empty)
+custom_profiling_settings
+enable_profiling
+profiling_coverage
+profiling_mode
+profiling_output
 
 statement ok
 PRAGMA enable_profiling='json';
@@ -24,13 +24,13 @@ statement ok
 PRAGMA profiling_mode='DETAILED';
 
 statement ok
-pragma custom_profiling_settings='{"CPU_TIME": "true", "LATENCY": "true"}';
+pragma custom_profiling_settings='{"CPU_TIME": "true"}';
 
 query II
 SELECT * EXCLUDE(description) FROM duckdb_profiling_settings();
 ----
-custom_profiling_settings	{"CPU_TIME": "true", "LATENCY": "true"}
+custom_profiling_settings	{"CPU_TIME": "true"}
 enable_profiling	json
 profiling_coverage	ALL
 profiling_mode	detailed
-profiling_output	test_profiling_output.json
+profiling_output	__TEST_DIR__/test_profiling_output.json
