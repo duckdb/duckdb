@@ -128,6 +128,7 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 			}
 		}
 	}
+	// No parameter was found with this index when there is nothing in the cache (default value is `duckdb::string()`)
 	return cache[index];
 }
 
