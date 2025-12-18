@@ -17,10 +17,15 @@ def to_enum_name(version_name):
 def generate_storage_enum(storage_versions):
     result = []
     result.append("enum class StorageVersion : uint64_t {")
+    current = ""
     for version_name, storage_version in storage_versions.items():
         if version_name == 'latest':
             continue
         result.append(f"    {to_enum_name(version_name)} = {storage_version},")
+        current = storage_version
+
+    latest = "LATEST"
+    result.append(f"    {to_enum_name(latest)} = {current},")
     result.append("    INVALID = 0")
     result.append("};")
     return "\n".join(result)
@@ -76,11 +81,9 @@ def main():
 
     storage_values = version_map['storage']['values']
 
-    # 1. Generate and update the Enum block in the .cpp file
     enum_code = generate_storage_enum(storage_values)
     update_file(STORAGE_ENUM_PATH, "ENUM", enum_code)
 
-    # 2. Generate and update the Array block in the .cpp file
     array_code = generate_storage_array(storage_values)
     update_file(STORAGE_INFO_PATH, "STORAGE_ARRAY", array_code)
 

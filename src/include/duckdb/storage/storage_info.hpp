@@ -128,6 +128,7 @@ enum class StorageVersion : uint64_t {
     V1_4_2 = 67,
     V1_4_3 = 67,
     V1_5_0 = 67,
+    LATEST = 67,
     INVALID = 0
 };
 // END OF ENUM VERSION INFO
