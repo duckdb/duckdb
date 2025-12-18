@@ -36,7 +36,7 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 
 	optional_idx current_storage_version;
 	if (storage_manager && storage_manager->HasStorageVersion()) {
-		current_storage_version = storage_manager->GetStorageVersion();
+		current_storage_version = storage_manager->GetStorageVersionValueIdx();
 	}
 	for (auto &candidate : candidates) {
 		auto &type = candidate.type;

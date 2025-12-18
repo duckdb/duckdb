@@ -58,7 +58,7 @@ TEST_CASE("Test different hyperloglog version serialization", "[hyperloglog]") {
 	Allocator allocator;
 	MemoryStream stream(allocator);
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::FromString("v1.0.0");
+	options.storage_compatibility = StorageCompatibility::FromString("v1.0.0");
 
 	// Add 100M values to a NEW HyperLogLog
 	HyperLogLog original_log;

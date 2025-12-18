@@ -166,10 +166,9 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	auto &config = DBConfig::GetConfig(context);
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	{
-		auto &serialize_comp = config.options.serialization_compatibility;
-		auto latest_version = SerializationCompatibility::Latest();
-		if (serialize_comp.manually_set &&
-		    serialize_comp.serialization_version != latest_version.serialization_version) {
+		auto &storage_comp = config.options.storage_compatibility;
+		auto latest_version = StorageCompatibility::Latest();
+		if (storage_comp.manually_set && storage_comp.storage_version != latest_version.storage_version) {
 			// Serialization should not be skipped, this test relies on the serialization to remove certain fields for
 			// compatibility with older versions. This might change behavior, not doing this might make this test fail.
 		} else {
@@ -193,11 +192,11 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		MemoryStream stream(Allocator::Get(context));
 
 		SerializationOptions options;
-		if (config.options.serialization_compatibility.manually_set) {
+		if (config.options.storage_compatibility.manually_set) {
 			// Override the default of 'latest' if this was manually set (for testing, mostly)
-			options.serialization_compatibility = config.options.serialization_compatibility;
+			options.storage_compatibility = config.options.storage_compatibility;
 		} else {
-			options.serialization_compatibility = SerializationCompatibility::Latest();
+			options.storage_compatibility = StorageCompatibility::Latest();
 		}
 
 		BinarySerializer::Serialize(*op, stream, options);

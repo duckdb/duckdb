@@ -33,7 +33,7 @@ public:
 
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 };
 
 class Serializer {
@@ -46,7 +46,7 @@ public:
 	}
 
 	bool ShouldSerialize(idx_t version_added) {
-		return options.serialization_compatibility.Compare(version_added);
+		return options.storage_compatibility.Compare(version_added);
 	}
 
 	class List {
