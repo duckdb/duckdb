@@ -71,6 +71,7 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 		}
 		return CompressionAvailabilityResult();
 	}
+	// default is available
 	return CompressionAvailabilityResult();
 }
 
