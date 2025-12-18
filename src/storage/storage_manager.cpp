@@ -53,8 +53,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
 			storage_version_user_provided = entry.second.ToString();
-			storage_version =
-			    SerializationCompatibility::FromString(storage_version_user_provided).serialization_version;
+			storage_version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -65,16 +64,15 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
-	if (encryption &&
-	    (!storage_version.IsValid() ||
-	     storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version)) {
+	if (encryption && (!storage_version.IsValid() ||
+	                   storage_version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException(
 			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
 			    storage_version_user_provided);
 		}
 		// set storage version to v1.4.0
-		storage_version = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+		storage_version = StorageCompatibility::FromString("v1.4.0").storage_version;
 	}
 }
 
@@ -301,7 +299,9 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		// in-memory databases can always use the latest storage version
-		storage_version = GetSerializationVersion("latest");
+		storage_version = GetStorageVersion("latest");
+		// storage version
+		/// storage_version = GetStorageVersion("latest")'
 		load_complete = true;
 		return;
 	}
@@ -360,6 +360,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		//! set the block header size for the encrypted database files
 		//! set the database to encrypted
 		//! update the storage version to 1.4.0
+		//! Block header size is only valid if database is encrypted
 		if (storage_options.block_header_size.IsValid()) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
@@ -371,7 +372,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 		if (!options.storage_version.IsValid()) {
 			// when creating a new database we default to the serialization version specified in the config
-			options.storage_version = config.options.serialization_compatibility.serialization_version;
+			options.storage_version = config.options.storage_compatibility.storage_version;
 		}
 
 		// Initialize the block manager before creating a new database.
@@ -463,7 +464,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 	}
 
-	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
+	if (row_group_size > 122880ULL && GetStorageVersionValueIdx() < 4) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
 		                            "version when creating the database to enable larger row groups",

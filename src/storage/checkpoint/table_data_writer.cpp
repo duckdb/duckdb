@@ -162,7 +162,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
+	// serialization version 3 = storage version
+	auto v1_0_0_storage = serializer.GetOptions().storage_compatibility.storage_version <
+	                      StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_1_0);
 	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);

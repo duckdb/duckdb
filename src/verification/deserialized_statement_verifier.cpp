@@ -17,7 +17,7 @@ DeserializedStatementVerifier::Create(const SQLStatement &statement,
 	Allocator allocator;
 	MemoryStream stream(allocator);
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::FromString("latest");
+	options.storage_compatibility = StorageCompatibility::FromString("latest");
 	BinarySerializer::Serialize(select_stmt, stream, options);
 	stream.Rewind();
 	auto result = BinaryDeserializer::Deserialize<SelectStatement>(stream);

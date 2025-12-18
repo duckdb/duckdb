@@ -146,7 +146,7 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 		//! Can't use ZSTD in in-memory environment
 		return nullptr;
 	}
-	if (storage.GetStorageVersion() < 4) {
+	if (storage.GetStorageVersionValueIdx() < 4) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
 	}

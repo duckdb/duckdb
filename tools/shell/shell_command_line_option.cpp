@@ -102,8 +102,7 @@ MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args
 MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
 	auto &storage_version = args[1];
 	try {
-		state.config.options.serialization_compatibility =
-		    duckdb::SerializationCompatibility::FromString(storage_version);
+		state.config.options.storage_compatibility = duckdb::StorageCompatibility::FromString(storage_version);
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
 		state.PrintF(PrintOutput::STDERR, "%s: Error: unknown argument (%s) for '-storage-version': %s\n",

@@ -194,7 +194,9 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(block_count);
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
-	ser.Write<idx_t>(serialization_compatibility);
+	// ! old
+	// ser.Write<idx_t>(serialization_compatibility);
+	ser.Write<idx_t>(storage_compatibility);
 }
 
 DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
@@ -222,7 +224,7 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	}
 
 	// Default to 1 for version 64, else read from file.
-	header.serialization_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
+	header.storage_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
 
 	return header;
 }
@@ -282,13 +284,18 @@ void SingleFileBlockManager::AddStorageVersionTag() {
 }
 
 uint64_t SingleFileBlockManager::GetVersionNumber() const {
+	// in this method, serialization number gets converted to the storage number
 	auto storage_version = options.storage_version.GetIndex();
-	if (storage_version < 4) {
+	// this is the serialization version, not the storage version
+	if (storage_version < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
 		return VERSION_NUMBER;
 	}
+	// TODO; we can make this simpeler
 	// Look up the matching version number.
-	auto version_name = GetStorageVersionName(storage_version, false);
-	return GetStorageVersion(version_name.c_str()).GetIndex();
+	// // the input here is actually serialization version number
+	// auto version_name = GetStorageVersionName(storage_version, false);
+	// return GetStorageVersion(version_name.c_str()).GetIndex();
+	return storage_version;
 }
 
 MainHeader ConstructMainHeader(idx_t version_number) {
@@ -379,7 +386,9 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	handle = fs.OpenFile(path, flags);
 	header_buffer.Clear();
 
+	// version number of the database (storageversioninfo)
 	options.version_number = GetVersionNumber();
+	// storage version number (serializationversioninfo)
 	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 	AddStorageVersionTag();
 
@@ -392,6 +401,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
 	memset(options.db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
+
 	if (encryption_enabled || options.version_number.GetIndex() >= 67) {
 		GenerateDBIdentifier(options.db_identifier);
 	}
@@ -442,7 +452,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
-	h1.serialization_compatibility = options.storage_version.GetIndex();
+	h1.storage_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -455,7 +465,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
-	h2.serialization_compatibility = options.storage_version.GetIndex();
+	h2.storage_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -527,7 +537,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
 
-		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a proper validation
 		// of the cipher used instead of this trick to avoid downgrades
 		if (stored_cipher != EncryptionTypes::GCM) {
 			if (config_cipher == EncryptionTypes::INVALID) {
@@ -669,17 +679,17 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	if (options.storage_version.IsValid()) {
 		// storage version specified explicity - use requested storage version
 		auto requested_compat_version = options.storage_version.GetIndex();
-		if (requested_compat_version < header.serialization_compatibility) {
+		if (requested_compat_version < header.storage_compatibility) {
 			throw InvalidInputException(
 			    "Error opening \"%s\": cannot initialize database with storage version %d - which is lower than what "
 			    "the database itself uses (%d). The storage version of an existing database cannot be lowered.",
-			    path, requested_compat_version, header.serialization_compatibility);
+			    path, requested_compat_version, header.storage_compatibility);
 		}
 	} else {
 		// load storage version from header
-		options.storage_version = header.serialization_compatibility;
+		options.storage_version = header.storage_compatibility;
 	}
-	if (header.serialization_compatibility > SerializationCompatibility::Latest().serialization_version) {
+	if (header.storage_compatibility > StorageCompatibility::Latest().storage_version) {
 		throw InvalidInputException(
 		    "Error opening \"%s\": file was written with a storage version greater than the latest version supported "
 		    "by this DuckDB instance. Try opening the file with a newer version of DuckDB.",
@@ -1188,7 +1198,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.block_count = NumericCast<idx_t>(max_block);
 	lock.unlock();
 
-	header.serialization_compatibility = options.storage_version.GetIndex();
+	header.storage_compatibility = options.storage_version.GetIndex();
 
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
