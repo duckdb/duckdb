@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -28,11 +29,11 @@ struct CompressionMethodRequirements {
 CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compression_type,
                                                          optional_ptr<StorageManager> storage_manager) {
 	//! Max storage compatibility
-	vector<CompressionMethodRequirements> candidates({{CompressionType::COMPRESSION_PATAS, optional_idx(), 0},
-	                                                  {CompressionType::COMPRESSION_CHIMP, optional_idx(), 0},
-	                                                  {CompressionType::COMPRESSION_DICTIONARY, 0, 4},
-	                                                  {CompressionType::COMPRESSION_FSST, 0, 4},
-	                                                  {CompressionType::COMPRESSION_DICT_FSST, 5, optional_idx()}});
+	vector<CompressionMethodRequirements> candidates({{CompressionType::COMPRESSION_PATAS, optional_idx(), StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID)},
+	                                                  {CompressionType::COMPRESSION_CHIMP, optional_idx(), StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID)},
+	                                                  {CompressionType::COMPRESSION_DICTIONARY, StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID), StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)},
+	                                                  {CompressionType::COMPRESSION_FSST, StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID), StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)},
+	                                                  {CompressionType::COMPRESSION_DICT_FSST, StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0), optional_idx()}});
 
 	optional_idx current_storage_version;
 	if (storage_manager && storage_manager->HasStorageVersion()) {

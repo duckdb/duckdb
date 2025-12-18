@@ -290,11 +290,6 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	if (storage_version < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
 		return VERSION_NUMBER;
 	}
-	// TODO; we can make this simpeler
-	// Look up the matching version number.
-	// // the input here is actually serialization version number
-	// auto version_name = GetStorageVersionName(storage_version, false);
-	// return GetStorageVersion(version_name.c_str()).GetIndex();
 	return storage_version;
 }
 

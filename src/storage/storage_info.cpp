@@ -89,42 +89,10 @@ static const StorageVersionInfo storage_version_info[] = {
 	{nullptr, StorageVersion::INVALID}
 };
 // END OF STORAGE_ARRAY VERSION INFO
+// clang-format on
 
 static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
 static_assert(StorageVersionInfo::GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO) == VERSION_NUMBER, "Check on VERSION_INFO");
-
-// START OF SERIALIZATION VERSION INFO
-const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 7;
-const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
-static const SerializationVersionInfo serialization_version_info[] = {
-	{"v0.10.0", 1},
-	{"v0.10.1", 1},
-	{"v0.10.2", 1},
-	{"v0.10.3", 2},
-	{"v1.0.0", 2},
-	{"v1.1.0", 3},
-	{"v1.1.1", 3},
-	{"v1.1.2", 3},
-	{"v1.1.3", 3},
-	{"v1.2.0", 4},
-	{"v1.2.1", 4},
-	{"v1.2.2", 4},
-	{"v1.3.0", 5},
-	{"v1.3.1", 5},
-	{"v1.3.2", 5},
-	{"v1.4.0", 6},
-	{"v1.4.1", 6},
-	{"v1.4.2", 6},
-	{"v1.4.3", 6},
-	{"v1.5.0", 7},
-	{"latest", 7},
-	{nullptr, 0}
-};
-// END OF SERIALIZATION VERSION INFO
-// clang-format on
-
-static_assert(DEFAULT_SERIALIZATION_VERSION_INFO <= LATEST_SERIALIZATION_VERSION_INFO,
-              "Check on SERIALIZATION_VERSION_INFO");
 
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
 	// original input here was a Serialization_version
