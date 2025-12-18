@@ -254,6 +254,7 @@ idx_t VariantColumnData::ScanWithCallback(
 
 		if (state.expression_state) {
 			auto &expression_state = *state.expression_state;
+			auto &executor = expression_state.executor;
 
 			auto &input = expression_state.input;
 			auto &target = expression_state.target;
@@ -261,6 +262,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			target.Reset();
 			input.data[0].Reference(extract_intermediate);
 			input.SetCardinality(scan_count);
+			executor.Execute(input, target);
 			result.Reference(target.data[0]);
 		} else {
 			result.Reference(extract_intermediate);
@@ -462,15 +464,18 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
 		Vector unshredded(variant_vec.GetType(), 1);
 		VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
-		variant_vec.SetValue(result_idx, unshredded.GetValue(0));
+		variant_vec.SetValue(0, unshredded.GetValue(0));
 	} else {
 		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
+		if (result_idx) {
+			variant_vec.SetValue(0, variant_vec.GetValue(result_idx));
+		}
 	}
 
 	if (!storage_index.IsPushdownExtract()) {
 		//! No extract required
 		D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
-		result.Reference(variant_vec);
+		result.SetValue(result_idx, variant_vec.GetValue(0));
 		return;
 	}
 
@@ -491,7 +496,7 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 
 	if (result.GetType().id() == LogicalTypeId::VARIANT) {
 		//! No cast required
-		result.Reference(extracted_variant);
+		result.SetValue(result_idx, extracted_variant.GetValue(0));
 		return;
 	}
 

@@ -126,6 +126,15 @@ def test_multiple_long_strings_many_rows(shell):
     result = test.run()
     result.check_stdout("laborum")
 
+def test_wrap_column_name(shell):
+    test = (
+        ShellTest(shell)
+        .statement('.maxwidth 100')
+        .statement('select 42 "this is a very long column name that should be wrapped if our terminal width is small enough, even if the value it contains is not that large";')
+    )
+    result = test.run()
+    result.check_stdout("that large")
+
 def test_big_json(shell):
     test = (
         ShellTest(shell)

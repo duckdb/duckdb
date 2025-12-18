@@ -187,6 +187,8 @@ public:
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! The maximum number of rows to analyze in order to determine column widths in DuckBox mode
+	idx_t max_analyze_rows = 0;
 	//! Decimal separator (if any)
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)
@@ -300,6 +302,7 @@ public:
 	MetadataResult DisplayEntries(const vector<string> &args, char type);
 	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
+	void ClearInterrupt();
 
 	static idx_t RenderLength(const char *str, idx_t str_len);
 	static idx_t RenderLength(duckdb::string_t str);
@@ -408,8 +411,9 @@ public:
 	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
-	SuccessState RenderQuery(ShellRenderer &renderer, const string &query);
-	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result);
+	SuccessState RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite);
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result,
+	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 

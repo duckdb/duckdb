@@ -1335,8 +1335,8 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 		                              data.get(),                 // Output buffer
 		                              allocate_size,              // Output buffer size
 		                              NULL, NULL);
-		// process the characters in REVERSE order and add the key presses
-		for (int i = len - 1; i >= 0; i--) {
+		// process the characters in ORDER and add the key presses
+		for (int i = 0; i < len; i++) {
 			char c = data[i];
 			key_press.sequence = EscapeSequence::INVALID;
 			if (c > 0 && c <= BACKSPACE) {
@@ -1364,7 +1364,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 			} else {
 				key_press.action = c;
 			}
-			BufferedKeyPresses::BufferKeyPress(key_action.key_press);
+			BufferedKeyPresses::BufferKeyPress(key_press);
 		}
 	}
 

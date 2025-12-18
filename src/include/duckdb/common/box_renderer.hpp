@@ -41,10 +41,14 @@ public:
 	BaseResultRenderer &operator<<(const string &val);
 
 	void Render(ResultRenderType render_mode, const string &val);
-	void SetValueType(const LogicalType &type);
+	void SetResultTypes(vector<LogicalType> new_column_types);
+	void SetValueColumn(optional_idx index);
+	const LogicalType &GetValueType();
 
 private:
-	LogicalType value_type;
+	vector<LogicalType> column_types;
+	LogicalType invalid_type;
+	optional_idx column_idx;
 };
 
 class StringResultRenderer : public BaseResultRenderer {
@@ -73,6 +77,8 @@ struct BoxRendererConfig {
 	idx_t max_width = 0;
 	// the maximum amount of rows to render
 	idx_t max_rows = 20;
+	//! The maximum number of rows to analyze in order to determine column widths
+	idx_t max_analyze_rows = (idx_t)-1;
 	// the limit that is applied prior to rendering
 	// if we are rendering exactly "limit" rows then a question mark is rendered instead
 	idx_t limit = 0;
@@ -131,12 +137,21 @@ struct BoxRendererConfig {
 #endif
 };
 
+struct BoxRendererState {
+	virtual ~BoxRendererState() = default;
+
+	virtual idx_t TotalRenderWidth() = 0;
+	virtual void Render(BaseResultRenderer &ss) = 0;
+};
+
 class BoxRenderer {
 public:
 	explicit BoxRenderer(BoxRendererConfig config_p = BoxRendererConfig());
 
 	string ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
+	unique_ptr<BoxRendererState> Prepare(ClientContext &context, const vector<string> &names,
+	                                     const ColumnDataCollection &op);
 	void Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op,
 	            BaseResultRenderer &ss);
 	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
