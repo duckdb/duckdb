@@ -213,9 +213,12 @@ NULL	100	Monday	ubn4.csv
 NULL	200	Sunday	ubn4.csv
 NULL	300	Friday	ubn4.csv
 
+statement ok
+SET VARIABLE union_by_name_csv_files = (SELECT list(file ORDER BY file) FROM glob('{DATA_DIR}/csv/union-by-name/part=[ab]/*'));
+
 # Test hive_partition with union_by_name
 statement error
-SELECT * FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
+SELECT * FROM read_csv_auto(getvariable('union_by_name_csv_files'), HIVE_PARTITIONING=TRUE, null_padding=0) ORDER BY id
 ----
 If you are trying to read files with different schemas, try setting union_by_name=True
 
@@ -232,9 +235,12 @@ statement error
 SELECT * FROM read_csv_auto('{DATA_DIR}/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
 
+statement ok
+set variable union_by_name_2_csv_files = (SELECT list(file ORDER BY file) FROM glob('{DATA_DIR}/csv/union_by_name_2/*.csv'));
+
 # Test one thread per file CSV union by name where file only had header.
 query IIII
-from read_csv('{DATA_DIR}/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
+from read_csv(getvariable('union_by_name_2_csv_files'), union_by_name=True, parallel = false);
 ----
 1	1	1	NULL
 
