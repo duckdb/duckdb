@@ -581,7 +581,9 @@ bool PruneStructPack(BoundAggregateExpression &aggregate, idx_t argument_index, 
 	vector<pair<string, LogicalType>> new_child_types;
 	new_children.reserve(required_indexes.size());
 	new_child_types.reserve(required_indexes.size());
+	D_ASSERT(struct_pack.children.size() == child_types.size());
 	for (auto idx : required_indexes) {
+		D_ASSERT(idx < struct_pack.children.size());
 		new_children.push_back(struct_pack.children[idx]->Copy());
 		new_child_types.push_back(child_types[idx]);
 	}
@@ -608,14 +610,17 @@ bool PruneStructPack(BoundAggregateExpression &aggregate, idx_t argument_index, 
 			} else if (child->type == ExpressionType::BOUND_REF) {
 				child->Cast<BoundReferenceExpression>().return_type = new_struct_type;
 			}
+			bool found = false;
 			for (idx_t new_idx = 0; new_idx < required_indexes.size(); new_idx++) {
 				if (required_indexes[new_idx] == extract_bind.index) {
 					extract_bind.index = new_idx;
 					extract_func->return_type = new_child_types[new_idx].second;
 					extract_func->function.return_type = extract_func->return_type;
+					found = true;
 					break;
 				}
 			}
+			D_ASSERT(found);
 		}
 	}
 	return true;

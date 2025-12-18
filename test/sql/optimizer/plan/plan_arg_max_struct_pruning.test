@@ -16,7 +16,7 @@ FROM (
   GROUP BY col_1, col_2
 );
 ----
-physical_plan	<REGEX>:.*struct_pack\(col_1, col_2,[\s\S]*col_3\).*
+physical_plan	<REGEX>:.*struct_pack\(col_1, col_2,\s*col_3\).*
 
 query II
 EXPLAIN SELECT col_2
@@ -36,4 +36,4 @@ FROM (
   GROUP BY col_1, col_2
 );
 ----
-physical_plan	<REGEX>:.*struct_pack\(col_1,[\s\S]*col_3\).*
+physical_plan	<REGEX>:.*struct_pack\(col_1,\s*col_3\).*
