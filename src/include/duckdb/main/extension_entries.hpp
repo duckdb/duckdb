@@ -731,6 +731,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"sum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sum_no_overflow", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sumkahan", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"switch", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"tan", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"tanh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
