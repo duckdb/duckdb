@@ -16,7 +16,17 @@ FROM (
   GROUP BY col_1, col_2
 );
 ----
-physical_plan	<REGEX>:.*struct_pack\(col_1, col_2,\s*col_3\).*
+physical_plan	<REGEX>:.*struct_pack\(col_1, col_2,.*col_3\).*
+
+query II
+EXPLAIN SELECT col_1, col_2, col_3
+FROM (
+  SELECT UNNEST(arg_max(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_4[^)]*\).*
 
 query II
 EXPLAIN SELECT col_2
@@ -29,6 +39,26 @@ FROM (
 physical_plan	<REGEX>:.*struct_pack\(col_2\).*
 
 query II
+EXPLAIN SELECT col_2
+FROM (
+  SELECT UNNEST(arg_min(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_1[^)]*\).*
+
+query II
+EXPLAIN SELECT col_2
+FROM (
+  SELECT UNNEST(arg_min(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_3[^)]*\).*
+
+query II
 EXPLAIN SELECT col_1, col_3
 FROM (
   SELECT UNNEST(arg_max_nulls_last(argmax_prune, col_5))
@@ -36,4 +66,14 @@ FROM (
   GROUP BY col_1, col_2
 );
 ----
-physical_plan	<REGEX>:.*struct_pack\(col_1,\s*col_3\).*
+physical_plan	<REGEX>:.*struct_pack\(col_1,.*col_3\).*
+
+query II
+EXPLAIN SELECT col_1, col_3
+FROM (
+  SELECT UNNEST(arg_max_nulls_last(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_2[^)]*\).*
