@@ -622,6 +622,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformMaterialized);
 	REGISTER_TRANSFORM(TransformHavingClause);
 	REGISTER_TRANSFORM(TransformOffsetValue);
+	REGISTER_TRANSFORM(TransformQualifyClause);
 }
 
 void PEGTransformerFactory::RegisterUse() {

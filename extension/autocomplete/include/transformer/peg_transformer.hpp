@@ -1074,7 +1074,7 @@ private:
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
-
+	static unique_ptr<ParsedExpression> TransformQualifyClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
