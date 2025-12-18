@@ -435,7 +435,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformMapStructField);
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
-
 	REGISTER_TRANSFORM(TransformGroupingExpression);
 }
 
