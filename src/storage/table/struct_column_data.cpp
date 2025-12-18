@@ -354,7 +354,8 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 		auto child_index = child_storage_index.GetPrimaryIndex();
 		auto &sub_column = *sub_columns[child_index];
 		auto &child_type = StructType::GetChildTypes(type)[child_index].second;
-		if (child_type != result.GetType()) {
+		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
+		    child_storage_index.GetType() != child_type) {
 			Vector intermediate(child_type, 1);
 			sub_column.FetchRow(transaction, state, child_storage_index, row_id, intermediate, 0);
 			auto context = transaction.transaction->context.lock();
