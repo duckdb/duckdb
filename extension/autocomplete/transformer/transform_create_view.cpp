@@ -55,7 +55,6 @@ void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNo
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer,
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	// TODO(Dtenwolde) handle recursive views
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
 	auto insert_column_list_pr = list_pr.Child<OptionalParseResult>(4);

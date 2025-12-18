@@ -138,26 +138,27 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelectParens(P
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto select_from = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, select_from->where_clause);
+	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, select_node->where_clause);
 	auto group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (group_opt.HasResult()) {
 		auto group_by_node = transformer.Transform<GroupByNode>(group_opt.optional_result);
-		if (group_by_node.group_expressions[0]->GetExpressionClass() == ExpressionClass::STAR) {
-			select_from->aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
-		} else {
-			select_from->groups = std::move(group_by_node);
+		if (ExpressionIsEmptyStar(*group_by_node.group_expressions[0])) {
+			select_node->aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+			group_by_node.group_expressions.clear();
+			group_by_node.grouping_sets.clear();
 		}
+		select_node->groups = std::move(group_by_node);
 	}
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, select_from->having);
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, select_node->having);
 	auto opt_window_clause = list_pr.Child<OptionalParseResult>(4);
 	if (opt_window_clause.HasResult()) {
 		throw NotImplementedException("Window clause in SELECT statement has not yet been implemented.");
 	}
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, select_from->qualify);
-	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 6, select_from->sample);
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, select_node->qualify);
+	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 6, select_node->sample);
 	auto select_statement = make_uniq<SelectStatement>();
-	select_statement->node = std::move(select_from);
+	select_statement->node = std::move(select_node);
 	return select_statement;
 }
 
@@ -1016,7 +1017,7 @@ GroupByNode PEGTransformerFactory::TransformGroupByClause(PEGTransformer &transf
 GroupByNode PEGTransformerFactory::TransformGroupByExpressions(PEGTransformer &transformer,
                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<GroupByNode>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto result = transformer.Transform<GroupByNode>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 GroupByNode PEGTransformerFactory::TransformGroupByAll(PEGTransformer &transformer,
