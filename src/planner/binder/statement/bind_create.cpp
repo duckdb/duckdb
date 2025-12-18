@@ -45,6 +45,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -154,6 +155,35 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
+void Binder::QualifyNode(QueryNode &node) {
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node,
+	    [&](unique_ptr<ParsedExpression> &child) {
+		    if (!child) {
+			    return;
+		    }
+		    QualifyExpression(*child);
+	    },
+	    [&](TableRef &ref) { QualifyRef(ref); });
+}
+
+void Binder::QualifyExpression(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::SUBQUERY) {
+		return;
+	}
+	auto &subquery_expr = expr.Cast<SubqueryExpression>();
+	QualifyNode(*subquery_expr.subquery->node);
+}
+
+void Binder::QualifyRef(TableRef &ref) {
+	if (ref.type != TableReferenceType::BASE_TABLE) {
+		return;
+	}
+	auto &base_table = ref.Cast<BaseTableRef>();
+	//! Bind the tableref, this is what qualifies the reference(s) inside the TableRef
+	(void)Bind(base_table);
+}
+
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// bind the view as if it were a query so we can catch errors
 	// note that we bind the original, and replace the original with a copy
@@ -176,6 +206,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto view_search_path = GetSearchPath(catalog, base.schema);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
+	QualifyNode(*base.query->node);
 	auto copy = base.query->Copy();
 	auto query_node = view_binder->Bind(*base.query);
 	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
