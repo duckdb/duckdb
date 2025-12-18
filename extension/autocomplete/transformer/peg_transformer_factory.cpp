@@ -284,6 +284,17 @@ void PEGTransformerFactory::RegisterDelete() {
 	REGISTER_TRANSFORM(TransformTruncateStatement);
 }
 
+void PEGTransformerFactory::RegisterDescribe() {
+	// describe.gram
+	REGISTER_TRANSFORM(TransformDescribeStatement);
+	REGISTER_TRANSFORM(TransformShowSelect);
+	REGISTER_TRANSFORM(TransformShowAllTables);
+	REGISTER_TRANSFORM(TransformShowQualifiedName);
+	REGISTER_TRANSFORM(TransformShowOrDescribeOrSummarize);
+	REGISTER_TRANSFORM(TransformShowOrDescribe);
+	REGISTER_TRANSFORM(TransformSummarize);
+}
+
 void PEGTransformerFactory::RegisterDetach() {
 	// detach.gram
 	REGISTER_TRANSFORM(TransformDetachStatement);
@@ -750,7 +761,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<ShowType>("SummarizeRule", ShowType::SUMMARY);
 	RegisterEnum<ShowType>("ShowRule", ShowType::SHOW_FROM);
 	RegisterEnum<ShowType>("DescribeRule", ShowType::DESCRIBE);
-	RegisterEnum<ShowType>("DescRule", ShowType::DESCRIBE);
 
 	RegisterEnum<InsertColumnOrder>("InsertByName", InsertColumnOrder::INSERT_BY_NAME);
 	RegisterEnum<InsertColumnOrder>("InsertByPosition", InsertColumnOrder::INSERT_BY_POSITION);
@@ -820,6 +830,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDetach();
+	RegisterDescribe();
 	RegisterDrop();
 	RegisterExport();
 	RegisterExpression();

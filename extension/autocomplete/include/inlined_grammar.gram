@@ -774,14 +774,17 @@ SecretStorageSpecifier <- 'IN' Identifier
 CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatementInternal
 DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
-ShowSelect <- ShowOrDescribeOrSummarize SelectStatement
+ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
 ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
 ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
 ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 
-ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'
-ShowOrDescribe <- 'SHOW' / 'DESCRIBE' / 'DESC'
-
+ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
+Summarize <- SummarizeRule
+SummarizeRule <- 'SUMMARIZE'
+ShowOrDescribe <- ShowRule / DescribeRule
+ShowRule <- 'SHOW'
+DescribeRule <- 'DESCRIBE' / 'DESC'
 VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
 VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
 

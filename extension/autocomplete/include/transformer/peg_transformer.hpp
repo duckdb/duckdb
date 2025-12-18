@@ -182,6 +182,7 @@ public:
 	void RegisterDeallocate();
 	void RegisterDelete();
 	void RegisterDetach();
+	void RegisterDescribe();
 	void RegisterDrop();
 	void RegisterExport();
 	void RegisterExpression();
@@ -506,6 +507,15 @@ private:
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
+
+	// describe.gram
+	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static ShowType TransformShowOrDescribeOrSummarize(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static ShowType TransformShowOrDescribe(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static ShowType TransformSummarize(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// delete.gram
 	static unique_ptr<SQLStatement> TransformDeleteStatement(PEGTransformer &transformer,
