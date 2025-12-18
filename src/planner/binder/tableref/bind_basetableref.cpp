@@ -267,7 +267,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		table_or_view =
 		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
-
+	if (ref.catalog_name.empty()) {
+		ref.catalog_name = table_or_view->ParentCatalog().GetName();
+	}
+	if (ref.schema_name.empty()) {
+		ref.schema_name = table_or_view->ParentSchema().name;
+	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node

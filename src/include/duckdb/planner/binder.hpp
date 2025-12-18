@@ -553,6 +553,11 @@ private:
 	                                           const string &tname);
 
 private:
+	void QualifyNode(QueryNode &node);
+	void QualifyExpression(ParsedExpression &expr);
+	void QualifyRef(TableRef &expr);
+
+private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
