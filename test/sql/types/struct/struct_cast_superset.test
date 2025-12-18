@@ -25,8 +25,11 @@ COPY t1 TO '__TEST_DIR__/struct_cast_t1.parquet' (FORMAT 'parquet');
 statement ok
 COPY t2 TO '__TEST_DIR__/struct_cast_t2.parquet' (FORMAT 'parquet');
 
+statement ok
+SET VARIABLE struct_cast_files = (SELECT list(file ORDER BY file) FROM glob('__TEST_DIR__/struct_cast_*.parquet'));
+
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/struct_cast_*.parquet', union_by_name = TRUE);
+SELECT * FROM read_parquet(getvariable('struct_cast_files'), union_by_name = TRUE);
 ----
 {'a': 42, 'b': 43, 'c': NULL}
 {'a': 100, 'b': NULL, 'c': 101}
