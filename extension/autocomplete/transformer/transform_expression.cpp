@@ -127,9 +127,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	unique_ptr<ParsedExpression> filter_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, filter_expr);
 	auto export_opt = list_pr.Child<OptionalParseResult>(4);
-	if (export_opt.HasResult()) {
-		throw NotImplementedException("Export has not yet been implemented");
-	}
 	auto over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
 		auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
@@ -143,7 +140,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 
 	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema,
 	                                            qualified_function.name, std::move(function_children));
-
+	result->export_state = export_opt.HasResult();
 	result->distinct = distinct;
 	if (!order_by.empty()) {
 		auto order_by_modifier = make_uniq<OrderModifier>();
