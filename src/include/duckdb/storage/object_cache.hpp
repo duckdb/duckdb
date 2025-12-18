@@ -113,7 +113,7 @@ public:
 			non_evictable_entries[std::move(key)] = std::move(value);
 			return;
 		}
-		lru_cache.Put(key, std::move(value), estimated_memory.GetIndex());
+		lru_cache.Put(std::move(key), std::move(value), estimated_memory.GetIndex());
 	}
 
 	void Delete(const string &key) {
