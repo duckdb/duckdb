@@ -426,6 +426,12 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
+void DataTable::FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,
+                               idx_t fetch_count, ColumnFetchState &state) {
+	TransactionData commit_transaction(MAX_TRANSACTION_ID, TRANSACTION_ID_START - 1);
+	row_groups->Fetch(commit_transaction, result, column_ids, row_identifiers, fetch_count, state);
+}
+
 bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
 	return row_groups->CanFetch(transaction, row_id);
 }

@@ -100,7 +100,7 @@ public:
 		index_entries = std::move(other.index_entries);
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);

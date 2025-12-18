@@ -269,7 +269,7 @@ vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, c
 	return infos;
 }
 
-void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
+void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		// merge any data appended to the index while the checkpoint was running
@@ -281,12 +281,69 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 		auto &bound_index = index.Cast<BoundIndex>();
 		if (entry->removed_data_during_checkpoint) {
 			// FIXME: this should use an optimized removal merge instead of doing fetches in the base table
+			// fetch all row-ids to delete
 			auto &art = entry->removed_data_during_checkpoint->Cast<ART>();
 			auto scan_state = art.InitializeFullScan();
-			set<row_t> row_ids;
-			art.Scan(*scan_state, NumericLimits<idx_t>::Maximum(), row_ids);
+			set<row_t> all_row_ids;
+			art.Scan(*scan_state, NumericLimits<idx_t>::Maximum(), all_row_ids);
 
-			throw InternalException("Remove data from ART");
+			// FIXME: this is mostly copied over from RowGroupCollection::RemoveFromIndexes, but we shouldn't be doing
+			// this anyway...
+			if (!all_row_ids.empty()) {
+				// in a loop fetch the
+				Vector row_identifiers(LogicalType::BIGINT);
+				auto row_ids = FlatVector::GetData<int64_t>(row_identifiers);
+				idx_t count = 0;
+
+				auto indexed_column_id_set = bound_index.GetColumnIdSet();
+				vector<StorageIndex> column_ids;
+				for (auto &col : indexed_column_id_set) {
+					column_ids.emplace_back(col);
+				}
+				sort(column_ids.begin(), column_ids.end());
+
+				auto types = storage.GetTypes();
+				vector<LogicalType> column_types;
+				for (auto &col : column_ids) {
+					column_types.push_back(types[col.GetPrimaryIndex()]);
+				}
+
+				DataChunk fetch_chunk;
+				fetch_chunk.Initialize(Allocator::DefaultAllocator(), column_types);
+
+				ColumnFetchState state;
+				state.fetch_type = FetchType::FORCE_FETCH;
+
+				DataChunk result_chunk;
+				auto fetched_columns = vector<bool>(types.size(), false);
+				result_chunk.Initialize(Allocator::DefaultAllocator(), types, fetched_columns);
+				// Now set all to-be-fetched columns.
+				for (auto &col : indexed_column_id_set) {
+					fetched_columns[col] = true;
+				}
+				auto last_row_id = *all_row_ids.rbegin();
+				for (auto &row_id : all_row_ids) {
+					row_ids[count++] = row_id;
+					if (row_id == last_row_id || count == STANDARD_VECTOR_SIZE) {
+						fetch_chunk.Reset();
+						storage.FetchCommitted(fetch_chunk, column_ids, row_identifiers, count, state);
+
+						// Reference the necessary columns of the fetch_chunk.
+						idx_t fetch_idx = 0;
+						for (idx_t j = 0; j < types.size(); j++) {
+							if (fetched_columns[j]) {
+								result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
+								continue;
+							}
+							result_chunk.data[j].Reference(Value(types[j]));
+						}
+						result_chunk.SetCardinality(fetch_chunk);
+
+						bound_index.Delete(result_chunk, row_identifiers);
+						count = 0;
+					}
+				}
+			}
 		}
 		if (entry->added_data_during_checkpoint) {
 			// we have written data here while checkpointing - merge it into the main index

@@ -2,9 +2,6 @@
 # description: Test concurrent checkpoints while deleting
 # group: [interquery]
 
-# FIXME: not working yet
-mode skip
-
 statement ok
 SET checkpoint_threshold='1TB'
 
@@ -17,7 +14,7 @@ SET index_scan_max_count=999999999
 statement ok
 SET index_scan_percentage=1
 
-loop sleep_time 0 100
+foreach sleep_time 0 25 50 75 100
 
 statement ok
 SET debug_checkpoint_sleep_ms=${sleep_time}
