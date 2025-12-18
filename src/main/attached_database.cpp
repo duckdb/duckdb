@@ -197,11 +197,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> attached_db) {
-	if (attached_db.use_count() != 1) {
-		return;
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
+	{
+		lock_guard<mutex> guard(attached_db->close_lock);
+		if (attached_db.use_count() == 1) {
+			attached_db->Close(DatabaseCloseAction::CHECKPOINT);
+		}
 	}
-	attached_db->Close(DatabaseCloseAction::CHECKPOINT);
+	attached_db.reset();
 }
 
 void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
