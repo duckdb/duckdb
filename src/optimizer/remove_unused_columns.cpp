@@ -24,21 +24,16 @@
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/common/string_util.hpp"
 #include <algorithm>
 #include <unordered_set>
 #include <utility>
 
 namespace duckdb {
 
-bool PruneStructPack(BoundAggregateExpression &aggregate, const vector<idx_t> &required_indexes,
+bool PruneStructPack(BoundAggregateExpression &aggregate, idx_t argument_index, const vector<idx_t> &required_indexes,
                      vector<BoundFunctionExpression *> *extracts);
 
 namespace {
-bool IsArgMinMax(const AggregateFunction &function) {
-	return StringUtil::StartsWith(function.name, "arg_min") || StringUtil::StartsWith(function.name, "arg_max");
-}
-
 vector<idx_t> GetRequiredStructFields(ReferencedColumn &column) {
 	if (column.child_columns.empty()) {
 		return {};
@@ -81,7 +76,7 @@ vector<BoundFunctionExpression *> GetStructExtractFunctions(ReferencedColumn &co
 	return extract_functions;
 }
 
-bool TryPruneArgMinMaxStructs(column_binding_map_t<ReferencedColumn> &column_references, LogicalAggregate &op) {
+bool TryPruneStructAggregateArgs(column_binding_map_t<ReferencedColumn> &column_references, LogicalAggregate &op) {
 	bool pruned_structs = false;
 	for (idx_t agg_idx = 0; agg_idx < op.expressions.size(); agg_idx++) {
 		auto &expr = op.expressions[agg_idx];
@@ -89,9 +84,11 @@ bool TryPruneArgMinMaxStructs(column_binding_map_t<ReferencedColumn> &column_ref
 			continue;
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
-		if (!IsArgMinMax(aggregate.function)) {
+		if (!aggregate.function.SupportsStructArgumentPruning()) {
 			continue;
 		}
+		// The aggregate declares which argument produces the struct to be pruned.
+		auto argument_index = aggregate.function.GetStructArgumentPruning().GetIndex();
 
 		auto binding = ColumnBinding(op.aggregate_index, agg_idx);
 		auto entry = column_references.find(binding);
@@ -105,7 +102,7 @@ bool TryPruneArgMinMaxStructs(column_binding_map_t<ReferencedColumn> &column_ref
 
 		auto extract_functions = GetStructExtractFunctions(entry->second);
 		auto *extract_ptr = extract_functions.empty() ? nullptr : &extract_functions;
-		if (PruneStructPack(aggregate, required_indexes, extract_ptr)) {
+		if (PruneStructPack(aggregate, argument_index, required_indexes, extract_ptr)) {
 			pruned_structs = true;
 		}
 	}
@@ -189,7 +186,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (aggr.grouping_sets.size() > 1) {
 			new_root = true;
 		}
-		TryPruneArgMinMaxStructs(column_references, aggr);
+		TryPruneStructAggregateArgs(column_references, aggr);
 		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
@@ -557,13 +554,17 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 	proj.expressions = std::move(expressions);
 }
 
-bool PruneStructPack(BoundAggregateExpression &aggregate, const vector<idx_t> &required_indexes,
+bool PruneStructPack(BoundAggregateExpression &aggregate, idx_t argument_index, const vector<idx_t> &required_indexes,
                      vector<BoundFunctionExpression *> *extracts) {
-	if (aggregate.children.empty()) {
+	if (aggregate.children.size() <= argument_index) {
 		return false;
 	}
-	auto &arg = aggregate.children[0];
+	auto &arg = aggregate.children[argument_index];
 	if (arg->expression_class != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	// Only prune when the aggregate returns the same struct as the target argument.
+	if (aggregate.return_type != arg->return_type || aggregate.function.return_type != arg->return_type) {
 		return false;
 	}
 	auto &struct_pack = arg->Cast<BoundFunctionExpression>();
@@ -594,8 +595,8 @@ bool PruneStructPack(BoundAggregateExpression &aggregate, const vector<idx_t> &r
 
 	aggregate.return_type = new_struct_type;
 	aggregate.function.return_type = new_struct_type;
-	if (!aggregate.function.arguments.empty()) {
-		aggregate.function.arguments[0] = new_struct_type;
+	if (aggregate.function.arguments.size() > argument_index) {
+		aggregate.function.arguments[argument_index] = new_struct_type;
 	}
 
 	if (extracts) {

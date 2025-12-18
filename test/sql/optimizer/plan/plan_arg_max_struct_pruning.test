@@ -17,3 +17,23 @@ FROM (
 );
 ----
 physical_plan	<REGEX>:.*struct_pack\(col_1, col_2,[\s\S]*col_3\).*
+
+query II
+EXPLAIN SELECT col_2
+FROM (
+  SELECT UNNEST(arg_min(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1
+);
+----
+physical_plan	<REGEX>:.*struct_pack\(col_2\).*
+
+query II
+EXPLAIN SELECT col_1, col_3
+FROM (
+  SELECT UNNEST(arg_max_nulls_last(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<REGEX>:.*struct_pack\(col_1,[\s\S]*col_3\).*
