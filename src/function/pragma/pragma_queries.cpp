@@ -100,21 +100,6 @@ static string PragmaShowTablesExpanded(ClientContext &context, const FunctionPar
 	return PragmaShowTablesExpanded();
 }
 
-string PragmaShowSchemas() {
-	return "SELECT "
-	       " sch.database_name, "
-	       " sch.schema_name, "
-	       " ((select current_schema() = sch.schema_name) "
-	       "  and (select current_database() = sch.database_name)) \"current\" "
-	       "FROM duckdb_schemas() sch "
-	       "JOIN duckdb_databases dbs ON sch.database_oid = dbs.database_oid "
-	       "WHERE dbs.internal = false;";
-}
-
-static string PragmaShowSchemas(ClientContext &context, const FunctionParameters &parameters) {
-	return PragmaShowSchemas();
-}
-
 string PragmaShowDatabases() {
 	return "SELECT database_name FROM duckdb_databases() WHERE NOT internal ORDER BY database_name;";
 }
@@ -234,7 +219,6 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("metadata_info", PragmaMetadataInfo, {}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", PragmaShowTables));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables_expanded", PragmaShowTablesExpanded));
-	set.AddFunction(PragmaFunction::PragmaStatement("show_schemas", PragmaShowSchemas));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_databases", PragmaShowDatabases));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_list", PragmaDatabaseList));
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
