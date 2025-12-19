@@ -1,11 +1,8 @@
 #include "duckdb/common/types/vector.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/fsst.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -20,12 +17,8 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
 namespace duckdb {
