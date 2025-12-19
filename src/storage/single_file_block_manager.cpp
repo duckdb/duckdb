@@ -229,6 +229,8 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		auto old_serialization_number = source.Read<idx_t>();
 		if (old_serialization_number == 5) {
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0);
+		} else if (old_serialization_number == 6) {
+			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_4_0);
 		}
 	}
 
@@ -291,13 +293,12 @@ void SingleFileBlockManager::AddStorageVersionTag() {
 
 uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	// in this method, serialization number gets converted to the storage number
-	auto storage_version = options.storage_version.GetIndex();
-	// this is the serialization version, not the storage version
-	if (storage_version < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
-		// returned is the storage version
-		return VERSION_NUMBER;
+	if (options.storage_version.IsValid()) {
+		// If version number is explicitly given at attach, we set it.
+		return options.storage_version.GetIndex();
 	}
-	return storage_version;
+	// we set to the newest version number
+	return VERSION_NUMBER;
 }
 
 MainHeader ConstructMainHeader(idx_t version_number) {

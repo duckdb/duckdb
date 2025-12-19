@@ -371,7 +371,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			options.block_header_size = config.options.default_block_header_size;
 		}
 		if (!options.storage_version.IsValid()) {
-			// when creating a new database we default to the serialization version specified in the config
+			// when creating a new database we default to the default storage version specified in the config
 			options.storage_version = config.options.storage_compatibility.storage_version;
 		}
 

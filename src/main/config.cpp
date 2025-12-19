@@ -867,6 +867,7 @@ StorageCompatibility StorageCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
+	// why do we default to 0.10.2?
 	auto res = FromString("v0.10.2");
 	res.manually_set = false;
 	return res;
