@@ -1,9 +1,6 @@
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
 SelectSetOpChain <- SelectAtom (SetOpClause SelectAtom)*
-
-# Crucial: This must NOT include WithClause or ResultModifiers directly.
-# It can only be a raw SelectStatementType or a fully parenthesized statement.
 SelectAtom <- SelectParens / SelectStatementType
 
 SelectParens <- Parens(SelectStatementInternal)

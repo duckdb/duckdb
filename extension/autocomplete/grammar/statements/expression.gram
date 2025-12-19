@@ -198,8 +198,8 @@ BaseExpression <- SingleExpression Indirection*
 
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
-DotOperator <- '.' (MethodCall / ColLabel)
-MethodCall <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?)
+DotOperator <- '.' (MethodExpression / ColLabel)
+MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?

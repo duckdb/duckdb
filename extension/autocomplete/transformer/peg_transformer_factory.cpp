@@ -452,6 +452,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 	REGISTER_TRANSFORM(TransformGroupingExpression);
+	REGISTER_TRANSFORM(TransformMethodExpression);
 }
 
 void PEGTransformerFactory::RegisterImport() {
@@ -519,7 +520,8 @@ void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
 	REGISTER_TRANSFORM(TransformSelectStatement);
 	REGISTER_TRANSFORM(TransformSelectStatementInternal);
-	REGISTER_TRANSFORM(TransformRepeatSetopSelect);
+	REGISTER_TRANSFORM(TransformSelectSetOpChain);
+	REGISTER_TRANSFORM(TransformSelectAtom);
 	REGISTER_TRANSFORM(TransformSetopClause);
 	REGISTER_TRANSFORM(TransformSetopType);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);

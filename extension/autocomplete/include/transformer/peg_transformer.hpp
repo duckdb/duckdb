@@ -693,6 +693,8 @@ private:
 	                                                          optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformDotOperator(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformMethodExpression(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSliceExpression(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSliceBound(PEGTransformer &transformer,
@@ -904,8 +906,10 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectStatementInternal(PEGTransformer &transformer,
 	                                                                    optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SetOperationNode> TransformRepeatSetopSelect(PEGTransformer &transformer,
-	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSelectSetOpChain(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSelectAtom(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
 	static SetOperationType TransformSetopType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SetOperationNode> TransformSetopClause(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
@@ -1074,7 +1078,8 @@ private:
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformQualifyClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformQualifyClause(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);

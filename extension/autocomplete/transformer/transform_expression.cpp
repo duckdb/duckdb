@@ -115,7 +115,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	}
 
 	vector<OrderByNode> order_by;
-	transformer.TransformOptional<vector<OrderByNode>>(list_pr, 2, order_by);
+	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
 	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
 	if (ignore_nulls_opt.HasResult()) {
 		throw NotImplementedException("Ignore nulls has not yet been implemented");
@@ -923,10 +923,47 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDotOperator(PEGTran
 	if (choice_pr.name == "ColLabel") {
 		return make_uniq<ConstantExpression>(transformer.Transform<string>(choice_pr.result));
 	}
-	if (choice_pr.name == "FunctionExpression") {
+	if (choice_pr.name == "MethodExpression") {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.result);
 	}
 	throw InternalException("Unexpected rule encountered in 'DotOperator'");
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PEGTransformer &transformer,
+													optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto collabel = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1))->Cast<ListParseResult>();
+	bool distinct = false;
+	transformer.TransformOptional<bool>(extract_parens, 0, distinct);
+	auto function_arg_opt = extract_parens.Child<OptionalParseResult>(1);
+	vector<unique_ptr<ParsedExpression>> function_children;
+	if (function_arg_opt.HasResult()) {
+		auto function_argument_list = ExtractParseResultsFromList(function_arg_opt.optional_result);
+		for (auto function_argument : function_argument_list) {
+			function_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(function_argument));
+		}
+	}
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0])) {
+		// COUNT(*) gets converted into COUNT()
+		function_children.clear();
+	}
+	vector<OrderByNode> order_by;
+	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
+	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
+	if (ignore_nulls_opt.HasResult()) {
+		throw NotImplementedException("Ignore nulls has not yet been implemented");
+	}
+
+	auto result = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA,
+	                                            collabel, std::move(function_children));
+	result->distinct = distinct;
+	if (!order_by.empty()) {
+		auto order_by_modifier = make_uniq<OrderModifier>();
+		order_by_modifier->orders = std::move(order_by);
+		result->order_bys = std::move(order_by_modifier);
+	}
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,

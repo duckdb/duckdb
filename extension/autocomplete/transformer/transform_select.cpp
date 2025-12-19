@@ -34,13 +34,30 @@ PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transfor
 	return select_statement;
 }
 
-unique_ptr<SetOperationNode> PEGTransformerFactory::TransformRepeatSetopSelect(PEGTransformer &transformer,
-                                                                               optional_ptr<ParseResult> parse_result) {
+unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto setop_clause = transformer.Transform<unique_ptr<SetOperationNode>>(list_pr.Child<ListParseResult>(0));
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
-	setop_clause->children.push_back(std::move(select_statement->node));
-	return setop_clause;
+	auto select = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
+	auto setop_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!setop_opt.HasResult()) {
+		return select;
+	}
+	auto setop_repeat = setop_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &setop : setop_repeat.children) {
+		auto setop_list = setop->Cast<ListParseResult>();
+		auto setop_result = transformer.Transform<unique_ptr<SetOperationNode>>(setop_list.Child<ListParseResult>(0));
+		auto right_select = transformer.Transform<unique_ptr<SelectStatement>>(setop_list.Child<ListParseResult>(1));
+		setop_result->children.push_back(std::move(select->node));
+		setop_result->children.push_back(std::move(right_select->node));
+		select->node = std::move(setop_result);
+	}
+	return select;
+}
+
+unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectAtom(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetopClause(PEGTransformer &transformer,
@@ -942,19 +959,18 @@ unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEG
 		result->limit = std::move(limit_percent.expression);
 		result->offset = std::move(offset_percent.expression);
 		return std::move(result);
-	} else {
-		auto result = make_uniq<LimitModifier>();
-		if (limit_percent.expression) {
-			result->limit = std::move(limit_percent.expression);
-		}
-		if (offset_percent.expression) {
-			result->offset = std::move(offset_percent.expression);
-		}
-		if (!result->limit && !result->offset) {
-			return nullptr;
-		}
-		return std::move(result);
 	}
+	auto result = make_uniq<LimitModifier>();
+	if (limit_percent.expression) {
+		result->limit = std::move(limit_percent.expression);
+	}
+	if (offset_percent.expression) {
+		result->offset = std::move(offset_percent.expression);
+	}
+	if (!result->limit && !result->offset) {
+		return nullptr;
+	}
+	return std::move(result);
 }
 
 LimitPercentResult PEGTransformerFactory::TransformLimitClause(PEGTransformer &transformer,
@@ -1248,7 +1264,7 @@ LimitPercentResult PEGTransformerFactory::TransformOffsetValue(PEGTransformer &t
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQualifyClause(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
