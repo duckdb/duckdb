@@ -14,7 +14,7 @@ PRAGMA enable_verification
 statement error
 ATTACH '__TEST_DIR__/encrypted_invalid.duckdb' AS encrypted_invalid (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0', debug_encryption_version 'v1');
 ----
-Invalid Input Error: Explicit provided STORAGE_VERSION ("v1.4.0") is not compatible with 'debug_encryption_version=v1' (storage >= v1.5.0)
+Explicit provided STORAGE_VERSION ("v1.4.0") is not compatible with 'debug_encryption_version = v1' (storage >= v1.5.0)
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');

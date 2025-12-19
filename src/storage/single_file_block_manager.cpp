@@ -496,6 +496,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 		if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
 			throw InvalidConfigurationException("No Encryption type set");
 		}
+
 		main_header.SetEncryptionVersion(options.encryption_options.encryption_version);
 
 		// The derived key is wiped in AddKeyToCache.
