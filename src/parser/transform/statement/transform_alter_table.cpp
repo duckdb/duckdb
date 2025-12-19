@@ -128,9 +128,9 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				}
 				auto null_column = column_entry.Copy();
 				null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
-				return TransformAndMaterializeAlter(
+				return unique_ptr<SQLStatement>(std::move(TransformAndMaterializeAlter(
 				    stmt, data, make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok),
-				    column_entry.GetName(), column_entry.DefaultValue().Copy());
+				    column_entry.GetName(), column_entry.DefaultValue().Copy())));
 
 			} else {
 				// ADD FIELD
@@ -227,7 +227,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			throw NotImplementedException("No support for that ALTER TABLE option yet!");
 		}
 	}
-	return result;
+	return unique_ptr<SQLStatement>(std::move(result));
 }
 
 } // namespace duckdb
