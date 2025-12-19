@@ -127,18 +127,51 @@ enum class StorageVersion : uint64_t {
     V1_4_1 = 67,
     V1_4_2 = 67,
     V1_4_3 = 67,
-    V1_5_0 = 67,
-    LATEST = 67,
+    V1_5_0 = 68,
+    LATEST = 68,
     INVALID = 0
 };
 // END OF ENUM VERSION INFO
+
+// START OF SER_ENUM VERSION INFO
+enum class SerializationVersionDeprecated : uint64_t {
+    V0_10_0 = 1,
+    V0_10_1 = 1,
+    V0_10_2 = 1,
+    V0_10_3 = 2,
+    V1_0_0 = 2,
+    V1_1_0 = 3,
+    V1_1_1 = 3,
+    V1_1_2 = 3,
+    V1_1_3 = 3,
+    V1_2_0 = 4,
+    V1_2_1 = 4,
+    V1_2_2 = 4,
+    V1_3_0 = 5,
+    V1_3_1 = 5,
+    V1_3_2 = 5,
+    V1_4_0 = 6,
+    V1_4_1 = 6,
+    V1_4_2 = 6,
+    V1_4_3 = 6,
+    V1_5_0 = 7,
+    LATEST = 7,
+    INVALID = 0
+};
+// END OF SER_ENUM VERSION INFO
 // clang-format on
 
 struct StorageVersionInfo {
+	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
+
 	const char *version_name;
 	StorageVersion storage_version;
 
 	static constexpr uint64_t GetStorageVersionValue(StorageVersion version) {
+		return static_cast<uint64_t>(version);
+	}
+
+	static constexpr uint64_t GetSerializationVersionValue(SerializationVersionDeprecated version) {
 		return static_cast<uint64_t>(version);
 	}
 

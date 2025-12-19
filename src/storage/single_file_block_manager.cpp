@@ -223,36 +223,39 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
-	// TODO check for every version which ser number is related to which storage number.
-	// todo; for the main header, keep the default storage number
-	// V1.3.0 is written with main header version number 65 (V1.2.0), or lower, then check the old serialization numbers
-	// probably keep storage version in header as low as possible?
-	if (main_header.version_number <= StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
-		auto old_serialization_number = source.Read<idx_t>();
-		//! TODO make this semantically correct constants
-		switch (old_serialization_number) {
-		case 1:
-		case 2:
-		case 3:
+	auto storage_header_version = source.Read<idx_t>();
+	constexpr idx_t default_header = static_cast<idx_t>(StorageVersionInfo::DEFAULT_STORAGE_VERSION_INFO);
+
+	// Note that the main_header version number will never be changed after the database is created
+	// even if the db file gets bumped to a higher version
+	// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0')")
+	if (main_header.version_number <= StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_5_0)) {
+		switch (storage_header_version) {
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::INVALID):
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V0_10_2):
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_0_0):
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_1_0):
+			// in some cases, the default storage version (64) is serialized
+			// as opposed to the deprecated serialization number
+		case default_header:
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionDefault();
 			break;
-		case 4:
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_2_0):
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0);
 			break;
-		case 5:
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_3_0):
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0);
 			break;
-		case 6:
+		case StorageVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_4_0):
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_4_0);
 			break;
 		default:
-			throw InvalidInputException("Old Serialization version not found!");
+			throw InvalidInputException("Deprecated serialization version not found!");
 		}
-	} 	else {
-		// from
+	} else {
+		// From v1.5.0 onwards, we use and store only the storage version number
 		header.storage_compatibility = main_header.version_number;
 	}
-
 	return header;
 }
 
