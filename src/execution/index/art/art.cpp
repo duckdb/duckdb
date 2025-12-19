@@ -1206,11 +1206,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 	if (other_art.owns_data) {
 		if (prefix_count != other_art.prefix_count) {
-			// this ART uses the deprecated form and the other one does not - transform the other one prior to merging
-			if (prefix_count != Prefix::DEPRECATED_COUNT) {
-				throw InternalException("Failed to merge ARTs - other ART is deprecated but this one is not");
-			}
-			other_art.TransformToDeprecated();
+			throw InternalException("Failed to merge ARTs - prefix count does not match");
 		}
 		if (tree.HasMetadata()) {
 			// Fully deserialize other_index, and traverse it to increment its buffer IDs.

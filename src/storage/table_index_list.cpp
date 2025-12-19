@@ -279,10 +279,22 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 		}
 		lock_guard<mutex> guard(entry->lock);
 		auto &bound_index = index.Cast<BoundIndex>();
+		vector<reference<BoundIndex>> delta_indexes;
+		vector<bool> delta_index_is_delete;
 		if (entry->removed_data_during_checkpoint) {
-			// FIXME: this should use an optimized removal merge instead of doing fetches in the base table
+			delta_indexes.push_back(*entry->removed_data_during_checkpoint);
+			delta_index_is_delete.push_back(true);
+		}
+		if (entry->added_data_during_checkpoint) {
+			delta_indexes.push_back(*entry->added_data_during_checkpoint);
+			delta_index_is_delete.push_back(false);
+		}
+		for (idx_t i = 0; i < delta_indexes.size(); i++) {
+			auto &delta_index = delta_indexes[i].get();
+			auto is_delete = delta_index_is_delete[i];
+			// FIXME: this should use an optimized (removal) merge instead of doing fetches in the base table
 			// fetch all row-ids to delete
-			auto &art = entry->removed_data_during_checkpoint->Cast<ART>();
+			auto &art = delta_index.Cast<ART>();
 			auto scan_state = art.InitializeFullScan();
 			set<row_t> all_row_ids;
 			art.Scan(*scan_state, NumericLimits<idx_t>::Maximum(), all_row_ids);
@@ -338,19 +350,18 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 							result_chunk.data[j].Reference(Value(types[j]));
 						}
 						result_chunk.SetCardinality(fetch_chunk);
-
-						bound_index.Delete(result_chunk, row_identifiers);
+						if (is_delete) {
+							bound_index.Delete(result_chunk, row_identifiers);
+						} else {
+							bound_index.Append(result_chunk, row_identifiers);
+						}
 						count = 0;
 					}
 				}
 			}
-			entry->removed_data_during_checkpoint.reset();
 		}
-		if (entry->added_data_during_checkpoint) {
-			// we have written data here while checkpointing - merge it into the main index
-			bound_index.MergeIndexes(*entry->added_data_during_checkpoint);
-			entry->added_data_during_checkpoint.reset();
-		}
+		entry->removed_data_during_checkpoint.reset();
+		entry->added_data_during_checkpoint.reset();
 		entry->last_written_checkpoint = checkpoint_id;
 	}
 }
