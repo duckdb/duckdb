@@ -962,8 +962,8 @@ bool SingleFileBlockManager::IsRemote() {
 	return !handle->OnDiskFile();
 }
 
-bool SingleFileBlockManager::Prefetch() {
-	switch (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db.GetDatabase())) {
+bool SingleFileBlockManager::Prefetch(StorageBlockPrefetch prefetch) {
+	switch (prefetch) {
 	case StorageBlockPrefetch::NEVER:
 		return false;
 	case StorageBlockPrefetch::DEBUG_FORCE_ALWAYS:

@@ -303,6 +303,7 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		auto &type = types[index];
 		column_scans[i].Initialize(context, type, column_ids[i], &GetOptions());
 	}
+	block_prefetch = DBConfig::GetSetting<StorageBlockPrefetchSetting>(*context.GetClientContext()->db);
 }
 
 bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
@@ -634,7 +635,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			count = max_count;
 		}
 		auto &block_manager = GetBlockManager();
-		if (block_manager.Prefetch()) {
+		if (block_manager.Prefetch(state.block_prefetch)) {
 			PrefetchState prefetch_state;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
