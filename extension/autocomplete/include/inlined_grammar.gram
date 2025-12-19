@@ -734,7 +734,7 @@ DotOperator <- '.' (FunctionExpression / ColLabel)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
-StepSliceBOund <- ':' Expression?
+StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
 
