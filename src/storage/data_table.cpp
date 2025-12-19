@@ -234,6 +234,12 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
                                const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters) {
+	for (auto &id : column_ids) {
+		if (id.IsRowIdColumn()) {
+			state.checkpoint_lock = transaction.SharedLockTable(*info);
+			break;
+		}
+	}
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
 	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
@@ -242,6 +248,12 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
+	for (auto &id : column_ids) {
+		if (id.IsRowIdColumn()) {
+			state.checkpoint_lock = transaction.SharedLockTable(*info);
+			break;
+		}
+	}
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
@@ -268,7 +280,14 @@ idx_t DataTable::MaxThreads(ClientContext &context) const {
 	return GetTotalRows() / parallel_scan_tuple_count + 1;
 }
 
-void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
+void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
+                                       const vector<ColumnIndex> &column_indexes) {
+	for (auto &id : column_indexes) {
+		if (id.IsRowIdColumn()) {
+			auto &transaction = DuckTransaction::Get(context, db);
+			state.checkpoint_lock = transaction.SharedLockTable(*info);
+		}
+	}
 	auto &local_storage = LocalStorage::Get(context, db);
 	row_groups->InitializeParallelScan(state.scan_state);
 
@@ -1400,14 +1419,12 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 
 unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	auto &transaction = DuckTransaction::Get(context, db);
 	// Bind all indexes.
 	info->BindIndexes(context);
 
 	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> types;
 	auto result = make_uniq<TableDeleteState>();
-	result->table_lock = transaction.SharedLockTable(*info);
 	result->has_delete_constraints = TableHasDeleteConstraints(table);
 	if (result->has_delete_constraints) {
 		// initialize the chunk if there are any constraints to verify
