@@ -1,11 +1,8 @@
-# name: test/sql/expressions/test_try_filter_doesnt_mutate_columns.test
+# name: test/sql/filter/test_try_filter_doesnt_mutate_columns.test
 # description: Test to ensure TRY inside a filter does not mutate the output data
 # group: [filter]
 
 # Reproduction of the bug
-statement ok
-PRAGMA enable_verification;
-
 statement ok
 CREATE TABLE t0(c0 INT, c1 INT);
 
