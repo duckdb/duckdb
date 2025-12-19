@@ -921,9 +921,6 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 				targets.initial_remove_target->InitializeLock(lock);
 				idx_t delete_count = targets.initial_remove_target->TryDelete(lock, result_chunk, row_identifiers,
 				                                                              &deleted_sel, &non_deleted_sel);
-				// Printer::PrintF("Successful deletes: %s", deleted_sel.ToString(delete_count));
-				// Printer::PrintF("Unsuccessful deletes: %s",
-				//                 non_deleted_sel.ToString(result_chunk.size() - delete_count));
 				if (delete_count > 0) {
 					if (targets.initial_append_target) {
 						// for any rows that were deleted - append them to the initial append target

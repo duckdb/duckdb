@@ -345,6 +345,7 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 					}
 				}
 			}
+			entry->removed_data_during_checkpoint.reset();
 		}
 		if (entry->added_data_during_checkpoint) {
 			// we have written data here while checkpointing - merge it into the main index
