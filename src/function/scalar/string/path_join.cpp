@@ -95,7 +95,7 @@ unique_ptr<FunctionData> PathJoinBind(ClientContext &context, ScalarFunction &bo
 	idx_t path_count = arguments.size();
 	vector<LogicalType> arg_types(arguments.size(), LogicalType::VARCHAR);
 	bound_function.arguments = std::move(arg_types);
-	bound_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	bound_function.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	return make_uniq<PathJoinBindData>(path_count);
 }
 
@@ -103,7 +103,7 @@ ScalarFunction PathJoinFun::GetFunction() {
 	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
 	path_join.bind = PathJoinBind;
 	path_join.varargs = LogicalType::VARCHAR;
-	path_join.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	path_join.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	return path_join;
 }
 
