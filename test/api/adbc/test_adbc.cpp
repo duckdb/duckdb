@@ -146,13 +146,7 @@ TEST_CASE("ADBC - non-empty query without actual statements", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	SECTION("Whitespace") {
-		REQUIRE(db.QueryAndCheck(" "));
-	}
-
-	SECTION("Line comment") {
-		REQUIRE(db.QueryAndCheck("--"));
-	}
+	REQUIRE(db.QueryAndCheck("--"));
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
@@ -1221,7 +1215,13 @@ TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
 
-	string query = "";
+	string query;
+	SECTION("Empty") {
+		query = "";
+	}
+	SECTION("Whitespace") {
+		query = " \n";
+	}
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
