@@ -535,7 +535,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 		result->reader = shared_from_this();
 	} else {
 		result->options = std::move(parquet_options);
-		result->metadata = std::move(metadata);
+		result->metadata = metadata;
 		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);
