@@ -161,6 +161,7 @@ public:
 	static vector<GroupingSet> GroupByExpressionUnfolding(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> group_by_expr,
 	                                                      GroupingExpressionMap &map, GroupByNode &result);
+	static unique_ptr<ResultModifier> VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset);
 
 	// Registration methods
 	void RegisterAlter();
@@ -1042,6 +1043,9 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ResultModifier>> TransformResultModifiers(PEGTransformer &transformer,
 	                                                                   optional_ptr<ParseResult> parse_result);
+
+	static unique_ptr<ResultModifier> TransformLimitOffset(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ResultModifier> TransformOffsetLimitClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ResultModifier> TransformLimitOffsetClause(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static LimitPercentResult TransformLimitClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

@@ -921,33 +921,54 @@ PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer, opt
 	return result;
 }
 
-unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer,
-                                                                             optional_ptr<ParseResult> parse_result) {
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffset(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	LimitPercentResult limit_percent;
-	LimitPercentResult offset_percent;
-	transformer.TransformOptional<LimitPercentResult>(list_pr, 0, limit_percent);
-	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, offset_percent);
-	if (offset_percent.is_percent) {
+	return transformer.Transform<unique_ptr<ResultModifier>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset) {
+	if (offset.is_percent) {
 		throw ParserException("Percentage for offsets are not supported.");
 	}
-	if (limit_percent.is_percent) {
+	if (limit.is_percent) {
 		auto result = make_uniq<LimitPercentModifier>();
-		result->limit = std::move(limit_percent.expression);
-		result->offset = std::move(offset_percent.expression);
+		result->limit = std::move(limit.expression);
+		result->offset = std::move(offset.expression);
 		return std::move(result);
 	}
 	auto result = make_uniq<LimitModifier>();
-	if (limit_percent.expression) {
-		result->limit = std::move(limit_percent.expression);
+	if (limit.expression) {
+		result->limit = std::move(limit.expression);
 	}
-	if (offset_percent.expression) {
-		result->offset = std::move(offset_percent.expression);
+	if (offset.expression) {
+		result->offset = std::move(offset.expression);
 	}
 	if (!result->limit && !result->offset) {
 		return nullptr;
 	}
 	return std::move(result);
+}
+
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	LimitPercentResult limit;
+	LimitPercentResult offset;
+	transformer.TransformOptional<LimitPercentResult>(list_pr, 0, offset);
+	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, limit);
+	return VerifyLimitOffset(limit, offset);
+}
+
+
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	LimitPercentResult limit;
+	LimitPercentResult offset;
+	transformer.TransformOptional<LimitPercentResult>(list_pr, 0, limit);
+	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, offset);
+	return VerifyLimitOffset(limit, offset);
 }
 
 LimitPercentResult PEGTransformerFactory::TransformLimitClause(PEGTransformer &transformer,
