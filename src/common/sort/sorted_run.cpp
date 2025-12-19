@@ -372,12 +372,18 @@ static void TemplatedReorder(ClientContext &context, unique_ptr<TupleDataCollect
 		for (idx_t i = 0; i < next; i++) {
 			key_ptrs[i] = &*it++;
 		}
-		if (!SORT_KEY::CONSTANT_SIZE) {
-			ReorderKeyData<SORT_KEY>(*new_key_data, new_key_data_append_state, new_key_data_input, next);
-		}
 		if (SORT_KEY::HAS_PAYLOAD) {
 			ReorderPayloadData<SORT_KEY>(*new_payload_data, new_payload_data_append_state, key_ptrs,
 			                             new_payload_data_input, next);
+			const auto new_payload_locations =
+			    FlatVector::GetData<const data_ptr_t>(new_payload_data_append_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < next; i++) {
+				auto &key = *key_ptrs[i];
+				key.SetPayload(new_payload_locations[i]);
+			}
+		}
+		if (!SORT_KEY::CONSTANT_SIZE) {
+			ReorderKeyData<SORT_KEY>(*new_key_data, new_key_data_append_state, new_key_data_input, next);
 		}
 		index += next;
 	}

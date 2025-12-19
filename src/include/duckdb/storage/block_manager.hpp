@@ -180,6 +180,9 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+protected:
+	bool in_destruction = false;
+
 private:
 	//! The lock for the set of blocks
 	mutex blocks_lock;

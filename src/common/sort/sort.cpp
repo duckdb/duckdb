@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
+Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
            vector<idx_t> projection_map, bool is_index_sort_p)
-    : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()),
-      is_index_sort(is_index_sort_p) {
+    : context(context_p), key_layout(make_shared_ptr<TupleDataLayout>()),
+      payload_layout(make_shared_ptr<TupleDataLayout>()), is_index_sort(is_index_sort_p) {
 	// Convert orders to a single "create_sort_key" expression (and corresponding "decode_sort_key")
 	FunctionBinder binder(context);
 	vector<unique_ptr<Expression>> create_children;

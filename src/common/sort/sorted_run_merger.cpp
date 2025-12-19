@@ -5,6 +5,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include "vergesort.h"
 #include "pdqsort.h"
@@ -783,12 +784,6 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			}
 		}
 
-		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
-		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
-		                            count);
-		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
-		                               *FlatVector::IncrementalSelectionVector(), count);
-
 		if (SORT_KEY::HAS_PAYLOAD) {
 			if (!sorted_run->payload_data->GetLayout().AllConstant()) {
 				sorted_run->payload_data->FindHeapPointers(payload_data_input, count);
@@ -798,7 +793,20 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			                                sorted_run->payload_append_state.chunk_state, 0, count);
 			sorted_run->payload_data->CopyRows(sorted_run->payload_append_state.chunk_state, payload_data_input,
 			                                   *FlatVector::IncrementalSelectionVector(), count);
+
+			const auto new_payload_locations =
+			    FlatVector::GetData<const data_ptr_t>(sorted_run->payload_append_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < count; i++) {
+				auto &key = merged_partition_keys[merged_partition_index + i];
+				key.SetPayload(new_payload_locations[i]);
+			}
 		}
+
+		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
+		                            count);
+		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
+		                               *FlatVector::IncrementalSelectionVector(), count);
 
 		merged_partition_index += count;
 	}
@@ -816,8 +824,13 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 //===--------------------------------------------------------------------===//
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
-    : sort(sort_p), sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
+    : scheduler(TaskScheduler::GetScheduler(*sort_p.context.db)), sort(sort_p), sorted_runs(std::move(sorted_runs_p)),
+      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
+      is_index_sort(is_index_sort_p) {
+}
+
+SortedRunMerger::~SortedRunMerger() {
+	ParallelDestroyTask<decltype(sorted_runs)>::Schedule(scheduler, sorted_runs);
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
