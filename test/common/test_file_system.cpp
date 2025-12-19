@@ -207,7 +207,11 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 
 	auto absolute_child = fs->JoinPath("/usr/local", "/usr/local/bin");
 	REQUIRE(absolute_child == fs->ConvertSeparators("/usr/local/bin"));
+
 	REQUIRE_THROWS(fs->JoinPath("/usr/local", "/var/log"));
+
+	auto scheme_like_embed = fs->JoinPath("/foo/proto://bar", "a");
+	REQUIRE(scheme_like_embed == "/foo/proto:/bar/a");
 
 #ifdef _WIN32
 	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
@@ -216,11 +220,11 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	auto clamp_drive_root_twice = fs->JoinPath(R"(C:\)", R"(..\..)");
 	REQUIRE(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
 
-	auto drive_relative = fs->JoinPath("C:", "system32");
-	REQUIRE(drive_relative == fs->ConvertSeparators("C:/system32"));
-
 	auto drive_absolute_child = fs->JoinPath(R"(C:\)", "system32");
 	REQUIRE(drive_absolute_child == fs->ConvertSeparators("C:/system32"));
+
+	auto drive_relative = fs->JoinPath("C:", "system32");
+	REQUIRE(drive_relative == fs->ConvertSeparators("C:system32"));
 
 	auto drive_relative_child = fs->JoinPath("C:drive_relative_path", "path");
 	REQUIRE(drive_relative_child == fs->ConvertSeparators("C:drive_relative_path/path"));

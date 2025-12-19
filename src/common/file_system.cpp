@@ -343,6 +343,11 @@ ParsedPath ParsePathWithScheme(const string &input) {
 	if (scheme_pos == 1 && StringUtil::CharacterIsAlpha(input[0])) {
 		return result;
 	}
+	// avoid exceptional case of foo/bar/scheme:// (which should normalize to foo/bar/scheme:)
+	if (input.find('/') < scheme_pos || input.find('\\') < scheme_pos) {
+		return result;
+	}
+
 	result.scheme = input.substr(0, scheme_pos + 3);
 	result.path = input.substr(scheme_pos + 3);
 	result.has_scheme = true;
@@ -495,6 +500,8 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	                              rhs_scheme_absolute || rhs_is_file_scheme;
 	auto lhs_absolute = lhs_parsed.has_scheme || lhs_normalize_absolute;
 	auto rhs_absolute = rhs_parsed.has_scheme || rhs_normalize_absolute;
+	auto lhs_is_naked_drive = lhs.size() == 2 && lhs[1] == ':' && StringUtil::CharacterIsAlpha(lhs[0]);
+
 	auto strip_leading = [](string &value, const string &chars) {
 		auto pos = value.find_first_not_of(chars);
 		if (pos == string::npos) {
@@ -581,7 +588,7 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	strip_leading(rhs, string(1, separator_char));
 
 	// Avoid introducing a second leading separator when lhs is already the root
-	auto combined = (lhs == separator) ? lhs + rhs : lhs + separator + rhs;
+	auto combined = (lhs == separator || lhs_is_naked_drive) ? lhs + rhs : lhs + separator + rhs;
 	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
 	return attach_scheme(lhs_parsed, normalized, lhs_scheme_absolute);
 }
