@@ -694,7 +694,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformDotOperator(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformMethodExpression(PEGTransformer &transformer,
-	                                                        optional_ptr<ParseResult> parse_result);
+	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSliceExpression(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSliceBound(PEGTransformer &transformer,
@@ -918,8 +918,6 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectParens(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SelectStatement> TransformBaseSelect(PEGTransformer &transformer,
-	                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectStatementType(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformOptionalParensSimpleSelect(PEGTransformer &transformer,

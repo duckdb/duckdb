@@ -527,7 +527,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
 	REGISTER_TRANSFORM(TransformSelectOrParens);
 	REGISTER_TRANSFORM(TransformSelectParens);
-	REGISTER_TRANSFORM(TransformBaseSelect);
 	REGISTER_TRANSFORM(TransformSelectStatementType);
 	REGISTER_TRANSFORM(TransformOptionalParensSimpleSelect);
 	REGISTER_TRANSFORM(TransformSimpleSelectParens);

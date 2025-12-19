@@ -106,23 +106,6 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectParens(PEGTran
 	return transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
 }
 
-unique_ptr<SelectStatement> PEGTransformerFactory::TransformBaseSelect(PEGTransformer &transformer,
-                                                                       optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
-	vector<unique_ptr<ResultModifier>> result_modifiers;
-	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
-	for (auto &mod : result_modifiers) {
-		select_statement->node->modifiers.push_back(std::move(mod));
-	}
-	auto with_clause = list_pr.Child<OptionalParseResult>(0);
-	if (with_clause.HasResult()) {
-		select_statement->node->cte_map = transformer.Transform<CommonTableExpressionMap>(with_clause.optional_result);
-	}
-
-	return select_statement;
-}
-
 unique_ptr<SelectStatement>
 PEGTransformerFactory::TransformSelectStatementType(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {

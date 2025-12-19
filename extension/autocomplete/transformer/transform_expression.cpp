@@ -930,7 +930,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDotOperator(PEGTran
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PEGTransformer &transformer,
-													optional_ptr<ParseResult> parse_result) {
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto collabel = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1))->Cast<ListParseResult>();
@@ -955,8 +955,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 		throw NotImplementedException("Ignore nulls has not yet been implemented");
 	}
 
-	auto result = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA,
-	                                            collabel, std::move(function_children));
+	auto result =
+	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, collabel, std::move(function_children));
 	result->distinct = distinct;
 	if (!order_by.empty()) {
 		auto order_by_modifier = make_uniq<OrderModifier>();
