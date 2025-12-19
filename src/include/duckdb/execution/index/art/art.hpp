@@ -25,6 +25,15 @@ class FixedSizeAllocator;
 
 struct ARTIndexScanState;
 
+struct DeleteIndexInfo {
+	DeleteIndexInfo() : delete_indexes(nullptr) {
+	}
+	explicit DeleteIndexInfo(vector<reference<BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
+	}
+
+	optional_ptr<vector<reference<BoundIndex>>> delete_indexes;
+};
+
 class ART : public BoundIndex {
 public:
 	friend class Leaf;
@@ -89,7 +98,8 @@ public:
 	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) override;
 
 	//! Delete a chunk from the ART.
-	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
+	idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+	                optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) override;
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 
@@ -141,7 +151,7 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
+	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
 	                optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,

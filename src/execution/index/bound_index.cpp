@@ -70,6 +70,20 @@ void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
 	Delete(state, entries, row_identifiers);
 }
 
+idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+                            optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
+	throw InternalException("TryDelete not implemented");
+}
+
+void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
+	TryDelete(state, entries, row_identifiers, nullptr, nullptr);
+	// FIXME: enable this
+	// if (deleted_rows != entries.size()) {
+	// 	throw InvalidInputException("Failure in BoundIndex::Delete - not all rows were deleted from the index. This
+	// likely signifies a corrupt index.");
+	// }
+}
+
 ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
 	throw NotImplementedException("this implementation of Insert does not exist.");
 }

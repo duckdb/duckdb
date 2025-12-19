@@ -689,21 +689,26 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
                                     optional_ptr<ConflictManager> manager) {
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
-		return indexes.Scan([&](Index &index) {
+		return indexes.ScanEntries([&](IndexEntry &entry) {
+			auto &index = *entry.index;
 			if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 				return false;
 			}
 			D_ASSERT(index.IsBound());
 			auto &art = index.Cast<ART>();
+
+			lock_guard<mutex> guard(entry.lock);
+			IndexAppendInfo index_append_info;
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-				D_ASSERT(!delete_index || delete_index->IsBound());
-				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
-				art.VerifyAppend(chunk, index_append_info, nullptr);
-			} else {
-				IndexAppendInfo index_append_info;
-				art.VerifyAppend(chunk, index_append_info, nullptr);
+				if (delete_index) {
+					index_append_info.delete_indexes.push_back(*delete_index);
+				}
 			}
+			if (entry.removed_data_during_checkpoint) {
+				index_append_info.delete_indexes.push_back(*entry.removed_data_during_checkpoint);
+			}
+			art.VerifyAppend(chunk, index_append_info, nullptr);
 			return false;
 		});
 	}
@@ -735,9 +740,8 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 	manager->SetMode(ConflictManagerMode::SCAN);
 	auto &matching_indexes = manager->MatchingIndexes();
 	auto &matching_delete_indexes = manager->MatchingDeleteIndexes();
-	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, nullptr);
 	for (idx_t i = 0; i < matching_indexes.size(); i++) {
-		index_append_info.delete_index = matching_delete_indexes[i];
+		IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, matching_delete_indexes[i]);
 		matching_indexes[i].get().VerifyAppend(chunk, index_append_info, *manager);
 	}
 

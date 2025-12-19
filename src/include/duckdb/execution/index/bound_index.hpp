@@ -33,13 +33,18 @@ enum class IndexAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1, INSER
 
 class IndexAppendInfo {
 public:
-	IndexAppendInfo() : append_mode(IndexAppendMode::DEFAULT), delete_index(nullptr) {};
-	IndexAppendInfo(const IndexAppendMode append_mode, const optional_ptr<BoundIndex> delete_index)
-	    : append_mode(append_mode), delete_index(delete_index) {};
+	IndexAppendInfo() : append_mode(IndexAppendMode::DEFAULT) {
+	}
+	IndexAppendInfo(const IndexAppendMode append_mode, optional_ptr<BoundIndex> delete_index)
+	    : append_mode(append_mode) {
+		if (delete_index) {
+			delete_indexes.push_back(*delete_index);
+		}
+	}
 
 public:
 	IndexAppendMode append_mode;
-	optional_ptr<BoundIndex> delete_index;
+	vector<reference<BoundIndex>> delete_indexes;
 };
 
 //! The index is an abstract base class that serves as the basis for indexes
@@ -108,8 +113,14 @@ public:
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
 	//! Deletes all data from the index
 	void CommitDrop() override;
-	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
-	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
+	//! Returns the amount of rows successfully deleted from the index.
+	//! If either deleted_sel or non_deleted_sel are provided the exact rows that were (not) deleted are written there
+	virtual idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+	                        optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel);
+	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
+	//! Throws an error if not all rows are deleted
+	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers);
 	//! Obtains a lock and calls Delete while holding that lock
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 

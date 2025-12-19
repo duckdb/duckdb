@@ -107,7 +107,7 @@ ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
 	// We fall back to the ART insertion code.
 	auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, entry.right.GetRowId());
 	return ARTOperator::Insert(arena, art, entry.left, row_id_key, entry.depth, row_id_key, GateStatus::GATE_SET,
-	                           nullptr, IndexAppendMode::DEFAULT);
+	                           DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 }
 
 array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf) {

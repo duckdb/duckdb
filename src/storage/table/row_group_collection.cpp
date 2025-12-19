@@ -894,10 +894,17 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 	result_chunk.SetCardinality(fetch_chunk);
 
+	DataChunk remaining_result_chunk;
+	unique_ptr<Vector> remaining_row_ids;
+
 	indexes.ScanEntries([&](IndexEntry &entry) {
 		auto &index = *entry.index;
 		if (index.IsBound()) {
 			lock_guard<mutex> guard(entry.lock);
+
+			reference<DataChunk> remove_chunk(result_chunk);
+			reference<Vector> remove_identifiers(row_identifiers);
+
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing
@@ -905,19 +912,57 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			IndexRemovalTargets targets;
 			GetIndexRemovalTargets(entry, removal_type, targets, active_checkpoint);
 
+			SelectionVector deleted_sel, non_deleted_sel;
 			if (targets.initial_remove_target) {
-				throw InternalException("FIXME: initial remove target is not yet supported");
+				// if we have the initial remove target, we first try to remove it from there
+				deleted_sel.Initialize(result_chunk.size());
+				non_deleted_sel.Initialize(result_chunk.size());
+				IndexLock lock;
+				targets.initial_remove_target->InitializeLock(lock);
+				idx_t delete_count = targets.initial_remove_target->TryDelete(lock, result_chunk, row_identifiers,
+				                                                              &deleted_sel, &non_deleted_sel);
+
+				if (targets.initial_append_target) {
+					// for any rows that were deleted - append them to the initial append target
+					DataChunk append_chunk;
+					append_chunk.InitializeEmpty(types);
+					append_chunk.Slice(result_chunk, deleted_sel, delete_count);
+					append_chunk.Flatten();
+
+					Vector append_ids(row_identifiers, deleted_sel, delete_count);
+
+					IndexAppendInfo append_info;
+					auto error = targets.initial_append_target->Append(append_chunk, append_ids, append_info);
+					if (error.HasError()) {
+						throw InternalException("Failed to append to %s: %s", targets.initial_append_target->name,
+						                        error.Message());
+					}
+				}
+
+				// for all remaining rows - push them into the
+				idx_t remaining_count = result_chunk.size() - delete_count;
+				if (remaining_count == 0) {
+					return false;
+				}
+				remaining_result_chunk.InitializeEmpty(types);
+				remaining_result_chunk.Slice(result_chunk, non_deleted_sel, remaining_count);
+				remaining_result_chunk.Flatten();
+				remove_chunk = remaining_result_chunk;
+
+				remaining_row_ids = make_uniq<Vector>(row_identifiers, non_deleted_sel, remaining_count);
+				remaining_row_ids->Flatten(remaining_count);
+				remove_identifiers = *remaining_row_ids;
 			}
 			// perform the targeted append / removal
 			if (targets.append_target) {
 				IndexAppendInfo append_info;
-				auto error = targets.append_target->Append(result_chunk, row_identifiers, append_info);
+				auto error = targets.append_target->Append(remove_chunk.get(), remove_identifiers.get(), append_info);
 				if (error.HasError()) {
 					throw InternalException("Failed to append to %s: %s", targets.append_target->name, error.Message());
 				}
 			}
 			if (targets.remove_target) {
-				targets.remove_target->Delete(result_chunk, row_identifiers);
+				targets.remove_target->Delete(remove_chunk.get(), remove_identifiers.get());
 			}
 			return false;
 		}

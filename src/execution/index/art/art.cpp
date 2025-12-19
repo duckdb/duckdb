@@ -469,11 +469,6 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(arena, chunk, row_ids, keys, row_id_keys);
 
-	optional_ptr<ART> delete_art;
-	if (info.delete_index) {
-		delete_art = info.delete_index->Cast<ART>();
-	}
-
 	auto conflict_type = ARTConflictType::NO_CONFLICT;
 	optional_idx conflict_idx;
 	auto was_empty = !tree.HasMetadata();
@@ -484,7 +479,7 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 			continue;
 		}
 		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
-		                                    delete_art, info.append_mode);
+		                                    DeleteIndexInfo(info.delete_indexes), info.append_mode);
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -572,26 +567,36 @@ void ART::CommitDrop(IndexLock &index_lock) {
 	tree.Clear();
 }
 
-void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
+idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
+                     optional_ptr<SelectionVector> non_deleted_sel) {
 	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
 	// FIXME: but rather all row IDs up to the conflicting row.
-	auto row_count = input.size();
+	auto row_count = entries.size();
 
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(input, expr_chunk);
+	ExecuteExpressions(entries, expr_chunk);
 
 	ArenaAllocator allocator(BufferAllocator::Get(db));
 	unsafe_vector<ARTKey> keys(row_count);
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
 
+	idx_t delete_count = 0;
 	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
 			continue;
 		}
 		D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
-		ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
+		auto deleted = ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
+		if (deleted) {
+			if (deleted_sel) {
+				deleted_sel->set_index(delete_count, i);
+			}
+			delete_count++;
+		} else if (non_deleted_sel) {
+			non_deleted_sel->set_index(i - delete_count, i);
+		}
 	}
 
 	if (!tree.HasMetadata()) {
@@ -611,6 +616,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		}
 	}
 #endif
+	return delete_count;
 }
 
 //===--------------------------------------------------------------------===//
@@ -771,39 +777,33 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
+void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
                      optional_idx &conflict_idx, idx_t i) {
-	// Fast path, the leaf is inlined, and the delete ART does not exist.
-	if (leaf.GetType() == NType::LEAF_INLINED && !delete_art) {
-		if (manager.AddHit(i, leaf.GetRowId())) {
-			conflict_idx = i;
+	// Get the delete_leaf if we have any
+	vector<row_t> deleted_row_ids;
+	if (delete_index_info.delete_indexes) {
+		for (auto &index : *delete_index_info.delete_indexes) {
+			auto &delete_art = index.get().Cast<ART>();
+			auto deleted_leaf = ARTOperator::Lookup(delete_art, delete_art.tree, key, 0);
+			// All leaves in the delete ART are inlined.
+			if (deleted_leaf->GetType() != NType::LEAF_INLINED) {
+				throw InternalException("Non-inlined leaf?");
+			}
+			auto deleted_row_id = deleted_leaf->GetRowId();
+			deleted_row_ids.push_back(deleted_row_id);
 		}
-		return;
 	}
 
-	// Get the delete_leaf.
-	// All leaves in the delete ART are inlined.
-	unsafe_optional_ptr<const Node> deleted_leaf;
-	if (delete_art) {
-		deleted_leaf = ARTOperator::Lookup(*delete_art, delete_art->tree, key, 0);
-	}
-
-	// The leaf is inlined, and there is no deleted leaf with the same key.
-	if (leaf.GetType() == NType::LEAF_INLINED && !deleted_leaf) {
-		if (manager.AddHit(i, leaf.GetRowId())) {
-			conflict_idx = i;
-		}
-		return;
-	}
-
-	// The leaf is inlined, and the same key exists in the delete ART.
-	if (leaf.GetType() == NType::LEAF_INLINED && deleted_leaf) {
-		D_ASSERT(deleted_leaf->GetType() == NType::LEAF_INLINED);
-		auto deleted_row_id = deleted_leaf->GetRowId();
+	if (leaf.GetType() == NType::LEAF_INLINED) {
 		auto this_row_id = leaf.GetRowId();
-
-		if (deleted_row_id == this_row_id) {
-			return;
+		if (!deleted_row_ids.empty()) {
+			// The leaf is inlined, and the same key exists in the delete ART.
+			// check if the row-id matches - if it does there is no conflict
+			for (auto &deleted_row_id : deleted_row_ids) {
+				if (deleted_row_id == this_row_id) {
+					return;
+				}
+			}
 		}
 
 		if (manager.AddHit(i, this_row_id)) {
@@ -816,7 +816,7 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	// Up to here, the above code paths work implicitly for FKs, as the leaf is inlined.
 	// FIXME: proper foreign key + delete ART support.
 	if (index_constraint_type == IndexConstraintType::FOREIGN) {
-		D_ASSERT(!deleted_leaf);
+		D_ASSERT(deleted_row_ids.empty());
 		// We don't handle FK conflicts in UPSERT, so the row ID should not matter.
 		if (manager.AddHit(i, MAX_ROW_ID)) {
 			conflict_idx = i;
@@ -834,11 +834,12 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
-	if (deleted_leaf) {
-		auto deleted_row_id = deleted_leaf->GetRowId();
+	if (!deleted_row_ids.empty()) {
 		for (const auto row_id : row_ids) {
-			if (deleted_row_id == row_id) {
-				return;
+			for (auto deleted_row_id : deleted_row_ids) {
+				if (deleted_row_id == row_id) {
+					return;
+				}
 			}
 		}
 	}
@@ -863,11 +864,6 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 	unsafe_vector<ARTKey> keys(expr_chunk.size());
 	GenerateKeys<>(arena_allocator, expr_chunk, keys);
 
-	optional_ptr<ART> delete_art;
-	if (info.delete_index) {
-		delete_art = info.delete_index->Cast<ART>();
-	}
-
 	optional_idx conflict_idx;
 	for (idx_t i = 0; !conflict_idx.IsValid() && i < chunk.size(); i++) {
 		if (keys[i].Empty()) {
@@ -881,7 +877,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 		if (!leaf) {
 			continue;
 		}
-		VerifyLeaf(*leaf, keys[i], delete_art, manager, conflict_idx, i);
+		VerifyLeaf(*leaf, keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
 	}
 
 	manager.FinishLookup();

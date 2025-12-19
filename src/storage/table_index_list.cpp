@@ -214,6 +214,7 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
 	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
 	auto &index = *entry->index;
+	lock_guard<mutex> guard(entry->lock);
 	D_ASSERT(index.IsBound());
 	optional_ptr<BoundIndex> delete_index;
 	if (storage) {
