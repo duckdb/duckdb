@@ -155,12 +155,11 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	mutex close_lock;
+	unordered_map<string, Value> attach_options;
 
 private:
 	//! Clean any (shared) resources held by the database.
 	void Cleanup();
-
-  unordered_map<string, Value> attach_options;
 };
 
 } // namespace duckdb
