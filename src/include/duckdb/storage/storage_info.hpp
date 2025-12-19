@@ -154,8 +154,8 @@ enum class SerializationVersionDeprecated : uint64_t {
     V1_4_1 = 6,
     V1_4_2 = 6,
     V1_4_3 = 6,
-    V1_5_0 = 7,
-    LATEST = 7,
+    V1_5_0 = 68,
+    LATEST = 68,
     INVALID = 0
 };
 // END OF SER_ENUM VERSION INFO
