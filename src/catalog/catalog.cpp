@@ -438,12 +438,6 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 	return results;
 }
 
-vector<string> Catalog::ListSchemas(ClientContext &context) {
-	vector<string> schemas;
-	ScanSchemas(context, [&](SchemaCatalogEntry &schema) { schemas.emplace_back(schema.name); });
-	return schemas;
-}
-
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
                                              const string &schema) {
 	auto &context = retriever.GetContext();
