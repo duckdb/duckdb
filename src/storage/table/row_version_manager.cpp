@@ -3,7 +3,7 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
 
