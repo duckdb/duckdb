@@ -21,6 +21,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -745,6 +746,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::SQLNULL: {
+		return Value();
 	}
 	case LogicalTypeId::MAP: {
 		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
