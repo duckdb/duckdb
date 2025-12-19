@@ -504,6 +504,7 @@ private:
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
 			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
 				return false;
