@@ -45,7 +45,6 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
