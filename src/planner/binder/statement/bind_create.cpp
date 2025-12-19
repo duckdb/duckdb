@@ -51,34 +51,40 @@ namespace duckdb {
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
-	if (catalog.empty() && !schema.empty()) {
-		// schema is specified - but catalog is not
-		// try searching for the catalog instead
-		auto &db_manager = DatabaseManager::Get(context);
-		auto database = db_manager.GetDatabase(context, schema);
-		if (database) {
-			// we have a database with this name
-			// check if there is a schema
-			auto &search_path = retriever.GetSearchPath();
-			auto catalog_names = search_path.GetCatalogsForSchema(schema);
-			if (catalog_names.empty()) {
-				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
-			}
-			for (auto &catalog_name : catalog_names) {
-				auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
-				if (!catalog_ptr) {
-					continue;
-				}
-				if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
-					throw BinderException(
-					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-					    schema, catalog_name, schema);
-				}
-			}
-			catalog = schema;
-			schema = string();
+	if (schema.empty()) {
+		return;
+	}
+	if (!catalog.empty()) {
+		return;
+	}
+	// schema is specified - but catalog is not
+	// try searching for the catalog instead
+	auto &db_manager = DatabaseManager::Get(context);
+	auto database = db_manager.GetDatabase(context, schema);
+	if (!database) {
+		//! No database by that name was found
+		return;
+	}
+	// we have a database with this name
+	// check if there is a schema
+	auto &search_path = retriever.GetSearchPath();
+	auto catalog_names = search_path.GetCatalogsForSchema(schema);
+	if (catalog_names.empty()) {
+		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+	}
+	for (auto &catalog_name : catalog_names) {
+		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
+		if (!catalog_ptr) {
+			continue;
+		}
+		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
+			throw BinderException(
+			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"", schema,
+			    catalog_name, schema);
 		}
 	}
+	catalog = schema;
+	schema = string();
 }
 
 void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
@@ -155,35 +161,6 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::QualifyNode(QueryNode &node) {
-	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    node,
-	    [&](unique_ptr<ParsedExpression> &child) {
-		    if (!child) {
-			    return;
-		    }
-		    QualifyExpression(*child);
-	    },
-	    [&](TableRef &ref) { QualifyRef(ref); });
-}
-
-void Binder::QualifyExpression(ParsedExpression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::SUBQUERY) {
-		return;
-	}
-	auto &subquery_expr = expr.Cast<SubqueryExpression>();
-	QualifyNode(*subquery_expr.subquery->node);
-}
-
-void Binder::QualifyRef(TableRef &ref) {
-	if (ref.type != TableReferenceType::BASE_TABLE) {
-		return;
-	}
-	auto &base_table = ref.Cast<BaseTableRef>();
-	//! Bind the tableref, this is what qualifies the reference(s) inside the TableRef
-	(void)Bind(base_table);
-}
-
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// bind the view as if it were a query so we can catch errors
 	// note that we bind the original, and replace the original with a copy
@@ -206,7 +183,6 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto view_search_path = GetSearchPath(catalog, base.schema);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
-	QualifyNode(*base.query->node);
 	auto copy = base.query->Copy();
 	auto query_node = view_binder->Bind(*base.query);
 	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
