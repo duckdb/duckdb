@@ -440,7 +440,7 @@ private:
 	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetMinMax(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
 	static string TransformSeqMinOrMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformNoMinMax(PEGTransformer &transformer,
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqNoMinMax(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<SequenceOption>> TransformSeqStartWith(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
@@ -914,8 +914,6 @@ private:
 	static unique_ptr<SetOperationNode> TransformSetopClause(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
 	static bool TransformDistinctOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SelectStatement> TransformSelectOrParens(PEGTransformer &transformer,
-	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectParens(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectStatementType(PEGTransformer &transformer,

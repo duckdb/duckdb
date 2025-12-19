@@ -93,12 +93,6 @@ SetOperationType PEGTransformerFactory::TransformSetopType(PEGTransformer &trans
 	return transformer.TransformEnum<SetOperationType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectOrParens(PEGTransformer &transformer,
-                                                                           optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
-}
-
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectParens(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

@@ -225,7 +225,7 @@ void PEGTransformerFactory::RegisterCreateSequence() {
 	REGISTER_TRANSFORM(TransformSeqSetIncrement);
 	REGISTER_TRANSFORM(TransformSeqSetMinMax);
 	REGISTER_TRANSFORM(TransformSeqMinOrMax);
-	REGISTER_TRANSFORM(TransformNoMinMax);
+	REGISTER_TRANSFORM(TransformSeqNoMinMax);
 	REGISTER_TRANSFORM(TransformSeqStartWith);
 	REGISTER_TRANSFORM(TransformSeqOwnedBy);
 }
@@ -525,7 +525,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSetopClause);
 	REGISTER_TRANSFORM(TransformSetopType);
 	REGISTER_TRANSFORM(TransformDistinctOrAll);
-	REGISTER_TRANSFORM(TransformSelectOrParens);
 	REGISTER_TRANSFORM(TransformSelectParens);
 	REGISTER_TRANSFORM(TransformSelectStatementType);
 	REGISTER_TRANSFORM(TransformOptionalParensSimpleSelect);
