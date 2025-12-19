@@ -1195,6 +1195,30 @@ PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer,
 	return result;
 }
 
+WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	WindowFrame result;
+	auto framing = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto frame_extent = transformer.Transform<vector<WindowBoundary>>(list_pr.Child<ListParseResult>(1));
+	transformer.TransformOptional<WindowExcludeMode>(list_pr, 2, result.exclude_clause);
+	// TODO refine window boundaries
+
+	return result;
+}
+
+WindowExcludeMode PEGTransformerFactory::TransformWindowExcludeClause(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<WindowExcludeMode>(list_pr.Child<ListParseResult>(1));
+}
+
+WindowExcludeMode PEGTransformerFactory::TransformWindowExcludeElement(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<WindowExcludeMode>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformWindowPartition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

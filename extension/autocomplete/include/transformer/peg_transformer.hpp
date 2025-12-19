@@ -20,6 +20,7 @@
 #include "ast/sequence_option.hpp"
 #include "ast/setting_info.hpp"
 #include "ast/table_alias.hpp"
+#include "ast/window_frame.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -744,6 +745,12 @@ private:
 	                                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrameContents(PEGTransformer &transformer,
 	                                                                 optional_ptr<ParseResult> parse_result);
+
+	static WindowFrame TransformFrameClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+
 	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
 

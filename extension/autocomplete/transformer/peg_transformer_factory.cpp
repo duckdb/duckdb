@@ -416,6 +416,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformWindowFrameContentsParens);
 	REGISTER_TRANSFORM(TransformWindowFrameNameContentsParens);
 	REGISTER_TRANSFORM(TransformWindowFrameContents);
+	REGISTER_TRANSFORM(TransformFrameClause);
+	REGISTER_TRANSFORM(TransformWindowExcludeClause);
+	REGISTER_TRANSFORM(TransformWindowExcludeElement);
+
 	REGISTER_TRANSFORM(TransformWindowPartition);
 
 	REGISTER_TRANSFORM(TransformSpecialFunctionExpression);
@@ -810,6 +814,11 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<MergeActionCondition>("BySource", MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE);
 	RegisterEnum<MergeActionCondition>("ByTarget", MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET);
+
+	RegisterEnum<WindowExcludeMode>("ExcludeCurrentRow", WindowExcludeMode::CURRENT_ROW);
+	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
+	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
+	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

@@ -48,7 +48,11 @@ Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
 FrameExtent <- ('BETWEEN' FrameBound 'AND' FrameBound) / FrameBound
 FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT' 'ROW') / (Expression 'PRECEDING') / (Expression 'FOLLOWING')
 WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
-WindowExcludeElement <- ('CURRENT' 'ROW') / 'GROUP' / 'TIES' / ('NO' 'OTHERS')
+WindowExcludeElement <- ExcludeCurrentRow / ExcludeGroup / ExcludeTies / ExcludeNoOthers
+ExcludeCurrentRow <- 'CURRENT' 'ROW'
+ExcludeGroup <- 'GROUP'
+ExcludeTies <- 'TIES'
+ExcludeNoOthers <- 'NO' 'OTHERS'
 OverClause <- 'OVER' WindowFrame
 WindowFrame <- WindowFrameDefinition / Identifier / ParensIdentifier
 ParensIdentifier <- Parens(Identifier)
