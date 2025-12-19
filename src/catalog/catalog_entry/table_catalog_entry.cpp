@@ -264,7 +264,7 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 			found_columns.insert(update.columns[i]);
 		}
 	}
-	if (found_column_count > 0 && found_column_count != bound_columns.size()) {
+	if (found_column_count != bound_columns.size()) {
 		// columns that were required are not all part of the UPDATE
 		// add them to the scan and update set
 		for (auto &physical_id : bound_columns) {
