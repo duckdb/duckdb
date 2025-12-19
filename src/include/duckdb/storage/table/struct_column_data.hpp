@@ -18,12 +18,12 @@ class StructColumnData : public ColumnData {
 public:
 	struct StructColumnDataChild {
 	public:
-		StructColumnDataChild(idx_t child_index, optional_idx vector_index, ColumnScanState &child, bool should_scan)
-		    : child_index(child_index), vector_index(vector_index), state(child), should_scan(should_scan) {
+		StructColumnDataChild(ColumnData &col, optional_idx vector_index, ColumnScanState &child, bool should_scan)
+		    : col(col), vector_index(vector_index), state(child), should_scan(should_scan) {
 		}
 
 	public:
-		idx_t child_index;
+		ColumnData &col;
 		optional_idx vector_index;
 		ColumnScanState &state;
 		bool should_scan;
