@@ -247,7 +247,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
-	` DeserializeVersionNumber(source, header.library_git_desc);
+	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
 
 	// We always deserialize, and read zeros, if not set.
