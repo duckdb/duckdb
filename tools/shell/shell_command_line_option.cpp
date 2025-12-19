@@ -113,6 +113,27 @@ MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) 
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetEncryptionKey(ShellState &state, const vector<string> &args) {
+	auto &key = args[1];
+	if (key.empty()) {
+		state.PrintF(PrintOutput::STDERR, "%s: Error: encryption key cannot be empty\n", state.program_name);
+		return MetadataResult::EXIT;
+	}
+	state.config.options.encryption_key = key;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetEncryptionCipher(ShellState &state, const vector<string> &args) {
+	auto cipher = duckdb::StringUtil::Upper(args[1]);
+	if (cipher != "GCM" && cipher != "CTR") {
+		state.PrintF(PrintOutput::STDERR, "%s: Error: invalid encryption cipher '%s'. Valid options are 'GCM' or 'CTR'\n",
+		             state.program_name, args[1].c_str());
+		return MetadataResult::EXIT;
+	}
+	state.config.options.encryption_cipher = cipher;
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	state.readStdin = false;
 	auto old_bail = state.bail_on_error;
@@ -157,6 +178,8 @@ static const CommandLineOption command_line_options[] = {
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
+    {"encryption-cipher", 1, "CIPHER", SetEncryptionCipher, nullptr, "set encryption cipher (GCM or CTR, default: GCM)"},
+    {"encryption-key", 1, "KEY", SetEncryptionKey, nullptr, "encrypt the database file with the given key"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
