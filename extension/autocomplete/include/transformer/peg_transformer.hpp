@@ -441,7 +441,7 @@ private:
 	                                                                      optional_ptr<ParseResult> parse_result);
 	static string TransformSeqMinOrMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<SequenceOption>> TransformSeqNoMinMax(PEGTransformer &transformer,
-	                                                                  optional_ptr<ParseResult> parse_result);
+	                                                                     optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<SequenceOption>> TransformSeqStartWith(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<SequenceOption>> TransformSeqOwnedBy(PEGTransformer &transformer,
