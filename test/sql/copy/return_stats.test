@@ -17,6 +17,9 @@ statement ok
 CREATE TABLE floating_point_nan AS SELECT case when i%10=0 then 'nan'::double when i%4=0 then null else i/10.0 end as fp FROM range(2500) t(i)
 
 statement ok
+CREATE TABLE floating_point_inf AS SELECT 'inf'::float as a, '-inf'::float as b, 'inf'::double as c, '-inf'::double as d
+
+statement ok
 CREATE TABLE fp_nan_only AS SELECT 'nan'::float as float_val
 
 statement ok
@@ -144,6 +147,11 @@ query IIIIII
 COPY fp_nan_only TO '__TEST_DIR__/fp_nan_only.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*fp_nan_only.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0}}	NULL
+
+query IIIIII
+COPY floating_point_inf TO '__TEST_DIR__/fp_inf.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp_inf.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"a"'={column_size_bytes=\d+, has_nan=false, max=inf, min=inf, null_count=0}, '"b"'={column_size_bytes=\d+, has_nan=false, max=-inf, min=-inf, null_count=0}, '"c"'={column_size_bytes=\d+, has_nan=false, max=inf, min=inf, null_count=0}, '"d"'={column_size_bytes=\d+, has_nan=false, max=-inf, min=-inf, null_count=0}}	NULL
 
 # large strings are truncated to the nearest valid UTF8 string
 query IIIIII

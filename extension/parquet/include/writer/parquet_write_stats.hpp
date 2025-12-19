@@ -10,6 +10,7 @@
 
 #include "column_writer.hpp"
 #include "parquet_geometry.hpp"
+#include <limits>
 
 namespace duckdb {
 
@@ -76,6 +77,15 @@ template <class SRC, class T, class OP>
 class FloatingPointStatisticsState : public NumericStatisticsState<SRC, T, OP> {
 public:
 	bool has_nan = false;
+
+	FloatingPointStatisticsState() {
+		// initialize floating point stats to +/- infinity so that updates with
+		// -inf/+inf values are handled correctly (instead of using finite
+		// numeric limits which would cause incorrect max/min when the only
+		// value is infinite)
+		this->min = std::numeric_limits<T>::infinity();
+		this->max = -std::numeric_limits<T>::infinity();
+	}
 
 public:
 	bool CanHaveNaN() override {

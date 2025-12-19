@@ -19,8 +19,15 @@ BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	SetMin(result, Value::MaximumValue(result.GetType()));
-	SetMax(result, Value::MinimumValue(result.GetType()));
+
+	if (result.GetType() == LogicalType::FLOAT || result.GetType() == LogicalType::DOUBLE) {
+		SetMin(result, Value::Infinity(result.GetType()));
+		SetMax(result, Value::NegativeInfinity(result.GetType()));
+	} else {
+		SetMin(result, Value::MaximumValue(result.GetType()));
+		SetMax(result, Value::MinimumValue(result.GetType()));
+	}
+
 	return result;
 }
 
