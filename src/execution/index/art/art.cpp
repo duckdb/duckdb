@@ -624,6 +624,9 @@ idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, opti
 // Point and range lookups
 //===--------------------------------------------------------------------===//
 bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
@@ -780,7 +783,7 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 
 void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
                      optional_idx &conflict_idx, idx_t i) {
-	// Get the delete_leaf if we have any
+	// Get the set of deleted row ids for this value if we have any delete indexes
 	vector<row_t> deleted_row_ids;
 	if (delete_index_info.delete_indexes) {
 		for (auto &index : *delete_index_info.delete_indexes) {
