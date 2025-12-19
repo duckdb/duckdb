@@ -1,0 +1,299 @@
+[
+  {
+    "group": "core",
+    "description": "core metrics",
+    "metrics": [
+      {
+        "name": "CPU_TIME",
+        "description": "CPU time spent on the query",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_TIMING"
+      },
+      {
+        "name": "CUMULATIVE_CARDINALITY",
+        "description": "Cumulative cardinality of the query",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": true,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_CARDINALITY"
+      },
+      {
+        "name": "CUMULATIVE_ROWS_SCANNED",
+        "description": "Cumulative number of rows scanned by the query",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": true,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_ROWS_SCANNED"
+      },
+      {
+        "name": "EXTRA_INFO",
+        "description": "Unique operator metrics",
+        "type": "Value::MAP",
+        "is_default": true
+      },
+      {
+        "name": "LATENCY",
+        "description": "Time spent executing the entire query",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
+        "name": "QUERY_NAME",
+        "description": "The SQL string of the query",
+        "type": "string",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "query_metric"
+      },
+      {
+        "name": "RESULT_SET_SIZE",
+        "description": "The size of the result",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true,
+        "collection_method": "child",
+        "child": "RESULT_SET_SIZE"
+      },
+      {
+        "name": "ROWS_RETURNED",
+        "description": "The number of rows returned by the query",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "child",
+        "child": "OPERATOR_CARDINALITY"
+      }
+    ]
+  },
+  {
+    "group": "execution",
+    "description": "metrics that are collected during query execution",
+    "metrics": [
+      {
+        "name": "BLOCKED_THREAD_TIME",
+        "description": "Time spent waiting for a thread to become available",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true
+      },
+      {
+        "name": "SYSTEM_PEAK_BUFFER_MEMORY",
+        "description": "Peak memory usage of the system",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true
+      },
+      {
+        "name": "SYSTEM_PEAK_TEMP_DIR_SIZE",
+        "description": "Peak size of the temporary directory",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true
+      },
+      {
+        "name": "TOTAL_MEMORY_ALLOCATED",
+        "description": "The total memory allocated by the buffer manager.",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "query_metric"
+      }
+    ]
+  },
+  {
+    "group": "file",
+    "description": "metrics that are collected during file operations",
+    "metrics": [
+      {
+        "name": "ATTACH_LOAD_STORAGE_LATENCY",
+        "description": "Time spent loading from storage.",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
+        "name": "ATTACH_REPLAY_WAL_LATENCY",
+        "description": "Time spent replaying the WAL file.",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
+        "name": "CHECKPOINT_LATENCY",
+        "description": "Time spent running checkpoints",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
+        "name": "COMMIT_LOCAL_STORAGE_LATENCY",
+        "description": "Time spent committing the transaction-local storage.",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
+        "name": "TOTAL_BYTES_READ",
+        "description": "The total bytes read by the file system.",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "query_metric"
+      },
+      {
+        "name": "TOTAL_BYTES_WRITTEN",
+        "description": "The total bytes written by the file system.",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "query_metric"
+      },
+      {
+        "name": "WAITING_TO_ATTACH_LATENCY",
+        "description": "Time spent waiting to ATTACH a file.",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
+        "name": "WAL_REPLAY_ENTRY_COUNT",
+        "description": "The total number of entries to replay in the WAL.",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "query_metric"
+      },
+      {
+        "name": "WRITE_TO_WAL_LATENCY",
+        "description": "Time spent writing to the WAL.",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
+      }
+    ]
+  },
+  {
+    "group": "phase_timing",
+    "description": "",
+    "metrics": [
+      {
+        "name": "ALL_OPTIMIZERS",
+        "description": "Enables all optimizers"
+      },
+      {
+        "name": "CUMULATIVE_OPTIMIZER_TIMING",
+        "description": "Time spent in all optimizers",
+        "type": "double",
+        "unit": "milliseconds",
+        "collection_method": "cumulative_operators"
+      },
+      {
+        "name": "PHYSICAL_PLANNER",
+        "description": "The time spent generating the physical plan",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER_COLUMN_BINDING",
+        "description": "The time spent binding the columns in the logical plan to physical columns",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER_CREATE_PLAN",
+        "description": "The time spent creating the physical plan",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER_RESOLVE_TYPES",
+        "description": "The time spent resolving the types in the logical plan to physical types",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PLANNER",
+        "description": "The time to generate the logical plan from the parsed SQL nodes.",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PLANNER_BINDING",
+        "description": "The time taken to bind the logical plan.",
+        "type": "double",
+        "unit": "milliseconds"
+      }
+    ]
+  },
+  {
+    "group": "operator",
+    "description": "metrics that are collected for each operator",
+    "metrics": [
+      {
+        "name": "OPERATOR_CARDINALITY",
+        "description": "Cardinality of the operator",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": true
+      },
+      {
+        "name": "OPERATOR_NAME",
+        "description": "Name of the operator",
+        "type": "string",
+        "is_default": true
+      },
+      {
+        "name": "OPERATOR_ROWS_SCANNED",
+        "description": "Number of rows scanned by the operator",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": true
+      },
+      {
+        "name": "OPERATOR_TIMING",
+        "description": "Time spent in the operator",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true
+      },
+      {
+        "name": "OPERATOR_TYPE",
+        "description": "Type of the operator",
+        "type": "string",
+        "is_default": true
+      }
+    ]
+  },
+  {
+    "group": "optimizer",
+    "description": "metrics that are collected for each optimizer",
+    "generated": true,
+    "metrics": []
+  }
+]

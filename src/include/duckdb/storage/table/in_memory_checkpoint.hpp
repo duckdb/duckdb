@@ -17,7 +17,7 @@ namespace duckdb {
 class InMemoryCheckpointer final : public CheckpointWriter {
 public:
 	InMemoryCheckpointer(QueryContext context, AttachedDatabase &db, BlockManager &block_manager,
-	                     StorageManager &storage_manager, CheckpointType checkpoint_type);
+	                     StorageManager &storage_manager, CheckpointOptions options);
 
 	void CreateCheckpoint() override;
 
@@ -27,8 +27,8 @@ public:
 	optional_ptr<ClientContext> GetClientContext() const {
 		return context;
 	}
-	CheckpointType GetCheckpointType() const {
-		return checkpoint_type;
+	CheckpointOptions GetCheckpointOptions() const {
+		return options;
 	}
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
@@ -41,7 +41,7 @@ private:
 	optional_ptr<ClientContext> context;
 	PartialBlockManager partial_block_manager;
 	StorageManager &storage_manager;
-	CheckpointType checkpoint_type;
+	CheckpointOptions options;
 };
 
 class InMemoryTableDataWriter : public TableDataWriter {
@@ -54,7 +54,7 @@ public:
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	void FlushPartialBlocks() override;
-	CheckpointType GetCheckpointType() const override;
+	CheckpointOptions GetCheckpointOptions() const override;
 	MetadataManager &GetMetadataManager() override;
 
 private:
@@ -67,7 +67,7 @@ public:
 	                       InMemoryCheckpointer &checkpoint_manager);
 
 public:
-	CheckpointType GetCheckpointType() const override;
+	CheckpointOptions GetCheckpointOptions() const override;
 	WriteStream &GetPayloadWriter() override;
 	MetaBlockPointer GetMetaBlockPointer() override;
 	optional_ptr<MetadataManager> GetMetadataManager() override;

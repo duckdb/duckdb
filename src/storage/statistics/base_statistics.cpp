@@ -6,6 +6,7 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
+#include "duckdb/common/column_index.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -113,7 +114,7 @@ void BaseStatistics::InitializeUnknown() {
 
 void BaseStatistics::InitializeEmpty() {
 	has_null = false;
-	has_no_null = true;
+	has_no_null = false;
 }
 
 bool BaseStatistics::CanHaveNull() const {
@@ -264,6 +265,16 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	}
 }
 
+unique_ptr<BaseStatistics> BaseStatistics::PushdownExtract(const StorageIndex &index) const {
+	auto stats_type = GetStatsType();
+	switch (stats_type) {
+	case StatisticsType::STRUCT_STATS:
+		return StructStats::PushdownExtract(*this, index);
+	default:
+		throw InternalException("PushdownExtract not supported for StatisticsType::%s", EnumUtil::ToString(stats_type));
+	}
+}
+
 BaseStatistics BaseStatistics::Copy() const {
 	BaseStatistics result(type);
 	result.Copy(*this);
@@ -331,7 +342,7 @@ void BaseStatistics::SetHasNoNull() {
 	}
 }
 
-void BaseStatistics::CombineValidity(BaseStatistics &left, BaseStatistics &right) {
+void BaseStatistics::CombineValidity(const BaseStatistics &left, const BaseStatistics &right) {
 	has_null = left.has_null || right.has_null;
 	has_no_null = left.has_no_null || right.has_no_null;
 }

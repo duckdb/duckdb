@@ -436,11 +436,16 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableFilter &filter) {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
 	lock_guard<mutex> l(stats_lock);
+	if (index.IsPushdownExtract()) {
+		auto child_stats = stats->statistics.PushdownExtract(index.GetChildIndex(0));
+		D_ASSERT(child_stats);
+		return filter.CheckStatistics(*child_stats);
+	}
 	return filter.CheckStatistics(stats->statistics);
 }
 
@@ -568,8 +573,8 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
-void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                          idx_t result_idx) {
+void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                          row_t row_id, Vector &result, idx_t result_idx) {
 	if (UnsafeNumericCast<idx_t>(row_id) > count) {
 		throw InternalException("ColumnData::FetchRow - row_id out of range");
 	}
@@ -655,10 +660,10 @@ void ColumnData::AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment
 	data.AppendSegment(l, std::move(segment));
 }
 
-void ColumnData::CommitDropColumn() {
+void ColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	for (auto &segment_p : data.Segments()) {
 		auto &segment = segment_p;
-		segment.CommitDropSegment();
+		segment.VisitBlockIds(visitor);
 	}
 }
 
@@ -956,6 +961,17 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
+struct ListBlockIds : public BlockIdVisitor {
+	explicit ListBlockIds(vector<block_id_t> &block_ids) : block_ids(block_ids) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		block_ids.push_back(block_id);
+	}
+
+	vector<block_id_t> &block_ids;
+};
+
 void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
@@ -997,12 +1013,17 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 			column_info.block_offset = segment.GetBlockOffset();
 		} else {
 			column_info.persistent = false;
+			column_info.block_id = INVALID_BLOCK;
+			column_info.block_offset = 0;
 		}
 		auto &compression_function = segment.GetCompressionFunction();
 		auto segment_state = segment.GetSegmentState();
 		if (segment_state) {
 			column_info.segment_info = segment_state->GetSegmentInfo();
-			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
+			if (compression_function.visit_block_ids) {
+				ListBlockIds list_block_ids(column_info.additional_blocks);
+				compression_function.visit_block_ids(segment, list_block_ids);
+			}
 		}
 		if (compression_function.get_segment_info) {
 			auto segment_info = compression_function.get_segment_info(context, segment);

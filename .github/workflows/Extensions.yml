@@ -19,6 +19,10 @@ on:
         type: boolean
         required: false
         default: true
+      opt_in_archs:
+        type: string
+        required: false
+        default: ''
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -34,6 +38,11 @@ on:
         type: string
         required: false
         default: ''
+      opt_in_archs:
+        description: 'Semicolon-separated list of architectures to opt into'
+        type: string
+        required: false
+        default: 'windows_arm64;'
       skip_tests:
         description: 'Set to true to skip all testing'
         type: boolean
@@ -96,6 +105,7 @@ jobs:
     outputs:
       main_extensions_config: ${{ steps.set-main-extensions.outputs.extension_config }}
       main_extensions_exclude_archs: ${{ steps.set-main-extensions.outputs.exclude_archs }}
+      main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
       rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
       external_extensions_config: ${{ steps.set-external-extensions.outputs.extension_config }}
@@ -105,6 +115,7 @@ jobs:
       # NOTE: on PRs we exclude some archs to speed things up
       BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
+      OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,6 +131,7 @@ jobs:
         run: |
           # Set config
           echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
+          echo opt_in_archs="$OPT_IN_ARCHS" >> $GITHUB_OUTPUT
           in_tree_extensions="`cat $IN_TREE_CONFIG_FILE`"
           out_of_tree_extensions="`cat $OUT_OF_TREE_CONFIG_FILE`"
           echo "extension_config<<EOF" >> $GITHUB_OUTPUT
@@ -164,6 +176,7 @@ jobs:
     with:
       artifact_prefix: main-extensions
       exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
+      opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
@@ -215,22 +228,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: ./.github/actions/cleanup_runner
+
       - uses: actions/download-artifact@v4
         name: Download main extensions
         with:
-          pattern: main-extensions-${{ github.sha }}*
+          pattern: main-extensions*
           path: /tmp/repository_generation/main-extensions
 
       - uses: actions/download-artifact@v4
         name: Download rust-based extensions
         with:
-          pattern: rust-based-extensions-${{ github.sha }}*
+          pattern: rust-based-extensions*
           path: /tmp/repository_generation/rust-based-extensions
 
       - uses: actions/download-artifact@v4
         name: Download external extensions
         with:
-          pattern: external-extensions-${{ github.sha }}*
+          pattern: external-extensions*
           path: /tmp/repository_generation/external-extensions
 
       - name: Print all extensions
@@ -246,7 +261,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: extension-repository-${{ github.sha }}
+          name: extension-repository
           path: |
             /tmp/merged_repository/**/*.duckdb_extension*
 
@@ -257,29 +272,22 @@ jobs:
         - create-extension-repository
 
     steps:
-      - name: Free disk space
-        uses: endersonmenezes/free-disk-space@v3
-        continue-on-error: true
-        if: inputs.run_disk_clean_step
-        with:
-          remove_haskell: true
-          remove_tool_cache: true
-          remove_folders: "/usr/local/share/powershell /usr/share/swift"
-          testing: false
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - uses: ./.github/actions/cleanup_runner
+
       - uses: actions/download-artifact@v4
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository
           path: /tmp
 
       - name: List extensions to deploy
         shell: bash
         run: |
-          tree /tmp/extension-repository-${{ github.sha }}
+          tree /tmp/extension-repository
 
       - name: Deploy extensions
         shell: bash
@@ -291,7 +299,7 @@ jobs:
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
           pip install awscli
-          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ github.sha }}
+          ./scripts/extension-upload-repository.sh /tmp/extension-repository
 
   autoload-tests:
     name: Extension Autoloading Tests
@@ -318,13 +326,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository
           path: /tmp
 
       - name: List extensions to test with
         shell: bash
         run: |
-          tree /tmp/extension-repository-${{ github.sha }}
+          tree /tmp/extension-repository
 
       - name: Build DuckDB
         env:
@@ -340,7 +348,7 @@ jobs:
 
       - name: Run Tests
         env:
-          LOCAL_EXTENSION_REPO: /tmp/extension-repository-${{ github.sha }}
+          LOCAL_EXTENSION_REPO: /tmp/extension-repository
         run: |
           ./build/release/test/unittest --autoloading available --skip-compiled
 
@@ -355,7 +363,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -385,13 +393,13 @@ jobs:
       - uses: actions/download-artifact@v4
         name: Download extension repository artifact
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository
           path: /tmp
 
       - name: Copy over local extension repository
         shell: bash
         run: |
-          cp -r /tmp/extension-repository-${{ github.sha }} build/release/repository
+          cp -r /tmp/extension-repository build/release/repository
           tree build/release/repository
           find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
           tree build/release/repository

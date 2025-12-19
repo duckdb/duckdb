@@ -31,7 +31,7 @@ public:
 		return compression_types;
 	}
 
-	virtual CheckpointType GetCheckpointType() const = 0;
+	virtual CheckpointOptions GetCheckpointOptions() const = 0;
 	virtual WriteStream &GetPayloadWriter() = 0;
 	virtual MetaBlockPointer GetMetaBlockPointer() = 0;
 	virtual optional_ptr<MetadataManager> GetMetadataManager() = 0;
@@ -58,7 +58,7 @@ public:
 	                         TableDataWriter &writer, MetadataWriter &table_data_writer);
 
 public:
-	CheckpointType GetCheckpointType() const override;
+	CheckpointOptions GetCheckpointOptions() const override;
 	WriteStream &GetPayloadWriter() override;
 	MetaBlockPointer GetMetaBlockPointer() override;
 	optional_ptr<MetadataManager> GetMetadataManager() override;

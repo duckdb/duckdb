@@ -80,6 +80,7 @@ public:
 	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
+	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
 
 	vector<idx_t> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan

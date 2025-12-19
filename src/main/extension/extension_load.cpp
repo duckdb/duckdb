@@ -81,14 +81,14 @@ struct ExtensionAccess {
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
-	static duckdb_database *GetDatabase(duckdb_extension_info info) {
+	static duckdb_database GetDatabase(duckdb_extension_info info) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
 		try {
 			// Create the duckdb_database
 			load_state.database_data = make_uniq<DatabaseWrapper>();
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
-			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
+			return reinterpret_cast<duckdb_database>(load_state.database_data.get());
 		} catch (std::exception &ex) {
 			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
@@ -350,19 +350,53 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		filename = address;
 #else
 
-		string local_path = !db.config.options.extension_directory.empty()
-		                        ? db.config.options.extension_directory
-		                        : ExtensionHelper::DefaultExtensionFolder(fs);
+		// Local function to process local path
+		auto ComputeLocalExtensionPath = [&fs](const string &base_path, const string &extension_name) -> string {
+			// convert random separators to platform-canonic
+			string local_path = fs.ConvertSeparators(base_path);
+			// expand ~ in extension directory
+			local_path = fs.ExpandPath(local_path);
+			auto path_components = PathComponents();
+			for (auto &path_ele : path_components) {
+				local_path = fs.JoinPath(local_path, path_ele);
+			}
+			return fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+		};
 
-		// convert random separators to platform-canonic
-		local_path = fs.ConvertSeparators(local_path);
-		// expand ~ in extension directory
-		local_path = fs.ExpandPath(local_path);
-		auto path_components = PathComponents();
-		for (auto &path_ele : path_components) {
-			local_path = fs.JoinPath(local_path, path_ele);
+		// Collect all directories to search for extensions
+		vector<string> search_directories;
+		if (!db.config.options.extension_directory.empty()) {
+			search_directories.push_back(db.config.options.extension_directory);
 		}
-		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+
+		if (!db.config.options.extension_directories.empty()) {
+			// Add all configured extension directories
+			for (const auto &dir : db.config.options.extension_directories) {
+				search_directories.push_back(dir);
+			}
+		}
+
+		// Add default extension directory if no custom directories configured
+		if (search_directories.empty()) {
+			for (const auto &path : ExtensionHelper::DefaultExtensionFolders(fs)) {
+				search_directories.push_back(path);
+			}
+		}
+
+		// Try each directory in sequence until extension is found
+		bool found = false;
+		for (const auto &directory : search_directories) {
+			filename = ComputeLocalExtensionPath(directory, extension_name);
+			if (fs.FileExists(filename)) {
+				found = true;
+				break;
+			}
+		}
+
+		// If not found in any directory, use the first directory for error reporting
+		if (!found) {
+			filename = ComputeLocalExtensionPath(search_directories[0], extension_name);
+		}
 #endif
 	} else {
 		direct_load = true;

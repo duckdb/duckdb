@@ -111,9 +111,6 @@ public:
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
-	//! Returns true if the query result has more rows than the given amount.
-	//! This might involve fetching up to that many rows - but wil not exhaust any
-	DUCKDB_API virtual bool MoreRowsThan(idx_t row_count);
 
 	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {
@@ -220,10 +217,6 @@ public:
 	iterator end() { // NOLINT: match stl API
 		return QueryResultIterator(nullptr);
 	}
-
-protected:
-	vector<unique_ptr<DataChunk>> stored_chunks;
-	bool result_exhausted = false;
 
 protected:
 	DUCKDB_API string HeaderToString();

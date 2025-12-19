@@ -12,6 +12,7 @@ add_library_unity(
   arena_allocator.cpp
   buffer_manager.cpp
   caching_file_system.cpp
+  caching_file_system_wrapper.cpp
   checkpoint_manager.cpp
   temporary_memory_manager.cpp
   block.cpp
@@ -19,6 +20,7 @@ add_library_unity(
   data_pointer.cpp
   data_table.cpp
   external_file_cache.cpp
+  external_file_cache_util.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp

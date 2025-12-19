@@ -176,21 +176,25 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 
+	try {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
-	auto ccontext = connection->context;
-	auto result = ccontext->Query(context.sql_query, parameters);
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result->Cast<StreamQueryResult>();
-		return stream_result.Materialize();
-	} else {
-		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-	}
+		parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+		auto ccontext = connection->context;
+		auto result = ccontext->Query(context.sql_query, parameters);
+		if (result->type == QueryResultType::STREAM_RESULT) {
+			auto &stream_result = result->Cast<StreamQueryResult>();
+			return stream_result.Materialize();
+		} else {
+			D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+			return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+		}
 #else
-	auto res = connection->context->Query(context.sql_query, parameters);
-	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
+		auto res = connection->context->Query(context.sql_query, parameters);
+		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
 #endif
+	} catch (std::exception &ex) {
+		return make_uniq<MaterializedQueryResult>(ErrorData(ex));
+	}
 }
 
 bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &conditions) {
@@ -336,13 +340,13 @@ LoadCommand::LoadCommand(SQLLogicTestRunner &runner, string dbpath_p, bool reado
 
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
-	                       LoopDefinition definition)
-	    : runner(runner), loop_commands(loop_commands), definition(std::move(definition)), success(true) {
+	                       vector<LoopDefinition> active_loops_p)
+	    : runner(runner), loop_commands(loop_commands), active_loops(std::move(active_loops_p)), success(true) {
 	}
 
 	SQLLogicTestRunner &runner;
 	const vector<duckdb::unique_ptr<Command>> &loop_commands;
-	LoopDefinition definition;
+	vector<LoopDefinition> active_loops;
 	atomic<bool> success;
 	string error_message;
 	string error_file;
@@ -356,7 +360,7 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 		// construct a new connection to the database
 		Connection con(*runner.db);
 		// create a new parallel execute context
-		vector<LoopDefinition> running_loops {execute_context->definition};
+		auto &running_loops = execute_context->active_loops;
 		ExecuteContext context(&con, std::move(running_loops));
 		for (auto &command : execute_context->loop_commands) {
 			execute_context->error_file = command->file_name;
@@ -394,15 +398,24 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				throw std::runtime_error("Concurrent loop is not supported over this command");
 			}
 		}
-		// parallel loop: launch threads
-		std::list<ParallelExecuteContext> contexts;
+		vector<idx_t> loop_indexes;
 		while (true) {
-			contexts.emplace_back(runner, loop_commands, loop_def);
+			loop_indexes.emplace_back(loop_def.loop_idx);
 			loop_def.loop_idx++;
 			if (loop_def.loop_idx >= loop_def.loop_end) {
 				// finished
 				break;
 			}
+		}
+		std::random_shuffle(loop_indexes.begin(), loop_indexes.end());
+
+		// parallel loop: launch threads
+		std::list<ParallelExecuteContext> contexts;
+		for (auto &loop_index : loop_indexes) {
+			loop_def.loop_idx = loop_index;
+			auto running_loops = context.running_loops;
+			running_loops.emplace_back(loop_def);
+			contexts.emplace_back(runner, loop_commands, std::move(running_loops));
 		}
 		std::list<std::thread> threads;
 		for (auto &context : contexts) {
@@ -481,9 +494,6 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (context.is_parallel) {
 		throw std::runtime_error("Cannot restart database in parallel");
-	}
-	if (runner.dbpath.empty()) {
-		throw std::runtime_error("cannot restart an in-memory database, did you forget to call \"load\"?");
 	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;

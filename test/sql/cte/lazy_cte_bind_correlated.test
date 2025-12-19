@@ -1,0 +1,16 @@
+# name: test/sql/cte/lazy_cte_bind_correlated.test
+# description: Test lazy CTE binding with correlated columns
+# group: [cte]
+
+query II rowsort
+SELECT query,
+    (WITH t AS (SELECT query)
+     SELECT x FROM (VALUES ('cat')) AS _(x)
+     WHERE x IN (SELECT query)) AS broken
+FROM   (VALUES ('cat'),
+               ('dog'),
+               ('duck')) AS queries(query)
+----
+cat	cat
+dog	NULL
+duck	NULL

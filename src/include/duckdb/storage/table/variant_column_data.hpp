@@ -22,11 +22,12 @@ public:
 	//! The sub-columns of the struct
 	vector<shared_ptr<ColumnData>> sub_columns;
 	shared_ptr<ValidityColumnData> validity;
-	//! Whether (some of) the fields are stored outside of the VARIANT data
-	bool is_shredded = false;
 
 public:
 	idx_t GetMaxEntry() override;
+	bool IsShredded() const {
+		return sub_columns.size() == 2;
+	}
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
@@ -45,8 +46,8 @@ public:
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-	              idx_t result_idx) override;
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
+	              Vector &result, idx_t result_idx) override;
 	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
@@ -54,7 +55,7 @@ public:
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
-	void CommitDropColumn() override;
+	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
@@ -77,8 +78,8 @@ public:
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
 
 private:
-	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type);
-	void ReplaceColumns(shared_ptr<ColumnData> &&unshredded, shared_ptr<ColumnData> &&shredded);
+	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type,
+	                                                 BaseStatistics &stats);
 	void CreateScanStates(ColumnScanState &state);
 	LogicalType GetShreddedType();
 };

@@ -258,10 +258,11 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 	return std::move(result);
 }
 
-void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
+void UncompressedStringStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManager();
-	state.Cleanup(block_manager);
+	for (auto &block_id : state.on_disk_blocks) {
+		visitor.Visit(block_id);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -279,7 +280,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	    UncompressedStringStorage::StringInitSegment, UncompressedStringStorage::StringInitAppend,
 	    UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend, nullptr,
 	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
-	    UncompressedStringStorage::CleanupState, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
+	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
 }
 
 //===--------------------------------------------------------------------===//

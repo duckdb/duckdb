@@ -34,6 +34,20 @@ bool TableCatalogEntry::HasGeneratedColumns() const {
 	return columns.LogicalColumnCount() != columns.PhysicalColumnCount();
 }
 
+StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) const {
+	if (column_id.IsRowIdColumn()) {
+		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID);
+	}
+
+	// The index of the base ColumnIndex is equal to the physical column index in the table
+	// for any child indices because the indices are already the physical indices.
+	// Only the top-level can have generated columns.
+	auto &col = GetColumn(column_id.ToLogical());
+	auto result = StorageIndex::FromColumnIndex(column_id);
+	result.SetIndex(col.StorageOid());
+	return result;
+}
+
 LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) const {
 	auto entry = columns.GetColumnIndex(column_name);
 	if (!entry.IsValid()) {
@@ -81,6 +95,8 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->dependencies = dependencies;
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	result->temporary = temporary;
+	result->internal = internal;
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);
@@ -248,7 +264,7 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 			found_columns.insert(update.columns[i]);
 		}
 	}
-	if (found_column_count > 0 && found_column_count != bound_columns.size()) {
+	if (found_column_count != bound_columns.size()) {
 		// columns that were required are not all part of the UPDATE
 		// add them to the scan and update set
 		for (auto &physical_id : bound_columns) {

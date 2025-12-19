@@ -423,7 +423,10 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 		}
 	}
 	auto bound_expr = option_binder.Bind(expr);
-	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
+	if (bound_expr->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 	if (val.IsNull()) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
 	}

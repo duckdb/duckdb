@@ -109,11 +109,6 @@ struct CompressedSegmentState {
 		return "";
 	} // LCOV_EXCL_STOP
 
-	//! Get the block ids of additional pages created by the segment
-	virtual vector<block_id_t> GetAdditionalBlocks() const { // LCOV_EXCL_START
-		return vector<block_id_t>();
-	} // LCOV_EXCL_STOP
-
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -216,7 +211,7 @@ typedef unique_ptr<ColumnSegmentState> (*compression_serialize_state_t)(ColumnSe
 //! Function prototype for deserializing the segment state
 typedef unique_ptr<ColumnSegmentState> (*compression_deserialize_state_t)(Deserializer &deserializer);
 //! Function prototype for cleaning up the segment state when the column data is dropped
-typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
+typedef void (*compression_visit_block_ids_t)(const ColumnSegment &segment, BlockIdVisitor &visitor);
 
 //===--------------------------------------------------------------------===//
 // GetSegmentInfo (optional)
@@ -241,7 +236,7 @@ public:
 	                    compression_revert_append_t revert_append = nullptr,
 	                    compression_serialize_state_t serialize_state = nullptr,
 	                    compression_deserialize_state_t deserialize_state = nullptr,
-	                    compression_cleanup_state_t cleanup_state = nullptr,
+	                    compression_visit_block_ids_t visit_block_ids = nullptr,
 	                    compression_init_prefetch_t init_prefetch = nullptr, compression_select_t select = nullptr,
 	                    compression_filter_t filter = nullptr)
 	    : type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
@@ -249,7 +244,7 @@ public:
 	      init_prefetch(init_prefetch), init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial),
 	      select(select), filter(filter), fetch_row(fetch_row), skip(skip), init_segment(init_segment),
 	      init_append(init_append), append(append), finalize_append(finalize_append), revert_append(revert_append),
-	      serialize_state(serialize_state), deserialize_state(deserialize_state), cleanup_state(cleanup_state) {
+	      serialize_state(serialize_state), deserialize_state(deserialize_state), visit_block_ids(visit_block_ids) {
 	}
 
 	//! Compression type
@@ -319,8 +314,8 @@ public:
 	compression_serialize_state_t serialize_state;
 	//! Deserialize the segment state to the metadata (optional)
 	compression_deserialize_state_t deserialize_state;
-	//! Cleanup the segment state (optional)
-	compression_cleanup_state_t cleanup_state;
+	//! Iterate over any extra block ids used by the compression algorithm (optional)
+	compression_visit_block_ids_t visit_block_ids;
 
 	// Get Segment Info
 	//! This is only necessary if you want to convey more information about the segment in the 'pragma_storage_info'

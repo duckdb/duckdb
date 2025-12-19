@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/copy_option_non_foldable.test
+# group: [parquet]
+
+require parquet
+
+statement ok
+PREPARE statement2 as COPY (
+	SELECT
+		42 AS number,
+		true AS is_even
+) TO '__TEST_DIR__/non_foldable_copy_option.parquet' (
+	FORMAT parquet,
+	KV_METADATA {
+		number: random()
+	}
+);
+
+statement ok
+EXECUTE statement2;
+
+query II
+select * from '__TEST_DIR__/non_foldable_copy_option.parquet'
+----
+42	true

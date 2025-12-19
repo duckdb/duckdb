@@ -182,6 +182,8 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &da
 		// update the child column (i.e. the validity column)
 		validity->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
 		                       row_group_start);
+		validity->UpdateWithBase(transaction, data_table, column_path[0], update_vector, row_ids, update_count, *this,
+		                         row_group_start);
 	}
 }
 
@@ -200,20 +202,20 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                                  idx_t result_idx) {
+void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
+                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
 		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
-	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
+	ColumnData::FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 }
 
-void StandardColumnData::CommitDropColumn() {
-	ColumnData::CommitDropColumn();
-	validity->CommitDropColumn();
+void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	ColumnData::VisitBlockIds(visitor);
+	validity->VisitBlockIds(visitor);
 }
 
 void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {

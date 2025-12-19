@@ -23,26 +23,17 @@ static void AssertVariant(const BaseStatistics &stats) {
 	}
 }
 
-void VariantStats::CreateUnshreddedStats(BaseStatistics &stats) {
-	BaseStatistics::Construct(stats.child_stats[0], VariantShredding::GetUnshreddedType());
-}
-
-void VariantStats::CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type) {
-	BaseStatistics::Construct(stats.child_stats[1], shredded_type);
-	auto &data = GetDataUnsafe(stats);
-	data.is_shredded = true;
-}
-
 void VariantStats::Construct(BaseStatistics &stats) {
 	stats.child_stats = unsafe_unique_array<BaseStatistics>(new BaseStatistics[2]);
-	GetDataUnsafe(stats).is_shredded = false;
+	GetDataUnsafe(stats).shredding_state = VariantStatsShreddingState::UNINITIALIZED;
 	CreateUnshreddedStats(stats);
 }
 
 BaseStatistics VariantStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
-	GetDataUnsafe(result).is_shredded = false;
+	//! Unknown - we have no clue what's in this
+	GetDataUnsafe(result).shredding_state = VariantStatsShreddingState::INCONSISTENT;
 	result.child_stats[0].Copy(BaseStatistics::CreateUnknown(VariantShredding::GetUnshreddedType()));
 	return result;
 }
@@ -50,31 +41,17 @@ BaseStatistics VariantStats::CreateUnknown(LogicalType type) {
 BaseStatistics VariantStats::CreateEmpty(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	GetDataUnsafe(result).is_shredded = false;
+	GetDataUnsafe(result).shredding_state = VariantStatsShreddingState::UNINITIALIZED;
 	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(VariantShredding::GetUnshreddedType()));
 	return result;
 }
 
-BaseStatistics VariantStats::CreateShredded(const LogicalType &shredded_type) {
-	BaseStatistics result(LogicalType::VARIANT());
-	result.InitializeEmpty();
+//===--------------------------------------------------------------------===//
+// Unshredded Stats
+//===--------------------------------------------------------------------===//
 
-	CreateShreddedStats(result, shredded_type);
-	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(VariantShredding::GetUnshreddedType()));
-	result.child_stats[1].Copy(BaseStatistics::CreateEmpty(shredded_type));
-	return result;
-}
-
-const BaseStatistics &VariantStats::GetShreddedStats(const BaseStatistics &stats) {
-	AssertVariant(stats);
-	D_ASSERT(GetDataUnsafe(stats).is_shredded == true);
-	return stats.child_stats[1];
-}
-
-BaseStatistics &VariantStats::GetShreddedStats(BaseStatistics &stats) {
-	AssertVariant(stats);
-	D_ASSERT(GetDataUnsafe(stats).is_shredded == true);
-	return stats.child_stats[1];
+void VariantStats::CreateUnshreddedStats(BaseStatistics &stats) {
+	BaseStatistics::Construct(stats.child_stats[0], VariantShredding::GetUnshreddedType());
 }
 
 const BaseStatistics &VariantStats::GetUnshreddedStats(const BaseStatistics &stats) {
@@ -101,68 +78,61 @@ void VariantStats::SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStat
 	}
 }
 
-void VariantStats::SetShreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats) {
+void VariantStats::MarkAsNotShredded(BaseStatistics &stats) {
+	D_ASSERT(!IsShredded(stats));
 	auto &data = GetDataUnsafe(stats);
-	if (!data.is_shredded) {
-		BaseStatistics::Construct(stats.child_stats[1], new_stats.GetType());
-		data.is_shredded = true;
-	}
-	stats.child_stats[1].Copy(new_stats);
+	//! All Variant stats start off as UNINITIALIZED, to support merging
+	//! This method marks the stats as being unshredded, so they produce INCONSISTENT when merged with SHREDDED stats
+	data.shredding_state = VariantStatsShreddingState::NOT_SHREDDED;
 }
 
-void VariantStats::SetShreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats) {
-	AssertVariant(stats);
-	D_ASSERT(new_stats);
-	SetShreddedStats(stats, *new_stats);
-}
+//===--------------------------------------------------------------------===//
+// Shredded Stats
+//===--------------------------------------------------------------------===//
 
-void VariantStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
-	auto &data = GetDataUnsafe(stats);
-	auto &unshredded_stats = VariantStats::GetUnshreddedStats(stats);
-
-	serializer.WriteProperty(200, "is_shredded", data.is_shredded);
-
-	serializer.WriteProperty(225, "unshredded_stats", unshredded_stats);
-	if (data.is_shredded) {
-		auto &shredded_stats = VariantStats::GetShreddedStats(stats);
-		serializer.WriteProperty(230, "shredded_type", shredded_stats.type);
-		serializer.WriteProperty(235, "shredded_stats", shredded_stats);
+static void AssertShreddedStats(const BaseStatistics &stats) {
+	if (stats.GetType().id() != LogicalTypeId::STRUCT) {
+		throw InternalException("Shredded stats should be of type STRUCT, not %s",
+		                        EnumUtil::ToString(stats.GetType().id()));
+	}
+	auto &struct_children = StructType::GetChildTypes(stats.GetType());
+	if (struct_children.size() != 2) {
+		throw InternalException(
+		    "Shredded stats need to consist of 2 children, 'untyped_value_index' and 'typed_value', not: %s",
+		    stats.GetType().ToString());
+	}
+	if (struct_children[0].second.id() != LogicalTypeId::UINTEGER) {
+		throw InternalException("Shredded stats 'untyped_value_index' should be of type UINTEGER, not %s",
+		                        EnumUtil::ToString(struct_children[0].second.id()));
 	}
 }
 
-void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
-	auto &type = base.GetType();
-	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
-	auto &data = GetDataUnsafe(base);
+bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
+	AssertShreddedStats(stats);
 
-	auto unshredded_type = VariantShredding::GetUnshreddedType();
-	data.is_shredded = deserializer.ReadProperty<bool>(200, "is_shredded");
+	auto &untyped_value_index_stats = StructStats::GetChildStats(stats, 0);
+	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
 
-	{
-		//! Read the 'unshredded_stats' child
-		deserializer.Set<const LogicalType &>(unshredded_type);
-		auto stat = deserializer.ReadProperty<BaseStatistics>(225, "unshredded_stats");
-		base.child_stats[0].Copy(stat);
-		deserializer.Unset<LogicalType>();
+	if (!typed_value_stats.CanHaveNull()) {
+		//! Fully shredded, no nulls
+		return true;
 	}
-
-	if (!data.is_shredded) {
-		return;
+	if (!untyped_value_index_stats.CanHaveNoNull()) {
+		//! In the event that this field is entirely missing from the parent OBJECT, both are NULL
+		return false;
 	}
-	//! Read the type of the 'shredded_stats'
-	auto shredded_type = deserializer.ReadProperty<LogicalType>(230, "shredded_type");
-
-	{
-		//! Finally read the 'shredded_stats' themselves
-		deserializer.Set<const LogicalType &>(shredded_type);
-		auto stat = deserializer.ReadProperty<BaseStatistics>(235, "shredded_stats");
-		if (base.child_stats[1].type.id() == LogicalTypeId::INVALID) {
-			base.child_stats[1] = BaseStatistics::CreateUnknown(shredded_type);
-		}
-		base.child_stats[1].Copy(stat);
-		deserializer.Unset<LogicalType>();
+	if (!NumericStats::HasMin(untyped_value_index_stats) || !NumericStats::HasMax(untyped_value_index_stats)) {
+		//! Has no min/max values, essentially double-checking the CanHaveNoNull from above
+		return false;
 	}
+	auto min_value = NumericStats::GetMinUnsafe<uint32_t>(untyped_value_index_stats);
+	auto max_value = NumericStats::GetMaxUnsafe<uint32_t>(untyped_value_index_stats);
+	if (min_value != max_value) {
+		//! Not a constant
+		return false;
+	}
+	//! 0 is reserved for NULL Variant values
+	return min_value == 0;
 }
 
 LogicalType ToStructuredType(const LogicalType &shredding) {
@@ -187,14 +157,147 @@ LogicalType ToStructuredType(const LogicalType &shredding) {
 	}
 }
 
-string VariantStats::ToString(const BaseStatistics &stats) {
+LogicalType VariantStats::GetShreddedStructuredType(const BaseStatistics &stats) {
+	D_ASSERT(IsShredded(stats));
+	return ToStructuredType(GetShreddedStats(stats).GetType());
+}
+
+void VariantStats::CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type) {
+	BaseStatistics::Construct(stats.child_stats[1], shredded_type);
 	auto &data = GetDataUnsafe(stats);
+	data.shredding_state = VariantStatsShreddingState::SHREDDED;
+}
+
+bool VariantStats::IsShredded(const BaseStatistics &stats) {
+	auto &data = GetDataUnsafe(stats);
+	return data.shredding_state == VariantStatsShreddingState::SHREDDED;
+}
+
+BaseStatistics VariantStats::CreateShredded(const LogicalType &shredded_type) {
+	BaseStatistics result(LogicalType::VARIANT());
+	result.InitializeEmpty();
+
+	CreateShreddedStats(result, shredded_type);
+	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(VariantShredding::GetUnshreddedType()));
+	result.child_stats[1].Copy(BaseStatistics::CreateEmpty(shredded_type));
+	return result;
+}
+
+const BaseStatistics &VariantStats::GetShreddedStats(const BaseStatistics &stats) {
+	AssertVariant(stats);
+	D_ASSERT(IsShredded(stats));
+	return stats.child_stats[1];
+}
+
+BaseStatistics &VariantStats::GetShreddedStats(BaseStatistics &stats) {
+	AssertVariant(stats);
+	D_ASSERT(IsShredded(stats));
+	return stats.child_stats[1];
+}
+
+void VariantStats::SetShreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats) {
+	auto &data = GetDataUnsafe(stats);
+	if (!IsShredded(stats)) {
+		BaseStatistics::Construct(stats.child_stats[1], new_stats.GetType());
+		D_ASSERT(data.shredding_state != VariantStatsShreddingState::INCONSISTENT);
+		data.shredding_state = VariantStatsShreddingState::SHREDDED;
+	}
+	stats.child_stats[1].Copy(new_stats);
+}
+
+void VariantStats::SetShreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats) {
+	AssertVariant(stats);
+	D_ASSERT(new_stats);
+	SetShreddedStats(stats, *new_stats);
+}
+
+//===--------------------------------------------------------------------===//
+// (De)Serialization
+//===--------------------------------------------------------------------===//
+
+void VariantStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
+	auto &data = GetDataUnsafe(stats);
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(stats);
+
+	serializer.WriteProperty(200, "shredding_state", data.shredding_state);
+
+	serializer.WriteProperty(225, "unshredded_stats", unshredded_stats);
+	if (IsShredded(stats)) {
+		auto &shredded_stats = VariantStats::GetShreddedStats(stats);
+		serializer.WriteProperty(230, "shredded_type", shredded_stats.type);
+		serializer.WriteProperty(235, "shredded_stats", shredded_stats);
+	}
+}
+
+void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
+	auto &type = base.GetType();
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
+	auto &data = GetDataUnsafe(base);
+
+	auto unshredded_type = VariantShredding::GetUnshreddedType();
+	data.shredding_state = deserializer.ReadProperty<VariantStatsShreddingState>(200, "shredding_state");
+
+	{
+		//! Read the 'unshredded_stats' child
+		deserializer.Set<const LogicalType &>(unshredded_type);
+		auto stat = deserializer.ReadProperty<BaseStatistics>(225, "unshredded_stats");
+		base.child_stats[0].Copy(stat);
+		deserializer.Unset<LogicalType>();
+	}
+
+	if (!IsShredded(base)) {
+		return;
+	}
+	//! Read the type of the 'shredded_stats'
+	auto shredded_type = deserializer.ReadProperty<LogicalType>(230, "shredded_type");
+
+	{
+		//! Finally read the 'shredded_stats' themselves
+		deserializer.Set<const LogicalType &>(shredded_type);
+		auto stat = deserializer.ReadProperty<BaseStatistics>(235, "shredded_stats");
+		if (base.child_stats[1].type.id() == LogicalTypeId::INVALID) {
+			base.child_stats[1] = BaseStatistics::CreateUnknown(shredded_type);
+		}
+		base.child_stats[1].Copy(stat);
+		deserializer.Unset<LogicalType>();
+	}
+}
+
+static string ToStringInternal(const BaseStatistics &stats) {
 	string result;
-	result = StringUtil::Format("is_shredded: %s", data.is_shredded ? "true" : "false");
-	if (data.is_shredded) {
+	result = StringUtil::Format("fully_shredded: %s", VariantShreddedStats::IsFullyShredded(stats) ? "true" : "false");
+
+	auto &typed_value = StructStats::GetChildStats(stats, 1);
+	auto type_id = typed_value.GetType().id();
+	if (type_id == LogicalTypeId::LIST) {
+		result += ", child: ";
+		auto &child_stats = ListStats::GetChildStats(typed_value);
+		result += ToStringInternal(child_stats);
+	} else if (type_id == LogicalTypeId::STRUCT) {
+		result += ", children: {";
+		auto &fields = StructType::GetChildTypes(typed_value.GetType());
+		for (idx_t i = 0; i < fields.size(); i++) {
+			if (i) {
+				result += ", ";
+			}
+			auto &child_stats = StructStats::GetChildStats(typed_value, i);
+			result += StringUtil::Format("%s: %s", fields[i].first, ToStringInternal(child_stats));
+		}
+		result += "}";
+	}
+	return result;
+}
+
+string VariantStats::ToString(const BaseStatistics &stats) {
+	string result;
+	bool is_shredded = IsShredded(stats);
+	auto &data = GetDataUnsafe(stats);
+	result = StringUtil::Format("shredding_state: %s", EnumUtil::ToString(data.shredding_state));
+	if (is_shredded) {
 		result += ", shredding: {";
 		result += StringUtil::Format("typed_value_type: %s, ", ToStructuredType(stats.child_stats[1].type).ToString());
-		result += StringUtil::Format("stats:%s", stats.child_stats[1].ToString());
+		result += StringUtil::Format("stats: {%s}", ToStringInternal(stats.child_stats[1]));
 		result += "}";
 	}
 	return result;
@@ -288,6 +391,7 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 		for (idx_t i = 0; i < new_child_stats.size(); i++) {
 			StructStats::SetChildStats(new_typed_value, i, new_child_stats[i]);
 		}
+		new_typed_value.CombineValidity(stats_typed_value, other_typed_value);
 		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
 		return true;
 	} else if (stats_typed_value_type.id() == LogicalTypeId::LIST) {
@@ -304,6 +408,7 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 			return false;
 		}
 		auto new_typed_value = BaseStatistics::CreateEmpty(LogicalType::LIST(new_child_stats.type));
+		new_typed_value.CombineValidity(stats_typed_value, other_typed_value);
 		ListStats::SetChildStats(new_typed_value, new_child_stats.ToUnique());
 		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
 		return true;
@@ -328,30 +433,76 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &data = GetDataUnsafe(stats);
 	auto &other_data = GetDataUnsafe(other);
 
-	if (other_data.is_shredded) {
-		if (!data.is_shredded) {
+	const auto other_shredding_state = other_data.shredding_state;
+	const auto shredding_state = data.shredding_state;
+
+	if (other_shredding_state == VariantStatsShreddingState::UNINITIALIZED) {
+		//! No need to merge
+		return;
+	}
+
+	switch (shredding_state) {
+	case VariantStatsShreddingState::INCONSISTENT: {
+		//! INCONSISTENT + ANY -> INCONSISTENT
+		return;
+	}
+	case VariantStatsShreddingState::UNINITIALIZED: {
+		switch (other_shredding_state) {
+		case VariantStatsShreddingState::SHREDDED:
 			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
 			stats.child_stats[1].Copy(other.child_stats[1]);
-			data.is_shredded = true;
-		} else {
+			break;
+		default:
+			break;
+		}
+		//! UNINITIALIZED + ANY -> ANY
+		data.shredding_state = other_shredding_state;
+		break;
+	}
+	case VariantStatsShreddingState::NOT_SHREDDED: {
+		if (other_shredding_state == VariantStatsShreddingState::NOT_SHREDDED) {
+			return;
+		}
+		//! NOT_SHREDDED + !NOT_SHREDDED -> INCONSISTENT
+		data.shredding_state = VariantStatsShreddingState::INCONSISTENT;
+		stats.child_stats[1].type = LogicalType::INVALID;
+		break;
+	}
+	case VariantStatsShreddingState::SHREDDED: {
+		switch (other_shredding_state) {
+		case VariantStatsShreddingState::SHREDDED: {
 			BaseStatistics merged_shredding_stats;
 			if (!MergeShredding(stats.child_stats[1], other.child_stats[1], merged_shredding_stats)) {
-				data.is_shredded = false;
+				//! SHREDDED(T1) + SHREDDED(T2) -> INCONSISTENT
+				data.shredding_state = VariantStatsShreddingState::INCONSISTENT;
+				stats.child_stats[1].type = LogicalType::INVALID;
 			} else {
+				//! SHREDDED(T1) + SHREDDED(T1) -> SHREDDED
 				stats.child_stats[1] = BaseStatistics::CreateUnknown(merged_shredding_stats.GetType());
 				stats.child_stats[1].Copy(merged_shredding_stats);
 			}
+			break;
 		}
-	} else {
-		stats.child_stats[0].Merge(other.child_stats[0]);
+		default:
+			//! SHREDDED + !SHREDDED -> INCONSISTENT
+			data.shredding_state = VariantStatsShreddingState::INCONSISTENT;
+			stats.child_stats[1].type = LogicalType::INVALID;
+			break;
+		}
+		break;
+	}
 	}
 }
 
 void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &other_data = VariantStats::GetDataUnsafe(other);
+	auto &data = VariantStats::GetDataUnsafe(stats);
+	(void)data;
 
+	//! This is ensured by the CopyBase method of BaseStatistics
+	D_ASSERT(data.shredding_state == other_data.shredding_state);
 	stats.child_stats[0].Copy(other.child_stats[0]);
-	if (other_data.is_shredded) {
+	if (IsShredded(other)) {
 		stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
 		stats.child_stats[1].Copy(other.child_stats[1]);
 	} else {

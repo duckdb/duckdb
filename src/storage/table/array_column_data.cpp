@@ -241,15 +241,15 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                               idx_t result_idx) {
+void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                               row_t row_id, Vector &result, idx_t result_idx) {
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());
 	}
 
 	// Fetch validity
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetEntry(result);
@@ -268,9 +268,9 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 
-void ArrayColumnData::CommitDropColumn() {
-	validity->CommitDropColumn();
-	child_column->CommitDropColumn();
+void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	validity->VisitBlockIds(visitor);
+	child_column->VisitBlockIds(visitor);
 }
 
 void ArrayColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {

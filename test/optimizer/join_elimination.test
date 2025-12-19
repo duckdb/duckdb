@@ -227,3 +227,20 @@ physical_plan	<!REGEX>:.*JOIN.*
 
 statement ok
 select b.* from b left join (select distinct a.ida from a ) as a on a.ida=b.idb union all select b.*  from b left join (select distinct a.ida from a ) as a on a.ida=b.idb;
+
+# we cannot use distinct statistics from outer child
+statement ok
+select a.ida from (select ida from a group by ida) as a left join b on ida < idb;
+
+query II
+explain select a.ida from (select ida from a group by ida) as a left join b on ida < idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+statement ok
+select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
+
+query II
+explain select a.ida from b right join (select ida from a group by ida) as a on ida < idb;
+----
+physical_plan	<REGEX>:.*JOIN.*
