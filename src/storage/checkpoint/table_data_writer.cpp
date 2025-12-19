@@ -116,7 +116,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		metadata_manager.ClearModifiedBlocks(existing_pointers);
 
 		// verify that existing_pointers indeed corresponds to the metadata blocks
-		if (debug_verify_blocks || true) {
+		if (debug_verify_blocks) {
 			vector<MetaBlockPointer> read_pointers;
 			MetadataReader reader(metadata_manager, pointer, read_pointers);
 			auto bound_info = Binder::BindCreateTableCheckpoint(table.GetInfo(), table.schema);
