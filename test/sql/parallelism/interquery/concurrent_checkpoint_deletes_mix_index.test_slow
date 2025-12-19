@@ -26,7 +26,7 @@ statement ok
 CREATE TABLE concurrent_checkpoint_wal.integers(i INTEGER PRIMARY KEY)
 
 # before starting the loop insert the data for the first 10 threads
-loop threadid 0 10
+loop threadid 0 11
 
 loop x 0 10
 

@@ -584,18 +584,19 @@ idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, opti
 
 	idx_t delete_count = 0;
 	for (idx_t i = 0; i < row_count; i++) {
-		if (keys[i].Empty()) {
-			continue;
+		bool deleted = false;
+		if (!keys[i].Empty()) {
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			deleted = ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		}
-		D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
-		auto deleted = ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
 		if (deleted) {
 			if (deleted_sel) {
 				deleted_sel->set_index(delete_count, i);
 			}
 			delete_count++;
 		} else if (non_deleted_sel) {
-			non_deleted_sel->set_index(i - delete_count, i);
+			idx_t non_delete_count = i - delete_count;
+			non_deleted_sel->set_index(non_delete_count, i);
 		}
 	}
 
@@ -785,6 +786,9 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete
 		for (auto &index : *delete_index_info.delete_indexes) {
 			auto &delete_art = index.get().Cast<ART>();
 			auto deleted_leaf = ARTOperator::Lookup(delete_art, delete_art.tree, key, 0);
+			if (!deleted_leaf) {
+				continue;
+			}
 			// All leaves in the delete ART are inlined.
 			if (deleted_leaf->GetType() != NType::LEAF_INLINED) {
 				throw InternalException("Non-inlined leaf?");
