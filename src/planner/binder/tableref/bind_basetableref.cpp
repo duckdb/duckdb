@@ -101,8 +101,14 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	}
 	auto default_schema = catalog.GetDefaultSchema();
 	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog.GetName(), default_schema);
+		view_search_path.emplace_back(catalog_name, default_schema);
 	}
+	catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
+		if (schema.name == default_schema) {
+			return;
+		}
+		view_search_path.emplace_back(catalog_name, schema.name);
+	});
 	return view_search_path;
 }
 
