@@ -425,9 +425,34 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);
-	if (aggregates.size() != ref.bound_aggregate_names.size()) {
-		throw InternalException("Pivot aggregate count mismatch (expected %llu, found %llu)",
-		                        ref.bound_aggregate_names.size(), aggregates.size());
+
+	if (aggregates.size() < ref.bound_aggregate_names.size()) {
+		vector<string> unique_names;
+		unordered_set<string> seen;
+		for (auto &name : ref.bound_aggregate_names) {
+			if (seen.find(name) == seen.end()) {
+				unique_names.push_back(name);
+				seen.insert(name);
+			}
+		}
+
+		if (unique_names.size() != aggregates.size()) {
+			throw InternalException("Pivot aggregate mismatch: %llu unique names, %llu aggregates",
+				unique_names.size(), aggregates.size());
+		}
+
+		unordered_map<string, idx_t> name_to_position;
+		for (idx_t i = 0; i < unique_names.size(); i++) {
+			name_to_position[unique_names[i]] = i;
+		}
+
+		vector<unique_ptr<Expression>> expanded_aggs;
+		for (auto &expected_name : ref.bound_aggregate_names) {
+			idx_t position = name_to_position[expected_name];
+			expanded_aggs.push_back(aggregates[position]->Copy());
+		}
+
+		result.bound_pivot.aggregates = std::move(expanded_aggs);
 	}
 
 	vector<string> child_names;
