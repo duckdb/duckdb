@@ -103,6 +103,8 @@ public:
 
 public:
 	virtual SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result);
+	virtual void RemoveRenderLimits() {
+	}
 	virtual void Analyze(RenderingQueryResult &result);
 	virtual void RenderHeader(PrintStream &out, ResultMetadata &result);
 	virtual void RenderRow(PrintStream &out, ResultMetadata &result, RowData &row);

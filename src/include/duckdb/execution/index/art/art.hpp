@@ -53,8 +53,7 @@ public:
 		return std::move(art);
 	}
 
-	//! Plan index construction.
-	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
+	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
 	Node tree = Node();
@@ -64,8 +63,6 @@ public:
 	bool owns_data;
 	//! True, if keys need a key length verification pass.
 	bool verify_max_key_len;
-	//! The number of bytes fitting in the prefix.
-	uint8_t prefix_count;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
@@ -130,7 +127,15 @@ public:
 	//! Returns string representation of the ART.
 	string ToString(IndexLock &l, bool display_ascii = false) override;
 
+	//! Returns the configured prefix byte capacity.
+	uint8_t PrefixCount() const {
+		return prefix_count;
+	}
+
 private:
+	//! The number of bytes fitting in the prefix.
+	uint8_t prefix_count;
+
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
