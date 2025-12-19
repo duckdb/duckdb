@@ -40,3 +40,36 @@ SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY d
 {storage_version=v1.4.0+}
 {storage_version=v1.0.0+}
 
+# We create a new database in most recent duckdb version
+statement ok
+ATTACH '{DATA_DIR}/storage/recent_storage.db' as db;
+
+statement ok
+USE db;
+
+# the default storage version is lower then the most recent storage version
+query I
+SELECT tags FROM duckdb_databases() WHERE database_name='db';
+----
+{storage_version=v1.0.0+}
+
+statement ok
+ATTACH 'random.db' as random;
+
+statement ok
+USE random;
+
+statement ok
+DETACH db;
+
+# We bump the storage version now explicitly
+statement ok
+ATTACH '{DATA_DIR}/storage/recent_storage.db' as db (STORAGE_VERSION 'v1.4.0');
+
+statement ok
+USE db;
+
+query I
+SELECT tags FROM duckdb_databases() WHERE database_name='db';
+----
+{storage_version=v1.4.0+}
