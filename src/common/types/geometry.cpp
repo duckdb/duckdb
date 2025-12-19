@@ -1050,8 +1050,7 @@ static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent
 #if DUCKDB_IS_BIG_ENDIAN
 		auto vert_ofs = vert_idx * sizeof(VERTEX_TYPE);
 		for (idx_t i = 0; i < sizeof(VERTEX_TYPE) / sizeof(double); ++i) {
-			auto le_value = Load<double>(ptr + vert_ofs + i * sizeof(double));
-			be_buffer[i] = BSwapIfBE(le_value);
+			be_buffer[i] = LoadLE<double>(ptr + vert_ofs + i * sizeof(double));
 		}
 		VERTEX_TYPE vertex = Load<VERTEX_TYPE>(be_ptr);
 #else

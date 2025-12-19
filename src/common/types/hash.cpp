@@ -84,7 +84,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 	// Hash/combine in blocks of 8 bytes
 	const auto remainder = len & 7U;
 	for (const auto end = ptr + len - remainder; ptr != end; ptr += 8U) {
-		h ^= BSwapIfBE(Load<hash_t>(ptr));
+		h ^= LoadLE<hash_t>(ptr);
 		h *= 0xd6e8feb86659fd93U;
 	}
 
@@ -93,7 +93,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 			D_ASSERT(len >= 8);
 			// Load remaining (<8) bytes (with a Load instead of a memcpy)
 			const auto inv_rem = 8U - remainder;
-			const auto hr = BSwapIfBE(Load<hash_t>(ptr - inv_rem)) >> (inv_rem * 8U);
+			const auto hr = LoadLE<hash_t>(ptr - inv_rem) >> (inv_rem * 8U);
 
 			h ^= hr;
 			h *= 0xd6e8feb86659fd93U;
@@ -123,7 +123,7 @@ hash_t Hash(string_t val) {
 
 		// Hash/combine the first 8-byte block
 		if (!val.Empty()) {
-			h ^= BSwapIfBE(Load<hash_t>(const_data_ptr_cast(val.GetPrefix())));
+			h ^= LoadLE<hash_t>(const_data_ptr_cast(val.GetPrefix()));
 			h *= 0xd6e8feb86659fd93U;
 		}
 
