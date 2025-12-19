@@ -747,6 +747,18 @@ private:
 	                                                                 optional_ptr<ParseResult> parse_result);
 
 	static WindowFrame TransformFrameClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformFraming(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<WindowBoundaryExpression> TransformFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<WindowBoundaryExpression> TransformBetweenFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<WindowBoundaryExpression> TransformSingleFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	static WindowBoundaryExpression TransformFrameUnbounded(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameCurrentRow(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	static bool TransformPrecedingOrFollowing(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 

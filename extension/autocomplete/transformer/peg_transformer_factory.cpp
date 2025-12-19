@@ -416,6 +416,16 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformWindowFrameContentsParens);
 	REGISTER_TRANSFORM(TransformWindowFrameNameContentsParens);
 	REGISTER_TRANSFORM(TransformWindowFrameContents);
+	REGISTER_TRANSFORM(TransformFraming);
+	REGISTER_TRANSFORM(TransformFrameExtent);
+	REGISTER_TRANSFORM(TransformBetweenFrameExtent);
+	REGISTER_TRANSFORM(TransformSingleFrameExtent);
+	REGISTER_TRANSFORM(TransformFrameBound);
+	REGISTER_TRANSFORM(TransformFrameUnbounded);
+	REGISTER_TRANSFORM(TransformFrameCurrentRow);
+	REGISTER_TRANSFORM(TransformFrameExpression);
+	REGISTER_TRANSFORM(TransformPrecedingOrFollowing);
+
 	REGISTER_TRANSFORM(TransformFrameClause);
 	REGISTER_TRANSFORM(TransformWindowExcludeClause);
 	REGISTER_TRANSFORM(TransformWindowExcludeElement);

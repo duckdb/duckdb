@@ -12,4 +12,9 @@ struct WindowFrame {
 	unique_ptr<ParsedExpression> end_expr;
 };
 
+struct WindowBoundaryExpression {
+	WindowBoundary boundary;
+	unique_ptr<ParsedExpression> expr;
+};
+
 } // namespace duckdb
