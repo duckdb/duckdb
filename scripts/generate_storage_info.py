@@ -31,6 +31,23 @@ def generate_storage_enum(storage_versions):
     return "\n".join(result)
 
 
+def generate_serialization_enum(serialization_versions):
+    result = []
+    result.append("enum class SerializationVersionDeprecated : uint64_t {")
+    current = ""
+    for version_name, serialization_version in serialization_versions.items():
+        if version_name == 'latest':
+            continue
+        result.append(f"    {to_enum_name(version_name)} = {serialization_version},")
+        current = serialization_version
+
+    latest = "LATEST"
+    result.append(f"    {to_enum_name(latest)} = {current},")
+    result.append("    INVALID = 0")
+    result.append("};")
+    return "\n".join(result)
+
+
 def generate_storage_array(storage_versions):
     result = []
     result.append("static const StorageVersionInfo storage_version_info[] = {")
@@ -80,9 +97,13 @@ def main():
         version_map = json.load(json_file)
 
     storage_values = version_map['storage']['values']
+    serialization_values = version_map['serialization']['values']
 
     enum_code = generate_storage_enum(storage_values)
     update_file(STORAGE_ENUM_PATH, "ENUM", enum_code)
+
+    enum_code_serialization = generate_serialization_enum(serialization_values)
+    update_file(STORAGE_ENUM_PATH, "SER_ENUM", enum_code_serialization)
 
     array_code = generate_storage_array(storage_values)
     update_file(STORAGE_INFO_PATH, "STORAGE_ARRAY", array_code)

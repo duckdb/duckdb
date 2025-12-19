@@ -99,7 +99,6 @@ constexpr uint64_t StorageVersionInfo::GetStorageVersionDefault() {
 	return GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO);
 }
 
-
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
 	// original input here was a Serialization_version
 	if (storage_version < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
