@@ -1253,7 +1253,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			}
 		}
 		optional_ptr<BoundIndex> append_index = bound_index;
-		optional_ptr<BoundIndex> lookup_index;
+		optional_ptr<BoundIndex> lookup_index, lookup_delete_index;
 		// check if there's an on-going checkpoint
 		if (active_checkpoint.IsValid() && bound_index.RequiresTransactionality()) {
 			// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main
@@ -1270,6 +1270,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 				if (bound_index.IsUnique()) {
 					// before appending we still need to look-up in the main index to verify there are no conflicts
 					lookup_index = bound_index;
+					lookup_delete_index = delete_index;
 				}
 				append_index = entry.added_data_during_checkpoint;
 			}
@@ -1279,8 +1280,14 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 			if (lookup_index) {
 				// if there's a look-up index - first verify we can append to that index before actually appending to
 				// the main index
-				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, entry.removed_data_during_checkpoint.get());
-				lookup_index->VerifyAppend(table_chunk, index_append_info, nullptr);
+				IndexAppendInfo lookup_append_info;
+				if (lookup_delete_index) {
+					lookup_append_info.delete_indexes.push_back(*lookup_delete_index);
+				}
+				if (entry.removed_data_during_checkpoint) {
+					lookup_append_info.delete_indexes.push_back(*entry.removed_data_during_checkpoint);
+				}
+				lookup_index->VerifyAppend(table_chunk, lookup_append_info, nullptr);
 			}
 
 			// Append the mock chunk containing empty columns for non-key columns.

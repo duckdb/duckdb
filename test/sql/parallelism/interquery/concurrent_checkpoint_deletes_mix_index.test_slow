@@ -46,12 +46,28 @@ onlyif threadid>10
 statement ok
 INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100);
 
-# delete the data
+# transaction-local: we can delete and re-insert the data
+onlyif threadid<>10
+statement ok
+BEGIN
+
 onlyif threadid<>10
 statement ok
 DELETE FROM concurrent_checkpoint_wal.integers WHERE i >= (${x} * 2000) + ${threadid} * 100 AND i < (${x} * 2000) + (${threadid} + 1) * 100 AND i%4=0
 
-# we can re-insert a part of the rows
+onlyif threadid<>10
+statement ok
+INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100) t(i) WHERE i%4=0;
+
+onlyif threadid<>10
+statement ok
+COMMIT
+
+# now with commits: we can delete + re-insert the data
+onlyif threadid<>10
+statement ok
+DELETE FROM concurrent_checkpoint_wal.integers WHERE i >= (${x} * 2000) + ${threadid} * 100 AND i < (${x} * 2000) + (${threadid} + 1) * 100 AND i%4=0
+
 onlyif threadid<>10
 statement ok
 INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range((${x} * 2000) + ${threadid} * 100, (${x} * 2000) + (${threadid} + 1) * 100) t(i) WHERE i%4=0;

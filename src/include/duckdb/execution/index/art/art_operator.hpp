@@ -341,32 +341,30 @@ private:
 			return ARTConflictType::NO_CONFLICT;
 		}
 
-		if (!delete_index_info.delete_indexes) {
-			if (append_mode == IndexAppendMode::IGNORE_DUPLICATES) {
+		if (delete_index_info.delete_indexes) {
+			// Lookup in the delete_art.
+			for (auto &delete_index : *delete_index_info.delete_indexes) {
+				auto &delete_art = delete_index.get().Cast<ART>();
+				auto delete_leaf = Lookup(delete_art, delete_art.tree, key, 0);
+				if (!delete_leaf) {
+					continue;
+				}
+
+				// The row ID has changed.
+				// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
+				D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
+				auto deleted_row_id = delete_leaf->GetRowId();
+				auto this_row_id = node.GetRowId();
+				if (deleted_row_id != this_row_id) {
+					continue;
+				}
+
+				// The deleted key and its row ID match the current key and its row ID.
+				Leaf::MergeInlined(arena, art, node, row_id_node, status, depth);
 				return ARTConflictType::NO_CONFLICT;
 			}
-			return ARTConflictType::CONSTRAINT;
 		}
-
-		// Lookup in the delete_art.
-		for (auto &delete_index : *delete_index_info.delete_indexes) {
-			auto &delete_art = delete_index.get().Cast<ART>();
-			auto delete_leaf = Lookup(delete_art, delete_art.tree, key, 0);
-			if (!delete_leaf) {
-				continue;
-			}
-
-			// The row ID has changed.
-			// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
-			D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-			auto deleted_row_id = delete_leaf->GetRowId();
-			auto this_row_id = node.GetRowId();
-			if (deleted_row_id != this_row_id) {
-				continue;
-			}
-
-			// The deleted key and its row ID match the current key and its row ID.
-			Leaf::MergeInlined(arena, art, node, row_id_node, status, depth);
+		if (append_mode == IndexAppendMode::IGNORE_DUPLICATES) {
 			return ARTConflictType::NO_CONFLICT;
 		}
 		return ARTConflictType::CONSTRAINT;
