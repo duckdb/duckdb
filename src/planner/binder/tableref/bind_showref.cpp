@@ -156,6 +156,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	string sql;
 	if (lname == "\"databases\"") {
 		sql = PragmaShowDatabases();
+	} else if (lname == "\"schemas\"") {
+		sql = PragmaShowSchemas();
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
 	} else if (ref.show_type == ShowType::SHOW_FROM) {
