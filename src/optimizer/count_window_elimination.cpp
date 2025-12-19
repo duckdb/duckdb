@@ -1,6 +1,6 @@
 #include "duckdb/optimizer/count_window_elimination.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -22,7 +22,7 @@ namespace duckdb {
 
 class CountWindowTableRebinder : public LogicalOperatorVisitor {
 public:
-	CountWindowTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
+	explicit CountWindowTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
 	unordered_map<idx_t, idx_t> table_map;
@@ -83,7 +83,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::Optimize(unique_ptr<Logical
 }
 
 unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
-                                                                     ColumnBindingReplacer &replacer) {
+                                                                      ColumnBindingReplacer &replacer) {
 	if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 		auto &filter = op->Cast<LogicalFilter>();
 		if (filter.expressions.size() == 1 && filter.children.size() == 1 &&
