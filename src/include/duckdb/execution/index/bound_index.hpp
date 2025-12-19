@@ -117,7 +117,8 @@ public:
 	//! Returns the amount of rows successfully deleted from the index.
 	//! If either deleted_sel or non_deleted_sel are provided the exact rows that were (not) deleted are written there
 	virtual idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
-	                        optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel);
+	                        optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                        optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Throws an error if not all rows are deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers);

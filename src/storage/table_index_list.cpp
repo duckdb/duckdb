@@ -216,19 +216,17 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	auto &index = *entry->index;
 	lock_guard<mutex> guard(entry->lock);
 	D_ASSERT(index.IsBound());
-	optional_ptr<BoundIndex> delete_index;
+	IndexAppendInfo index_append_info;
 	if (storage) {
-		delete_index = storage->delete_indexes.Find(index.GetIndexName());
+		auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
+		if (delete_index) {
+			index_append_info.delete_indexes.push_back(*delete_index);
+		}
 	}
-	if (!delete_index) {
-		delete_index = entry->removed_data_during_checkpoint.get();
-	} else if (entry->removed_data_during_checkpoint.get()) {
-		throw InternalException("TableIndexList::VerifyForeignKey - transaction-local deletes AND deletes during "
-		                        "checkpoint not handled yet");
+	if (entry->removed_data_during_checkpoint) {
+		index_append_info.delete_indexes.push_back(*entry->removed_data_during_checkpoint);
 	}
-	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 
-	lock_guard<mutex> entry_lock(entry->lock);
 	auto &main_index = index.Cast<BoundIndex>();
 	main_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
 	if (entry->added_data_during_checkpoint) {

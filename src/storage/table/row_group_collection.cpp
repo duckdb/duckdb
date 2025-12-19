@@ -913,8 +913,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 				// if we have an initial remove target, we first try to remove the chunk from there
 				IndexLock lock;
 				targets.initial_remove_target->InitializeLock(lock);
-				idx_t delete_count =
-				    targets.initial_remove_target->TryDelete(lock, result_chunk, row_identifiers, nullptr, nullptr);
+				idx_t delete_count = targets.initial_remove_target->TryDelete(lock, result_chunk, row_identifiers);
 				if (delete_count > 0) {
 					if (delete_count != result_chunk.size()) {
 						// it should not be possible to get here

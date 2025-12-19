@@ -76,7 +76,7 @@ idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_id
 }
 
 void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
-	TryDelete(state, entries, row_identifiers, nullptr, nullptr);
+	TryDelete(state, entries, row_identifiers);
 	// FIXME: enable this
 	// if (deleted_rows != entries.size()) {
 	// 	throw InvalidInputException("Failure in BoundIndex::Delete - not all rows were deleted from the index. This
