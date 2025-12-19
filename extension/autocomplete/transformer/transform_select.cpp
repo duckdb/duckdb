@@ -953,9 +953,8 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer,
 																   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto offset = transformer.Transform<LimitPercentResult>(list_pr.Child<ListParseResult>(0));
 	LimitPercentResult limit;
-	LimitPercentResult offset;
-	transformer.TransformOptional<LimitPercentResult>(list_pr, 0, offset);
 	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, limit);
 	return VerifyLimitOffset(limit, offset);
 }
@@ -964,9 +963,8 @@ unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetLimitClause(PEG
 unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	LimitPercentResult limit;
+	auto limit = transformer.Transform<LimitPercentResult>(list_pr.Child<ListParseResult>(0));
 	LimitPercentResult offset;
-	transformer.TransformOptional<LimitPercentResult>(list_pr, 0, limit);
 	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, offset);
 	return VerifyLimitOffset(limit, offset);
 }
@@ -1182,39 +1180,26 @@ PEGTransformerFactory::TransformGroupingSetsClause(PEGTransformer &transformer,
 
 CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	CommonTableExpressionMap result;
+    auto &list_pr = parse_result->Cast<ListParseResult>();
+    bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
+    auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+    CommonTableExpressionMap result;
 
-	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
-		auto with_entry =
-		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
-		if (is_recursive) {
-			auto recursive_node = make_uniq<RecursiveCTENode>();
-			recursive_node->ctename = with_entry.first;
-			auto &query_node = with_entry.second->query->node;
-			if (query_node->type == QueryNodeType::SET_OPERATION_NODE) {
-				auto set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(query_node));
-				if (set_node->children.size() != 2) {
-					throw ParserException("Expected exactly two children to set operation node");
-				}
-				if (set_node->setop_type != SetOperationType::UNION) {
-					throw ParserException("Expected a union operation node");
-				}
-				recursive_node->left = std::move(set_node->children[0]);
-				recursive_node->right = std::move(set_node->children[1]);
-				recursive_node->aliases = with_entry.second->aliases;
-				recursive_node->union_all = set_node->setop_all;
-				with_entry.second->query->node = std::move(recursive_node);
-			} else {
-				throw NotImplementedException("Unexpected node encountered for recursive CTE: %s",
-				                              EnumUtil::ToString(query_node->type));
-			}
-		}
-		result.map.insert(with_entry.first, std::move(with_entry.second));
-	}
-	return result;
+    for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
+        auto with_entry =
+            transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
+
+        if (is_recursive) {
+            // Now safe to call on SELECT, VALUES, etc.
+            with_entry.second->query->node = ToRecursiveCTE(
+                std::move(with_entry.second->query->node),
+                with_entry.first,
+                with_entry.second->aliases
+            );
+        }
+        result.map.insert(with_entry.first, std::move(with_entry.second));
+    }
+    return result;
 }
 
 pair<string, unique_ptr<CommonTableExpressionInfo>>

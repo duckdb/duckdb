@@ -1021,9 +1021,9 @@ ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetLimitClause / LimitClause / OffsetClause
-LimitOffsetClause <- LimitClause OffsetClause
-OffsetLimitClause <- OffsetClause LimitClause
+LimitOffset <- LimitOffsetClause / OffsetLimitClause
+LimitOffsetClause <- LimitClause OffsetClause?
+OffsetLimitClause <- OffsetClause LimitClause?
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
