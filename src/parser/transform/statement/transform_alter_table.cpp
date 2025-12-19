@@ -47,6 +47,36 @@ void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement
 	multi_statement->statements.push_back(std::move(update_statement));
 }
 
+unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery::PGAlterTableStmt &stmt,
+                                                        AlterEntryData &data,
+                                                        unique_ptr<AlterInfo> info_with_null_placeholder,
+                                                        const string &column_name,
+                                                        unique_ptr<ParsedExpression> expression) {
+	auto multi_statement = make_uniq<MultiStatement>();
+	/* Here we do a workaround that consists of the following statements:
+	 *	 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	 *	 2. `UPDATE t SET u = <expression>;`
+	 *	 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	 *
+	 * This workaround exists because, when statements like this were executed:
+	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
+	 * the WAL replay would re-run the default expression, and with expressions such as RANDOM or CURRENT_TIMESTAMP, the
+	 * value would be different from that of the original run. By now doing an UPDATE, we force materialization of these
+	 * values, which makes WAL replays consistent.
+	 */
+
+	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
+
+	// 2. `UPDATE t SET u = <expression>;`
+	AddUpdateToMultiStatement(multi_statement, column_name, stmt.relation->relname, expression);
+
+	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	// Reinstate the original default expression.
+	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+	return multi_statement;
+}
+
 unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
 	D_ASSERT(stmt.relation);
 	if (stmt.cmds->length != 1) {
@@ -89,47 +119,19 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			}
 			column_entry.SetName(column_names.back());
 			if (column_names.size() == 1) {
-
 				// ADD COLUMN
 				if (!column_entry.HasDefaultValue() ||
 				    column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
-					result->info = make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
+					result->info =
+					    make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
 					break;
 				}
-				auto multi_statement = make_uniq<MultiStatement>();
-
-				/* Here we do a workaround that consists of the following statements:
-				 *	 1. ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
-				 *	 2. UPDATE t SET u = <expression>;
-				 *	 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
-				 * This workaround exists because when an `ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>` takes
-				 * place, the WAL replay would re-run the default expression, and with expressions such as RANDOM or
-				 * CURRENT_TIMESTAMP, the value would be different than that of the original run. By now doing an
-				 * UPDATE, we force materialization of these values, which makes WAL replays consistent.
-				 */
-
-				// Keep a copy of the original expression before we change it, to be able to reinstate it at the end.
-				auto original_expression = column_entry.DefaultValue().Copy();
-
-				// 1.  ALTER TABLE t ADD COLUMN u <type> DEFAULT NULL;
-				Value null_value = Value(nullptr);
-				auto null_expression = ConstantExpression(null_value);
 				auto null_column = column_entry.Copy();
-				null_column.SetDefaultValue(make_uniq<ConstantExpression>(null_expression));
-				// Here we're not writing the actual values yet, just inserting NULL as a placeholder.The actual values
-				// will be handled by the UPDATE statement that follows
-				AddToMultiStatement(multi_statement,
-				                    make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok));
+				null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+				return TransformAndMaterializeAlter(
+				    stmt, data, make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok),
+				    column_entry.GetName(), column_entry.DefaultValue().Copy());
 
-				// 2. UPDATE t SET u = <expression>;
-				AddUpdateToMultiStatement(multi_statement, column_entry.GetName(), stmt.relation->relname,
-				                          original_expression);
-
-				// 3. ALTER TABLE t ALTER u SET DEFAULT <expression>;
-				// Reinstate the original default expression.
-				AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_entry.GetName(),
-				                                                               std::move(original_expression)));
-				return multi_statement;
 			} else {
 				// ADD FIELD
 				column_names.pop_back();
