@@ -24,6 +24,7 @@ namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
+
 	// storage version < v1.4.0
 	if (!storage_version.IsValid() ||
 	    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
@@ -52,7 +53,6 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 			if (!storage_version_user_provided.empty()) {
 				if (encryption_version == target_encryption_version) {
 					// encryption version is explicitly given, but not compatible with < v1.5.0
-					if (!storage_version_user_provided.empty()) {
 						throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") is not compatible with "
 						                            "'debug_encryption_version = v1' (storage >= "
 						                            "v1.5.0)",
@@ -63,7 +63,6 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 					target_encryption_version = EncryptionTypes::V0_0;
 					break;
 				}
-			}
 		}
 
 		break;
