@@ -141,6 +141,8 @@ struct StorageVersionInfo {
 	static constexpr uint64_t GetStorageVersionValue(StorageVersion version) {
 		return static_cast<uint64_t>(version);
 	}
+
+	static constexpr uint64_t GetStorageVersionDefault();
 };
 
 //! The version number default, lower and upper bounds of the database storage format

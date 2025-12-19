@@ -223,15 +223,34 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
-	header.storage_compatibility = main_header.version_number;
-	// V1.3.0 is written with main header version number 65 (V1.2.0), even though it should be 66
-	if (main_header.version_number == StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
+	// TODO check for every version which ser number is related to which storage number.
+	// todo; for the main header, keep the default storage number
+	// V1.3.0 is written with main header version number 65 (V1.2.0), or lower, then check the old serialization numbers
+	// probably keep storage version in header as low as possible?
+	if (main_header.version_number <= StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
 		auto old_serialization_number = source.Read<idx_t>();
-		if (old_serialization_number == 5) {
+		//! TODO make this semantically correct constants
+		switch (old_serialization_number) {
+		case 1:
+		case 2:
+		case 3:
+			header.storage_compatibility = StorageVersionInfo::GetStorageVersionDefault();
+			break;
+		case 4:
+			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0);
+			break;
+		case 5:
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0);
-		} else if (old_serialization_number == 6) {
+			break;
+		case 6:
 			header.storage_compatibility = StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_4_0);
+			break;
+		default:
+			throw InvalidInputException("Old Serialization version not found!");
 		}
+	} 	else {
+		// from
+		header.storage_compatibility = main_header.version_number;
 	}
 
 	return header;

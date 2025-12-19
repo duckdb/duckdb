@@ -7,12 +7,12 @@ require vector_size 2048
 
 ## Files created via `duckdb file_name -c "CHECKPOINT;"
 
-statement ok
-ATTACH '{TEMP_DIR}/current_storage_version.db';
-
-statement ok
-CHECKPOINT;
-
+# statement ok
+# ATTACH '{TEMP_DIR}/current_storage_version.db';
+#
+# statement ok
+# CHECKPOINT;
+#
 # statement ok
 # ATTACH '{DATA_DIR}/storage/empty64.db' (READ_ONLY);
 #
@@ -21,14 +21,19 @@ CHECKPOINT;
 #
 # statement ok
 # ATTACH '{DATA_DIR}/storage/empty66.db' (READ_ONLY);
-#
-# statement ok
-# ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
+
+statement ok
+ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
+
+# query I
+# SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY database_name;
+# ----
+# {storage_version=v1.0.0+}
+# {storage_version=v1.2.0+}
+# {storage_version=v1.3.0+}
+# {storage_version=v1.4.0+}
 
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY database_name;
 ----
-{storage_version=v1.0.0+}
-{storage_version=v1.2.0+}
-{storage_version=v1.3.0+}
 {storage_version=v1.4.0+}
