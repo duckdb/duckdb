@@ -23,7 +23,6 @@ struct PragmaFunctions {
 
 string PragmaShowTables(const string &catalog = "", const string &schema = "");
 string PragmaShowTablesExpanded();
-string PragmaShowSchemas();
 string PragmaShowDatabases();
 string PragmaShowVariables();
 string PragmaShow(const string &table_name);
