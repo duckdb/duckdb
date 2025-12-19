@@ -616,6 +616,20 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (read_only || !load_complete) {
 		return;
 	}
+	unique_ptr<StorageLockKey> vacuum_lock;
+	if (options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
+		auto &transaction_manager = GetAttached().GetTransactionManager().Cast<DuckTransactionManager>();
+		vacuum_lock = transaction_manager.TryGetVacuumLock();
+		if (!vacuum_lock) {
+			if (options.type == CheckpointType::FULL_CHECKPOINT) {
+				options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+			} else {
+				throw TransactionException(
+				    "Cannot CHECKPOINT: vacuum-only checkpoint but we could not get the vacuum lock");
+			}
+		}
+	}
+
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}

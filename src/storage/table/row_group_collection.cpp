@@ -1183,7 +1183,9 @@ public:
 			total_append_count += append_counts[target_idx];
 		}
 		if (total_append_count != merge_rows) {
-			throw InternalException("Mismatch in row group count vs verify count in RowGroupCollection::Checkpoint");
+			throw InternalException(
+			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
+			    total_append_count);
 		}
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {

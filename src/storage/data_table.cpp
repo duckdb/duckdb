@@ -286,6 +286,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 		if (id.IsRowIdColumn()) {
 			auto &transaction = DuckTransaction::Get(context, db);
 			state.checkpoint_lock = transaction.SharedLockTable(*info);
+			break;
 		}
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -1419,6 +1420,7 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 
 unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	auto &transaction = DuckTransaction::Get(context, db);
 	// Bind all indexes.
 	info->BindIndexes(context);
 
@@ -1435,6 +1437,7 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 		result->verify_chunk.Initialize(Allocator::Get(context), types);
 		result->constraint_state = make_uniq<ConstraintState>(table, bound_constraints);
 	}
+	result->checkpoint_lock = transaction.SharedLockTable(*info);
 	return result;
 }
 

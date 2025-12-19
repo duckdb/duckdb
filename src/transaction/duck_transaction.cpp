@@ -292,29 +292,35 @@ void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
 }
 
 void DuckTransaction::SetModifications(DatabaseModificationType type) {
-	if (write_lock) {
-		// already have a write lock
-		return;
-	}
-	bool require_write_lock = false;
-	require_write_lock = require_write_lock || type.UpdateData();
-	require_write_lock = require_write_lock || type.AlterTable();
-	require_write_lock = require_write_lock || type.CreateCatalogEntry();
-	require_write_lock = require_write_lock || type.DropCatalogEntry();
-	require_write_lock = require_write_lock || type.Sequence();
-	require_write_lock = require_write_lock || type.CreateIndex();
+	if (!checkpoint_lock) {
+		bool require_write_lock = false;
+		require_write_lock = require_write_lock || type.UpdateData();
+		require_write_lock = require_write_lock || type.AlterTable();
+		require_write_lock = require_write_lock || type.CreateCatalogEntry();
+		require_write_lock = require_write_lock || type.DropCatalogEntry();
+		require_write_lock = require_write_lock || type.Sequence();
+		require_write_lock = require_write_lock || type.CreateIndex();
 
-	if (require_write_lock) {
-		// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
-		write_lock = GetTransactionManager().SharedCheckpointLock();
+		if (require_write_lock) {
+			// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
+			checkpoint_lock = GetTransactionManager().SharedCheckpointLock();
+		}
+	}
+	if (!vacuum_lock) {
+		bool require_vacuum_lock = false;
+		require_vacuum_lock = type.DeleteData();
+
+		if (require_vacuum_lock) {
+			vacuum_lock = GetTransactionManager().SharedVacuumLock();
+		}
 	}
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
-	if (!write_lock) {
+	if (!checkpoint_lock) {
 		return GetTransactionManager().TryGetCheckpointLock();
 	} else {
-		return GetTransactionManager().TryUpgradeCheckpointLock(*write_lock);
+		return GetTransactionManager().TryUpgradeCheckpointLock(*checkpoint_lock);
 	}
 }
 
