@@ -233,8 +233,8 @@ public:
 	idx_t batch_index;
 	//! The valid selection
 	SelectionVector valid_sel;
-	//! How to prefetch blocks
-	StorageBlockPrefetch block_prefetch;
+	//! How to prefetch blocks (initialized on the first prefetch)
+	unique_ptr<StorageBlockPrefetch> block_prefetch;
 
 	RandomEngine random;
 
