@@ -266,7 +266,7 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) const {
 	vector<string> schemas;
 	for (auto &path : paths) {
-		if (!path.schema.empty() && StringUtil::CIEquals(path.catalog, catalog)) {
+		if (path.schema != INVALID_SCHEMA && StringUtil::CIEquals(path.catalog, catalog)) {
 			schemas.push_back(path.schema);
 		}
 	}
