@@ -319,7 +319,7 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 		// If version number is explicitly given at attach, we set it.
 		return options.storage_version.GetIndex();
 	}
-	// we set to the newest version number
+	// we return the default version number
 	return VERSION_NUMBER;
 }
 

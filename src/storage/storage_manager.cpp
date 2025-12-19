@@ -464,7 +464,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 	}
 
-	if (row_group_size > 122880ULL && GetStorageVersionValueIdx() < 4) {
+	if (row_group_size > 122880ULL &&
+	    GetStorageVersionValueIdx() < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
 		                            "version when creating the database to enable larger row groups",
