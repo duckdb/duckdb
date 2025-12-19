@@ -1005,21 +1005,27 @@ ReturningClause <- 'RETURNING' TargetList
 
 CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
 SelectStatement <- SelectStatementInternal
-SelectStatementInternal <- SelectOrParens RepeatSetopSelect* ResultModifiers?
-RepeatSetopSelect <- SetOpClause SelectStatementInternal
-SetopClause <- SetopType DistinctOrAll? ByName?
+SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
+SelectSetOpChain <- SelectAtom (SetOpClause SelectAtom)*
+
+# Crucial: This must NOT include WithClause or ResultModifiers directly.
+# It can only be a raw SelectStatementType or a fully parenthesized statement.
+SelectAtom <- SelectParens / SelectStatementType
+
+SelectParens <- Parens(SelectStatementInternal)
+
+SetOpClause <- SetopType DistinctOrAll? ByName?
 SetopType <- SetopUnion / SetopExcept / SetopIntersect
 SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
 SetopIntersect <- 'INTERSECT'
 ByName <- 'BY' 'NAME'
-SelectOrParens <- BaseSelect / SelectParens
-SelectParens <- Parens(SelectStatementInternal)
 
-BaseSelect <- WithClause? SelectStatementType ResultModifiers?
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
-ResultModifiers <- OrderByClause? LimitOffsetClause?
-LimitOffsetClause <- LimitClause? OffsetClause?
+ResultModifiers <- OrderByClause? LimitOffset?
+LimitOffset <- LimitOffsetClause / OffsetLimitClause / LimitClause / OffsetClause
+LimitOffsetClause <- LimitClause OffsetClause
+OffsetLimitClause <- OffsetClause LimitClause
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)

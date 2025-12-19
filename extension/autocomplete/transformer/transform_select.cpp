@@ -24,16 +24,8 @@ unique_ptr<SelectStatement>
 PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
-	auto setop_select = list_pr.Child<OptionalParseResult>(1);
-	if (setop_select.HasResult()) {
-		auto setop_repeat = setop_select.optional_result->Cast<RepeatParseResult>();
-		for (auto setop : setop_repeat.children) {
-			auto setop_result = transformer.Transform<unique_ptr<SetOperationNode>>(setop);
-			setop_result->children.insert(setop_result->children.begin(), std::move(select_statement->node));
-			select_statement->node = std::move(setop_result);
-		}
-	}
+	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
+	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, select_statement->node->cte_map);
 	vector<unique_ptr<ResultModifier>> result_modifiers;
 	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
 	for (auto &result_modifier : result_modifiers) {
