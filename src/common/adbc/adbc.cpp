@@ -13,6 +13,8 @@
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
+#include <algorithm>
+#include <cstring>
 #include <stdlib.h>
 #include <string.h>
 
@@ -871,6 +873,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			out->release = nullptr;
 			out->get_last_error = nullptr;
 		}
+
+		if (rows_affected) {
+			*rows_affected = 0;
+		}
 		return ADBC_STATUS_OK;
 	}
 
@@ -998,7 +1004,9 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		SetError(error, "Missing query");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	if (strlen(query) == 0) {
+
+	auto query_len = strlen(query);
+	if (std::all_of(query, query + query_len, duckdb::StringUtil::CharacterIsSpace)) {
 		SetError(error, "No statements found");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
