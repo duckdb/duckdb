@@ -5,6 +5,7 @@
 # These files were created with vector-size 2048
 require vector_size 2048
 
+## TODO change the verisions
 ## Files created via `duckdb file_name -c "CHECKPOINT;"
 
 # statement ok
@@ -19,11 +20,11 @@ require vector_size 2048
 # statement ok
 # ATTACH '{DATA_DIR}/storage/empty65.db' (READ_ONLY);
 #
-# statement ok
-# ATTACH '{DATA_DIR}/storage/empty66.db' (READ_ONLY);
-
 statement ok
-ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
+ATTACH '{DATA_DIR}/storage/empty66.db' (READ_ONLY);
+
+# statement ok
+# ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
 
 # query I
 # SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY database_name;
