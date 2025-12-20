@@ -112,6 +112,10 @@ optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const Ba
 	AssertShreddedStats(stats);
 
 	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
+	if (typed_value_stats.GetType().id() != LogicalTypeId::STRUCT) {
+		//! Not shredded on an OBJECT, either directly shredded on a primitive type or on an ARRAY
+		return nullptr;
+	}
 
 	auto &child_types = StructType::GetChildTypes(typed_value_stats.GetType());
 	for (idx_t i = 0; i < child_types.size(); i++) {
@@ -566,16 +570,28 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 		return nullptr;
 	}
 	auto &child_stats = *res;
+
+	auto &typed_value_stats = StructStats::GetChildStats(child_stats, 1);
+	auto &last_index = index_iter.get();
+	auto &child_type = typed_value_stats.type;
+	if (!last_index.HasType() || last_index.GetType().id() == LogicalTypeId::VARIANT) {
+		//! Return the variant stats, not the 'typed_value' (non-variant) stats, since there's no cast pushed down
+
+		BaseStatistics copy = BaseStatistics::CreateUnknown(stats.type);
+		copy.Copy(stats);
+		copy.child_stats[1] = BaseStatistics::CreateUnknown(child_stats.GetType());
+		copy.child_stats[1].Copy(child_stats);
+		return copy.ToUnique();
+	}
 	if (!VariantShreddedStats::IsFullyShredded(child_stats)) {
 		//! Not all data is shredded, so there are values in the column that are not of the shredded type
 		return nullptr;
 	}
-	auto &typed_value_stats = StructStats::GetChildStats(child_stats, 1);
-	auto &last_index = index_iter.get();
-	auto &child_type = typed_value_stats.type;
-	if (last_index.HasType() && child_type != last_index.GetType()) {
+
+	auto &cast_type = last_index.GetType();
+	if (child_type != cast_type) {
 		//! FIXME: support try_cast
-		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, index.GetType());
+		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, cast_type);
 	}
 	return typed_value_stats.ToUnique();
 }
