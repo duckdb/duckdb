@@ -112,6 +112,7 @@ def filename_to_upper_camel(file):
     parts = name.split('_')  # ['column', 'name', 'keywords']
     return ''.join(p.capitalize() for p in parts)
 
+
 with open(os.path.join(statements_dir, "common.gram"), 'r') as f:
     contents += f.read() + "\n"
 
