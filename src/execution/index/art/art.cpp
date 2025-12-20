@@ -898,6 +898,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 }
 
 string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+	lock_guard<mutex> l(lock);
 	auto key_name = GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
 	return exception_msg;
