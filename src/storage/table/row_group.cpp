@@ -221,6 +221,13 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		// variant - column scan states are created later
 		// this is done because the internal shape of the VARIANT is different per rowgroup
 		scan_child_column.resize(2, true);
+		if (!storage_index.IsPushdownExtract()) {
+			return;
+		}
+		auto &scan_type = storage_index.GetScanType();
+		if (scan_type.id() != LogicalTypeId::VARIANT) {
+			PushDownCast(type, scan_type);
+		}
 		return;
 	}
 

@@ -233,12 +233,22 @@ NULL	NULL
 84	{'a': 84, 'b': NULL}
 NULL	{'a': NULL, 'b': false}
 
+onlyif type=struct
 query II
 SELECT base.s.nested_struct.a, base.s FROM ${source}
 ----
 42	{'name': {'v': Row 1, 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}
 NULL	NULL
 84	{'name': {'v': Row 3, 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
+
+onlyif type=variant
+query II
+SELECT base.s.nested_struct.a, variant_normalize(base.s) FROM ${source}
+----
+42	{'name': {'id': 1, 'v': Row 1}, 'nested_struct': {'a': 42, 'b': true}}
+NULL	NULL
+84	{'name': {'id': 3, 'v': Row 3}, 'nested_struct': {'a': 84, 'b': NULL}}
 NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
 
 query II

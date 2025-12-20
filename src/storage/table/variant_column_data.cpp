@@ -150,14 +150,6 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 		}
 		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
 	}
-
-	if (!state.storage_index.IsPushdownExtract()) {
-		return;
-	}
-	auto &child = state.storage_index.GetChildIndex(0);
-	if (!child.HasChildren() && child.HasType() && child.GetType().id() != LogicalTypeId::VARIANT) {
-		state.PushDownCast(type, child.GetType());
-	}
 }
 
 idx_t VariantColumnData::GetMaxEntry() {

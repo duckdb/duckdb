@@ -85,6 +85,13 @@ public:
 	bool HasType() const {
 		return type.id() != LogicalTypeId::INVALID;
 	}
+	const LogicalType &GetScanType() const {
+		D_ASSERT(HasType());
+		if (IsPushdownExtract()) {
+			return child_indexes[0].GetScanType();
+		}
+		return GetType();
+	}
 	const LogicalType &GetType() const {
 		return type;
 	}
