@@ -82,10 +82,9 @@ private:
 	                                                 BaseStatistics &stats);
 	bool PushdownShreddedFieldExtract(const StorageIndex &variant_extract, StorageIndex &out_struct_extract) const;
 	void CreateScanStates(ColumnScanState &state);
-	idx_t ScanWithCallback(
-	    ColumnScanState &state, Vector &result, idx_t target_count,
-	    std::function<idx_t(ColumnData &column, ColumnScanState &child_state, Vector &target_vector, idx_t count)>
-	        callback) const;
+	idx_t ScanWithCallback(ColumnScanState &state, Vector &result, idx_t target_count,
+	                       const std::function<idx_t(ColumnData &column, ColumnScanState &child_state,
+	                                                 Vector &target_vector, idx_t count)> &callback) const;
 	LogicalType GetShreddedType();
 };
 

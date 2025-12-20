@@ -3,6 +3,7 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 class BaseStatistics;

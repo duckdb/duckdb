@@ -10,6 +10,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -211,8 +212,8 @@ Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) const {
 
 idx_t VariantColumnData::ScanWithCallback(
     ColumnScanState &state, Vector &result, idx_t target_count,
-    std::function<idx_t(ColumnData &column, ColumnScanState &child_state, Vector &target_vector, idx_t count)> callback)
-    const {
+    const std::function<idx_t(ColumnData &column, ColumnScanState &child_state, Vector &target_vector, idx_t count)>
+        &callback) const {
 	if (state.storage_index.IsPushdownExtract()) {
 		if (IsShredded() && state.child_states[2].storage_index.IsPushdownExtract()) {
 			//! In the initialize we have verified that the field exists and the data is fully shredded (for this
