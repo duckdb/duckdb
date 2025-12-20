@@ -129,6 +129,9 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	const unordered_map<string, Value> &GetAttachOptions() const {
+		return attach_options;
+	}
 	string StoredPath() const;
 
 	static bool NameIsReserved(const string &name);
@@ -147,6 +150,7 @@ private:
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
+	unordered_map<string, Value> attach_options;
 };
 
 } // namespace duckdb
