@@ -64,10 +64,11 @@ void BoundIndex::CommitDrop() {
 	CommitDrop(index_lock);
 }
 
-void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
+idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
+                            optional_ptr<SelectionVector> non_deleted_sel) {
 	IndexLock state;
 	InitializeLock(state);
-	Delete(state, entries, row_identifiers);
+	return TryDelete(state, entries, row_identifiers, deleted_sel, non_deleted_sel);
 }
 
 idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
@@ -75,12 +76,18 @@ idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_id
 	throw InternalException("TryDelete not implemented");
 }
 
+void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
+	IndexLock state;
+	InitializeLock(state);
+	Delete(state, entries, row_identifiers);
+}
+
 void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
 	TryDelete(state, entries, row_identifiers);
 	// FIXME: enable this
 	// if (deleted_rows != entries.size()) {
-	// 	throw InvalidInputException("Failure in BoundIndex::Delete - not all rows were deleted from the index. This
-	// likely signifies a corrupt index.");
+	// 	throw InvalidInputException("Failed to delete all rows from index. Only deleted %d out of %d rows.\nChunk: %s",
+	// deleted_rows, entries.size(), entries.ToString());
 	// }
 }
 

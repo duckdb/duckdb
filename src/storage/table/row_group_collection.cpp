@@ -743,8 +743,8 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 struct IndexRemovalTargets {
 	optional_ptr<BoundIndex> append_target;
 	optional_ptr<BoundIndex> remove_target;
-	optional_ptr<BoundIndex> initial_remove_target;
-	optional_ptr<BoundIndex> initial_append_target;
+	optional_ptr<BoundIndex> conditional_remove_target;
+	optional_ptr<BoundIndex> conditional_append_target;
 };
 
 void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
@@ -757,30 +757,46 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType 
 		    main_index.CreateEmptyCopy("removed_data_during_checkpoint_", main_index.index_constraint_type);
 	}
 	if (removal_type == IndexRemovalType::MAIN_INDEX_ONLY || removal_type == IndexRemovalType::MAIN_INDEX) {
-		// removing from main index - add to "removed_data_during_checkpoint"
-		targets.append_target = entry.removed_data_during_checkpoint.get();
+		// removing from main index - but we cannot remove directly due to the concurrent checkpoint
+		// add removal to delta index
 		if (entry.added_data_during_checkpoint) {
 			// if we have also added data during this checkpoint - we might need to remove from there instead
 			// we FIRST try to remove from "added_data_during_checkpoint"
-			// any rows in there that we remove will be aded to "deleted_rows_in_use"
-			targets.initial_remove_target = entry.added_data_during_checkpoint.get();
+			// any rows that are not there we add to "removed_data_during_checkpoint"
+			targets.conditional_remove_target = entry.added_data_during_checkpoint.get();
+			targets.conditional_append_target = entry.removed_data_during_checkpoint.get();
+		} else {
+			// add removed rows to "removed_data_during_checkpoint"
+			targets.conditional_append_target = entry.removed_data_during_checkpoint.get();
+		}
+		if (removal_type == IndexRemovalType::MAIN_INDEX) {
+			// we also need to append to "deleted_rows_in_use"
 			if (!entry.deleted_rows_in_use) {
 				// create "deleted_rows_in_use" if it does not exist yet
 				entry.deleted_rows_in_use =
 				    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
 			}
-			targets.initial_append_target = entry.deleted_rows_in_use;
+			targets.append_target = entry.deleted_rows_in_use;
 		}
 		return;
 	}
 	if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY ||
 	    removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
-		targets.remove_target = entry.removed_data_during_checkpoint.get();
-		if (entry.added_data_during_checkpoint && entry.deleted_rows_in_use) {
-			// if we have also added data during this checkpoint - we might need to re-add back to there
-			// try to remove from "deleted_rows_in_use" - if that is succesful, re-add to "added_data_during_checkpoint"
-			targets.initial_remove_target = entry.deleted_rows_in_use.get();
-			targets.initial_append_target = entry.added_data_during_checkpoint.get();
+		// revert adding to main index
+		if (entry.added_data_during_checkpoint) {
+			// we have added data during this checkpoint as well, remove might have EITHER:
+			// (1) added to "removed_data_during_checkpoint"
+			// (2) removed data from "added_data_during_checkpoint"
+			// revert by first trying to remove from "removed_data_during_checkpoint"
+			// any rows that were not removed are re-added back to "added_data_during_checkpoint"
+			targets.conditional_remove_target = entry.removed_data_during_checkpoint.get();
+			targets.conditional_append_target = entry.added_data_during_checkpoint.get();
+		} else {
+			targets.conditional_remove_target = entry.removed_data_during_checkpoint.get();
+		}
+		if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
+			// we also need to remove from "deleted_rows_in_use"
+			targets.remove_target = entry.deleted_rows_in_use.get();
 		}
 	}
 }
@@ -909,11 +925,10 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			IndexRemovalTargets targets;
 			GetIndexRemovalTargets(entry, removal_type, targets, active_checkpoint);
 
-			if (targets.initial_remove_target) {
-				// if we have an initial remove target, we first try to remove the chunk from there
-				IndexLock lock;
-				targets.initial_remove_target->InitializeLock(lock);
-				idx_t delete_count = targets.initial_remove_target->TryDelete(lock, result_chunk, row_identifiers);
+			bool removal_succeeded = false;
+			if (targets.conditional_remove_target) {
+				// if we have an conditional remove target, we first try to remove the chunk from there
+				idx_t delete_count = targets.conditional_remove_target->TryDelete(result_chunk, row_identifiers);
 				if (delete_count > 0) {
 					if (delete_count != result_chunk.size()) {
 						// it should not be possible to get here
@@ -926,16 +941,16 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 						throw InternalException("RowGroupCollection::RemoveFromIndexes - partially deleted from the "
 						                        "initial removal target");
 					}
-					if (targets.initial_append_target) {
-						// for any rows that were deleted - append them to the initial append target
-						IndexAppendInfo append_info;
-						auto error = targets.initial_append_target->Append(result_chunk, row_identifiers, append_info);
-						if (error.HasError()) {
-							throw InternalException("Failed to append to %s: %s", targets.initial_append_target->name,
-							                        error.Message());
-						}
-					}
-					return false;
+					removal_succeeded = true;
+				}
+			}
+			if (targets.conditional_append_target && !removal_succeeded) {
+				// for any rows that were not removed - append them to the conditional append target instead
+				IndexAppendInfo append_info;
+				auto error = targets.conditional_append_target->Append(result_chunk, row_identifiers, append_info);
+				if (error.HasError()) {
+					throw InternalException("Failed to append to %s: %s", targets.conditional_append_target->name,
+					                        error.Message());
 				}
 			}
 			// perform the targeted append / removal

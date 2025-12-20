@@ -584,7 +584,7 @@ idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, opti
 
 	idx_t delete_count = 0;
 	for (idx_t i = 0; i < row_count; i++) {
-		bool deleted = false;
+		bool deleted = true;
 		if (!keys[i].Empty()) {
 			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
 			deleted = ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);

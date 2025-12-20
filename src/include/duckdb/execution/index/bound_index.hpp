@@ -119,6 +119,9 @@ public:
 	virtual idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
 	                        optional_ptr<SelectionVector> deleted_sel = nullptr,
 	                        optional_ptr<SelectionVector> non_deleted_sel = nullptr);
+	//! Obtains a lock and calls TryDelete while holding that lock
+	idx_t TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Throws an error if not all rows are deleted
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers);
