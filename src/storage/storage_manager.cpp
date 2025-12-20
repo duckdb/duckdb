@@ -624,8 +624,8 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			if (options.type == CheckpointType::FULL_CHECKPOINT) {
 				options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 			} else {
-				throw TransactionException(
-				    "Cannot CHECKPOINT: vacuum-only checkpoint but we could not get the vacuum lock");
+				// nothing to do
+				return;
 			}
 		}
 	}
