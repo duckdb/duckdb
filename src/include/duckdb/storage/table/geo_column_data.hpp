@@ -22,6 +22,10 @@ public:
 	//! The "shape" of this might differ depending on if we "shred" this column or not.
 	shared_ptr<ColumnData> base_column;
 
+	//! Shredding state of the column
+	GeometryType geom_type = GeometryType::INVALID;
+	VertexType vert_type = VertexType::XY;
+
 public:
 	idx_t GetMaxEntry() override;
 
@@ -67,10 +71,10 @@ public:
 	void Verify(RowGroup &parent) override;
 
 private:
-	LogicalType GetLayoutType() const;
-	void Specialize(Vector &source, Vector &target, idx_t count);
-	void Reassemble(Vector &source, Vector &target, idx_t count);
-	void InterpretStats(BaseStatistics &source, BaseStatistics &target);
+	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryType geom_type, VertexType vert_type);
+	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryType geom_type, VertexType vert_type);
+	static void InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
+	                           VertexType vert_type);
 };
 
 } // namespace duckdb

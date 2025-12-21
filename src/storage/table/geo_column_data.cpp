@@ -3,6 +3,9 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/vector_operations/generic_executor.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 
@@ -34,27 +37,8 @@ void GeoColumnData::InitializeChildScanStates(ColumnScanState &state) {
 	// Reset, inner layout might be different
 	state.child_states.clear();
 
-	// Validity
-	state.child_states.emplace_back(state.parent);
-	state.child_states[0].scan_options = state.scan_options;
-
-	if (base_column->type.id() == LogicalTypeId::GEOMETRY) {
-		// No need to reshape the child scan states
-		return;
-	}
-
-	// Initialize point XY sub columns
-
-	// X
-	state.child_states.emplace_back(state.parent);
-	state.child_states[1].Initialize(state.context, LogicalTypeId::DOUBLE, state.scan_options);
-
-	// Y
-	state.child_states.emplace_back(state.parent);
-	state.child_states[2].Initialize(state.context, LogicalTypeId::DOUBLE, state.scan_options);
-
-	// Scan both child columns
-	state.scan_child_column.resize(2, true);
+	// Initialize using the type of the base column
+	state.Initialize(state.context, base_column->type, state.scan_options);
 }
 
 void GeoColumnData::InitializeScan(ColumnScanState &state) {
@@ -84,7 +68,7 @@ idx_t GeoColumnData::Scan(TransactionData transaction, idx_t vector_index, Colum
 	const auto scan_count = base_column->Scan(transaction, vector_index, state, scan_chunk.data[0], target_count);
 
 	// Now reassemble
-	Reassemble(scan_chunk.data[0], result, scan_count);
+	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type);
 	return scan_count;
 }
 
@@ -105,7 +89,7 @@ idx_t GeoColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, V
 	const auto scan_count = base_column->ScanCommitted(vector_index, state, scan_chunk.data[0], target_count);
 
 	// Now reassemble
-	Reassemble(scan_chunk.data[0], result, scan_count);
+	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type);
 	return scan_count;
 }
 
@@ -188,6 +172,9 @@ public:
 	// The checkpoint state for the inner column.
 	unique_ptr<ColumnCheckpointState> inner_column_state;
 
+	GeometryType geom_type = GeometryType::INVALID;
+	VertexType vert_type = VertexType::XY;
+
 	shared_ptr<ColumnData> CreateEmptyColumnData() override {
 		auto new_column = make_shared_ptr<GeoColumnData>(
 		    original_column.GetBlockManager(), original_column.GetTableInfo(), original_column.column_index,
@@ -205,7 +192,10 @@ public:
 		auto new_inner = inner_column_state->GetFinalResult();
 		new_inner->SetParent(column_data);
 		column_data.base_column = std::move(new_inner);
-		;
+
+		// Pass on the shredding state too
+		column_data.geom_type = geom_type;
+		column_data.vert_type = vert_type;
 
 		return ColumnCheckpointState::GetFinalResult();
 	}
@@ -218,9 +208,12 @@ public:
 	PersistentColumnData ToPersistentData() override {
 		auto inner_data = inner_column_state->ToPersistentData();
 
-		// If this is a shredded column, record it in the peristent data!
-		if (inner_column->type.id() != LogicalTypeId::GEOMETRY) {
-			inner_data.shredded_type = inner_column->type;
+		// If this is a shredded column, record it in the persistent data!
+		if (geom_type != GeometryType::INVALID) {
+			auto extra_data = make_uniq<GeometryPersistentColumnData>();
+			extra_data->geom_type = geom_type;
+			extra_data->vert_type = vert_type;
+			inner_data.extra_data = std::move(extra_data);
 		}
 
 		return inner_data;
@@ -231,8 +224,7 @@ public:
 
 unique_ptr<ColumnCheckpointState> GeoColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                        PartialBlockManager &partial_block_manager) {
-	// return base_column->CreateCheckpointState(row_group, partial_block_manager);
-	throw NotImplementedException("GeoColumnData CreateCheckpointState is not implemented yet.");
+	return make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) {
@@ -246,16 +238,23 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	}
 
 	// Figure out if this segment can use an alternative type layout
-	auto layout_type = GetLayoutType();
+	auto new_geom_type = GeometryType::POINT;
+	auto new_vert_type = VertexType::XY;
+	auto &types = GeometryStats::GetTypes(this->stats->statistics);
 
-	if (layout_type.id() == LogicalTypeId::INVALID) {
+	auto has_mixed_type = !types.TryGetSingleType(new_geom_type, new_vert_type);
+	auto has_only_geometry_collection = new_geom_type == GeometryType::GEOMETRYCOLLECTION;
+	auto has_only_invalid = new_geom_type == GeometryType::INVALID;
+
+	if (has_mixed_type || has_only_geometry_collection || has_only_invalid) {
 		// Cant specialize, keep column
 		checkpoint_state->inner_column_state = base_column->Checkpoint(row_group, info);
 		return std::move(checkpoint_state);
 	}
 
-	auto new_column =
-	    CreateColumn(block_manager, this->info, base_column->column_index, layout_type, GetDataType(), this);
+	auto new_type = Geometry::GetVectorizedType(new_geom_type, new_vert_type);
+
+	auto new_column = CreateColumn(block_manager, this->info, base_column->column_index, new_type, GetDataType(), this);
 
 	// Setup scan from the old column
 	DataChunk scan_chunk;
@@ -285,19 +284,23 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		append_chunk.SetCardinality(to_scan);
 
 		// Make the split
-		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan);
+		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, new_geom_type, new_vert_type);
 
 		// Append into the new specialized column
-		// TODO: Keep this stats around, and merge into the actual stats
 		auto dummy_stats = BaseStatistics::CreateEmpty(new_column->GetType());
 		new_column->Append(dummy_stats, append_state, append_chunk.data[0], to_scan);
 
-		InterpretStats(dummy_stats, *checkpoint_state->global_stats);
+		// Merge the stats into the checkpoint state's global stats
+		InterpretStats(dummy_stats, *checkpoint_state->global_stats, new_geom_type, new_vert_type);
 	}
 
 	// Move then new column into our checkpoint state
 	checkpoint_state->inner_column = std::move(new_column);
 	checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+
+	// Also set the shredding state
+	checkpoint_state->geom_type = new_geom_type;
+	checkpoint_state->vert_type = new_vert_type;
 
 	return std::move(checkpoint_state);
 }
@@ -311,28 +314,36 @@ bool GeoColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData GeoColumnData::Serialize() {
-	// TODO: might want to write shredding state...
-	// If this is a shredded column, record it in the peristent data!
+	// Serialize the inner column
 	auto inner_data = base_column->Serialize();
-	if (base_column->type.id() != LogicalTypeId::GEOMETRY) {
-		inner_data.shredded_type = base_column->type;
+
+	// If this is a shredded column, record it in the persistent data!
+	if (geom_type != GeometryType::INVALID) {
+		auto extra_data = make_uniq<GeometryPersistentColumnData>();
+		extra_data->geom_type = geom_type;
+		extra_data->vert_type = vert_type;
+		inner_data.extra_data = std::move(extra_data);
 	}
+
 	return inner_data;
 }
 
 void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
-	// TODO: Check what we actually deserialized here,
-	// and make new base column data if it differs
-
-	// TODO: This is not a great way to detect shredded columns
-	if (column_data.child_columns.empty()) {
+	if (!column_data.extra_data) {
+		// No shredding, just initialize normally
 		base_column->InitializeColumn(column_data, target_stats);
 		count = base_column->count.load();
 		return;
 	}
 
+	auto &geom_data = column_data.extra_data->Cast<GeometryPersistentColumnData>();
+
+	// Set the shredding state
+	vert_type = geom_data.vert_type;
+	geom_type = geom_data.geom_type;
+
 	// Else, this is a shredded point
-	auto layout_type = LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
+	auto layout_type = geom_data.GetStorageType();
 	auto new_column =
 	    CreateColumn(block_manager, this->info, base_column->column_index, layout_type, GetDataType(), this);
 
@@ -342,7 +353,7 @@ void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStat
 	count = base_column->count.load();
 
 	// Interpret the stats
-	InterpretStats(dummy_stats, target_stats);
+	InterpretStats(dummy_stats, target_stats, geom_type, vert_type);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -365,112 +376,88 @@ void GeoColumnData::Verify(RowGroup &parent) {
 //----------------------------------------------------------------------------------------------------------------------
 // Specialize
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType GeoColumnData::GetLayoutType() const {
-	// Get the stats of this column
-	auto &stats = this->stats->statistics;
-	const auto &types = GeometryStats::GetTypes(stats);
-
-	if (types.HasOnly(GeometryType::POINT, VertexType::XY)) {
-		// Push POINT_XY type
-		return LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
-	}
-
-	return LogicalTypeId::INVALID;
+void GeoColumnData::Specialize(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+                               VertexType vert_type) {
+	Geometry::ToVectorizedFormat(source, target, count, geom_type, vert_type);
 }
 
-static void ShredPoints(Vector &source_vec, Vector &target_vec, idx_t count) {
-	auto &parts = StructVector::GetEntries(target_vec);
-	auto &x_vec = *parts[0];
-	auto &y_vec = *parts[1];
-	const auto x_data = FlatVector::GetData<double>(x_vec);
-	const auto y_data = FlatVector::GetData<double>(y_vec);
+void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+                               VertexType vert_type) {
+	Geometry::FromVectorizedFormat(source, target, count, geom_type, vert_type);
+}
 
-	// TODO: This is cheating and should be generalized:
-	UnifiedVectorFormat scan_uvu;
-	source_vec.ToUnifiedFormat(count, scan_uvu);
-	const auto scan_data = UnifiedVectorFormat::GetData<string_t>(scan_uvu);
-
-	for (idx_t res_idx = 0; res_idx < count; res_idx++) {
-		const auto row_idx = scan_uvu.sel->get_index(res_idx);
-
-		if (!scan_uvu.validity.RowIsValid(row_idx)) {
-			FlatVector::SetNull(target_vec, res_idx, true);
-			continue;
-		}
-
-		const auto &blob = scan_data[row_idx];
-#ifdef DEBUG
-		const auto type = Geometry::GetType(blob);
-		D_ASSERT(type.first == GeometryType::POINT && type.second == VertexType::XY);
-#endif
-
-		// Shred!
-		const auto data = blob.GetData();
-		// X/Y is at (1 + 4) offset
-		memcpy(&x_data[res_idx], data + sizeof(uint8_t) + sizeof(uint32_t), sizeof(double));
-		memcpy(&y_data[res_idx], data + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(double), sizeof(double));
+static const BaseStatistics *GetVertexStats(BaseStatistics &stats, GeometryType geom_type) {
+	switch (geom_type) {
+	case GeometryType::POINT: {
+		return StructStats::GetChildStats(stats);
+	}
+	case GeometryType::LINESTRING: {
+		const auto &line_stats = ListStats::GetChildStats(stats);
+		return StructStats::GetChildStats(line_stats);
+	}
+	case GeometryType::POLYGON: {
+		const auto &poly_stats = ListStats::GetChildStats(stats);
+		const auto &ring_stats = ListStats::GetChildStats(poly_stats);
+		return StructStats::GetChildStats(ring_stats);
+	}
+	case GeometryType::MULTIPOINT: {
+		const auto &mpoint_stats = ListStats::GetChildStats(stats);
+		return StructStats::GetChildStats(mpoint_stats);
+	}
+	case GeometryType::MULTILINESTRING: {
+		const auto &mline_stats = ListStats::GetChildStats(stats);
+		const auto &line_stats = ListStats::GetChildStats(mline_stats);
+		return StructStats::GetChildStats(line_stats);
+	}
+	case GeometryType::MULTIPOLYGON: {
+		const auto &mpoly_stats = ListStats::GetChildStats(stats);
+		const auto &poly_stats = ListStats::GetChildStats(mpoly_stats);
+		const auto &ring_stats = ListStats::GetChildStats(poly_stats);
+		return StructStats::GetChildStats(ring_stats);
+	}
+	default:
+		throw NotImplementedException("Unsupported geometry type %d for interpreting stats",
+		                              static_cast<int>(geom_type));
 	}
 }
 
-void GeoColumnData::Specialize(Vector &source, Vector &target, idx_t count) {
-	// TODO: Check for other layouts
-	ShredPoints(source, target, count);
-}
-
-static void UnshredPoints(Vector &geom_vec, Vector &result, idx_t count) {
-	UnifiedVectorFormat geom_uvu;
-
-	geom_vec.ToUnifiedFormat(count, geom_uvu);
-
-	const auto &parts = StructVector::GetEntries(geom_vec);
-	const auto &x_vec = *parts[0];
-	const auto &y_vec = *parts[1];
-
-	const auto result_data = FlatVector::GetData<string_t>(result);
-	const auto x_data = FlatVector::GetData<double>(x_vec);
-	const auto y_data = FlatVector::GetData<double>(y_vec);
-
-	for (idx_t res_idx = 0; res_idx < count; res_idx++) {
-		const auto geom_idx = geom_uvu.sel->get_index(res_idx);
-		const auto geom_valid = geom_uvu.validity.RowIsValid(geom_idx);
-
-		// Both null
-		if (!geom_valid) {
-			FlatVector::SetNull(result, res_idx, true);
-			continue;
-		}
-
-		char buffer[1 + 4 + 8 + 8];
-		memcpy(buffer, "\x01\x01\x00\x00\x00", 5); // POINT type
-		memcpy(buffer + 5, &x_data[geom_idx], 8);
-		memcpy(buffer + 13, &y_data[geom_idx], 8);
-		result_data[res_idx] = StringVector::AddStringOrBlob(result, string_t(buffer, sizeof(buffer)));
-	}
-}
-
-void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count) {
-	UnshredPoints(source, target, count);
-}
-
-void GeoColumnData::InterpretStats(BaseStatistics &source, BaseStatistics &target) {
-	// TODO: We need to track what we shredded to
-
+void GeoColumnData::InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
+                                   VertexType vert_type) {
 	// Copy base stats
 	target.CopyBase(source);
 
-	// Set extent
-	const auto struct_stats = StructStats::GetChildStats(source);
-
+	// Extract vertex stats
+	const auto vert_stats = GetVertexStats(source, geom_type);
 	auto &extent = GeometryStats::GetExtent(target);
-	extent.x_min = NumericStats::GetMin<double>(struct_stats[0]);
-	extent.x_max = NumericStats::GetMax<double>(struct_stats[0]);
-	extent.y_min = NumericStats::GetMin<double>(struct_stats[1]);
-	extent.y_max = NumericStats::GetMax<double>(struct_stats[1]);
+	extent.x_min = NumericStats::GetMin<double>(vert_stats[0]);
+	extent.x_max = NumericStats::GetMax<double>(vert_stats[0]);
+	extent.y_min = NumericStats::GetMin<double>(vert_stats[1]);
+	extent.y_max = NumericStats::GetMax<double>(vert_stats[1]);
+
+	switch (vert_type) {
+	case VertexType::XYZ:
+		extent.m_min = NumericStats::GetMin<double>(vert_stats[2]);
+		extent.m_max = NumericStats::GetMax<double>(vert_stats[2]);
+		break;
+	case VertexType::XYM:
+		extent.z_min = NumericStats::GetMin<double>(vert_stats[2]);
+		extent.z_max = NumericStats::GetMax<double>(vert_stats[2]);
+		break;
+	case VertexType::XYZM:
+		extent.z_min = NumericStats::GetMin<double>(vert_stats[2]);
+		extent.z_max = NumericStats::GetMax<double>(vert_stats[2]);
+		extent.m_min = NumericStats::GetMin<double>(vert_stats[3]);
+		extent.m_max = NumericStats::GetMax<double>(vert_stats[3]);
+		break;
+	default:
+		// Nothing to do
+		break;
+	}
 
 	// Set types
 	auto &types = GeometryStats::GetTypes(target);
 	types.Clear();
-	types.Add(GeometryType::POINT, VertexType::XY);
+	types.Add(geom_type, vert_type);
 }
 
 } // namespace duckdb
