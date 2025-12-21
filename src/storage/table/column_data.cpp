@@ -787,45 +787,6 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 		serializer.WriteProperty(101, "validity", child_columns[0]);
 	} break;
 	}
-
-	//----------
-	/*
-
-	serializer.WritePropertyWithDefault(100, "data_pointers", pointers);
-	if (child_columns.empty()) {
-	    // validity column
-	    D_ASSERT(physical_type == PhysicalType::BIT);
-	    return;
-	}
-	serializer.WriteProperty(101, "validity", child_columns[0]);
-
-	if (logical_type_id == LogicalTypeId::VARIANT) {
-	    D_ASSERT(physical_type == PhysicalType::STRUCT);
-	    D_ASSERT(child_columns.size() == 2 || child_columns.size() == 3);
-
-	    auto unshredded_type = VariantShredding::GetUnshreddedType();
-	    serializer.WriteProperty<PersistentColumnData>(102, "unshredded", child_columns[1]);
-
-	    if (child_columns.size() == 3) {
-	        D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
-	        serializer.WriteProperty<LogicalType>(115, "shredded_type", shredded_type);
-	        serializer.WriteProperty<PersistentColumnData>(120, "shredded", child_columns[2]);
-	    }
-	    return;
-	}
-
-	if (shredded_type.id() != LogicalTypeId::INVALID) {
-	    serializer.WritePropertyWithDefault(115, "shredded_type", shredded_type, LogicalType());
-	}
-
-	if (physical_type == PhysicalType::ARRAY || physical_type == PhysicalType::LIST) {
-	    D_ASSERT(child_columns.size() == 2);
-	    serializer.WriteProperty(102, "child_column", child_columns[1]);
-	} else if (physical_type == PhysicalType::STRUCT) {
-	    serializer.WriteList(102, "sub_columns", child_columns.size() - 1,
-	                         [&](Serializer::List &list, idx_t i) { list.WriteElement(child_columns[i + 1]); });
-	}
-	*/
 }
 
 void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
@@ -849,7 +810,11 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	switch (extra_data->GetType()) {
 	case ExtraPersistentColumnDataType::VARIANT: {
 		const auto &variant_data = extra_data->Cast<VariantPersistentColumnData>();
-		PersistentColumnData result(variant_data.logical_type);
+
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
+		auto &shredded_type = variant_data.logical_type;
+		auto variant_type = LogicalType::STRUCT({{"unshredded", unshredded_type}, {"shredded", shredded_type}});
+		PersistentColumnData result(variant_type);
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
