@@ -1685,4 +1685,53 @@ void Geometry::FromVectorizedFormat(Vector &source, Vector &target, idx_t count,
 	}
 }
 
+static LogicalType GetVectorizedTypeInternal(GeometryType geom_type, LogicalType vertex_type) {
+	switch (geom_type) {
+	case GeometryType::POINT:
+		return vertex_type;
+	case GeometryType::LINESTRING:
+		return LogicalType::LIST(vertex_type);
+	case GeometryType::POLYGON:
+		return LogicalType::LIST(LogicalType::LIST(vertex_type));
+	case GeometryType::MULTIPOINT:
+		return LogicalType::LIST(vertex_type);
+	case GeometryType::MULTILINESTRING:
+		return LogicalType::LIST(LogicalType::LIST(vertex_type));
+	case GeometryType::MULTIPOLYGON:
+		return LogicalType::LIST(LogicalType::LIST(LogicalType::LIST(vertex_type)));
+	case GeometryType::GEOMETRYCOLLECTION:
+		throw NotImplementedException("GEOMETRYCOLLECTION vectorized type not implemented");
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom_type));
+	}
+}
+
+LogicalType Geometry::GetVectorizedType(GeometryType geom_type, VertexType vert_type) {
+	switch (vert_type) {
+	case VertexType::XY: {
+		auto vert = LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
+		return GetVectorizedTypeInternal(geom_type, std::move(vert));
+	}
+	case VertexType::XYZ: {
+		auto vert =
+		    LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}, {"z", LogicalType::DOUBLE}});
+		return GetVectorizedTypeInternal(geom_type, std::move(vert));
+	}
+	case VertexType::XYM: {
+		auto vert =
+		    LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}, {"m", LogicalType::DOUBLE}});
+		return GetVectorizedTypeInternal(geom_type, std::move(vert));
+	}
+	case VertexType::XYZM: {
+		auto vert = LogicalType::STRUCT({{"x", LogicalType::DOUBLE},
+		                                 {"y", LogicalType::DOUBLE},
+		                                 {"z", LogicalType::DOUBLE},
+		                                 {"m", LogicalType::DOUBLE}});
+		return GetVectorizedTypeInternal(geom_type, std::move(vert));
+	}
+	default:
+		throw InvalidInputException("Unsupported vertex type %d", static_cast<int>(vert_type));
+	}
+}
+
 } // namespace duckdb
