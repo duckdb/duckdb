@@ -18,7 +18,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/table/geo_column_data.hpp"
-#include "fmt/format.h"
 
 namespace duckdb {
 
@@ -850,13 +849,13 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	switch (extra_data->GetType()) {
 	case ExtraPersistentColumnDataType::VARIANT: {
 		const auto &variant_data = extra_data->Cast<VariantPersistentColumnData>();
-		PersistentColumnData result(variant_data.GetStorageType());
+		PersistentColumnData result(variant_data.logical_type);
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
-		PersistentColumnData result(geometry_data.GetStorageType());
+		PersistentColumnData result(Geometry::GetVectorizedType(geometry_data.geom_type, geometry_data.vert_type));
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -911,12 +910,6 @@ bool PersistentColumnData::HasUpdates() const {
 		}
 	}
 	return false;
-}
-
-void PersistentColumnData::SetVariantShreddedType(const LogicalType &shredded_type) {
-	// D_ASSERT(physical_type == PhysicalType::STRUCT);
-	// D_ASSERT(logical_type_id == LogicalTypeId::VARIANT);
-	// this->shredded_type = shredded_type;
 }
 
 PersistentRowGroupData::PersistentRowGroupData(vector<LogicalType> types_p) : types(std::move(types_p)) {
