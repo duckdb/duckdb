@@ -552,7 +552,7 @@ bool TryCastWithOverflowCheck(int32_t value, uhugeint_t &result) {
 }
 
 template <>
-inline bool TryCastWithOverflowCheck(int64_t value, uhugeint_t &result) {
+bool TryCastWithOverflowCheck(int64_t value, uhugeint_t &result) {
 	return Uhugeint::TryConvert(value, result);
 }
 
@@ -577,12 +577,12 @@ bool TryCastWithOverflowCheck(uint64_t value, uhugeint_t &result) {
 }
 
 template <>
-inline bool TryCastWithOverflowCheck(float value, uhugeint_t &result) {
+bool TryCastWithOverflowCheck(float value, uhugeint_t &result) {
 	return Uhugeint::TryConvert(std::nearbyintf(value), result);
 }
 
 template <>
-inline bool TryCastWithOverflowCheck(double value, uhugeint_t &result) {
+bool TryCastWithOverflowCheck(double value, uhugeint_t &result) {
 	return Uhugeint::TryConvert(std::nearbyint(value), result);
 }
 
