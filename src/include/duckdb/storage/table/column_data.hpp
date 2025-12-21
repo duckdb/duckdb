@@ -321,12 +321,8 @@ public:
 	static constexpr auto TYPE = ExtraPersistentColumnDataType::VARIANT;
 	VariantPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
 	}
-	VariantPersistentColumnData(const LogicalType &storage_type)
+	explicit VariantPersistentColumnData(const LogicalType &storage_type)
 	    : ExtraPersistentColumnData(TYPE), logical_type(storage_type) {
-	}
-
-	LogicalType GetStorageType() const {
-		return logical_type;
 	}
 
 	LogicalType logical_type;
@@ -339,10 +335,6 @@ public:
 	}
 	GeometryPersistentColumnData(GeometryType type, VertexType vert)
 	    : ExtraPersistentColumnData(TYPE), geom_type(type), vert_type(vert) {
-	}
-
-	LogicalType GetStorageType() const {
-		return LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
 	}
 
 	GeometryType geom_type = GeometryType::INVALID;
@@ -367,7 +359,6 @@ public:
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
 	bool HasUpdates() const;
-	void SetVariantShreddedType(const LogicalType &shredded_type);
 
 public:
 	LogicalType logical_type;

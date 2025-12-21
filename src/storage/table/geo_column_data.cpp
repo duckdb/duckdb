@@ -343,11 +343,9 @@ void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStat
 	geom_type = geom_data.geom_type;
 
 	// Else, this is a shredded point
-	auto layout_type = geom_data.GetStorageType();
-	auto new_column =
-	    CreateColumn(block_manager, this->info, base_column->column_index, layout_type, GetDataType(), this);
+	const auto layout_type = Geometry::GetVectorizedType(geom_type, vert_type);
+	base_column = CreateColumn(block_manager, this->info, base_column->column_index, layout_type, GetDataType(), this);
 
-	base_column = new_column;
 	auto dummy_stats = BaseStatistics::CreateEmpty(layout_type);
 	base_column->InitializeColumn(column_data, dummy_stats);
 	count = base_column->count.load();
