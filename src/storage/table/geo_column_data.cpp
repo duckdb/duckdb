@@ -434,12 +434,12 @@ void GeoColumnData::InterpretStats(BaseStatistics &source, BaseStatistics &targe
 
 	switch (vert_type) {
 	case VertexType::XYZ:
-		extent.m_min = NumericStats::GetMin<double>(vert_stats[2]);
-		extent.m_max = NumericStats::GetMax<double>(vert_stats[2]);
-		break;
-	case VertexType::XYM:
 		extent.z_min = NumericStats::GetMin<double>(vert_stats[2]);
 		extent.z_max = NumericStats::GetMax<double>(vert_stats[2]);
+		break;
+	case VertexType::XYM:
+		extent.m_min = NumericStats::GetMin<double>(vert_stats[2]);
+		extent.m_max = NumericStats::GetMax<double>(vert_stats[2]);
 		break;
 	case VertexType::XYZM:
 		extent.z_min = NumericStats::GetMin<double>(vert_stats[2]);
