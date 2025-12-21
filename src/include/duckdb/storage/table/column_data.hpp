@@ -276,6 +276,77 @@ public:
 	}
 };
 
+enum class ExtraPersistentColumnDataType : uint8_t {
+	INVALID = 0,
+	VARIANT = 1,
+	GEOMETRY = 2,
+};
+
+class ExtraPersistentColumnData {
+public:
+	ExtraPersistentColumnDataType GetType() const {
+		return type;
+	}
+
+	virtual ~ExtraPersistentColumnData() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(type == TARGET::TYPE);
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(type == TARGET::TYPE);
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ExtraPersistentColumnData> Deserialize(Deserializer &deserializer);
+
+protected:
+	explicit ExtraPersistentColumnData(ExtraPersistentColumnDataType type_p) : type(type_p) {
+	}
+
+private:
+	ExtraPersistentColumnDataType type;
+};
+
+class VariantPersistentColumnData final : public ExtraPersistentColumnData {
+public:
+	static constexpr auto TYPE = ExtraPersistentColumnDataType::VARIANT;
+	VariantPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
+	}
+	VariantPersistentColumnData(const LogicalType &storage_type)
+	    : ExtraPersistentColumnData(TYPE), logical_type(storage_type) {
+	}
+
+	LogicalType GetStorageType() const {
+		return logical_type;
+	}
+
+	LogicalType logical_type;
+};
+
+class GeometryPersistentColumnData final : public ExtraPersistentColumnData {
+public:
+	static constexpr auto TYPE = ExtraPersistentColumnDataType::GEOMETRY;
+	GeometryPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
+	}
+	GeometryPersistentColumnData(GeometryType type, VertexType vert)
+	    : ExtraPersistentColumnData(TYPE), geom_type(type), vert_type(vert) {
+	}
+
+	LogicalType GetStorageType() const {
+		return LogicalType::STRUCT({{"x", LogicalType::DOUBLE}, {"y", LogicalType::DOUBLE}});
+	}
+
+	GeometryType geom_type = GeometryType::INVALID;
+	VertexType vert_type = VertexType::XY;
+};
+
 struct PersistentColumnData {
 public:
 	explicit PersistentColumnData(const LogicalType &logical_type);
@@ -297,14 +368,13 @@ public:
 	void SetVariantShreddedType(const LogicalType &shredded_type);
 
 public:
-	PhysicalType physical_type;
-	LogicalTypeId logical_type_id;
+	LogicalType logical_type;
 	vector<DataPointer> pointers;
 	vector<PersistentColumnData> child_columns;
 	bool has_updates = false;
 
-	// Alternative logical type used for this segment
-	LogicalType shredded_type;
+	//! Extra persistent data for specific column types
+	unique_ptr<ExtraPersistentColumnData> extra_data;
 };
 
 struct PersistentRowGroupData {
