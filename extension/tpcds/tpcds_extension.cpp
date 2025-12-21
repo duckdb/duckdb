@@ -3,9 +3,9 @@
 #include "dsdgen.hpp"
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -25,6 +25,13 @@ struct DSDGenFunctionData : public TableFunctionData {
 static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DSDGenFunctionData>();
+
+	// Set the current catalog and schema.
+	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	result->catalog = current_catalog;
+	result->schema = current_schema;
+
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
 			throw BinderException("Cannot use NULL as function argument");

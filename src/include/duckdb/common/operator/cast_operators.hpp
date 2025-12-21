@@ -73,7 +73,8 @@ struct Cast {
 	static inline DST Operation(SRC input) {
 		DST result;
 		if (!TryCast::Operation(input, result)) {
-			throw InvalidInputException(CastExceptionText<SRC, DST>(input));
+			const auto msg = CastExceptionText<SRC, DST>(input);
+			throw InvalidInputException(msg);
 		}
 		return result;
 	}
