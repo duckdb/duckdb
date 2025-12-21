@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/geo_column_data.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
 
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -249,6 +250,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	if (has_mixed_type || has_only_geometry_collection || has_only_invalid) {
 		// Cant specialize, keep column
 		checkpoint_state->inner_column_state = base_column->Checkpoint(row_group, info);
+		checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
 		return std::move(checkpoint_state);
 	}
 
