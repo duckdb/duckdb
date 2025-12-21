@@ -2,9 +2,9 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "tpch_extension.hpp"
 
 #include "dbgen/dbgen.hpp"
+#include "tpch_extension.hpp"
 
 namespace duckdb {
 

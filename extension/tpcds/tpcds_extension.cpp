@@ -1,11 +1,10 @@
-#include "tpcds_extension.hpp"
-
-#include "dsdgen.hpp"
-
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
+
+#include "dsdgen.hpp"
+#include "tpcds_extension.hpp"
 
 namespace duckdb {
 
