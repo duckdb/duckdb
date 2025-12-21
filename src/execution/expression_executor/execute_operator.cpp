@@ -117,7 +117,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		try {
 			Execute(*expr.children[0], &child_state, sel, count, try_result);
 			if (try_result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-            	result.Reference(try_result);
+				result.Reference(try_result);
 				return;
 			}
 			if (sel) {
