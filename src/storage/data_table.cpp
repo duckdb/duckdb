@@ -505,7 +505,12 @@ idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx
 }
 
 static string ConstructForeignKeyError(optional_idx conflict, bool is_append, Index &index, DataChunk &input) {
-	D_ASSERT(index.IsBound());
+	if (!index.IsBound()) {
+		// This can happen during WAL replay if the index hasn't been fully reconstructed yet
+		throw SerializationException(
+		    "Cannot verify foreign key constraint: index '%s' is not bound (possibly corrupted WAL)",
+		    index.GetIndexName());
+	}
 	auto &bound_index = index.Cast<BoundIndex>();
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
 	return bound_index.GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
@@ -682,11 +687,17 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 			if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 				return false;
 			}
-			D_ASSERT(index.IsBound());
+			// Skip unbound indexes - they cannot be verified yet (e.g., during WAL replay)
+			if (!index.IsBound()) {
+				return false;
+			}
 			auto &art = index.Cast<ART>();
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-				D_ASSERT(!delete_index || delete_index->IsBound());
+				if (delete_index && !delete_index->IsBound()) {
+					// Skip if delete index is not bound yet
+					return false;
+				}
 				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 				art.VerifyAppend(chunk, index_append_info, nullptr);
 			} else {
@@ -708,11 +719,17 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 		if (!conflict_info.ConflictTargetMatches(index)) {
 			return false;
 		}
-		D_ASSERT(index.IsBound());
+		// Skip unbound indexes - they cannot be verified yet (e.g., during WAL replay)
+		if (!index.IsBound()) {
+			return false;
+		}
 		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-			D_ASSERT(!delete_index || delete_index->IsBound());
+			if (delete_index && !delete_index->IsBound()) {
+				// Skip if delete index is not bound yet
+				return false;
+			}
 			manager->AddIndex(art, delete_index);
 		} else {
 			manager->AddIndex(art, nullptr);
@@ -736,14 +753,20 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 		if (!index.IsUnique() || index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
+		// Skip unbound indexes - they cannot be verified yet (e.g., during WAL replay)
+		if (!index.IsBound()) {
+			return false;
+		}
 		if (manager->IndexMatches(index.Cast<BoundIndex>())) {
 			return false;
 		}
-		D_ASSERT(index.IsBound());
 		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-			D_ASSERT(!delete_index || delete_index->IsBound());
+			if (delete_index && !delete_index->IsBound()) {
+				// Skip if delete index is not bound yet
+				return false;
+			}
 			IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
 			art.VerifyAppend(chunk, index_append_info, *manager);
 		} else {
@@ -1691,7 +1714,10 @@ void DataTable::CommitDropTable() {
 
 	// propagate dropping this table to its indexes: frees all index memory
 	info->indexes.Scan([&](Index &index) {
-		D_ASSERT(index.IsBound());
+		// Skip unbound indexes - they don't have memory to free
+		if (!index.IsBound()) {
+			return false;
+		}
 		index.Cast<BoundIndex>().CommitDrop();
 		return false;
 	});

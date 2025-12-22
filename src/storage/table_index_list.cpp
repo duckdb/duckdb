@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
@@ -214,7 +215,12 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
 	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
 	auto &index = *entry->index;
-	D_ASSERT(index.IsBound());
+	if (!index.IsBound()) {
+		// This can happen during WAL replay if the index hasn't been fully reconstructed yet
+		throw SerializationException(
+		    "Cannot verify foreign key constraint: index '%s' is not bound (possibly corrupted WAL)",
+		    index.GetIndexName());
+	}
 	optional_ptr<BoundIndex> delete_index;
 	if (storage) {
 		delete_index = storage->delete_indexes.Find(index.GetIndexName());

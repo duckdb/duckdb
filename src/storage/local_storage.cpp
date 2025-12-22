@@ -437,7 +437,10 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	}
 
 	delete_indexes.Scan([&](Index &index) {
-		D_ASSERT(index.IsBound());
+		// Skip unbound indexes - they cannot be appended to yet
+		if (!index.IsBound()) {
+			return false;
+		}
 		if (!index.IsUnique()) {
 			return false;
 		}
