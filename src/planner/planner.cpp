@@ -14,7 +14,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
-
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
 namespace duckdb {
