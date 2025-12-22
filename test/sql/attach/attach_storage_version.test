@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-PRAGMA disable_verification
+PRAGMA enable_verification
 
 statement ok
 ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
