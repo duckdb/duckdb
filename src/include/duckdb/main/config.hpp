@@ -68,7 +68,7 @@ class StorageCompatibility {
 public:
 	static StorageCompatibility FromDatabase(AttachedDatabase &db);
 	static StorageCompatibility FromIndex(idx_t storage_version);
-	static StorageCompatibility FromString(const string &input, bool bump_version = false);
+	static StorageCompatibility FromString(const string &input);
 	static StorageCompatibility Default();
 	static StorageCompatibility Latest();
 

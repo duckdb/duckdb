@@ -838,7 +838,7 @@ StorageCompatibility StorageCompatibility::FromIndex(const idx_t version) {
 	return result;
 }
 
-StorageCompatibility StorageCompatibility::FromString(const string &input, bool bump_version) {
+StorageCompatibility StorageCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
 	}
@@ -848,12 +848,6 @@ StorageCompatibility StorageCompatibility::FromString(const string &input, bool 
 		auto candidates = GetStorageCandidates();
 		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
-	}
-
-	if (bump_version) {
-		if (storage_version.GetIndex() < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_5_0)) {
-			storage_version = GetSerializationVersionDeprecated(input.c_str());
-		}
 	}
 
 	StorageCompatibility result;
@@ -874,7 +868,6 @@ StorageCompatibility StorageCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
-	// why do we default to 0.10.2?
 	auto res = FromString("v0.10.2");
 	res.manually_set = false;
 	return res;
