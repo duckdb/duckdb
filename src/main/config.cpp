@@ -838,7 +838,7 @@ StorageCompatibility StorageCompatibility::FromIndex(const idx_t version) {
 	return result;
 }
 
-StorageCompatibility StorageCompatibility::FromString(const string &input) {
+StorageCompatibility StorageCompatibility::FromString(const string &input, bool bump_version) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
 	}
@@ -849,6 +849,13 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
 	}
+
+	if (bump_version) {
+		if (storage_version.GetIndex() < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_5_0)) {
+			storage_version = GetSerializationVersionDeprecated(input.c_str());
+		}
+	}
+
 	StorageCompatibility result;
 	result.duckdb_version = input;
 	result.storage_version = storage_version.GetIndex();
