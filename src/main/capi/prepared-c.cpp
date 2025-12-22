@@ -113,15 +113,15 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return duckdb::string();
 	}
-	auto &named = wrapper->statement->named_param_map;
-	if (index == 0 || index > named.size()) {
+	auto &named_param_map = wrapper->statement->named_param_map;
+	if (index == 0 || index > named_param_map.size()) {
 		return duckdb::string();
 	}
 
 	auto &cache = wrapper->param_index_to_name;
-	if (cache.size() != named.size() + 1) {
-		cache.assign(named.size() + 1, duckdb::string());
-		for (auto &kv : named) {
+	if (cache.size() != named_param_map.size() + 1) {
+		cache.assign(named_param_map.size() + 1, duckdb::string());
+		for (auto &kv : named_param_map) {
 			auto idx = kv.second;
 			if (idx < cache.size() && cache[idx].empty()) {
 				cache[idx] = kv.first;
