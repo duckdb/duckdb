@@ -17,12 +17,11 @@ namespace duckdb {
 //----------------------------------------------------------------------------------------------------------------------
 // TODO: Override ::Filter to push down bounding box filters.
 
-GeoColumnData::GeoColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+GeoColumnData::GeoColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                              ColumnDataType data_type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent) {
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	if (data_type != ColumnDataType::CHECKPOINT_TARGET) {
-		base_column =
-		    make_shared_ptr<StandardColumnData>(block_manager, info, column_index, std::move(type), data_type, this);
+		base_column = make_shared_ptr<StandardColumnData>(block_manager, info, column_index, type, data_type, this);
 	}
 }
 
