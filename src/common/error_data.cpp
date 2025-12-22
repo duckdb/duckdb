@@ -80,9 +80,8 @@ void ErrorData::Throw(const string &prepended_message) const {
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
 		throw Exception(extra_info, type, new_message);
-	} else {
-		throw Exception(extra_info, type, raw_message);
 	}
+	throw Exception(extra_info, type, raw_message);
 }
 
 const ExceptionType &ErrorData::Type() const {
