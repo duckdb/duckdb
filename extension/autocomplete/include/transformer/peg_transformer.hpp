@@ -141,6 +141,8 @@ public:
 	case_insensitive_map_t<idx_t> named_parameter_map;
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
+
+	case_insensitive_map_t<unique_ptr<WindowExpression>> window_clauses;
 };
 
 class PEGTransformerFactory {
@@ -1113,6 +1115,11 @@ private:
 	                                                          optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformQualifyClause(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformWindowClause(PEGTransformer &transformer,
+	                                                                  optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformWindowDefinition(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);

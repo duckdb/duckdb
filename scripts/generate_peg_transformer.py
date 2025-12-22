@@ -35,6 +35,9 @@ EXCLUDED_RULES = {
     "MacroOrFunction",
     "GroupingOrGroupingId",
     "DefaultValues",
+    "RowOrRows",
+    "Recursive",
+    "IfNotExists",
     # found in matcher.cpp
     "ReservedIdentifier",
     "CatalogName",

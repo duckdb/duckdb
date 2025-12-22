@@ -1135,7 +1135,12 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
-		throw NotImplementedException("Identifier in Window Function has not yet been implemented");
+		auto window_name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
+		auto it = transformer.window_clauses.find(string(window_name));
+		if (it == transformer.window_clauses.end()) {
+			throw ParserException("window \"%s\" does not exist", window_name);
+		}
+		return std::move(it->second);
 	}
 	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
 }
@@ -1254,8 +1259,8 @@ PEGTransformerFactory::TransformBetweenFrameExtent(PEGTransformer &transformer,
                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<WindowBoundaryExpression> result;
-	auto start = transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(1));
-	auto end = transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(3));
+	result.push_back(transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(1)));
+	result.push_back(transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(3)));
 	return result;
 }
 

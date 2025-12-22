@@ -124,6 +124,21 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelectParens(P
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto opt_window_clause = list_pr.Child<OptionalParseResult>(4);
+	if (opt_window_clause.HasResult()) {
+		auto window_functions =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.optional_result);
+		for (auto &window_func : window_functions) {
+			D_ASSERT(!window_func->alias.empty());
+			string window_name(window_func->alias);
+			auto it = transformer.window_clauses.find(window_name);
+			if (it != transformer.window_clauses.end()) {
+				throw ParserException("window \"%s\" is already defined", window_name);
+			}
+			transformer.window_clauses[window_name] =
+			    unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
+		}
+	}
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, select_node->where_clause);
 	auto group_opt = list_pr.Child<OptionalParseResult>(2);
@@ -137,10 +152,6 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 		select_node->groups = std::move(group_by_node);
 	}
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, select_node->having);
-	auto opt_window_clause = list_pr.Child<OptionalParseResult>(4);
-	if (opt_window_clause.HasResult()) {
-		throw NotImplementedException("Window clause in SELECT statement has not yet been implemented.");
-	}
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 5, select_node->qualify);
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 6, select_node->sample);
 	auto select_statement = make_uniq<SelectStatement>();
@@ -1247,6 +1258,25 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQualifyClause(PEGTr
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformWindowClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto window_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(1));
+	vector<unique_ptr<ParsedExpression>> result;
+	for (auto &window : window_list) {
+		result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(window));
+	}
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
+	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
+	return window_function;
 }
 
 } // namespace duckdb

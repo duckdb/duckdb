@@ -639,6 +639,8 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformHavingClause);
 	REGISTER_TRANSFORM(TransformOffsetValue);
 	REGISTER_TRANSFORM(TransformQualifyClause);
+	REGISTER_TRANSFORM(TransformWindowClause);
+	REGISTER_TRANSFORM(TransformWindowDefinition);
 }
 
 void PEGTransformerFactory::RegisterUse() {
