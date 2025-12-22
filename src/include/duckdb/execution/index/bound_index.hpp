@@ -47,6 +47,15 @@ public:
 	vector<reference<BoundIndex>> delete_indexes;
 };
 
+enum class DeltaIndexType {
+	NONE,
+	LOCAL_APPEND,
+	LOCAL_DELETE,
+	ADDED_DURING_CHECKPOINT,
+	REMOVED_DURING_CHECKPOINT,
+	DELETED_ROWS_IN_USE
+};
+
 //! The index is an abstract base class that serves as the basis for indexes
 class BoundIndex : public Index {
 public:
@@ -77,6 +86,9 @@ public:
 	//! Those column_ids store the physical table indexes of the Index,
 	//! and we use them when binding the unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
+
+	//! Whether or not this is a delta index - and if it is, which type it is
+	DeltaIndexType delta_index_type = DeltaIndexType::NONE;
 
 public:
 	bool IsBound() const override {
@@ -145,12 +157,11 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock.
 	void Vacuum();
 
-	//! Whether or not the index requires transactionality. If true we will create delta indexes
-	virtual bool RequiresTransactionality() const;
-	//! Creates an empty copy of the index with the same schema, etc, but a different constraint type
-	//! This will only be called if RequiresTransactionality returns true
-	virtual unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
-	                                               IndexConstraintType constraint_type) const;
+	//! Whether or not the index supports the creation of delta indexes
+	virtual bool SupportsDeltaIndexes() const;
+	//! Creates a delta index - an empty copy of the index with the same schema, etc
+	//! This will only be called if SupportsDeltaIndexes returns true
+	virtual unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const;
 
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
 	virtual idx_t GetInMemorySize(IndexLock &state) = 0;

@@ -163,13 +163,12 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-bool BoundIndex::RequiresTransactionality() const {
+bool BoundIndex::SupportsDeltaIndexes() const {
 	return false;
 }
 
-unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(const string &name_prefix,
-                                                   IndexConstraintType constraint_type) const {
-	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
+unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
+	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
 }
 
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {

@@ -1070,13 +1070,19 @@ idx_t ART::GetInMemorySize(IndexLock &index_lock) {
 	return in_memory_size;
 }
 
-bool ART::RequiresTransactionality() const {
+bool ART::SupportsDeltaIndexes() const {
 	return true;
 }
 
-unique_ptr<BoundIndex> ART::CreateEmptyCopy(const string &name_prefix, IndexConstraintType constraint_type) const {
-	return make_uniq<ART>(name_prefix + name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions,
-	                      db);
+unique_ptr<BoundIndex> ART::CreateDeltaIndex(DeltaIndexType delta_index) const {
+	auto constraint_type = index_constraint_type;
+	if (delta_index == DeltaIndexType::DELETED_ROWS_IN_USE) {
+		// deleted_rows_in_use allows duplicates regardless of whether or not the main index is a unique index or not
+		constraint_type = IndexConstraintType::NONE;
+	}
+	auto result = make_uniq<ART>(name, constraint_type, GetColumnIds(), table_io_manager, unbound_expressions, db);
+	result->delta_index_type = delta_index_type;
+	return std::move(result);
 }
 
 //===-------------------------------------------------------------------===//

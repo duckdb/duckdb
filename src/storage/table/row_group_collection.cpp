@@ -753,8 +753,7 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType 
 
 	// create "removed_data_during_checkpoint" if it does not exist
 	if (!entry.removed_data_during_checkpoint) {
-		entry.removed_data_during_checkpoint =
-		    main_index.CreateEmptyCopy("removed_data_during_checkpoint_", main_index.index_constraint_type);
+		entry.removed_data_during_checkpoint = main_index.CreateDeltaIndex(DeltaIndexType::REMOVED_DURING_CHECKPOINT);
 	}
 	if (removal_type == IndexRemovalType::MAIN_INDEX_ONLY || removal_type == IndexRemovalType::MAIN_INDEX) {
 		// removing from main index - but we cannot remove directly due to the concurrent checkpoint
@@ -773,8 +772,7 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType 
 			// we also need to append to "deleted_rows_in_use"
 			if (!entry.deleted_rows_in_use) {
 				// create "deleted_rows_in_use" if it does not exist yet
-				entry.deleted_rows_in_use =
-				    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
+				entry.deleted_rows_in_use = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
 			}
 			targets.append_target = entry.deleted_rows_in_use;
 		}
@@ -806,8 +804,9 @@ void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, In
 
 	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
 	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
-	bool index_requires_delta = main_index.RequiresTransactionality();
-	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE && active_checkpoint.IsValid() && index_requires_delta) {
+	bool supports_delta_indexes = main_index.SupportsDeltaIndexes();
+	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE && active_checkpoint.IsValid() &&
+	    supports_delta_indexes) {
 		// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main index
 		if (!entry.last_written_checkpoint.IsValid() ||
 		    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
@@ -829,11 +828,10 @@ void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, In
 		break;
 	case IndexRemovalType::MAIN_INDEX:
 		// regular removal from main index - add rows to delta index if required
-		if (index_requires_delta) {
+		if (supports_delta_indexes) {
 			if (!entry.deleted_rows_in_use) {
 				// create "deleted_rows_in_use" if it does not exist yet
-				entry.deleted_rows_in_use =
-				    main_index.CreateEmptyCopy("deleted_rows_in_use_", IndexConstraintType::NONE);
+				entry.deleted_rows_in_use = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
 			}
 			targets.append_target = entry.deleted_rows_in_use;
 		}
@@ -842,13 +840,13 @@ void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, In
 	case IndexRemovalType::REVERT_MAIN_INDEX:
 		// revert regular append to main index - remove from deleted_rows_in_use if we appended there before
 		targets.append_target = main_index;
-		if (index_requires_delta) {
+		if (supports_delta_indexes) {
 			targets.remove_target = entry.deleted_rows_in_use;
 		}
 		break;
 	case IndexRemovalType::DELETED_ROWS_IN_USE:
 		// remove from removal index if we appended any rows
-		if (index_requires_delta) {
+		if (supports_delta_indexes) {
 			targets.remove_target = entry.deleted_rows_in_use;
 		}
 		break;
