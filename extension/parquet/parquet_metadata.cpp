@@ -822,7 +822,8 @@ static unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, Tabl
 
 	result->return_types = return_types;
 	result->multi_file_reader = MultiFileReader::Create(input.table_function);
-	result->file_list = result->multi_file_reader->CreateFileList(context, input.inputs[0], true /*consistent_ordering*/);
+	result->file_list =
+	    result->multi_file_reader->CreateFileList(context, input.inputs[0], true /*consistent_ordering*/);
 
 	return std::move(result);
 }
