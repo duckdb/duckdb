@@ -211,7 +211,7 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	REQUIRE_THROWS(fs->JoinPath("/usr/local", "/var/log"));
 
 	auto scheme_like_embed = fs->JoinPath("/foo/proto://bar", "a");
-	REQUIRE(scheme_like_embed == "/foo/proto:/bar/a");
+	REQUIRE(scheme_like_embed == fs->ConvertSeparators("/foo/proto:/bar/a"));
 
 #ifdef _WIN32
 	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
