@@ -244,7 +244,6 @@ GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTra
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
 	generated.expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
 	transformer.TransformOptional<bool>(list_pr, 0, generated.default_column);
-	transformer.TransformOptional<bool>(list_pr, 3, generated.virtual_column);
 	return generated;
 }
 
