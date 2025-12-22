@@ -16,6 +16,7 @@ add_library_unity(
   common_aggregate_optimizer.cpp
   common_subplan_optimizer.cpp
   compressed_materialization.cpp
+  count_window_elimination.cpp
   cse_optimizer.cpp
   cte_filter_pusher.cpp
   cte_inlining.cpp
