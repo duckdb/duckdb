@@ -10,6 +10,7 @@ struct GeneratedColumnDefinition {
 
 struct ConstraintColumnDefinition {
 	ColumnDefinition column_definition;
+	vector<ConstraintType> constraint_types;
 	vector<unique_ptr<Constraint>> constraints;
 };
 } // namespace duckdb

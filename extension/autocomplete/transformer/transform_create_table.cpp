@@ -9,6 +9,7 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 namespace duckdb {
 
@@ -109,13 +110,18 @@ ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransfor
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_elements = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	ColumnElements result;
-	for (auto column_element : column_elements) {
-		auto column_element_child = column_element->Cast<ListParseResult>().Child<ChoiceParseResult>(0).result;
+	for (idx_t col_idx = 0; col_idx < column_elements.size(); ++col_idx) {
+		auto column_element_child = column_elements[col_idx]->Cast<ListParseResult>().Child<ChoiceParseResult>(0).result;
 		if (column_element_child->name == "ColumnDefinition") {
 			auto column_result = transformer.Transform<ConstraintColumnDefinition>(column_element_child);
 			result.columns.AddColumn(std::move(column_result.column_definition));
-			for (auto constraint : column_result.constraints) {
+			for (auto &constraint : column_result.constraints) {
 				result.constraints.push_back(std::move(constraint));
+			}
+			for (auto constraint_type : column_result.constraint_types) {
+				if (constraint_type == ConstraintType::NOT_NULL) {
+					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
+				}
 			}
 		} else if (column_element_child->name == "TopLevelConstraint") {
 			result.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(column_element_child));
@@ -233,7 +239,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		if (column_constraint.default_value) {
 			col.SetDefaultValue(std::move(column_constraint.default_value));
 		}
-		ConstraintColumnDefinition result = { std::move(col), vector<unique_ptr<Constraint>>() };
+		ConstraintColumnDefinition result = { std::move(col), column_constraint.constraint_types, std::move(column_constraint.constraints) };
 		return result;
 	}
 
@@ -243,7 +249,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		col.SetDefaultValue(std::move(column_constraint.default_value));
 	}
 	col.SetCompressionType(compression_type);
-	ConstraintColumnDefinition result = { std::move(col), vector<unique_ptr<Constraint>>() };
+	ConstraintColumnDefinition result = { std::move(col), column_constraint.constraint_types, std::move(column_constraint.constraints) };
 	return result;
 }
 
