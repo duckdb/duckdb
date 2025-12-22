@@ -766,7 +766,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"translate", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"trim", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"trunc", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"try_parse_formatted_bytes", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"txid_current", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"typeof", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ui_is_started", "ui", CatalogType::TABLE_FUNCTION_ENTRY},

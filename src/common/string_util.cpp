@@ -345,7 +345,7 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 	idx_t result;
 	const string error = TryParseFormattedBytes(arg, result);
 	if (!error.empty()) {
-		throw ParserException(error);
+		throw InvalidInputException(error);
 	}
 	return result;
 }
