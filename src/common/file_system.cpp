@@ -343,6 +343,7 @@ ParsedPath ParsePathWithScheme(const string &input) {
 	if (scheme_pos == 1 && StringUtil::CharacterIsAlpha(input[0])) {
 		return result;
 	}
+
 	// avoid exceptional case of foo/bar/scheme:// (which should normalize to foo/bar/scheme:)
 	if (input.find('/') < scheme_pos || input.find('\\') < scheme_pos) {
 		return result;
@@ -500,7 +501,11 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	                              rhs_scheme_absolute || rhs_is_file_scheme;
 	auto lhs_absolute = lhs_parsed.has_scheme || lhs_normalize_absolute;
 	auto rhs_absolute = rhs_parsed.has_scheme || rhs_normalize_absolute;
-	auto lhs_is_naked_drive = lhs.size() == 2 && lhs[1] == ':' && StringUtil::CharacterIsAlpha(lhs[0]);
+
+	auto lhs_is_naked_drive = false;
+#ifdef _WIN32
+	lhs_is_naked_drive = lhs.size() == 2 && lhs[1] == ':' && StringUtil::CharacterIsAlpha(lhs[0]);
+#endif
 
 	auto strip_leading = [](string &value, const string &chars) {
 		auto pos = value.find_first_not_of(chars);

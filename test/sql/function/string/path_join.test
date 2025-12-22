@@ -87,6 +87,11 @@ SELECT path_join(NULL, 'dir');
 NULL
 
 query I
+SELECT path_join('dir', NULL);
+----
+NULL
+
+query I
 SELECT path_join('base', NULL, 'dir');
 ----
 NULL
