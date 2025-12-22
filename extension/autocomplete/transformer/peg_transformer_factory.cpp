@@ -258,6 +258,8 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
 	REGISTER_TRANSFORM(TransformDefaultValue);
 	REGISTER_TRANSFORM(TransformGeneratedColumn);
+	REGISTER_TRANSFORM(TransformColumnCompression);
+
 }
 
 void PEGTransformerFactory::RegisterCreateType() {
@@ -832,6 +834,10 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
 	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
+
+	RegisterEnum<ConstraintType>("NotNullConstraint", ConstraintType::NOT_NULL);
+	RegisterEnum<ConstraintType>("UniqueConstraint", ConstraintType::UNIQUE);
+	RegisterEnum<ConstraintType>("PrimaryKeyConstraint", ConstraintType::UNIQUE);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

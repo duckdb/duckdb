@@ -112,7 +112,11 @@ ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransfor
 	for (auto column_element : column_elements) {
 		auto column_element_child = column_element->Cast<ListParseResult>().Child<ChoiceParseResult>(0).result;
 		if (column_element_child->name == "ColumnDefinition") {
-			result.columns.AddColumn(transformer.Transform<ColumnDefinition>(column_element_child));
+			auto column_result = transformer.Transform<ConstraintColumnDefinition>(column_element_child);
+			result.columns.AddColumn(std::move(column_result.column_definition));
+			for (auto constraint : column_result.constraints) {
+				result.constraints.push_back(std::move(constraint));
+			}
 		} else if (column_element_child->name == "TopLevelConstraint") {
 			result.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(column_element_child));
 		} else {
@@ -188,7 +192,7 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 	return parts;
 }
 
-ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer &transformer,
+ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer &transformer,
                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 
@@ -197,6 +201,7 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 	LogicalType type = LogicalType::ANY;
 	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
 	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
+	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	ColumnConstraint column_constraint;
 	if (constraints_opt.HasResult()) {
 		auto constraints_repeat = constraints_opt.optional_result->Cast<RepeatParseResult>();
@@ -208,10 +213,12 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 					throw ParserException("Cannot define a default value twice");
 				}
 				column_constraint.default_value = transformer.Transform<unique_ptr<ParsedExpression>>(constraint);
+			} else if (constraint->name == "NotNullConstraint" || constraint->name == "UniqueConstraint" || constraint->name == "PrimaryKeyConstraint") {
+				column_constraint.constraint_types.push_back(transformer.TransformEnum<ConstraintType>(constraint));
+			} else if (constraint->name == "ColumnCompression") {
+				compression_type = transformer.Transform<CompressionType>(constraint);
 			} else {
-				throw NotImplementedException("Constraints are not yet implemented.");
-				// TODO(Dtenwolde)
-				// column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
+				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
 			}
 		}
 	}
@@ -221,19 +228,22 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 		if (type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(type, std::move(generated.expr));
 		}
-		ColumnDefinition result(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
-
+		ColumnDefinition col(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
+		col.SetCompressionType(compression_type);
 		if (column_constraint.default_value) {
-			result.SetDefaultValue(std::move(column_constraint.default_value));
+			col.SetDefaultValue(std::move(column_constraint.default_value));
 		}
+		ConstraintColumnDefinition result = { std::move(col), vector<unique_ptr<Constraint>>() };
 		return result;
 	}
 
-	ColumnDefinition result(qualified_name.name, type);
+	ColumnDefinition col(qualified_name.name, type);
 
 	if (column_constraint.default_value) {
-		result.SetDefaultValue(std::move(column_constraint.default_value));
+		col.SetDefaultValue(std::move(column_constraint.default_value));
 	}
+	col.SetCompressionType(compression_type);
+	ConstraintColumnDefinition result = { std::move(col), vector<unique_ptr<Constraint>>() };
 	return result;
 }
 
@@ -345,5 +355,13 @@ string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer,
 	}
 	return transformer.Transform<string>(choice_pr);
 }
+
+CompressionType PEGTransformerFactory::TransformColumnCompression(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto compression_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+	return CompressionTypeFromString(StringUtil::Lower(compression_string));
+}
+
 
 } // namespace duckdb

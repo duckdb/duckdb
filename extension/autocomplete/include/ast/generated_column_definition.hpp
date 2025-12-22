@@ -7,4 +7,9 @@ struct GeneratedColumnDefinition {
 	bool virtual_column = false;
 	bool default_column = false;
 };
+
+struct ConstraintColumnDefinition {
+	ColumnDefinition column_definition;
+	vector<unique_ptr<Constraint>> constraints;
+};
 } // namespace duckdb

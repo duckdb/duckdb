@@ -479,7 +479,7 @@ private:
 	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
-	static ColumnDefinition TransformColumnDefinition(PEGTransformer &transformer,
+	static ConstraintColumnDefinition TransformColumnDefinition(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformTypeOrGenerated(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopLevelConstraint(PEGTransformer &transformer,
@@ -499,6 +499,8 @@ private:
 	static unique_ptr<Constraint> TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static CompressionType TransformColumnCompression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 
 	// create_type.gram

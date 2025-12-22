@@ -8,6 +8,7 @@ namespace duckdb {
 
 struct ColumnConstraint {
 	vector<unique_ptr<Constraint>> constraints;
+	vector<ConstraintType> constraint_types; // Used to create proper constrains when column index is known
 	unique_ptr<ParsedExpression> default_value;
 };
 
