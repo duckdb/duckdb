@@ -1,6 +1,6 @@
 #include "duckdb/function/scalar_function.hpp"
 
-#include <core_functions/scalar/string_functions.hpp>
+#include "core_functions/scalar/string_functions.hpp"
 
 namespace duckdb {
 static void PraseFormattedBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
