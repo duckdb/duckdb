@@ -158,7 +158,8 @@ protected:
 //! MultiFileList that takes a list of paths and produces a list of files with all globs expanded
 class GlobMultiFileList : public MultiFileList {
 public:
-	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobInput glob_input);
+	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobInput glob_input,
+	                  bool _consistent_ordering);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
@@ -195,6 +196,8 @@ protected:
 	vector<unique_ptr<PaginatedResult<OpenFileInfo>>> paginated_files;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
+	//! Force alphabetical oder -> no reliance on the underlying filesystem order
+	const bool consistent_ordering;
 
 	mutable mutex lock;
 };

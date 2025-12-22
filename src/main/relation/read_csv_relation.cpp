@@ -32,7 +32,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("ReadCSVRelation");
 	vector<OpenFileInfo> files;
-	files = multi_file_reader->CreateFileList(*context, file_list)->GetAllFiles();
+	files = multi_file_reader->CreateFileList(*context, file_list, true /*consistent_ordering*/)->GetAllFiles();
 
 	D_ASSERT(!files.empty());
 

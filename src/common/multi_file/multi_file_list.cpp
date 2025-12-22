@@ -272,8 +272,10 @@ idx_t SimpleMultiFileList::GetTotalFileCount() {
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobInput glob_input)
-    : MultiFileList(std::move(paths_p), std::move(glob_input)), context(context_p), current_path(0) {
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobInput glob_input,
+                                     const bool _consistent_ordering)
+    : MultiFileList(std::move(paths_p), std::move(glob_input)), context(context_p), current_path(0),
+      consistent_ordering(_consistent_ordering) {
 	paginated_files.resize(paths.size());
 }
 
@@ -375,7 +377,7 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
 	const auto &current_file_path = paths[current_path].path;
-	if (fs.SupportsPaginatedGlobbing(current_file_path, context)) {
+	if (fs.SupportsPaginatedGlobbing(current_file_path, context) && !consistent_ordering) {
 		auto &pagination_result = paginated_files[current_path];
 		if (pagination_result == nullptr) {
 			pagination_result = fs.PaginatedGlobFiles(current_file_path, context, glob_input);
@@ -390,6 +392,10 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 		return true;
 	} else {
 		auto glob_files = fs.GlobFiles(current_file_path, context, glob_input);
+		if (consistent_ordering) {
+			std::sort(glob_files.begin(), glob_files.end());
+		}
+
 		result.insert(result.end(), glob_files.begin(), glob_files.end());
 		current_path++;
 		return true;
