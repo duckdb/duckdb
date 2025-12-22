@@ -245,10 +245,10 @@ static bool CanPushdown(const ArrowType &type) {
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::VARCHAR:
 		return true;
+	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
-		// PyArrow doesn't support binary view filters yet
+		// PyArrow doesn't support binary and string view filters yet
 		return type.GetTypeInfo<ArrowStringInfo>().GetSizeType() != ArrowVariableSizeType::VIEW;
 	case LogicalTypeId::DECIMAL: {
 		switch (duck_type.InternalType()) {
