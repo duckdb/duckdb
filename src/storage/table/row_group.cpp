@@ -1255,7 +1255,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
-		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 		if (metadata_manager) {
 			vector<MetaBlockPointer> extra_metadata_block_pointers;
 			extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
@@ -1323,7 +1323,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		metadata_blocks.insert(column_pointer.block_pointer);
 	}
 	if (metadata_manager) {
-		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 	}
 	// set up the pointers correctly within this row group for future operations
 	column_pointers = row_group_pointer.data_pointers;
@@ -1376,10 +1376,11 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
-vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
+vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed
 		// re-use them as-is
+		auto &manager = *writer.GetMetadataManager();
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
@@ -1388,7 +1389,7 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 		// no version information: write nothing
 		return vector<MetaBlockPointer>();
 	}
-	return vinfo->Checkpoint(manager);
+	return vinfo->Checkpoint(writer);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {

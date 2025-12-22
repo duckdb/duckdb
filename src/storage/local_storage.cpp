@@ -30,31 +30,19 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		if (constraint == IndexConstraintType::NONE) {
 			return false;
 		}
-		if (index.GetIndexType() != ART::TYPE_NAME) {
-			return false;
-		}
 		if (!index.IsBound()) {
 			return false;
 		}
-		auto &art = index.Cast<ART>();
-
-		// UNIQUE constraint.
-		vector<unique_ptr<Expression>> expressions;
-		vector<unique_ptr<Expression>> delete_expressions;
-		for (auto &expr : art.unbound_expressions) {
-			expressions.push_back(expr->Copy());
-			delete_expressions.push_back(expr->Copy());
+		auto &bound_index = index.Cast<BoundIndex>();
+		if (!bound_index.SupportsDeltaIndexes()) {
+			return false;
 		}
 
 		// Create a delete index and a local index.
-		auto &name = art.GetIndexName();
-		auto &io_manager = art.table_io_manager;
-		auto delete_index =
-		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(delete_expressions), art.db);
+		auto delete_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_DELETE);
 		delete_indexes.AddIndex(std::move(delete_index));
 
-		auto append_index =
-		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(expressions), art.db);
+		auto append_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
 		append_indexes.AddIndex(std::move(append_index));
 		return false;
 	});
