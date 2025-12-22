@@ -246,8 +246,7 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
 
 	auto multi_file_reader = MultiFileReader::Create(function);
-	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
-	                                                   input);
+	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
 	auto parquet_options = make_uniq<ParquetFileReaderOptions>(std::move(serialization.parquet_options));
 	auto interface = make_uniq<ParquetMultiFileInfo>();
 	auto bind_data = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindInternal(
