@@ -159,7 +159,7 @@ protected:
 class GlobMultiFileList : public MultiFileList {
 public:
 	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobInput glob_input,
-	                  bool _consistent_ordering);
+	                  bool _consistent_ordering = true);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,

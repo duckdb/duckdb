@@ -66,12 +66,17 @@ public:
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
 	DUCKDB_API virtual shared_ptr<MultiFileList>
-	CreateFileList(ClientContext &context, const vector<string> &paths, bool consistent_ordering,
+	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 	//! Shorthand for ParsePaths + CreateFileList
 	DUCKDB_API shared_ptr<MultiFileList>
-	CreateFileList(ClientContext &context, const Value &input, bool consistent_ordering,
+	CreateFileList(ClientContext &context, const Value &input,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
+
+	//!  Create a MultiFileList from a vector of paths, without guaranteeing any ordering
+	DUCKDB_API shared_ptr<MultiFileList>
+	CreateUnorderedFileList(ClientContext &context, const Value &input,
+	                        const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
