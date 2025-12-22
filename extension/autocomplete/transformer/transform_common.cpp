@@ -253,7 +253,7 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
 		if (modifiers.size() > 9) {
-			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", result.GetAlias());
+			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", qualified_type_name.name);
 		}
 		if (qualified_type_name.schema.empty()) {
 			qualified_type_name.schema = qualified_type_name.catalog;
