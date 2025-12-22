@@ -765,6 +765,17 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	// Serialize the extra data
 	serializer.WritePropertyWithDefault(150, "extra_data", extra_data);
 
+	// TODO: Dont special-case this
+	if (logical_type.id() == LogicalTypeId::VARIANT) {
+		serializer.WritePropertyWithDefault(100, "data_pointers", pointers);
+		serializer.WriteProperty(101, "validity", child_columns[0]);
+		serializer.WriteProperty(102, "unshredded", child_columns[1]);
+		if (child_columns.size() > 2) {
+			serializer.WriteProperty(103, "shredded", child_columns[2]);
+		}
+		return;
+	}
+
 	switch (logical_type.InternalType()) {
 	case PhysicalType::BIT: {
 		serializer.WritePropertyWithDefault(100, "data_pointers", pointers);
@@ -809,12 +820,8 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	// Otherwise, the type of this segment may depend on extra data
 	switch (extra_data->GetType()) {
 	case ExtraPersistentColumnDataType::VARIANT: {
-		const auto &variant_data = extra_data->Cast<VariantPersistentColumnData>();
-
 		auto unshredded_type = VariantShredding::GetUnshreddedType();
-		auto &shredded_type = variant_data.logical_type;
-		auto variant_type = LogicalType::STRUCT({{"unshredded", unshredded_type}, {"shredded", shredded_type}});
-		PersistentColumnData result(variant_type);
+		PersistentColumnData result(LogicalType::VARIANT());
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -832,6 +839,18 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserializer) {
 	auto result = GetPersistentColumnDataType(deserializer);
 	const auto &type = result.logical_type;
+
+	// TODO: Dont special-case this
+	if (type.id() == LogicalTypeId::VARIANT) {
+		deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+		result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+		result.DeserializeField(deserializer, 102, "unshredded", VariantShredding::GetUnshreddedType());
+		if (result.extra_data) {
+			auto &variant_data = result.extra_data->Cast<VariantPersistentColumnData>();
+			result.DeserializeField(deserializer, 103, "shredded", variant_data.logical_type);
+		}
+		return result;
+	}
 
 	switch (type.InternalType()) {
 	case PhysicalType::BIT: {
