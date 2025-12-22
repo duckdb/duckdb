@@ -351,9 +351,19 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 						}
 						result_chunk.SetCardinality(fetch_chunk);
 						if (is_delete) {
-							bound_index.Delete(result_chunk, row_identifiers);
+							auto delete_count = bound_index.TryDelete(result_chunk, row_identifiers);
+							if (delete_count != result_chunk.size()) {
+								throw InternalException("Failed to remove all rows while merging checkpoint deltas - "
+								                        "this signifies a bug or broken index\nChunk: %s",
+								                        result_chunk.ToString());
+							}
 						} else {
-							bound_index.Append(result_chunk, row_identifiers);
+							auto error = bound_index.Append(result_chunk, row_identifiers);
+							if (error.HasError()) {
+								throw InternalException("Failed to append while merging checkpoint deltas - this "
+								                        "signifies a bug or broken index: %s",
+								                        error.Message());
+							}
 						}
 						count = 0;
 					}

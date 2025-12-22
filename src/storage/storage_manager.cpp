@@ -179,8 +179,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	return true;
 }
 
-void StorageManager::WALFinishCheckpoint() {
-	lock_guard<mutex> guard(wal_lock);
+void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 	D_ASSERT(wal.get());
 
 	// "wal" points to the checkpoint WAL
