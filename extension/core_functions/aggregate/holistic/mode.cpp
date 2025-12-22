@@ -234,15 +234,12 @@ struct BaseModeFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		if (!source.frequency_map) {
 			return;
 		}
 		if (!target.frequency_map) {
-			// Copy - don't destroy! Otherwise windowing will break.
-			target.frequency_map = new typename STATE::Counts(*source.frequency_map);
-			target.count = source.count;
-			return;
+			target.frequency_map = TYPE_OP::CreateEmpty(aggr_input_data.allocator);
 		}
 		for (auto &val : *source.frequency_map) {
 			auto &i = (*target.frequency_map)[val.first];

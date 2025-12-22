@@ -139,14 +139,25 @@ void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 
 unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &stats, const StorageIndex &index) {
 	D_ASSERT(index.GetPrimaryIndex() < StructType::GetChildCount(stats.type));
-	auto &child_stats = GetChildStats(stats, index.GetPrimaryIndex());
+	auto child_index = index.GetPrimaryIndex();
+	auto &child_types = StructType::GetChildTypes(stats.type);
+
+	auto &child_stats = GetChildStats(stats, child_index);
+	auto &child_type = child_types[child_index].second;
 
 	auto &child_indexes = index.GetChildIndexes();
 	if (child_indexes.empty()) {
-		return child_stats.ToUnique();
+		D_ASSERT(child_stats.type == child_type);
+		if (index.GetType() != child_type) {
+			//! FIXME: support try_cast
+			return StatisticsPropagator::TryPropagateCast(child_stats, child_type, index.GetType());
+		} else {
+			return child_stats.ToUnique();
+		}
 	} else {
 		D_ASSERT(child_indexes.size() == 1);
-		return child_stats.PushdownExtract(child_indexes[0]);
+		auto &child_index = child_indexes[0];
+		return child_stats.PushdownExtract(child_index);
 	}
 }
 

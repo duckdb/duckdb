@@ -2481,6 +2481,45 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                "Table type must be \"LOCAL TABLE\", \"BASE TABLE\" or \"VIEW\": \"INVALID\"") == 0));
 		adbc_error.release(&adbc_error);
 	}
+
+	// Test input quoting protection
+	{
+		ADBCTestDatabase db("test_input_quoting");
+		db.CreateTable("test_table", db.QueryArrow("SELECT 42 as value"));
+
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+
+		// Test catalog filter with special characters
+		auto status =
+		    AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "'; DROP TABLE test_table; --",
+		                             nullptr, nullptr, nullptr, nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists after special characters in filter
+		auto res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+
+		// Test schema filter with special characters
+		status = AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
+		                                  "'; DROP TABLE test_table; --", nullptr, nullptr, nullptr, &arrow_stream,
+		                                  &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists
+		res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+
+		// Test table name filter with special characters
+		status = AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+		                                  "'; DROP TABLE test_table; --", nullptr, nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists
+		res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+	}
 }
 
 TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {

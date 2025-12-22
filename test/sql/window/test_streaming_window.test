@@ -533,3 +533,16 @@ SELECT
 	STDDEV_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf 
 FROM issue17621 
 GROUP BY ROLLUP(k)
+
+# UNION multiple local states
+query II
+WITH start_and_inputs AS (
+    SELECT 50 AS moves
+    UNION ALL
+    SELECT 50 AS moves
+)
+SELECT moves, sum(moves) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS sum
+FROM start_and_inputs;
+----
+50	50
+50	100

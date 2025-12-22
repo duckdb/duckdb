@@ -123,7 +123,7 @@ unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request, unique_ptr<HTTP
 }
 
 BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params)
-    : type(type), url(url), headers(headers), params(params) {
+    : type(type), url(url), headers(MergeHeaders(headers, params)), params(params) {
 	HTTPUtil::DecomposeURL(url, path, proto_host_port);
 }
 
@@ -189,9 +189,6 @@ private:
 	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
 		duckdb_httplib::Headers headers;
 		for (auto &entry : header_map) {
-			headers.insert(entry);
-		}
-		for (auto &entry : params.extra_headers) {
 			headers.insert(entry);
 		}
 		return headers;

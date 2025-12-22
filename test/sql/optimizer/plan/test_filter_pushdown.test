@@ -231,3 +231,15 @@ ORDER BY ALL;
 ----
 1	2021-01-01	2021-01-01	2010-01-01
 1	2021-01-01	2021-02-15	2010-01-01
+
+# test ALIAS function in WHERE clause with column comparison
+statement ok
+CREATE TABLE t0(c0 VARCHAR(500));
+
+statement ok
+INSERT INTO t0(c0) VALUES ('2');
+
+query T
+SELECT * FROM t0 WHERE (t0.c0<(ALIAS(t0.c0)));
+----
+2

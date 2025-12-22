@@ -83,3 +83,8 @@ query I
 SELECT concat(NULL, NULL)
 ----
 NULL
+
+query I
+SELECT ''~concat(NULL)
+----
+NULL

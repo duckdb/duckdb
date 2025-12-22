@@ -60,7 +60,11 @@ atomic<bool> success {true};
 unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &query) {
 	auto result = conn.Query(query);
 	if (result->HasError()) {
-		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, result->GetError());
+		auto err = result->GetError();
+		if (StringUtil::Contains(err, "write-write conflict on key") && StringUtil::Contains(query, "COMMIT")) {
+			return nullptr;
+		}
+		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, err);
 		success = false;
 	}
 	return result;
@@ -197,6 +201,11 @@ void AttachWorker::lookup(AttachTask &task) {
 	string query = "SELECT i, s, ts, obj FROM " + table_name + " WHERE i = " + to_string(expected_max_val);
 	addLog("q: " + query);
 	auto result = execQuery(query);
+	if (!result) {
+		addLog("FAILURE - Unexpected empty result");
+		success = false;
+		return;
+	}
 	if (result->RowCount() == 0) {
 		addLog("FAILURE - No rows returned from query");
 		success = false;

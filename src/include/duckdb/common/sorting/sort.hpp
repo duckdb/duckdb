@@ -50,6 +50,10 @@ public:
 	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
 	     vector<idx_t> projection_map, bool is_index_sort = false);
 
+public:
+	//! The client context
+	ClientContext &context;
+
 private:
 	//! Key orders, expressions, and layout
 	unique_ptr<Expression> create_sort_key;

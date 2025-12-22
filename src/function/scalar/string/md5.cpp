@@ -28,7 +28,7 @@ struct MD5Number128Operator {
 		MD5Context context;
 		context.Add(input);
 		context.Finish(digest);
-		return *reinterpret_cast<uhugeint_t *>(digest);
+		return BSwapIfBE(*reinterpret_cast<uhugeint_t *>(digest));
 	}
 };
 

@@ -19,18 +19,29 @@ class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 
+struct ReferencedExtractComponent {
+public:
+	explicit ReferencedExtractComponent(unique_ptr<Expression> &extract) : extract(extract) {
+	}
+
+public:
+	//! The extract expression in the chain of extracts (i.e: s.my_field.my_nested_field has 2 components)
+	unique_ptr<Expression> &extract;
+	//! (Optionally) the cast on top of the extract
+	optional_ptr<unique_ptr<Expression>> cast;
+};
+
 struct ReferencedStructExtract {
 public:
-	ReferencedStructExtract(vector<reference<unique_ptr<Expression>>> expressions, idx_t bindings_idx,
-	                        ColumnIndex &&path)
-	    : bindings_idx(bindings_idx), expr(std::move(expressions)), extract_path(std::move(path)) {
+	ReferencedStructExtract(vector<ReferencedExtractComponent> components, idx_t bindings_idx, ColumnIndex &&path)
+	    : bindings_idx(bindings_idx), components(std::move(components)), extract_path(std::move(path)) {
 	}
 
 public:
 	//! The index into the 'bindings' of the ReferencedColumn that is the child of this struct_extract
 	idx_t bindings_idx;
-	//! The struct extract expressions, in order from root to leaf
-	vector<reference<unique_ptr<Expression>>> expr;
+	//! The struct extract components, in order from root to leaf
+	vector<ReferencedExtractComponent> components;
 	//! The ColumnIndex with a path that matches this struct extract
 	ColumnIndex extract_path;
 };
@@ -72,16 +83,17 @@ protected:
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Add a reference to a sub-section of the column used in a struct extract, with the parent expression
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column,
-	                const vector<reference<unique_ptr<Expression>>> &parent);
+	                const vector<ReferencedExtractComponent> &parent);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	//! ret: The amount of bindings created
 	idx_t ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
-	bool HandleStructExtract(unique_ptr<Expression> *expression);
+	bool HandleStructExtract(unique_ptr<Expression> *expression,
+	                         optional_ptr<unique_ptr<Expression>> cast_expression = nullptr);
 
 	bool HandleStructExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
-	                                  vector<idx_t> &indexes, vector<reference<unique_ptr<Expression>>> &expressions);
+	                                  vector<idx_t> &indexes, vector<ReferencedExtractComponent> &expressions);
 	void SetMode(BaseColumnPrunerMode mode);
 	bool HandleStructPack(Expression &expr);
 	BaseColumnPrunerMode GetMode() const;
@@ -120,8 +132,8 @@ private:
 	void RemoveColumnsFromLogicalGet(LogicalGet &get);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
-	void WritePushdownExtractColumns(const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx,
-	                                 const LogicalType &column_type,
-	                                 const std::function<idx_t(const ColumnIndex &new_index)> &callback);
+	void WritePushdownExtractColumns(
+	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
+	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<LogicalType> cast_type)> &callback);
 };
 } // namespace duckdb

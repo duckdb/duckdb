@@ -35,7 +35,7 @@ FORMAT_SCRIPT = REPO_ROOT / "scripts" / "format.py"
 
 
 def path_from_duckdb(path: Path):
-    return str(path).split('duckdb/', 1)[1]
+    return path.relative_to(REPO_ROOT)
 
 
 def format_file(path: Path):

@@ -55,7 +55,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 	if (array.null_count != 0 && array.n_buffers > 0 && array.buffers[0]) {
 		auto bit_offset = GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
 		mask.EnsureWritable();
-#if STANDARD_VECTOR_SIZE > 64
+#if STANDARD_VECTOR_SIZE > 64 && !DUCKDB_IS_BIG_ENDIAN
 		auto n_bitmask_bytes = (size + 8 - 1) / 8;
 		if (bit_offset % 8 == 0) {
 			//! just memcpy nullmask
