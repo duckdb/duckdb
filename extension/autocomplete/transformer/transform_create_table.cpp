@@ -51,7 +51,6 @@ PEGTransformerFactory::TransformCreateStatementVariation(PEGTransformer &transfo
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("CreateTableStmt not implemented");
 	auto result = make_uniq<CreateStatement>();
 	QualifiedName table_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	// Use appropriate constructor
@@ -288,23 +287,15 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransf
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto fk_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
+	auto pk_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 
-	auto table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
-	auto opt_pk_list = list_pr.Child<OptionalParseResult>(5);
-	vector<string> pk_list;
-	if (opt_pk_list.HasResult()) {
-		pk_list = transformer.Transform<vector<string>>(opt_pk_list.optional_result);
+	auto fk_constraint = transformer.Transform<unique_ptr<Constraint>>(list_pr.Child<ListParseResult>(3));
+	if (fk_constraint->type != ConstraintType::FOREIGN_KEY) {
+		throw InternalException("Expected foreign key constraint.");
 	}
-	auto key_actions = list_pr.Child<OptionalParseResult>(6);
-	// TODO(Dtenwolde) do something with key actions
-
-	ForeignKeyInfo fk_info;
-	fk_info.table = table_name->table_name;
-	fk_info.schema = table_name->schema_name;
-	// TODO(Dtenwolde) unsure about the fk type or how to figure this out.
-	fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
-	return make_uniq<ForeignKeyConstraint>(pk_list, fk_list, fk_info);
+	auto fk = unique_ptr_cast<Constraint, ForeignKeyConstraint>(std::move(fk_constraint));
+	fk->pk_columns = pk_list;
+	return std::move(fk);
 }
 
 vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &transformer,

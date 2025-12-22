@@ -1752,8 +1752,7 @@ PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &tran
 	for (auto col : col_list) {
 		lambda_columns.push_back(transformer.Transform<string>(col));
 	}
-	auto lhs_lambda = make_uniq<ColumnRefExpression>(lambda_columns);
-	auto lambda_expression = make_uniq<LambdaExpression>(std::move(lhs_lambda), std::move(rhs_lambda));
+	auto lambda_expression = make_uniq<LambdaExpression>(lambda_columns, std::move(rhs_lambda));
 	auto in_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(5));
 	auto list_comprehension_filter = list_pr.Child<OptionalParseResult>(6);
 	if (list_comprehension_filter.HasResult()) {

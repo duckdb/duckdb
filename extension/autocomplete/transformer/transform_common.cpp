@@ -234,41 +234,48 @@ PEGTransformerFactory::TransformTypeModifiers(PEGTransformer &transformer, optio
 LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transformer,
                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto opt_modifiers = list_pr.Child<OptionalParseResult>(1);
+	vector<Value> modifiers;
+	if (opt_modifiers.HasResult()) {
+		auto modifier_expressions =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
+		for (const auto &modifier : modifier_expressions) {
+			if (modifier->GetExpressionClass() != ExpressionClass::CONSTANT) {
+				throw ParserException("Expected a constant as type modifier");
+			}
+			modifiers.push_back(modifier->Cast<ConstantExpression>().value);
+		}
+	}
 	auto qualified_type_or_character = list_pr.Child<ListParseResult>(0);
 	auto type_or_character_pr = qualified_type_or_character.Child<ChoiceParseResult>(0).result;
 	LogicalType result;
 	if (type_or_character_pr->name == "QualifiedTypeName") {
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
+		if (modifiers.size() > 9) {
+			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", result.GetAlias());
+		}
+		if (qualified_type_name.schema.empty()) {
+			qualified_type_name.schema = qualified_type_name.catalog;
+			qualified_type_name.catalog = INVALID_CATALOG;
+		}
 		if (result.id() == LogicalTypeId::USER) {
-			vector<Value> modifiers;
-			if (qualified_type_name.schema.empty()) {
-				qualified_type_name.schema = qualified_type_name.catalog;
-				qualified_type_name.catalog = INVALID_CATALOG;
-			}
 			result = LogicalType::USER(qualified_type_name.catalog, qualified_type_name.schema,
 			                           qualified_type_name.name, std::move(modifiers));
+		} else if (result.id() == LogicalTypeId::ENUM) {
+			Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(modifiers.size()));
+			auto string_data = FlatVector::GetData<string_t>(enum_vector);
+			idx_t pos = 0;
+			for (auto modifier : modifiers) {
+				string_data[pos++] = StringVector::AddString(enum_vector, modifier.ToString());
+			}
+			return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(modifiers.size()));
 		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);
 	} else {
 		throw InternalException("Unexpected rule %s encountered in SimpleType", type_or_character_pr->name);
 	}
-	auto opt_modifiers = list_pr.Child<OptionalParseResult>(1);
-	vector<unique_ptr<ParsedExpression>> modifiers;
-	if (opt_modifiers.HasResult()) {
-		modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
-		for (const auto &modifier : modifiers) {
-			if (modifier->GetExpressionClass() == ExpressionClass::CONSTANT) {
-				continue;
-			}
-			throw ParserException("Expected a constant as type modifier");
-		}
-		if (modifiers.size() > 9) {
-			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", result.GetAlias());
-		}
-	}
-	// TODO(Dtenwolde) add modifiers
 	return result;
 }
 

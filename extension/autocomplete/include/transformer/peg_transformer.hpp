@@ -497,6 +497,8 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformDefaultValue(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
+	static unique_ptr<Constraint> TransformForeignKeyConstraint(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
 
 	// create_type.gram
 	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,

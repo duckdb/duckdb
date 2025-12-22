@@ -1017,12 +1017,12 @@ ReturningClause <- 'RETURNING' TargetList
 CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
-SelectSetOpChain <- SelectAtom (SetOpClause SelectAtom)*
+SelectSetOpChain <- SelectAtom (SetopClause SelectAtom)*
 SelectAtom <- SelectParens / SelectStatementType
 
 SelectParens <- Parens(SelectStatementInternal)
 
-SetOpClause <- SetopType DistinctOrAll? ByName?
+SetopClause <- SetopType DistinctOrAll? ByName?
 SetopType <- SetopUnion / SetopExcept / SetopIntersect
 SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
@@ -1104,7 +1104,6 @@ JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
 
-OuterJoinType <- 'FULL' / 'LEFT' / 'RIGHT'
 JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
 CrossJoinPrefix <- 'CROSS'
