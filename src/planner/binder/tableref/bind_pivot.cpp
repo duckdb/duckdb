@@ -437,8 +437,8 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 		}
 
 		if (unique_names.size() != aggregates.size()) {
-			throw InternalException("Pivot aggregate mismatch: %llu unique names, %llu aggregates",
-				unique_names.size(), aggregates.size());
+			throw InternalException("Pivot aggregate mismatch: %llu unique names, %llu aggregates", unique_names.size(),
+			                        aggregates.size());
 		}
 
 		unordered_map<string, idx_t> name_to_position;
