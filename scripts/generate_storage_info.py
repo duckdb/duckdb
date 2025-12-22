@@ -66,6 +66,24 @@ def generate_storage_array(storage_versions):
     return "\n".join(result)
 
 
+def generate_serialization_array(serialization_versions):
+    result = []
+    result.append("static const SerializationVersionInfo serialization_version_info[] = {")
+
+    current = ""
+    for version_name, _ in serialization_versions.items():
+        if version_name == 'latest':
+            continue
+        result.append(f'\t{{"{version_name}", SerializationVersionDeprecated::{to_enum_name(version_name)}}},')
+        current = version_name
+
+    latest = "latest"
+    result.append(f'\t{{"{latest}", SerializationVersionDeprecated::{to_enum_name(current)}}},')
+    result.append("\t{nullptr, SerializationVersionDeprecated::INVALID}")
+    result.append("};")
+    return "\n".join(result)
+
+
 def update_file(path, marker_type, new_content):
     if not os.path.exists(path):
         print(f"Error: {path} not found.")
@@ -107,6 +125,9 @@ def main():
 
     array_code = generate_storage_array(storage_values)
     update_file(STORAGE_INFO_PATH, "STORAGE_ARRAY", array_code)
+
+    ser_array_code = generate_serialization_array(serialization_values)
+    update_file(STORAGE_INFO_PATH, "SER_ARRAY", ser_array_code)
 
     print(f"Successfully updated all version info in {STORAGE_INFO_PATH}")
 

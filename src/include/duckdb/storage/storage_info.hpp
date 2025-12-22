@@ -171,13 +171,18 @@ struct StorageVersionInfo {
 		return static_cast<uint64_t>(version);
 	}
 
-	static constexpr uint64_t GetSerializationVersionValue(SerializationVersionDeprecated version) {
-		return static_cast<uint64_t>(version);
-	}
-
 	static constexpr uint64_t GetStorageVersionDefault() {
 		return GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO);
 	};
+};
+
+struct SerializationVersionInfo {
+	const char *version_name;
+	SerializationVersionDeprecated storage_version;
+
+	static constexpr uint64_t GetSerializationVersionValue(SerializationVersionDeprecated version) {
+		return static_cast<uint64_t>(version);
+	}
 };
 
 //! The version number default, lower and upper bounds of the database storage format
@@ -185,7 +190,9 @@ extern const uint64_t VERSION_NUMBER;
 extern const uint64_t VERSION_NUMBER_LOWER;
 extern const uint64_t VERSION_NUMBER_UPPER;
 string GetDuckDBVersions(const idx_t version_number);
+string GetStorageVersionNameInternal(const idx_t storage_version);
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix);
+optional_idx GetSerializationVersionDeprecated(const char *version_string);
 optional_idx GetStorageVersion(const char *version_string);
 vector<string> GetStorageCandidates();
 

@@ -1600,7 +1600,8 @@ Value SecretDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto version_string = input.GetValue<string>();
-	auto storage_compatibility = StorageCompatibility::FromString(version_string);
+	// we set bump_version to true, because the version is explicitly bumped by setting storage_compatibility
+	auto storage_compatibility = StorageCompatibility::FromString(version_string, true);
 	config.options.storage_compatibility = storage_compatibility;
 }
 
