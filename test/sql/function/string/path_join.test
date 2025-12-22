@@ -67,11 +67,21 @@ SELECT path_join('s3://foo', 'az://foo');
 incompatible URI schemes
 
 statement error
+SELECT path_join('/usr/local', 's3://foo');
+----
+cannot join absolute URI
+
+statement error
 SELECT path_join('dir', '/abs/path');
 ----
 absolute RHS
 
-statement error
+query I
 SELECT path_join(NULL, 'dir');
 ----
-NULL argument
+NULL
+
+query I
+SELECT path_join('dir', NULL);
+----
+NULL

@@ -217,7 +217,7 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	REQUIRE(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
 
 	auto drive_relative = fs->JoinPath("C:", "system32");
-	REQUIRE(drive_relative == fs->ConvertSeparators("C:/system32"));
+	REQUIRE(drive_relative == fs->ConvertSeparators("C:system32"));
 
 	auto drive_absolute_child = fs->JoinPath(R"(C:\)", "system32");
 	REQUIRE(drive_absolute_child == fs->ConvertSeparators("C:/system32"));

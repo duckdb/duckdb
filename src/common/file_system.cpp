@@ -581,7 +581,13 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	strip_leading(rhs, string(1, separator_char));
 
 	// Avoid introducing a second leading separator when lhs is already the root
-	auto combined = (lhs == separator) ? lhs + rhs : lhs + separator + rhs;
+#ifdef _WIN32
+	bool lhs_is_drive_prefix =
+	    lhs.size() == 2 && StringUtil::CharacterIsAlpha(lhs[0]) && lhs[1] == ':' && !lhs_parsed.has_scheme;
+#else
+	bool lhs_is_drive_prefix = false;
+#endif
+	auto combined = (lhs == separator || lhs_is_drive_prefix) ? lhs + rhs : lhs + separator + rhs;
 	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
 	return attach_scheme(lhs_parsed, normalized, lhs_scheme_absolute);
 }

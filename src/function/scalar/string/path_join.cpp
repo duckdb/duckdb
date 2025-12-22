@@ -25,14 +25,14 @@ public:
 	}
 };
 
-// Process one output row; throws on invalid input, fills out_result otherwise.
-static void ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs, idx_t col_count, FileSystem &fs,
+// Process one output row; returns false if any input is NULL.
+static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs, idx_t col_count, FileSystem &fs,
                        string &out_result) {
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
 		auto &vdata = inputs[col_idx];
 		auto idx = vdata.sel->get_index(row_idx);
 		if (!vdata.validity.RowIsValid(idx)) {
-			throw InvalidInputException("path_join: NULL argument");
+			return false;
 		}
 		auto input_value = UnifiedVectorFormat::GetData<string_t>(vdata)[idx].GetString();
 		if (col_idx == 0) {
@@ -41,6 +41,7 @@ static void ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs,
 			out_result = fs.JoinPath(out_result, input_value);
 		}
 	}
+	return true;
 }
 
 void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -69,8 +70,11 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &validity = ConstantVector::Validity(result);
 		auto result_data = ConstantVector::GetData<string_t>(result);
 		string joined;
-		ProcessRow(0, inputs, col_count, fs, joined);
-		result_data[0] = StringVector::AddString(result, joined);
+		if (!ProcessRow(0, inputs, col_count, fs, joined)) {
+			validity.SetInvalid(0);
+		} else {
+			result_data[0] = StringVector::AddString(result, joined);
+		}
 		return;
 	}
 
@@ -80,7 +84,10 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		string joined;
-		ProcessRow(row_idx, inputs, col_count, fs, joined);
+		if (!ProcessRow(row_idx, inputs, col_count, fs, joined)) {
+			validity.SetInvalid(row_idx);
+			continue;
+		}
 		result_data[row_idx] = StringVector::AddString(result, joined);
 	}
 }
@@ -95,7 +102,7 @@ unique_ptr<FunctionData> PathJoinBind(ClientContext &context, ScalarFunction &bo
 	idx_t path_count = arguments.size();
 	vector<LogicalType> arg_types(arguments.size(), LogicalType::VARCHAR);
 	bound_function.arguments = std::move(arg_types);
-	bound_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	bound_function.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	return make_uniq<PathJoinBindData>(path_count);
 }
 
@@ -103,7 +110,7 @@ ScalarFunction PathJoinFun::GetFunction() {
 	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
 	path_join.bind = PathJoinBind;
 	path_join.varargs = LogicalType::VARCHAR;
-	path_join.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	path_join.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	return path_join;
 }
 
