@@ -19,4 +19,4 @@ SELECT * FROM parquet_file_metadata('{DATA_DIR}/parquet-testing/arrow/alltypes_d
 query IIIIIIIIII
 SELECT unnest(parquet_file_metadata, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/arrow/column_orders.parquet')
 ----
-data/parquet-testing/arrow/column_orders.parquet	DuckDB version v1.5.0-dev4781 (build 8a469a87b9)	2	1	1	NULL	NULL	293	215	ColumnOrder(TYPE_ORDER=TypeDefinedOrder()), ColumnOrder(TYPE_ORDER=TypeDefinedOrder())
+data/parquet-testing/arrow/column_orders.parquet	DuckDB version v1.5.0-dev4781 (build 8a469a87b9)	2	1	1	NULL	NULL	293	215	['ColumnOrder(TYPE_ORDER=TypeDefinedOrder())', 'ColumnOrder(TYPE_ORDER=TypeDefinedOrder())']
