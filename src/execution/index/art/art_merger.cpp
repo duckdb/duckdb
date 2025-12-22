@@ -255,7 +255,7 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 
 	Prefix l_prefix(art, entry.left, true);
 	Prefix r_prefix(art, entry.right, true);
-	const auto count = Prefix::Count(art);
+	const auto count = art.PrefixCount();
 
 	// Find a byte at pos where the prefixes differ.
 	// If they match up to max_count, then pos stays invalid.
