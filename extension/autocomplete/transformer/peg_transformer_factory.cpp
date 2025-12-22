@@ -175,7 +175,6 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformCopyFileName);
 	REGISTER_TRANSFORM(TransformIdentifierColId);
 	REGISTER_TRANSFORM(TransformCopyOptions);
-	REGISTER_TRANSFORM(TransformGenericCopyOptionListParens);
 	REGISTER_TRANSFORM(TransformSpecializedOptionList);
 	REGISTER_TRANSFORM(TransformSpecializedOption);
 	REGISTER_TRANSFORM(TransformSingleOption);
@@ -257,6 +256,7 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformCheckConstraint);
 	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
 	REGISTER_TRANSFORM(TransformDefaultValue);
+	REGISTER_TRANSFORM(TransformGeneratedColumn);
 }
 
 void PEGTransformerFactory::RegisterCreateType() {

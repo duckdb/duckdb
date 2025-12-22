@@ -778,7 +778,7 @@ TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
 
 ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
-CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? Parens(GenericCopyOptionList)
+CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
 
 SecretStorageSpecifier <- 'IN' Identifier
 
@@ -876,8 +876,7 @@ ReservedTableQualification <- ReservedTableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
-ColumnDefinition <- DottedIdentifier TypeOrGenerated ColumnConstraint*
-TypeOrGenerated <- Type? GeneratedColumn?
+ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
 NotNullConstraint <- 'NOT'? 'NULL'
 UniqueConstraint <- 'UNIQUE'
@@ -1220,7 +1219,7 @@ VariableList <- List(Expression)
 
 ResetStatement <- 'RESET' (SetVariable / SetSetting)
 
-ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral Parens(GenericCopyOptionList)?
+ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
 
 ExportSource <- CatalogName 'TO'
 
@@ -1236,7 +1235,8 @@ FromOrTo <- 'FROM' / 'TO'
 CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
 
 CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
-CopyOptions <- 'WITH'? Parens(GenericCopyOptionList) / (SpecializedOptions*)
+CopyOptions <- 'WITH'? (GenericCopyOptionList / SpecializedOptionsList)
+SpecializedOptionsList <- SpecializedOptions*
 SpecializedOptions <-
 	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /
 	SpecializedStringOption /
@@ -1249,7 +1249,7 @@ SpecializedStringOption <- ('DELIMITER' / 'NULL' / 'QUOTE' / 'ESCAPE') 'AS'? Str
 
 StarOrColumnList <- '*' / ColumnList
 
-GenericCopyOptionList <- List(GenericCopyOption)
+GenericCopyOptionList <- Parens(List(GenericCopyOption))
 GenericCopyOption <- CopyOptionName Expression?
 
 CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
@@ -1270,7 +1270,7 @@ AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / Chan
 
 AddConstraint <- 'ADD' TopLevelConstraint
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
-AddColumnEntry <- DottedIdentifier TypeOrGenerated ColumnConstraint*
+AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
 RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
@@ -1479,7 +1479,7 @@ Parens(D) <- '(' D ')'
 
 ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptions? Statement
 
-ExplainOptions <- Parens(GenericCopyOptionList)
+ExplainOptions <- GenericCopyOptionList
 
 AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?
@@ -1519,7 +1519,7 @@ AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath Attac
 Database <- 'DATABASE'
 DatabasePath <- StringLiteral
 AttachAlias <- 'AS' ColId
-AttachOptions <- Parens(GenericCopyOptionList)
+AttachOptions <- GenericCopyOptionList
 
 DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 

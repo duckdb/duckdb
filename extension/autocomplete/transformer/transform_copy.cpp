@@ -99,7 +99,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 
 	auto &copy_options_pr = list_pr.Child<OptionalParseResult>(4);
 	if (copy_options_pr.HasResult()) {
-		info->options = transformer.Transform<case_insensitive_map_t<vector<Value>>>(copy_options_pr.optional_result);
+		auto generic_options = transformer.Transform<vector<GenericCopyOption>>(copy_options_pr.optional_result);
+		for (auto &option : generic_options) {
+			info->options[option.name] = option.children;
+		}
 		auto format_option = info->options.find("format");
 		if (format_option != info->options.end()) {
 			info->format = format_option->second[0].GetValue<string>();
@@ -148,41 +151,29 @@ string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transform
 	return result;
 }
 
-case_insensitive_map_t<vector<Value>>
+vector<GenericCopyOption>
 PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	// CopyOptions <- 'WITH'i? (Parens(GenericCopyOptionList) / SpecializedOption+)
+	// CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptions
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto copy_option_pr = list_pr.Child<ChoiceParseResult>(1).result;
-	return transformer.Transform<case_insensitive_map_t<vector<Value>>>(copy_option_pr);
+	auto &choice_list = list_pr.Child<ListParseResult>(1);
+	return transformer.Transform<vector<GenericCopyOption>>(choice_list.Child<ChoiceParseResult>(0).result);
 }
 
-case_insensitive_map_t<vector<Value>>
-PEGTransformerFactory::TransformGenericCopyOptionListParens(PEGTransformer &transformer,
-                                                            optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto generic_options = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto generic_options_transformed = transformer.Transform<unordered_map<string, vector<Value>>>(generic_options);
-	case_insensitive_map_t<vector<Value>> result;
-	for (auto option : generic_options_transformed) {
-		result[option.first] = {option.second};
-	}
-	return result;
-}
-
-case_insensitive_map_t<vector<Value>>
+vector<GenericCopyOption>
 PEGTransformerFactory::TransformSpecializedOptionList(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto options = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	case_insensitive_map_t<vector<Value>> result;
-	for (auto option : options) {
-		auto option_result = transformer.Transform<GenericCopyOption>(option);
-		result[option_result.name] = option_result.children;
+	auto options_opt = list_pr.Child<OptionalParseResult>(0);
+	if (!options_opt.HasResult()) {
+		return {};
 	}
-
+	auto options = options_opt.optional_result->Cast<RepeatParseResult>();
+	vector<GenericCopyOption> result;
+	for (auto option : options.children) {
+		result.push_back(transformer.Transform<GenericCopyOption>(option));
+	}
 	return result;
 }
-
 GenericCopyOption PEGTransformerFactory::TransformSpecializedOption(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -207,7 +198,6 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool force_quote = list_pr.Child<OptionalParseResult>(0).HasResult();
 	string func_name = force_quote ? "force_quote" : "quote";
-	// TODO(dtenwolde) continue with options here. Need to return ParsedExpressions rather than Value
 	return GenericCopyOption(func_name, Value());
 }
 

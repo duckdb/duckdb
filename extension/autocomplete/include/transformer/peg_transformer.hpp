@@ -10,6 +10,7 @@
 #include "ast/create_table_as.hpp"
 #include "ast/distinct_clause.hpp"
 #include "ast/extension_repository_info.hpp"
+#include "ast/generated_column_definition.hpp"
 #include "ast/generic_copy_option.hpp"
 #include "ast/insert_values.hpp"
 #include "ast/join_prefix.hpp"
@@ -380,11 +381,9 @@ private:
 	static bool TransformFromOrTo(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformCopyFileName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIdentifierColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<vector<Value>> TransformCopyOptions(PEGTransformer &transformer,
+	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<vector<Value>>
-	TransformGenericCopyOptionListParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<vector<Value>> TransformSpecializedOptionList(PEGTransformer &transformer,
+	static vector<GenericCopyOption> TransformSpecializedOptionList(PEGTransformer &transformer,
 	                                                                            optional_ptr<ParseResult> parse_result);
 
 	static GenericCopyOption TransformSpecializedOption(PEGTransformer &transformer,
@@ -499,6 +498,8 @@ private:
 	                                                          optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
+	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 	// create_type.gram
 	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,

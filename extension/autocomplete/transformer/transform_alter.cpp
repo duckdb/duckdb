@@ -150,8 +150,9 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	AddColumnEntry new_column;
 	new_column.column_path = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
-	new_column.type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
-	auto constraints_opt = list_pr.Child<OptionalParseResult>(2);
+	transformer.TransformOptional<LogicalType>(list_pr, 1, new_column.type);
+	// TODO(Dtenwolde) Add support for generated columns here
+	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
 	if (!constraints_opt.HasResult()) {
 		return new_column;
 	}

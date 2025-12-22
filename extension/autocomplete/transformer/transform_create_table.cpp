@@ -1,6 +1,7 @@
 #include "ast/column_constraints.hpp"
 #include "ast/column_elements.hpp"
 #include "ast/create_table_as.hpp"
+#include "ast/generated_column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -193,8 +194,9 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
-	auto type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
-	auto constraints_opt = list_pr.Child<OptionalParseResult>(2);
+	LogicalType type = LogicalType::ANY;
+	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
+	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
 	ColumnConstraint column_constraint;
 	if (constraints_opt.HasResult()) {
 		auto constraints_repeat = constraints_opt.optional_result->Cast<RepeatParseResult>();
@@ -213,14 +215,39 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 			}
 		}
 	}
-	// TODO(Dtenwolde) Deal with ColumnConstraint
-	auto result = ColumnDefinition(qualified_name.name, type);
+	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
+	if (generated_opt.HasResult()) {
+		auto generated = transformer.Transform<GeneratedColumnDefinition>(generated_opt.optional_result);
+		if (type != LogicalType::ANY) {
+			generated.expr = make_uniq<CastExpression>(type, std::move(generated.expr));
+		}
+		ColumnDefinition result(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
+
+		if (column_constraint.default_value) {
+			result.SetDefaultValue(std::move(column_constraint.default_value));
+		}
+		return result;
+	}
+
+	ColumnDefinition result(qualified_name.name, type);
+
 	if (column_constraint.default_value) {
 		result.SetDefaultValue(std::move(column_constraint.default_value));
 	}
-
 	return result;
 }
+
+GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	GeneratedColumnDefinition generated;
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
+	generated.expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+	transformer.TransformOptional<bool>(list_pr, 0, generated.default_column);
+	transformer.TransformOptional<bool>(list_pr, 3, generated.virtual_column);
+	return generated;
+}
+
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultValue(PEGTransformer &transformer,
                                                                           optional_ptr<ParseResult> parse_result) {
