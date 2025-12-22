@@ -163,7 +163,8 @@ public:
 	                                                      optional_ptr<ParseResult> group_by_expr,
 	                                                      GroupingExpressionMap &map, GroupByNode &result);
 	static unique_ptr<ResultModifier> VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset);
-	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name, vector<string> &aliases);
+	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
+	                                            vector<string> &aliases);
 	static void WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node);
 	static void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node);
 
@@ -748,20 +749,28 @@ private:
 
 	static WindowFrame TransformFrameClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformFraming(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<WindowBoundaryExpression> TransformFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<WindowBoundaryExpression> TransformBetweenFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<WindowBoundaryExpression> TransformSingleFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static WindowBoundaryExpression TransformFrameBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<WindowBoundaryExpression> TransformFrameExtent(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
+	static vector<WindowBoundaryExpression> TransformBetweenFrameExtent(PEGTransformer &transformer,
+	                                                                    optional_ptr<ParseResult> parse_result);
+	static vector<WindowBoundaryExpression> TransformSingleFrameExtent(PEGTransformer &transformer,
+	                                                                   optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameBound(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
 
-	static WindowBoundaryExpression TransformFrameUnbounded(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static WindowBoundaryExpression TransformFrameCurrentRow(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static WindowBoundaryExpression TransformFrameExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameUnbounded(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameCurrentRow(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static WindowBoundaryExpression TransformFrameExpression(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
 
 	static bool TransformPrecedingOrFollowing(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
+	static WindowExcludeMode TransformWindowExcludeClause(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static WindowExcludeMode TransformWindowExcludeElement(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
 
 	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
@@ -1066,8 +1075,10 @@ private:
 	static vector<unique_ptr<ResultModifier>> TransformResultModifiers(PEGTransformer &transformer,
 	                                                                   optional_ptr<ParseResult> parse_result);
 
-	static unique_ptr<ResultModifier> TransformLimitOffset(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ResultModifier> TransformOffsetLimitClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ResultModifier> TransformLimitOffset(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ResultModifier> TransformOffsetLimitClause(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ResultModifier> TransformLimitOffsetClause(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static LimitPercentResult TransformLimitClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

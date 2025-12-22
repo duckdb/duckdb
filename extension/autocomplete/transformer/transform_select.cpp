@@ -922,12 +922,13 @@ PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer, opt
 }
 
 unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffset(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ResultModifier>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset) {
+unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercentResult &limit,
+                                                                    LimitPercentResult &offset) {
 	if (offset.is_percent) {
 		throw ParserException("Percentage for offsets are not supported.");
 	}
@@ -951,14 +952,13 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 }
 
 unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto offset = transformer.Transform<LimitPercentResult>(list_pr.Child<ListParseResult>(0));
 	LimitPercentResult limit;
 	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, limit);
 	return VerifyLimitOffset(limit, offset);
 }
-
 
 unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
@@ -1180,26 +1180,23 @@ PEGTransformerFactory::TransformGroupingSetsClause(PEGTransformer &transformer,
 
 CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
-    auto &list_pr = parse_result->Cast<ListParseResult>();
-    bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
-    auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-    CommonTableExpressionMap result;
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
+	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+	CommonTableExpressionMap result;
 
-    for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
-        auto with_entry =
-            transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
+	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
+		auto with_entry =
+		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
 
-        if (is_recursive) {
-            // Now safe to call on SELECT, VALUES, etc.
-            with_entry.second->query->node = ToRecursiveCTE(
-                std::move(with_entry.second->query->node),
-                with_entry.first,
-                with_entry.second->aliases
-            );
-        }
-        result.map.insert(with_entry.first, std::move(with_entry.second));
-    }
-    return result;
+		if (is_recursive) {
+			// Now safe to call on SELECT, VALUES, etc.
+			with_entry.second->query->node =
+			    ToRecursiveCTE(std::move(with_entry.second->query->node), with_entry.first, with_entry.second->aliases);
+		}
+		result.map.insert(with_entry.first, std::move(with_entry.second));
+	}
+	return result;
 }
 
 pair<string, unique_ptr<CommonTableExpressionInfo>>

@@ -132,7 +132,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		window_function->catalog = qualified_function.catalog;
 		window_function->schema = qualified_function.schema;
-		window_function->function_name = qualified_function.name;
+		window_function->function_name = StringUtil::Lower(qualified_function.name);
 		window_function->children = std::move(function_children);
 		window_function->type = WindowExpression::WindowToExpressionType(window_function->function_name);
 		return std::move(window_function);
@@ -1187,7 +1187,12 @@ PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer,
 	}
 	auto frame_opt = list_pr.Child<OptionalParseResult>(2);
 	if (frame_opt.HasResult()) {
-		throw NotImplementedException("Frame has not yet been implemented");
+		auto window_frame = transformer.Transform<WindowFrame>(frame_opt.optional_result);
+		result->start = window_frame.start;
+		result->end = window_frame.end;
+		result->start_expr = std::move(window_frame.start_expr);
+		result->end_expr = std::move(window_frame.end_expr);
+		result->exclude_clause = window_frame.exclude_clause;
 	} else {
 		result->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		result->end = WindowBoundary::CURRENT_ROW_RANGE;
@@ -1196,27 +1201,57 @@ PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer,
 }
 
 WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	WindowFrame result;
 	auto framing = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto frame_extent = transformer.Transform<vector<WindowBoundaryExpression>>(list_pr.Child<ListParseResult>(1));
-	// TODO Handle frame boundary expressions here
-
+	for (auto &frame : frame_extent) {
+		if (StringUtil::CIEquals(framing, "rows")) {
+			if (frame.boundary == WindowBoundary::CURRENT_ROW_RANGE) {
+				frame.boundary = WindowBoundary::CURRENT_ROW_ROWS;
+			} else if (frame.boundary == WindowBoundary::EXPR_PRECEDING_RANGE) {
+				frame.boundary = WindowBoundary::EXPR_PRECEDING_ROWS;
+			} else if (frame.boundary == WindowBoundary::EXPR_FOLLOWING_RANGE) {
+				frame.boundary = WindowBoundary::EXPR_FOLLOWING_ROWS;
+			}
+		} else if (StringUtil::CIEquals(framing, "groups")) {
+			if (frame.boundary == WindowBoundary::CURRENT_ROW_RANGE) {
+				frame.boundary = WindowBoundary::CURRENT_ROW_GROUPS;
+			} else if (frame.boundary == WindowBoundary::EXPR_PRECEDING_RANGE) {
+				frame.boundary = WindowBoundary::EXPR_PRECEDING_GROUPS;
+			} else if (frame.boundary == WindowBoundary::EXPR_FOLLOWING_RANGE) {
+				frame.boundary = WindowBoundary::EXPR_FOLLOWING_GROUPS;
+			}
+		} else if (StringUtil::CIEquals(framing, "range")) {
+			continue;
+		} else {
+			throw ParserException("Invalid result from frame: %s", framing);
+		}
+	}
+	result.start = frame_extent[0].boundary;
+	if (frame_extent[0].expr) {
+		result.start_expr = std::move(frame_extent[0].expr);
+	}
+	if (frame_extent.size() == 2) {
+		result.end = frame_extent[1].boundary;
+		if (frame_extent[1].expr) {
+			result.end_expr = std::move(frame_extent[1].expr);
+		}
+	}
 	transformer.TransformOptional<WindowExcludeMode>(list_pr, 2, result.exclude_clause);
-	// TODO refine window boundaries
-
-	return result;
+	return std::move(result);
 }
 
 vector<WindowBoundaryExpression> PEGTransformerFactory::TransformFrameExtent(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<vector<WindowBoundaryExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-vector<WindowBoundaryExpression> PEGTransformerFactory::TransformBetweenFrameExtent(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+vector<WindowBoundaryExpression>
+PEGTransformerFactory::TransformBetweenFrameExtent(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<WindowBoundaryExpression> result;
 	auto start = transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(1));
@@ -1224,8 +1259,8 @@ vector<WindowBoundaryExpression> PEGTransformerFactory::TransformBetweenFrameExt
 	return result;
 }
 
-vector<WindowBoundaryExpression> PEGTransformerFactory::TransformSingleFrameExtent(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+vector<WindowBoundaryExpression>
+PEGTransformerFactory::TransformSingleFrameExtent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<WindowBoundaryExpression> result;
 	result.push_back(transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(0)));
@@ -1233,13 +1268,13 @@ vector<WindowBoundaryExpression> PEGTransformerFactory::TransformSingleFrameExte
 }
 
 WindowBoundaryExpression PEGTransformerFactory::TransformFrameBound(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 WindowBoundaryExpression PEGTransformerFactory::TransformFrameUnbounded(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool preceding = transformer.Transform<bool>(list_pr.Child<ListParseResult>(1));
 	WindowBoundaryExpression result;
@@ -1252,7 +1287,7 @@ WindowBoundaryExpression PEGTransformerFactory::TransformFrameUnbounded(PEGTrans
 }
 
 WindowBoundaryExpression PEGTransformerFactory::TransformFrameExpression(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	WindowBoundaryExpression result;
 	result.expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
@@ -1266,9 +1301,8 @@ WindowBoundaryExpression PEGTransformerFactory::TransformFrameExpression(PEGTran
 	return result;
 }
 
-
 WindowBoundaryExpression PEGTransformerFactory::TransformFrameCurrentRow(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                         optional_ptr<ParseResult> parse_result) {
 	WindowBoundaryExpression result;
 	// These are placeholders and will be converted to groups/rows/range later
 	result.boundary = WindowBoundary::CURRENT_ROW_RANGE;
@@ -1276,28 +1310,26 @@ WindowBoundaryExpression PEGTransformerFactory::TransformFrameCurrentRow(PEGTran
 }
 
 bool PEGTransformerFactory::TransformPrecedingOrFollowing(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	return StringUtil::CIEquals(choice_pr->Cast<KeywordParseResult>().keyword, "preceding");
 }
 
 WindowExcludeMode PEGTransformerFactory::TransformWindowExcludeClause(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<WindowExcludeMode>(list_pr.Child<ListParseResult>(1));
 }
 
-string PEGTransformerFactory::TransformFraming(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformFraming(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
-
 WindowExcludeMode PEGTransformerFactory::TransformWindowExcludeElement(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<WindowExcludeMode>(list_pr.Child<ChoiceParseResult>(0).result);
 }
