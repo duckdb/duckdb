@@ -125,9 +125,10 @@ void GeoColumnData::RevertAppend(row_t new_count) {
 idx_t GeoColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return base_column->Fetch(state, row_id, result);
 }
-void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                             idx_t result_idx) {
-	return base_column->FetchRow(transaction, state, row_id, result, result_idx);
+
+void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                             row_t row_id, Vector &result, idx_t result_idx) {
+	return base_column->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

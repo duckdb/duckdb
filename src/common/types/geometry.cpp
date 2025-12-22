@@ -1314,9 +1314,9 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::LINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);           // Little-endian
-		writer.Write<uint32_t>(meta);       // Type/meta
-		writer.Write<uint32_t>(vert_count); // Vertex count
+		writer.Write<uint8_t>(1);                                        // Little-endian
+		writer.Write<uint32_t>(meta);                                    // Type/meta
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
 
 		// Write vertex data
 		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
@@ -1471,15 +1471,15 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 
 		const auto meta = static_cast<uint32_t>(GeometryType::POLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);           // Little-endian
-		writer.Write<uint32_t>(meta);       // Type/meta
-		writer.Write<uint32_t>(ring_count); // Ring count
+		writer.Write<uint8_t>(1);                                        // Little-endian
+		writer.Write<uint32_t>(meta);                                    // Type/meta
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_count)); // Ring count
 
 		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
 			const auto &ring_entry = ring_data[poly_entry.offset + ring_idx];
 			const auto vert_count = ring_entry.length;
 
-			writer.Write<uint32_t>(vert_count); // Vertex count
+			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
 
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
@@ -1607,9 +1607,9 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::MULTIPOINT) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);           // Little-endian
-		writer.Write<uint32_t>(meta);       // Type/meta
-		writer.Write<uint32_t>(part_count); // Part count
+		writer.Write<uint8_t>(1);                                        // Little-endian
+		writer.Write<uint32_t>(meta);                                    // Type/meta
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(part_count)); // Part count
 
 		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
 			// Write point byte order and type/meta
@@ -1781,9 +1781,9 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::MULTILINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);           // Little-endian
-		writer.Write<uint32_t>(meta);       // Type/meta
-		writer.Write<uint32_t>(line_count); // Line count
+		writer.Write<uint8_t>(1);                                        // Little-endian
+		writer.Write<uint32_t>(meta);                                    // Type/meta
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(line_count)); // Line count
 
 		for (uint32_t line_idx = 0; line_idx < line_count; line_idx++) {
 			const auto &line_entry = line_data[mult_entry.offset + line_idx];
@@ -1792,9 +1792,9 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 			// Write line byte order and type/meta
 			const auto line_meta =
 			    static_cast<uint32_t>(GeometryType::LINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-			writer.Write<uint8_t>(1);           // Little-endian
-			writer.Write<uint32_t>(line_meta);  // Type/meta
-			writer.Write<uint32_t>(vert_count); // Vertex count
+			writer.Write<uint8_t>(1);                                        // Little-endian
+			writer.Write<uint32_t>(line_meta);                               // Type/meta
+			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
 
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
@@ -1982,9 +1982,9 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::MULTIPOLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-		writer.Write<uint8_t>(1);           // Little-endian
-		writer.Write<uint32_t>(meta);       // Type/meta
-		writer.Write<uint32_t>(poly_count); // Polygon count
+		writer.Write<uint8_t>(1);                                        // Little-endian
+		writer.Write<uint32_t>(meta);                                    // Type/meta
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(poly_count)); // Polygon count
 
 		for (uint32_t poly_idx = 0; poly_idx < poly_count; poly_idx++) {
 			const auto &poly_entry = poly_data[mult_entry.offset + poly_idx];
@@ -1993,15 +1993,15 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 			// Write polygon byte order and type/meta
 			const auto poly_meta =
 			    static_cast<uint32_t>(GeometryType::POLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-			writer.Write<uint8_t>(1);           // Little-endian
-			writer.Write<uint32_t>(poly_meta);  // Type/meta
-			writer.Write<uint32_t>(ring_count); // Ring count
+			writer.Write<uint8_t>(1);                                        // Little-endian
+			writer.Write<uint32_t>(poly_meta);                               // Type/meta
+			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_count)); // Ring count
 
 			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
 				const auto &ring_entry = ring_data[poly_entry.offset + ring_idx];
 				const auto vert_count = ring_entry.length;
 
-				writer.Write<uint32_t>(vert_count); // Vertex count
+				writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
 
 				// Write vertex data
 				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
