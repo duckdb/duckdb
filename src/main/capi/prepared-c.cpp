@@ -41,15 +41,11 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	return wrapper->statements.size();
 }
 
-static void duckdb_prepare_cache_parameter_names_internal(PreparedStatementWrapper *wrapper) {
+static void duckdb_prepare_reversed_named_params_map(PreparedStatementWrapper *wrapper) {
 	auto &named_param_map = wrapper->statement->named_param_map;
 	auto &cache = wrapper->param_index_to_name;
-	cache.assign(named_param_map.size() + 1, duckdb::string());
 	for (auto &kv : named_param_map) {
-		auto idx = kv.second;
-		if (idx < cache.size() && cache[idx].empty()) {
-			cache[idx] = kv.first;
-		}
+		cache[kv.second] = kv.first;
 	}
 }
 
@@ -69,7 +65,7 @@ duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
 		if (wrapper->statement->HasError()) {
 			return DuckDBError;
 		}
-		duckdb_prepare_cache_parameter_names_internal(wrapper);
+		duckdb_prepare_reversed_named_params_map(wrapper);
 		return DuckDBSuccess;
 	} catch (...) {
 		delete wrapper;
@@ -98,7 +94,7 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 		if (wrapper->statement->HasError()) {
 			return DuckDBError;
 		}
-		duckdb_prepare_cache_parameter_names_internal(wrapper);
+		duckdb_prepare_reversed_named_params_map(wrapper);
 		return DuckDBSuccess;
 	} catch (...) {
 		delete wrapper;
@@ -134,11 +130,11 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 		return duckdb::string();
 	}
 	auto &cache = wrapper->param_index_to_name;
-	if (index == 0 || index >= cache.size()) {
+	auto it = cache.find(index);
+	if (it == cache.end()) {
 		return duckdb::string();
 	}
-	// No parameter was found with this index when there is nothing in the cache (default value is `duckdb::string()`)
-	return cache[index];
+	return it->second;
 }
 
 const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
