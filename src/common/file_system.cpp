@@ -575,6 +575,12 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 		return attach_scheme(rhs_parsed, normalized_rhs, rhs_scheme_absolute);
 	}
 
+#ifdef _WIN32
+	bool lhs_was_drive_root = !lhs_parsed.has_scheme && lhs.size() >= 3 && StringUtil::CharacterIsAlpha(lhs[0]) &&
+	                          lhs[1] == ':' && (lhs[2] == '/' || lhs[2] == '\\');
+#else
+	bool lhs_was_drive_root = false;
+#endif
 	while (lhs.size() > 1 && lhs.back() == separator_char) {
 		lhs.pop_back();
 	}
@@ -587,7 +593,8 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 #else
 	bool lhs_is_drive_prefix = false;
 #endif
-	auto combined = (lhs == separator || lhs_is_drive_prefix) ? lhs + rhs : lhs + separator + rhs;
+	auto combined =
+	    (lhs == separator || (lhs_is_drive_prefix && !lhs_was_drive_root)) ? lhs + rhs : lhs + separator + rhs;
 	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
 	return attach_scheme(lhs_parsed, normalized, lhs_scheme_absolute);
 }
