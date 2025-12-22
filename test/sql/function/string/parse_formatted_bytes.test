@@ -114,28 +114,28 @@ NULL	NULL
 statement error
 SELECT parse_formatted_bytes('null');
 ----
-Parser Error: Memory must have a number (e.g. 1GB)
+Invalid Input Error: Memory must have a number (e.g. 1GB)
 
 statement error
 SELECT parse_formatted_bytes('none');
 ----
-Parser Error: Memory must have a number (e.g. 1GB)
+Invalid Input Error: Memory must have a number (e.g. 1GB)
 
 # Error cases
 statement error
 SELECT parse_formatted_bytes('5');
 ----
-Parser Error: Unknown unit for memory: '' (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
+Invalid Input Error: Unknown unit for memory: '' (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 statement error
 SELECT parse_formatted_bytes('abc');
 ----
-Memory must have a number (e.g. 1GB)
+Invalid Input Error: Memory must have a number (e.g. 1GB)
 
 statement error
 SELECT parse_formatted_bytes('1 Ki');
 ----
-Unknown unit for memory: 'ki' (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
+Invalid Input Error: Unknown unit for memory: 'ki' (expected: KB, MB, GB, TB for 1000^i units or KiB, MiB, GiB, TiB for 1024^i units)
 
 statement error
 SELECT parse_formatted_bytes(1933);
@@ -145,26 +145,72 @@ Binder Error: No function matches the given name and argument types 'parse_forma
 statement error
 SELECT parse_formatted_bytes('10000000000 TiB');
 ----
-Parser Error: Memory value out of range: value is too large
+Invalid Input Error: Memory value out of range: value is too large
 
 # not a number
 statement error
 SELECT parse_formatted_bytes('1.5.3 GB');
 ----
-Parser Error: Invalid memory limit: '1.5.3'
+Invalid Input Error: Invalid memory limit: '1.5.3'
 
 statement error
 SELECT parse_formatted_bytes('inf GiB');
 ----
-Parser Error: Memory must have a number (e.g. 1GB)
+Invalid Input Error: Memory must have a number (e.g. 1GB)
 
 # Negative values are mapped to max uint64
 statement error
 SELECT parse_formatted_bytes('-5 MB');
 ----
-Parser Error: Memory cannot be negative
+Invalid Input Error: Memory cannot be negative
 
 statement error
 SELECT parse_formatted_bytes(' -1 KiB');
 ----
-Parser Error: Memory cannot be negative
+Invalid Input Error: Memory cannot be negative
+
+# Using try() to return NULL on failure
+query I
+SELECT try(parse_formatted_bytes('abc'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('-5 MB'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('10000000000 TiB'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('1.5.3 GB'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('inf GiB'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('1 Ki'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('5'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('none'));
+----
+NULL
+
+query I
+SELECT try(parse_formatted_bytes('null'));
+----
+NULL
