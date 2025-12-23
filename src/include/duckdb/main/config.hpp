@@ -82,6 +82,8 @@ public:
 	idx_t storage_version;
 	//! Whether this was set by a manual SET/PRAGMA or default
 	bool manually_set;
+	//! serialization version (2 or 3, which are both storage version 64)
+	idx_t serialization_version_deprecated;
 
 protected:
 	StorageCompatibility() = default;
