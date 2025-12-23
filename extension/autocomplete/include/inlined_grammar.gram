@@ -883,7 +883,7 @@ UniqueConstraint <- 'UNIQUE'
 PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
 DefaultValue <- 'DEFAULT' Expression
 CheckConstraint <- 'CHECK' Parens(Expression)
-ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions?
+ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
 ColumnCollation <- 'COLLATE' Expression
 ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
 

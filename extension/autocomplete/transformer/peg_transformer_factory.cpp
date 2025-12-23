@@ -249,16 +249,22 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
 	REGISTER_TRANSFORM(TransformColumnDefinition);
-	REGISTER_TRANSFORM(TransformTypeOrGenerated);
 	REGISTER_TRANSFORM(TransformTopLevelConstraint);
 	REGISTER_TRANSFORM(TransformTopLevelConstraintList);
 	REGISTER_TRANSFORM(TransformTopPrimaryKeyConstraint);
 	REGISTER_TRANSFORM(TransformTopUniqueConstraint);
 	REGISTER_TRANSFORM(TransformCheckConstraint);
 	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
+	REGISTER_TRANSFORM(TransformForeignKeyConstraint);
 	REGISTER_TRANSFORM(TransformDefaultValue);
 	REGISTER_TRANSFORM(TransformGeneratedColumn);
 	REGISTER_TRANSFORM(TransformColumnCompression);
+	REGISTER_TRANSFORM(TransformPrimaryKeyConstraint);
+	REGISTER_TRANSFORM(TransformUniqueConstraint);
+	REGISTER_TRANSFORM(TransformNotNullConstraint);
+	REGISTER_TRANSFORM(TransformKeyActions);
+	REGISTER_TRANSFORM(TransformUpdateAction);
+	REGISTER_TRANSFORM(TransformDeleteAction);
 
 }
 
@@ -834,10 +840,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
 	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
-
-	RegisterEnum<ConstraintType>("NotNullConstraint", ConstraintType::NOT_NULL);
-	RegisterEnum<ConstraintType>("UniqueConstraint", ConstraintType::UNIQUE);
-	RegisterEnum<ConstraintType>("PrimaryKeyConstraint", ConstraintType::UNIQUE);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

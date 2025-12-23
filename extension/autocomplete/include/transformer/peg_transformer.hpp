@@ -15,6 +15,7 @@
 #include "ast/insert_values.hpp"
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
+#include "ast/key_actions.hpp"
 #include "ast/limit_percent_result.hpp"
 #include "ast/macro_parameter.hpp"
 #include "ast/on_conflict_expression_target.hpp"
@@ -481,7 +482,6 @@ private:
 	                                                optional_ptr<ParseResult> parse_result);
 	static ConstraintColumnDefinition TransformColumnDefinition(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
-	static LogicalType TransformTypeOrGenerated(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopLevelConstraint(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopLevelConstraintList(PEGTransformer &transformer,
@@ -496,11 +496,16 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformDefaultValue(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
-	static unique_ptr<Constraint> TransformForeignKeyConstraint(PEGTransformer &transformer,
+	static unique_ptr<ForeignKeyConstraint> TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static CompressionType TransformColumnCompression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
+	static pair<bool, ConstraintType> TransformPrimaryKeyConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<bool, ConstraintType> TransformUniqueConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<bool, ConstraintType> TransformNotNullConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static KeyActions TransformKeyActions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformUpdateAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformDeleteAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 
 	// create_type.gram
