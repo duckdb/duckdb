@@ -41,7 +41,7 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	return wrapper->statements.size();
 }
 
-static void duckdb_prepare_reversed_named_params_map(PreparedStatementWrapper *wrapper) {
+static void duckdb_prepare_reversed_named_params_map_internal(PreparedStatementWrapper *wrapper) {
 	auto &named_param_map = wrapper->statement->named_param_map;
 	auto &cache = wrapper->param_index_to_name;
 	for (auto &kv : named_param_map) {
@@ -65,7 +65,7 @@ duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
 		if (wrapper->statement->HasError()) {
 			return DuckDBError;
 		}
-		duckdb_prepare_reversed_named_params_map(wrapper);
+		duckdb_prepare_reversed_named_params_map_internal(wrapper);
 		return DuckDBSuccess;
 	} catch (...) {
 		delete wrapper;
@@ -94,7 +94,7 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 		if (wrapper->statement->HasError()) {
 			return DuckDBError;
 		}
-		duckdb_prepare_reversed_named_params_map(wrapper);
+		duckdb_prepare_reversed_named_params_map_internal(wrapper);
 		return DuckDBSuccess;
 	} catch (...) {
 		delete wrapper;
