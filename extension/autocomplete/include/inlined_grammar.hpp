@@ -837,7 +837,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ReservedTableQualification <- ReservedTableName '.'\n"
 	"CreateTableColumnList <- List(CreateTableColumnElement)\n"
 	"CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint\n"
-	"ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*\n"
+	"ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*\n"
 	"ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression\n"
 	"NotNullConstraint <- 'NOT'? 'NULL'\n"
 	"UniqueConstraint <- 'UNIQUE'\n"

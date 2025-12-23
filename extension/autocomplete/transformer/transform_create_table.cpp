@@ -214,7 +214,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
 	LogicalType type = LogicalType::ANY;
 	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
-	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
+	auto constraints_opt = list_pr.Child<OptionalParseResult>(4);
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	ColumnConstraint column_constraint;
 	if (constraints_opt.HasResult()) {
