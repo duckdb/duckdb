@@ -853,7 +853,8 @@ private:
 	                                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer,
 	                                                                         optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformListComprehensionFilter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformListComprehensionFilter(PEGTransformer &transformer,
+	                                                                     optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
 

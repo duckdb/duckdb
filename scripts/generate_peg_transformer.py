@@ -40,8 +40,8 @@ EXCLUDED_RULES = {
     "IfNotExists",
     "PlainIdentifier",
     "QuotedIdentifier",
-    "CreateTableColumnElement"
-    # found in matcher.cpp
+    "CreateTableColumnElement",
+    "OrReplace",
     "ReservedIdentifier",
     "CatalogName",
     "SchemaName",

@@ -126,8 +126,8 @@ ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransfor
 				if (constraint_type.second == ConstraintType::NOT_NULL) {
 					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
 				} else if (constraint_type.second == ConstraintType::UNIQUE) {
-					result.constraints.push_back(
-					    make_uniq<UniqueConstraint>(LogicalIndex(col_idx), column_result.column_definition.GetName(), constraint_type.first));
+					result.constraints.push_back(make_uniq<UniqueConstraint>(
+					    LogicalIndex(col_idx), column_result.column_definition.GetName(), constraint_type.first));
 				}
 			}
 			result.columns.AddColumn(std::move(column_result.column_definition));
@@ -261,7 +261,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		ColumnDefinition col(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
 		col.SetCompressionType(compression_type);
 		if (column_constraint.default_value) {
-			col.SetDefaultValue(std::move(column_constraint.default_value));
+			throw ParserException("Not allowed to set default on a generated column");
 		}
 		ConstraintColumnDefinition result = {std::move(col), column_constraint.constraint_types,
 		                                     std::move(column_constraint.constraints)};
@@ -285,7 +285,6 @@ GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTra
 	GeneratedColumnDefinition generated;
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
 	generated.expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
-	transformer.TransformOptional<bool>(list_pr, 0, generated.default_column);
 	return generated;
 }
 

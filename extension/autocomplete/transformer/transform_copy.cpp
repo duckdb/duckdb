@@ -113,7 +113,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 					for (auto partition : option.children) {
 						func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
 					}
-					auto row_func = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
+					auto row_func =
+					    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
 					info->parsed_options[option_upper] = std::move(row_func);
 				}
 			} else {
