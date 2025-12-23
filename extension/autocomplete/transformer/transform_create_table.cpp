@@ -56,6 +56,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<CreateStatement>();
 	QualifiedName table_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	if (table_name.name.empty()) {
+		throw ParserException("Empty table name not supported");
+	}
 	// Use appropriate constructor
 	auto info = make_uniq<CreateTableInfo>(table_name.catalog, table_name.schema, table_name.name);
 
@@ -116,7 +119,6 @@ ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransfor
 		    column_elements[col_idx]->Cast<ListParseResult>().Child<ChoiceParseResult>(0).result;
 		if (column_element_child->name == "ColumnDefinition") {
 			auto column_result = transformer.Transform<ConstraintColumnDefinition>(column_element_child);
-			result.columns.AddColumn(std::move(column_result.column_definition));
 			for (auto &constraint : column_result.constraints) {
 				result.constraints.push_back(std::move(constraint));
 			}
@@ -125,9 +127,10 @@ ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransfor
 					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
 				} else if (constraint_type.second == ConstraintType::UNIQUE) {
 					result.constraints.push_back(
-					    make_uniq<UniqueConstraint>(LogicalIndex(col_idx), constraint_type.first));
+					    make_uniq<UniqueConstraint>(LogicalIndex(col_idx), column_result.column_definition.GetName(), constraint_type.first));
 				}
 			}
+			result.columns.AddColumn(std::move(column_result.column_definition));
 		} else if (column_element_child->name == "TopLevelConstraint") {
 			result.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(column_element_child));
 		} else {
