@@ -151,8 +151,8 @@ string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transform
 	return result;
 }
 
-vector<GenericCopyOption>
-PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<GenericCopyOption> PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
 	// CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptions
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_list = list_pr.Child<ListParseResult>(1);

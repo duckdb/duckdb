@@ -383,9 +383,9 @@ private:
 	static string TransformCopyFileName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIdentifierColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer,
-	                                                                  optional_ptr<ParseResult> parse_result);
+	                                                      optional_ptr<ParseResult> parse_result);
 	static vector<GenericCopyOption> TransformSpecializedOptionList(PEGTransformer &transformer,
-	                                                                            optional_ptr<ParseResult> parse_result);
+	                                                                optional_ptr<ParseResult> parse_result);
 
 	static GenericCopyOption TransformSpecializedOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
@@ -481,7 +481,7 @@ private:
 	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
 	static ConstraintColumnDefinition TransformColumnDefinition(PEGTransformer &transformer,
-	                                                  optional_ptr<ParseResult> parse_result);
+	                                                            optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopLevelConstraint(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopLevelConstraintList(PEGTransformer &transformer,
@@ -497,18 +497,21 @@ private:
 	static unique_ptr<ParsedExpression> TransformDefaultValue(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ForeignKeyConstraint> TransformForeignKeyConstraint(PEGTransformer &transformer,
+	                                                                      optional_ptr<ParseResult> parse_result);
+	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static CompressionType TransformColumnCompression(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static pair<bool, ConstraintType> TransformPrimaryKeyConstraint(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static pair<bool, ConstraintType> TransformUniqueConstraint(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
-	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static CompressionType TransformColumnCompression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static pair<bool, ConstraintType> TransformPrimaryKeyConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static pair<bool, ConstraintType> TransformUniqueConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static pair<bool, ConstraintType> TransformNotNullConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<bool, ConstraintType> TransformNotNullConstraint(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	static KeyActions TransformKeyActions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformUpdateAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformDeleteAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformColumnCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
-
 
 	// create_type.gram
 	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,
