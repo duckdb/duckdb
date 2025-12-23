@@ -90,7 +90,7 @@ set(RE2_SOURCES
     util/strutil.cc
 )
 
-add_library(duckdb_re2 STATIC ${RE2_SOURCES})
+add_library_unity(duckdb_re2 STATIC ${RE2_SOURCES})
 
 target_include_directories(
   duckdb_re2
