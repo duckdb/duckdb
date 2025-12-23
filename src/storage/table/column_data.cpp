@@ -852,6 +852,50 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 		return result;
 	}
 
+	// TODO: This is ugly
+	if (result.extra_data && result.extra_data->GetType() == ExtraPersistentColumnDataType::GEOMETRY) {
+		auto &geo_data = result.extra_data->Cast<GeometryPersistentColumnData>();
+		auto actual_type = Geometry::GetVectorizedType(geo_data.geom_type, geo_data.vert_type);
+
+		// We need to set the actual type in scope, as when we deserialize "data_pointers" we use it to detect
+		// the type of the statistics.
+		deserializer.Set<const LogicalType &>(actual_type);
+
+		switch (actual_type.InternalType()) {
+		case PhysicalType::BIT: {
+			deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+		} break;
+		case PhysicalType::ARRAY: {
+			deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+			result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+			result.DeserializeField(deserializer, 102, "child_column", ArrayType::GetChildType(type));
+		} break;
+		case PhysicalType::LIST: {
+			deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+			result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+			result.DeserializeField(deserializer, 102, "child_column", ListType::GetChildType(type));
+		} break;
+		case PhysicalType::STRUCT: {
+			deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+			result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+			const auto &child_types = StructType::GetChildTypes(type);
+			deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
+				deserializer.Set<const LogicalType &>(child_types[i].second);
+				result.child_columns.push_back(list.ReadElement<PersistentColumnData>());
+				deserializer.Unset<LogicalType>();
+			});
+		} break;
+		default: {
+			deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
+			result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
+		} break;
+		}
+
+		deserializer.Unset<LogicalType>();
+
+		return result;
+	}
+
 	switch (type.InternalType()) {
 	case PhysicalType::BIT: {
 		deserializer.ReadPropertyWithDefault(100, "data_pointers", result.pointers);
