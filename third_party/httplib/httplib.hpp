@@ -1,5 +1,6 @@
 // taken from: https://github.com/yhirose/cpp-httplib/blob/v0.27.0/httplib.h
 // Note: some modifications are made to file (replace std::regex with RE2)
+// Patched CreateFile2 for lower Windows versions
 
 //
 //  httplib.h
@@ -200,12 +201,12 @@
     "cpp-httplib doesn't support platforms where size_t is less than 64 bits."
 #endif
 
-#ifdef _WIN32
-#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
-#error                                                                         \
-    "cpp-httplib doesn't support Windows 8 or lower. Please use Windows 10 or later."
-#endif
-#endif
+// #ifdef _WIN32
+// #if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+// #error                                                                         \
+//     "cpp-httplib doesn't support Windows 8 or lower. Please use Windows 10 or later."
+// #endif
+// #endif
 
 /*
  * Headers
@@ -3115,6 +3116,51 @@ inline bool mmap::open(const char *path) {
   close();
 
 #if defined(_WIN32)
+#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
+  // Patch for Windows versions < 10
+  // used old code from httplib v0.14.3
+
+  hFile_ = ::CreateFileA(
+      path,
+      GENERIC_READ,
+      FILE_SHARE_READ,
+      NULL,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      NULL);
+
+  if (hFile_ == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+
+  size_ = ::GetFileSize(hFile_, NULL);
+
+  hMapping_ = ::CreateFileMapping(
+      hFile_,
+      NULL,
+      PAGE_READONLY,
+      0,
+      0,
+      NULL);
+
+  if (hMapping_ == NULL) {
+    close();
+    return false;
+  }
+
+  addr_ = ::MapViewOfFile(
+      hMapping_,
+      FILE_MAP_READ,
+      0,
+      0,
+      0);
+
+  if (addr_ == NULL) {
+    close();
+    return false;
+  }
+
+#else
   auto wpath = u8string_to_wstring(path);
   if (wpath.empty()) { return false; }
 
@@ -3156,6 +3202,7 @@ inline bool mmap::open(const char *path) {
     close();
     return false;
   }
+#endif
 #else
   fd_ = ::open(path, O_RDONLY);
   if (fd_ == -1) { return false; }
