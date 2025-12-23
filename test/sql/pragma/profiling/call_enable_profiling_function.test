@@ -134,7 +134,9 @@ statement ok
 CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"})
 
 query I
-SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
+SELECT column_name
+FROM (DESCRIBE SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')))
+ORDER BY column_name;
 ----
 CUMULATIVE_CARDINALITY
 CUMULATIVE_ROWS_SCANNED
@@ -146,7 +148,9 @@ statement ok
 CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
 
 query I
-SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
+SELECT column_name
+FROM (DESCRIBE SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')))
+ORDER BY column_name;
 ----
 EXTRA_INFO
 QUERY_NAME
@@ -156,7 +160,7 @@ statement ok
 CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE']);
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
 LATENCY
 RESULT_SET_SIZE
@@ -220,7 +224,7 @@ statement ok
 CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE']);
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
 LATENCY
 RESULT_SET_SIZE
@@ -230,7 +234,7 @@ statement ok
 CALL enable_profiling(['TOTAL_BYTES_READ', 'TOTAL_BYTES_WRITTEN'], mode = 'detailed');
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
 TOTAL_BYTES_READ
 TOTAL_BYTES_WRITTEN
@@ -298,7 +302,7 @@ SELECT CURRENT_SETTING('profiling_mode');
 standard
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')::VARCHAR[]) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
 LATENCY
 QUERY_NAME

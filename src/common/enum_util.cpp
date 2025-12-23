@@ -130,6 +130,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -3720,6 +3721,27 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value) {
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
 	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
+}
+
+const StringUtil::EnumStringLiteral *GetProfilingParameterNamesValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProfilingParameterNames::FORMAT), "FORMAT" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::COVERAGE), "COVERAGE" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::SAVE_LOCATION), "SAVE_LOCATION" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::MODE), "MODE" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::METRICS), "METRICS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value) {
+	return StringUtil::EnumToString(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", static_cast<uint32_t>(value));
+}
+
+template<>
+ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value) {
+	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {

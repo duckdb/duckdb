@@ -69,16 +69,21 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 	bool metrics_set = false;
 
 	for (const auto &named_param : input.named_parameters) {
-		auto key = StringUtil::Lower(named_param.first);
-		if (key == "format") {
+		const auto key = EnumUtil::FromString<ProfilingParameterNames>(named_param.first);
+		switch (key) {
+		case ProfilingParameterNames::FORMAT:
 			bind_data->format = StringUtil::Lower(named_param.second.ToString());
-		} else if (key == "coverage") {
-			bind_data->coverage = named_param.second;
-		} else if (key == "save_location") {
+			break;
+		case ProfilingParameterNames::COVERAGE:
+			bind_data->coverage = StringUtil::Lower(named_param.second.ToString());
+			break;
+		case ProfilingParameterNames::SAVE_LOCATION:
 			bind_data->save_location = StringUtil::Lower(named_param.second.ToString());
-		} else if (key == "mode") {
-			ProfilingModeSetting::SetLocal(context, named_param.second);
-		} else if (key == "metrics") {
+			break;
+		case ProfilingParameterNames::MODE:
+			bind_data->mode = StringUtil::Lower(named_param.second.ToString());
+			break;
+		case ProfilingParameterNames::METRICS: {
 			if (named_param.second.type() != LogicalType::LIST(LogicalType::VARCHAR) &&
 			    named_param.second.type().id() != LogicalTypeId::STRUCT &&
 			    named_param.second.type() != LogicalType::VARCHAR) {
@@ -87,6 +92,7 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 
 			bind_data->metrics = named_param.second;
 			metrics_set = true;
+		}
 		}
 	}
 

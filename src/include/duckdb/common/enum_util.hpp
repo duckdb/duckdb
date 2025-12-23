@@ -330,6 +330,8 @@ enum class ProfilerPrintFormat : uint8_t;
 
 enum class ProfilingCoverage : uint8_t;
 
+enum class ProfilingParameterNames : uint8_t;
+
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -921,6 +923,9 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
+
+template<>
+const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -1585,6 +1590,9 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
+
+template<>
+ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
