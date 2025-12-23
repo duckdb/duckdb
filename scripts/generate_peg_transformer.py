@@ -38,6 +38,9 @@ EXCLUDED_RULES = {
     "RowOrRows",
     "Recursive",
     "IfNotExists",
+    "PlainIdentifier",
+    "QuotedIdentifier",
+    "CreateTableColumnElement"
     # found in matcher.cpp
     "ReservedIdentifier",
     "CatalogName",
