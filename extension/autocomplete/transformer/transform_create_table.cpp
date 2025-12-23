@@ -232,7 +232,8 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				}
 			} else if (constraint->name == "ForeignKeyConstraint") {
 				auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(constraint);
-				throw NotImplementedException("Foreign key is not fully implemented");
+				fk_constraint->fk_columns.push_back(qualified_name.name);
+				column_constraint.constraints.push_back(std::move(fk_constraint));
 			}
 			else {
 				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
@@ -327,7 +328,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(P
 	auto pk_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 
 	auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(list_pr.Child<ListParseResult>(3));
-	fk_constraint->pk_columns = pk_list;
+	fk_constraint->fk_columns = pk_list;
 	return std::move(fk_constraint);
 }
 
@@ -367,16 +368,16 @@ unique_ptr<ForeignKeyConstraint> PEGTransformerFactory::TransformForeignKeyConst
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(1));
 	fk_info.schema = base_table->schema_name;
 	fk_info.table = base_table->table_name;
-	fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-	vector<string> fk_list;
+	fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+	vector<string> pk_list;
 	auto col_list_opt = list_pr.Child<OptionalParseResult>(2);
 	if (col_list_opt.HasResult()) {
 		auto extract_parens = ExtractResultFromParens(col_list_opt.optional_result);
-		fk_list = transformer.Transform<vector<string>>(extract_parens);
+		pk_list = transformer.Transform<vector<string>>(extract_parens);
 	}
 	auto key_actions = transformer.Transform<KeyActions>(list_pr.Child<ListParseResult>(3));
 
-	return make_uniq<ForeignKeyConstraint>(vector<string>(), fk_list, fk_info);
+	return make_uniq<ForeignKeyConstraint>(pk_list, vector<string>(), fk_info);
 }
 
 KeyActions PEGTransformerFactory::TransformKeyActions(PEGTransformer &transformer,
