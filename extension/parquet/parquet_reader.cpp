@@ -1233,17 +1233,57 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
-	GetPartitionStats(*GetFileMetadata(), result);
+	GetPartitionStats(*GetFileMetadata(), result, *root_schema, parquet_options);
 }
 
-void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata,
-                                      vector<PartitionStatistics> &result) {
+struct ParquetPartitionRowGroup : public PartitionRowGroup {
+	ParquetPartitionRowGroup(const duckdb_parquet::FileMetaData &metadata_p,
+	                         optional_ptr<ParquetColumnSchema> root_schema_p,
+	                         optional_ptr<ParquetOptions> parquet_options_p, const idx_t row_group_idx_p)
+	    : metadata(metadata_p), root_schema(root_schema_p), parquet_options(parquet_options_p),
+	      row_group_idx(row_group_idx_p) {
+	}
+
+	const duckdb_parquet::FileMetaData &metadata;
+	optional_ptr<ParquetColumnSchema> root_schema;
+	optional_ptr<ParquetOptions> parquet_options;
+	idx_t row_group_idx;
+	bool is_exact;
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
+		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_chunk = row_group.columns[storage_index.GetPrimaryIndex()];
+
+		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
+		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
+		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
+			const auto &stats = column_chunk.meta_data.statistics;
+			is_exact = stats.is_min_value_exact && stats.is_max_value_exact;
+		}
+
+		const auto &column_schema = root_schema->children[storage_index.GetPrimaryIndex()];
+		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &) override {
+		return is_exact;
+	}
+};
+
+void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
+                                      optional_ptr<ParquetColumnSchema> root_schema,
+                                      optional_ptr<ParquetOptions> parquet_options) {
 	idx_t offset = 0;
-	for (auto &row_group : metadata.row_groups) {
+	for (idx_t i = 0; i < metadata.row_groups.size(); i++) {
+		auto &row_group = metadata.row_groups[i];
 		PartitionStatistics partition_stats;
 		partition_stats.row_start = offset;
 		partition_stats.count = row_group.num_rows;
 		partition_stats.count_type = CountType::COUNT_EXACT;
+		if (root_schema && parquet_options) {
+			partition_stats.partition_row_group =
+			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, *root_schema, *parquet_options, i);
+		}
 		offset += row_group.num_rows;
 		result.push_back(partition_stats);
 	}
