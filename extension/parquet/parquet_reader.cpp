@@ -1,5 +1,8 @@
 #include "parquet_reader.hpp"
 
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "parquet_types.h"
 #include "reader/boolean_column_reader.hpp"
 #include "reader/callback_column_reader.hpp"
 #include "column_reader.hpp"
@@ -176,7 +179,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
-		                    std::move(aad_crypto_metadata));
+		                    aad_crypto_metadata);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -650,8 +653,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		if (is_repeated) {
 			auto list_type = LogicalType::LIST(result.type);
 			vector<ParquetColumnSchema> list_child = {std::move(result)};
-			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, std::move(list_type), max_define, max_repeat,
-			                                               this_idx, next_file_idx, std::move(list_child));
+			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+			                                               next_file_idx, std::move(list_child));
 		}
 		result.parent_schema_index = this_idx;
 		return result;
@@ -665,8 +668,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			auto list_type = LogicalType::LIST(result.type);
 			vector<ParquetColumnSchema> list_child = {std::move(result)};
-			return ParquetColumnSchema::FromChildSchemas(s_ele.name, std::move(list_type), max_define, max_repeat,
-			                                             this_idx, next_file_idx, std::move(list_child));
+			return ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+			                                             next_file_idx, std::move(list_child));
 		}
 
 		return result;
