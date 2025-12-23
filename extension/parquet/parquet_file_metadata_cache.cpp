@@ -1,5 +1,7 @@
 #include "parquet_file_metadata_cache.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache_util.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 
 namespace duckdb {
@@ -26,18 +28,19 @@ bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
 	                                  new_handle.GetLastModifiedTime());
 }
 
-ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info) const {
-	if (!info.extended_info) {
+ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info, ClientContext &context) const {
+	CacheValidationMode validation_mode = ExternalFileCacheUtil::GetCacheValidationMode(info, &context, *context.db);
+	if (validation_mode == CacheValidationMode::NO_VALIDATION) {
+		return ParquetCacheValidity::VALID;
+	}
+	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path)) {
+		return ParquetCacheValidity::VALID;
+	}
+	if (info.extended_info == nullptr) {
 		return ParquetCacheValidity::UNKNOWN;
 	}
-	auto &open_options = info.extended_info->options;
-	const auto validate_entry = open_options.find("validate_external_file_cache");
-	if (validate_entry != open_options.end()) {
-		// check if always valid - if so just return valid
-		if (BooleanValue::Get(validate_entry->second)) {
-			return ParquetCacheValidity::VALID;
-		}
-	}
+
+	const auto &open_options = info.extended_info->options;
 	const auto lm_entry = open_options.find("last_modified");
 	if (lm_entry == open_options.end()) {
 		return ParquetCacheValidity::UNKNOWN;
@@ -48,7 +51,8 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 	if (etag_entry != open_options.end()) {
 		new_etag = StringValue::Get(etag_entry->second);
 	}
-	if (ExternalFileCache::IsValid(false, version_tag, last_modified, new_etag, new_last_modified)) {
+
+	if (ExternalFileCache::IsValid(/*validate=*/true, version_tag, last_modified, new_etag, new_last_modified)) {
 		return ParquetCacheValidity::VALID;
 	}
 	return ParquetCacheValidity::INVALID;

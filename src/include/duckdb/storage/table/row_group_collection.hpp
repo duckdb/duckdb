@@ -82,6 +82,7 @@ public:
 
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
+
 	//! Returns true, if the row group can fetch the row id for the transaction.
 	bool CanFetch(TransactionData, const row_t row_id);
 
@@ -103,7 +104,7 @@ public:
 	bool IsPersistent() const;
 
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
-	                       IndexRemovalType removal_type);
+	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
@@ -134,7 +135,7 @@ public:
 
 	void SetStats(TableStatistics &new_stats);
 	void CopyStats(TableStatistics &stats);
-	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
+	unique_ptr<BaseStatistics> CopyStats(const StorageIndex &column_id);
 	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
@@ -155,6 +156,8 @@ public:
 		return row_group_size;
 	}
 	void SetAppendRequiresNewRowGroup();
+	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
+	idx_t GetSegmentCount();
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,

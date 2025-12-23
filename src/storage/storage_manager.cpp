@@ -179,8 +179,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	return true;
 }
 
-void StorageManager::WALFinishCheckpoint() {
-	lock_guard<mutex> guard(wal_lock);
+void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 	D_ASSERT(wal.get());
 
 	// "wal" points to the checkpoint WAL
@@ -616,6 +615,20 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (read_only || !load_complete) {
 		return;
 	}
+	unique_ptr<StorageLockKey> vacuum_lock;
+	if (options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
+		auto &transaction_manager = GetAttached().GetTransactionManager().Cast<DuckTransactionManager>();
+		vacuum_lock = transaction_manager.TryGetVacuumLock();
+		if (!vacuum_lock) {
+			if (options.type == CheckpointType::FULL_CHECKPOINT) {
+				options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+			} else {
+				// nothing to do
+				return;
+			}
+		}
+	}
+
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}

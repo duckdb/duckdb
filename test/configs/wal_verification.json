@@ -20,6 +20,13 @@
         "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
       ]
     },
+    {"reason": "Checkpointing is necessary to trigger expected checkpoint error.",
+      "paths": [
+        "test/sql/storage/checkpoint/test_checkpoint_failure_delayed_commit.test",
+        "test/sql/storage/checkpoint/test_checkpoint_failure_delayed_rollback.test",
+        "test/sql/storage/checkpoint/test_checkpoint_failure_on_detach.test"
+      ]
+    },
     {
       "reason": "Empty WAL is necessary to trigger optimizer rule.",
       "paths": [
@@ -93,6 +100,12 @@
       "reason": "FIXME: Attempting to checkpoint read-only database.",
       "paths": [
         "test/sql/storage/read_duckdb/read_duckdb_index.test"
+      ]
+    },
+    {
+      "reason": "External file cache cannot persist across database restarts when force_restart is enabled.",
+      "paths": [
+        "test/sql/storage/external_file_cache/external_file_cache_validate.test"
       ]
     }
   ]

@@ -85,8 +85,9 @@ public:
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context) const;
-	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
+	                            const vector<ColumnIndex> &column_indexes);
+	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -97,6 +98,8 @@ public:
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
+	void FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,
+	                    idx_t fetch_count, ColumnFetchState &state);
 	//! Returns true, if the transaction can fetch the row ID.
 	bool CanFetch(DuckTransaction &transaction, const row_t row_id);
 
@@ -187,7 +190,7 @@ public:
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
 	                                 DataChunk &table_chunk, DataChunk &index_chunk,
 	                                 const vector<StorageIndex> &mapped_column_ids, row_t row_start,
-	                                 const IndexAppendMode index_append_mode);
+	                                 const IndexAppendMode index_append_mode, optional_idx active_checkpoint);
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
 	                          DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
@@ -197,7 +200,7 @@ public:
 	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
-	                       IndexRemovalType removal_type);
+	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
@@ -216,7 +219,7 @@ public:
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();

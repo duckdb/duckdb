@@ -268,6 +268,8 @@ private:
 	void Verify() const;
 
 private:
+	//! Task scheduler for parallel destruction
+	TaskScheduler &scheduler;
 	//! Shared allocator for STL allocations
 	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection

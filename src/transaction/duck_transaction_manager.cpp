@@ -90,10 +90,19 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-ActiveCheckpointWrapper::ActiveCheckpointWrapper(DuckTransactionManager &manager) : manager(manager) {
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(DuckTransactionManager &manager)
+    : manager(manager), is_cleared(false) {
 }
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
+	Clear();
+}
+
+void ActiveCheckpointWrapper::Clear() {
+	if (is_cleared) {
+		return;
+	}
+	is_cleared = true;
 	manager.ResetCheckpointId();
 }
 
@@ -256,6 +265,14 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(Stor
 
 unique_ptr<StorageLockKey> DuckTransactionManager::TryGetCheckpointLock() {
 	return checkpoint_lock.TryGetExclusiveLock();
+}
+
+unique_ptr<StorageLockKey> DuckTransactionManager::SharedVacuumLock() {
+	return vacuum_lock.GetSharedLock();
+}
+
+unique_ptr<StorageLockKey> DuckTransactionManager::TryGetVacuumLock() {
+	return vacuum_lock.TryGetExclusiveLock();
 }
 
 transaction_t DuckTransactionManager::GetCommitTimestamp() {

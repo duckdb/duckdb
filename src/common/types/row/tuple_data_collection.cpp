@@ -5,6 +5,8 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
 
@@ -14,7 +16,8 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
                                          MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
-    : stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
+    : scheduler(TaskScheduler::GetScheduler(buffer_manager.GetDatabase())),
+      stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
                                     : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
       layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p),
       allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator)),
@@ -29,6 +32,7 @@ TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<Tupl
 }
 
 TupleDataCollection::~TupleDataCollection() {
+	ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments);
 }
 
 void TupleDataCollection::Initialize() {

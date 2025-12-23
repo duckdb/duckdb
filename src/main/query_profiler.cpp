@@ -1,25 +1,23 @@
 #include "duckdb/main/query_profiler.hpp"
 
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/fstream.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/profiling_utils.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
 #include "yyjson_utils.hpp"
 
-#include <algorithm>
 #include <utility>
 
 using namespace duckdb_yyjson; // NOLINT
@@ -397,22 +395,22 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		auto &info = GetOperatorInfo(*active_operator);
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_TIMING)) {
 			op.End();
-			info.AddTime(op.Elapsed());
+			info.AddMetric(MetricType::OPERATOR_TIMING, op.Elapsed());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_CARDINALITY) && chunk) {
-			info.AddReturnedElements(chunk->size());
+			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
-			info.AddResultSetSize(result_set_size);
+			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
 			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
-			info.UpdateSystemPeakBufferManagerMemory(used_memory);
+			info.AddMetric(MetricType::SYSTEM_PEAK_BUFFER_MEMORY, used_memory);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
 			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
-			info.UpdateSystemPeakTempDirectorySize(used_swap);
+			info.AddMetric(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE, used_swap);
 		}
 	}
 	active_operator = nullptr;
@@ -439,6 +437,15 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 					// entry does not exist yet - insert
 					info.extra_info.insert(std::move(new_info));
 				}
+			}
+		}
+		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROWS_SCANNED) &&
+		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
+			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
+			const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
+			if (rows_scanned.IsValid()) {
+				auto &info = GetOperatorInfo(*active_operator);
+				info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, rows_scanned.GetIndex());
 			}
 		}
 	}
@@ -490,17 +497,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			info.MetricSum<idx_t>(MetricType::OPERATOR_CARDINALITY, node.second.elements_returned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROWS_SCANNED)) {
-			if (op.type == PhysicalOperatorType::TABLE_SCAN) {
-				auto &scan_op = op.Cast<PhysicalTableScan>();
-				auto &bind_data = scan_op.bind_data;
-
-				if (bind_data && scan_op.function.cardinality) {
-					auto cardinality = scan_op.function.cardinality(context, &(*bind_data));
-					if (cardinality && cardinality->has_estimated_cardinality) {
-						info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
-					}
-				}
-			}
+			info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, node.second.rows_scanned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);

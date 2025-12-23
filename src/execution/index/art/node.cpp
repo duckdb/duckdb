@@ -11,7 +11,9 @@
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
@@ -357,8 +359,7 @@ bool Node::IsAnyLeaf() const {
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
-void Node::TransformToDeprecated(ART &art, Node &node,
-                                 unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator) {
+void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
 	D_ASSERT(node.HasMetadata());
 
 	if (node.GetGateStatus() == GateStatus::GATE_SET) {
@@ -369,19 +370,19 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 	auto type = node.GetType();
 	switch (type) {
 	case NType::PREFIX:
-		return Prefix::TransformToDeprecated(art, node, deprecated_prefix_allocator);
+		return PrefixHandle::TransformToDeprecated(art, node, state);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
 		return;
 	case NType::NODE_4:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node4>(art, node, type), state);
 	case NType::NODE_16:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node16>(art, node, type), state);
 	case NType::NODE_48:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node48>(art, node, type), state);
 	case NType::NODE_256:
-		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), deprecated_prefix_allocator);
+		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), state);
 	default:
 		throw InternalException("invalid node type for TransformToDeprecated: %d", type);
 	}
@@ -402,7 +403,7 @@ void Node::Verify(ART &art) const {
 		Leaf::DeprecatedVerify(art, *this);
 		return;
 	case NType::PREFIX: {
-		Prefix::Verify(art, *this);
+		ConstPrefixHandle::Verify(art, *this);
 		return;
 	}
 	default:
@@ -496,7 +497,7 @@ string Node::ToString(ART &art, const ToStringOptions &options) const {
 	case NType::PREFIX: {
 		ToStringOptions prefix_options = options;
 		prefix_options.inside_gate = propagate_gate;
-		string str = Prefix::ToString(art, *this, prefix_options);
+		string str = ConstPrefixHandle::ToString(art, *this, prefix_options);
 		if (is_gate) {
 			string s = "";
 			indent(s, options.indent_level);
