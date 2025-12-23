@@ -265,6 +265,7 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformKeyActions);
 	REGISTER_TRANSFORM(TransformUpdateAction);
 	REGISTER_TRANSFORM(TransformDeleteAction);
+	REGISTER_TRANSFORM(TransformColumnCollation);
 
 }
 

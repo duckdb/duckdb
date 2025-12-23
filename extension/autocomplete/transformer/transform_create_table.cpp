@@ -234,8 +234,9 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(constraint);
 				fk_constraint->fk_columns.push_back(qualified_name.name);
 				column_constraint.constraints.push_back(std::move(fk_constraint));
-			}
-			else {
+			} else if (constraint->name == "ColumnCollation") {
+				type = transformer.Transform<LogicalType>(constraint);
+			} else {
 				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
 			}
 		}
@@ -415,6 +416,15 @@ pair<bool, ConstraintType> PEGTransformerFactory::TransformNotNullConstraint(PEG
 																   optional_ptr<ParseResult> parse_result) {
 	return make_pair(false, ConstraintType::NOT_NULL);
 }
+
+LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
+	string collation = StringUtil::Join(dotted_identifier, ".");
+	return LogicalType::VARCHAR_COLLATION(collation);
+}
+
 
 
 } // namespace duckdb

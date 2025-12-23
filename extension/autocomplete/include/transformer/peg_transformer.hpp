@@ -506,6 +506,8 @@ private:
 	static KeyActions TransformKeyActions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformUpdateAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformDeleteAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LogicalType TransformColumnCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 
 	// create_type.gram

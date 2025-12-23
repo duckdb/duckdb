@@ -845,7 +845,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DefaultValue <- 'DEFAULT' Expression\n"
 	"CheckConstraint <- 'CHECK' Parens(Expression)\n"
 	"ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions\n"
-	"ColumnCollation <- 'COLLATE' Expression\n"
+	"ColumnCollation <- 'COLLATE' DottedIdentifier\n"
 	"ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString\n"
 	"KeyActions <- UpdateAction? DeleteAction?\n"
 	"UpdateAction <- 'ON' 'UPDATE' KeyAction\n"
