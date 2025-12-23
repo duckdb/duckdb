@@ -138,6 +138,17 @@ bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileO
 	return FindFileSystem(filename).TryRemoveFile(filename, opener);
 }
 
+void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	unordered_map<FileSystem *, vector<string>> files_by_fs;
+	for (const auto &filename : filenames) {
+		auto &fs = FindFileSystem(filename);
+		files_by_fs[&fs].push_back(filename);
+	}
+	for (auto &entry : files_by_fs) {
+		entry.first->RemoveFiles(entry.second, opener);
+	}
+}
+
 string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path).PathSeparator(path);
 }
