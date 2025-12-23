@@ -32,19 +32,19 @@ John	ipsum
 
 # Test glob with file:/some/path
 query II
-SELECT file[:6], parse_filename(file) FROM glob(getvariable('work_dir_no_host') || '/data/*/bad_date_timestamp_mix.csv')
+SELECT file[:6], parse_filename(file) FROM glob(getvariable('work_dir_no_host') || '/data/*/bad_date_timestamp_mix.csv') ORDER BY file
 ----
 file:/	bad_date_timestamp_mix.csv
 
 # Test glob with file:///some/path
 query II
-SELECT file[:8], parse_filename(file) FROM glob(getvariable('work_dir_triple_slash') || '/data/*/bad_date_timestamp_mix.csv')
+SELECT file[:8], parse_filename(file) FROM glob(getvariable('work_dir_triple_slash') || '/data/*/bad_date_timestamp_mix.csv') ORDER BY file
 ----
 file:///	bad_date_timestamp_mix.csv
 
 # Test glob with file://localhost/some/path/to/duckdb/repo
 query II
-SELECT file[:17], parse_filename(file) FROM glob(getvariable('work_dir_localhost') || '/data/*/bad_date_timestamp_mix.csv')
+SELECT file[:17], parse_filename(file) FROM glob(getvariable('work_dir_localhost') || '/data/*/bad_date_timestamp_mix.csv') ORDER BY file
 ----
 file://localhost/	bad_date_timestamp_mix.csv
 
