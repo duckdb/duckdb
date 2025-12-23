@@ -77,7 +77,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	if (db_manager) {
-		db_manager->ResetDatabases(scheduler);
+		db_manager->ResetDatabases();
 	}
 	// destroy child elements
 	connection_manager.reset();

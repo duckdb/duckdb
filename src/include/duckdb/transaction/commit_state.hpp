@@ -29,7 +29,7 @@ enum class CommitMode { COMMIT, REVERT_COMMIT };
 
 struct IndexDataRemover {
 public:
-	explicit IndexDataRemover(QueryContext context, IndexRemovalType removal_type);
+	explicit IndexDataRemover(DuckTransaction &transaction, QueryContext context, IndexRemovalType removal_type);
 
 	void PushDelete(DeleteInfo &info);
 	void Verify();
@@ -38,6 +38,7 @@ private:
 	void Flush(DataTable &table, row_t *row_numbers, idx_t count);
 
 private:
+	DuckTransaction &transaction;
 	// data for index cleanup
 	QueryContext context;
 	//! While committing, we remove data from any indexes that was deleted

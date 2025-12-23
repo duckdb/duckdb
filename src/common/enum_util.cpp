@@ -13,6 +13,7 @@
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
@@ -136,6 +137,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -174,6 +176,7 @@
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
@@ -679,6 +682,24 @@ AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const 
 	return static_cast<AsyncResultsExecutionMode>(StringUtil::StringToEnum(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetBaseColumnPrunerModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(BaseColumnPrunerMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT), "DISABLE_PUSHDOWN_EXTRACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<BaseColumnPrunerMode>(BaseColumnPrunerMode value) {
+	return StringUtil::EnumToString(GetBaseColumnPrunerModeValues(), 2, "BaseColumnPrunerMode", static_cast<uint32_t>(value));
+}
+
+template<>
+BaseColumnPrunerMode EnumUtil::FromString<BaseColumnPrunerMode>(const char *value) {
+	return static_cast<BaseColumnPrunerMode>(StringUtil::StringToEnum(GetBaseColumnPrunerModeValues(), 2, "BaseColumnPrunerMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(BinderType::REGULAR_BINDER), "REGULAR_BINDER" },
@@ -1040,6 +1061,25 @@ const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties
 template<>
 ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const char *value) {
 	return static_cast<ColumnDataScanProperties>(StringUtil::StringToEnum(GetColumnDataScanPropertiesValues(), 3, "ColumnDataScanProperties", value));
+}
+
+const StringUtil::EnumStringLiteral *GetColumnIndexTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ColumnIndexType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ColumnIndexType::FULL_READ), "FULL_READ" },
+		{ static_cast<uint32_t>(ColumnIndexType::PUSHDOWN_EXTRACT), "PUSHDOWN_EXTRACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value) {
+	return StringUtil::EnumToString(GetColumnIndexTypeValues(), 3, "ColumnIndexType", static_cast<uint32_t>(value));
+}
+
+template<>
+ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value) {
+	return static_cast<ColumnIndexType>(StringUtil::StringToEnum(GetColumnIndexTypeValues(), 3, "ColumnIndexType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentTypeValues() {
@@ -2989,6 +3029,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_SUBPLAN), "OPTIMIZER_COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COUNT_WINDOW_ELIMINATION), "OPTIMIZER_COUNT_WINDOW_ELIMINATION" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
@@ -3003,12 +3044,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 66, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 67, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 66, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 67, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -3244,19 +3285,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" },
 		{ static_cast<uint32_t>(OptimizerType::COMMON_SUBPLAN), "COMMON_SUBPLAN" },
-		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" }
+		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" },
+		{ static_cast<uint32_t>(OptimizerType::COUNT_WINDOW_ELIMINATION), "COUNT_WINDOW_ELIMINATION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 33, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 34, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 33, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 34, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
@@ -3740,6 +3782,25 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value) {
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
 	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PushdownExtractSupport::UNCHECKED), "UNCHECKED" },
+		{ static_cast<uint32_t>(PushdownExtractSupport::DISABLED), "DISABLED" },
+		{ static_cast<uint32_t>(PushdownExtractSupport::ENABLED), "ENABLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value) {
+	return StringUtil::EnumToString(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", static_cast<uint32_t>(value));
+}
+
+template<>
+PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value) {
+	return static_cast<PushdownExtractSupport>(StringUtil::StringToEnum(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {
@@ -4508,6 +4569,24 @@ const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value) 
 template<>
 StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *value) {
 	return static_cast<StorageBlockPrefetch>(StringUtil::StringToEnum(GetStorageBlockPrefetchValues(), 4, "StorageBlockPrefetch", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStorageIndexTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StorageIndexType::FULL_READ), "FULL_READ" },
+		{ static_cast<uint32_t>(StorageIndexType::PUSHDOWN_EXTRACT), "PUSHDOWN_EXTRACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value) {
+	return StringUtil::EnumToString(GetStorageIndexTypeValues(), 2, "StorageIndexType", static_cast<uint32_t>(value));
+}
+
+template<>
+StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value) {
+	return static_cast<StorageIndexType>(StringUtil::StringToEnum(GetStorageIndexTypeValues(), 2, "StorageIndexType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {

@@ -126,8 +126,11 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
 		}
 		return entry->second.type;
+	} else if (index.HasType()) {
+		return index.GetScanType();
+	} else {
+		return returned_types[index.GetPrimaryIndex()];
 	}
-	return returned_types[index.GetPrimaryIndex()];
 }
 
 const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
@@ -193,7 +196,7 @@ bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageInde
 
 	auto table = GetTable();
 	if (!table) {
-		//! If there's no table (or the table is not a DuckDB table) we assume there's no mismatch between
+		//! If there's no table we assume there's no mismatch between
 		//! logical/storage index
 		out_index = StorageIndex::FromColumnIndex(column_index);
 		return true;
@@ -204,8 +207,7 @@ bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageInde
 		//! This is a generated column, can't use the row group pruner
 		return false;
 	}
-	out_index = StorageIndex::FromColumnIndex(column_index);
-	out_index.SetIndex(column.StorageOid());
+	out_index = table->GetStorageIndex(column_index);
 	return true;
 }
 
