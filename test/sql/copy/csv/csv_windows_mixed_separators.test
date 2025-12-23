@@ -14,7 +14,7 @@ SELECT * FROM '{DATA_DIR}\csv/test/date.csv'
 2019-06-05
 
 query I
-SELECT parse_path(g)[-3:] FROM glob('{DATA_DIR}/csv\test/*.csv') t(g) ORDER BY file WHERE g LIKE '%date.csv'
+SELECT parse_path(g)[-3:] FROM glob('{DATA_DIR}/csv\test/*.csv') t(g) WHERE g LIKE '%date.csv' ORDER BY file
 ----
 [csv, test, date.csv]
 
