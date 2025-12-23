@@ -72,7 +72,9 @@
     {
       "reason": "Implement transform sample",
       "paths": [
-        "test/sql/index/art/scan/test_random_uuid.test"
+        "test/sql/index/art/scan/test_random_uuid.test",
+        "test/sql/index/art/issues/test_art_internal_issue_4742.test",
+        "test/sql/show_select/show_quote_identifier.test"
       ]
     },
     {
@@ -95,14 +97,6 @@
       "reason": "Case insensitive preservation",
       "paths": [
         "test/sql/settings/setting_preserve_identifier_case.test"
-      ]
-    },
-    {
-      "reason": "Create Table Statement",
-      "paths": [
-        "test/sql/export/parquet/export_parquet_enum.test",
-        "test/sql/export/export_generated_columns.test",
-        "test/sql/export/export_database.test"
       ]
     },
     {
@@ -162,7 +156,11 @@
         "test/sql/json/issues/large_quoted_string_constant.test",
         "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/catalog/test_quoted_column_name.test"
+        "test/sql/catalog/test_quoted_column_name.test",
+        "test/sql/keywords/keywords_in_expressions.test",
+        "test/sql/export/export_database.test",
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/copy/return_stats.test"
       ]
     },
     {

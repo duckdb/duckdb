@@ -1756,12 +1756,22 @@ PEGTransformerFactory::TransformListComprehensionExpression(PEGTransformer &tran
 	auto in_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(5));
 	auto list_comprehension_filter = list_pr.Child<OptionalParseResult>(6);
 	if (list_comprehension_filter.HasResult()) {
-		throw NotImplementedException("List comprehension filter is not yet implemented");
+		vector<unique_ptr<ParsedExpression>> filter_children;
+		filter_children.push_back(std::move(in_expr));
+		auto filter = transformer.Transform<unique_ptr<ParsedExpression>>(list_comprehension_filter.optional_result);
+		filter_children.push_back(make_uniq<LambdaExpression>(lambda_columns, std::move(filter)));
+		in_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_filter", std::move(filter_children));
 	}
 	vector<unique_ptr<ParsedExpression>> list_comp_children;
 	list_comp_children.push_back(std::move(in_expr));
 	list_comp_children.push_back(std::move(lambda_expression));
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(list_comp_children));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionFilter(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
 case_insensitive_map_t<unique_ptr<ParsedExpression>>

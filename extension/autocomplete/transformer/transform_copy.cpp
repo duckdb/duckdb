@@ -101,7 +101,24 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	if (copy_options_pr.HasResult()) {
 		auto generic_options = transformer.Transform<vector<GenericCopyOption>>(copy_options_pr.optional_result);
 		for (auto &option : generic_options) {
-			info->options[option.name] = option.children;
+			auto option_upper = StringUtil::Upper(option.name);
+			if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE") {
+				if (option.expression) {
+					info->parsed_options[option_upper] = std::move(option.expression);
+				} else {
+					if (option.children.empty()) {
+						throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
+					}
+					vector<unique_ptr<ParsedExpression>> func_children;
+					for (auto partition : option.children) {
+						func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
+					}
+					auto row_func = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
+					info->parsed_options[option_upper] = std::move(row_func);
+				}
+			} else {
+				info->options[option_upper] = option.children;
+			}
 		}
 		auto format_option = info->options.find("format");
 		if (format_option != info->options.end()) {

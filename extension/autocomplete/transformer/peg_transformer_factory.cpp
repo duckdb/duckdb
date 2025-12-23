@@ -163,6 +163,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformInterval);
 	REGISTER_TRANSFORM(TransformSetofType);
 	Register("NumericModType", &TransformDecimalType);
+	Register("DecType", &TransformDecimalType);
 }
 
 void PEGTransformerFactory::RegisterCopy() {
@@ -473,6 +474,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformMapStructExpression);
 	REGISTER_TRANSFORM(TransformMapStructField);
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
+	REGISTER_TRANSFORM(TransformListComprehensionFilter);
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 	REGISTER_TRANSFORM(TransformGroupingExpression);
 	REGISTER_TRANSFORM(TransformMethodExpression);
