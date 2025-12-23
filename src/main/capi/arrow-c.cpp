@@ -103,8 +103,43 @@ duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, str
 	auto conn = reinterpret_cast<Connection *>(connection);
 	auto &types = arrow_table->GetTypes();
 
-	auto dchunk = duckdb::make_uniq<duckdb::DataChunk>();
-	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, duckdb::NumericCast<idx_t>(arrow_array->length));
+	bool chunk_was_initialized = false;
+	duckdb::unique_ptr<duckdb::DataChunk> new_chunk_holder;
+	duckdb::DataChunk *dchunk = nullptr;
+
+	// Check if out_chunk has already been initialized
+	if (*out_chunk != nullptr) {
+		chunk_was_initialized = true;
+		dchunk = reinterpret_cast<duckdb::DataChunk *>(*out_chunk);
+
+		// Verify that the schema matches
+		if (dchunk->ColumnCount() != types.size()) {
+			auto error_msg = duckdb::StringUtil::Format(
+			    "Schema mismatch: out_chunk has %llu columns but converted_schema has %llu columns",
+			    dchunk->ColumnCount(), types.size());
+			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, error_msg.c_str());
+		}
+
+		const auto chunk_types = dchunk->GetTypes();
+		for (idx_t i = 0; i < types.size(); i++) {
+			if (chunk_types[i] != types[i]) {
+				auto error_msg = duckdb::StringUtil::Format(
+				    "Schema mismatch: column %llu has type %s in out_chunk but type %s in converted_schema", i,
+				    chunk_types[i].ToString().c_str(), types[i].ToString().c_str());
+				return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, error_msg.c_str());
+			}
+		}
+
+		// Reset the chunk to prepare for new data
+		dchunk->Reset();
+		dchunk->SetCapacity(duckdb::NumericCast<idx_t>(arrow_array->length));
+	} else {
+		// Create and initialize a new chunk
+		new_chunk_holder = duckdb::make_uniq<duckdb::DataChunk>();
+		new_chunk_holder->Initialize(duckdb::Allocator::DefaultAllocator(), types,
+		                             duckdb::NumericCast<idx_t>(arrow_array->length));
+		dchunk = new_chunk_holder.get();
+	}
 
 	auto &arrow_types = arrow_table->GetColumns();
 	dchunk->SetCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
@@ -148,7 +183,11 @@ duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, str
 			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Unknown error occurred during conversion");
 		}
 	}
-	*out_chunk = reinterpret_cast<duckdb_data_chunk>(dchunk.release());
+
+	// Only assign to out_chunk if it wasn't already initialized
+	if (!chunk_was_initialized) {
+		*out_chunk = reinterpret_cast<duckdb_data_chunk>(new_chunk_holder.release());
+	}
 	return nullptr;
 }
 
