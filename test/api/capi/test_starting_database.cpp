@@ -97,6 +97,6 @@ TEST_CASE("On Disk DB File Name Case Preserved", "[simplestartup]") {
 				fs->TryRemoveFile(db_path_lower);
 			}
 		}
-		fs->RemoveFile(db_path);
+		fs->TryRemoveFile(db_path);
 	}
 }

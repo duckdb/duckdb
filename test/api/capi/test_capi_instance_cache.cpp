@@ -134,8 +134,11 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 		duckdb_close(&db2);
 		duckdb_disconnect(&conn1);
 		duckdb_close(&db1);
-		fs->RemoveFile(db_path);
-		fs->RemoveFile(attached_db_path);
+		if (count == 0) {
+			fs->TryRemoveFile(db_path_lower);
+		}
+		fs->TryRemoveFile(db_path);
+		fs->TryRemoveFile(attached_db_path);
 	}
 	duckdb_destroy_instance_cache(&instance_cache);
 }
