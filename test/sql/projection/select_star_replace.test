@@ -52,4 +52,42 @@ SELECT integers.* REPLACE (i+100 AS blabla) FROM integers
 statement error
 SELECT * EXCLUDE (i) REPLACE (i+100 AS i) FROM integers
 ----
-<REGEX>:.*Parser Error.*cannot occur in both.*
+<REGEX>:.*Parser Error: Column "i" cannot occur in both EXCLUDE and REPLACE list
+
+-- Test: REPLACE with quoted string constant (ColLabel parser support)
+statement ok
+CREATE TABLE test_star(id INTEGER, col1 VARCHAR, col2 VARCHAR, col3 INTEGER);
+
+statement ok
+INSERT INTO test_star VALUES (1, 'val1', 'val2', 42);
+
+query IIII
+SELECT test_star.* REPLACE ('quoted_val' AS quoted_val) FROM test_star;
+----
+id	quoted_val	col2	col3
+1	quoted_val	val2	42
+-- 1
+
+-- Test: REPLACE with quoted string and arithmetic expression (binding verification)
+query IIII
+SELECT test_star.* REPLACE (col1 AS 'computed: ' || (id * 2)::VARCHAR) FROM test_star;
+----
+id	?column?	col2	col3
+1	computed: 2	val2	42
+-- 1
+
+-- Test: Full combo EXCLUDE + REPLACE (arithmetic) + RENAME (unified HandleRename, qualified)
+query III
+SELECT test_star.* EXCLUDE (col2) REPLACE (col1 AS id * 2) RENAME (col3 AS final3) FROM test_star;
+----
+id	?column?	final3
+1	2	42
+-- 1
+
+-- Test: Combo with quoted REPLACE, EXCLUDE, and qualified RENAME (parser + binder integration)
+query III
+SELECT test_star.* EXCLUDE (col2) REPLACE (col1 AS 'replaced: ' || col3::VARCHAR) RENAME (id AS renamed_id, col3 AS final3) FROM test_star;
+----
+renamed_id	?column?	final3
+1	replaced: 42	42
+-- 1*
