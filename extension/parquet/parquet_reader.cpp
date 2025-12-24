@@ -1251,7 +1251,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 	optional_ptr<ParquetColumnSchema> root_schema;
 	optional_ptr<ParquetOptions> parquet_options;
 	idx_t row_group_idx;
-	bool is_exact;
+	bool is_exact = false;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		const auto &row_group = metadata.row_groups[row_group_idx];
