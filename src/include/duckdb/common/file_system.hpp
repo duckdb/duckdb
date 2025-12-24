@@ -36,6 +36,40 @@ class Logger;
 class ClientContext;
 class QueryContext;
 
+template <typename T>
+struct PaginatedResult {
+	PaginatedResult() = default;
+
+	virtual ~PaginatedResult() = default;
+
+	bool FetchNextPage() {
+		if (page_buffer.empty()) {
+			page_buffer = GetNextPageInternal();
+		}
+		return !page_buffer.empty();
+	}
+
+	vector<T> ClaimNextPage() {
+		return std::move(page_buffer);
+	}
+
+	vector<T> ClaimAllPages() {
+		vector<T> result;
+		while (FetchNextPage()) {
+			auto next_page = ClaimNextPage();
+			result.insert(result.end(), std::make_move_iterator(next_page.begin()),
+			              std::make_move_iterator(next_page.end()));
+		}
+		return result;
+	}
+
+protected:
+	virtual vector<T> GetNextPageInternal() = 0;
+
+private:
+	std::vector<T> page_buffer;
+};
+
 enum class FileType {
 	//! Regular file
 	FILE_TYPE_REGULAR,
@@ -233,8 +267,16 @@ public:
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
+	//! Runs a glob on the file system, returning a list of matching files in a paginated fashion
+	DUCKDB_API virtual unique_ptr<PaginatedResult<OpenFileInfo>> PaginatedGlob(const string &path,
+	                                                                           FileOpener *opener = nullptr);
 	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
+
+	//! Runs a glob on the file system, returning a list of matching files in a paginated fashion
+	DUCKDB_API unique_ptr<PaginatedResult<OpenFileInfo>>
+	PaginatedGlobFiles(const string &path, ClientContext &context,
+	                   const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -252,6 +294,9 @@ public:
 
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
+
+	//! Whether or not the file system supports paginated globbing for a specific file path
+	DUCKDB_API virtual bool SupportsPaginatedGlobbing(const string &fpath, ClientContext &context);
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	DUCKDB_API virtual void Seek(FileHandle &handle, idx_t location);
