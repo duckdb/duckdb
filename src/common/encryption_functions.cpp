@@ -49,7 +49,8 @@ void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const
 		keys.AddKey(key_name, key);
 	} else {
 		// wipe out the key
-		std::memset(key, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key,
+		                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 }
 
@@ -61,7 +62,8 @@ string EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key) {
 		keys.AddKey(key_id, key);
 	} else {
 		// wipe out the original key
-		std::memset(key, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key,
+		                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 
 	return key_id;
