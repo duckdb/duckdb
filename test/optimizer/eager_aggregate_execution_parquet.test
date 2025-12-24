@@ -2,10 +2,6 @@
 # description: Test eager count_star, min, and max execution on parquet
 # group: [optimizer]
 
-# TODO: Do we still need this?
-# Alternative verify disables eager aggregate execution
-require no_alternative_verify
-
 require parquet
 
 statement ok

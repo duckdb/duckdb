@@ -1254,21 +1254,21 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_schema = root_schema->children[storage_index.GetPrimaryIndex()];
+		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
+		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_chunk = row_group.columns[storage_index.GetPrimaryIndex()];
 
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
 		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
 		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
 			const auto &stats = column_chunk.meta_data.statistics;
-			is_exact = stats.is_min_value_exact && stats.is_max_value_exact;
+			return stats.is_min_value_exact && stats.is_max_value_exact;
 		}
-
-		const auto &column_schema = root_schema->children[storage_index.GetPrimaryIndex()];
-		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
-	}
-
-	bool MinMaxIsExact(const BaseStatistics &) override {
-		return is_exact;
+		return false;
 	}
 };
 
