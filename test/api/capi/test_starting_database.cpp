@@ -1,8 +1,8 @@
-#include "catch.hpp"
+#include "capi_tester.hpp"
 #include "duckdb.h"
-
 #include "test_helpers.hpp"
 
+using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Simple In-Memory DB Start Up and Shutdown", "[simplestartup]") {
@@ -89,6 +89,8 @@ TEST_CASE("On Disk DB File Name Case Preserved", "[simplestartup]") {
 #else  // !(_WIN32 or __APPLE__): case sensitive, different files
 			REQUIRE(count == 0);
 #endif // _WIN32 or __APPLE__
+			duckdb_destroy_data_chunk(&chunk);
+			duckdb_destroy_result(&result);
 			duckdb_disconnect(&conn);
 			duckdb_close(&database);
 			if (count == 0) {

@@ -128,6 +128,8 @@ TEST_CASE("Test the database instance cache with case-insensitive FS", "[capi]")
 		REQUIRE(count == 0);
 #endif // _WIN32 or __APPLE__
        // Cleanup
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
 		duckdb_disconnect(&conn2);
 		duckdb_close(&db2);
 		duckdb_disconnect(&conn1);
