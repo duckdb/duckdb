@@ -3,43 +3,28 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
-#include "reader/boolean_column_reader.hpp"
-#include "reader/callback_column_reader.hpp"
 #include "column_reader.hpp"
-#include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
-#include "parquet_timestamp.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
-#include "reader/string_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
-#include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
-#include "duckdb/common/encryption_functions.hpp"
-
-#include <cassert>
-#include <chrono>
-#include <cstring>
-#include <sstream>
 
 namespace duckdb {
 
