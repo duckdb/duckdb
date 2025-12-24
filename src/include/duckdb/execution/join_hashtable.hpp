@@ -99,38 +99,42 @@ public:
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
-		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result, const vector<idx_t> &output_in_probe);
 		//! Are pointer chains all pointing to NULL?
 		bool PointersExhausted() const;
 
 	private:
 		//! Next operator for the inner join
-		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the semi join
-		void NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the anti join
-		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the RIGHT semi and anti join
-		void NextRightSemiOrAntiJoin(DataChunk &keys);
-		//! Next operator for the left outer join
-		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the mark join
-		void NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the single join
-		void NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
+		                   const vector<idx_t> &output_in_probe);
+		void NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
+		                  const vector<idx_t> &output_in_probe);
+		void NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
+		                  const vector<idx_t> &output_in_probe);
+		void NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data);
+		void NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
+		                  const vector<idx_t> &output_in_probe);
+		void NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
+		                  const vector<idx_t> &output_in_probe);
+		void NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
+		                    const vector<idx_t> &output_in_probe);
 
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false
 		//! for every tuple
-		void ScanKeyMatches(DataChunk &keys);
+		void ScanKeyMatches(DataChunk &keys, DataChunk &probe_data);
 		template <bool MATCH>
-		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result,
+		                        const vector<idx_t> &output_in_probe);
+		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result,
+		                             const vector<idx_t> &output_in_probe);
 
-		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
-
-		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
+		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &probe_data, SelectionVector &result_vector);
 
 		//! Update the data chunk compaction buffer
 		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
+
+		//! Apply residual predicate filtering
+		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count, SelectionVector *no_match_sel);
 
 	public:
 		void AdvancePointers();
@@ -139,7 +143,7 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
+		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel, SelectionVector *no_match_sel);
 	};
 
 public:
@@ -175,7 +179,12 @@ public:
 	};
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
+	              unique_ptr<Expression> residual = nullptr, const vector<idx_t> &residual_build_cols = {},
+	              const vector<idx_t> &residual_probe_cols = {},
+	              const unordered_map<idx_t, idx_t> &build_to_layout = {},
+	              const unordered_map<idx_t, idx_t> &probe_to_probe = {}, const vector<idx_t> &output_in_probe = {},
+	              idx_t output_col_count = 0);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -286,6 +295,26 @@ public:
 	bool insert_duplicate_keys = true;
 	//! Number of probe matches
 	atomic<idx_t> total_probe_matches {0};
+	//! Residual predicate to evaluate during probing
+	unique_ptr<Expression> residual_predicate;
+	//! Build-side (RHS) columns needed for residual predicate evaluation
+	//! These are indices into the build payload
+	vector<idx_t> residual_build_columns;
+	//! Probe-side (LHS) columns needed for residual predicate evaluation
+	//! These are indices into the probe chunk
+	vector<idx_t> residual_probe_columns;
+	//! Mapping from build input index to layout position
+	unordered_map<idx_t, idx_t> build_input_to_layout_map;
+	// Mapping from original probe index to position in lhs_probe_data
+	//! Used in ApplyResidualPredicate to access probe columns
+	//! e.g., if probe col 7 is at position 2 in probe_data: probe_input_to_probe_map[7] = 2
+	unordered_map<idx_t, idx_t> probe_input_to_probe_map;
+	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
+	//! Used in Next() to extract only output columns from probe data
+	//! e.g., if output col 0 is at probe position 2: lhs_output_in_probe[0] = 2
+	vector<idx_t> lhs_output_in_probe;
+	//! Number of LHS output columns (for sizing result chunks)
+	idx_t lhs_output_column_count;
 
 	struct {
 		mutex mj_lock;

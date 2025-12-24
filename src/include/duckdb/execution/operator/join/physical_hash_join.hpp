@@ -31,7 +31,8 @@ public:
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info,
+	                 unique_ptr<Expression> residual, vector<idx_t> p_build_cols, vector<idx_t> p_probe_cols);
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
@@ -53,6 +54,21 @@ public:
 
 	//! Join Keys statistics (optional)
 	vector<unique_ptr<BaseStatistics>> join_stats;
+
+	//! Residual predicate for arbitrary conditions
+	unique_ptr<Expression> residual_predicate;
+	vector<idx_t> predicate_build_cols;
+	vector<idx_t> predicate_probe_cols;
+	//! Mapping from build input column index to layout position
+	unordered_map<idx_t, idx_t> build_input_to_layout_map;
+	//! For probe phase (includes predicate columns)
+	JoinProjectionColumns lhs_probe_columns;
+	//! Mapping from lhs_output_columns positions to lhs_probe_columns positions
+	//! e.g., if lhs_probe_columns = [0, 2, 5, 7] and lhs_output_columns = [0, 2, 7]
+	//! then lhs_output_in_probe = [0, 1, 3]
+	vector<idx_t> lhs_output_in_probe;
+	//! Mapping original probe index -> position in lhs_probe_columns
+	unordered_map<idx_t, idx_t> probe_input_to_probe_map;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

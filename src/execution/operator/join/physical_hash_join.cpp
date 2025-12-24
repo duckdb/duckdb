@@ -33,28 +33,47 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                                    PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+                                   unique_ptr<JoinFilterPushdownInfo> pushdown_info_p,
+                                   unique_ptr<Expression> residual_p, vector<idx_t> p_build_cols,
+                                   vector<idx_t> p_probe_cols)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
+	residual_predicate = std::move(residual_p);
+	predicate_build_cols = std::move(p_build_cols);
+	predicate_probe_cols = std::move(p_probe_cols);
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
 	children.push_back(right);
 
-	// Collect condition types, and which conditions are just references (so we won't duplicate them in the payload)
+	auto &lhs_input_types = children[0].get().GetTypes();
+	auto &rhs_input_types = children[1].get().GetTypes();
+
+	// Build mapping for join conditions
+	unordered_map<idx_t, idx_t> build_input_to_layout;
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
+
 	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
 		auto &condition = conditions[cond_idx];
 		condition_types.push_back(condition.left->return_type);
+
 		if (condition.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			build_columns_in_conditions.emplace(condition.right->Cast<BoundReferenceExpression>().index, cond_idx);
+			auto build_input_idx = condition.right->Cast<BoundReferenceExpression>().index;
+			build_columns_in_conditions.emplace(build_input_idx, cond_idx);
 		}
 	}
 
-	auto &lhs_input_types = children[0].get().GetTypes();
+	// Map predicate build columns
+	for (auto rhs_idx_with_offset : predicate_build_cols) {
+		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
+		auto it = build_columns_in_conditions.find(rhs_idx);
+		if (it != build_columns_in_conditions.end()) {
+			build_input_to_layout[rhs_idx_with_offset] = it->second;
+		}
+	}
 
-	// Create a projection map for the LHS (if it was empty), for convenience
+	// build lhs_output_columns
 	lhs_output_columns.col_idxs = left_projection_map;
 	if (lhs_output_columns.col_idxs.empty()) {
 		lhs_output_columns.col_idxs.reserve(lhs_input_types.size());
@@ -68,45 +87,121 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		lhs_output_columns.col_types.push_back(lhs_col_type);
 	}
 
-	// For ANTI, SEMI and MARK join, we only need to store the keys, so for these the payload/RHS types are empty
+	// build lhs_probe_columns
+	unordered_set<idx_t> required_probe_cols;
+
+	// add all output columns
+	for (auto col : lhs_output_columns.col_idxs) {
+		required_probe_cols.insert(col);
+	}
+
+	// add all predicate columns
+	for (auto col : predicate_probe_cols) {
+		required_probe_cols.insert(col);
+	}
+
+	lhs_probe_columns.col_idxs.assign(required_probe_cols.begin(), required_probe_cols.end());
+	std::sort(lhs_probe_columns.col_idxs.begin(), lhs_probe_columns.col_idxs.end());
+
+	for (auto col_idx : lhs_probe_columns.col_idxs) {
+		lhs_probe_columns.col_types.push_back(lhs_input_types[col_idx]);
+	}
+
+	// build mapping (original index -> position in lhs_probe_columns)
+	for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
+		probe_input_to_probe_map[lhs_probe_columns.col_idxs[i]] = i;
+	}
+
+	lhs_output_in_probe.reserve(lhs_output_columns.col_idxs.size());
+
+	for (auto output_col_idx : lhs_output_columns.col_idxs) {
+		// find where this output column is located in lhs_probe_columns
+		auto it = probe_input_to_probe_map.find(output_col_idx);
+		D_ASSERT(it != probe_input_to_probe_map.end());
+		lhs_output_in_probe.push_back(it->second);
+	}
+
+	// handle build side (RHS)
 	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
+		if (!predicate_build_cols.empty()) {
+			for (auto rhs_idx_with_offset : predicate_build_cols) {
+				idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
+				auto it = build_columns_in_conditions.find(rhs_idx);
+				if (it == build_columns_in_conditions.end()) {
+					idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
+					build_input_to_layout[rhs_idx_with_offset] = layout_pos;
+
+					payload_columns.col_idxs.push_back(rhs_idx);
+					payload_columns.col_types.push_back(rhs_input_types[rhs_idx]);
+				}
+			}
+		}
+
+		build_input_to_layout_map = std::move(build_input_to_layout);
 		return;
 	}
 
-	auto &rhs_input_types = children[1].get().GetTypes();
-
-	// Create a projection map for the RHS (if it was empty), for convenience
+	// for other join types
 	auto right_projection_map_copy = right_projection_map;
 	if (right_projection_map_copy.empty()) {
-		right_projection_map_copy.reserve(rhs_input_types.size());
 		for (idx_t i = 0; i < rhs_input_types.size(); i++) {
 			right_projection_map_copy.emplace_back(i);
 		}
 	}
 
-	// Now fill payload expressions/types and RHS columns/types
+	for (auto rhs_idx_with_offset : predicate_build_cols) {
+		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
+
+		// skip if it's a join condition
+		auto it = build_columns_in_conditions.find(rhs_idx);
+		if (it == build_columns_in_conditions.end()) {
+			idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
+			build_input_to_layout[rhs_idx_with_offset] = layout_pos;
+
+			payload_columns.col_idxs.push_back(rhs_idx);
+			payload_columns.col_types.push_back(rhs_input_types[rhs_idx]);
+		}
+	}
+
 	for (auto &rhs_col : right_projection_map_copy) {
 		auto &rhs_col_type = rhs_input_types[rhs_col];
+		idx_t rhs_col_with_offset = lhs_input_types.size() + rhs_col;
 
+		// check if it's a join condition
 		auto it = build_columns_in_conditions.find(rhs_col);
-		if (it == build_columns_in_conditions.end()) {
-			// This rhs column is not a join key
-			payload_columns.col_idxs.push_back(rhs_col);
-			payload_columns.col_types.push_back(rhs_col_type);
-			rhs_output_columns.col_idxs.push_back(condition_types.size() + payload_columns.col_types.size() - 1);
-		} else {
-			// This rhs column is a join key
+
+		if (it != build_columns_in_conditions.end()) {
+			// it's in join conditions - use condition position
 			rhs_output_columns.col_idxs.push_back(it->second);
+		} else {
+			// check if already in payload (from predicate)
+			auto layout_it = build_input_to_layout.find(rhs_col_with_offset);
+
+			if (layout_it != build_input_to_layout.end()) {
+				// already in payload (from predicate) - reuse position
+				rhs_output_columns.col_idxs.push_back(layout_it->second);
+			} else {
+				// new column - add to payload
+				idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
+				build_input_to_layout[rhs_col_with_offset] = layout_pos;
+
+				payload_columns.col_idxs.push_back(rhs_col);
+				payload_columns.col_types.push_back(rhs_col_type);
+				rhs_output_columns.col_idxs.push_back(layout_pos);
+			}
 		}
+
 		rhs_output_columns.col_types.push_back(rhs_col_type);
 	}
+
+	build_input_to_layout_map = std::move(build_input_to_layout);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
                                    PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality)
     : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       nullptr) {
+                       nullptr, nullptr, {}, {}) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -256,8 +351,11 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
-	                                       rhs_output_columns.col_idxs);
+	auto result = make_uniq<JoinHashTable>(
+	    context, *this, conditions, payload_columns.col_types, join_type, rhs_output_columns.col_idxs,
+	    residual_predicate ? residual_predicate->Copy() : nullptr, predicate_build_cols, predicate_probe_cols,
+	    build_input_to_layout_map, probe_input_to_probe_map, lhs_output_in_probe, lhs_output_columns.col_idxs.size());
+
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -1004,6 +1102,7 @@ public:
 
 	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
+	DataChunk lhs_probe_data;
 	DataChunk lhs_output;
 
 	ExpressionExecutor probe_executor;
@@ -1026,9 +1125,17 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto state = make_uniq<HashJoinOperatorState>(context.client, sink);
 	state->lhs_join_keys.Initialize(allocator, condition_types);
+
+	// initialize probe data with ALL probe columns (output + predicate)
+	if (!lhs_probe_columns.col_types.empty()) {
+		state->lhs_probe_data.Initialize(allocator, lhs_probe_columns.col_types);
+	}
+
+	// keep lhs_output initialization for now
 	if (!lhs_output_columns.col_types.empty()) {
 		state->lhs_output.Initialize(allocator, lhs_output_columns.col_types);
 	}
+
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
@@ -1037,6 +1144,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		}
 		TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 	}
+
 	if (sink.external) {
 		state->spill_chunk.Initialize(allocator, sink.probe_types);
 		sink.InitializeProbeSpill();
@@ -1056,6 +1164,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
+		// for empty result construction, use output columns only
 		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -1092,8 +1201,9 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		}
 	}
 
-	state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
-	state.scan_structure.Next(state.lhs_join_keys, state.lhs_output, chunk);
+	// pass probe data and mapping to Next
+	state.lhs_probe_data.ReferenceColumns(input, lhs_probe_columns.col_idxs);
+	state.scan_structure.Next(state.lhs_join_keys, state.lhs_probe_data, chunk, lhs_output_in_probe);
 
 	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
 		state.scan_structure.is_null = true;
@@ -1196,7 +1306,7 @@ public:
 	//! Chunks for holding the scanned probe collection
 	DataChunk lhs_probe_chunk;
 	DataChunk lhs_join_keys;
-	DataChunk lhs_output;
+	DataChunk lhs_probe_data;
 	TupleDataChunkState join_key_state;
 	ExpressionExecutor lhs_join_key_executor;
 
@@ -1397,7 +1507,10 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, c
 
 	lhs_probe_chunk.Initialize(allocator, sink.probe_types);
 	lhs_join_keys.Initialize(allocator, op.condition_types);
-	lhs_output.Initialize(allocator, op.lhs_output_columns.col_types);
+
+	// initialize with PROBE columns (not just output)
+	lhs_probe_data.Initialize(allocator, op.lhs_probe_columns.col_types);
+
 	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
 	for (auto &cond : op.conditions) {
@@ -1451,15 +1564,14 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::PROBE && sink.hash_table->finalized);
 
 	if (!scan_structure.is_null) {
-		// Still have elements remaining (i.e. we got >STANDARD_VECTOR_SIZE elements in the previous probe)
-		scan_structure.Next(lhs_join_keys, lhs_output, chunk);
+		// still have elements remaining
+		scan_structure.Next(lhs_join_keys, lhs_probe_data, chunk, gstate.op.lhs_output_in_probe);
 		if (chunk.size() != 0 || !scan_structure.PointersExhausted()) {
 			return;
 		}
 	}
 
 	if (!scan_structure.is_null || empty_ht_probe_in_progress) {
-		// Previous probe is done
 		scan_structure.is_null = true;
 		empty_ht_probe_in_progress = false;
 		sink.probe_spill->consumer->FinishChunk(probe_local_scan);
@@ -1474,10 +1586,20 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	// Get the probe chunk columns/hashes
 	lhs_join_keys.Reset();
 	lhs_join_key_executor.Execute(lhs_probe_chunk, lhs_join_keys);
-	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
+
+	// reference ALL probe columns
+	lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_probe_columns.col_idxs);
+
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_output, chunk);
+		// For empty HT result, extract only output columns
+		DataChunk temp_output;
+		temp_output.Initialize(Allocator::DefaultAllocator(), gstate.op.lhs_output_columns.col_types);
+		for (idx_t i = 0; i < gstate.op.lhs_output_in_probe.size(); i++) {
+			temp_output.data[i].Reference(lhs_probe_data.data[gstate.op.lhs_output_in_probe[i]]);
+		}
+		temp_output.SetCardinality(lhs_probe_data.size());
+		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, temp_output, chunk);
 		empty_ht_probe_in_progress = true;
 		return;
 	}
@@ -1485,7 +1607,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	// Perform the probe
 	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
-	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
+	scan_structure.Next(lhs_join_keys, lhs_probe_data, chunk, gstate.op.lhs_output_in_probe);
 }
 
 void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
@@ -1596,6 +1718,10 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
 	}
 	result["Conditions"] = condition_info;
+
+	if (residual_predicate) {
+		result["Residual Predicate"] = residual_predicate->ToString();
+	}
 
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
