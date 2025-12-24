@@ -372,6 +372,15 @@
         "struct": "RegexpEscapeFun"
     },
     {
+        "name": "path_join",
+        "parameters": "path,...",
+        "description": "Joins path components using the platform separator, normalizing duplicate separators and dot segments. Absolute RHS components must be compatible (same scheme/parent) or raise an error.",
+        "example": "path_join('dir', 'subdir', 'file')",
+        "categories": ["string"],
+        "type": "scalar_function",
+        "struct": "PathJoinFun"
+    },
+    {
         "name": "~~",
         "parameters": "",
         "description": "",
