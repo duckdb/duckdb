@@ -113,8 +113,6 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	stats.Initialize(types, data);
 	metadata_pointer = data.base_table_pointer;
 	metadata_pointers = data.read_metadata_pointers;
-	row_groups->Initialize(data, metadata_pointers);
-	stats.Initialize(types, data);
 }
 
 void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer,
