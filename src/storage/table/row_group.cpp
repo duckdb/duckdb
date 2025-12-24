@@ -191,7 +191,7 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 
 static unique_ptr<PushedDownExpressionState> CreateCast(ClientContext &context, const LogicalType &original_type,
                                                         const LogicalType &cast_type) {
-	auto input = make_uniq<BoundReferenceExpression>(original_type, 0);
+	auto input = make_uniq<BoundReferenceExpression>(original_type, NumericCast<storage_t>(0));
 	auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), cast_type);
 	auto res = make_uniq<PushedDownExpressionState>(context);
 	res->target.Initialize(context, {cast_type});
