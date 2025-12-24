@@ -703,8 +703,9 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 		auto result_data = FlatVector::GetData<string_t>(result);
 		// call Finalize on the result
 		for (idx_t r = 0; r < size; r++) {
-			result_data[r].SetSizeAndFinalize(NumericCast<uint32_t>(offsets[r]),
-			                                  key_lengths.variable_lengths[r] + key_lengths.constant_length);
+			const auto offset = NumericCast<uint32_t>(offsets[r]);
+			const auto allocated_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
+			result_data[r].SetSizeAndFinalize(offset, allocated_size);
 		}
 		break;
 	}

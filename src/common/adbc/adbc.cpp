@@ -13,6 +13,8 @@
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
+#include <algorithm>
+#include <cstring>
 #include <stdlib.h>
 #include <string.h>
 
@@ -985,6 +987,22 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (has_stream && to_table) {
 		return IngestToTableFromBoundStream(wrapper, rows_affected, error);
 	}
+
+	if (!wrapper->statement) {
+		if (out) {
+			out->private_data = nullptr;
+			out->get_schema = nullptr;
+			out->get_next = nullptr;
+			out->release = nullptr;
+			out->get_last_error = nullptr;
+		}
+
+		if (rows_affected) {
+			*rows_affected = 0;
+		}
+		return ADBC_STATUS_OK;
+	}
+
 	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
 	if (!stream_wrapper) {
 		SetError(error, "Allocation error");
@@ -1140,6 +1158,12 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
+	auto query_len = strlen(query);
+	if (std::all_of(query, query + query_len, duckdb::StringUtil::CharacterIsSpace)) {
+		SetError(error, "No statements found");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
 	if (wrapper->ingestion_stream.release) {
 		// Release any resources currently held by the ingestion stream before we overwrite it
@@ -1159,6 +1183,13 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		duckdb_destroy_extracted(&extracted_statements);
 		return ADBC_STATUS_INTERNAL;
 	}
+
+	if (extract_statements_size == 0) {
+		// Query is non-empty, but there are no actual statements.
+		duckdb_destroy_extracted(&extracted_statements);
+		return ADBC_STATUS_OK;
+	}
+
 	// Now lets loop over the statements, and execute every one
 	for (idx_t i = 0; i < extract_statements_size - 1; i++) {
 		duckdb_prepared_statement statement_internal = nullptr;

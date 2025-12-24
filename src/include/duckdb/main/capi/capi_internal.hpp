@@ -53,6 +53,7 @@ struct PreparedStatementWrapper {
 	unique_ptr<PreparedStatement> statement;
 	bool success = true;
 	ErrorData error_data;
+	unordered_map<idx_t, string> param_index_to_name;
 };
 
 struct ExtractStatementsWrapper {

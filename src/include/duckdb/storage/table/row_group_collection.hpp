@@ -53,7 +53,7 @@ public:
 	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
-	void FinalizeCheckpoint(MetaBlockPointer pointer);
+	void FinalizeCheckpoint(MetaBlockPointer pointer, const vector<MetaBlockPointer> &existing_pointers);
 
 	bool IsEmpty() const;
 
@@ -187,6 +187,8 @@ private:
 	atomic<idx_t> allocation_size;
 	//! Root metadata pointer, if the collection is loaded from disk
 	MetaBlockPointer metadata_pointer;
+	//! Other metadata pointers
+	vector<MetaBlockPointer> metadata_pointers;
 	//! Whether or not we need to append a new row group prior to appending
 	bool requires_new_row_group;
 };

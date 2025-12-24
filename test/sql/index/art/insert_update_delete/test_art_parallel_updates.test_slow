@@ -2,6 +2,9 @@
 # description: Test concurrent updates causing index scans.
 # group: [insert_update_delete]
 
+# Database was created with a vector size of 2048.
+require exact_vector_size 2048
+
 unzip data/storage/artupdates.db.gz __TEST_DIR__/artupdates.db
 
 statement ok
