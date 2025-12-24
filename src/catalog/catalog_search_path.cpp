@@ -197,8 +197,15 @@ void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set
 	Set(std::move(new_paths), set_type);
 }
 
-const vector<CatalogSearchEntry> &CatalogSearchPath::Get() const {
-	return paths;
+vector<CatalogSearchEntry> CatalogSearchPath::Get() const {
+	vector<CatalogSearchEntry> res;
+	for (auto &path : paths) {
+		if (path.schema.empty()) {
+			continue;
+		}
+		res.emplace_back(path);
+	}
+	return res;
 }
 
 string CatalogSearchPath::GetDefaultSchema(const string &catalog) const {
@@ -250,7 +257,7 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 		catalogs.push_back(SYSTEM_CATALOG);
 	} else {
 		for (auto &path : paths) {
-			if (StringUtil::CIEquals(path.schema, schema)) {
+			if (StringUtil::CIEquals(path.schema, schema) || path.schema.empty()) {
 				catalogs.push_back(path.catalog);
 			}
 		}
@@ -261,7 +268,7 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) const {
 	vector<string> schemas;
 	for (auto &path : paths) {
-		if (StringUtil::CIEquals(path.catalog, catalog)) {
+		if (!path.schema.empty() && StringUtil::CIEquals(path.catalog, catalog)) {
 			schemas.push_back(path.schema);
 		}
 	}
@@ -269,8 +276,8 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 }
 
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
-	const auto &paths = Get();
 	D_ASSERT(paths.size() >= 2);
+	D_ASSERT(!paths[1].schema.empty());
 	return paths[1];
 }
 

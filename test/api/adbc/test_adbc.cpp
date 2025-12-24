@@ -140,6 +140,15 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT 42"));
 }
 
+TEST_CASE("ADBC - non-empty query without actual statements", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	REQUIRE(db.QueryAndCheck("--"));
+}
+
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -1306,6 +1315,49 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	auto res = db.Query("Select * from result");
 	REQUIRE((res->ColumnCount() == 1));
 	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
+	adbc_error.release(&adbc_error);
+}
+
+TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	string query;
+	SECTION("Empty") {
+		query = "";
+	}
+	SECTION("Whitespace") {
+		query = " \n";
+	}
+
+	// Create connection - database and whatnot
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	auto status = AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error);
+
+	REQUIRE((status == ADBC_STATUS_INVALID_ARGUMENT));
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
 	adbc_error.release(&adbc_error);
 }
 
