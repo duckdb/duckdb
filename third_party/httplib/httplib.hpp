@@ -19,6 +19,7 @@
 #include "duckdb/common/string.hpp"
 #include <exception>
 #include <stdexcept>
+#include <re2/re2.h>
 
 /*
  * Platform compatibility check
@@ -165,8 +166,10 @@
 #define CPPHTTPLIB_RECV_FLAGS 0
 #endif
 
-#ifndef CPPHTTPLIB_SEND_FLAGS
+#ifndef MSG_NOSIGNAL
 #define CPPHTTPLIB_SEND_FLAGS 0
+#else
+#define CPPHTTPLIB_SEND_FLAGS MSG_NOSIGNAL
 #endif
 
 #ifndef CPPHTTPLIB_LISTEN_BACKLOG
@@ -318,7 +321,6 @@ using socket_t = int;
 #include <map>
 #include <memory>
 #include <mutex>
-#include <random>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -327,7 +329,6 @@ using socket_t = int;
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include "duckdb/common/re2_regex.hpp"
 #include "duckdb/common/random_engine.hpp"
 
@@ -366,6 +367,7 @@ using socket_t = int;
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
+#include <openssl/rand.h>
 
 #if defined(_WIN32) && defined(OPENSSL_USE_APPLINK)
 #include <openssl/applink.c>
@@ -379,8 +381,12 @@ using socket_t = int;
 #error Please use OpenSSL or a current version of BoringSSL
 #endif
 #define SSL_get1_peer_certificate SSL_get_peer_certificate
+// Disabled OpenSSL version check for CI
+//#elif OPENSSL_VERSION_NUMBER < 0x30000000L
+//#error Sorry, OpenSSL versions prior to 3.0.0 are not supported
+//#endif
 #elif OPENSSL_VERSION_NUMBER < 0x30000000L
-#error Sorry, OpenSSL versions prior to 3.0.0 are not supported
+#define SSL_get1_peer_certificate SSL_get_peer_certificate
 #endif
 
 #endif // CPPHTTPLIB_OPENSSL_SUPPORT
@@ -415,16 +421,16 @@ namespace detail {
  */
 
 template <class T, class... Args>
-typename std::enable_if<!std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<!std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(Args &&...args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  return duckdb::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <class T>
-typename std::enable_if<std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(std::size_t n) {
   typedef typename std::remove_extent<T>::type RT;
-  return std::unique_ptr<T>(new RT[n]);
+  return duckdb::unique_ptr<T>(new RT[n]);
 }
 
 namespace case_ignore {
@@ -910,7 +916,7 @@ public:
 
   bool enqueue(std::function<void()> fn) override {
     {
-      std::unique_lock<std::mutex> lock(mutex_);
+      duckdb::unique_lock<std::mutex> lock(mutex_);
       if (max_queued_requests_ > 0 && jobs_.size() >= max_queued_requests_) {
         return false;
       }
@@ -924,7 +930,7 @@ public:
   void shutdown() override {
     // Stop all worker threads...
     {
-      std::unique_lock<std::mutex> lock(mutex_);
+      duckdb::unique_lock<std::mutex> lock(mutex_);
       shutdown_ = true;
     }
 
@@ -944,7 +950,7 @@ private:
       for (;;) {
         std::function<void()> fn;
         {
-          std::unique_lock<std::mutex> lock(pool_.mutex_);
+          duckdb::unique_lock<std::mutex> lock(pool_.mutex_);
 
           pool_.cond_.wait(
               lock, [&] { return !pool_.jobs_.empty() || pool_.shutdown_; });
@@ -1059,7 +1065,7 @@ private:
 };
 
 /**
- * Performs std::regex_match on request path
+ * Performs RegexMatch on request path
  * and stores the result in Request::matches
  *
  * Note that regex match is performed directly on the whole request.
@@ -1213,13 +1219,10 @@ protected:
   size_t payload_max_length_ = CPPHTTPLIB_PAYLOAD_MAX_LENGTH;
 
 private:
-  using Handlers =
-      std::vector<std::pair<std::unique_ptr<detail::MatcherBase>, Handler>>;
-  using HandlersForContentReader =
-      std::vector<std::pair<std::unique_ptr<detail::MatcherBase>,
-                            HandlerWithContentReader>>;
+	using Handlers = std::vector<std::pair<Regex, Handler>>;
+	using HandlersForContentReader = std::vector<std::pair<Regex, HandlerWithContentReader>>;
 
-  static std::unique_ptr<detail::MatcherBase>
+	static duckdb::unique_ptr<detail::MatcherBase>
   make_matcher(const std::string &pattern);
 
   Server &set_error_handler_core(HandlerWithResponse handler, std::true_type);
@@ -1361,16 +1364,16 @@ std::ostream &operator<<(std::ostream &os, const Error &obj);
 class Result {
 public:
   Result() = default;
-  Result(std::unique_ptr<Response> &&res, Error err,
+  Result(duckdb::unique_ptr<Response> &&res, Error err,
          Headers &&request_headers = Headers{})
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)) {}
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-  Result(std::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
+  Result(duckdb::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
          int ssl_error)
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)), ssl_error_(ssl_error) {}
-  Result(std::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
+  Result(duckdb::unique_ptr<Response> &&res, Error err, Headers &&request_headers,
          int ssl_error, unsigned long ssl_openssl_error)
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)), ssl_error_(ssl_error),
@@ -1407,7 +1410,7 @@ public:
   size_t get_request_header_value_count(const std::string &key) const;
 
 private:
-  std::unique_ptr<Response> res_;
+  duckdb::unique_ptr<Response> res_;
   Error err_ = Error::Unknown;
   Headers request_headers_;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
@@ -1739,7 +1742,7 @@ private:
   template <typename ClientType> void setup_redirect_client(ClientType &client);
   bool handle_request(Stream &strm, Request &req, Response &res,
                       bool close_connection, Error &error);
-  std::unique_ptr<Response> send_with_content_provider(
+  duckdb::unique_ptr<Response> send_with_content_provider(
       Request &req, const char *body, size_t content_length,
       ContentProvider content_provider,
       ContentProviderWithoutLength content_provider_without_length,
@@ -1956,7 +1959,7 @@ public:
 #endif
 
 private:
-  std::unique_ptr<ClientImpl> cli_;
+  duckdb::unique_ptr<ClientImpl> cli_;
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   bool is_ssl_ = false;
@@ -2839,8 +2842,8 @@ inline std::string base64_encode(const std::string &in) {
   std::string out;
   out.reserve(in.size());
 
-  auto val = 0;
-  auto valb = -6;
+	unsigned int val = 0;
+	int valb = -6;
 
   for (auto c : in) {
     val = (val << 8) + static_cast<uint8_t>(c);
@@ -2924,7 +2927,7 @@ inline std::string encode_path(const std::string &s) {
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
     case ' ': result += "%20"; break;
-    case '+': result += "%2B"; break;
+    // case '+': result += "%2B"; break;
     case '\r': result += "%0D"; break;
     case '\n': result += "%0A"; break;
     case '\'': result += "%27"; break;
@@ -3004,7 +3007,7 @@ divide(const std::string &str, char d,
 
 inline void split(const char *b, const char *e, char d,
                   std::function<void(const char *, const char *)> fn) {
-  return split(b, e, d, (std::numeric_limits<size_t>::max)(), std::move(fn));
+  return split(b, e, d, static_cast<size_t>((std::numeric_limits<size_t>::max)()), fn);
 }
 
 inline void split(const char *b, const char *e, char d, size_t m,
@@ -3728,7 +3731,7 @@ inline int getaddrinfo_with_timeout(const char *node, const char *service,
   bool timed_out = false;
 
   {
-    std::unique_lock<std::mutex> lock(context.mutex);
+    duckdb::unique_lock<std::mutex> lock(context.mutex);
 
     while (!context.completed) {
       auto now = std::chrono::steady_clock::now();
@@ -3893,7 +3896,7 @@ inline int getaddrinfo_with_timeout(const char *node, const char *service,
   };
 
   // Allocate on the heap, so the resolver thread can keep using the data.
-  auto state = std::make_shared<GetAddrInfoState>();
+  auto state = duckdb::make_shared_ptr<GetAddrInfoState>();
 
   std::thread resolve_thread([=]() {
     auto thread_result = getaddrinfo(
@@ -3906,7 +3909,7 @@ inline int getaddrinfo_with_timeout(const char *node, const char *service,
   });
 
   // Wait for completion or timeout
-  std::unique_lock<std::mutex> lock(state->mutex);
+  duckdb::unique_lock<std::mutex> lock(state->mutex);
   auto finished =
       state->result_cv.wait_for(lock, std::chrono::seconds(timeout_sec),
                                 [&] { return state->completed; });
@@ -4298,8 +4301,8 @@ inline unsigned int str2tag(const std::string &s) {
 
 namespace udl {
 
-inline constexpr unsigned int operator""_t(const char *s, size_t l) {
-  return str2tag_core(s, l, 0);
+inline constexpr unsigned int operator ""_t(const char *s, size_t l) {
+	return str2tag_core(s, l, 0);
 }
 
 } // namespace udl
@@ -4313,7 +4316,7 @@ find_content_type(const std::string &path,
   auto it = user_data.find(ext);
   if (it != user_data.end()) { return it->second; }
 
-  using udl::operator""_t;
+  using udl::operator ""_t;
 
   switch (str2tag(ext)) {
   default: return default_content_type;
@@ -4371,7 +4374,7 @@ find_content_type(const std::string &path,
 }
 
 inline bool can_compress_content_type(const std::string &content_type) {
-  using udl::operator""_t;
+  using udl::operator ""_t;
 
   auto tag = str2tag(content_type);
 
@@ -5007,7 +5010,7 @@ bool prepare_content_receiver(T &x, int &status,
                               bool decompress, U callback) {
   if (decompress) {
     std::string encoding = x.get_header_value("Content-Encoding");
-    std::unique_ptr<decompressor> decompressor;
+    duckdb::unique_ptr<decompressor> decompressor;
 
     if (encoding == "gzip" || encoding == "deflate") {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
@@ -6239,7 +6242,7 @@ inline bool has_crlf(const std::string &s) {
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
-  auto context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
+  auto context = duckdb::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
       EVP_MD_CTX_new(), EVP_MD_CTX_free);
 
   unsigned int hash_length = 0;
@@ -6249,7 +6252,7 @@ inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
   EVP_DigestUpdate(context.get(), s.c_str(), s.size());
   EVP_DigestFinal_ex(context.get(), hash, &hash_length);
 
-  std::stringstream ss;
+  duckdb::stringstream ss;
   for (auto i = 0u; i < hash_length; ++i) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<unsigned int>(hash[i]);
@@ -6276,7 +6279,7 @@ inline std::pair<std::string, std::string> make_digest_authentication_header(
     const std::string &password, bool is_proxy = false) {
   std::string nc;
   {
-    std::stringstream ss;
+    duckdb::stringstream ss;
     ss << std::setfill('0') << std::setw(8) << std::hex << cnonce_count;
     nc = ss.str();
   }
@@ -6369,7 +6372,7 @@ inline bool load_system_certs_on_windows(X509_STORE *store) {
 #elif defined(CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN) && TARGET_OS_MAC
 template <typename T>
 using CFObjectPtr =
-    std::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
+    duckdb::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
 
 inline void cf_object_ptr_deleter(CFTypeRef obj) {
   if (obj) { CFRelease(obj); }
@@ -6481,7 +6484,7 @@ inline bool parse_www_authenticate(const Response &res,
   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
   if (res.has_header(auth_key)) {
     thread_local auto re =
-        std::regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
+        Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
     auto s = res.get_header_value(auth_key);
     auto pos = s.find(' ');
     if (pos != std::string::npos) {
@@ -6490,9 +6493,8 @@ inline bool parse_www_authenticate(const Response &res,
         return false;
       } else if (type == "Digest") {
         s = s.substr(pos + 1);
-        auto beg = std::sregex_iterator(s.begin(), s.end(), re);
-        for (auto i = beg; i != std::sregex_iterator(); ++i) {
-          const auto &m = *i;
+      	auto matches = duckdb_re2::RegexFindAll(s, re);
+      	for (auto &m : matches) {
           auto key = s.substr(static_cast<size_t>(m.position(1)),
                               static_cast<size_t>(m.length(1)));
           auto val = m.length(2) > 0
@@ -6799,8 +6801,8 @@ inline std::string decode_query_component(const std::string &component,
 inline std::string append_query_params(const std::string &path,
                                        const Params &params) {
   std::string path_with_query = path;
-  thread_local const std::regex re("[^?]+\\?.*");
-  auto delm = std::regex_match(path, re) ? '&' : '?';
+  thread_local const Regex re("[^?]+\\?.*");
+  auto delm = RegexMatch(path, re) ? '&' : '?';
   path_with_query += delm + detail::params_to_query_str(params);
   return path_with_query;
 }
@@ -7395,7 +7397,7 @@ inline Server::Server()
 
 inline Server::~Server() = default;
 
-inline std::unique_ptr<detail::MatcherBase>
+inline duckdb::unique_ptr<detail::MatcherBase>
 Server::make_matcher(const std::string &pattern) {
   if (pattern.find("/:") != std::string::npos) {
     return detail::make_unique<detail::PathParamsMatcher>(pattern);
@@ -7405,60 +7407,60 @@ Server::make_matcher(const std::string &pattern) {
 }
 
 inline Server &Server::Get(const std::string &pattern, Handler handler) {
-  get_handlers_.emplace_back(make_matcher(pattern), std::move(handler));
+  get_handlers_.emplace_back(Regex(pattern), std::move(handler));
   return *this;
 }
 
 inline Server &Server::Post(const std::string &pattern, Handler handler) {
-  post_handlers_.emplace_back(make_matcher(pattern), std::move(handler));
+  post_handlers_.emplace_back(Regex(pattern), std::move(handler));
   return *this;
 }
 
 inline Server &Server::Post(const std::string &pattern,
                             HandlerWithContentReader handler) {
-  post_handlers_for_content_reader_.emplace_back(make_matcher(pattern),
+  post_handlers_for_content_reader_.emplace_back(Regex(pattern),
                                                  std::move(handler));
   return *this;
 }
 
 inline Server &Server::Put(const std::string &pattern, Handler handler) {
-  put_handlers_.emplace_back(make_matcher(pattern), std::move(handler));
+  put_handlers_.emplace_back(Regex(pattern), std::move(handler));
   return *this;
 }
 
 inline Server &Server::Put(const std::string &pattern,
                            HandlerWithContentReader handler) {
-  put_handlers_for_content_reader_.emplace_back(make_matcher(pattern),
+  put_handlers_for_content_reader_.emplace_back(Regex(pattern),
                                                 std::move(handler));
   return *this;
 }
 
 inline Server &Server::Patch(const std::string &pattern, Handler handler) {
-  patch_handlers_.emplace_back(make_matcher(pattern), std::move(handler));
+  patch_handlers_.emplace_back(Regex(pattern), std::move(handler));
   return *this;
 }
 
 inline Server &Server::Patch(const std::string &pattern,
                              HandlerWithContentReader handler) {
-  patch_handlers_for_content_reader_.emplace_back(make_matcher(pattern),
+  patch_handlers_for_content_reader_.emplace_back(Regex(pattern),
                                                   std::move(handler));
   return *this;
 }
 
 inline Server &Server::Delete(const std::string &pattern, Handler handler) {
-  delete_handlers_.emplace_back(make_matcher(pattern), std::move(handler));
+  delete_handlers_.emplace_back(Regex(pattern), std::move(handler));
   return *this;
 }
 
 inline Server &Server::Delete(const std::string &pattern,
                               HandlerWithContentReader handler) {
-  delete_handlers_for_content_reader_.emplace_back(make_matcher(pattern),
+  delete_handlers_for_content_reader_.emplace_back(Regex(pattern),
                                                    std::move(handler));
   return *this;
 }
 
 inline Server &Server::Options(const std::string &pattern, Handler handler) {
-  options_handlers_.emplace_back(make_matcher(pattern), std::move(handler));
+  options_handlers_.emplace_back(Regex(pattern), std::move(handler));
   return *this;
 }
 
@@ -7672,6 +7674,10 @@ inline void Server::stop() {
 
 inline void Server::decommission() { is_decommissioned = true; }
 
+static const std::set<std::string> SERVER_METHODS{
+		"GET",     "HEAD",    "POST",  "PUT",   "DELETE",
+		"CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
+
 inline bool Server::parse_request_line(const char *s, Request &req) const {
   auto len = strlen(s);
   if (len < 2 || s[len - 2] != '\r' || s[len - 1] != '\n') { return false; }
@@ -7693,14 +7699,7 @@ inline bool Server::parse_request_line(const char *s, Request &req) const {
     if (count != 3) { return false; }
   }
 
-  thread_local const std::set<std::string> methods{
-      "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
-      "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
-
-  if (methods.find(req.method) == methods.end()) {
-    output_error_log(Error::InvalidHTTPMethod, &req);
-    return false;
-  }
+  if (SERVER_METHODS.find(req.method) == SERVER_METHODS.end()) { return false; }
 
   if (req.version != "HTTP/1.1" && req.version != "HTTP/1.0") {
     output_error_log(Error::InvalidHTTPVersion, &req);
@@ -7845,7 +7844,7 @@ Server::write_content_with_provider(Stream &strm, const Request &req,
     if (res.is_chunked_content_provider_) {
       auto type = detail::encoding_type(req, res);
 
-      std::unique_ptr<detail::compressor> compressor;
+      duckdb::unique_ptr<detail::compressor> compressor;
       if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
         compressor = detail::make_unique<detail::gzip_compressor>();
@@ -8002,7 +8001,7 @@ inline bool Server::handle_file_request(const Request &req, Response &res) {
             res.set_header(kv.first, kv.second);
           }
 
-          auto mm = std::make_shared<detail::mmap>(path.c_str());
+          auto mm = duckdb::make_shared_ptr<detail::mmap>(path.c_str());
           if (!mm->is_open()) {
             output_error_log(Error::OpenFile, &req);
             return false;
@@ -8089,7 +8088,7 @@ inline bool Server::listen_internal() {
   auto se = detail::scope_exit([&]() { is_running_ = false; });
 
   {
-    std::unique_ptr<TaskQueue> task_queue(new_task_queue());
+    duckdb::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
     while (svr_sock_ != INVALID_SOCKET) {
 #ifndef _WIN32
@@ -8240,11 +8239,11 @@ inline bool Server::routing(Request &req, Response &res, Stream &strm) {
 inline bool Server::dispatch_request(Request &req, Response &res,
                                      const Handlers &handlers) const {
   for (const auto &x : handlers) {
-    const auto &matcher = x.first;
+  	const auto &pattern = x.first;
     const auto &handler = x.second;
 
-    if (matcher->match(req)) {
-      req.matched_route = matcher->pattern();
+  	if (duckdb_re2::RegexMatch(req.path, req.matches, pattern)) {
+      req.matched_route = pattern.GetRegex().pattern();
       if (!pre_request_handler_ ||
           pre_request_handler_(req, res) != HandlerResponse::Handled) {
         handler(req, res);
@@ -8331,7 +8330,7 @@ inline void Server::apply_ranges(const Request &req, Response &res,
     if (type != detail::EncodingType::None) {
       output_pre_compression_log(req, res);
 
-      std::unique_ptr<detail::compressor> compressor;
+      duckdb::unique_ptr<detail::compressor> compressor;
       std::string content_encoding;
 
       if (type == detail::EncodingType::Gzip) {
@@ -8373,11 +8372,11 @@ inline bool Server::dispatch_request_for_content_reader(
     Request &req, Response &res, ContentReader content_reader,
     const HandlersForContentReader &handlers) const {
   for (const auto &x : handlers) {
-    const auto &matcher = x.first;
+  	const auto &pattern = x.first;
     const auto &handler = x.second;
 
-    if (matcher->match(req)) {
-      req.matched_route = matcher->pattern();
+  	if (duckdb_re2::RegexMatch(req.path, req.matches, pattern)) {
+      req.matched_route = pattern.GetRegex().pattern();
       if (!pre_request_handler_ ||
           pre_request_handler_(req, res) != HandlerResponse::Handled) {
         handler(req, res, content_reader);
@@ -8584,7 +8583,7 @@ Server::process_request(Stream &strm, const std::string &remote_addr,
     // Serve file content by using a content provider
     if (!res.file_content_path_.empty()) {
       const auto &path = res.file_content_path_;
-      auto mm = std::make_shared<detail::mmap>(path.c_str());
+      auto mm = duckdb::make_shared_ptr<detail::mmap>(path.c_str());
       if (!mm->is_open()) {
         res.body.clear();
         res.content_length_ = 0;
@@ -8824,13 +8823,13 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
   if (!line_reader.getline()) { return false; }
 
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
-  thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
+  thread_local const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
 #else
-  thread_local const std::regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+  thread_local const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
 #endif
 
-  std::cmatch m;
-  if (!std::regex_match(line_reader.ptr(), m, re)) {
+  Match m;
+  if (!RegexMatch(line_reader.ptr(), m, re)) {
     return req.method == "CONNECT";
   }
   res.version = std::string(m[1]);
@@ -8842,7 +8841,7 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
     if (!line_reader.getline()) { return false; } // CRLF
     if (!line_reader.getline()) { return false; } // next response line
 
-    if (!std::regex_match(line_reader.ptr(), m, re)) { return false; }
+    if (!RegexMatch(line_reader.ptr(), m, re)) { return false; }
     res.version = std::string(m[1]);
     res.status = std::stoi(std::string(m[2]));
     res.reason = std::string(m[3]);
@@ -9074,7 +9073,12 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+   if (location.empty()) {
+   	 // s3 requests will not return a location header, and instead a
+	 // X-Amx-Region-Bucket header. Return true so all response headers
+	 // are returned to the httpfs/calling extension
+	 return true;
+	}
 
   thread_local const Regex re(
       R"((?:(https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
@@ -9262,7 +9266,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 
   if (req.is_chunked_content_provider_) {
     // TODO: Brotli support
-    std::unique_ptr<detail::compressor> compressor;
+    duckdb::unique_ptr<detail::compressor> compressor;
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
     if (compress_) {
       compressor = detail::make_unique<detail::gzip_compressor>();
@@ -9454,7 +9458,7 @@ inline bool ClientImpl::write_request(Stream &strm, Request &req,
   return true;
 }
 
-inline std::unique_ptr<Response> ClientImpl::send_with_content_provider(
+inline duckdb::unique_ptr<Response> ClientImpl::send_with_content_provider(
     Request &req, const char *body, size_t content_length,
     ContentProvider content_provider,
     ContentProviderWithoutLength content_provider_without_length,
@@ -12127,5 +12131,9 @@ inline SSL_CTX *Client::ssl_context() const {
 // ----------------------------------------------------------------------------
 
 } // namespace CPPHTTPLIB_NAMESPACE
+
+#if defined(_WIN32) && defined(CPPHTTPLIB_USE_POLL)
+#undef poll
+#endif
 
 #endif // CPPHTTPLIB_HTTPLIB_H
