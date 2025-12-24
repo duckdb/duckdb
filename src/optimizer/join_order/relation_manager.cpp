@@ -144,6 +144,15 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		return true;
 	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
+
+		// TODO: Maybe we can support reorder here and make predicate influence cardinality estimates
+		// The easiest option to implement is to preserve the predicate and ignore the estimation of it for NOW
+		if (join.predicate) {
+			idx_t has_range = 0;
+			D_ASSERT(join.HasEquality(has_range));
+			return false;
+		}
+
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
