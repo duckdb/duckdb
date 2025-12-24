@@ -375,7 +375,9 @@ public:
 		if (child_states.size() == 2) {
 			D_ASSERT(variant_column_data.sub_columns.size() == 2);
 			D_ASSERT(variant_column_data.sub_columns[1]->type.id() == LogicalTypeId::STRUCT);
-			data.SetVariantShreddedType(variant_column_data.sub_columns[1]->type);
+
+			// Set the extra data to indicate that this is shredded data
+			data.extra_data = make_uniq<VariantPersistentColumnData>(variant_column_data.sub_columns[1]->type);
 		}
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
@@ -560,7 +562,8 @@ bool VariantColumnData::HasAnyChanges() const {
 PersistentColumnData VariantColumnData::Serialize() {
 	PersistentColumnData persistent_data(type);
 	if (IsShredded()) {
-		persistent_data.SetVariantShreddedType(sub_columns[1]->type);
+		// Set the extra data to indicate that this is shredded data
+		persistent_data.extra_data = make_uniq<VariantPersistentColumnData>(sub_columns[1]->type);
 	}
 	persistent_data.child_columns.push_back(validity->Serialize());
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -578,7 +581,10 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 
-		auto &shredded_type = column_data.variant_shredded_type;
+		// TODO:
+		D_ASSERT(column_data.extra_data);
+		auto &variant_extra_data = column_data.extra_data->Cast<VariantPersistentColumnData>();
+		auto &shredded_type = variant_extra_data.logical_type;
 		if (!IsShredded()) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
 			sub_columns.push_back(ColumnData::CreateColumn(block_manager, info, 2, shredded_type, GetDataType(), this));
