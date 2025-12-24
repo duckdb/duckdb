@@ -107,6 +107,27 @@ static void AssertShreddedStats(const BaseStatistics &stats) {
 	}
 }
 
+optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const BaseStatistics &stats,
+                                                                        const string &field_name) {
+	AssertShreddedStats(stats);
+
+	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
+	if (typed_value_stats.GetType().id() != LogicalTypeId::STRUCT) {
+		//! Not shredded on an OBJECT, either directly shredded on a primitive type or on an ARRAY
+		return nullptr;
+	}
+
+	auto &child_types = StructType::GetChildTypes(typed_value_stats.GetType());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &name = child_types[i].first;
+		if (StringUtil::CIEquals(name, field_name)) {
+			auto &child_stats = StructStats::GetChildStats(typed_value_stats, i);
+			return child_stats;
+		}
+	}
+	return nullptr;
+}
+
 bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
 	AssertShreddedStats(stats);
 
@@ -522,6 +543,57 @@ const VariantStatsData &VariantStats::GetDataUnsafe(const BaseStatistics &stats)
 VariantStatsData &VariantStats::GetDataUnsafe(BaseStatistics &stats) {
 	AssertVariant(stats);
 	return stats.stats_union.variant_data;
+}
+
+unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &stats, const StorageIndex &index) {
+	if (!VariantStats::IsShredded(stats)) {
+		//! Not shredded at all, no stats available
+		return nullptr;
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(stats);
+	reference<const StorageIndex> index_iter(index);
+	optional_ptr<const BaseStatistics> res(shredded_stats);
+	while (true) {
+		auto &current = index_iter.get();
+		D_ASSERT(!current.HasPrimaryIndex());
+		auto &field_name = current.GetFieldName();
+		res = VariantShreddedStats::FindChildStats(*res, field_name);
+		if (!res) {
+			return nullptr;
+		}
+		if (!index_iter.get().HasChildren()) {
+			break;
+		}
+	}
+	if (!res) {
+		//! Not shredded on this field
+		return nullptr;
+	}
+	auto &child_stats = *res;
+
+	auto &typed_value_stats = StructStats::GetChildStats(child_stats, 1);
+	auto &last_index = index_iter.get();
+	auto &child_type = typed_value_stats.type;
+	if (!last_index.HasType() || last_index.GetType().id() == LogicalTypeId::VARIANT) {
+		//! Return the variant stats, not the 'typed_value' (non-variant) stats, since there's no cast pushed down
+
+		BaseStatistics copy = BaseStatistics::CreateUnknown(stats.type);
+		copy.Copy(stats);
+		copy.child_stats[1] = BaseStatistics::CreateUnknown(child_stats.GetType());
+		copy.child_stats[1].Copy(child_stats);
+		return copy.ToUnique();
+	}
+	if (!VariantShreddedStats::IsFullyShredded(child_stats)) {
+		//! Not all data is shredded, so there are values in the column that are not of the shredded type
+		return nullptr;
+	}
+
+	auto &cast_type = last_index.GetType();
+	if (child_type != cast_type) {
+		//! FIXME: support try_cast
+		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, cast_type);
+	}
+	return typed_value_stats.ToUnique();
 }
 
 } // namespace duckdb

@@ -23,6 +23,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include <utility>
 
@@ -337,54 +338,64 @@ static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t f
 	return static_cast<idx_t>(std::distance(column_ids.begin(), it));
 }
 
-static ColumnIndex PathToIndex(const vector<idx_t> &path, optional_ptr<unique_ptr<Expression>> cast_expression) {
-	D_ASSERT(!path.empty());
-	ColumnIndex index = ColumnIndex(path[0]);
-	reference<ColumnIndex> current(index);
-	for (idx_t i = 1; i < path.size(); i++) {
-		current.get().AddChildIndex(ColumnIndex(path[i]));
-		current = current.get().GetChildIndex(0);
+//! returns: found_path, depth of the found path
+std::pair<column_index_set::iterator, idx_t> FindShortestMatchingPath(column_index_set &all_paths,
+                                                                      const ColumnIndex &full_path) {
+	idx_t depth = 0;
+	column_index_set::iterator entry;
+
+	ColumnIndex copy;
+	if (full_path.HasPrimaryIndex()) {
+		copy = ColumnIndex(full_path.GetPrimaryIndex());
+	} else {
+		copy = ColumnIndex(full_path.GetFieldName());
 	}
-	if (cast_expression) {
-		auto &cast = *cast_expression;
-		current.get().SetType(cast->return_type);
+
+	reference<const ColumnIndex> path_iter(full_path);
+	reference<ColumnIndex> copy_iter(copy);
+	while (true) {
+		if (path_iter.get().HasType()) {
+			copy_iter.get().SetType(path_iter.get().GetType());
+		}
+		entry = all_paths.find(copy);
+		if (entry != all_paths.end()) {
+			//! Path found, we're done
+			return make_pair(entry, depth);
+		}
+		if (!path_iter.get().HasChildren()) {
+			break;
+		}
+		path_iter = path_iter.get().GetChildIndex(0);
+
+		ColumnIndex new_child;
+		if (path_iter.get().HasPrimaryIndex()) {
+			new_child = ColumnIndex(path_iter.get().GetPrimaryIndex());
+		} else {
+			new_child = ColumnIndex(path_iter.get().GetFieldName());
+		}
+
+		copy_iter.get().AddChildIndex(new_child);
+		copy_iter = copy_iter.get().GetChildIndex(0);
+		depth++;
 	}
-	return index;
+	return make_pair(all_paths.end(), depth);
 }
 
 void RemoveUnusedColumns::WritePushdownExtractColumns(
     const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-    const std::function<idx_t(const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type)> &callback) {
+    const std::function<idx_t(const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type)> &callback) {
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
 		//! Replace the struct extract expression at the right depth with a BoundColumnRefExpression
-
 		auto &full_path = struct_extract.extract_path;
 
-		idx_t depth = 0;
-		column_index_set::iterator entry;
-		ColumnIndex copy(full_path.GetPrimaryIndex());
-		reference<const ColumnIndex> path_iter(full_path);
-		reference<ColumnIndex> copy_iter(copy);
-		while (true) {
-			if (path_iter.get().HasType()) {
-				copy_iter.get().SetType(path_iter.get().GetType());
-			}
-			entry = col.unique_paths.find(copy);
-			if (entry != col.unique_paths.end()) {
-				//! Path found, we're done
-				break;
-			}
-			if (!path_iter.get().HasChildren()) {
-				throw InternalException("This path wasn't found in the registered paths for this expression at all!?");
-			}
-			path_iter = path_iter.get().GetChildIndex(0);
-			copy_iter.get().AddChildIndex(ColumnIndex(path_iter.get().GetPrimaryIndex()));
-			copy_iter = copy_iter.get().GetChildIndex(0);
-			depth++;
+		auto res = FindShortestMatchingPath(col.unique_paths, full_path);
+		auto entry = res.first;
+		auto depth = res.second;
+		if (entry == col.unique_paths.end()) {
+			throw InternalException("This path wasn't found in the registered paths for this expression at all!?");
 		}
-		D_ASSERT(entry != col.unique_paths.end());
 		D_ASSERT(struct_extract.components.size() > depth);
 		auto &component = struct_extract.components[depth];
 		auto &expr = component.cast ? *component.cast : component.extract;
@@ -461,7 +472,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
 		    entry->first, entry->second, i, column_type,
-		    [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
+		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> idx_t {
 			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
 			    target->SetAlias(expr.GetAlias());
 			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
@@ -645,23 +656,24 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
 
 		//! Pushdown Extract is supported, emit a column for every field
-		WritePushdownExtractColumns(entry->first, entry->second, col_sel_idx, column_type,
-		                            [&](const ColumnIndex &extract_path, optional_ptr<LogicalType> cast_type) -> idx_t {
-			                            ColumnIndex new_index(struct_column_index, {extract_path});
-			                            new_index.SetPushdownExtractType(column_type, cast_type);
+		WritePushdownExtractColumns(
+		    entry->first, entry->second, col_sel_idx, column_type,
+		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> idx_t {
+			    ColumnIndex new_index(struct_column_index, {extract_path});
+			    new_index.SetPushdownExtractType(column_type, cast_type);
 
-			                            auto column_binding_index = new_column_ids.size();
-			                            auto entry = child_map.find(new_index);
-			                            if (entry == child_map.end()) {
-				                            //! Adds the binding for the child only if it doesn't exist yet
-				                            entry = child_map.emplace(new_index, column_binding_index).first;
-				                            created_bindings[new_index.GetPrimaryIndex()]++;
+			    auto column_binding_index = new_column_ids.size();
+			    auto entry = child_map.find(new_index);
+			    if (entry == child_map.end()) {
+				    //! Adds the binding for the child only if it doesn't exist yet
+				    entry = child_map.emplace(new_index, column_binding_index).first;
+				    created_bindings[new_index.GetPrimaryIndex()]++;
 
-				                            new_column_ids.emplace_back(std::move(new_index));
-				                            original_ids.emplace_back(col_sel_idx);
-			                            }
-			                            return entry->second;
-		                            });
+				    new_column_ids.emplace_back(std::move(new_index));
+				    original_ids.emplace_back(col_sel_idx);
+			    }
+			    return entry->second;
+		    });
 	}
 	if (new_column_ids.empty()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
@@ -710,26 +722,13 @@ BaseColumnPrunerMode BaseColumnPruner::GetMode() const {
 	return mode;
 }
 
-bool BaseColumnPruner::HandleStructExtractRecursive(unique_ptr<Expression> &expr_p,
-                                                    optional_ptr<BoundColumnRefExpression> &colref,
-                                                    vector<idx_t> &indexes,
-                                                    vector<ReferencedExtractComponent> &expressions) {
-	auto &expr = *expr_p;
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return false;
-	}
-	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
-	    function.function.name != "array_extract") {
-		return false;
-	}
-	if (!function.bind_info) {
-		return false;
-	}
+bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
+                                           optional_ptr<BoundColumnRefExpression> &colref,
+                                           reference<ColumnIndex> &path_ref,
+                                           vector<ReferencedExtractComponent> &expressions) {
+	auto &function = expr_p->Cast<BoundFunctionExpression>();
 	auto &child = function.children[0];
-	if (child->return_type.id() != LogicalTypeId::STRUCT) {
-		return false;
-	}
+	D_ASSERT(child->return_type.id() == LogicalTypeId::STRUCT);
 	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
 	// struct extract, check if left child is a bound column ref
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
@@ -739,35 +738,110 @@ bool BaseColumnPruner::HandleStructExtractRecursive(unique_ptr<Expression> &expr
 			return false;
 		}
 		colref = &ref;
-		indexes.push_back(bind_data.index);
+		auto &path = path_ref.get();
+		path.AddChildIndex(ColumnIndex(bind_data.index));
+		path_ref = path.GetChildIndex(0);
 		expressions.emplace_back(expr_p);
 		return true;
 	}
 	// not a column reference - try to handle this recursively
-	if (!HandleStructExtractRecursive(child, colref, indexes, expressions)) {
+	if (!HandleExtractRecursive(child, colref, path_ref, expressions)) {
 		return false;
 	}
-	indexes.push_back(bind_data.index);
+	auto &path = path_ref.get();
+	path.AddChildIndex(ColumnIndex(bind_data.index));
+	path_ref = path.GetChildIndex(0);
+
 	expressions.emplace_back(expr_p);
 	return true;
 }
 
-bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression,
-                                           optional_ptr<unique_ptr<Expression>> cast_expression) {
+bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
+                                            optional_ptr<BoundColumnRefExpression> &colref,
+                                            reference<ColumnIndex> &path_ref,
+                                            vector<ReferencedExtractComponent> &expressions) {
+	auto &function = expr_p->Cast<BoundFunctionExpression>();
+	auto &child = function.children[0];
+	D_ASSERT(child->return_type.id() == LogicalTypeId::VARIANT);
+	auto &bind_data = function.bind_info->Cast<VariantExtractBindData>();
+	if (bind_data.component.lookup_mode != VariantChildLookupMode::BY_KEY) {
+		//! We don't push down variant extract on ARRAY values
+		return false;
+	}
+	// variant extract, check if left child is a bound column ref
+	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		// column reference - check if it is a variant
+		auto &ref = child->Cast<BoundColumnRefExpression>();
+		if (ref.return_type.id() != LogicalTypeId::VARIANT) {
+			return false;
+		}
+		colref = &ref;
+
+		auto &path = path_ref.get();
+		path.AddChildIndex(ColumnIndex(bind_data.component.key));
+		path_ref = path.GetChildIndex(0);
+
+		expressions.emplace_back(expr_p);
+		return true;
+	}
+	// not a column reference - try to handle this recursively
+	if (!HandleExtractRecursive(child, colref, path_ref, expressions)) {
+		return false;
+	}
+
+	auto &path = path_ref.get();
+	path.AddChildIndex(ColumnIndex(bind_data.component.key));
+	path_ref = path.GetChildIndex(0);
+
+	expressions.emplace_back(expr_p);
+	return true;
+}
+
+bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
+                                              optional_ptr<BoundColumnRefExpression> &colref,
+                                              reference<ColumnIndex> &path_ref,
+                                              vector<ReferencedExtractComponent> &expressions) {
+	auto &expr = *expr_p;
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
+	    function.function.name != "array_extract" && function.function.name != "variant_extract") {
+		return false;
+	}
+	if (!function.bind_info) {
+		return false;
+	}
+	auto &child = function.children[0];
+	auto child_type = child->return_type.id();
+	switch (child_type) {
+	case LogicalTypeId::STRUCT:
+		return HandleStructExtract(expr_p, colref, path_ref, expressions);
+	case LogicalTypeId::VARIANT:
+		return HandleVariantExtract(expr_p, colref, path_ref, expressions);
+	default:
+		return false;
+	}
+}
+
+bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expression,
+                                               optional_ptr<unique_ptr<Expression>> cast_expression) {
 	optional_ptr<BoundColumnRefExpression> colref;
-	vector<idx_t> indexes;
 	vector<ReferencedExtractComponent> expressions;
 
-	if (!HandleStructExtractRecursive(*expression, colref, indexes, expressions)) {
+	ColumnIndex path(0);
+	reference<ColumnIndex> path_ref(path);
+	if (!HandleExtractRecursive(*expression, colref, path_ref, expressions)) {
 		return false;
 	}
 	if (cast_expression) {
 		auto &top_level = expressions.back();
 		top_level.cast = cast_expression;
+		path_ref.get().SetType((*cast_expression)->return_type);
 	}
 
-	auto index = PathToIndex(indexes, cast_expression);
-	AddBinding(*colref, std::move(index), expressions);
+	AddBinding(*colref, path.GetChildIndex(0), expressions);
 	return true;
 }
 
@@ -779,8 +853,20 @@ void BaseColumnPruner::MergeChildColumns(vector<ColumnIndex> &current_child_colu
 	}
 	// if we are already extract sub-fields, add it (if it is not there yet)
 	for (auto &binding : current_child_columns) {
-		if (binding.GetPrimaryIndex() != new_child_column.GetPrimaryIndex()) {
-			continue;
+		if (binding.HasPrimaryIndex()) {
+			if (!new_child_column.HasPrimaryIndex()) {
+				continue;
+			}
+			if (binding.GetPrimaryIndex() != new_child_column.GetPrimaryIndex()) {
+				continue;
+			}
+		} else {
+			if (new_child_column.HasPrimaryIndex()) {
+				continue;
+			}
+			if (binding.GetFieldName() != new_child_column.GetFieldName()) {
+				continue;
+			}
 		}
 		// found a match: sub-field is already projected
 		// check if we have child columns
@@ -827,26 +913,13 @@ void ReferencedColumn::AddPath(const ColumnIndex &path) {
 	}
 	path.VerifySinglePath();
 
-	//! Do not add the path if it is a child of an existing path
-	ColumnIndex copy(path.GetPrimaryIndex());
-	reference<const ColumnIndex> path_iter(path);
-	reference<ColumnIndex> copy_iter(copy);
-	while (true) {
-		if (path_iter.get().HasType()) {
-			copy_iter.get().SetType(path_iter.get().GetType());
-		}
-		//! Create a subset of the path up to an increasing depth, so we can check if the parent path already exists
-		if (unique_paths.count(copy)) {
-			//! The parent path already exists, don't add the new path
-			return;
-		}
-		if (!path_iter.get().HasChildren()) {
-			break;
-		}
-		path_iter = path_iter.get().GetChildIndex(0);
-		copy_iter.get().AddChildIndex(ColumnIndex(path_iter.get().GetPrimaryIndex()));
-		copy_iter = copy_iter.get().GetChildIndex(0);
+	auto res = FindShortestMatchingPath(unique_paths, path);
+	auto entry = res.first;
+	if (entry != unique_paths.end()) {
+		//! The parent path already exists, don't add the new path
+		return;
 	}
+
 	//! No parent path exists, but child paths could already be added, remove them if they exist
 	auto it = unique_paths.begin();
 	for (; it != unique_paths.end();) {
@@ -912,14 +985,14 @@ void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 	//! Check if this is a struct extract wrapped in a cast
 	optional_ptr<unique_ptr<Expression>> cast_child;
 	if (TryGetCastChild(*expression, cast_child)) {
-		if (HandleStructExtract(cast_child.get(), expression)) {
+		if (HandleExtractExpression(cast_child.get(), expression)) {
 			// already handled
 			return;
 		}
 	}
 
 	//! Check if this is a struct extract
-	if (HandleStructExtract(expression)) {
+	if (HandleExtractExpression(expression)) {
 		// already handled
 		return;
 	}

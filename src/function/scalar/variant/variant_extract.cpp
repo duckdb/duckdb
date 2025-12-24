@@ -8,42 +8,21 @@
 
 namespace duckdb {
 
-namespace {
-
-struct BindData : public FunctionData {
-public:
-	explicit BindData(const string &str);
-	explicit BindData(uint32_t index);
-	BindData(const BindData &other) = default;
-
-public:
-	unique_ptr<FunctionData> Copy() const override;
-	bool Equals(const FunctionData &other) const override;
-
-public:
-	VariantPathComponent component;
-};
-
-} // namespace
-
-BindData::BindData(const string &str) : FunctionData() {
-	component.lookup_mode = VariantChildLookupMode::BY_KEY;
-	component.key = str;
+VariantExtractBindData::VariantExtractBindData(const string &str) : FunctionData(), component(str) {
 }
-BindData::BindData(uint32_t index) : FunctionData() {
+VariantExtractBindData::VariantExtractBindData(uint32_t index) : FunctionData() {
 	if (index == 0) {
 		throw BinderException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
 	}
-	component.lookup_mode = VariantChildLookupMode::BY_INDEX;
-	component.index = index - 1;
+	component = VariantPathComponent(index - 1);
 }
 
-unique_ptr<FunctionData> BindData::Copy() const {
-	return make_uniq<BindData>(*this);
+unique_ptr<FunctionData> VariantExtractBindData::Copy() const {
+	return make_uniq<VariantExtractBindData>(*this);
 }
 
-bool BindData::Equals(const FunctionData &other) const {
-	auto &bind_data = other.Cast<BindData>();
+bool VariantExtractBindData::Equals(const FunctionData &other) const {
+	auto &bind_data = other.Cast<VariantExtractBindData>();
 	if (bind_data.component.lookup_mode != component.lookup_mode) {
 		return false;
 	}
@@ -106,7 +85,7 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
 
-	auto &info = bind_data->Cast<BindData>();
+	auto &info = bind_data->Cast<VariantExtractBindData>();
 	auto &variant_stats = child_stats[0];
 	const bool is_shredded = VariantStats::IsShredded(variant_stats);
 	if (!is_shredded) {
@@ -122,6 +101,9 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	auto child_variant_stats = VariantStats::CreateShredded(found_stats->GetType());
 	VariantStats::SetUnshreddedStats(child_variant_stats, unshredded_stats);
 	VariantStats::SetShreddedStats(child_variant_stats, *found_stats);
+	//! FIXME: these stats are too wide
+	child_variant_stats.SetHasNoNull();
+	child_variant_stats.SetHasNull();
 
 	return child_variant_stats.ToUnique();
 }
@@ -143,29 +125,16 @@ static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, Scala
 	}
 
 	if (constant_arg.type().id() == LogicalTypeId::VARCHAR) {
-		return make_uniq<BindData>(constant_arg.GetValue<string>());
+		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<string>());
 	} else if (constant_arg.type().id() == LogicalTypeId::UINTEGER) {
-		return make_uniq<BindData>(constant_arg.GetValue<uint32_t>());
+		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<uint32_t>());
 	} else {
 		throw InternalException("Constant-folded argument was not of type UINTEGER or VARCHAR");
 	}
 }
 
-//! FIXME: it could make sense to allow a third argument: 'default'
-//! This can currently be achieved with COALESCE(TRY(<extract method>), 'default')
-static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto count = input.size();
-
-	D_ASSERT(input.ColumnCount() == 2);
-	auto &variant_vec = input.data[0];
-	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
-
-	auto &path = input.data[1];
-	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	(void)path;
-
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<BindData>();
+void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
+                                  idx_t count) {
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
@@ -186,48 +155,62 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
-	auto &component = info.component;
-	auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
-	                                                                               : VariantLogicalType::OBJECT;
-	auto collection_result = VariantUtils::CollectNestedData(
-	    variant, expected_type, value_index_sel, count, optional_idx(), 0, nested_data, FlatVector::Validity(result));
-	if (!collection_result.success) {
-		if (expected_type == VariantLogicalType::ARRAY) {
-			throw InvalidInputException("Can't extract index %d from a VARIANT(%s)", component.index,
-			                            EnumUtil::ToString(collection_result.wrong_type));
-		} else {
-			D_ASSERT(expected_type == VariantLogicalType::OBJECT);
-			throw InvalidInputException("Can't extract key '%s' from a VARIANT(%s)", component.key,
-			                            EnumUtil::ToString(collection_result.wrong_type));
-		}
-	}
+	for (idx_t i = 0; i < components.size(); i++) {
+		auto &component = components[i];
+		auto &input_indices = i % 2 == 0 ? value_index_sel : new_value_index_sel;
+		auto &output_indices = i % 2 == 0 ? new_value_index_sel : value_index_sel;
 
-	//! Look up the value_index of the child we're extracting
-	ValidityMask lookup_validity(count);
-	VariantUtils::FindChildValues(variant, component, nullptr, new_value_index_sel, lookup_validity, nested_data,
-	                              count);
-	if (!lookup_validity.AllValid()) {
-		optional_idx index;
-		for (idx_t i = 0; i < count; i++) {
-			if (!lookup_validity.RowIsValid(i)) {
-				index = i;
-				break;
+		auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
+		                                                                               : VariantLogicalType::OBJECT;
+
+		auto collection_result = VariantUtils::CollectNestedData(
+		    variant, expected_type, input_indices, count, optional_idx(), 0, nested_data, FlatVector::Validity(result));
+		if (!collection_result.success) {
+			if (expected_type == VariantLogicalType::ARRAY) {
+				throw InvalidInputException("Can't extract index %d from a VARIANT(%s)", component.index,
+				                            EnumUtil::ToString(collection_result.wrong_type));
+			} else {
+				D_ASSERT(expected_type == VariantLogicalType::OBJECT);
+				throw InvalidInputException("Can't extract key '%s' from a VARIANT(%s)", component.key,
+				                            EnumUtil::ToString(collection_result.wrong_type));
 			}
 		}
-		D_ASSERT(index.IsValid());
-		switch (component.lookup_mode) {
-		case VariantChildLookupMode::BY_INDEX: {
-			auto nested_index = index.GetIndex();
-			throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d", nested_data[nested_index].child_count,
-			                            component.index);
+
+		//! Look up the value_index of the child we're extracting
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data, count);
+		for (idx_t i = 0; i < count; i++) {
+			if (nested_data[i].is_null) {
+				output_indices[i] = input_indices[i];
+			}
 		}
-		case VariantChildLookupMode::BY_KEY: {
-			auto nested_index = index.GetIndex();
-			auto row_index = nested_index;
-			auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
-			throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'", StringUtil::Join(object_keys, ","),
-			                            component.key);
-		}
+
+		if (!lookup_validity.AllValid()) {
+			optional_idx index;
+			for (idx_t i = 0; i < count; i++) {
+				if (!lookup_validity.RowIsValid(i)) {
+					index = i;
+					break;
+				}
+			}
+			D_ASSERT(index.IsValid());
+			switch (component.lookup_mode) {
+			case VariantChildLookupMode::BY_INDEX: {
+				auto nested_index = index.GetIndex();
+				throw InvalidInputException("VARIANT(ARRAY(%d)) is missing index %d",
+				                            nested_data[nested_index].child_count, component.index);
+			}
+			case VariantChildLookupMode::BY_KEY: {
+				auto nested_index = index.GetIndex();
+				auto row_index = nested_index;
+				auto object_keys = VariantUtils::GetObjectKeys(variant, row_index, nested_data[nested_index]);
+				throw InvalidInputException("VARIANT(OBJECT(%s)) is missing key '%s'",
+				                            StringUtil::Join(object_keys, ","), component.key);
+			}
+			default:
+				throw InternalException("VariantChildLookupMode::%s not handled in VariantUtils::VariantExtract",
+				                        EnumUtil::ToString(component.lookup_mode));
+			}
 		}
 	}
 
@@ -256,6 +239,8 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 		result_values_data[i] = values_data[values.sel->get_index(i)];
 	}
 
+	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
+
 	//! Prepare the selection vector to remap index 0 of each row
 	SelectionVector new_sel(0, values_list_size);
 	for (idx_t i = 0; i < count; i++) {
@@ -263,7 +248,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 			continue;
 		}
 		auto &list_entry = values_data[values.sel->get_index(i)];
-		new_sel.set_index(list_entry.offset, list_entry.offset + new_value_index_sel[i]);
+		new_sel.set_index(list_entry.offset, list_entry.offset + result_indices[i]);
 	}
 
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
@@ -273,17 +258,40 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
 	                              values_list_size);
 
-	auto value_is_null = VariantUtils::ValueIsNull(variant, new_value_index_sel, count, optional_idx());
+	auto value_is_null = VariantUtils::ValueIsNull(variant, result_indices, count, optional_idx());
 	if (!value_is_null.empty()) {
-		result.Flatten(count);
+		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data
+		//! Which is a problem if we're still sharing the memory with 'input'
+		Vector other(result.GetType(), count);
+		VectorOperations::Copy(result, other, count, 0, 0);
+		result.Reference(other);
+
 		for (auto &i : value_is_null) {
 			FlatVector::SetNull(result, i, true);
 		}
 	}
 
-	if (input.AllConstant()) {
+	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+}
+
+//! FIXME: it could make sense to allow a third argument: 'default'
+//! This can currently be achieved with COALESCE(TRY(<extract method>), 'default')
+static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto count = input.size();
+
+	D_ASSERT(input.ColumnCount() == 2);
+	auto &variant_vec = input.data[0];
+	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
+
+	auto &path = input.data[1];
+	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	(void)path;
+
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
+	VariantUtils::VariantExtract(variant_vec, {info.component}, result, count);
 }
 
 ScalarFunctionSet VariantExtractFun::GetFunctions() {

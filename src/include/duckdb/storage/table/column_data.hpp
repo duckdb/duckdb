@@ -105,6 +105,9 @@ public:
 		D_ASSERT(HasParent());
 		return *parent;
 	}
+
+	virtual const BaseStatistics &GetChildStats(const ColumnData &child) const;
+
 	const LogicalType &GetType() const {
 		return type;
 	}
@@ -208,6 +211,7 @@ public:
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics() const;
+	const BaseStatistics &GetStatisticsRef() const;
 
 protected:
 	//! Append a transient segment

@@ -17,9 +17,18 @@ struct UnifiedVariantVector;
 struct RecursiveUnifiedVectorFormat;
 struct UnifiedVectorFormat;
 
-enum class VariantChildLookupMode : uint8_t { BY_KEY, BY_INDEX };
+enum class VariantChildLookupMode : uint8_t { INVALID, BY_KEY, BY_INDEX };
 
 struct VariantPathComponent {
+public:
+	explicit VariantPathComponent() : lookup_mode(VariantChildLookupMode::INVALID) {
+	}
+	explicit VariantPathComponent(const string &key) : lookup_mode(VariantChildLookupMode::BY_KEY), key(key) {
+	}
+	explicit VariantPathComponent(uint32_t index) : lookup_mode(VariantChildLookupMode::BY_INDEX), index(index) {
+	}
+
+public:
 	VariantChildLookupMode lookup_mode;
 	string key;
 	uint32_t index;

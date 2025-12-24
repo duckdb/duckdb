@@ -16,6 +16,20 @@
 
 namespace duckdb {
 
+struct VariantExtractBindData : public FunctionData {
+public:
+	explicit VariantExtractBindData(const string &str);
+	explicit VariantExtractBindData(uint32_t index);
+	VariantExtractBindData(const VariantExtractBindData &other) = default;
+
+public:
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other) const override;
+
+public:
+	VariantPathComponent component;
+};
+
 struct VariantNestedDataCollectionResult {
 public:
 	VariantNestedDataCollectionResult() : success(true) {
@@ -85,6 +99,8 @@ struct VariantUtils {
 	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
 	DUCKDB_API static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
 	                                           SelectionVector &sel, idx_t sel_size);
+	DUCKDB_API static void VariantExtract(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
+	                                      idx_t count);
 };
 
 } // namespace duckdb

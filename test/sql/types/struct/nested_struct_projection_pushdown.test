@@ -2,14 +2,24 @@
 # description: Test nested struct projection pushdown
 # group: [struct]
 
+load __TEST_DIR__/nested_struct_projection_pushdown.db
+
 require parquet
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
 
 statement ok
 PRAGMA enable_verification
 
+foreach type struct variant
+
 # 2 layers of nesting
+
+onlyif type=struct
 statement ok
-CREATE TABLE test_structs(
+CREATE OR REPLACE TABLE test_structs(
 	id INT,
 	s STRUCT(
 		name STRUCT(
@@ -23,12 +33,24 @@ CREATE TABLE test_structs(
 	)
 );
 
+onlyif type=variant
+statement ok
+CREATE OR REPLACE TABLE test_structs(
+	id INT,
+	s VARIANT
+);
+
 statement ok
 INSERT INTO test_structs
 VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
        (2, NULL),
        (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
        (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+statement ok
+checkpoint
+
+restart
 
 statement ok
 COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
@@ -141,11 +163,18 @@ SELECT s.name.v FROM ${source} WHERE s.nested_struct.b
 ----
 Row 1
 
+# source
 endloop
 
 # 3 layers of nesting
+
+onlyif type=struct
 statement ok
-CREATE TABLE test_structs_nested(id INT, base STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+CREATE OR REPLACE TABLE test_structs_nested(id INT, base STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+
+onlyif type=variant
+statement ok
+CREATE OR REPLACE TABLE test_structs_nested(id INT, base VARIANT);
 
 statement ok
 INSERT INTO test_structs_nested
@@ -154,6 +183,10 @@ VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b
        (3, {'s': {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}}),
        (4, {'s': {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}});
 
+statement ok
+checkpoint
+
+restart
 
 statement ok
 COPY test_structs_nested TO '__TEST_DIR__/test_structs.parquet'
@@ -200,12 +233,22 @@ NULL	NULL
 84	{'a': 84, 'b': NULL}
 NULL	{'a': NULL, 'b': false}
 
+onlyif type=struct
 query II
 SELECT base.s.nested_struct.a, base.s FROM ${source}
 ----
 42	{'name': {'v': Row 1, 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}
 NULL	NULL
 84	{'name': {'v': Row 3, 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
+
+onlyif type=variant
+query II
+SELECT base.s.nested_struct.a, variant_normalize(base.s) FROM ${source}
+----
+42	{'name': {'id': 1, 'v': Row 1}, 'nested_struct': {'a': 42, 'b': true}}
+NULL	NULL
+84	{'name': {'id': 3, 'v': Row 3}, 'nested_struct': {'a': 84, 'b': NULL}}
 NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
 
 query II
@@ -229,4 +272,8 @@ SELECT base.s.name.v FROM ${source} WHERE base.s.nested_struct.b
 ----
 Row 1
 
+# source
+endloop
+
+# type
 endloop
