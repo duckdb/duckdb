@@ -159,6 +159,10 @@ struct EnableLoggingFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EnableProfilingFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct TestType {
 	TestType(LogicalType type_p, string name_p)
 	    : type(std::move(type_p)), name(std::move(name_p)), min_value(Value::MinimumValue(type)),
