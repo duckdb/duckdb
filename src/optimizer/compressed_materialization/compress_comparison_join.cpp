@@ -21,6 +21,13 @@ static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector
 
 void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperator> &op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
+	if (join.predicate) {
+		// It's HARD to compress, maybe we could compress when the intersection between cols in conditions
+		// and cols in predicate is EMPTY SET but still hard to reason about correctness.
+		idx_t has_range = 0;
+		D_ASSERT(join.HasEquality(has_range));
+		return;
+	}
 	if (join.join_type == JoinType::MARK) {
 		// Tricky to get bindings right. RHS binding stays the same even though it changes type. Skip for now
 		return;
