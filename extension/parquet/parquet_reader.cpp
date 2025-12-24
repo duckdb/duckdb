@@ -1248,10 +1248,9 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	const duckdb_parquet::FileMetaData &metadata;
-	optional_ptr<ParquetColumnSchema> root_schema;
-	optional_ptr<ParquetOptions> parquet_options;
-	idx_t row_group_idx;
-	bool is_exact = false;
+	const optional_ptr<ParquetColumnSchema> root_schema;
+	const optional_ptr<ParquetOptions> parquet_options;
+	const idx_t row_group_idx;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		const auto &row_group = metadata.row_groups[row_group_idx];
