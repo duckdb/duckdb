@@ -48,11 +48,18 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
-	explicit CopyToFunctionGlobalState(ClientContext &context)
-	    : initialized(false), rows_copied(0), last_file_offset(0),
+	explicit CopyToFunctionGlobalState(ClientContext &context_p)
+	    : context(context_p), finished(false), initialized(false), rows_copied(0), last_file_offset(0),
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
 		max_open_files = DBConfig::GetSetting<PartitionedWriteMaxOpenFilesSetting>(context);
 	}
+	~CopyToFunctionGlobalState() override;
+
+	ClientContext &context;
+	//! Whether the copy was successfully finalized
+	bool finished;
+	//! The list of files created by this operator
+	vector<string> created_files;
 
 	StorageLock lock;
 	atomic<bool> initialized;
@@ -79,6 +86,7 @@ public:
 			return;
 		}
 		// initialize writing to the file
+		created_files.push_back(op.file_path);
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*global_state, op);
@@ -198,6 +206,7 @@ public:
 				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 			}
 		}
+		created_files.push_back(full_path);
 		optional_ptr<CopyToFileInfo> written_file_info;
 		if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
 			written_file_info = AddFile(*global_lock, full_path, op.return_type);
@@ -243,6 +252,19 @@ private:
 	vector_of_value_map_t<idx_t> previous_partitions;
 	idx_t global_offset = 0;
 };
+
+CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
+	if (finished || created_files.empty()) {
+		return;
+	}
+	// If we reach here, the query failed before Finalize was called
+	auto &fs = FileSystem::GetFileSystem(context);
+	for (auto &file : created_files) {
+		if (fs.FileExists(file)) {
+			fs.RemoveFile(file);
+		}
+	}
+}
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 	auto &fs = FileSystem::GetFileSystem(context);
@@ -356,6 +378,7 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
+	g.created_files.push_back(output_path);
 	optional_ptr<CopyToFileInfo> written_file_info;
 	if (return_type != CopyFunctionReturnType::CHANGED_ROWS) {
 		written_file_info = g.AddFile(global_lock, output_path, return_type);
@@ -639,7 +662,10 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               OperatorSinkFinalizeInput &input) const {
-	return FinalizeInternal(context, input.global_state);
+	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
+	auto result = FinalizeInternal(context, input.global_state);
+	gstate.finished = true;
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
