@@ -19,7 +19,6 @@
 #include "duckdb/common/string.hpp"
 #include <exception>
 #include <stdexcept>
-#include <re2/re2.h>
 
 /*
  * Platform compatibility check
@@ -8243,7 +8242,6 @@ inline bool Server::dispatch_request(Request &req, Response &res,
     const auto &handler = x.second;
 
   	if (duckdb_re2::RegexMatch(req.path, req.matches, pattern)) {
-      req.matched_route = pattern.GetRegex().pattern();
       if (!pre_request_handler_ ||
           pre_request_handler_(req, res) != HandlerResponse::Handled) {
         handler(req, res);
@@ -8376,7 +8374,6 @@ inline bool Server::dispatch_request_for_content_reader(
     const auto &handler = x.second;
 
   	if (duckdb_re2::RegexMatch(req.path, req.matches, pattern)) {
-      req.matched_route = pattern.GetRegex().pattern();
       if (!pre_request_handler_ ||
           pre_request_handler_(req, res) != HandlerResponse::Handled) {
         handler(req, res, content_reader);
