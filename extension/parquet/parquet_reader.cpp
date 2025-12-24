@@ -1284,7 +1284,7 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 		partition_stats.count_type = CountType::COUNT_EXACT;
 		if (root_schema && parquet_options) {
 			partition_stats.partition_row_group =
-			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, *root_schema, *parquet_options, i);
+			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i);
 		}
 		offset += row_group.num_rows;
 		result.push_back(partition_stats);
