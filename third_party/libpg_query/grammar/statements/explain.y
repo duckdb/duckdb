@@ -86,6 +86,7 @@ ExplainableStmt:
 			| VariableSetStmt
 			| VariableShowStmt
 			| ViewStmt
+			| ClusterStmt
 		;
 
 
