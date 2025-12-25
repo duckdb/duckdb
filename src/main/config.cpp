@@ -187,6 +187,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(VariantMinimumShreddingSize),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
+    DUCKDB_LOCAL(InspectRangeFilterSetting),
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 90),
