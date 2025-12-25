@@ -1103,7 +1103,6 @@ public:
 	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
 	DataChunk lhs_probe_data;
-	DataChunk lhs_output;
 
 	ExpressionExecutor probe_executor;
 	JoinHashTable::ScanStructure scan_structure;
@@ -1129,11 +1128,6 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	// initialize probe data with ALL probe columns (output + predicate)
 	if (!lhs_probe_columns.col_types.empty()) {
 		state->lhs_probe_data.Initialize(allocator, lhs_probe_columns.col_types);
-	}
-
-	// keep lhs_output initialization for now
-	if (!lhs_output_columns.col_types.empty()) {
-		state->lhs_output.Initialize(allocator, lhs_output_columns.col_types);
 	}
 
 	if (sink.perfect_join_executor) {
@@ -1164,16 +1158,17 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
-		// for empty result construction, use output columns only
-		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
+		// for empty result, only need output columns (no predicate evaluation)
+		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
+		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_probe_data, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	if (sink.perfect_join_executor) {
 		D_ASSERT(!sink.external);
-		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_output, chunk,
+		// for perfect hash join, when predicate is NULL, only output columns are needed
+		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
+		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_probe_data, chunk,
 		                                                         *state.perfect_hash_join_state);
 	}
 
@@ -1589,7 +1584,6 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 
 	// reference ALL probe columns
 	lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_probe_columns.col_idxs);
-
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		// For empty HT result, extract only output columns
