@@ -51,7 +51,7 @@ struct ThrottlingSum {
 			local_state.row_sums.push_back(sum);
 		}
 
-		if (PhysicalOperator::OperatorCachingAllowed(context)) {
+		if (PhysicalOperator::SelectOperatorCachingMode(context) == OperatorCachingMode::UNORDERED) {
 			// Caching is allowed
 			if (local_state.current_idx < local_state.row_sums.size()) {
 				output.SetCardinality(1);

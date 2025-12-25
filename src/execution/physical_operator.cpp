@@ -188,23 +188,24 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	return (max_memory / num_threads) / 4;
 }
 
-bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
+OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext &context) {
 	if (!context.client.config.enable_caching_operators) {
-		return false;
+		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline) {
-		return false;
+		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline->GetSink()) {
-		return false;
-	} else if (context.pipeline->IsOrderDependent()) {
-		return false;
+		return OperatorCachingMode::NONE;
 	} else {
 		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
 		if (partition_info.AnyRequired()) {
-			return false;
+			return OperatorCachingMode::PARTITIONED;
 		}
 	}
+	if (context.pipeline->IsOrderDependent()) {
+		return OperatorCachingMode::ORDERED;
+	}
 
-	return true;
+	return OperatorCachingMode::UNORDERED;
 }
 
 //===--------------------------------------------------------------------===//

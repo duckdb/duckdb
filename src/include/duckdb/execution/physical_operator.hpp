@@ -34,6 +34,8 @@ class PipelineBuildState;
 class MetaPipeline;
 class PhysicalPlan;
 
+enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
 public:
@@ -199,7 +201,7 @@ public:
 	static idx_t GetMaxThreadMemory(ClientContext &context);
 
 	//! Whether operator caching is allowed in the current execution context
-	static bool OperatorCachingAllowed(ExecutionContext &context);
+	static OperatorCachingMode SelectOperatorCachingMode(ExecutionContext &context);
 
 	virtual bool IsSink() const {
 		return false;
