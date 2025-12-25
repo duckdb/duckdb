@@ -317,6 +317,8 @@ CachingPhysicalOperator::CachingPhysicalOperator(PhysicalPlan &physical_plan, Ph
 }
 
 enum class CachingPhysicalOperatorExecuteMode : uint8_t {
+	RETURN_CACHED_APPEND_CHUNK,
+	RETURN_CACHED_PLUS_CHUNK,
 	RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION,
 	RETURN_CHUNK,
 	APPEND_CHUNK,
@@ -387,7 +389,11 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
 		}
 
-		execution_mode = CachingPhysicalOperatorExecuteMode::APPEND_CHUNK;
+		if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
+			execution_mode = CachingPhysicalOperatorExecuteMode::APPEND_CHUNK;
+		} else {
+			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
+		}
 	} else if (state.cached_chunk && state.cached_chunk->size() > 0 &&
 	           state.can_cache_chunk != OperatorCachingMode::UNORDERED) {
 		// We need first to return (*state.cached_chunk), then chunk at the next iteration
@@ -395,10 +401,33 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		D_ASSERT(chunk.size() > 0);
 		D_ASSERT(state.cached_chunk->size() > 0);
 
-		execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
+		if (chunk.size() <= CACHE_THRESHOLD) {
+			if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
+				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
+			} else if (needs_continuation_chunk) {
+				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
+			} else {
+				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
+			}
+		} else {
+			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
+		}
 	}
 
 	switch (execution_mode) {
+	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK: {
+		auto tmp = make_uniq<DataChunk>();
+		tmp->Move(chunk);
+		chunk.Move(*state.cached_chunk);
+		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		state.cached_chunk->Append(*tmp);
+		break;
+	}
+	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK:
+		state.cached_chunk->Append(chunk);
+		chunk.Move(*state.cached_chunk);
+		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		break;
 	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED:
 		D_ASSERT(chunk.size() == 0);
 		chunk.Move(*state.cached_chunk);
@@ -420,14 +449,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	}
 	case CachingPhysicalOperatorExecuteMode::APPEND_CHUNK: {
 		state.cached_chunk->Append(chunk);
-		if (state.cached_chunk->size() > (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD)) {
-			// chunk cache full: return it
-			chunk.Move(*state.cached_chunk);
-			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
-		} else {
-			// chunk cache not full return empty result
-			chunk.Reset();
-		}
+		chunk.Reset();
 		break;
 	}
 	case CachingPhysicalOperatorExecuteMode::RETURN_CHUNK:
