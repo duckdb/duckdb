@@ -20,6 +20,10 @@ namespace duckdb {
 
 namespace {
 
+// The number of fixed arguments before the variadic key column arguments:
+// catalog, schema, table, index_name
+static constexpr idx_t INDEX_KEY_FIXED_ARGS = 4;
+
 string GetStringArgument(ClientContext &context, const Expression &expr, const string &parameter_name,
                          const string &default_value, bool allow_empty_default) {
 	if (!expr.IsFoldable()) {
@@ -85,67 +89,9 @@ void ValidateIndex(const Index &index, const string &catalog_name, const string 
 	}
 }
 
-vector<string> GetColumnNames(const BoundIndex &bound_index, const ColumnList &columns) {
-	const auto &column_ids = bound_index.GetColumnIds();
-	vector<string> column_names;
-	column_names.reserve(column_ids.size());
-	for (auto column_id : column_ids) {
-		auto &col_def = columns.GetColumn(PhysicalIndex(column_id));
-		column_names.emplace_back(col_def.GetName());
-	}
-	return column_names;
-}
-
-void ValidateKeyStructType(const Expression &key_expr) {
-	if (key_expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	D_ASSERT(key_expr.return_type.id() == LogicalTypeId::STRUCT);
-}
-
-// Returns a mapping from the struct field name to its offset in the struct type.
-case_insensitive_map_t<idx_t> BuildFieldLookup(const LogicalType &key_type) {
-	const auto &child_types = StructType::GetChildTypes(key_type);
-	case_insensitive_map_t<idx_t> field_lookup;
-	for (idx_t i = 0; i < child_types.size(); i++) {
-		field_lookup[child_types[i].first] = i;
-	}
-	return field_lookup;
-}
-
-// Return a mapping from the Index column offset (in the list of index columns, not the whole table),
-// to the corresponding offset in the struct. This also performs validation to make sure the types and number of
-// columns match.
-vector<idx_t> BuildFieldMap(const vector<string> &column_names, const LogicalType &key_type,
-                            const vector<LogicalType> &index_types, const string &index_name) {
-	const auto &child_types = StructType::GetChildTypes(key_type);
-	auto field_lookup = BuildFieldLookup(key_type);
-
-	if (child_types.size() < column_names.size()) {
-		throw BinderException("index_key key_struct is missing fields for index '%s'", index_name);
-	}
-
-	vector<idx_t> field_map;
-	field_map.reserve(column_names.size());
-	for (idx_t i = 0; i < column_names.size(); i++) {
-		auto entry = field_lookup.find(column_names[i]);
-		if (entry == field_lookup.end()) {
-			throw BinderException("index_key key_struct does not contain field '%s' required by index '%s'",
-			                      column_names[i], index_name);
-		}
-		field_map.push_back(entry->second);
-		const auto &struct_child_type = child_types[entry->second].second;
-		if (struct_child_type != index_types[i]) {
-			throw BinderException("index_key key_struct field '%s' has type %s but index expects %s", column_names[i],
-			                      struct_child_type.ToString().c_str(), index_types[i].ToString().c_str());
-		}
-	}
-	return field_map;
-}
-
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> index_types, vector<idx_t> field_map)
-	    : art_index(art_index_p), index_types(std::move(index_types)), field_map(std::move(field_map)) {
+	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> index_types)
+	    : art_index(art_index_p), index_types(std::move(index_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -154,20 +100,18 @@ struct IndexKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return art_index == other.art_index && index_types == other.index_types && field_map == other.field_map;
+		return art_index == other.art_index && index_types == other.index_types;
 	}
 
 	optional_ptr<ART> art_index;
 	vector<LogicalType> index_types;
-	// Mapping from offset in key_types (a column in the index) to its corresponding offset in the struct.
-	vector<idx_t> field_map;
 };
 
 unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
                                       vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() != 5) {
+	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
 		throw BinderException(
-		    "index_key requires five arguments: catalog, schema, table, index_or_constraint, key_struct");
+		    "index_key requires at least four arguments: catalog, schema, table, index_or_constraint");
 	}
 
 	string catalog_name = GetStringArgument(context, *arguments[0], "catalog", INVALID_CATALOG, true);
@@ -184,7 +128,6 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	data_table_info.BindIndexes(context, ART::TYPE_NAME);
 
 	auto &index_list = data_table_info.GetIndexes();
-	auto &columns = duck_table.GetColumns();
 
 	auto found_index = FindIndexByName(index_list, index_name, catalog_name, schema_name, table_entry.name);
 	ValidateIndex(*found_index, catalog_name, schema_name, table_entry.name, index_name);
@@ -195,15 +138,28 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 	if (index_types.empty()) {
 		throw CatalogException("index_key: index '%s' has no key columns", index_name);
 	}
-	vector<string> column_names = GetColumnNames(bound_index, columns);
 
-	auto &key_expr = *arguments[4];
-	ValidateKeyStructType(key_expr);
-	LogicalType key_struct = key_expr.return_type;
-	bound_function.arguments[4] = key_struct;
-	vector<idx_t> field_map = BuildFieldMap(column_names, key_struct, index_types, index_name);
+	// Validate that the number of variadic arguments matches the number of index columns
+	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
+	if (num_key_args != index_types.size()) {
+		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided",
+		                      index_name, index_types.size(), num_key_args);
+	}
 
-	return make_uniq<IndexKeyBindData>(&art_index, std::move(index_types), std::move(field_map));
+	// Validate that each argument type matches the corresponding index column type exactly (no casting)
+	for (idx_t i = 0; i < index_types.size(); i++) {
+		auto &arg_expr = *arguments[INDEX_KEY_FIXED_ARGS + i];
+		if (arg_expr.HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
+		if (arg_expr.return_type != index_types[i]) {
+			throw BinderException("index_key: argument %llu has type %s but index '%s' expects %s", i + 1,
+			                      arg_expr.return_type.ToString().c_str(), index_name,
+			                      index_types[i].ToString().c_str());
+		}
+	}
+
+	return make_uniq<IndexKeyBindData>(&art_index, std::move(index_types));
 }
 
 void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -211,18 +167,15 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
-	auto &key_struct = args.data[4];
+	D_ASSERT(args.ColumnCount() >= INDEX_KEY_FIXED_ARGS + bind_data.index_types.size());
 
 	DataChunk key_chunk;
 	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.index_types);
 	key_chunk.SetCardinality(count);
 
-	auto &struct_children = StructVector::GetEntries(key_struct);
-
+	// Copy the variadic key column arguments (starting from INDEX_KEY_FIXED_ARGS) into the key chunk
 	for (idx_t col_idx = 0; col_idx < bind_data.index_types.size(); col_idx++) {
-		auto field_idx = bind_data.field_map[col_idx];
-		D_ASSERT(field_idx < struct_children.size());
-		key_chunk.data[col_idx].Reference(*struct_children[field_idx]);
+		key_chunk.data[col_idx].Reference(args.data[INDEX_KEY_FIXED_ARGS + col_idx]);
 	}
 
 	unsafe_vector<ARTKey> key_buffer;
@@ -251,9 +204,10 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 } // namespace
 
 ScalarFunction IndexKeyFun::GetFunction() {
-	return ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalTypeId::STRUCT},
-	    LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
+	ScalarFunction fun({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                   LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
+	fun.varargs = LogicalType::ANY;
+	return fun;
 }
 
 } // namespace duckdb
