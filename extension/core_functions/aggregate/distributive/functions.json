@@ -164,5 +164,12 @@
         "description": "Internal only. Calculates the sum value for all tuples in arg without overflow checks.",
         "example": "sum_no_overflow(A)",
         "type": "aggregate_function_set"
+    },
+    {
+        "name": "max_intersections",
+        "parameters": "left, right",
+        "description": "Returns the maximum number of overlapping intervals from pairs of (left, right) values.",
+        "example": "max_intersections(left, right)",
+        "type": "aggregate_function"
     }
 ]

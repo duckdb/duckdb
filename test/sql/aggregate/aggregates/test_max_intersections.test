@@ -1,0 +1,107 @@
+# name: test/sql/aggregate/aggregates/test_max_intersections.test
+# description: Test Aggregate Function max_intersections
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+query I
+select max_intersections(NULL, NULL)
+----
+0
+
+query I
+select max_intersections(1,1)
+----
+1
+
+query I
+select max_intersections(i,i) from range(100) tbl(i);
+----
+1
+
+query I
+select max_intersections(i,i) from range(100) tbl(i) where 1 = 0;
+----
+0
+
+# Basic overlaps
+statement ok
+create table intervals (s integer, e integer)
+
+statement ok
+insert into intervals values
+ (1,5), (4,8), (7,9), (2,6), (3,3)
+
+query I
+select max_intersections(s,e) from intervals;
+----
+3
+
+# Group by
+query II
+select s%2, max_intersections(s,e) from intervals group by s%2 order by s%2;
+----
+0	2
+1	2
+
+# Window Function
+query I rowsort
+select max_intersections(s,e) over ( partition by s%2) from intervals;
+----
+2
+2
+2
+2
+2
+
+# Adjacency counts touching endpoints
+query I
+select max_intersections(i, i+1) from range(3) tbl(i);
+----
+2
+
+# Constant intervals across multiple rows
+query I
+select max_intersections(2,5) from range(3);
+----
+3
+
+# Invalid intervals ignored
+query I
+select max_intersections(i+1, i) from range(10) tbl(i);
+----
+0
+
+# Mixed NULL and invalid values
+statement ok
+create table mixed (s integer, e integer)
+
+statement ok
+insert into mixed values (NULL,NULL), (5,2), (1,3), (2,3), (2,2)
+
+query I
+select max_intersections(s,e) from mixed;
+----
+3
+
+# All NULLs
+statement ok
+create table empties (s integer, e integer)
+
+statement ok
+insert into empties values (NULL,NULL), (NULL,NULL)
+
+query I
+select max_intersections(s,e) from empties;
+----
+0
+
+# Negative interval
+query I
+select max_intersections(-10,-5);
+----
+1
