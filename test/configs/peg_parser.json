@@ -60,7 +60,9 @@
     {
       "reason": "Unclassified failures",
       "paths": [
-        "test/sql/types/enum/test_enum.test"
+        "test/sql/types/enum/test_enum.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
       ]
     }
   ]

@@ -387,7 +387,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 	}
 
-	storage.InitializeParallelScan(context, g_state->state);
+	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}

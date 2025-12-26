@@ -46,7 +46,8 @@ enum class OptimizerType : uint32_t {
 	LATE_MATERIALIZATION,
 	CTE_INLINING,
 	COMMON_SUBPLAN,
-	JOIN_ELIMINATION
+	JOIN_ELIMINATION,
+	COUNT_WINDOW_ELIMINATION
 };
 
 string OptimizerTypeToString(OptimizerType type);

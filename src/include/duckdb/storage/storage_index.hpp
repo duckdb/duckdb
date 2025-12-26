@@ -60,6 +60,9 @@ public:
 	PhysicalIndex ToPhysical() const {
 		return PhysicalIndex(index);
 	}
+	bool HasType() const {
+		return type.id() != LogicalTypeId::INVALID;
+	}
 	const LogicalType &GetType() const {
 		return type;
 	}

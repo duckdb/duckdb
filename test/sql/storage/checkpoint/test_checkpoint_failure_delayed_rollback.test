@@ -1,0 +1,35 @@
+# name: test/sql/storage/checkpoint/test_checkpoint_failure_delayed_rollback.test
+# description: Test failing a delayed CHECKPOINT (after DETACH) on ROLLBACK.
+# group: [checkpoint]
+
+# Alternative verification disables checkpointing on shutdown.
+require no_alternative_verify
+
+statement ok
+SET threads = 1;
+
+statement ok
+ATTACH '__TEST_DIR__/fail_detach_delayed' AS db;
+
+statement ok
+PRAGMA wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA debug_checkpoint_abort = 'before_header';
+
+statement ok
+CREATE TABLE db.integers AS SELECT * FROM range(100) tbl(i);
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+INSERT INTO db.integers VALUES (42);
+
+statement ok con2
+DETACH db;
+
+statement error con1
+ROLLBACK;
+----
+Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag

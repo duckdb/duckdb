@@ -10,6 +10,12 @@ create or replace table z(id integer);
 statement ok
 insert into z from range(10_000_000);
 
+statement ok
+create or replace table random_values(id int, mod ubigint);
+
+statement ok
+insert into random_values select id, (random() * 3)::UBIGINT from range(100) t(id);
+
 loop i 0 100
 
 statement ok
@@ -30,7 +36,7 @@ SELECT SUM(id) FROM z
 
 onlyif c=5
 statement ok
-DELETE FROM z WHERE id%((random() * 3)::UBIGINT)=0
+DELETE FROM z WHERE id%(select mod from random_values where id=${i})=0
 
 onlyif c=6
 statement ok

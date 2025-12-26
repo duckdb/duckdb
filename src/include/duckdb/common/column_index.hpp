@@ -100,7 +100,7 @@ public:
 	void SetType(const LogicalType &type_information) {
 		type = type_information;
 	}
-	void SetPushdownExtractType(const LogicalType &type_information) {
+	void SetPushdownExtractType(const LogicalType &type_information, optional_ptr<LogicalType> cast_type = nullptr) {
 		//! We can upgrade the optional prune hint to a PUSHDOWN_EXTRACT, which is no longer optional
 		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 		type = type_information;
@@ -108,10 +108,15 @@ public:
 
 		auto &child = child_indexes[0];
 		auto &child_types = StructType::GetChildTypes(type);
+		auto &child_type = child_types[child.GetPrimaryIndex()].second;
 		if (child.child_indexes.empty()) {
-			child.SetType(child_types[child.GetPrimaryIndex()].second);
+			if (cast_type) {
+				child.SetType(*cast_type);
+			} else {
+				child.SetType(child_type);
+			}
 		} else {
-			child.SetPushdownExtractType(child_types[child.GetPrimaryIndex()].second);
+			child.SetPushdownExtractType(child_type, cast_type);
 		}
 	}
 	const LogicalType &GetScanType() const {

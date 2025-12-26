@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include <string.h>
@@ -218,6 +219,11 @@ const T Load(const_data_ptr_t ptr) {
 	T ret;
 	memcpy(&ret, ptr, sizeof(ret)); // NOLINT
 	return ret;
+}
+
+template <typename T>
+const T LoadLE(const_data_ptr_t ptr) {
+	return BSwapIfBE(Load<T>(ptr));
 }
 
 template <typename T>

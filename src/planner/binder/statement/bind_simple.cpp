@@ -30,6 +30,10 @@ unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddIndex(Binder &binder, Table
 
 BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
                                          unique_ptr<AlterInfo> alter_info) {
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		throw BinderException("Cannot execute the `ALTER TABLE` statement on `%s`, only `Table` entries are accepted.",
+		                      CatalogTypeToString(entry.type));
+	}
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &table = entry.Cast<TableCatalogEntry>();

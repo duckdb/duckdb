@@ -80,6 +80,21 @@ struct IndexScanState {
 
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
+struct PushedDownExpressionState {
+public:
+	explicit PushedDownExpressionState(ClientContext &context) : executor(context) {
+	}
+
+public:
+	//! The executor to execute the expression
+	ExpressionExecutor executor;
+	//! The pushed down expression to execute
+	unique_ptr<Expression> expression;
+	//! The target chunk to store the result of the execution
+	DataChunk target;
+	DataChunk input;
+};
+
 struct ColumnScanState {
 	explicit ColumnScanState(optional_ptr<CollectionScanState> parent_p) : parent(parent_p) {
 	}
@@ -114,6 +129,8 @@ struct ColumnScanState {
 	vector<bool> scan_child_column;
 	//! Contains TableScan level config for scanning
 	optional_ptr<TableScanOptions> scan_options;
+	//! (optionally) the expression state for any pushed down expression(s)
+	unique_ptr<PushedDownExpressionState> expression_state;
 
 public:
 	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
@@ -127,7 +144,15 @@ public:
 	idx_t GetPositionInSegment() const;
 };
 
+enum class FetchType {
+	//! Verify if each row is valid for the transaction prior to fetching
+	TRANSACTIONAL_FETCH,
+	// Force fetch the row, regardless of it if is valid for the transaction or not
+	FORCE_FETCH
+};
+
 struct ColumnFetchState {
+	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
 	//! The query context for this fetch
 	QueryContext context;
 	//! The set of pinned block handles for this set of fetches

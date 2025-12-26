@@ -26,6 +26,9 @@
 #include "duckdb/storage/table/row_id_column_data.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
@@ -186,6 +189,18 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType 
 	}
 }
 
+static unique_ptr<PushedDownExpressionState> CreateCast(ClientContext &context, const LogicalType &original_type,
+                                                        const LogicalType &cast_type) {
+	auto input = make_uniq<BoundReferenceExpression>(original_type, 0);
+	auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), cast_type);
+	auto res = make_uniq<PushedDownExpressionState>(context);
+	res->target.Initialize(context, {cast_type});
+	res->input.Initialize(context, {original_type});
+	res->executor.AddExpression(*cast_expression);
+	res->expression = std::move(cast_expression);
+	return res;
+}
+
 void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
                                  optional_ptr<TableScanOptions> options) {
 	auto &children = column_id.GetChildIndexes();
@@ -224,10 +239,15 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 			}
 		} else {
 			if (storage_index.IsPushdownExtract()) {
+				D_ASSERT(context.Valid());
 				scan_child_column.resize(1, true);
 				D_ASSERT(children.size() == 1);
 				auto &child = children[0];
 				auto child_index = child.GetPrimaryIndex();
+				auto &child_type = StructType::GetChildTypes(type)[child_index].second;
+				if (!child.HasChildren() && child_type != child.GetType()) {
+					expression_state = CreateCast(*context.GetClientContext(), child_type, child.GetType());
+				}
 				child_states[1].Initialize(context, struct_children[child_index].second, child, options);
 			} else {
 				// only scan the specified subset of columns
@@ -1235,7 +1255,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
-		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 		if (metadata_manager) {
 			vector<MetaBlockPointer> extra_metadata_block_pointers;
 			extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
@@ -1303,7 +1323,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		metadata_blocks.insert(column_pointer.block_pointer);
 	}
 	if (metadata_manager) {
-		row_group_pointer.deletes_pointers = CheckpointDeletes(*metadata_manager);
+		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 	}
 	// set up the pointers correctly within this row group for future operations
 	column_pointers = row_group_pointer.data_pointers;
@@ -1356,10 +1376,11 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
-vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
+vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed
 		// re-use them as-is
+		auto &manager = *writer.GetMetadataManager();
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
@@ -1368,7 +1389,7 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 		// no version information: write nothing
 		return vector<MetaBlockPointer>();
 	}
-	return vinfo->Checkpoint(manager);
+	return vinfo->Checkpoint(writer);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
