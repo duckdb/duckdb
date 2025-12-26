@@ -6,7 +6,7 @@ else ()
 endif()
 if (NOT MINGW)
     duckdb_extension_load(iceberg
-#            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
+            ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
             GIT_TAG 90c059e2dd876a483e63a2f1b04ef66fa45a0c85
             )
