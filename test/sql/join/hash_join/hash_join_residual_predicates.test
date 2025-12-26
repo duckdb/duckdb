@@ -1,0 +1,327 @@
+# name: test/sql/join/hash_join/hash_join_residual_predicates.test
+# description: Test hash join with residual predicates (non-pushdown conditions in ON clause)
+# group: [hash_join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE orders (id INT, customer_id INT, amount INT, status VARCHAR);
+
+statement ok
+CREATE TABLE customers (customer_id INT, name VARCHAR, region VARCHAR);
+
+statement ok
+INSERT INTO orders VALUES
+    (1, 100, 50, 'pending'),
+    (2, 100, 150, 'completed'),
+    (3, 200, 200, 'completed'),
+    (4, 300, 80, 'pending'),
+    (5, 400, 300, 'completed');
+
+statement ok
+INSERT INTO customers VALUES
+    (100, 'Alice', 'North'),
+    (200, 'Bob', 'South'),
+    (300, 'Charlie', 'East'),
+    (500, 'Diana', 'West');
+
+query II
+EXPLAIN SELECT * FROM orders o
+INNER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+INNER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+3	200	200	200	Bob	South
+4	300	80	300	Charlie	East
+
+query II
+EXPLAIN SELECT * FROM orders o
+INNER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount < c.customer_id;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+INNER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount < c.customer_id;
+----
+1	100	50	100	Alice	North
+4	300	80	300	Charlie	East
+
+query II
+EXPLAIN SELECT * FROM orders o
+INNER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount < c.customer_id
+    AND o.amount + c.customer_id > 200;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+INNER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount < c.customer_id
+    AND o.amount + c.customer_id > 200;
+----
+4	300	80	300	Charlie	East
+
+query II
+EXPLAIN SELECT * FROM orders o
+LEFT JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: LEFT.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+LEFT JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+1	100	50	NULL	NULL	NULL
+2	100	150	NULL	NULL	NULL
+3	200	200	200	Bob	South
+4	300	80	300	Charlie	East
+5	400	300	NULL	NULL	NULL
+
+query II
+EXPLAIN SELECT * FROM orders o
+LEFT JOIN customers c ON o.customer_id = c.customer_id
+    AND o.status != 'pending';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: LEFT.*Residual Predicate.*
+
+query IIITTIT rowsort
+SELECT o.id, o.customer_id, o.amount, o.status, c.customer_id, c.name, c.region
+FROM orders o
+LEFT JOIN customers c ON o.customer_id = c.customer_id
+    AND o.status != 'pending';
+----
+1	100	50	pending	NULL	NULL	NULL
+2	100	150	completed	100	Alice	North
+3	200	200	completed	200	Bob	South
+4	300	80	pending	NULL	NULL	NULL
+5	400	300	completed	NULL	NULL	NULL
+
+query II
+EXPLAIN SELECT * FROM orders o
+RIGHT JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: RIGHT.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+RIGHT JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+3	200	200	200	Bob	South
+4	300	80	300	Charlie	East
+NULL	NULL	NULL	100	Alice	North
+NULL	NULL	NULL	500	Diana	West
+
+query II
+EXPLAIN SELECT * FROM orders o
+RIGHT JOIN customers c ON o.customer_id = c.customer_id
+    AND c.region != 'North';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: RIGHT.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+RIGHT JOIN customers c ON o.customer_id = c.customer_id
+    AND c.region != 'North';
+----
+3	200	200	200	Bob	South
+4	300	80	300	Charlie	East
+NULL	NULL	NULL	100	Alice	North
+NULL	NULL	NULL	500	Diana	West
+
+query II
+EXPLAIN SELECT * FROM orders o
+FULL OUTER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: FULL.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+FULL OUTER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+1	100	50	NULL	NULL	NULL
+2	100	150	NULL	NULL	NULL
+3	200	200	200	Bob	South
+4	300	80	300	Charlie	East
+5	400	300	NULL	NULL	NULL
+NULL	NULL	NULL	100	Alice	North
+NULL	NULL	NULL	500	Diana	West
+
+query II
+EXPLAIN SELECT * FROM orders o
+FULL OUTER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount > 100 AND c.region = 'South';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: FULL.*Residual Predicate.*
+
+query IIITIT rowsort
+SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
+FROM orders o
+FULL OUTER JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount > 100 AND c.region = 'South';
+----
+1	100	50	NULL	NULL	NULL
+2	100	150	NULL	NULL	NULL
+3	200	200	200	Bob	South
+4	300	80	NULL	NULL	NULL
+5	400	300	NULL	NULL	NULL
+NULL	NULL	NULL	100	Alice	North
+NULL	NULL	NULL	300	Charlie	East
+NULL	NULL	NULL	500	Diana	West
+
+query II
+EXPLAIN SELECT * FROM orders o
+SEMI JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: SEMI.*Residual Predicate.*
+
+query IIIT rowsort
+SELECT o.id, o.customer_id, o.amount, o.status
+FROM orders o
+SEMI JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+3	200	200	completed
+4	300	80	pending
+
+query II
+EXPLAIN SELECT * FROM orders o
+ANTI JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: ANTI.*Residual Predicate.*
+
+query IIIT rowsort
+SELECT o.id, o.customer_id, o.amount, o.status
+FROM orders o
+ANTI JOIN customers c ON o.customer_id = c.customer_id
+    AND o.amount + c.customer_id > 250;
+----
+1	100	50	pending
+2	100	150	completed
+5	400	300	completed
+
+query II
+EXPLAIN SELECT * FROM orders o
+ANTI JOIN customers c ON o.customer_id = c.customer_id
+    AND o.status != 'pending';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: ANTI.*Residual Predicate.*
+
+query IIIT rowsort
+SELECT o.id, o.customer_id, o.amount, o.status
+FROM orders o
+ANTI JOIN customers c ON o.customer_id = c.customer_id
+    AND o.status != 'pending';
+----
+1	100	50	pending
+4	300	80	pending
+5	400	300	completed
+
+query II
+EXPLAIN SELECT o.id, o.amount,
+    (SELECT c.name FROM customers c
+     WHERE c.customer_id = o.customer_id
+         AND c.customer_id + o.amount > 250)
+FROM orders o;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: SINGLE.*Residual Predicate.*
+
+query IIT rowsort
+SELECT o.id, o.amount,
+    (SELECT c.name FROM customers c
+     WHERE c.customer_id = o.customer_id
+         AND c.customer_id + o.amount > 250)
+FROM orders o;
+----
+1	50	NULL
+2	150	NULL
+3	200	Bob
+4	80	Charlie
+5	300	NULL
+
+statement ok
+INSERT INTO customers VALUES (200, 'Bob2', 'South');
+
+statement error
+SELECT o.id, o.amount,
+    (SELECT c.name FROM customers c
+     WHERE c.customer_id = o.customer_id
+         AND c.customer_id + o.amount > 250)
+FROM orders o;
+----
+More than one row returned by a subquery used as an expression - scalar subqueries can only return a single row.
+
+statement ok
+DELETE FROM customers WHERE name = 'Bob2';
+
+query II
+EXPLAIN SELECT * FROM orders o
+WHERE o.customer_id NOT IN (
+    SELECT c.customer_id
+    FROM customers c
+    WHERE c.customer_id = o.customer_id
+);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: MARK.*
+
+query IIIT rowsort
+SELECT o.id, o.customer_id, o.amount, o.status
+FROM orders o
+WHERE o.customer_id NOT IN (
+    SELECT c.customer_id
+    FROM customers c
+    WHERE c.customer_id = o.customer_id
+);
+----
+5	400	300	completed
+
+# MARK JOIN with residual predicate (NOTE: residual currently applied on INNER JOIN at leaf level, not on MARK JOIN itself)
+query II
+EXPLAIN SELECT * FROM orders o
+WHERE o.customer_id NOT IN (
+    SELECT c.customer_id
+    FROM customers c
+    WHERE c.customer_id = o.customer_id
+    AND o.amount + c.customer_id > 250
+);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: MARK.*
+
+query IIIT rowsort
+SELECT o.id, o.customer_id, o.amount, o.status
+FROM orders o
+WHERE o.customer_id NOT IN (
+    SELECT c.customer_id
+    FROM customers c
+    WHERE c.customer_id = o.customer_id
+    AND o.amount + c.customer_id > 250
+);
+----
+1	100	50	pending
+2	100	150	completed
+5	400	300	completed
