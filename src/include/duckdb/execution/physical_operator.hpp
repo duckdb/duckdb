@@ -34,6 +34,8 @@ class PipelineBuildState;
 class MetaPipeline;
 class PhysicalPlan;
 
+enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
 public:
@@ -199,7 +201,7 @@ public:
 	static idx_t GetMaxThreadMemory(ClientContext &context);
 
 	//! Whether operator caching is allowed in the current execution context
-	static bool OperatorCachingAllowed(ExecutionContext &context);
+	static OperatorCachingMode SelectOperatorCachingMode(ExecutionContext &context);
 
 	virtual bool IsSink() const {
 		return false;
@@ -256,7 +258,9 @@ public:
 	unique_ptr<DataChunk> cached_chunk;
 	bool initialized = false;
 	//! Whether or not the chunk can be cached
-	bool can_cache_chunk = false;
+	OperatorCachingMode can_cache_chunk = OperatorCachingMode::NONE;
+	bool must_return_continuation_chunk = false;
+	OperatorResultType cached_result;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also

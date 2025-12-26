@@ -131,8 +131,8 @@ void DataChunk::Reference(DataChunk &chunk) {
 }
 
 void DataChunk::Move(DataChunk &chunk) {
-	SetCardinality(chunk);
 	SetCapacity(chunk);
+	SetCardinality(chunk);
 	data = std::move(chunk.data);
 	vector_caches = std::move(chunk.vector_caches);
 

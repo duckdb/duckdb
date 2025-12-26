@@ -107,6 +107,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -3193,6 +3194,26 @@ const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value) {
 template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value) {
 	return static_cast<OnEntryNotFound>(StringUtil::StringToEnum(GetOnEntryNotFoundValues(), 2, "OnEntryNotFound", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOperatorCachingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OperatorCachingMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(OperatorCachingMode::PARTITIONED), "PARTITIONED" },
+		{ static_cast<uint32_t>(OperatorCachingMode::ORDERED), "ORDERED" },
+		{ static_cast<uint32_t>(OperatorCachingMode::UNORDERED), "UNORDERED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OperatorCachingMode>(OperatorCachingMode value) {
+	return StringUtil::EnumToString(GetOperatorCachingModeValues(), 4, "OperatorCachingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+OperatorCachingMode EnumUtil::FromString<OperatorCachingMode>(const char *value) {
+	return static_cast<OperatorCachingMode>(StringUtil::StringToEnum(GetOperatorCachingModeValues(), 4, "OperatorCachingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOperatorFinalResultTypeValues() {
