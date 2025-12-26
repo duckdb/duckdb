@@ -23,6 +23,7 @@ class BufferManager;
 class ClientContext;
 class DatabaseInstance;
 class MetadataManager;
+enum class StorageBlockPrefetch : uint8_t;
 
 enum class ConvertToPersistentMode { DESTRUCTIVE, THREAD_SAFE };
 
@@ -92,7 +93,7 @@ public:
 	//! Whether or not the attached database is in-memory
 	virtual bool InMemory() = 0;
 	//! Whether or not to prefetch
-	virtual bool Prefetch() {
+	virtual bool Prefetch(StorageBlockPrefetch prefetch) {
 		return false;
 	}
 

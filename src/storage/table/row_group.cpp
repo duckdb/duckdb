@@ -634,7 +634,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			count = max_count;
 		}
 		auto &block_manager = GetBlockManager();
-		if (block_manager.Prefetch()) {
+		if (!state.block_prefetch) {
+			// Get this setting once, as getting looking up a setting for each prefetch is expensive
+			state.block_prefetch = unique_ptr<StorageBlockPrefetch>(new StorageBlockPrefetch);
+			*state.block_prefetch =
+			    DBConfig::GetSetting<StorageBlockPrefetchSetting>(block_manager.GetBufferManager().GetDatabase());
+		}
+		if (block_manager.Prefetch(*state.block_prefetch)) {
 			PrefetchState prefetch_state;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];

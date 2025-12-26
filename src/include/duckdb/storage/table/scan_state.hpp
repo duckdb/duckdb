@@ -17,6 +17,7 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
@@ -240,6 +241,8 @@ public:
 	idx_t batch_index;
 	//! The valid selection
 	SelectionVector valid_sel;
+	//! How to prefetch blocks (initialized on the first prefetch)
+	unique_ptr<StorageBlockPrefetch> block_prefetch;
 
 	RandomEngine random;
 
