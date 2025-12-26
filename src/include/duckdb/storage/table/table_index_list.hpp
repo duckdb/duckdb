@@ -84,7 +84,8 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of the table.
-	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options);
+	vector<unique_ptr<IndexStorageInfo>> SerializeToDisk(QueryContext context,
+	                                                     const case_insensitive_map_t<Value> &options);
 
 public:
 	//! Initialize an index_chunk from a table.

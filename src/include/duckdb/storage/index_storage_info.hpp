@@ -8,13 +8,21 @@
 
 #pragma once
 
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/storage_index.hpp"
+#include "duckdb/execution/index/buffered_index_replays.hpp"
 
 namespace duckdb {
+
+class ColumnDataCollection;
+class DataChunk;
+class Serializer;
+class Deserializer;
 
 //! Information to serialize a FixedSizeAllocator, which holds the index data
 struct FixedSizeAllocatorInfo {
@@ -41,8 +49,14 @@ struct IndexBufferInfo {
 
 //! Index (de)serialization information.
 struct IndexStorageInfo {
-	IndexStorageInfo() {};
+	IndexStorageInfo() = default;
 	explicit IndexStorageInfo(const string &name) : name(name) {};
+
+	IndexStorageInfo(IndexStorageInfo &&other) noexcept;
+	IndexStorageInfo &operator=(IndexStorageInfo &&other) noexcept;
+	IndexStorageInfo(const IndexStorageInfo &) = delete;
+	IndexStorageInfo &operator=(const IndexStorageInfo &) = delete;
+	~IndexStorageInfo();
 
 	//! The name.
 	string name;
@@ -58,6 +72,15 @@ struct IndexStorageInfo {
 	//! Second dimension: The buffers of each fixed-size allocator.
 	vector<vector<IndexBufferInfo>> buffers;
 
+	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
+	unique_ptr<BufferedIndexReplays> buffered_replays;
+
+	//! Maps the column IDs in the buffered replays to a physical table offset.
+	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
+	//! physical table index mapped_column_ids[i].
+	//! This is in sorted order of physical column IDs.
+	vector<StorageIndex> mapped_column_ids;
+
 	//! The root block pointer of the index. Necessary to support older storage files.
 	BlockPointer root_block_ptr;
 
@@ -71,7 +94,7 @@ struct IndexStorageInfo {
 	}
 
 	void Serialize(Serializer &serializer) const;
-	static IndexStorageInfo Deserialize(Deserializer &deserializer);
+	static unique_ptr<IndexStorageInfo> Deserialize(Deserializer &deserializer);
 };
 
 //! Additional index information for tables

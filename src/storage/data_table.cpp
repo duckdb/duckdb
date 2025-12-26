@@ -350,7 +350,7 @@ bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKey
 	return index != nullptr;
 }
 
-void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info) {
+void DataTable::SetIndexStorageInfo(vector<unique_ptr<IndexStorageInfo>> index_storage_info) {
 	info->index_storage_infos = std::move(index_storage_info);
 }
 
@@ -1647,7 +1647,7 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, const IndexStorageInfo &index_info) {
+                         const IndexConstraintType type, unique_ptr<IndexStorageInfo> index_info) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
 		                           "%s by a different transaction",
@@ -1668,8 +1668,8 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 
 	// Create an ART around the expressions.
 	auto &io_manager = TableIOManager::Get(*this);
-	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
-	                          index_info);
+	auto art = make_uniq<ART>(index_info->name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
+	                          *index_info);
 	info->indexes.AddIndex(std::move(art));
 }
 

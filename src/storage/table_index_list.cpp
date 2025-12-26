@@ -235,21 +235,22 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context,
-                                                         const case_insensitive_map_t<Value> &options) {
-	vector<IndexStorageInfo> infos;
+vector<unique_ptr<IndexStorageInfo>> TableIndexList::SerializeToDisk(QueryContext context,
+                                                                     const case_insensitive_map_t<Value> &options) {
+	vector<unique_ptr<IndexStorageInfo>> infos;
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (index.IsBound()) {
 			auto info = index.Cast<BoundIndex>().SerializeToDisk(context, options);
-			D_ASSERT(info.IsValid() && !info.name.empty());
-			infos.push_back(info);
+			D_ASSERT(info->IsValid() && !info->name.empty());
+			infos.push_back(std::move(info));
 			continue;
 		}
 
-		auto info = index.Cast<UnboundIndex>().GetStorageInfo();
-		D_ASSERT(!info.name.empty());
-		infos.push_back(info);
+		// Take IndexStorageInfo from UnboundIndex.
+		auto info = index.Cast<UnboundIndex>().TakeStorageInfo(options);
+		D_ASSERT(!info->name.empty());
+		infos.push_back(std::move(info));
 	}
 	return infos;
 }

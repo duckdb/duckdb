@@ -91,12 +91,12 @@ void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", options, case_insensitive_map_t<Value>());
 }
 
-IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
-	IndexStorageInfo result;
-	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
-	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
-	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
-	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());
+unique_ptr<IndexStorageInfo> IndexStorageInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<IndexStorageInfo>(new IndexStorageInfo());
+	deserializer.ReadPropertyWithDefault<string>(100, "name", result->name);
+	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result->root);
+	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result->allocator_infos);
+	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result->options, case_insensitive_map_t<Value>());
 	return result;
 }
 
