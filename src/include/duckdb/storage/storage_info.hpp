@@ -96,6 +96,8 @@ public:
 	uint64_t version_number;
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
+	//! Encryption version
+	uint8_t encryption_version;
 
 	//! The length of the unique database identifier.
 	static constexpr idx_t DB_IDENTIFIER_LEN = 16;
@@ -123,6 +125,9 @@ public:
 	void SetEncrypted() {
 		flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
+	void SetEncryptionVersion(uint8_t version) {
+		encryption_version = version;
+	}
 
 	void SetEncryptionMetadata(data_ptr_t source) {
 		memset(encryption_metadata, 0, ENCRYPTION_METADATA_LEN);
@@ -131,6 +136,10 @@ public:
 
 	EncryptionTypes::CipherType GetEncryptionCipher() {
 		return static_cast<EncryptionTypes::CipherType>(encryption_metadata[2]);
+	}
+
+	EncryptionTypes::EncryptionVersion GetEncryptionVersion() const {
+		return static_cast<EncryptionTypes::EncryptionVersion>(encryption_metadata[3]);
 	}
 
 	void SetDBIdentifier(data_ptr_t source) {
@@ -143,8 +152,26 @@ public:
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
 	}
 
+	void SetCanaryIV(data_ptr_t source) {
+		memset(canary_iv, 0, AES_IV_LEN);
+		memcpy(canary_iv, source, AES_IV_LEN);
+	}
+
+	void SetCanaryTag(data_ptr_t source) {
+		memset(canary_tag, 0, AES_TAG_LEN);
+		memcpy(canary_tag, source, AES_TAG_LEN);
+	}
+
 	data_ptr_t GetDBIdentifier() {
 		return db_identifier;
+	}
+
+	data_ptr_t GetIV() {
+		return canary_iv;
+	}
+
+	data_ptr_t GetTag() {
+		return canary_tag;
 	}
 
 	static bool CompareDBIdentifiers(const data_ptr_t db_identifier_1, const data_ptr_t db_identifier_2) {
@@ -170,6 +197,8 @@ private:
 	//! The unique database identifier and optional encryption salt.
 	data_t db_identifier[DB_IDENTIFIER_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
+	data_t canary_iv[AES_IV_LEN];
+	data_t canary_tag[AES_IV_LEN];
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two

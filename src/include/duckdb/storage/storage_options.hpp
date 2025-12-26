@@ -36,7 +36,10 @@ struct StorageOptions {
 	//! encryption key
 	//! FIXME: change to a unique_ptr in the future
 	shared_ptr<string> user_key;
+	//! encryption version (set default to 1)
+	EncryptionTypes::EncryptionVersion encryption_version = EncryptionTypes::NONE;
 
+	void SetEncryptionVersion(string &storage_version_user_provided);
 	void Initialize(const unordered_map<string, Value> &options);
 };
 
