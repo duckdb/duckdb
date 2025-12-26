@@ -368,51 +368,71 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	if (child_result == OperatorResultType::FINISHED) {
 		needs_continuation_chunk = true;
 	}
-
 	const bool has_non_empty_cached_chunk = state.cached_chunk && state.cached_chunk->size() > 0;
+	const bool has_space_for_chunk_in_cache =
+	    state.cached_chunk && (state.cached_chunk->size() + chunk.size() <= STANDARD_VECTOR_SIZE);
 
 	auto execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
-
 	if (has_non_empty_cached_chunk && needs_continuation_chunk) {
-		if (chunk.size() == 0 && child_result != OperatorResultType::BLOCKED) {
-			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED;
+		if (chunk.size() == 0) {
+			if (child_result == OperatorResultType::BLOCKED) {
+				// First return cached, then empty chunk via continuation that will BLOCK
+				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
+			} else {
+				// Return cached, and the current result
+				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED;
+			}
+		} else if (chunk.size() <= CACHE_THRESHOLD && has_space_for_chunk_in_cache) {
+			// chunk is small, both fit
+			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
 		} else {
-			D_ASSERT(state.cached_chunk->size() > 0);
+			// First return cached, then chunk via continuation
 			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
 		}
 	} else if (chunk.size() == 0) {
 		// Nothing required to be done, this also means that BLOCKED is properly passed through
+		// Note that this case works also for unordered cases, given no rows are there
 
 		execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 	} else if (chunk.size() <= CACHE_THRESHOLD && !needs_continuation_chunk) {
-		// we have filtered out a significant amount of tuples AND we have enough space in the cached chunk
-		// add this chunk to the cache and continue
+		// We have filtered out a significant amount of tuples
 
 		if (!state.cached_chunk) {
+			// Initialize cached_chunk
 			state.cached_chunk = make_uniq<DataChunk>();
 			state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
 		}
 
-		if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
+		if (has_space_for_chunk_in_cache) {
+			// We can just append, do and return empty chunk
 			execution_mode = CachingPhysicalOperatorExecuteMode::APPEND_CHUNK;
 		} else {
+			// Return what is now cached, and append chunk (via tmp)
 			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 		}
-	} else if (has_non_empty_cached_chunk && state.can_cache_chunk != OperatorCachingMode::UNORDERED) {
-		// We need first to return (*state.cached_chunk), then chunk at the next iteration
+	} else if (state.can_cache_chunk == OperatorCachingMode::UNORDERED) {
+		// Chunk is too big to considering caching, order is not required, just return it
+		execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
+	} else if (has_non_empty_cached_chunk) {
+		// We need first to return (*state.cached_chunk), then chunk on the continuation
 		// NOTE: Both are not empty
 		D_ASSERT(chunk.size() > 0);
 		D_ASSERT(state.cached_chunk->size() > 0);
 
 		if (chunk.size() <= CACHE_THRESHOLD) {
+			// We can consider appening
 			if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
+				// Both fit toghether, append then return
 				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
 			} else if (needs_continuation_chunk) {
+				// Both needs to be returned in this step, but cached before current chunk
 				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
 			} else {
+				// Return now cached, and append chunk (via tmp)
 				execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 			}
 		} else {
+			// Both needs to be returned in this step, but cached before current chunk
 			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
 		}
 	}
