@@ -365,11 +365,15 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 			needs_continuation_chunk = true;
 		}
 	}
+	if (child_result == OperatorResultType::FINISHED) {
+		needs_continuation_chunk = true;
+	}
+
+	const bool has_non_empty_cached_chunk = state.cached_chunk && state.cached_chunk->size() > 0;
 
 	auto execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 
-	if (state.cached_chunk && state.cached_chunk->size() > 0 &&
-	    (child_result == OperatorResultType::FINISHED || needs_continuation_chunk)) {
+	if (has_non_empty_cached_chunk && needs_continuation_chunk) {
 		if (chunk.size() == 0 && child_result != OperatorResultType::BLOCKED) {
 			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED;
 		} else {
@@ -394,8 +398,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		} else {
 			execution_mode = CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 		}
-	} else if (state.cached_chunk && state.cached_chunk->size() > 0 &&
-	           state.can_cache_chunk != OperatorCachingMode::UNORDERED) {
+	} else if (has_non_empty_cached_chunk && state.can_cache_chunk != OperatorCachingMode::UNORDERED) {
 		// We need first to return (*state.cached_chunk), then chunk at the next iteration
 		// NOTE: Both are not empty
 		D_ASSERT(chunk.size() > 0);
