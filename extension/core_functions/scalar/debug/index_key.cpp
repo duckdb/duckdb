@@ -66,7 +66,7 @@ string GetRequiredStructField(const vector<Value> &children, const LogicalType &
 	if (field_value.type().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("index_key table_path field '%s' must be VARCHAR", field_name);
 	}
-	string result = StringValue::Get(field_value);
+	auto result = StringValue::Get(field_value);
 	if (result.empty()) {
 		throw BinderException("index_key table_path field '%s' cannot be empty", field_name);
 	}
@@ -128,7 +128,7 @@ optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &in
 			available_names.push_back(idx.GetIndexName());
 			return false;
 		});
-		string available_list = StringUtil::Join(available_names, ", ");
+		auto available_list = StringUtil::Join(available_names, ", ");
 
 		if (available_names.empty()) {
 			throw CatalogException(
@@ -191,7 +191,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 
 	// Extract index_name (always the second argument)
 	idx_t index_name_idx = INDEX_KEY_FIXED_ARGS - 1;
-	string index_name = GetStringArgument(context, *arguments[index_name_idx], "index_name");
+	auto index_name = GetStringArgument(context, *arguments[index_name_idx], "index_name");
 
 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.catalog, path.schema, path.table_name)
 	                        .Cast<TableCatalogEntry>();
@@ -208,7 +208,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 
 	auto &bound_index = found_index->Cast<BoundIndex>();
 	auto &art_index = bound_index.Cast<ART>();
-	vector<LogicalType> index_types = art_index.logical_types;
+	auto index_types = art_index.logical_types;
 	if (index_types.empty()) {
 		throw CatalogException("index_key: index '%s' has no key columns", index_name);
 	}
@@ -251,14 +251,17 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	bind_data.art_index->GenerateKeys<>(allocator, key_chunk, key_buffer);
 
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+	result_validity.SetAllValid(count);
+
 	for (idx_t row = 0; row < count; row++) {
 		auto &generated_key = key_buffer[row];
 		if (generated_key.Empty()) {
-			result.SetValue(row, Value());
+			result_validity.SetInvalid(row);
 		} else {
-			const_data_ptr_t data_ptr = generated_key.data;
-			Value blob_value = Value::BLOB(data_ptr, generated_key.len);
-			result.SetValue(row, blob_value);
+			result_data[row] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(generated_key.data), generated_key.len);
 		}
 	}
 

@@ -27,19 +27,16 @@ CREATE UNIQUE INDEX tbl1_idx_txt ON tbl1(txt);
 statement ok
 INSERT INTO tbl1 (id, uid, txt) VALUES (1, 10, 'alpha'), (2, 20, 'beta'), (3, 30, 'gamma');
 
-# Test with full struct specification
 query I
 SELECT index_key({'catalog': '', 'schema': 'main', 'table_name': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
 \x80\x00\x00\x01alpha\x00
 
-# Test with minimal struct (only table_name, defaults apply - empty catalog, 'main' schema)
 query I
 SELECT index_key({'table_name': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
 \x80\x00\x00\x01alpha\x00
 
-# Test with schema specified (catalog defaults to empty)
 query I
 SELECT index_key({'schema': 'main', 'table_name': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
@@ -122,13 +119,11 @@ ATTACH ':memory:' AS other;
 statement ok
 CREATE TABLE other.tbl1(id INTEGER PRIMARY KEY);
 
-# Test with catalog specification
 query I
 SELECT index_key({'catalog': 'other', 'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 42);
 ----
 \x80\x00\x00*
 
-# Test with different schema
 statement ok
 CREATE SCHEMA test_schema;
 
@@ -138,7 +133,6 @@ CREATE TABLE test_schema.tbl4(id INTEGER PRIMARY KEY, value VARCHAR);
 statement ok
 INSERT INTO test_schema.tbl4 VALUES (1, 'test1'), (2, 'test2');
 
-# Test with explicit schema specification
 query I
 SELECT index_key({'schema': 'test_schema', 'table_name': 'tbl4'}, 'PRIMARY_tbl4_0', id)
 FROM test_schema.tbl4
@@ -147,7 +141,6 @@ ORDER BY id;
 \x80\x00\x00\x01
 \x80\x00\x00\x02
 
-# Test that schema defaults to 'main' when not specified
 query I
 SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
@@ -229,7 +222,6 @@ ORDER BY key1;
 \x80\x00\x00\x0Frow15\x00\x80\x00\x00\x00\x00\x00\x80\x00
 \x80\x00\x00\x10row16\x00\x80\x00\x00\x00\x00\x01\x00\x00
 
-# Test vectorized execution with schema specified
 query I
 SELECT index_key({'schema': 'main', 'table_name': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
 FROM tbl3
