@@ -107,18 +107,25 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		lhs_probe_columns.col_types.push_back(lhs_input_types[col_idx]);
 	}
 
-	// build mapping (original index -> position in lhs_probe_columns)
-	for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
-		probe_input_to_probe_map[lhs_probe_columns.col_idxs[i]] = i;
+	// build mapping for ONLY predicate probe columns (input index -> position in lhs_probe_columns)
+	for (auto predicate_col_idx : predicate_probe_cols) {
+		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
+			if (lhs_probe_columns.col_idxs[i] == predicate_col_idx) {
+				probe_input_to_probe_map[predicate_col_idx] = i;
+				break;
+			}
+		}
 	}
 
+	// build lhs_output_in_probe mapping (output columns -> positions in lhs_probe_columns)
 	lhs_output_in_probe.reserve(lhs_output_columns.col_idxs.size());
-
 	for (auto output_col_idx : lhs_output_columns.col_idxs) {
-		// find where this output column is located in lhs_probe_columns
-		auto it = probe_input_to_probe_map.find(output_col_idx);
-		D_ASSERT(it != probe_input_to_probe_map.end());
-		lhs_output_in_probe.push_back(it->second);
+		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
+			if (lhs_probe_columns.col_idxs[i] == output_col_idx) {
+				lhs_output_in_probe.push_back(i);
+				break;
+			}
+		}
 	}
 
 	// handle build side (RHS)
@@ -183,8 +190,6 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 			} else {
 				// new column - add to payload
 				idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
-				build_input_to_layout[rhs_col_with_offset] = layout_pos;
-
 				payload_columns.col_idxs.push_back(rhs_col);
 				payload_columns.col_types.push_back(rhs_col_type);
 				rhs_output_columns.col_idxs.push_back(layout_pos);
@@ -351,10 +356,10 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(
-	    context, *this, conditions, payload_columns.col_types, join_type, rhs_output_columns.col_idxs,
-	    residual_predicate ? residual_predicate->Copy() : nullptr, predicate_build_cols, predicate_probe_cols,
-	    build_input_to_layout_map, probe_input_to_probe_map, lhs_output_in_probe, lhs_output_columns.col_idxs.size());
+	auto result =
+	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
+	                             rhs_output_columns.col_idxs, residual_predicate ? residual_predicate->Copy() : nullptr,
+	                             build_input_to_layout_map, probe_input_to_probe_map, lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -1198,7 +1203,7 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	// pass probe data and mapping to Next
 	state.lhs_probe_data.ReferenceColumns(input, lhs_probe_columns.col_idxs);
-	state.scan_structure.Next(state.lhs_join_keys, state.lhs_probe_data, chunk, lhs_output_in_probe);
+	state.scan_structure.Next(state.lhs_join_keys, state.lhs_probe_data, chunk);
 
 	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
 		state.scan_structure.is_null = true;
@@ -1560,7 +1565,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 
 	if (!scan_structure.is_null) {
 		// still have elements remaining
-		scan_structure.Next(lhs_join_keys, lhs_probe_data, chunk, gstate.op.lhs_output_in_probe);
+		scan_structure.Next(lhs_join_keys, lhs_probe_data, chunk);
 		if (chunk.size() != 0 || !scan_structure.PointersExhausted()) {
 			return;
 		}
@@ -1601,7 +1606,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	// Perform the probe
 	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
-	scan_structure.Next(lhs_join_keys, lhs_probe_data, chunk, gstate.op.lhs_output_in_probe);
+	scan_structure.Next(lhs_join_keys, lhs_probe_data, chunk);
 }
 
 void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
