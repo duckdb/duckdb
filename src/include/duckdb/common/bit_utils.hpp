@@ -41,7 +41,7 @@ struct CountZeros<uint64_t> {
 		value |= value >> 16;
 		value |= value >> 32;
 		auto result = 63 - index64msb[(value * debruijn64msb) >> 58];
-#ifdef __clang__
+#if defined(__clang__) && !defined(_MSC_VER)
 		D_ASSERT(result == static_cast<uint64_t>(__builtin_clzl(value_in)));
 #endif
 		return result;
@@ -58,7 +58,7 @@ struct CountZeros<uint64_t> {
 		                                   56, 45, 25, 31, 35, 16, 9,  12, 44, 24, 15, 8,  23, 7,  6,  5};
 		constexpr uint64_t debruijn64lsb = 0x07EDD5E59A4E28C2ULL;
 		auto result = index64lsb[((value & -value) * debruijn64lsb) >> 58];
-#ifdef __clang__
+#if defined(__clang__) && !defined(_MSC_VER)
 		D_ASSERT(result == static_cast<uint64_t>(__builtin_ctzl(value_in)));
 #endif
 		return result;
