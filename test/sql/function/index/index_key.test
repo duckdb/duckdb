@@ -27,57 +27,70 @@ CREATE UNIQUE INDEX tbl1_idx_txt ON tbl1(txt);
 statement ok
 INSERT INTO tbl1 (id, uid, txt) VALUES (1, 10, 'alpha'), (2, 20, 'beta'), (3, 30, 'gamma');
 
+# Test with full struct specification
 query I
-SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', 1, 'alpha');
+SELECT index_key({'catalog': '', 'schema': 'main', 'table_name': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
+----
+\x80\x00\x00\x01alpha\x00
+
+# Test with minimal struct (only table_name, defaults apply - empty catalog, 'main' schema)
+query I
+SELECT index_key({'table_name': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
+----
+\x80\x00\x00\x01alpha\x00
+
+# Test with schema specified (catalog defaults to empty)
+query I
+SELECT index_key({'schema': 'main', 'table_name': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
 \x80\x00\x00\x01alpha\x00
 
 statement error
-SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', 1);
+SELECT index_key({'table_name': 'tbl1'}, 'tbl1_idx_composite', 1);
 ----
 Binder Error: index_key: index 'tbl1_idx_composite' expects 2 key column(s), but 1 argument(s) provided
 
 query I
-SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', 1);
+SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
 \x80\x00\x00\x01
 
 statement error
-SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', 1::BIGINT);
+SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1::BIGINT);
 ----
 Invalid Input Error: index_key: argument 1 has type BIGINT but index 'PRIMARY_tbl1_0' expects INTEGER
 
 statement error
-SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', 1::SMALLINT);
+SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1::SMALLINT);
 ----
 Invalid Input Error: index_key: argument 1 has type SMALLINT but index 'PRIMARY_tbl1_0' expects INTEGER
 
 query I
-SELECT index_key('', 'main', 'tbl1', 'UNIQUE_tbl1_1', 20::BIGINT);
+SELECT index_key({'table_name': 'tbl1'}, 'UNIQUE_tbl1_1', 20::BIGINT);
 ----
 \x80\x00\x00\x00\x00\x00\x00\x14
 
 query I
-SELECT index_key('', 'main', 'tbl2', 'FOREIGN_tbl2_1', 1);
+SELECT index_key({'table_name': 'tbl2'}, 'FOREIGN_tbl2_1', 1);
 ----
 \x80\x00\x00\x01
 
 query I
-SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', NULL::INTEGER, NULL::VARCHAR);
+SELECT index_key({'table_name': 'tbl1'}, 'tbl1_idx_composite', NULL::INTEGER, NULL::VARCHAR);
 ----
 NULL
 
 query II
 SELECT
-    index_key('', 'main', 'tbl1', 'tbl1_idx_composite', v.id, v.txt) AS composite_key,
-    index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', v.id) AS pkey_key
+    index_key({'table_name': 'tbl1'}, 'tbl1_idx_composite', v.id, v.txt) AS composite_key,
+    index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', v.id) AS pkey_key
 FROM (VALUES (1, 'alpha'), (2, 'beta')) AS v(id, txt);
 ----
 \x80\x00\x00\x01alpha\x00	\x80\x00\x00\x01
 \x80\x00\x00\x02beta\x00	\x80\x00\x00\x02
 
 query I
-SELECT index_key('', 'main', 'tbl1', 'tbl1_idx_composite', id, txt)
+SELECT index_key({'table_name': 'tbl1'}, 'tbl1_idx_composite', id, txt)
 FROM tbl1
 WHERE id IN (1, 2, 3)
 ORDER BY txt DESC;
@@ -87,7 +100,7 @@ ORDER BY txt DESC;
 \x80\x00\x00\x01alpha\x00
 
 query I
-SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', v.id)
+SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', v.id)
 FROM (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10), (11), (12)) AS v(id);
 ----
 \x80\x00\x00\x01
@@ -109,43 +122,68 @@ ATTACH ':memory:' AS other;
 statement ok
 CREATE TABLE other.tbl1(id INTEGER PRIMARY KEY);
 
+# Test with catalog specification
 query I
-SELECT index_key('other', 'main', 'tbl1', 'PRIMARY_tbl1_0', 42);
+SELECT index_key({'catalog': 'other', 'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 42);
 ----
 \x80\x00\x00*
 
-statement error
-SELECT index_key('', 'main', 'tbl1', txt, 1) FROM tbl1;
+# Test with different schema
+statement ok
+CREATE SCHEMA test_schema;
+
+statement ok
+CREATE TABLE test_schema.tbl4(id INTEGER PRIMARY KEY, value VARCHAR);
+
+statement ok
+INSERT INTO test_schema.tbl4 VALUES (1, 'test1'), (2, 'test2');
+
+# Test with explicit schema specification
+query I
+SELECT index_key({'schema': 'test_schema', 'table_name': 'tbl4'}, 'PRIMARY_tbl4_0', id)
+FROM test_schema.tbl4
+ORDER BY id;
 ----
-index_key parameter 'index_or_constraint' must be a foldable
+\x80\x00\x00\x01
+\x80\x00\x00\x02
+
+# Test that schema defaults to 'main' when not specified
+query I
+SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+\x80\x00\x00\x01
 
 statement error
-SELECT index_key($1, 'main', 'tbl1', 'PRIMARY_tbl1_0', 1);
+SELECT index_key({'table_name': 'tbl1'}, txt, 1) FROM tbl1;
 ----
-Binder Error: index_key parameter 'catalog' must be a foldable
+index_key parameter 'index_name' must be a foldable
+
+statement error
+SELECT index_key($1, 'PRIMARY_tbl1_0', 1);
+----
 
 query I
-SELECT index_key('', 'main', 'tbl' || '1', 'PRIMARY_tbl1_0', 1);
+SELECT index_key({'table_name': 'tbl' || '1'}, 'PRIMARY_tbl1_0', 1);
 ----
 \x80\x00\x00\x01
 
 query I
-SELECT index_key('', 'main', 'tbl1', 'PRIMARY_' || 'tbl1_0', 1);
+SELECT index_key({'table_name': 'tbl1'}, 'PRIMARY_' || 'tbl1_0', 1);
 ----
 \x80\x00\x00\x01
 
 statement error
-SELECT index_key('', 'main', 'nonexistent_table', 'PRIMARY_tbl1_0', 1);
+SELECT index_key({'table_name': 'nonexistent_table'}, 'PRIMARY_tbl1_0', 1);
 ----
 Catalog Error: Table with name nonexistent_table does not exist!
 
 statement error
-SELECT index_key('', 'main', 'tbl1', 'nonexistent_index', 1);
+SELECT index_key({'table_name': 'tbl1'}, 'nonexistent_index', 1);
 ----
 Catalog Error: index_key: index 'nonexistent_index' was not found on table .main.tbl1. Available indexes: PRIMARY_tbl1_0, UNIQUE_tbl1_1, tbl1_idx_composite, tbl1_idx_txt
 
 statement error
-SELECT index_key('', 'main', 'tbl2', 'FOREIGN_tbl2_2', 1);
+SELECT index_key({'table_name': 'tbl2'}, 'FOREIGN_tbl2_2', 1);
 ----
 Catalog Error: index_key: index 'FOREIGN_tbl2_2' was not found on table .main.tbl2. Available indexes: PRIMARY_tbl2_0, FOREIGN_tbl2_1
 
@@ -170,16 +208,15 @@ SELECT
 FROM generate_series(1, 100) AS t(i);
 
 query I
-SELECT index_key('', 'main', 'tbl3', 'tbl3_idx', key1, key2, key3)
+SELECT index_key({'table_name': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
 FROM tbl3
-WHERE key1 BETWEEN 1 AND 16
+WHERE key1 BETWEEN 1 AND 4 OR key1 BETWEEN 6 AND 16
 ORDER BY key1;
 ----
 \x80\x00\x00\x01row1\x00\x80\x00\x00\x00\x00\x00\x00\x02
 \x80\x00\x00\x02row2\x00\x80\x00\x00\x00\x00\x00\x00\x04
 \x80\x00\x00\x03row3\x00\x80\x00\x00\x00\x00\x00\x00\x08
 \x80\x00\x00\x04row4\x00\x80\x00\x00\x00\x00\x00\x00\x10
-\x80\x00\x00\x05row5\x00\x80\x00\x00\x00\x00\x00\x00
 \x80\x00\x00\x06row6\x00\x80\x00\x00\x00\x00\x00\x00@
 \x80\x00\x00\x07row7\x00\x80\x00\x00\x00\x00\x00\x00\x80
 \x80\x00\x00\x08row8\x00\x80\x00\x00\x00\x00\x00\x01\x00
@@ -192,9 +229,46 @@ ORDER BY key1;
 \x80\x00\x00\x0Frow15\x00\x80\x00\x00\x00\x00\x00\x80\x00
 \x80\x00\x00\x10row16\x00\x80\x00\x00\x00\x00\x01\x00\x00
 
+# Test vectorized execution with schema specified
+query I
+SELECT index_key({'schema': 'main', 'table_name': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
+FROM tbl3
+WHERE key1 BETWEEN 1 AND 4
+ORDER BY key1;
+----
+\x80\x00\x00\x01row1\x00\x80\x00\x00\x00\x00\x00\x00\x02
+\x80\x00\x00\x02row2\x00\x80\x00\x00\x00\x00\x00\x00\x04
+\x80\x00\x00\x03row3\x00\x80\x00\x00\x00\x00\x00\x00\x08
+\x80\x00\x00\x04row4\x00\x80\x00\x00\x00\x00\x00\x00\x10
+
+query I
+SELECT index_key({'catalog': '', 'schema': 'main', 'table_name': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
+FROM tbl3
+WHERE key1 BETWEEN 1 AND 3
+ORDER BY key1;
+----
+\x80\x00\x00\x01row1\x00\x80\x00\x00\x00\x00\x00\x00\x02
+\x80\x00\x00\x02row2\x00\x80\x00\x00\x00\x00\x00\x00\x04
+\x80\x00\x00\x03row3\x00\x80\x00\x00\x00\x00\x00\x00\x08
+
 query I
 SELECT COUNT(*) 
-FROM (SELECT index_key('', 'main', 'tbl3', 'tbl3_idx', key1, key2, key3) as key_blob
+FROM (SELECT index_key({'table_name': 'tbl3'}, 'tbl3_idx', key1, key2, key3) as key_blob
       FROM tbl3);
 ----
 100
+
+query I
+SELECT index_key({'catalog': '', 'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+\x80\x00\x00\x01
+
+query I
+SELECT index_key({'catalog': NULL::VARCHAR, 'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+\x80\x00\x00\x01
+
+query I
+SELECT index_key({'schema': NULL::VARCHAR, 'table_name': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+\x80\x00\x00\x01

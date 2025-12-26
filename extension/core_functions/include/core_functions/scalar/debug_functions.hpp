@@ -37,9 +37,9 @@ struct SleepMsFun {
 
 struct IndexKeyFun {
 	static constexpr const char *Name = "index_key";
-	static constexpr const char *Parameters = "catalog,schema,table,index_name,...";
-	static constexpr const char *Description = "Generate an ART index key from variadic key column arguments";
-	static constexpr const char *Example = "index_key('', 'main', 'tbl1', 'tbl1_id_pkey', id)";
+	static constexpr const char *Parameters = "table_path,index_name,...";
+	static constexpr const char *Description = "Generate an ART index key from variadic key column arguments. table_path is a STRUCT with required field 'table_name' and optional fields 'catalog' and 'schema'";
+	static constexpr const char *Example = "index_key({'table_name': 'tbl1'}, 'tbl1_id_pkey', id)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
