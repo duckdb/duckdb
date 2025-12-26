@@ -1591,14 +1591,10 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_probe_columns.col_idxs);
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
-		// For empty HT result, extract only output columns
-		DataChunk temp_output;
-		temp_output.Initialize(Allocator::DefaultAllocator(), gstate.op.lhs_output_columns.col_types);
-		for (idx_t i = 0; i < gstate.op.lhs_output_in_probe.size(); i++) {
-			temp_output.data[i].Reference(lhs_probe_data.data[gstate.op.lhs_output_in_probe[i]]);
-		}
-		temp_output.SetCardinality(lhs_probe_data.size());
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, temp_output, chunk);
+		// for empty result, only need output columns (no predicate evaluation)
+		lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_output_columns.col_idxs);
+		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_probe_data,
+		                                   chunk);
 		empty_ht_probe_in_progress = true;
 		return;
 	}

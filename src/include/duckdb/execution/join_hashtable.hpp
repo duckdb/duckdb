@@ -129,6 +129,9 @@ public:
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
 		                             SelectionVector *no_match_sel);
 
+	private:
+		unique_ptr<ExpressionExecutor> residual_executor;
+
 	public:
 		void AdvancePointers();
 		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);

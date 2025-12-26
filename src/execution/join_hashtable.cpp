@@ -853,6 +853,10 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
       found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
       is_null(true), rhs_pointers(LogicalType::POINTER), lhs_sel_vector(STANDARD_VECTOR_SIZE), last_match_count(0),
       last_sel_vector(STANDARD_VECTOR_SIZE) {
+	if (ht.residual_predicate) {
+		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
+		residual_executor->AddExpression(*ht.residual_predicate);
+	}
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
@@ -996,12 +1000,9 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	// execute the residual predicate
-	ExpressionExecutor executor(ht.context);
-	executor.AddExpression(*ht.residual_predicate);
-
 	DataChunk result_chunk;
 	result_chunk.Initialize(ht.context, {LogicalType::BOOLEAN});
-	executor.Execute(eval_chunk, result_chunk);
+	residual_executor->Execute(eval_chunk, result_chunk);
 
 	// filter based on results
 	Vector &result_vector = result_chunk.data[0];
