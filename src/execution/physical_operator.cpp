@@ -329,10 +329,6 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
                                                               const OperatorResultType child_result,
                                                               CachingOperatorState &state,
                                                               ClientContext &client_context) {
-#if STANDARD_VECTOR_SIZE < 128
-	return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
-#endif
-
 	if (state.can_cache_chunk == OperatorCachingMode::NONE) {
 		return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 	}
