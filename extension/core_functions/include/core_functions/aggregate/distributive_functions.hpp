@@ -299,7 +299,6 @@ struct SumNoOverflowFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
-
 struct MaxIntersectionsFun {
 	static constexpr const char *Name = "max_intersections";
 	static constexpr const char *Parameters = "left,right";
