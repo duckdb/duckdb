@@ -85,14 +85,4 @@ struct ParseLogMessage {
 	static ScalarFunction GetFunction();
 };
 
-struct IndexKeyFun {
-	static constexpr const char *Name = "index_key";
-	static constexpr const char *Parameters = "catalog,schema,table,index_name,key_struct";
-	static constexpr const char *Description = "Generate an ART index key from a struct";
-	static constexpr const char *Example = "index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', struct_pack(id := 1))";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
-};
-
 } // namespace duckdb

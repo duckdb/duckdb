@@ -49,13 +49,5 @@
         "example": "parse_duckdb_log_message('FileSystem', log_message)",
         "type": "scalar_function",
         "struct": "ParseLogMessage"
-    },
-    {
-        "name": "index_key",
-        "parameters": "catalog,schema,table,index_name,key_struct",
-        "description": "Generate an ART index key from a struct",
-        "example": "index_key('', 'main', 'tbl1', 'tbl1_id_pkey', struct_pack(id := 1))",
-        "type": "scalar_function",
-        "struct": "IndexKeyFun"
     }
 ]
