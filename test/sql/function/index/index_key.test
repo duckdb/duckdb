@@ -45,12 +45,12 @@ SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', 1);
 statement error
 SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', 1::BIGINT);
 ----
-Binder Error: index_key: argument 1 has type BIGINT but index 'PRIMARY_tbl1_0' expects INTEGER
+Invalid Input Error: index_key: argument 1 has type BIGINT but index 'PRIMARY_tbl1_0' expects INTEGER
 
 statement error
 SELECT index_key('', 'main', 'tbl1', 'PRIMARY_tbl1_0', 1::SMALLINT);
 ----
-Binder Error: index_key: argument 1 has type SMALLINT but index 'PRIMARY_tbl1_0' expects INTEGER
+Invalid Input Error: index_key: argument 1 has type SMALLINT but index 'PRIMARY_tbl1_0' expects INTEGER
 
 query I
 SELECT index_key('', 'main', 'tbl1', 'UNIQUE_tbl1_1', 20::BIGINT);
@@ -148,3 +148,53 @@ statement error
 SELECT index_key('', 'main', 'tbl2', 'FOREIGN_tbl2_2', 1);
 ----
 Catalog Error: index_key: index 'FOREIGN_tbl2_2' was not found on table .main.tbl2. Available indexes: PRIMARY_tbl2_0, FOREIGN_tbl2_1
+
+statement ok
+CREATE TABLE tbl3(
+    key1 INTEGER,
+    key2 VARCHAR,
+    key3 BIGINT,
+    extra_data VARCHAR
+);
+
+statement ok
+CREATE UNIQUE INDEX tbl3_idx ON tbl3(key1, key2, key3);
+
+statement ok
+INSERT INTO tbl3(key1, key2, key3, extra_data) 
+SELECT 
+    i,
+    'row' || i::VARCHAR,
+    CASE WHEN i <= 62 THEN 1::BIGINT << i ELSE i::BIGINT END,
+    'extra_' || i::VARCHAR
+FROM generate_series(1, 100) AS t(i);
+
+query I
+SELECT index_key('', 'main', 'tbl3', 'tbl3_idx', key1, key2, key3)
+FROM tbl3
+WHERE key1 BETWEEN 1 AND 16
+ORDER BY key1;
+----
+\x80\x00\x00\x01row1\x00\x80\x00\x00\x00\x00\x00\x00\x02
+\x80\x00\x00\x02row2\x00\x80\x00\x00\x00\x00\x00\x00\x04
+\x80\x00\x00\x03row3\x00\x80\x00\x00\x00\x00\x00\x00\x08
+\x80\x00\x00\x04row4\x00\x80\x00\x00\x00\x00\x00\x00\x10
+\x80\x00\x00\x05row5\x00\x80\x00\x00\x00\x00\x00\x00
+\x80\x00\x00\x06row6\x00\x80\x00\x00\x00\x00\x00\x00@
+\x80\x00\x00\x07row7\x00\x80\x00\x00\x00\x00\x00\x00\x80
+\x80\x00\x00\x08row8\x00\x80\x00\x00\x00\x00\x00\x01\x00
+\x80\x00\x00\x09row9\x00\x80\x00\x00\x00\x00\x00\x02\x00
+\x80\x00\x00\x0Arow10\x00\x80\x00\x00\x00\x00\x00\x04\x00
+\x80\x00\x00\x0Brow11\x00\x80\x00\x00\x00\x00\x00\x08\x00
+\x80\x00\x00\x0Crow12\x00\x80\x00\x00\x00\x00\x00\x10\x00
+\x80\x00\x00\x0Drow13\x00\x80\x00\x00\x00\x00\x00 \x00
+\x80\x00\x00\x0Erow14\x00\x80\x00\x00\x00\x00\x00@\x00
+\x80\x00\x00\x0Frow15\x00\x80\x00\x00\x00\x00\x00\x80\x00
+\x80\x00\x00\x10row16\x00\x80\x00\x00\x00\x00\x01\x00\x00
+
+query I
+SELECT COUNT(*) 
+FROM (SELECT index_key('', 'main', 'tbl3', 'tbl3_idx', key1, key2, key3) as key_blob
+      FROM tbl3);
+----
+100

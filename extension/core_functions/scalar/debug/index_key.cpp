@@ -90,8 +90,8 @@ void ValidateIndex(const Index &index, const string &catalog_name, const string 
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> index_types)
-	    : art_index(art_index_p), index_types(std::move(index_types)) {
+	IndexKeyBindData(optional_ptr<ART> art_index_p, vector<LogicalType> index_types, string index_name)
+	    : art_index(art_index_p), index_types(std::move(index_types)), index_name(std::move(index_name)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -100,11 +100,12 @@ struct IndexKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return art_index == other.art_index && index_types == other.index_types;
+		return art_index == other.art_index && index_types == other.index_types && index_name == other.index_name;
 	}
 
 	optional_ptr<ART> art_index;
 	vector<LogicalType> index_types;
+	string index_name;
 };
 
 unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
@@ -146,20 +147,7 @@ unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bo
 		                      index_name, index_types.size(), num_key_args);
 	}
 
-	// Validate that each argument type matches the corresponding index column type exactly (no casting)
-	for (idx_t i = 0; i < index_types.size(); i++) {
-		auto &arg_expr = *arguments[INDEX_KEY_FIXED_ARGS + i];
-		if (arg_expr.HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (arg_expr.return_type != index_types[i]) {
-			throw BinderException("index_key: argument %llu has type %s but index '%s' expects %s", i + 1,
-			                      arg_expr.return_type.ToString().c_str(), index_name,
-			                      index_types[i].ToString().c_str());
-		}
-	}
-
-	return make_uniq<IndexKeyBindData>(&art_index, std::move(index_types));
+	return make_uniq<IndexKeyBindData>(&art_index, std::move(index_types), index_name);
 }
 
 void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -168,6 +156,15 @@ void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	idx_t count = args.size();
 	D_ASSERT(args.ColumnCount() >= INDEX_KEY_FIXED_ARGS + bind_data.index_types.size());
+
+	for (idx_t i = 0; i < bind_data.index_types.size(); i++) {
+		auto &key_vector = args.data[INDEX_KEY_FIXED_ARGS + i];
+		if (key_vector.GetType() != bind_data.index_types[i]) {
+			throw InvalidInputException("index_key: argument %llu has type %s but index '%s' expects %s", i + 1,
+			                            key_vector.GetType().ToString().c_str(), bind_data.index_name.c_str(),
+			                            bind_data.index_types[i].ToString().c_str());
+		}
+	}
 
 	DataChunk key_chunk;
 	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.index_types);
