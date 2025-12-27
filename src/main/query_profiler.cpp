@@ -262,11 +262,11 @@ void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
 }
 
 idx_t QueryProfiler::GetBytesRead() const {
-	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_READ);
+	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ);
 }
 
 idx_t QueryProfiler::GetBytesWritten() const {
-	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_WRITTEN);
+	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN);
 }
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
