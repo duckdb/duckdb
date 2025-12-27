@@ -205,6 +205,7 @@ void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 	if (info.return_type.id() == LogicalTypeId::LIST) {
