@@ -2866,6 +2866,9 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	// Test file://localhost/<abs path> is accepted
 	{
 		auto abs_path = TestCreatePath("test_uri_localhost.db");
+		if (!abs_path.empty() && abs_path[0] != '/') {
+			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+		}
 		std::remove(abs_path.c_str());
 		string uri = string("file://localhost") + abs_path;
 
@@ -2884,15 +2887,26 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	// Test file://<non-localhost>/<abs path> is rejected
 	{
 		auto abs_path = TestCreatePath("test_uri_non_localhost.db");
+		if (!abs_path.empty() && abs_path[0] != '/') {
+			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+		}
 		string uri = string("file://example.com") + abs_path;
 
 		AdbcDatabase adbc_database;
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
-		REQUIRE(!SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
+		REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(adbc_error.message);
+		REQUIRE((std::strcmp(adbc_error.message, "file: URI with a non-empty authority is not supported") == 0));
+		adbc_error.release(&adbc_error);
+		InitializeADBCError(&adbc_error);
+		auto release_status = AdbcDatabaseRelease(&adbc_database, &adbc_error);
+		REQUIRE((release_status == ADBC_STATUS_OK || release_status == ADBC_STATUS_INVALID_STATE));
 	}
+
+	adbc_error.release(&adbc_error);
 }
 
 } // namespace duckdb
