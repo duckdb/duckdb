@@ -151,8 +151,11 @@ struct DuckDBAdbcDatabaseWrapper {
 	duckdb_config config = nullptr;
 	//! The DuckDB Database
 	duckdb_database database = nullptr;
-	//! Path of Disk-Based Database or :memory: database
+	//! Path of Disk-Based Database or :memory: database (ADBC "path" option)
 	std::string path;
+	//! Derived path from ADBC "uri" option (after minimal normalization)
+	std::string uri_path;
+	bool uri_set = false;
 };
 
 static void EmptyErrorRelease(AdbcError *error) {
@@ -219,6 +222,37 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 		wrapper->path = value;
 		return ADBC_STATUS_OK;
 	}
+	if (strcmp(key, "uri") == 0) {
+		if (strncmp(value, "file:", 5) != 0) {
+			wrapper->uri_path = value;
+			wrapper->uri_set = true;
+			return ADBC_STATUS_OK;
+		}
+		std::string file_path(value + 5);
+		auto suffix_pos = file_path.find_first_of("?#");
+		if (suffix_pos != std::string::npos) {
+			file_path.erase(suffix_pos);
+		}
+		if (duckdb::StringUtil::StartsWith(file_path, "//")) {
+			auto path_start = file_path.find('/', 2);
+			std::string authority =
+			    (path_start == std::string::npos) ? file_path.substr(2) : file_path.substr(2, path_start - 2);
+			auto authority_lc = duckdb::StringUtil::Lower(authority);
+			if (path_start == std::string::npos) {
+				// Accept file://foo as a relative path for compatibility (e.g., arrow-adbc recipe driver example).
+				file_path = (authority_lc.empty() || authority_lc == "localhost") ? std::string() : authority;
+			} else {
+				if (!authority_lc.empty() && authority_lc != "localhost") {
+					SetError(error, "file: URI with a non-empty authority is not supported");
+					return ADBC_STATUS_INVALID_ARGUMENT;
+				}
+				file_path = file_path.substr(path_start);
+			}
+		}
+		wrapper->uri_path = std::move(file_path);
+		wrapper->uri_set = true;
+		return ADBC_STATUS_OK;
+	}
 	auto res = duckdb_set_config(wrapper->config, key, value);
 
 	return CheckResult(res, error, "Failed to set configuration option");
@@ -235,7 +269,8 @@ AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *err
 	char *errormsg = nullptr;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
-	auto res = duckdb_open_ext(wrapper->path.c_str(), &wrapper->database, wrapper->config, &errormsg);
+	const auto &db_path = wrapper->uri_set ? wrapper->uri_path : wrapper->path;
+	auto res = duckdb_open_ext(db_path.c_str(), &wrapper->database, wrapper->config, &errormsg);
 	auto adbc_result = CheckResult(res, error, errormsg);
 	if (errormsg) {
 		free(errormsg);
