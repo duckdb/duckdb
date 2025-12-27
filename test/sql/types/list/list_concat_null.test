@@ -88,3 +88,13 @@ query I
 SELECT ''~concat(NULL)
 ----
 NULL
+
+query I
+SELECT concat(NULL, NULL) is NULL
+----
+true
+
+query I
+SELECT concat(NULL) is NULL
+----
+true
