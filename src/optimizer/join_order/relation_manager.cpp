@@ -142,14 +142,13 @@ bool ExpressionContainsColumnRef(const Expression &root_expr) {
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
-	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 
-		// TODO: Maybe we can support reorder here and make predicate influence cardinality estimates
-		// The easiest option to implement is to preserve the predicate and ignore the estimation of it for NOW
-		if (join.predicate) {
-			idx_t has_range = 0;
-			D_ASSERT(join.HasEquality(has_range));
+		// TODO: SEMI/ANTI joins with residual predicates are not supported
+		if ((join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) && join.predicate) {
 			return false;
 		}
 
@@ -557,6 +556,21 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 	return can_reorder;
 }
 
+//! Flatten a predicate into individual conjuncts
+static void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+			for (auto &child : conj.children) {
+				FlattenConjunction(*child, result);
+			}
+			return;
+		}
+	}
+	// not an AND conjunction - add as is
+	result.push_back(expr.Copy());
+}
+
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
                                                              JoinRelationSetManager &set_manager) {
@@ -642,7 +656,37 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
+
+				if (join.predicate) {
+					// flatten residual predicate into individual conjuncts
+					vector<unique_ptr<Expression>> conjuncts;
+					FlattenConjunction(*join.predicate, conjuncts);
+
+					// add all conjuncts to filters_and_bindings
+					for (auto &conjunct : conjuncts) {
+						if (filter_set.find(*conjunct) != filter_set.end()) {
+							continue; // Already have this condition
+						}
+						filter_set.insert(*conjunct);
+
+						unordered_set<idx_t> bindings;
+						ExtractBindings(*conjunct, bindings);
+
+						// Skip if no table bindings
+						if (bindings.empty()) {
+							continue;
+						}
+
+						auto &set = set_manager.GetJoinRelation(bindings);
+						auto filter_info = make_uniq<FilterInfo>(std::move(conjunct), set, filters_and_bindings.size(),
+						                                         join.join_type);
+						filters_and_bindings.push_back(std::move(filter_info));
+					}
+
+					join.predicate.reset();
+				}
 			}
+
 			join.conditions.clear();
 		} else {
 			vector<unique_ptr<Expression>> leftover_expressions;

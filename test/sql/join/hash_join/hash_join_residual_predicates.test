@@ -26,12 +26,13 @@ INSERT INTO customers VALUES
     (300, 'Charlie', 'East'),
     (500, 'Diana', 'West');
 
+# INNER JOIN tests - Residual predicates are extracted and pushed as FILTERs by the join order optimizer
 query II
 EXPLAIN SELECT * FROM orders o
 INNER JOIN customers c ON o.customer_id = c.customer_id
     AND o.amount + c.customer_id > 250;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*Residual Predicate.*
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
 
 query IIITIT rowsort
 SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
@@ -64,7 +65,7 @@ INNER JOIN customers c ON o.customer_id = c.customer_id
     AND o.amount < c.customer_id
     AND o.amount + c.customer_id > 200;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*Residual Predicate.*
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
 
 query IIITIT rowsort
 SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
@@ -249,7 +250,7 @@ EXPLAIN SELECT o.id, o.amount,
          AND c.customer_id + o.amount > 250)
 FROM orders o;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: SINGLE.*Residual Predicate.*
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: SINGLE.*
 
 query IIT rowsort
 SELECT o.id, o.amount,
@@ -300,7 +301,6 @@ WHERE o.customer_id NOT IN (
 ----
 5	400	300	completed
 
-# MARK JOIN with residual predicate (NOTE: residual currently applied on INNER JOIN at leaf level, not on MARK JOIN itself)
 query II
 EXPLAIN SELECT * FROM orders o
 WHERE o.customer_id NOT IN (
