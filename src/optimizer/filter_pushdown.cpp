@@ -238,6 +238,28 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	return FilterResult::SUCCESS;
 }
 
+bool FilterPushdown::IsUnsatisfiable(ClientContext &context, Expression &expr) {
+	if (!expr.IsFoldable()) {
+		return false;
+	}
+
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, expr, result)) {
+		return false;
+	}
+
+	if (result.IsNull()) {
+		return true;
+	}
+
+	auto bool_result = result.DefaultCastAs(LogicalType::BOOLEAN);
+	if (!BooleanValue::Get(bool_result)) {
+		return true;
+	}
+
+	return false;
+}
+
 void FilterPushdown::GenerateFilters() {
 	if (!filters.empty()) {
 		D_ASSERT(!combiner.HasFilters());

@@ -43,6 +43,37 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_
 	return root_expr;
 }
 
+static unique_ptr<LogicalOperator> CreateDummyRHS(Optimizer &optimizer, unique_ptr<LogicalOperator> &rhs_op) {
+	unordered_map<idx_t, vector<unique_ptr<Expression>>> projections_groups;
+	auto column_bindings = rhs_op->GetColumnBindings();
+	rhs_op->ResolveOperatorTypes();
+	auto &types = rhs_op->types;
+
+	for (idx_t i = 0; i < column_bindings.size(); i++) {
+		projections_groups[column_bindings[i].table_index].emplace_back(
+		    make_uniq<BoundConstantExpression>(Value(types[i])));
+	}
+
+	auto create_proj_dummy_scan = [&](idx_t table_index) {
+		auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
+		auto proj = make_uniq<LogicalProjection>(table_index, std::move(projections_groups[table_index]));
+		proj->AddChild(std::move(dummy_scan));
+		return proj;
+	};
+
+	auto begin = projections_groups.begin();
+	D_ASSERT(begin != projections_groups.end());
+	unique_ptr<LogicalOperator> rhs = create_proj_dummy_scan(begin->first);
+	projections_groups.erase(begin);
+
+	for (auto &group : projections_groups) {
+		auto proj = create_proj_dummy_scan(group.first);
+		rhs = LogicalCrossProduct::Create(std::move(rhs), std::move(proj));
+	}
+
+	return rhs;
+}
+
 static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewriter, Expression *expr,
                               unordered_set<idx_t> &right_bindings) {
 	// make a copy of the expression
@@ -153,41 +184,25 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 
 	bool rewrite_right = true;
-	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	bool has_unsatisfiable_condition = false;
+
+	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &comparison_join = join.Cast<LogicalComparisonJoin>();
+		if (comparison_join.predicate && IsUnsatisfiable(optimizer.context, *comparison_join.predicate)) {
+			has_unsatisfiable_condition = true;
+		}
+	} else if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		auto &any_join = join.Cast<LogicalAnyJoin>();
 		if (AddFilter(any_join.condition->Copy()) == FilterResult::UNSATISFIABLE) {
-			// filter statically evaluates to false, turns it to the cross product join with 1 row NULLs
-			if (any_join.join_type == JoinType::LEFT) {
-				unordered_map<idx_t, vector<unique_ptr<Expression>>> projections_groups;
-				auto column_bindings = op->children[1]->GetColumnBindings();
-				op->children[1]->ResolveOperatorTypes();
-				auto &types = op->children[1]->types;
-				for (idx_t i = 0; i < column_bindings.size(); i++) {
-					projections_groups[column_bindings[i].table_index].emplace_back(
-					    make_uniq<BoundConstantExpression>(Value(types[i])));
-				}
-
-				auto create_proj_dummy_scan = [&](idx_t table_index) {
-					auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
-					auto proj = make_uniq<LogicalProjection>(table_index, std::move(projections_groups[table_index]));
-					proj->AddChild(std::move(dummy_scan));
-					return proj;
-				};
-				// make cross products on the RHS first
-				auto begin = projections_groups.begin();
-				D_ASSERT(begin != projections_groups.end());
-				unique_ptr<LogicalOperator> left = create_proj_dummy_scan(begin->first);
-				projections_groups.erase(begin);
-				for (auto &group : projections_groups) {
-					auto proj = create_proj_dummy_scan(group.first);
-					auto op = LogicalCrossProduct::Create(std::move(left), std::move(proj));
-					left = std::move(op);
-				}
-				// then make cross product with the LHS
-				op = LogicalCrossProduct::Create(std::move(op->children[0]), std::move(left));
-				rewrite_right = false;
-			}
+			has_unsatisfiable_condition = true;
 		}
+	}
+
+	// if unsatisfiable and LEFT JOIN - replace RHS with dummy scan
+	if (has_unsatisfiable_condition && join.join_type == JoinType::LEFT) {
+		auto dummy_rhs = CreateDummyRHS(optimizer, op->children[1]);
+		op = LogicalCrossProduct::Create(std::move(op->children[0]), std::move(dummy_rhs));
+		rewrite_right = false;
 	}
 
 	if (rewrite_right) {

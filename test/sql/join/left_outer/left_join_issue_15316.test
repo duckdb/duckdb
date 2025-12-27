@@ -27,7 +27,7 @@ AND (
     FALSE
 );
 ----
-logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
 
 # RHS contains multiple tables
 statement ok

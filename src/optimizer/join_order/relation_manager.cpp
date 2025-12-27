@@ -665,14 +665,14 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					// add all conjuncts to filters_and_bindings
 					for (auto &conjunct : conjuncts) {
 						if (filter_set.find(*conjunct) != filter_set.end()) {
-							continue; // Already have this condition
+							continue;
 						}
 						filter_set.insert(*conjunct);
 
 						unordered_set<idx_t> bindings;
 						ExtractBindings(*conjunct, bindings);
 
-						// Skip if no table bindings
+						// skip if no table bindings
 						if (bindings.empty()) {
 							continue;
 						}

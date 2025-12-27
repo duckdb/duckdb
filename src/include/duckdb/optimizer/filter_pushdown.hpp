@@ -27,6 +27,8 @@ public:
 
 	void CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings);
 
+	static bool IsUnsatisfiable(ClientContext &context, Expression &expr);
+
 	struct Filter {
 		unordered_set<idx_t> bindings;
 		unique_ptr<Expression> filter;
