@@ -14,6 +14,8 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include <stdlib.h>
+static void ReleaseError(struct AdbcError *error);
+
 #include <string.h>
 
 #include "duckdb/main/prepared_statement_data.hpp"
@@ -158,19 +160,19 @@ struct DuckDBAdbcDatabaseWrapper {
 	bool uri_set = false;
 };
 
-static void EmptyErrorRelease(AdbcError *error) {
-	// The object is valid but doesn't contain any data that needs to be cleaned up
-	// Just set the release to nullptr to indicate that it's no longer valid.
-	error->release = nullptr;
-}
-
 void InitializeADBCError(AdbcError *error) {
 	if (!error) {
 		return;
 	}
+	// Avoid leaking any DuckDB-owned error message.
+	// Only call DuckDB's own release callback.
+	if (error->message && error->release == ::ReleaseError) {
+		error->release(error);
+	}
 	error->message = nullptr;
 	// Don't set to nullptr, as that indicates that it's invalid
-	error->release = EmptyErrorRelease;
+	// Use DuckDB's release callback even for an "empty" error.
+	error->release = ::ReleaseError;
 	std::memset(error->sqlstate, '\0', sizeof(error->sqlstate));
 	error->vendor_code = -1;
 }
