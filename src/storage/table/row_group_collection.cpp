@@ -30,12 +30,12 @@ RowGroupSegmentTree::RowGroupSegmentTree(RowGroupCollection &collection)
 RowGroupSegmentTree::~RowGroupSegmentTree() {
 }
 
-void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
+void RowGroupSegmentTree::Initialize(PersistentTableData &data, optional_ptr<vector<MetaBlockPointer>> read_pointers) {
 	D_ASSERT(data.row_group_count > 0);
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
+	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer, read_pointers);
 	root_pointer = data.block_pointer;
 }
 
@@ -97,13 +97,16 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(this->row_start == 0);
 	auto l = row_groups->Lock();
 	this->total_rows = data.total_rows;
-	row_groups->Initialize(data);
-	stats.Initialize(types, data);
 	metadata_pointer = data.base_table_pointer;
+	metadata_pointers = data.read_metadata_pointers;
+	row_groups->Initialize(data, metadata_pointers);
+	stats.Initialize(types, data);
 }
 
-void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer) {
+void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer,
+                                            const vector<MetaBlockPointer> &existing_pointers) {
 	metadata_pointer = pointer;
+	metadata_pointers = existing_pointers;
 }
 
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
@@ -1176,7 +1179,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				row_group.CheckpointDeletes(metadata_manager);
 				row_groups->AppendSegment(l, std::move(entry.node));
 			}
-			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
+			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load());
 			return;
 		}
 	}
