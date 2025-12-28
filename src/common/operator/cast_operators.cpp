@@ -30,6 +30,8 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <duckdb/common/serializer/binary_deserializer.hpp>
+#include <duckdb/common/serializer/memory_stream.hpp>
 
 namespace duckdb {
 
@@ -1422,6 +1424,22 @@ template <>
 string_t CastFromPointer::Operation(uintptr_t input, Vector &vector) {
 	std::string s = duckdb_fmt::format("0x{:x}", input);
 	return StringVector::AddString(vector, s);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Pointer
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromType::Operation(string_t input, Vector &vector) {
+	MemoryStream stream(data_ptr_cast(input.GetDataWriteable()), input.GetSize());
+	BinaryDeserializer deserializer(stream);
+	try {
+		auto type = LogicalType::Deserialize(deserializer);
+		return StringVector::AddString(vector, type.ToString());
+	} catch (std::exception &ex) {
+		// TODO: Format better error here?
+		return StringVector::AddString(vector, ex.what());
+	}
 }
 
 //===--------------------------------------------------------------------===//

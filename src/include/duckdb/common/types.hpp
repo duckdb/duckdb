@@ -198,6 +198,7 @@ enum class LogicalTypeId : uint8_t {
 	TEMPLATE = 5,
 
 	UNBOUND = 6, /* Unbound type, used during query planning */
+	TYPE = 7,    /* Type type, used for type parameters */
 
 	BOOLEAN = 10,
 	TINYINT = 11,
@@ -452,6 +453,7 @@ public:
 	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_mods); // NOLINT
 	DUCKDB_API static LogicalType UNBOUND(const string &name); // NOLINT
 	DUCKDB_API static LogicalType UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters); // NOLINT
+	DUCKDB_API static LogicalType TYPE(); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types

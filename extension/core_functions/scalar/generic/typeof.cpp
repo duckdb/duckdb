@@ -7,7 +7,7 @@ namespace duckdb {
 namespace {
 
 void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	Value v(args.data[0].GetType().ToString());
+	auto v = Value::TYPE(args.data[0].GetType());
 	result.Reference(v);
 }
 
@@ -18,13 +18,13 @@ unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput 
 		return nullptr;
 	}
 	// emit a constant expression
-	return make_uniq<BoundConstantExpression>(Value(return_type.ToString()));
+	return make_uniq<BoundConstantExpression>(Value::TYPE(return_type));
 }
 
 } // namespace
 
 ScalarFunction TypeOfFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::TYPE(), TypeOfFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindTypeOfFunctionExpression);
 	return fun;

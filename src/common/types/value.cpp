@@ -935,6 +935,25 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
+Value Value::TYPE(const LogicalType &type) {
+	MemoryStream stream;
+	BinarySerializer::Serialize(type, stream);
+	auto data_ptr = const_char_ptr_cast(stream.GetData());
+	auto data_len = stream.GetPosition();
+
+	Value result(LogicalType::TYPE());
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(data_ptr, data_len));
+	return result;
+}
+
+Value Value::TYPE(const string_t &serialized_type) {
+	Value result(LogicalType::TYPE());
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(serialized_type.GetString());
+	return result;
+}
+
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
@@ -1784,6 +1803,19 @@ const string &StringValue::Get(const Value &value) {
 	D_ASSERT(value.type().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<StringValueInfo>().GetString();
+}
+
+LogicalType TypeValue::GetType(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling TypeValue::GetType on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::TYPE);
+	D_ASSERT(value.value_info_);
+	auto &type_str = value.value_info_->Get<StringValueInfo>().GetString();
+	MemoryStream stream((data_ptr_cast(const_cast<char *>(type_str.data()))), type_str.size());
+	BinaryDeserializer deserializer(stream);
+
+	return LogicalType::Deserialize(deserializer);
 }
 
 date_t DateValue::Get(const Value &value) {
