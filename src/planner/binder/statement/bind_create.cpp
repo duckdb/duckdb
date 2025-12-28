@@ -45,6 +45,8 @@
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include <duckdb/common/type_parameter.hpp>
+
 namespace duckdb {
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
@@ -373,6 +375,65 @@ static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
 
 LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog,
                                             const string &schema) {
+	if (type.id() == LogicalTypeId::UNBOUND) {
+		// Unbound type, bind to concrete type
+		auto unbound_type_name = UnboundType::GetName(type);
+		auto &unbound_type_params = UnboundType::GetParameters(type);
+
+		vector<Value> bound_type_params;
+		for (auto &param : unbound_type_params) {
+			if (param->IsExpression()) {
+				ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'"));
+				auto expr = param->GetExpression()->Copy();
+				auto bound_expr = binder.Bind(expr);
+
+				if (!bound_expr->IsFoldable()) {
+					// Throw nice error here
+					throw BinderException("Type parameter expression for type '%s' is not constant", unbound_type_name);
+				}
+
+				auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
+				bound_type_params.push_back(bound_param);
+			}
+		}
+
+		// Lookup the type
+		EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, unbound_type_name);
+		auto entry =
+		    entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		auto &type_entry = entry->Cast<TypeCatalogEntry>();
+
+		// Call the bind function
+		// TODO: We should ALWAYS call the bind function. For now, we keep the old behavior for user-defined types
+		if (type_entry.bind_function) {
+			BindLogicalTypeInput input {context, type_entry.user_type, bound_type_params};
+			return type_entry.bind_function(input);
+		} else {
+			return type_entry.user_type;
+		}
+
+		// Check type
+		auto type_id = TransformStringToLogicalTypeId(unbound_type_name);
+		if (type_id == LogicalTypeId::DECIMAL) {
+			int64_t width = 0;
+			int64_t scale = 0;
+
+			if (bound_type_params.size() > 2) {
+				throw BinderException("Decimal type takes at most two parameters (width, scale)");
+			}
+			if (bound_type_params.size() >= 1) {
+				width = bound_type_params[0].GetValue<int64_t>();
+			}
+			if (bound_type_params.size() == 2) {
+				scale = bound_type_params[1].GetValue<int64_t>();
+			}
+			if (scale > width) {
+				throw BinderException("Decimal scale (%llu) cannot be greater than width (%llu)", scale, width);
+			}
+			return LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale));
+		}
+	}
+
 	if (type.id() != LogicalTypeId::USER) {
 		// Nested type, make sure to bind any nested user types recursively
 		LogicalType result;
@@ -486,9 +547,12 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
 	// check if we need to bind this type at all
-	if (!TypeVisitor::Contains(type, LogicalTypeId::USER)) {
+	if (!TypeVisitor::Contains(type, [](const LogicalType &ty) {
+		    return ty.id() == LogicalTypeId::USER || ty.id() == LogicalTypeId::UNBOUND;
+	    })) {
 		return;
 	}
+
 	type = BindLogicalTypeInternal(type, catalog, schema);
 }
 

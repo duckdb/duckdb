@@ -10,6 +10,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -159,6 +160,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::TEMPLATE:
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
+	case LogicalTypeId::UNBOUND:
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
@@ -481,6 +483,24 @@ string LogicalType::ToString() const {
 		}
 		ret += ")";
 		return ret;
+	}
+	case LogicalTypeId::UNBOUND: {
+		if (!type_info_) {
+			return "UNBOUND";
+		}
+		auto &params = UnboundType::GetParameters(*this);
+		string result = UnboundType::GetName(*this);
+		if (!params.empty()) {
+			result += "(";
+			for (idx_t i = 0; i < params.size(); i++) {
+				result += params[i]->ToString();
+				if (i < params.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += ")";
+		}
+		return result;
 	}
 	case LogicalTypeId::USER: {
 		string result;
@@ -1379,6 +1399,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::USER:
+	case LogicalTypeId::UNBOUND:
 		break;
 	}
 	return 1000;
@@ -1816,6 +1837,19 @@ LogicalType LogicalType::USER(string catalog, string schema, string name, vector
 }
 
 //===--------------------------------------------------------------------===//
+// Unbound Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::UNBOUND(const string &name) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(name);
+	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
+}
+
+LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(name, std::move(parameters));
+	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
+}
+
+//===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
 LogicalType LogicalType::ENUM(Vector &ordered_data, idx_t size) {
@@ -2077,6 +2111,24 @@ const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs;
+}
+
+//===--------------------------------------------------------------------===//
+// Unbound Types
+//===--------------------------------------------------------------------===//
+
+const string &UnboundType::GetName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
+	return info->Cast<UnboundTypeInfo>().name;
+}
+
+const vector<unique_ptr<TypeParameter>> &UnboundType::GetParameters(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
+	return info->Cast<UnboundTypeInfo>().parameters;
 }
 
 //===--------------------------------------------------------------------===//
