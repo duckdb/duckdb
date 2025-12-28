@@ -30,7 +30,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
 	TEMPLATE_TYPE_INFO = 12,
-	GEO_TYPE_INFO = 13
+	GEO_TYPE_INFO = 13,
+	UNBOUND_TYPE_INFO = 14
 };
 
 struct ExtraTypeInfo {
@@ -292,6 +293,27 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+};
+
+struct UnboundTypeInfo : public ExtraTypeInfo {
+	explicit UnboundTypeInfo(string name_p);
+	UnboundTypeInfo(string name_p, vector<unique_ptr<TypeParameter>> parameters);
+
+	// The name of the unbound type
+	string name;
+
+	// The type parameters of the unbound type
+	vector<unique_ptr<TypeParameter>> parameters;
+
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	UnboundTypeInfo();
 };
 
 } // namespace duckdb

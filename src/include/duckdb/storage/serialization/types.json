@@ -260,5 +260,23 @@
         "type": "CoordinateReferenceSystem"
       }
     ]
+  },
+  {
+    "class": "UnboundTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "UNBOUND_TYPE_INFO",
+    "includes": [ "duckdb/common/type_parameter.hpp"],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "parameters",
+        "type": "vector<unique_ptr<TypeParameter>>"
+      }
+    ]
   }
 ]

@@ -22,6 +22,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class TypeParameter;
 class CoordinateReferenceSystem;
 
 struct string_t; // NOLINT: mimic std casing
@@ -195,6 +196,8 @@ enum class LogicalTypeId : uint8_t {
 	// specifying to the binder that they dont need to resolve to the same concrete type. Two templates with the same
 	// name are always resolved to the same concrete type.
 	TEMPLATE = 5,
+
+	UNBOUND = 6, /* Unbound type, used during query planning */
 
 	BOOLEAN = 10,
 	TINYINT = 11,
@@ -447,6 +450,8 @@ public:
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name, const vector<Value> &user_type_mods); // NOLINT
 	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_mods); // NOLINT
+	DUCKDB_API static LogicalType UNBOUND(const string &name); // NOLINT
+	DUCKDB_API static LogicalType UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -483,6 +488,11 @@ struct UserType {
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static const vector<Value> &GetTypeModifiers(const LogicalType &type);
 	DUCKDB_API static vector<Value> &GetTypeModifiers(LogicalType &type);
+};
+
+struct UnboundType {
+	DUCKDB_API static const string &GetName(const LogicalType &type);
+	DUCKDB_API static const vector<unique_ptr<TypeParameter>> &GetParameters(const LogicalType &type);
 };
 
 struct EnumType {
