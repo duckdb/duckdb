@@ -38,7 +38,6 @@ public:
 
 	//! Equivalent to calling "TryParse" and throwing an exception on failure
 	explicit CoordinateReferenceSystem(const string &crs);
-
 	//! Get the identified type of the coordinate reference system
 	CoordinateReferenceSystemType GetType() const {
 		return type;

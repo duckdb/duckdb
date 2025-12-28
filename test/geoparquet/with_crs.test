@@ -10,7 +10,7 @@ COPY (select 'POINT(0 1)'::GEOMETRY('OGC:CRS84') as g) TO '__TEST_DIR__/test.par
 query I
 select typeof(g) from '__TEST_DIR__/test.parquet';
 ----
-GEOMETRY(OGC:CRS84)
+GEOMETRY('OGC:CRS84')
 
 # Dont write the CRS if its is the default one
 query I
@@ -210,7 +210,7 @@ COPY (select 'POINT(0 1)'::GEOMETRY('
 query I
 select typeof(g) from '__TEST_DIR__/test_unknown_projjson_crs.parquet';
 ----
-GEOMETRY(EPSG:3857)
+GEOMETRY('EPSG:3857')
 
 
 # But for GeoParquet V2, we always write the CRS
@@ -220,4 +220,4 @@ COPY (select 'POINT(0 1)'::GEOMETRY('EPSG:3857') as g) TO '__TEST_DIR__/test_v2.
 query I
 select typeof(g) from '__TEST_DIR__/test_v2.parquet';
 ----
-GEOMETRY(EPSG:3857)
+GEOMETRY('EPSG:3857')

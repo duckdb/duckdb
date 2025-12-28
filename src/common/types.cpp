@@ -533,7 +533,8 @@ string LogicalType::ToString() const {
 			return "GEOMETRY";
 		}
 		auto &crs = GeoType::GetCRS(*this);
-		return StringUtil::Format("GEOMETRY(%s)", crs.GetDisplayName());
+		auto crs_name = KeywordHelper::WriteQuoted(crs.GetDisplayName(), '\'');
+		return StringUtil::Format("GEOMETRY(%s)", crs_name);
 	}
 	default:
 		return EnumUtil::ToString(id_);

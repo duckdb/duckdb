@@ -208,6 +208,9 @@ private:
 
 	void Match(char c) {
 		if (!TryMatch(c)) {
+			if (pos == end) {
+				throw InvalidInputException("Expected '%c' but got end of input at position %zu", c, pos - beg);
+			}
 			throw InvalidInputException("Expected '%c' but got '%c' at position %zu", c, *pos, pos - beg);
 		}
 	}
@@ -248,12 +251,13 @@ private:
 
 	unique_ptr<WKTValue> ParseKeywordNode() {
 		string name;
+		vector<unique_ptr<WKTValue>> children;
+
 		if (!TryMatchText(name)) {
 			return nullptr;
 		}
 
 		if (TryMatch('[')) {
-			vector<unique_ptr<WKTValue>> children;
 			do {
 				auto child = ParseNode();
 				if (!child) {
@@ -267,7 +271,6 @@ private:
 		}
 
 		if (TryMatch('(')) {
-			vector<unique_ptr<WKTValue>> children;
 			do {
 				auto child = ParseNode();
 				if (!child) {
@@ -279,15 +282,16 @@ private:
 			return make_uniq<WKTKeyword>(std::move(name), std::move(children));
 		}
 
-		return nullptr;
+		// Nodes don't have to have children
+		return make_uniq<WKTKeyword>(std::move(name), std::move(children));
 	}
 
 	unique_ptr<WKTValue> ParseNumberNode() {
-		if (pos != end && isdigit(*pos)) {
+		if (pos != end) {
 			double num;
 			const auto res = duckdb_fast_float::from_chars(pos, end, num);
 			if (res.ec != std::errc()) {
-				throw InvalidInputException("Expected number at position %zu", pos - beg);
+				return nullptr;
 			}
 			pos = res.ptr;    // update position to the end of the parsed number
 			SkipWhitespace(); // remove trailing whitespace
@@ -325,6 +329,40 @@ private:
 	}
 };
 
+static string TryExtractIDFromWKTNode(const WKTKeyword &keyword) {
+	auto &children = keyword.GetChildren();
+	for (const auto &child : children) {
+		if (!child->IsKeyword()) {
+			continue;
+		}
+
+		const auto &child_keyword = child->As<WKTKeyword>();
+		if (!child_keyword.Match("ID")) {
+			continue;
+		}
+
+		auto &id_children = child_keyword.GetChildren();
+		if (id_children.size() < 2) {
+			continue;
+		}
+
+		const auto &first = id_children[0];
+		const auto &second = id_children[1];
+
+		if (!first->IsString() || !second->IsNumber()) {
+			continue;
+		}
+
+		const auto &authority = first->As<WKTString>().GetValue();
+		const auto code_number = second->As<WKTNumber>().GetValue();
+		if (code_number < 0 || code_number > static_cast<double>(std::numeric_limits<idx_t>::max())) {
+			continue;
+		}
+		return authority + ":" + to_string(static_cast<idx_t>(code_number));
+	}
+
+	return string();
+}
 bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateReferenceSystem &result) {
 	const auto node = WKTParser::Parse(text);
 
@@ -403,6 +441,12 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 		}
 
 		// TODO: Parse "ID" subnode to get the code
+		auto name = TryExtractIDFromWKTNode(transform_keyword);
+		if (name.empty()) {
+			// Pick name as fallback instead of code
+			name = first_transform_child->As<WKTString>().GetValue();
+		}
+
 		result.type = CoordinateReferenceSystemType::WKT2_2019;
 		result.name = first_transform_child->As<WKTString>().GetValue();
 		result.text = text;
@@ -417,13 +461,17 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 	// Otherwise, the name is the first child
 	const auto &first = children[0];
 	if (!first->IsString()) {
-		// First child needs to be a string (the name)
+		// Pick name as fallback instead of code
 		return false;
 	}
 
-	// TODO: Parse "ID" subnode to get the code
+	auto name = TryExtractIDFromWKTNode(keyword);
+	if (name.empty()) {
+		// Pick name as fallback
+		name = first->As<WKTString>().GetValue();
+	}
+	result.name = name;
 	result.type = CoordinateReferenceSystemType::WKT2_2019;
-	result.name = first->As<WKTString>().GetValue();
 	result.text = text;
 
 	// Also trim text
