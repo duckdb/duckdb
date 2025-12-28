@@ -2,6 +2,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include "yyjson.hpp"
 #include "fast_float/fast_float.h"
@@ -349,16 +351,22 @@ static string TryExtractIDFromWKTNode(const WKTKeyword &keyword) {
 		const auto &first = id_children[0];
 		const auto &second = id_children[1];
 
-		if (!first->IsString() || !second->IsNumber()) {
+		if (!first->IsString()) {
 			continue;
 		}
 
-		const auto &authority = first->As<WKTString>().GetValue();
-		const auto code_number = second->As<WKTNumber>().GetValue();
-		if (code_number < 0 || code_number > static_cast<double>(std::numeric_limits<idx_t>::max())) {
-			continue;
+		const auto code_auth = first->As<WKTString>().GetValue();
+		if (second->IsNumber()) {
+			const auto number = second->As<WKTNumber>().GetValue();
+			if (number < 0 || number > static_cast<double>(std::numeric_limits<idx_t>::max())) {
+				continue;
+			}
+			return code_auth + ":" + StringUtil::Format("%llu", static_cast<idx_t>(number));
 		}
-		return authority + ":" + to_string(static_cast<idx_t>(code_number));
+		if (second->IsString()) {
+			return code_auth + ":" + second->As<WKTString>().GetValue();
+		}
+		return string();
 	}
 
 	return string();
@@ -448,7 +456,7 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 		}
 
 		result.type = CoordinateReferenceSystemType::WKT2_2019;
-		result.name = first_transform_child->As<WKTString>().GetValue();
+		result.name = name;
 		result.text = text;
 
 		// Also trim text
@@ -510,15 +518,8 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 	// Check that the type is one of the PROJJSON CRS types
 	// There are other (derived CRS) types, but they can not be used as root CRS definitions
 	const string type_str = yyjson_get_str(type_val);
-	const auto projjson_crs_types = {"GeographicCRS",
-	                                 "GeodeticCRS",
-	                                 "ProjectedCRS",
-	                                 "CompoundCRS",
-	                                 "BoundCRS",
-	                                 "VerticalCRS",
-	                                 "EngineeringCRS",
-	                                 "TemporalCRS"
-	                                 "ParametricCRS"};
+	const auto projjson_crs_types = {"GeographicCRS", "GeodeticCRS",    "ProjectedCRS", "CompoundCRS",  "BoundCRS",
+	                                 "VerticalCRS",   "EngineeringCRS", "TemporalCRS",  "ParametricCRS"};
 
 	auto found = false;
 	for (auto &kw : projjson_crs_types) {
@@ -568,7 +569,7 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 				const auto code_val = yyjson_obj_get(id_val, "code");
 				if (code_val && yyjson_is_int(code_val)) {
 					const auto code_int = yyjson_get_int(code_val);
-					result.code += ":" + to_string(code_int);
+					result.code += ":" + StringUtil::Format("%d", code_int);
 				}
 				if (code_val && yyjson_is_str(code_val)) {
 					const auto code_str = yyjson_get_str(code_val);
