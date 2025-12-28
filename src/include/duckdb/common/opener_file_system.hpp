@@ -101,7 +101,11 @@ public:
 	}
 
 	bool CanSeek(const string &filename) override {
-		return GetFileSystem().CanSeek(filename);
+		auto &fs = GetFileSystem();
+		if (fs.IsWrapperFileSystem()) {
+			return fs.CanSeek(filename);
+		}
+		return fs.CanSeek();
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {

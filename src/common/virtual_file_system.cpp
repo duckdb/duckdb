@@ -127,7 +127,11 @@ bool VirtualFileSystem::FileExists(const string &filename, optional_ptr<FileOpen
 }
 
 bool VirtualFileSystem::CanSeek(const string &filename) {
-	return FindFileSystem(filename).CanSeek();
+	auto &fs = FindFileSystem(filename);
+	if (fs.IsWrapperFileSystem()) {
+		return fs.CanSeek(filename);
+	}
+	return fs.CanSeek();
 }
 
 bool VirtualFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
