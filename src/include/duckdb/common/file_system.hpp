@@ -276,8 +276,14 @@ public:
 
 	//! If FS was manually set by the user
 	DUCKDB_API virtual bool IsManuallySet();
+	//! There're two types of filesystem in duckdb: one is "raw filesystem", which directly interacts with storage
+	//! backends, another is "wrapper filesystem", which provides additional features via decorator pattern.
+	//! Return whether the current filesystem is a wrapper filesystem.
+	DUCKDB_API virtual bool IsWrapperFileSystem() const;
 	//! Whether or not we can seek into the file
 	DUCKDB_API virtual bool CanSeek();
+	//! Whether the the filesystem indicated by the [filename] is seekable.
+	DUCKDB_API virtual bool CanSeek(const string &filename);
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);

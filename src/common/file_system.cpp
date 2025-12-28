@@ -673,7 +673,15 @@ bool FileSystem::CanSeek() {
 	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
 }
 
+bool FileSystem::CanSeek(const string &filename) {
+	throw NotImplementedException("%s: CanSeek is not implemented for file path %s!", GetName(), filename);
+}
+
 bool FileSystem::IsManuallySet() {
+	return false;
+}
+
+bool FileSystem::IsWrapperFileSystem() const {
 	return false;
 }
 
@@ -746,6 +754,9 @@ idx_t FileHandle::SeekPosition() {
 }
 
 bool FileHandle::CanSeek() {
+	if (file_system.IsWrapperFileSystem()) {
+		return file_system.CanSeek(GetPath());
+	}
 	return file_system.CanSeek();
 }
 
