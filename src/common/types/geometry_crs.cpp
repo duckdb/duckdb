@@ -493,7 +493,7 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 // PROJJSON Parsing
 //----------------------------------------------------------------------------------------------------------------------
 bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateReferenceSystem &result) {
-	using namespace duckdb_yyjson;
+	using namespace duckdb_yyjson; // NOLINT
 
 	unique_ptr<yyjson_doc, void (*)(yyjson_doc *)> doc(yyjson_read(text.c_str(), text.size(), YYJSON_READ_NOFLAG),
 	                                                   yyjson_doc_free);
