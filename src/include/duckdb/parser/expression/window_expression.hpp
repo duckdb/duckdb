@@ -92,6 +92,8 @@ public:
 
 	static bool Equal(const WindowExpression &a, const WindowExpression &b);
 
+	bool HasBoundedParts();
+
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(Serializer &serializer) const override;
