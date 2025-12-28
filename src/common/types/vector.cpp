@@ -804,6 +804,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 		return Value::ARRAY(ArrayType::GetChildType(type), std::move(children));
 	}
+	case LogicalTypeId::TYPE: {
+		auto blob = reinterpret_cast<string_t *>(data)[index];
+		return Value::TYPE(blob);
+	}
 	default:
 		throw InternalException("Unimplemented type for value access");
 	}

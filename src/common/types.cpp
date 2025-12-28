@@ -120,6 +120,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::TYPE:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -1399,6 +1400,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::USER:
 	case LogicalTypeId::UNBOUND:
+	case LogicalTypeId::TYPE:
 		break;
 	}
 	return 1000;
@@ -1846,6 +1848,13 @@ LogicalType LogicalType::UNBOUND(const string &name) {
 LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters) {
 	auto info = make_shared_ptr<UnboundTypeInfo>(name, std::move(parameters));
 	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Type Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::TYPE() {
+	return LogicalType(LogicalTypeId::TYPE);
 }
 
 //===--------------------------------------------------------------------===//
