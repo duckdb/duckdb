@@ -124,10 +124,17 @@ SELECT index_key({'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1::SMALLINT);
 ----
 Invalid Input Error: index_key: argument 1 has type SMALLINT but index 'PRIMARY_tbl1_0' expects INTEGER
 
-query I
-SELECT index_key({'table': 'tbl1'}, 'tbl1_idx_composite', NULL::INTEGER, NULL::VARCHAR);
+# Type mismatch on last column of multi-column index (tbl3_idx expects INTEGER, VARCHAR, BIGINT)
+statement ok
+CREATE TABLE tbl3_wrong_type(c1 INTEGER, c2 VARCHAR, c3 INTEGER);
+
+statement ok
+INSERT INTO tbl3_wrong_type VALUES (1, 'test', 100);
+
+statement error
+SELECT index_key({'table': 'tbl3'}, 'tbl3_idx', c1, c2, c3) FROM tbl3_wrong_type;
 ----
-NULL
+Invalid Input Error: index_key: argument 3 has type INTEGER but index 'tbl3_idx' expects BIGINT
 
 ########################################################################################################################
 #                                                                                                                      #
@@ -295,7 +302,7 @@ index_key: parameter 'index_name' must be a constant
 statement error
 SELECT index_key($1, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: table_path parameter must be a constant
+Expected 1 parameters, but none were supplied
 
 ########################################################################################################################
 #                                                                                                                      #
@@ -337,6 +344,11 @@ Binder Error: No function matches the given name and argument types
 
 query I
 SELECT index_key({'table': 'tbl1'}, NULL, 1);
+----
+NULL
+
+query I
+SELECT index_key({'table': 'tbl1'}, 'tbl1_idx_composite', NULL::INTEGER, NULL::VARCHAR);
 ----
 NULL
 
