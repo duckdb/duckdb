@@ -480,10 +480,15 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 			// we can write UTF8 directly
 			fputs(z1, out);
 		} else {
-			// fallback to writing old style windows unicode
-			char *z2 = sqlite3_win32_utf8_to_mbcs_v2(z1, 0);
-			fputs(z2, out);
-			sqlite3_free(z2);
+			// convert from utf8 to utf16
+			LPWSTR unicode_text = sqlite3_win32_utf8_to_unicode(z1);
+			if (unicode_text) {
+				auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+				// use WriteConsoleW to write the unicode codepoints to the console
+				DWORD text_len = wcslen(unicode_text);
+				WriteConsoleW(out_handle, unicode_text, text_len, NULL, NULL);
+				sqlite3_free(unicode_text);
+			}
 		}
 		sqlite3_free(z1);
 	} else {
