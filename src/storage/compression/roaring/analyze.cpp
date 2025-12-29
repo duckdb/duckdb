@@ -23,7 +23,7 @@ static unsafe_unique_array<BitmaskTableEntry> CreateBitmaskTable() {
 	result = make_unsafe_uniq_array_uninitialized<BitmaskTableEntry>(NumericLimits<uint8_t>::Maximum() + 1);
 
 	for (uint16_t val = 0; val < NumericLimits<uint8_t>::Maximum() + 1; val++) {
-		bool previous_bit;
+		bool previous_bit = false;
 		auto &entry = result[val];
 		entry.valid_count = 0;
 		entry.run_count = 0;
@@ -36,7 +36,7 @@ static unsafe_unique_array<BitmaskTableEntry> CreateBitmaskTable() {
 			}
 			entry.valid_count += bit_set;
 
-			if (i && !bit_set && previous_bit == true) {
+			if (!bit_set && previous_bit) {
 				entry.run_count++;
 			}
 			previous_bit = bit_set;
