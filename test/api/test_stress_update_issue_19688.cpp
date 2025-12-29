@@ -24,7 +24,8 @@ void WorkerTask(DuckDB *db, int worker_id, atomic<int> *success_count) {
 		int val = val_distribution(generator);
 
 		// UPDATE the row
-		auto update_result = con.Query("UPDATE stress_test SET val=$1, payload=$2 WHERE id = $3", val, JSON_PAYLOAD, id);
+		auto update_result =
+		    con.Query("UPDATE stress_test SET val=$1, payload=$2 WHERE id = $3", val, JSON_PAYLOAD, id);
 		if (update_result->HasError()) {
 			REQUIRE(update_result->GetErrorType() != ExceptionType::FATAL);
 			return;
@@ -64,14 +65,14 @@ TEST_CASE("Concurrent stress test: UPDATE/DELETE/INSERT", "[api][concurrent]") {
 
 	// Seed 1000 rows and verify the initial count.
 	for (int idx = 0; idx < STRESS_TEST_NUM_ROWS; idx++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO stress_test (id, val, payload) VALUES ($1, $2, $3)", idx, idx * 1000,
-		                           JSON_PAYLOAD));
+		REQUIRE_NO_FAIL(
+		    con.Query("INSERT INTO stress_test (id, val, payload) VALUES ($1, $2, $3)", idx, idx * 1000, JSON_PAYLOAD));
 	}
 	auto count_result = con.Query("SELECT COUNT(*) FROM stress_test");
 	REQUIRE(CHECK_COLUMN(count_result, 0, {STRESS_TEST_NUM_ROWS}));
 
-   // Launch concurrent workers to perform UPDATE/DELETE/INSERT operations on the same rows, and check for fatal
-   // errors and successful operations.
+	// Launch concurrent workers to perform UPDATE/DELETE/INSERT operations on the same rows, and check for fatal
+	// errors and successful operations.
 	vector<std::thread> workers;
 	atomic<int> total_success(0);
 	for (int w = 0; w < STRESS_TEST_NUM_WORKERS; w++) {
@@ -81,9 +82,9 @@ TEST_CASE("Concurrent stress test: UPDATE/DELETE/INSERT", "[api][concurrent]") {
 		worker.join();
 	}
 
-   // Make sure some successful operations were performed.
-   // For concurrent updates on the same rows, it's acceptable and normal to have transient errors (i.e., conflict
-   // updates), but we should not have any fatal errors (i.e., invalid database state).
+	// Make sure some successful operations were performed.
+	// For concurrent updates on the same rows, it's acceptable and normal to have transient errors (i.e., conflict
+	// updates), but we should not have any fatal errors (i.e., invalid database state).
 	REQUIRE(total_success > 0);
 }
 
