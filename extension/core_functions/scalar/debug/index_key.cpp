@@ -23,6 +23,10 @@ namespace {
 static constexpr idx_t INDEX_KEY_FIXED_ARGS = 2;
 
 struct TablePath {
+	TablePath(string catalog, string schema, string table)
+	    : catalog(std::move(catalog)), schema(std::move(schema)), table(std::move(table)) {
+	}
+
 	string catalog;
 	string schema;
 	string table;
@@ -92,11 +96,9 @@ static TablePath EvaluateTablePath(ClientContext &context, const Expression &exp
 	auto &input_children = StructValue::GetChildren(input_struct);
 	auto &struct_type = expr.return_type;
 
-	TablePath path;
-	path.catalog = GetOptionalStructField(input_children, struct_type, "catalog", INVALID_CATALOG);
-	path.schema = GetOptionalStructField(input_children, struct_type, "schema", DEFAULT_SCHEMA);
-	path.table = GetRequiredStructField(input_children, struct_type, "table");
-	return path;
+	return TablePath(GetOptionalStructField(input_children, struct_type, "catalog", INVALID_CATALOG),
+	                 GetOptionalStructField(input_children, struct_type, "schema", DEFAULT_SCHEMA),
+	                 GetRequiredStructField(input_children, struct_type, "table"));
 }
 
 static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
@@ -248,8 +250,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	auto &art = bind_data.bound_index->Cast<ART>();
-	unsafe_vector<ARTKey> keys;
-	keys.resize(count);
+	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	art.GenerateKeys<>(allocator, key_chunk, keys);
 
