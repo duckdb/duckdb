@@ -59,7 +59,7 @@ TEST_CASE("Delete encryption key from cache", "[encryption]") {
 	key_cache.AddKey("test_key", data_ptr_t(derived_key.data()));
 	REQUIRE(VerifyWipe(derived_key.data(), derived_key.size()) == true);
 
-	// DeleteKey() (contains ClearKey() and EraseKey()), we call erase
+	// DeleteKey() (contains ClearKey() and EraseKey()), we thus erase the value
 	// In that case, we cannot test whether the memory is zeroed out
 	auto key_data_ptr = key_cache.GetKey("test_key");
 	key_cache.ClearKey("test_key");

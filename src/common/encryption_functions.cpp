@@ -46,17 +46,6 @@ bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name)
 	return keys.HasKey(key_name);
 }
 
-void EncryptionEngine::DeleteKey(DatabaseInstance &db, const string &key_name) {
-	auto &keys = EncryptionKeyManager::Get(db);
-
-	if (keys.HasKey(key_name)) {
-		keys.DeleteKey(key_name);
-		return;
-	}
-
-	throw InvalidInputException("Key with name '" + key_name + "' not found");
-}
-
 void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	if (!keys.HasKey(key_name)) {
