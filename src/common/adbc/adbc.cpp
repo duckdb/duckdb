@@ -431,21 +431,24 @@ enum class AdbcInfoCode : uint32_t {
 	DRIVER_NAME,
 	DRIVER_VERSION,
 	DRIVER_ARROW_VERSION,
+	DRIVER_ADBC_VERSION,
 	UNRECOGNIZED // always the last entry of the enum
 };
 
 static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 	switch (info_code) {
-	case 0:
+	case ADBC_INFO_VENDOR_NAME:
 		return AdbcInfoCode::VENDOR_NAME;
-	case 1:
+	case ADBC_INFO_VENDOR_VERSION:
 		return AdbcInfoCode::VENDOR_VERSION;
-	case 2:
+	case ADBC_INFO_DRIVER_NAME:
 		return AdbcInfoCode::DRIVER_NAME;
-	case 3:
+	case ADBC_INFO_DRIVER_VERSION:
 		return AdbcInfoCode::DRIVER_VERSION;
-	case 4:
+	case ADBC_INFO_DRIVER_ARROW_VERSION:
 		return AdbcInfoCode::DRIVER_ARROW_VERSION;
+	case ADBC_INFO_DRIVER_ADBC_VERSION:
+		return AdbcInfoCode::DRIVER_ADBC_VERSION;
 	default:
 		return AdbcInfoCode::UNRECOGNIZED;
 	}
@@ -467,7 +470,11 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	}
 
 	// If 'info_codes' is NULL, we should output all the info codes we recognize
-	size_t length = info_codes ? info_codes_length : static_cast<size_t>(AdbcInfoCode::UNRECOGNIZED);
+	static constexpr uint32_t DEFAULT_INFO_CODES[] = {ADBC_INFO_VENDOR_NAME,          ADBC_INFO_VENDOR_VERSION,
+	                                                  ADBC_INFO_DRIVER_NAME,          ADBC_INFO_DRIVER_VERSION,
+	                                                  ADBC_INFO_DRIVER_ARROW_VERSION, ADBC_INFO_DRIVER_ADBC_VERSION};
+	const uint32_t *requested_codes = info_codes ? info_codes : DEFAULT_INFO_CODES;
+	size_t length = info_codes ? info_codes_length : (sizeof(DEFAULT_INFO_CODES) / sizeof(DEFAULT_INFO_CODES[0]));
 
 	duckdb::string q = R"EOF(
 		select
@@ -483,31 +490,46 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	)EOF";
 
 	duckdb::string results = "";
+	static constexpr const char *INFO_UNION_TYPE = "UNION(string_value VARCHAR, bool_value BOOL, int64_value BIGINT, "
+	                                               "int32_bitmask INTEGER, string_list VARCHAR[], "
+	                                               "int32_to_int32_list_map MAP(INTEGER, INTEGER[]))";
 
 	for (size_t i = 0; i < length; i++) {
-		auto code = duckdb::NumericCast<uint32_t>(info_codes ? info_codes[i] : i);
+		auto code = duckdb::NumericCast<uint32_t>(requested_codes[i]);
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
 		case AdbcInfoCode::VENDOR_NAME: {
-			results += "(0, 'duckdb'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := 'duckdb')::%s),",
+			                                      (uint32_t)ADBC_INFO_VENDOR_NAME, INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::VENDOR_VERSION: {
-			results += duckdb::StringUtil::Format("(1, '%s'),", duckdb_library_version());
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '%s')::%s),",
+			                                      (uint32_t)ADBC_INFO_VENDOR_VERSION, duckdb_library_version(),
+			                                      INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::DRIVER_NAME: {
-			results += "(2, 'ADBC DuckDB Driver'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := 'ADBC DuckDB Driver')::%s),",
+			                                      (uint32_t)ADBC_INFO_DRIVER_NAME, INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::DRIVER_VERSION: {
-			// TODO: fill in driver version
-			results += "(3, '(unknown)'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '%s')::%s),",
+			                                      (uint32_t)ADBC_INFO_DRIVER_VERSION, duckdb_library_version(),
+			                                      INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::DRIVER_ARROW_VERSION: {
 			// TODO: fill in arrow version
-			results += "(4, '(unknown)'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '(unknown)')::%s),",
+			                                      (uint32_t)ADBC_INFO_DRIVER_ARROW_VERSION, INFO_UNION_TYPE);
+			break;
+		}
+		case AdbcInfoCode::DRIVER_ADBC_VERSION: {
+			results += duckdb::StringUtil::Format("(%u, union_value(int64_value := %lld::BIGINT)::%s),",
+			                                      ADBC_INFO_DRIVER_ADBC_VERSION, (long long)ADBC_VERSION_1_1_0,
+			                                      INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::UNRECOGNIZED: {

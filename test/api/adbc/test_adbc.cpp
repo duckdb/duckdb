@@ -630,7 +630,8 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 
 	// ==== UNHAPPY PATH ====
 
-	static uint32_t test_info_codes[] = {100, 4, 3};
+	static uint32_t test_info_codes[] = {ADBC_INFO_DRIVER_NAME, ADBC_INFO_DRIVER_ARROW_VERSION,
+	                                     ADBC_INFO_DRIVER_VERSION};
 	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
 
 	// No error
@@ -654,6 +655,44 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
 	REQUIRE((status == ADBC_STATUS_OK));
 	REQUIRE((out_stream.release != nullptr));
+	{
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+
+		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
+		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto res = rel->Project("info_name")->Execute();
+		REQUIRE(!res->HasError());
+		auto &mat = res->Cast<MaterializedQueryResult>();
+
+		bool found_adbc_version = false;
+		for (idx_t row = 0; row < mat.RowCount(); row++) {
+			found_adbc_version |= (mat.GetValue(0, row).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		}
+		REQUIRE(found_adbc_version);
+	}
+
+	{
+		// Validate ADBC_INFO_DRIVER_ADBC_VERSION is returned as int64
+		static uint32_t version_code[] = {ADBC_INFO_DRIVER_ADBC_VERSION};
+		status = AdbcConnectionGetInfo(&adbc_connection, version_code, 1, &out_stream, &adbc_error);
+		REQUIRE((status == ADBC_STATUS_OK));
+		REQUIRE((out_stream.release != nullptr));
+
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+
+		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
+		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto res = rel->Project("info_name, info_value.int64_value AS adbc_version")->Execute();
+		REQUIRE(!res->HasError());
+		auto &mat = res->Cast<MaterializedQueryResult>();
+		REQUIRE(mat.RowCount() == 1);
+		REQUIRE(mat.GetValue(0, 0).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		REQUIRE(mat.GetValue(0, 1).ToString() == std::to_string(ADBC_VERSION_1_1_0));
+
+		out_stream.release(&out_stream);
+	}
 
 	out_stream.release(&out_stream);
 
