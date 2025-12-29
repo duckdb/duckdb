@@ -108,7 +108,7 @@ unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 		memcpy(metadata_ptr, &key_size, sizeof(int32_t));
 		metadata_ptr += sizeof(int32_t);
 		// Key
-		memcpy(metadata_ptr, key.c_str(), key_size);
+		memcpy(metadata_ptr, key.c_str(), key.size());
 		metadata_ptr += key_size;
 		const std::string &value = pair.second;
 		const int32_t value_size = static_cast<int32_t>(value.size());
@@ -116,7 +116,7 @@ unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 		memcpy(metadata_ptr, &value_size, sizeof(int32_t));
 		metadata_ptr += sizeof(int32_t);
 		// Value
-		memcpy(metadata_ptr, value.c_str(), value_size);
+		memcpy(metadata_ptr, value.c_str(), value.size());
 		metadata_ptr += value_size;
 	}
 	return metadata_array_ptr;
