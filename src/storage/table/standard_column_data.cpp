@@ -156,7 +156,7 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 
 	const unique_lock<mutex> standard_lock(update_lock);
 	const unique_lock<mutex> validity_lock(validity->update_lock);
-	
+
 	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
 	auto validity_fetch = validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 	if (standard_fetch != validity_fetch) {
@@ -169,7 +169,7 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	if (!validity->updates) {
 		validity->updates = make_uniq<UpdateSegment>(*validity);
 	}
-	
+
 	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
 	                row_group_start);
 	validity->updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
