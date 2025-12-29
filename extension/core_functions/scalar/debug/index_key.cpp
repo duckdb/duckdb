@@ -160,29 +160,25 @@ static void ValidateIndex(const Index &index, const TablePath &path, const strin
 		auto qualified_table = FormatQualifiedTableName(path);
 		throw CatalogException("index_key: index '%s' on table %s is not yet bound", index_name, qualified_table);
 	}
-	if (index.GetIndexType() != ART::TYPE_NAME) {
-		throw NotImplementedException(
-		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index.GetIndexType());
-	}
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(optional_ptr<BoundIndex> bound_index_p, vector<LogicalType> key_types_p, string index_p)
-	    : bound_index(bound_index_p), key_types(std::move(key_types_p)), index(std::move(index_p)) {
+	IndexKeyBindData(optional_ptr<BoundIndex> bound_index_p, vector<LogicalType> key_types, string index_name)
+	    : bound_index(bound_index_p), key_types(std::move(key_types)), index_name(std::move(index_name)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<IndexKeyBindData>(bound_index, key_types, index);
+		return make_uniq<IndexKeyBindData>(bound_index, key_types, index_name);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return bound_index == other.bound_index && key_types == other.key_types && index == other.index;
+		return bound_index == other.bound_index && key_types == other.key_types && index_name == other.index_name;
 	}
 
 	optional_ptr<BoundIndex> bound_index;
 	vector<LogicalType> key_types;
-	string index;
+	string index_name;
 };
 
 static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
@@ -236,7 +232,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		auto &key_vector = args.data[INDEX_KEY_FIXED_ARGS + i];
 		if (key_vector.GetType() != bind_data.key_types[i]) {
 			throw InvalidInputException("index_key: argument %llu has type %s but index '%s' expects %s", i + 1,
-			                            key_vector.GetType().ToString().c_str(), bind_data.index.c_str(),
+			                            key_vector.GetType().ToString().c_str(), bind_data.index_name.c_str(),
 			                            bind_data.key_types[i].ToString().c_str());
 		}
 	}
@@ -249,29 +245,34 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		key_chunk.data[col_idx].Reference(args.data[INDEX_KEY_FIXED_ARGS + col_idx]);
 	}
 
-	auto &art = bind_data.bound_index->Cast<ART>();
-	unsafe_vector<ARTKey> keys(count);
-	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	art.GenerateKeys<>(allocator, key_chunk, keys);
-
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	result_validity.SetAllValid(count);
 
-	for (idx_t i = 0; i < count; i++) {
-		auto &key = keys[i];
-		if (key.Empty()) {
-			result_validity.SetInvalid(i);
-		} else {
-			result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
-		}
-	}
+	auto index_type = bind_data.bound_index->GetIndexType();
+	if (index_type == ART::TYPE_NAME) {
+		auto &art = bind_data.bound_index->Cast<ART>();
+		unsafe_vector<ARTKey> keys(count);
+		ArenaAllocator allocator(Allocator::DefaultAllocator());
+		art.GenerateKeys<>(allocator, key_chunk, keys);
 
-	if (count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		for (idx_t i = 0; i < count; i++) {
+			auto &key = keys[i];
+			if (key.Empty()) {
+				result_validity.SetInvalid(i);
+			} else {
+				result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
+			}
+		}
+		if (count == 1) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		result.Verify(count);
+		return;
 	}
-	result.Verify(count);
+	throw NotImplementedException("index_key: index type '%s' is not yet supported (only ART indexes are supported)",
+	                              index_type);
 }
 
 } // namespace
