@@ -611,9 +611,8 @@ static unique_ptr<TableFilter> TryCreateFilterFromComparison(ExpressionType comp
 
 // Validate and update column_id for consistency checking across OR branches
 // Returns false if column doesn't match expected column_id
-static bool ValidateColumnConsistency(const BoundColumnRefExpression &column_ref,
-                                      const vector<ColumnIndex> &column_ids, idx_t &column_id,
-                                      bool is_first_comparison) {
+static bool ValidateColumnConsistency(const BoundColumnRefExpression &column_ref, const vector<ColumnIndex> &column_ids,
+                                      idx_t &column_id, bool is_first_comparison) {
 	idx_t child_column_id = column_ids[column_ref.binding.column_index].GetPrimaryIndex();
 	if (is_first_comparison) {
 		column_id = child_column_id;
@@ -641,8 +640,7 @@ static unique_ptr<TableFilter> TryProcessOrChild(Expression &child, const vector
 		}
 
 		auto &comp = child.Cast<BoundComparisonExpression>();
-		auto comparison_type =
-		    invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 		return TryCreateFilterFromComparison(comparison_type, const_val->value);
 	}
 
