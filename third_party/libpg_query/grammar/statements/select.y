@@ -1676,6 +1676,42 @@ opt_collate_clause:
  *		- thomas 1997-10-10
  *
  *****************************************************************************/
+typemod
+	: Typename 			{ $$ = (PGNode *) $1; }
+	| SimpleConst  		{ $$ = (PGNode *) $1; }
+	| '(' a_expr ')' 	{ $$ = (PGNode *) $2; }
+	;
+
+named_typemod
+	: IDENT Typename 		{ $$ = list_make2(makeString($1), $2); }
+	| IDENT SimpleConst { $$ = list_make2(makeString($1), $2); }
+	| IDENT ':' '=' Typename { $$ = list_make2(makeString($1), $4); }
+	;
+
+opt_named_typemod
+	: typemod		{ $$ = list_make2(NULL, $1); }
+	| named_typemod	{ $$ = $1; }
+	;
+
+typemod_list
+	: opt_named_typemod 					{ $$ = list_make1($1); }
+	| typemod_list ',' opt_named_typemod 	{ $$ = lappend($1, $3); }
+	;
+
+typemod_list_opt_comma
+	: typemod_list 		{ $$ = $1; }
+	| typemod_list ',' 	{ $$ = $1; }
+	;
+
+opt_typemod_list_opt_comma
+	: typemod_list_opt_comma 	{ $$ = $1; }
+	| /* empty */ 				{ $$ = NULL; }
+	;
+
+opt_type_modifiers:
+	'(' opt_typemod_list_opt_comma	')'	{ $$ = $2; }
+	| /* EMPTY */						{ $$ = NULL; }
+	;
 
 colid_type_list:
             ColId Typename   {
@@ -1737,7 +1773,7 @@ Typename:	SimpleTypename opt_array_bounds
 				   $$->typmods = $3;
 				   $$->location = @1;
                }
-            | MAP '(' type_list ')' opt_array_bounds
+            | MAP '(' typemod_list ')' opt_array_bounds
             	{
 				   $$ = SystemTypeName("map");
 				   $$->arrayBounds = $5;
@@ -1824,10 +1860,6 @@ GenericType:
 			// 		$$->typmods = $3;
 			// 		$$->location = @1;
 			// 	}
-		;
-
-opt_type_modifiers: '(' opt_expr_list_opt_comma	 ')'				{ $$ = $2; }
-					| /* EMPTY */					{ $$ = NIL; }
 		;
 
 /*
@@ -4154,39 +4186,47 @@ func_name:	function_name_token
 /*
  * Constants
  */
-AexprConst: Iconst
-				{
-					$$ = makeIntConst($1, @1);
-				}
-			| FCONST
-				{
-					$$ = makeFloatConst($1, @1);
-				}
-			| Sconst opt_indirection
-				{
-					if ($2)
-					{
-						PGAIndirection *n = makeNode(PGAIndirection);
-						n->arg = makeStringConst($1, @1);
-						n->indirection = check_indirection($2, yyscanner);
-						$$ = (PGNode *) n;
-					}
-					else
-						$$ = makeStringConst($1, @1);
-				}
-			| BCONST
-				{
-					$$ = makeBitStringConst($1, @1);
-				}
-			| XCONST
-				{
-					/* This is a bit constant per SQL99:
-					 * Without Feature F511, "BIT data type",
-					 * a <general literal> shall not be a
-					 * <bit string literal> or a <hex string literal>.
-					 */
-					$$ = makeBitStringConst($1, @1);
-				}
+SimpleConst:
+	Iconst
+		{
+			$$ = makeIntConst($1, @1);
+		}
+	| FCONST
+		{
+			$$ = makeFloatConst($1, @1);
+		}
+	| Sconst
+		{
+			$$ = makeStringConst($1, @1);
+		}
+	| BCONST
+		{
+			$$ = makeBitStringConst($1, @1);
+		}
+	| XCONST
+		{
+			/* This is a bit constant per SQL99:
+			 * Without Feature F511, "BIT data type",
+			 * a <general literal> shall not be a
+			 * <bit string literal> or a <hex string literal>.
+			 */
+			$$ = makeBitStringConst($1, @1);
+		}
+	| TRUE_P
+		{
+			$$ = makeBoolAConst(true, @1);
+		}
+	| FALSE_P
+		{
+			$$ = makeBoolAConst(false, @1);
+		}
+	| NULL_P
+		{
+			$$ = makeNullAConst(@1);
+		}
+	;
+
+AexprConst: SimpleConst
 			| func_name Sconst
 				{
 					/* generic type 'literal' syntax */
@@ -4247,18 +4287,6 @@ AexprConst: Iconst
 			| ConstInterval Sconst opt_interval
 				{
 					$$ = makeIntervalNode($2, @2, $3);
-				}
-			| TRUE_P
-				{
-					$$ = makeBoolAConst(true, @1);
-				}
-			| FALSE_P
-				{
-					$$ = makeBoolAConst(false, @1);
-				}
-			| NULL_P
-				{
-					$$ = makeNullAConst(@1);
 				}
 		;
 
