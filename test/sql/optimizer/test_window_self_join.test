@@ -1,4 +1,4 @@
-# name: test/sql/optimizer/test_count_window_elimination.test
+# name: test/sql/optimizer/test_window_self_join.test
 # description: Test Count Window Elimination optimizer
 # group: [optimizer]
 
