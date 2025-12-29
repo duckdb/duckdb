@@ -49,7 +49,7 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(ClientContext &context_p)
-	    : context(context_p), finished(false), initialized(false), rows_copied(0), last_file_offset(0),
+	    : context(context_p), finalized(false), initialized(false), rows_copied(0), last_file_offset(0),
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
 		max_open_files = DBConfig::GetSetting<PartitionedWriteMaxOpenFilesSetting>(context);
 	}
@@ -57,7 +57,7 @@ public:
 
 	ClientContext &context;
 	//! Whether the copy was successfully finalized
-	bool finished;
+	bool finalized;
 	//! The list of files created by this operator
 	vector<string> created_files;
 
@@ -254,7 +254,7 @@ private:
 };
 
 CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
-	if (!initialized || finished || created_files.empty()) {
+	if (!initialized || finalized || created_files.empty()) {
 		return;
 	}
 	// If we reach here, the query failed before Finalize was called
@@ -664,7 +664,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
                                               OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto result = FinalizeInternal(context, input.global_state);
-	gstate.finished = true;
+	gstate.finalized = true;
 	return result;
 }
 
