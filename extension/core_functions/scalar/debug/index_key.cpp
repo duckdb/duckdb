@@ -165,21 +165,21 @@ static void ValidateIndex(const Index &index, const TablePath &path, const strin
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(optional_ptr<ART> art_p, vector<LogicalType> types_p, string index_p)
-	    : art(art_p), types(std::move(types_p)), index(std::move(index_p)) {
+	IndexKeyBindData(optional_ptr<BoundIndex> bound_index_p, vector<LogicalType> key_types_p, string index_p)
+	    : bound_index(bound_index_p), key_types(std::move(key_types_p)), index(std::move(index_p)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<IndexKeyBindData>(art, types, index);
+		return make_uniq<IndexKeyBindData>(bound_index, key_types, index);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return art == other.art && types == other.types && index == other.index;
+		return bound_index == other.bound_index && key_types == other.key_types && index == other.index;
 	}
 
-	optional_ptr<ART> art;
-	vector<LogicalType> types;
+	optional_ptr<BoundIndex> bound_index;
+	vector<LogicalType> key_types;
 	string index;
 };
 
@@ -202,7 +202,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();
 
-	data_table_info.BindIndexes(context, ART::TYPE_NAME);
+	data_table_info.BindIndexes(context);
 
 	auto &index_list = data_table_info.GetIndexes();
 
@@ -210,18 +210,17 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	ValidateIndex(*found_index, path, index);
 
 	auto &bound_index = found_index->Cast<BoundIndex>();
-	auto &art = bound_index.Cast<ART>();
-	auto types = art.logical_types;
-	if (types.empty()) {
+	auto key_types = bound_index.logical_types;
+	if (key_types.empty()) {
 		throw CatalogException("index_key: index '%s' has no key columns", index);
 	}
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
-	if (num_key_args != types.size()) {
+	if (num_key_args != key_types.size()) {
 		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided", index,
-		                      types.size(), num_key_args);
+		                      key_types.size(), num_key_args);
 	}
-	return make_uniq<IndexKeyBindData>(&art, std::move(types), index);
+	return make_uniq<IndexKeyBindData>(&bound_index, std::move(key_types), index);
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -229,29 +228,30 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
-	D_ASSERT(args.ColumnCount() >= INDEX_KEY_FIXED_ARGS + bind_data.types.size());
+	D_ASSERT(args.ColumnCount() >= INDEX_KEY_FIXED_ARGS + bind_data.key_types.size());
 
-	for (idx_t i = 0; i < bind_data.types.size(); i++) {
+	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
 		auto &key_vector = args.data[INDEX_KEY_FIXED_ARGS + i];
-		if (key_vector.GetType() != bind_data.types[i]) {
+		if (key_vector.GetType() != bind_data.key_types[i]) {
 			throw InvalidInputException("index_key: argument %llu has type %s but index '%s' expects %s", i + 1,
 			                            key_vector.GetType().ToString().c_str(), bind_data.index.c_str(),
-			                            bind_data.types[i].ToString().c_str());
+			                            bind_data.key_types[i].ToString().c_str());
 		}
 	}
 
 	DataChunk key_chunk;
-	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.types);
+	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.key_types);
 	key_chunk.SetCardinality(count);
 
-	for (idx_t col_idx = 0; col_idx < bind_data.types.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < bind_data.key_types.size(); col_idx++) {
 		key_chunk.data[col_idx].Reference(args.data[INDEX_KEY_FIXED_ARGS + col_idx]);
 	}
 
+	auto &art = bind_data.bound_index->Cast<ART>();
 	unsafe_vector<ARTKey> keys;
 	keys.resize(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	bind_data.art->GenerateKeys<>(allocator, key_chunk, keys);
+	art.GenerateKeys<>(allocator, key_chunk, keys);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<string_t>(result);
