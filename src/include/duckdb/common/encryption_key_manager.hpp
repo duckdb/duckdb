@@ -33,6 +33,10 @@ public:
 		return key;
 	}
 
+	data_ptr_t GetData() {
+		return key;
+	}
+
 public:
 	static void LockEncryptionKey(data_ptr_t key, idx_t key_len = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	static void UnlockEncryptionKey(data_ptr_t key, idx_t key_len = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
