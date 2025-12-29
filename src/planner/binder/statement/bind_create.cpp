@@ -394,6 +394,11 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 
 				auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
 				bound_type_params.push_back(bound_param);
+			} else if (param->IsType()) {
+				// Otherwise, bind the type!
+				auto param_type = param->GetType();
+				BindLogicalType(param_type, catalog, schema);
+				bound_type_params.push_back(Value(param_type));
 			}
 		}
 
@@ -408,9 +413,10 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		if (type_entry.bind_function) {
 			BindLogicalTypeInput input {context, type_entry.user_type, bound_type_params};
 			return type_entry.bind_function(input);
-		} else {
-			return type_entry.user_type;
 		}
+		// else {
+		//	return type_entry.user_type;
+		//}
 
 		// Check type
 		auto type_id = TransformStringToLogicalTypeId(unbound_type_name);

@@ -25,7 +25,7 @@
 				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma c_expr_list c_expr_list_opt_comma
 				target_list			 			 opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
-				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select extended_indirection opt_extended_indirection
+				opt_select_limit 			 			 TableFuncElementList opt_select extended_indirection opt_extended_indirection
 				qualified_typename
 %type <list>	group_by_list group_by_list_opt_comma opt_func_arguments unpivot_header
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
@@ -60,7 +60,7 @@
 %type <node> TableFuncElement
 
 %type <list> columnrefList
-%type <node> where_clause 				a_expr b_expr c_expr d_expr AexprConst opt_slice_bound extended_indirection_el
+%type <node> where_clause 				a_expr b_expr c_expr d_expr SimpleConst AexprConst opt_slice_bound extended_indirection_el
 				columnref columnref_opt_indirection in_expr having_clause qualify_clause func_table opt_at_clause at_specifier
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
@@ -132,3 +132,6 @@
 %type <node> pivot_value pivot_column_entry single_pivot_value unpivot_value
 %type <list> pivot_value_list pivot_column_list_internal pivot_column_list pivot_header opt_pivot_group_by unpivot_value_list
 %type <boolean> opt_include_nulls
+
+%type <node> typemod
+%type <list> opt_type_modifiers opt_typemod_list_opt_comma typemod_list_opt_comma typemod_list opt_named_typemod named_typemod
