@@ -79,6 +79,69 @@ public:
 		}
 	}
 
+	//! Check if only the given geometry and vertex type is present
+	//! (all others are absent)
+	bool HasOnly(GeometryType geom_type, VertexType vert_type) const {
+		const auto vert_idx = static_cast<uint8_t>(vert_type);
+		const auto geom_idx = static_cast<uint8_t>(geom_type);
+		D_ASSERT(vert_idx < VERT_TYPES);
+		D_ASSERT(geom_idx < PART_TYPES);
+		for (uint8_t v_idx = 0; v_idx < VERT_TYPES; v_idx++) {
+			for (uint8_t g_idx = 1; g_idx < PART_TYPES; g_idx++) {
+				if (v_idx == vert_idx && g_idx == geom_idx) {
+					if (!(sets[v_idx] & (1 << g_idx))) {
+						return false;
+					}
+				} else {
+					if (sets[v_idx] & (1 << g_idx)) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	bool HasSingleType() const {
+		idx_t type_count = 0;
+		for (uint8_t v_idx = 0; v_idx < VERT_TYPES; v_idx++) {
+			for (uint8_t g_idx = 1; g_idx < PART_TYPES; g_idx++) {
+				if (sets[v_idx] & (1 << g_idx)) {
+					type_count++;
+					if (type_count > 1) {
+						return false;
+					}
+				}
+			}
+		}
+		return type_count == 1;
+	}
+
+	bool TryGetSingleType(GeometryType &geom_type, VertexType &vert_type) const {
+		auto result_geom = GeometryType::INVALID;
+		auto result_vert = VertexType::XY;
+		auto result_found = false;
+
+		for (uint8_t v_idx = 0; v_idx < VERT_TYPES; v_idx++) {
+			for (uint8_t g_idx = 1; g_idx < PART_TYPES; g_idx++) {
+				if (sets[v_idx] & (1 << g_idx)) {
+					if (result_found) {
+						// Multiple types found
+						return false;
+					}
+					result_found = true;
+					result_geom = static_cast<GeometryType>(g_idx);
+					result_vert = static_cast<VertexType>(v_idx);
+				}
+			}
+		}
+		if (result_found) {
+			geom_type = result_geom;
+			vert_type = result_vert;
+		}
+		return result_found;
+	}
+
 	void AddWKBType(int32_t wkb_type) {
 		const auto vert_idx = static_cast<uint8_t>((wkb_type / 1000) % 10);
 		const auto geom_idx = static_cast<uint8_t>(wkb_type % 1000);

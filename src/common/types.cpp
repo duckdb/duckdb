@@ -2027,8 +2027,7 @@ LogicalType LogicalType::VARIANT() {
 //===--------------------------------------------------------------------===//
 
 LogicalType LogicalType::GEOMETRY() {
-	auto info = make_shared_ptr<GeoTypeInfo>();
-	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+	return LogicalType(LogicalTypeId::GEOMETRY);
 }
 
 //===--------------------------------------------------------------------===//
