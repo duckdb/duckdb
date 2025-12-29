@@ -88,8 +88,8 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(arena, leaf.row_ids[i]);
-			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr,
-			                                         IndexAppendMode::INSERT_DUPLICATES);
+			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET,
+			                                         DeleteIndexInfo(), IndexAppendMode::INSERT_DUPLICATES);
 			if (conflict_type != ARTConflictType::NO_CONFLICT) {
 				throw InternalException("invalid conflict type in Leaf::TransformToNested");
 			}
