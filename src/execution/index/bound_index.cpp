@@ -64,10 +64,31 @@ void BoundIndex::CommitDrop() {
 	CommitDrop(index_lock);
 }
 
+idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
+                            optional_ptr<SelectionVector> non_deleted_sel) {
+	IndexLock state;
+	InitializeLock(state);
+	return TryDelete(state, entries, row_identifiers, deleted_sel, non_deleted_sel);
+}
+
+idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+                            optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
+	throw InternalException("TryDelete not implemented");
+}
+
 void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	Delete(state, entries, row_identifiers);
+}
+
+void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
+	TryDelete(state, entries, row_identifiers);
+	// FIXME: enable this
+	// if (deleted_rows != entries.size()) {
+	// 	throw InvalidInputException("Failed to delete all rows from index. Only deleted %d out of %d rows.\nChunk: %s",
+	// deleted_rows, entries.size(), entries.ToString());
+	// }
 }
 
 ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
@@ -142,13 +163,12 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-bool BoundIndex::RequiresTransactionality() const {
+bool BoundIndex::SupportsDeltaIndexes() const {
 	return false;
 }
 
-unique_ptr<BoundIndex> BoundIndex::CreateEmptyCopy(const string &name_prefix,
-                                                   IndexConstraintType constraint_type) const {
-	throw InternalException("BoundIndex::CreateEmptyCopy is not supported for this index type");
+unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
+	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
 }
 
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
