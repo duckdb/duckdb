@@ -397,3 +397,82 @@ SELECT * FROM integers WHERE a!=1 OR a<3
 ----
 1	1
 
+
+######### Complex OR with nested AND expressions ###############################
+
+# Recreate test table with more values
+statement ok
+DROP TABLE integers
+
+statement ok
+CREATE TABLE integers AS SELECT a as a, a as b FROM generate_series(1, 10, 1) tbl(a)
+
+# Test 1: Two AND branches in OR (range union pattern)
+# Verify the filter is pushed down and produces correct results
+query II
+SELECT * FROM integers WHERE (a >= 1 AND a < 3) OR (a >= 7 AND a <= 9) ORDER BY a
+----
+1	1
+2	2
+7	7
+8	8
+9	9
+
+# Test 2: Mixed simple comparison and AND conjunction
+query II
+SELECT * FROM integers WHERE a = 5 OR (a >= 8 AND a <= 10) ORDER BY a
+----
+5	5
+8	8
+9	9
+10	10
+
+# Test 3: Multiple AND branches (3 ranges)
+query II
+SELECT * FROM integers WHERE (a >= 1 AND a < 2) OR (a >= 4 AND a < 5) OR (a >= 8 AND a <= 9) ORDER BY a
+----
+1	1
+4	4
+8	8
+9	9
+
+# Test 4: Different columns within same AND - results should still be correct
+query II
+SELECT * FROM integers WHERE (a >= 1 AND b < 5) OR a = 3 ORDER BY a
+----
+1	1
+2	2
+3	3
+4	4
+
+# Test 5: Different columns across OR branches - results should still be correct
+query II
+SELECT * FROM integers WHERE (a >= 1 AND a < 3) OR (b >= 8 AND b < 10) ORDER BY a
+----
+1	1
+2	2
+8	8
+9	9
+
+# Test 6: Simple OR (should be pushed down)
+query II
+SELECT * FROM integers WHERE (a >= 5) OR (a < 2) ORDER BY a
+----
+1	1
+5	5
+6	6
+7	7
+8	8
+9	9
+10	10
+
+# Test 7: Constant on left side of comparison
+query II
+SELECT * FROM integers WHERE (1 <= a AND 3 > a) OR (7 <= a AND 9 >= a) ORDER BY a
+----
+1	1
+2	2
+7	7
+8	8
+9	9
+
