@@ -263,9 +263,18 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	}
 
 	// truncate the WAL
+	unique_ptr<lock_guard<mutex>> wal_lock;
 	if (has_wal) {
-		storage_manager.WALFinishCheckpoint();
+		wal_lock = storage_manager.GetWALLock();
+		storage_manager.WALFinishCheckpoint(*wal_lock);
 	}
+
+	// FIXME: hold the WAL lock while we are merging checkpoint deltas
+	// this prevents any commits from happening while this is going on
+	// this is currently required because of the way that "deletes + inserts" of the same row are processed
+	// currently we FIRST append the new (duplicate) insert, THEN delete the old value
+	// if we append the duplicate value, then call MergeCheckpointDeltas, that will fail with a duplicate entry error
+	// we can fix this and stop holding the WAL lock once we fix / remove that order of operations in the commit
 
 	// for any indexes that were appended to while checkpointing, merge the delta back into the main index
 	// FIXME: we only clean up appends made to tables that are part of this checkpoint
@@ -283,7 +292,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &storage = table.GetStorage();
 		auto &table_info = storage.GetDataTableInfo();
 		auto &index_list = table_info->GetIndexes();
-		index_list.MergeCheckpointDeltas(options.transaction_id);
+		index_list.MergeCheckpointDeltas(storage, options.transaction_id);
 	}
 }
 

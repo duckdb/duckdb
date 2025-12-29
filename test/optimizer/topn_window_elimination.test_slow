@@ -15,7 +15,10 @@ statement ok
 CREATE TABLE tbl_with_null AS SELECT * FROM VALUES (0, [0], null), (0, [1], 1), (1, [2], null), (null, [3], 3), (null, [4], 4), t(grp, a, b)
 
 statement ok
-CREATE TABLE tbl2 AS SELECT * FROM VALUES (0, 'a'), (1, 'b'), (null, 'c'), t(x, y)
+CREATE TABLE tbl2(generated_col AS (x + 1), x INTEGER, y VARCHAR)
+
+statement ok
+INSERT INTO tbl2 VALUES (0, 'a'), (1, 'b'), (null, 'c')
 
 statement ok
 CREATE MACRO window_fun(table_name, col_names, sort_order, topn) AS TABLE
@@ -225,3 +228,66 @@ ORDER BY a.id, list_distance(a.vec, neighbor.vec);
 query IIII
 SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
 ---
+
+#
+# Test non strict less than conditions
+#
+statement ok
+set disabled_optimizers = ''
+
+statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
+CREATE TABLE ints AS 
+	SELECT CAST(FLOOR(RANDOM() * 100) AS INT) as rand 
+	FROM range(10_000_000);
+
+# = 1 conditions should be optimized
+query I
+SELECT rand
+FROM ints
+QUALIFY 1 = row_number() OVER(ORDER BY rand);
+----
+0
+
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 1 = row_number() OVER(ORDER BY rand);
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# Less than conditions should be optimized
+query I
+SELECT rand
+FROM ints
+QUALIFY 2 > row_number() OVER(ORDER BY rand);
+----
+0
+
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 2 > row_number() OVER(ORDER BY rand);
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# NOP comparisons should not be optimised
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 0 = row_number() OVER(ORDER BY rand);
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 1 > row_number() OVER(ORDER BY rand);
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*

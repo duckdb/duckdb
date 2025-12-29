@@ -115,7 +115,7 @@ void Iterator::FindMinimum(const Node &node) {
 		// Traverse the prefix.
 		if (ref.get().GetType() == NType::PREFIX) {
 			Prefix prefix(art, ref.get());
-			for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+			for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 				current_key.Push(prefix.data[i]);
 				if (status == GateStatus::GATE_SET) {
 					row_id[nested_depth] = prefix.data[i];
@@ -195,13 +195,13 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 
 		// Push back all prefix bytes.
 		Prefix prefix(art, ref.get());
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+		for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
 		nodes.emplace(ref.get(), 0);
 
 		// We compare the prefix bytes with the key bytes.
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+		for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 			// We found a prefix byte that is less than its corresponding key byte.
 			// I.e., the subsequent node is lesser than the key. Thus, the next node
 			// is the lower bound.
@@ -219,7 +219,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 		}
 
 		// The prefix matches the key. Move to the child and update depth.
-		depth += prefix.data[Prefix::Count(art)];
+		depth += prefix.data[art.PrefixCount()];
 		ref = *prefix.ptr;
 	}
 	// Should always have a node with metadata.
@@ -278,7 +278,7 @@ void Iterator::PopNode() {
 	} else {
 		// Pop all prefix bytes and the node.
 		Prefix prefix(art, nodes.top().node);
-		auto prefix_byte_count = prefix.data[Prefix::Count(art)];
+		auto prefix_byte_count = prefix.data[art.PrefixCount()];
 		current_key.Pop(prefix_byte_count);
 
 		if (status == GateStatus::GATE_SET) {

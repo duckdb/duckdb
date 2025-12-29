@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "parquet_crypto.hpp"
+#include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
@@ -751,8 +752,17 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 		if (stats.empty()) {
 			return string();
 		}
-		auto numeric_val = Load<T>(const_data_ptr_cast(stats.data()));
-		return Value::DECIMAL(numeric_val, width, scale).ToString();
+
+		auto stats_data = const_data_ptr_cast(stats.data());
+
+		if (sizeof(T) == sizeof(hugeint_t)) {
+			auto _schema = ParquetColumnSchema();
+			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), _schema);
+			return Value::DECIMAL(numeric_val, width, scale).ToString();
+		} else {
+			auto numeric_val = Load<T>(stats_data);
+			return Value::DECIMAL(numeric_val, width, scale).ToString();
+		}
 	}
 };
 
@@ -874,7 +884,7 @@ struct NullStatsUnifier : public ColumnStatsUnifier {
 static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_uniq<NullStatsUnifier>();
+		return make_uniq<NumericStatsUnifier<int8_t>>();
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -919,6 +929,8 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 			return make_uniq<DecimalStatsUnifier<int32_t>>(width, scale);
 		case PhysicalType::INT64:
 			return make_uniq<DecimalStatsUnifier<int64_t>>(width, scale);
+		case PhysicalType::INT128:
+			return make_uniq<DecimalStatsUnifier<hugeint_t>>(width, scale);
 		default:
 			return make_uniq<NullStatsUnifier>();
 		}
