@@ -693,7 +693,7 @@ static unique_ptr<TableFilter> TryProcessOrChild(Expression &child, const vector
 			return std::move(and_filter->child_filters[0]);
 		}
 
-		return and_filter;
+		return std::move(and_filter);
 	}
 
 	return nullptr;
