@@ -189,8 +189,9 @@ AttachedDatabaseWrapper::AttachedDatabaseWrapper(ClientContext &context,
 AttachedDatabaseWrapper::~AttachedDatabaseWrapper() {
 	if (attached_database) {
 		auto &db_manager = DatabaseManager::Get(context);
-		db_manager.DetachDatabase(context, attached_database->GetName(), OnEntryNotFound::RETURN_NULL);
+		auto name = attached_database->GetName();
 		attached_database.reset();
+		db_manager.DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
 	}
 }
 DuckDBReader::DuckDBReader(ClientContext &context_p, OpenFileInfo file_p, const DuckDBFileReaderOptions &options)

@@ -25,6 +25,15 @@ class FixedSizeAllocator;
 
 struct ARTIndexScanState;
 
+struct DeleteIndexInfo {
+	DeleteIndexInfo() : delete_indexes(nullptr) {
+	}
+	explicit DeleteIndexInfo(vector<reference<BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
+	}
+
+	optional_ptr<vector<reference<BoundIndex>>> delete_indexes;
+};
+
 class ART : public BoundIndex {
 public:
 	friend class Leaf;
@@ -63,12 +72,11 @@ public:
 	bool owns_data;
 	//! True, if keys need a key length verification pass.
 	bool verify_max_key_len;
-	//! The number of bytes fitting in the prefix.
-	uint8_t prefix_count;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
+	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
@@ -87,7 +95,8 @@ public:
 	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) override;
 
 	//! Delete a chunk from the ART.
-	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
+	idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+	                optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) override;
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 
@@ -109,9 +118,8 @@ public:
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
-	bool RequiresTransactionality() const override;
-	unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
-	                                       IndexConstraintType constraint_type) const override;
+	bool SupportsDeltaIndexes() const override;
+	unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const override;
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
@@ -129,7 +137,16 @@ public:
 	//! Returns string representation of the ART.
 	string ToString(IndexLock &l, bool display_ascii = false) override;
 
+	//! Returns the configured prefix byte capacity.
+	uint8_t PrefixCount() const {
+		return prefix_count;
+	}
+
 private:
+	//! The number of bytes fitting in the prefix.
+	uint8_t prefix_count;
+
+	bool FullScan(idx_t max_count, set<row_t> &row_ids);
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
 	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
@@ -138,7 +155,7 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
+	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
 	                optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,

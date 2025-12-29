@@ -1,42 +1,30 @@
 #include "parquet_reader.hpp"
 
-#include "reader/boolean_column_reader.hpp"
-#include "reader/callback_column_reader.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "parquet_types.h"
 #include "column_reader.hpp"
-#include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
-#include "parquet_timestamp.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
-#include "reader/string_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
-#include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
-#include "duckdb/common/encryption_functions.hpp"
-
-#include <cassert>
-#include <chrono>
-#include <cstring>
-#include <sstream>
 
 namespace duckdb {
 
@@ -176,7 +164,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
-		                    std::move(aad_crypto_metadata));
+		                    aad_crypto_metadata);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -504,7 +492,8 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
 	const auto is_at_root = depth == 1;
 	const auto is_in_gpq_metadata = metadata.geo_metadata && metadata.geo_metadata->IsGeometryColumn(s_ele.name);
-	const auto is_leaf = s_ele.num_children == 0;
+	// A leaf node has a type set (as per Parquet spec)
+	const auto is_leaf = s_ele.__isset.type;
 	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
 
 	if (is_geoparquet_geom) {
@@ -557,11 +546,23 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
 
-	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
+	// Determine if this is an inner node
+	// According to Parquet spec: nodes without 'type' set are inner nodes (groups)
+	// For backwards compatibility with non-standard files, also check the old condition
+	bool is_inner_node = !s_ele.__isset.type || (s_ele.__isset.num_children && s_ele.num_children > 0);
+
+	if (is_inner_node && s_ele.__isset.type) {
+		// This case handles non-standard files where both type and num_children are set
+		// Prioritize num_children if set and > 0
+		is_inner_node = s_ele.__isset.num_children && s_ele.num_children > 0;
+	}
+
+	if (is_inner_node) { // inner node
 		vector<ParquetColumnSchema> child_schemas;
 
 		idx_t c_idx = 0;
-		while (c_idx < NumericCast<idx_t>(s_ele.num_children)) {
+		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
+		while (c_idx < num_children) {
 			next_schema_idx++;
 
 			auto child_schema =
@@ -637,8 +638,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		if (is_repeated) {
 			auto list_type = LogicalType::LIST(result.type);
 			vector<ParquetColumnSchema> list_child = {std::move(result)};
-			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, std::move(list_type), max_define, max_repeat,
-			                                               this_idx, next_file_idx, std::move(list_child));
+			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+			                                               next_file_idx, std::move(list_child));
 		}
 		result.parent_schema_index = this_idx;
 		return result;
@@ -652,8 +653,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			auto list_type = LogicalType::LIST(result.type);
 			vector<ParquetColumnSchema> list_child = {std::move(result)};
-			return ParquetColumnSchema::FromChildSchemas(s_ele.name, std::move(list_type), max_define, max_repeat,
-			                                             this_idx, next_file_idx, std::move(list_child));
+			return ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+			                                             next_file_idx, std::move(list_child));
 		}
 
 		return result;
@@ -1220,17 +1221,64 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
-	GetPartitionStats(*GetFileMetadata(), result);
+	GetPartitionStats(*GetFileMetadata(), result, *root_schema, parquet_options);
 }
 
-void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata,
-                                      vector<PartitionStatistics> &result) {
+struct ParquetPartitionRowGroup : public PartitionRowGroup {
+	ParquetPartitionRowGroup(const duckdb_parquet::FileMetaData &metadata_p,
+	                         optional_ptr<ParquetColumnSchema> root_schema_p,
+	                         optional_ptr<ParquetOptions> parquet_options_p, const idx_t row_group_idx_p)
+	    : metadata(metadata_p), root_schema(root_schema_p), parquet_options(parquet_options_p),
+	      row_group_idx(row_group_idx_p) {
+	}
+
+	const duckdb_parquet::FileMetaData &metadata;
+	const optional_ptr<ParquetColumnSchema> root_schema;
+	const optional_ptr<ParquetOptions> parquet_options;
+	const idx_t row_group_idx;
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
+		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		D_ASSERT(metadata.row_groups.size() > row_group_idx);
+		D_ASSERT(root_schema->children.size() > primary_index);
+
+		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_schema = root_schema->children[primary_index];
+		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
+		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		D_ASSERT(metadata.row_groups.size() > row_group_idx);
+		D_ASSERT(root_schema->children.size() > primary_index);
+
+		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_chunk = row_group.columns[primary_index];
+
+		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
+		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
+		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
+			const auto &stats = column_chunk.meta_data.statistics;
+			return stats.is_min_value_exact && stats.is_max_value_exact;
+		}
+		return false;
+	}
+};
+
+void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
+                                      optional_ptr<ParquetColumnSchema> root_schema,
+                                      optional_ptr<ParquetOptions> parquet_options) {
 	idx_t offset = 0;
-	for (auto &row_group : metadata.row_groups) {
+	for (idx_t i = 0; i < metadata.row_groups.size(); i++) {
+		auto &row_group = metadata.row_groups[i];
 		PartitionStatistics partition_stats;
 		partition_stats.row_start = offset;
 		partition_stats.count = row_group.num_rows;
 		partition_stats.count_type = CountType::COUNT_EXACT;
+		if (root_schema && parquet_options) {
+			partition_stats.partition_row_group =
+			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i);
+		}
 		offset += row_group.num_rows;
 		result.push_back(partition_stats);
 	}

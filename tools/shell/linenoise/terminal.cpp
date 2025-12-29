@@ -453,7 +453,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 			if (buf[i] == '\a') {
 				break;
 			}
-			if (i > 2 && buf[i - 1] == '\e' && buf[i] == '\\') {
+			if (i > 2 && buf[i - 1] == '\x1b' && buf[i] == '\\') {
 				i--;
 				break;
 			}
