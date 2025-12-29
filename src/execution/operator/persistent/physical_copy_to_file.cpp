@@ -254,7 +254,7 @@ private:
 };
 
 CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
-	if (finished || created_files.empty()) {
+	if (!initialized || finished || created_files.empty()) {
 		return;
 	}
 	// If we reach here, the query failed before Finalize was called
