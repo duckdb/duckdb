@@ -24,8 +24,8 @@ void WorkerTask(DuckDB *db, int worker_id, atomic<int> *success_count) {
 		int val = val_distribution(generator);
 
 		// UPDATE the row
-		auto update_result =
-		    con.Query("UPDATE test_stress_update_issue_19688 SET val=$1, payload=$2 WHERE id = $3", val, JSON_PAYLOAD, id);
+		auto update_result = con.Query("UPDATE test_stress_update_issue_19688 SET val=$1, payload=$2 WHERE id = $3",
+		                               val, JSON_PAYLOAD, id);
 		if (update_result->HasError()) {
 			REQUIRE(update_result->GetErrorType() != ExceptionType::FATAL);
 			return;
@@ -41,7 +41,8 @@ void WorkerTask(DuckDB *db, int worker_id, atomic<int> *success_count) {
 		(*success_count)++;
 
 		// INSERT it back
-		auto insert_result = con.Query("INSERT INTO test_stress_update_issue_19688 VALUES ($1, $2, $3)", id, val, JSON_PAYLOAD);
+		auto insert_result =
+		    con.Query("INSERT INTO test_stress_update_issue_19688 VALUES ($1, $2, $3)", id, val, JSON_PAYLOAD);
 		if (insert_result->HasError()) {
 			REQUIRE(insert_result->GetErrorType() != ExceptionType::FATAL);
 			return;
@@ -66,8 +67,8 @@ TEST_CASE("Concurrent stress test: UPDATE/DELETE/INSERT", "[api][concurrent]") {
 
 	// Seed 1000 rows and verify the initial count.
 	for (int idx = 0; idx < STRESS_TEST_NUM_ROWS; idx++) {
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test_stress_update_issue_19688 (id, val, payload) VALUES ($1, $2, $3)", idx, idx * 1000, JSON_PAYLOAD));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test_stress_update_issue_19688 (id, val, payload) VALUES ($1, $2, $3)",
+		                          idx, idx * 1000, JSON_PAYLOAD));
 	}
 	auto count_result = con.Query("SELECT COUNT(*) FROM test_stress_update_issue_19688");
 	REQUIRE(CHECK_COLUMN(count_result, 0, {STRESS_TEST_NUM_ROWS}));
