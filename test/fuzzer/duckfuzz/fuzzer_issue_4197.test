@@ -1,0 +1,7 @@
+# name: test/fuzzer/duckfuzz/fuzzer_issue_4197.test
+# description: Test fuzzyduck
+# group: [duckfuzz]
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+SELECT "-"(c1, c2) FROM test_vector_types(CAST(NULL AS BIGNUM), CAST(NULL AS BIGNUM)) AS test_vector_types(c1, c2)

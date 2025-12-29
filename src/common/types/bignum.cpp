@@ -36,13 +36,9 @@ void Bignum::Verify(const bignum_t &input) {
 		number_of_bytes |= static_cast<uint32_t>(bignum_ptr[1]) << 8 & 0xFF00;
 		number_of_bytes |= static_cast<uint32_t>(bignum_ptr[2]) & 0xFF;
 	}
-	if (number_of_bytes != bignum_bytes - 3) {
-		throw InternalException("The number of bytes set in the Bignum header: %d bytes. Does not "
-		                        "match the number of bytes encountered as the bignum data: %d bytes.",
-		                        number_of_bytes, bignum_bytes - 3);
-	}
-	//  No bytes between 4 and end can be 0, unless total size == 4
-	if (bignum_bytes > 4) {
+
+	//  No data bytes between 1 and end can be 0, unless data size == 1
+	if (number_of_bytes > 1) {
 		if (is_negative) {
 			if (static_cast<data_t>(~bignum_ptr[3]) == 0) {
 				throw InternalException("Invalid top data bytes set to 0 for BIGNUM values");
