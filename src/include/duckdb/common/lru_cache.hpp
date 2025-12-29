@@ -44,7 +44,6 @@ public:
 		// Remove existing entry if present
 		auto existing_it = entry_map.find(key);
 		if (existing_it != entry_map.end()) {
-			current_memory -= existing_it->second.memory;
 			DeleteImpl(existing_it);
 		}
 
@@ -71,7 +70,6 @@ public:
 		if (it == entry_map.end()) {
 			return false;
 		}
-		current_memory -= it->second.memory;
 		DeleteImpl(it);
 		return true;
 	}
@@ -115,6 +113,8 @@ private:
 	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
+		current_memory -= iter->second.memory;
+		D_ASSERT(current_memory >= 0);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}
@@ -129,7 +129,6 @@ private:
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			if (stale_it != entry_map.end()) {
-				current_memory -= stale_it->second.memory;
 				DeleteImpl(stale_it);
 			} else {
 				// Should not happen, but be defensive
