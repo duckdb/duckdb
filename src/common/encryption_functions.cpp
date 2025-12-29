@@ -33,6 +33,9 @@ idx_t EncryptionNonce::size() const {
 EncryptionEngine::EncryptionEngine() {
 }
 
+EncryptionEngine::~EncryptionEngine() {
+}
+
 const_data_ptr_t EncryptionEngine::GetKeyFromCache(DatabaseInstance &db, const string &key_name) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	return keys.GetKey(key_name);
@@ -43,12 +46,22 @@ bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name)
 	return keys.HasKey(key_name);
 }
 
+void EncryptionEngine::DeleteKey(DatabaseInstance &db, const string &key_name) {
+	auto &keys = EncryptionKeyManager::Get(db);
+
+	if (keys.HasKey(key_name)) {
+		keys.DeleteKey(key_name);
+		return;
+	}
+
+	throw InvalidInputException("Key with name '" + key_name + "' not found");
+}
+
 void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	if (!keys.HasKey(key_name)) {
 		keys.AddKey(key_name, key);
 	} else {
-		// wipe out the key
 		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key,
 		                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
@@ -61,7 +74,6 @@ string EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key) {
 	if (!keys.HasKey(key_id)) {
 		keys.AddKey(key_id, key);
 	} else {
-		// wipe out the original key
 		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key,
 		                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}

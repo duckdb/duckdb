@@ -39,6 +39,7 @@ public:
 	static void AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe = true);
 	static string AddKeyToCache(DatabaseInstance &db, data_ptr_t key);
 	static void AddTempKeyToCache(DatabaseInstance &db);
+	static void DeleteKey(DatabaseInstance &db, const string &key_name);
 
 	//! Encryption Functions
 	static void EncryptBlock(AttachedDatabase &attached_db, const string &key_id, FileBuffer &block,
