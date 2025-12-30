@@ -224,13 +224,17 @@ shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Deserialize(Deserializer &deserializ
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<TypeParameter>>>(201, "parameters", parameters);
+	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<TypeParameter>>>(203, "parameters", parameters);
 }
 
 shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<UnboundTypeInfo>(new UnboundTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TypeParameter>>>(201, "parameters", result->parameters);
+	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<string>(202, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TypeParameter>>>(203, "parameters", result->parameters);
 	return std::move(result);
 }
 

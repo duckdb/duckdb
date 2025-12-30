@@ -296,10 +296,12 @@ protected:
 };
 
 struct UnboundTypeInfo : public ExtraTypeInfo {
-	explicit UnboundTypeInfo(string name_p);
-	UnboundTypeInfo(string name_p, vector<unique_ptr<TypeParameter>> parameters);
+	explicit UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
+	                         vector<unique_ptr<TypeParameter>> parameters);
 
 	// The name of the unbound type
+	string catalog;
+	string schema;
 	string name;
 
 	// The type parameters of the unbound type
