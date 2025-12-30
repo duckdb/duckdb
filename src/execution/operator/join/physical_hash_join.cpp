@@ -38,19 +38,6 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
-	if (residual_p) {
-		vector<idx_t> probe_cols;
-		vector<idx_t> build_cols;
-
-		auto &lhs_types = children[0].get().GetTypes();
-		ExtractResidualPredicateColumns(residual_p, lhs_types.size(), probe_cols, build_cols);
-
-		// create info struct
-		residual_info = make_uniq<ResidualPredicateInfo>(std::move(residual_p));
-		residual_info->probe_cols = std::move(probe_cols);
-		residual_info->build_cols = std::move(build_cols);
-	}
-
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -59,156 +46,49 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	auto &lhs_input_types = children[0].get().GetTypes();
 	auto &rhs_input_types = children[1].get().GetTypes();
 
-	// Build mapping for join conditions
-	unordered_map<idx_t, idx_t> build_input_to_layout;
-	unordered_map<idx_t, idx_t> build_columns_in_conditions;
+	if (residual_p) {
+		vector<idx_t> probe_cols;
+		vector<idx_t> build_cols;
 
-	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
-		auto &condition = conditions[cond_idx];
-		condition_types.push_back(condition.left->return_type);
+		ExtractResidualPredicateColumns(residual_p, lhs_input_types.size(), probe_cols, build_cols);
 
-		if (condition.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto build_input_idx = condition.right->Cast<BoundReferenceExpression>().index;
-			build_columns_in_conditions.emplace(build_input_idx, cond_idx);
-		}
+		// create info struct
+		residual_info = make_uniq<ResidualPredicateInfo>(std::move(residual_p));
+		residual_info->probe_cols = std::move(probe_cols);
+		residual_info->build_cols = std::move(build_cols);
 	}
 
-	// Map predicate build columns
-	for (auto rhs_idx_with_offset : residual_info->build_cols) {
-		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
-		auto it = build_columns_in_conditions.find(rhs_idx);
-		if (it != build_columns_in_conditions.end()) {
-			build_input_to_layout[rhs_idx_with_offset] = it->second;
-		}
+	// build condition types
+	for (auto &condition : conditions) {
+		condition_types.push_back(condition.left->return_type);
 	}
 
 	// build lhs_output_columns
 	lhs_output_columns.col_idxs = left_projection_map;
 	if (lhs_output_columns.col_idxs.empty()) {
-		lhs_output_columns.col_idxs.reserve(lhs_input_types.size());
 		for (idx_t i = 0; i < lhs_input_types.size(); i++) {
 			lhs_output_columns.col_idxs.emplace_back(i);
 		}
 	}
 
 	for (auto &lhs_col : lhs_output_columns.col_idxs) {
-		auto &lhs_col_type = lhs_input_types[lhs_col];
-		lhs_output_columns.col_types.push_back(lhs_col_type);
+		lhs_output_columns.col_types.push_back(lhs_input_types[lhs_col]);
 	}
 
-	// build lhs_probe_columns
-	unordered_set<idx_t> required_probe_cols;
-
-	// add all output columns
-	for (auto col : lhs_output_columns.col_idxs) {
-		required_probe_cols.insert(col);
-	}
-
-	// add all predicate columns
-	for (auto col : residual_info->probe_cols) {
-		required_probe_cols.insert(col);
-	}
-
-	lhs_probe_columns.col_idxs.assign(required_probe_cols.begin(), required_probe_cols.end());
-	std::sort(lhs_probe_columns.col_idxs.begin(), lhs_probe_columns.col_idxs.end());
-
-	for (auto col_idx : lhs_probe_columns.col_idxs) {
-		lhs_probe_columns.col_types.push_back(lhs_input_types[col_idx]);
-	}
-
-	// build mapping for ONLY predicate probe columns (input index -> position in lhs_probe_columns)
-	for (auto predicate_col_idx : residual_info->probe_cols) {
-		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
-			if (lhs_probe_columns.col_idxs[i] == predicate_col_idx) {
-				residual_info->probe_input_to_probe_map[predicate_col_idx] = i;
-				break;
-			}
-		}
-	}
-
-	// build lhs_output_in_probe mapping (output columns -> positions in lhs_probe_columns)
-	lhs_output_in_probe.reserve(lhs_output_columns.col_idxs.size());
-	for (auto output_col_idx : lhs_output_columns.col_idxs) {
-		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
-			if (lhs_probe_columns.col_idxs[i] == output_col_idx) {
-				lhs_output_in_probe.push_back(i);
-				break;
-			}
+	// initialize residual predicate structures if present
+	if (residual_info) {
+		InitializeResidualPredicate(lhs_input_types);
+	} else {
+		// lhs_probe_columns = lhs_output_columns
+		lhs_probe_columns = lhs_output_columns;
+		lhs_output_in_probe.reserve(lhs_output_columns.col_idxs.size());
+		for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
+			lhs_output_in_probe.push_back(i);
 		}
 	}
 
 	// handle build side (RHS)
-	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
-		if (!residual_info->build_cols.empty()) {
-			for (auto rhs_idx_with_offset : residual_info->build_cols) {
-				idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
-				auto it = build_columns_in_conditions.find(rhs_idx);
-				if (it == build_columns_in_conditions.end()) {
-					idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
-					build_input_to_layout[rhs_idx_with_offset] = layout_pos;
-
-					payload_columns.col_idxs.push_back(rhs_idx);
-					payload_columns.col_types.push_back(rhs_input_types[rhs_idx]);
-				}
-			}
-		}
-
-		residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
-		return;
-	}
-
-	// for other join types
-	auto right_projection_map_copy = right_projection_map;
-	if (right_projection_map_copy.empty()) {
-		for (idx_t i = 0; i < rhs_input_types.size(); i++) {
-			right_projection_map_copy.emplace_back(i);
-		}
-	}
-
-	for (auto rhs_idx_with_offset : residual_info->build_cols) {
-		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
-
-		// skip if it's a join condition
-		auto it = build_columns_in_conditions.find(rhs_idx);
-		if (it == build_columns_in_conditions.end()) {
-			idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
-			build_input_to_layout[rhs_idx_with_offset] = layout_pos;
-
-			payload_columns.col_idxs.push_back(rhs_idx);
-			payload_columns.col_types.push_back(rhs_input_types[rhs_idx]);
-		}
-	}
-
-	for (auto &rhs_col : right_projection_map_copy) {
-		auto &rhs_col_type = rhs_input_types[rhs_col];
-		idx_t rhs_col_with_offset = lhs_input_types.size() + rhs_col;
-
-		// check if it's a join condition
-		auto it = build_columns_in_conditions.find(rhs_col);
-
-		if (it != build_columns_in_conditions.end()) {
-			// it's in join conditions - use condition position
-			rhs_output_columns.col_idxs.push_back(it->second);
-		} else {
-			// check if already in payload (from predicate)
-			auto layout_it = build_input_to_layout.find(rhs_col_with_offset);
-
-			if (layout_it != build_input_to_layout.end()) {
-				// already in payload (from predicate) - reuse position
-				rhs_output_columns.col_idxs.push_back(layout_it->second);
-			} else {
-				// new column - add to payload
-				idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
-				payload_columns.col_idxs.push_back(rhs_col);
-				payload_columns.col_types.push_back(rhs_col_type);
-				rhs_output_columns.col_idxs.push_back(layout_pos);
-			}
-		}
-
-		rhs_output_columns.col_types.push_back(rhs_col_type);
-	}
-
-	residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
+	InitializeBuildSide(lhs_input_types, rhs_input_types, right_projection_map);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
@@ -221,8 +101,8 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
                                                        vector<idx_t> &probe_column_ids,
                                                        vector<idx_t> &build_column_ids) {
-	multiset<idx_t> probe_cols;
-	multiset<idx_t> build_cols;
+	unordered_set<idx_t> probe_cols;
+	unordered_set<idx_t> build_cols;
 
 	ExpressionIterator::EnumerateExpression(predicate, [&](unique_ptr<Expression> &expr) {
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_REF) {
@@ -241,6 +121,136 @@ void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &p
 
 	probe_column_ids.assign(probe_cols.begin(), probe_cols.end());
 	build_column_ids.assign(build_cols.begin(), build_cols.end());
+}
+
+void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types) {
+	D_ASSERT(residual_info && residual_info->HasPredicate());
+	// build lhs_probe_columns (output + predicate columns)
+	unordered_set<idx_t> required_probe_cols;
+	for (auto col : lhs_output_columns.col_idxs) {
+		required_probe_cols.insert(col);
+	}
+	for (auto col : residual_info->probe_cols) {
+		required_probe_cols.insert(col);
+	}
+
+	lhs_probe_columns.col_idxs.assign(required_probe_cols.begin(), required_probe_cols.end());
+	std::sort(lhs_probe_columns.col_idxs.begin(), lhs_probe_columns.col_idxs.end());
+
+	for (auto col_idx : lhs_probe_columns.col_idxs) {
+		lhs_probe_columns.col_types.push_back(lhs_input_types[col_idx]);
+	}
+
+	// build mapping for predicate probe columns
+	for (auto predicate_col_idx : residual_info->probe_cols) {
+		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
+			if (lhs_probe_columns.col_idxs[i] == predicate_col_idx) {
+				residual_info->probe_input_to_probe_map[predicate_col_idx] = i;
+				break;
+			}
+		}
+	}
+
+	// build lhs_output_in_probe mapping
+	lhs_output_in_probe.reserve(lhs_output_columns.col_idxs.size());
+	for (auto output_col_idx : lhs_output_columns.col_idxs) {
+		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
+			if (lhs_probe_columns.col_idxs[i] == output_col_idx) {
+				lhs_output_in_probe.push_back(i);
+				break;
+			}
+		}
+	}
+}
+
+void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_types,
+                                           const vector<LogicalType> &rhs_input_types,
+                                           const vector<idx_t> &right_projection_map) {
+	unordered_map<idx_t, idx_t> build_columns_in_conditions;
+	unordered_map<idx_t, idx_t> build_input_to_layout;
+
+	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
+		auto &condition = conditions[cond_idx];
+		if (condition.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
+			auto build_input_idx = condition.right->Cast<BoundReferenceExpression>().index;
+			build_columns_in_conditions.emplace(build_input_idx, cond_idx);
+		}
+	}
+
+	// handle SEMI/ANTI/MARK joins
+	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
+		MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_columns_in_conditions, build_input_to_layout);
+
+		if (residual_info && residual_info->HasPredicate()) {
+			residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
+		}
+		return;
+	}
+
+	// for other join types
+	auto right_projection_map_copy = right_projection_map;
+	if (right_projection_map_copy.empty()) {
+		for (idx_t i = 0; i < rhs_input_types.size(); i++) {
+			right_projection_map_copy.emplace_back(i);
+		}
+	}
+
+	// map ALL predicate columns (both in conditions and not)
+	MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_columns_in_conditions, build_input_to_layout);
+
+	// build rhs_output_columns
+	for (auto &rhs_col : right_projection_map_copy) {
+		auto &rhs_col_type = rhs_input_types[rhs_col];
+		idx_t rhs_col_with_offset = lhs_input_types.size() + rhs_col;
+
+		auto it = build_columns_in_conditions.find(rhs_col);
+		if (it != build_columns_in_conditions.end()) {
+			// it's in join conditions
+			rhs_output_columns.col_idxs.push_back(it->second);
+		} else {
+			// check if already in payload (from predicate)
+			auto layout_it = build_input_to_layout.find(rhs_col_with_offset);
+			if (layout_it != build_input_to_layout.end()) {
+				rhs_output_columns.col_idxs.push_back(layout_it->second);
+			} else {
+				// new column - add to payload
+				idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
+				payload_columns.col_idxs.push_back(rhs_col);
+				payload_columns.col_types.push_back(rhs_col_type);
+				rhs_output_columns.col_idxs.push_back(layout_pos);
+			}
+		}
+		rhs_output_columns.col_types.push_back(rhs_col_type);
+	}
+
+	if (residual_info && residual_info->HasPredicate()) {
+		residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
+	}
+}
+
+void PhysicalHashJoin::MapResidualBuildColumns(const vector<LogicalType> &lhs_input_types,
+                                               const vector<LogicalType> &rhs_input_types,
+                                               const unordered_map<idx_t, idx_t> &build_columns_in_conditions,
+                                               unordered_map<idx_t, idx_t> &build_input_to_layout) {
+	if (!residual_info || !residual_info->HasPredicate()) {
+		return;
+	}
+
+	for (auto rhs_idx_with_offset : residual_info->build_cols) {
+		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
+		auto it = build_columns_in_conditions.find(rhs_idx);
+
+		if (it != build_columns_in_conditions.end()) {
+			// column IS in conditions
+			build_input_to_layout[rhs_idx_with_offset] = it->second;
+		} else {
+			// column NOT in conditions - add to payload
+			idx_t layout_pos = condition_types.size() + payload_columns.col_idxs.size();
+			build_input_to_layout[rhs_idx_with_offset] = layout_pos;
+			payload_columns.col_idxs.push_back(rhs_idx);
+			payload_columns.col_types.push_back(rhs_input_types[rhs_idx]);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -393,7 +403,8 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 	auto result = make_uniq<JoinHashTable>(
 	    context, *this, conditions, payload_columns.col_types, join_type, rhs_output_columns.col_idxs,
 	    (residual_info && residual_info->HasPredicate()) ? residual_info->predicate->Copy() : nullptr,
-	    residual_info->build_input_to_layout_map, residual_info->probe_input_to_probe_map, lhs_output_in_probe);
+	    residual_info ? residual_info->build_input_to_layout_map : unordered_map<idx_t, idx_t>(),
+	    residual_info ? residual_info->probe_input_to_probe_map : unordered_map<idx_t, idx_t>(), lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join

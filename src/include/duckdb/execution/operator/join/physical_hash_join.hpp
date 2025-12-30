@@ -131,6 +131,14 @@ public:
 private:
 	static void ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
 	                                            vector<idx_t> &probe_column_ids, vector<idx_t> &build_column_ids);
+
+	void InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types);
+
+	void InitializeBuildSide(const vector<LogicalType> &lhs_input_types, const vector<LogicalType> &rhs_input_types,
+	                         const vector<idx_t> &right_projection_map);
+	void MapResidualBuildColumns(const vector<LogicalType> &lhs_input_types, const vector<LogicalType> &rhs_input_types,
+	                             const unordered_map<idx_t, idx_t> &build_columns_in_conditions,
+	                             unordered_map<idx_t, idx_t> &build_input_to_layout);
 };
 
 } // namespace duckdb
