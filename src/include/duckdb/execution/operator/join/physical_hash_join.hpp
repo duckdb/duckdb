@@ -137,6 +137,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	static void ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
+	                                            vector<idx_t> &probe_column_ids, vector<idx_t> &build_column_ids);
 };
 
 } // namespace duckdb

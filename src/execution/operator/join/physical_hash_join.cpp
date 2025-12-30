@@ -209,6 +209,31 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                        nullptr, nullptr, {}, {}) {
 }
 
+void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
+                                                       vector<idx_t> &probe_column_ids,
+                                                       vector<idx_t> &build_column_ids) {
+	multiset<idx_t> probe_cols;
+	multiset<idx_t> build_cols;
+
+	ExpressionIterator::EnumerateExpression(predicate, [&](unique_ptr<Expression> &expr) {
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_REF) {
+			auto &ref = expr->Cast<BoundReferenceExpression>();
+			idx_t col_idx = ref.index;
+
+			if (col_idx < probe_column_count) {
+				// Probe (LHS) column
+				probe_cols.insert(col_idx);
+			} else {
+				// Build (RHS) column
+				build_cols.insert(col_idx);
+			}
+		}
+	});
+
+	probe_column_ids.assign(probe_cols.begin(), probe_cols.end());
+	build_column_ids.assign(build_cols.begin(), build_cols.end());
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
