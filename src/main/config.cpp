@@ -116,7 +116,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(EnableMacroDependenciesSetting),
     DUCKDB_GLOBAL(EnableMbedtlsSetting),
     DUCKDB_SETTING(EnableObjectCacheSetting),
-    DUCKDB_GLOBAL(EnableOpensslSetting),
     DUCKDB_LOCAL(EnableProfilingSetting),
     DUCKDB_LOCAL(EnableProgressBarSetting),
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),

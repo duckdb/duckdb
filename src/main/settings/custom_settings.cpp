@@ -1248,11 +1248,28 @@ void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 	if (config.options.enable_mbedtls) {
 		// this overrides OpenSSL, even when httpfs is loaded
 		config.encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	} else {
+		// check if there are attached databases encrypted
+		bool encrypted_db_attached = false;
+		for (auto &database : db->GetDatabaseManager().GetDatabases()) {
+			if (database->GetStorageManager().IsEncrypted()) {
+				encrypted_db_attached = true;
+				break;
+			};
+		};
+
+		if (encrypted_db_attached) {
+			// autoload httpfs if any attached db uses encryption
+			if (!ExtensionHelper::TryAutoLoadExtension(*db, "httpfs")) {
+				throw InvalidConfigurationException(
+				    "Cannot disable MbedTLS, HTTPFS extension is required to write encrypted databases");
+			};
+		}
 	}
 }
 
 void EnableMbedtlsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// if encryption is initialized, httpfs will be attempted to autoload again
+	// If encryption is initialized, httpfs will be attempted to autoload again
 	config.encryption_util = nullptr;
 	config.options.enable_mbedtls = false;
 }
