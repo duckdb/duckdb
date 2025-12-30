@@ -627,6 +627,7 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 
 	AdbcStatusCode status = ADBC_STATUS_OK;
 	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
 
 	// ==== UNHAPPY PATH ====
 
@@ -635,15 +636,19 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
 
 	// No error
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
 	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(out_stream.release == nullptr);
 
 	// Invalid connection
 	AdbcConnection bogus_connection;
 	bogus_connection.private_data = nullptr;
 	bogus_connection.private_driver = nullptr;
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
 	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(out_stream.release == nullptr);
 
 	// No stream
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
@@ -652,6 +657,7 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	// ==== HAPPY PATH ====
 
 	// This returns all known info codes
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
 	REQUIRE((status == ADBC_STATUS_OK));
 	REQUIRE((out_stream.release != nullptr));
@@ -671,30 +677,30 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 		}
 		REQUIRE(found_adbc_version);
 	}
+	out_stream.release = nullptr;
 
 	{
 		// Validate ADBC_INFO_DRIVER_ADBC_VERSION is returned as int64
 		static uint32_t version_code[] = {ADBC_INFO_DRIVER_ADBC_VERSION};
-		status = AdbcConnectionGetInfo(&adbc_connection, version_code, 1, &out_stream, &adbc_error);
+		ArrowArrayStream version_stream;
+		version_stream.release = nullptr;
+		status = AdbcConnectionGetInfo(&adbc_connection, version_code, 1, &version_stream, &adbc_error);
 		REQUIRE((status == ADBC_STATUS_OK));
-		REQUIRE((out_stream.release != nullptr));
+		REQUIRE((version_stream.release != nullptr));
 
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 
-		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
+		auto params = ArrowTestHelper::ConstructArrowScan(version_stream);
 		auto rel = cconn->TableFunction("arrow_scan", params);
 		auto res = rel->Project("info_name, info_value.int64_value AS adbc_version")->Execute();
 		REQUIRE(!res->HasError());
 		auto &mat = res->Cast<MaterializedQueryResult>();
 		REQUIRE(mat.RowCount() == 1);
 		REQUIRE(mat.GetValue(0, 0).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
-		REQUIRE(mat.GetValue(0, 1).ToString() == std::to_string(ADBC_VERSION_1_1_0));
-
-		out_stream.release(&out_stream);
+		REQUIRE(mat.GetValue(1, 0).ToString() == std::to_string(ADBC_VERSION_1_1_0));
+		version_stream.release = nullptr;
 	}
-
-	out_stream.release(&out_stream);
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
