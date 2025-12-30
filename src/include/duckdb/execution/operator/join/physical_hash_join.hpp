@@ -22,6 +22,7 @@ struct ResidualPredicateInfo {
 	unique_ptr<Expression> predicate;
 	unordered_map<idx_t, idx_t> build_input_to_layout_map;
 	unordered_map<idx_t, idx_t> probe_input_to_probe_map;
+	vector<LogicalType> probe_types;
 
 	explicit ResidualPredicateInfo(unique_ptr<Expression> pred) : predicate(std::move(pred)) {
 	}
@@ -34,6 +35,7 @@ struct ResidualPredicateInfo {
 		auto result = make_uniq<ResidualPredicateInfo>(predicate ? predicate->Copy() : nullptr);
 		result->build_input_to_layout_map = build_input_to_layout_map;
 		result->probe_input_to_probe_map = probe_input_to_probe_map;
+		result->probe_types = probe_types;
 		return result;
 	}
 };

@@ -85,6 +85,11 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		}
 	}
 
+	// store probe types
+	if (residual_info) {
+		residual_info->probe_types = lhs_probe_columns.col_types;
+	}
+
 	// handle build side (RHS)
 	InitializeBuildSide(lhs_input_types, rhs_input_types, right_projection_map, build_cols);
 }
