@@ -130,6 +130,15 @@ jobs:
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
 
+
+    - name: Package ZIP files
+      shell: bash
+      run: |
+        python scripts/amalgamation.py
+        /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
+        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-${{ matrix.config.arch }}.zip Release/duckdb.exe
+        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-${{ matrix.config.arch }}.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+
     - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-windows-${{ matrix.config.arch }}
@@ -137,17 +146,13 @@ jobs:
           libduckdb-windows-${{ matrix.config.arch }}.zip
           duckdb_cli-windows-${{ matrix.config.arch }}.zip
 
-    - name: Deploy
+    - name: Deploy to Staging
       shell: bash
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python scripts/amalgamation.py
-        /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-${{ matrix.config.arch }}.zip Release/duckdb.exe
-        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-${{ matrix.config.arch }}.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-${{ matrix.config.arch }}.zip duckdb_cli-windows-${{ matrix.config.arch }}.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
