@@ -272,8 +272,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			if (type.id() == LogicalTypeId::UNKNOWN) {
 				continue;
 			}
-			if (type.id() == LogicalTypeId::USER) {
-				type = TransformStringToLogicalType(type.ToString(), context);
+			if (type.id() == LogicalTypeId::UNBOUND) {
+				BindLogicalType(type);
 			}
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);

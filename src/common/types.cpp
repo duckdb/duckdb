@@ -1485,9 +1485,6 @@ void LogicalType::SetAlias(string alias) {
 }
 
 string LogicalType::GetAlias() const {
-	if (id() == LogicalTypeId::USER) {
-		return UnboundType::GetName(*this);
-	}
 	if (type_info_) {
 		return type_info_->alias;
 	}
@@ -1495,9 +1492,6 @@ string LogicalType::GetAlias() const {
 }
 
 bool LogicalType::HasAlias() const {
-	if (id() == LogicalTypeId::UNBOUND) {
-		return !UnboundType::GetName(*this).empty();
-	}
 	if (type_info_ && !type_info_->alias.empty()) {
 		return true;
 	}
