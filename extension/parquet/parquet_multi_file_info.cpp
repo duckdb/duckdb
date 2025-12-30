@@ -316,7 +316,6 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
 	table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 	table_function.named_parameters["explicit_cardinality"] = LogicalType::UBIGINT;
 	table_function.named_parameters["schema"] = LogicalTypeId::ANY;
@@ -359,10 +358,6 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		options.file_row_number = GetBooleanArgument(key, values);
 		return true;
 	}
-	if (key == "debug_use_openssl") {
-		options.debug_use_openssl = GetBooleanArgument(key, values);
-		return true;
-	}
 	if (key == "encryption_config") {
 		if (values.size() != 1) {
 			throw BinderException("Parquet encryption_config cannot be empty!");
@@ -399,10 +394,6 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "file_row_number") {
 		options.file_row_number = BooleanValue::Get(val);
-		return true;
-	}
-	if (key == "debug_use_openssl") {
-		options.debug_use_openssl = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "can_have_nan") {
@@ -455,7 +446,6 @@ void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, Bin
 	info.type = ScanType::PARQUET;
 	info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_options.binary_as_string));
 	info.InsertOption("file_row_number", Value::BOOLEAN(parquet_options.file_row_number));
-	info.InsertOption("debug_use_openssl", Value::BOOLEAN(parquet_options.debug_use_openssl));
 }
 
 optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,

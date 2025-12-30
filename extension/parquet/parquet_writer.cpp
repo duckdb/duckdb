@@ -358,7 +358,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
                              optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
-                             int64_t compression_level_p, bool debug_use_openssl_p, ParquetVersion parquet_version,
+                             int64_t compression_level_p, ParquetVersion parquet_version,
                              GeoParquetVersion geoparquet_version)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
@@ -367,8 +367,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       string_dictionary_page_size_limit(string_dictionary_page_size_limit_p),
       enable_bloom_filters(enable_bloom_filters_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
-      debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version), geoparquet_version(geoparquet_version),
-      total_written(0), num_row_groups(0) {
+      parquet_version(parquet_version), geoparquet_version(geoparquet_version), total_written(0), num_row_groups(0) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -383,7 +382,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 			// use openssl
 		}
 
-		if (config.encryption_util && debug_use_openssl) {
+		if (config.encryption_util && !config.options.enable_mbedtls) {
 			// Use OpenSSL
 			encryption_util = config.encryption_util;
 		} else {

@@ -806,7 +806,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	}
 	// set pointer to factory method for AES state
 	auto &config = DBConfig::GetConfig(context_p);
-	if (config.encryption_util && parquet_options.debug_use_openssl) {
+	if (config.encryption_util && !config.options.enable_mbedtls) {
 		encryption_util = config.encryption_util;
 	} else {
 		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();

@@ -460,13 +460,6 @@
         "default_value": "false"
     },
     {
-        "name": "enable_openssl",
-        "description": "(Re)enable openssl for encryption",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
-    },
-    {
         "name": "enable_profiling",
         "description": "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)",
         "type": "VARCHAR",

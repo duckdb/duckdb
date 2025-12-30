@@ -67,9 +67,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	idx_t row_group_size_bytes = NumericLimits<idx_t>::Maximum();
 
-	//! How/Whether to encrypt the data
+	//! Encryption configuration
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	bool debug_use_openssl = true;
 
 	//! After how many distinct values should we abandon dictionary compression and bloom filters?
 	//! Defaults to 1/5th of the row group size if unset (in templated_column_writer.hpp)
@@ -132,7 +131,6 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
-	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
 	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["parquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
@@ -295,15 +293,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
 			}
 			bind_data->bloom_filter_false_positive_ratio = val;
-		} else if (loption == "debug_use_openssl") {
-			auto val = StringUtil::Lower(option.second[0].GetValue<std::string>());
-			if (val == "false") {
-				bind_data->debug_use_openssl = false;
-			} else if (val == "true") {
-				bind_data->debug_use_openssl = true;
-			} else {
-				throw BinderException("Expected debug_use_openssl to be a BOOLEAN");
-			}
 		} else if (loption == "compression_level") {
 			const auto val = option.second[0].GetValue<int64_t>();
 			if (val < ZStdFileSystem::MinimumCompressionLevel() || val > ZStdFileSystem::MaximumCompressionLevel()) {
@@ -366,8 +355,8 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
 	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
 	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
-	    parquet_bind.parquet_version, parquet_bind.geoparquet_version);
+	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
+	    parquet_bind.geoparquet_version);
 	return std::move(global_state);
 }
 
@@ -610,21 +599,19 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
 	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
 	                                    default_value.row_groups_per_file);
-	serializer.WritePropertyWithDefault(111, "debug_use_openssl", bind_data.debug_use_openssl,
-	                                    default_value.debug_use_openssl);
-	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
+	serializer.WritePropertyWithDefault(111, "dictionary_size_limit", bind_data.dictionary_size_limit,
 	                                    default_value.dictionary_size_limit);
-	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
+	serializer.WritePropertyWithDefault(112, "bloom_filter_false_positive_ratio",
 	                                    bind_data.bloom_filter_false_positive_ratio,
 	                                    default_value.bloom_filter_false_positive_ratio);
-	serializer.WritePropertyWithDefault(114, "parquet_version", bind_data.parquet_version,
+	serializer.WritePropertyWithDefault(113, "parquet_version", bind_data.parquet_version,
 	                                    default_value.parquet_version);
-	serializer.WritePropertyWithDefault(115, "string_dictionary_page_size_limit",
+	serializer.WritePropertyWithDefault(114, "string_dictionary_page_size_limit",
 	                                    bind_data.string_dictionary_page_size_limit,
 	                                    default_value.string_dictionary_page_size_limit);
-	serializer.WritePropertyWithDefault(116, "geoparquet_version", bind_data.geoparquet_version,
+	serializer.WritePropertyWithDefault(115, "geoparquet_version", bind_data.geoparquet_version,
 	                                    default_value.geoparquet_version);
-	serializer.WriteProperty(117, "shredding_types", bind_data.shredding_types);
+	serializer.WriteProperty(116, "shredding_types", bind_data.shredding_types);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -647,19 +634,17 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	ParquetWriteBindData default_value;
 	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
 	    110, "row_groups_per_file", default_value.row_groups_per_file);
-	data->debug_use_openssl =
-	    deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", default_value.debug_use_openssl);
 	data->dictionary_size_limit =
-	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(112, "dictionary_size_limit", optional_idx());
+	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(111, "dictionary_size_limit", optional_idx());
 	data->bloom_filter_false_positive_ratio = deserializer.ReadPropertyWithExplicitDefault<double>(
-	    113, "bloom_filter_false_positive_ratio", default_value.bloom_filter_false_positive_ratio);
+	    112, "bloom_filter_false_positive_ratio", default_value.bloom_filter_false_positive_ratio);
 	data->parquet_version =
-	    deserializer.ReadPropertyWithExplicitDefault(114, "parquet_version", default_value.parquet_version);
+	    deserializer.ReadPropertyWithExplicitDefault(113, "parquet_version", default_value.parquet_version);
 	data->string_dictionary_page_size_limit = deserializer.ReadPropertyWithExplicitDefault(
-	    115, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
+	    114, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
 	data->geoparquet_version =
-	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
-	data->shredding_types = deserializer.ReadProperty<ShreddingType>(117, "shredding_types");
+	    deserializer.ReadPropertyWithExplicitDefault(115, "geoparquet_version", default_value.geoparquet_version);
+	data->shredding_types = deserializer.ReadProperty<ShreddingType>(116, "shredding_types");
 
 	return std::move(data);
 }

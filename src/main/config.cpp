@@ -190,12 +190,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 92),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 91),
                                                      DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 111),
-                                                     DUCKDB_SETTING_ALIAS("user", 126),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 110),
+                                                     DUCKDB_SETTING_ALIAS("user", 125),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 125),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 124),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
