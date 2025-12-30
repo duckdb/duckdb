@@ -34,14 +34,23 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p,
-                                   unique_ptr<Expression> residual_p, vector<idx_t> p_build_cols,
-                                   vector<idx_t> p_probe_cols)
+                                   unique_ptr<Expression> residual_p)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
-	residual_predicate = std::move(residual_p);
-	predicate_build_cols = std::move(p_build_cols);
-	predicate_probe_cols = std::move(p_probe_cols);
+	if (residual_p) {
+		vector<idx_t> probe_cols;
+		vector<idx_t> build_cols;
+
+		auto &lhs_types = children[0].get().GetTypes();
+		ExtractResidualPredicateColumns(residual_p, lhs_types.size(), probe_cols, build_cols);
+
+		// create info struct
+		residual_info = make_uniq<ResidualPredicateInfo>(std::move(residual_p));
+		residual_info->probe_cols = std::move(probe_cols);
+		residual_info->build_cols = std::move(build_cols);
+	}
+
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -206,7 +215,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                                    PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality)
     : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       nullptr, nullptr, {}, {}) {
+                       nullptr, nullptr) {
 }
 
 void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,

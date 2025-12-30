@@ -19,31 +19,6 @@ static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index += offset; });
 }
 
-static void ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
-                                            vector<idx_t> &probe_column_ids, vector<idx_t> &build_column_ids) {
-	multiset<idx_t> probe_cols;
-	multiset<idx_t> build_cols;
-
-	ExpressionIterator::EnumerateExpression(predicate, [&](unique_ptr<Expression> &expr) {
-		if (expr->GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto &ref = expr->Cast<BoundReferenceExpression>();
-			idx_t col_idx = ref.index;
-
-			if (col_idx < probe_column_count) {
-				// Probe (LHS) column
-				probe_cols.insert(col_idx);
-			} else {
-				// Build (RHS) column
-				build_cols.insert(col_idx);
-			}
-		}
-	});
-
-	// Convert sets to vectors
-	probe_column_ids.assign(probe_cols.begin(), probe_cols.end());
-	build_column_ids.assign(build_cols.begin(), build_cols.end());
-}
-
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -85,19 +60,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
 	prefer_range_joins = prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
-		vector<idx_t> predicate_probe_cols;
-		vector<idx_t> predicate_build_cols;
-
-		if (op.predicate) {
-			ExtractResidualPredicateColumns(op.predicate, left.types.size(), predicate_probe_cols,
-			                                predicate_build_cols);
-		}
-
-		// Pass separately to PhysicalHashJoin
+		// pass separately to PhysicalHashJoin
 		auto &join = Make<PhysicalHashJoin>(
 		    op, left, right, std::move(op.conditions), op.join_type, op.left_projection_map, op.right_projection_map,
-		    std::move(op.mark_types), op.estimated_cardinality, std::move(op.filter_pushdown), std::move(op.predicate),
-		    std::move(predicate_build_cols), std::move(predicate_probe_cols));
+		    std::move(op.mark_types), op.estimated_cardinality, std::move(op.filter_pushdown), std::move(op.predicate));
 		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
 		return join;
 	}

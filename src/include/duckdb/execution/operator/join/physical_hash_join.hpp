@@ -47,7 +47,7 @@ public:
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
 	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info,
-	                 unique_ptr<Expression> residual, vector<idx_t> p_build_cols, vector<idx_t> p_probe_cols);
+	                 unique_ptr<Expression> residual);
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
