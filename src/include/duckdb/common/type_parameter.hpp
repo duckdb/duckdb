@@ -11,8 +11,8 @@ class TypeParameter {
 public:
 	virtual ~TypeParameter() = default;
 
-	static unique_ptr<TypeParameter> EXPRESSION(unique_ptr<ParsedExpression> expr);
-	static unique_ptr<TypeParameter> TYPE(LogicalType type);
+	static unique_ptr<TypeParameter> EXPRESSION(string name, unique_ptr<ParsedExpression> expr);
+	static unique_ptr<TypeParameter> TYPE(string name, LogicalType type);
 
 	TypeParameterKind GetKind() const {
 		return kind;
@@ -22,6 +22,12 @@ public:
 	}
 	bool IsType() const {
 		return kind == TypeParameterKind::TYPE;
+	}
+	const string &GetName() const {
+		return name;
+	}
+	bool HasName() const {
+		return !name.empty();
 	}
 
 	virtual const unique_ptr<ParsedExpression> &GetExpression() const = 0;
@@ -35,11 +41,12 @@ public:
 	static unique_ptr<TypeParameter> Deserialize(Deserializer &deserializer);
 
 protected:
-	TypeParameter(TypeParameterKind kind_p) : kind(kind_p) {
+	TypeParameter(TypeParameterKind kind_p, string name_p) : kind(kind_p), name(std::move(name_p)) {
 	}
 
 private:
 	TypeParameterKind kind;
+	string name;
 };
 
 } // namespace duckdb

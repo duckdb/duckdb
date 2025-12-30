@@ -83,18 +83,18 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		case duckdb_libpgquery::T_PGAConst: {
 			// Constant value
 			auto const_node = PGPointerCast<duckdb_libpgquery::PGAConst>(value_node_ptr);
-			type_params.push_back(TypeParameter::EXPRESSION(TransformValue(const_node->val)));
+			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), TransformValue(const_node->val)));
 		} break;
 		case duckdb_libpgquery::T_PGAExpr:
 		case duckdb_libpgquery::T_PGFuncCall: {
 			// Expression
 			auto expr = TransformExpression(*value_node);
-			type_params.push_back(TypeParameter::EXPRESSION(std::move(expr)));
+			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), std::move(expr)));
 		} break;
 		case duckdb_libpgquery::T_PGTypeName: {
 			// Type name
 			auto type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(value_node_ptr));
-			type_params.push_back(TypeParameter::TYPE(std::move(type)));
+			type_params.push_back(TypeParameter::TYPE(std::move(name_str), std::move(type)));
 		} break;
 		default:
 			throw ParserException("Expected a constant, expression or type name as type modifier value");

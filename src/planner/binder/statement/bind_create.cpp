@@ -380,7 +380,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		auto unbound_type_name = UnboundType::GetName(type);
 		auto &unbound_type_params = UnboundType::GetParameters(type);
 
-		vector<Value> bound_type_params;
+		vector<TypeArgument> bound_type_params;
 		for (auto &param : unbound_type_params) {
 			if (param->IsExpression()) {
 				ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'"));
@@ -393,12 +393,12 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 				}
 
 				auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-				bound_type_params.push_back(bound_param);
+				bound_type_params.emplace_back(param->GetName(), bound_param);
 			} else if (param->IsType()) {
 				// Otherwise, bind the type!
 				auto param_type = param->GetType();
 				BindLogicalType(param_type, catalog, schema);
-				bound_type_params.push_back(Value(param_type));
+				bound_type_params.emplace_back(param->GetName(), Value::TYPE(param_type));
 			}
 		}
 
@@ -413,30 +413,12 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		if (type_entry.bind_function) {
 			BindLogicalTypeInput input {context, type_entry.user_type, bound_type_params};
 			return type_entry.bind_function(input);
-		}
-		// else {
-		//	return type_entry.user_type;
-		//}
+		} else {
+			if (!bound_type_params.empty()) {
+				throw BinderException("Type '%s' does not take any type parameters", unbound_type_name);
+			}
 
-		// Check type
-		auto type_id = TransformStringToLogicalTypeId(unbound_type_name);
-		if (type_id == LogicalTypeId::DECIMAL) {
-			int64_t width = 0;
-			int64_t scale = 0;
-
-			if (bound_type_params.size() > 2) {
-				throw BinderException("Decimal type takes at most two parameters (width, scale)");
-			}
-			if (bound_type_params.size() >= 1) {
-				width = bound_type_params[0].GetValue<int64_t>();
-			}
-			if (bound_type_params.size() == 2) {
-				scale = bound_type_params[1].GetValue<int64_t>();
-			}
-			if (scale > width) {
-				throw BinderException("Decimal scale (%llu) cannot be greater than width (%llu)", scale, width);
-			}
-			return LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale));
+			return type_entry.user_type;
 		}
 	}
 
@@ -540,9 +522,9 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 	// Apply the type modifiers (if any)
 	if (user_bind_modifiers_func) {
 		// If an explicit bind_modifiers function was provided, use that to construct the type
-
-		BindLogicalTypeInput input {context, result, user_type_mods};
-		result = user_bind_modifiers_func(input);
+		throw NotImplementedException("TODO");
+		// BindLogicalTypeInput input {context, result, user_type_mods};
+		// result = user_bind_modifiers_func(input);
 	} else {
 		if (!user_type_mods.empty()) {
 			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
