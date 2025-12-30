@@ -363,13 +363,17 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto flags = GetFileFlags(true);
 
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
-	// if (encryption_enabled) {
-	// 	if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
-	// 		throw InvalidConfigurationException(
-	// 		    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
-	// 		    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
-	// 	}
-	// }
+	if (encryption_enabled) {
+		auto const &config = DBConfig::Get(db);
+		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only &&
+		    !config.options.enable_mbedtls) {
+			throw InvalidConfigurationException(
+			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
+			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`. "
+			    " To write encrypted database that ar NOT securely encrypted, one can use SET enable_mbedtls = "
+			    "'true'.");
+		}
+	}
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);

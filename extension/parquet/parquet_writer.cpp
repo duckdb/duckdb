@@ -376,7 +376,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		auto &config = DBConfig::GetConfig(context);
 
 		// To ensure we can write, we need to autoload httpfs
-		if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+		if ((!config.encryption_util || !config.encryption_util->SupportsEncryption()) &&
+		    !config.options.enable_mbedtls) {
 			ExtensionHelper::TryAutoLoadExtension(context, "httpfs");
 		} else if (!config.encryption_util && context.db->ExtensionIsLoaded("httpfs")) {
 			// use openssl
