@@ -74,7 +74,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	}
 
 	// Map predicate build columns
-	for (auto rhs_idx_with_offset : predicate_build_cols) {
+	for (auto rhs_idx_with_offset : residual_info->build_cols) {
 		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
 		auto it = build_columns_in_conditions.find(rhs_idx);
 		if (it != build_columns_in_conditions.end()) {
@@ -105,7 +105,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	}
 
 	// add all predicate columns
-	for (auto col : predicate_probe_cols) {
+	for (auto col : residual_info->probe_cols) {
 		required_probe_cols.insert(col);
 	}
 
@@ -117,10 +117,10 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	}
 
 	// build mapping for ONLY predicate probe columns (input index -> position in lhs_probe_columns)
-	for (auto predicate_col_idx : predicate_probe_cols) {
+	for (auto predicate_col_idx : residual_info->probe_cols) {
 		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
 			if (lhs_probe_columns.col_idxs[i] == predicate_col_idx) {
-				probe_input_to_probe_map[predicate_col_idx] = i;
+				residual_info->probe_input_to_probe_map[predicate_col_idx] = i;
 				break;
 			}
 		}
@@ -139,8 +139,8 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 
 	// handle build side (RHS)
 	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
-		if (!predicate_build_cols.empty()) {
-			for (auto rhs_idx_with_offset : predicate_build_cols) {
+		if (!residual_info->build_cols.empty()) {
+			for (auto rhs_idx_with_offset : residual_info->build_cols) {
 				idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
 				auto it = build_columns_in_conditions.find(rhs_idx);
 				if (it == build_columns_in_conditions.end()) {
@@ -153,7 +153,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 			}
 		}
 
-		build_input_to_layout_map = std::move(build_input_to_layout);
+		residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
 		return;
 	}
 
@@ -165,7 +165,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		}
 	}
 
-	for (auto rhs_idx_with_offset : predicate_build_cols) {
+	for (auto rhs_idx_with_offset : residual_info->build_cols) {
 		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
 
 		// skip if it's a join condition
@@ -208,7 +208,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		rhs_output_columns.col_types.push_back(rhs_col_type);
 	}
 
-	build_input_to_layout_map = std::move(build_input_to_layout);
+	residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
@@ -390,10 +390,10 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result =
-	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
-	                             rhs_output_columns.col_idxs, residual_predicate ? residual_predicate->Copy() : nullptr,
-	                             build_input_to_layout_map, probe_input_to_probe_map, lhs_output_in_probe);
+	auto result = make_uniq<JoinHashTable>(
+	    context, *this, conditions, payload_columns.col_types, join_type, rhs_output_columns.col_idxs,
+	    (residual_info && residual_info->HasPredicate()) ? residual_info->predicate->Copy() : nullptr,
+	    residual_info->build_input_to_layout_map, residual_info->probe_input_to_probe_map, lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -1748,8 +1748,8 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 	}
 	result["Conditions"] = condition_info;
 
-	if (residual_predicate) {
-		result["Residual Predicate"] = residual_predicate->ToString();
+	if (residual_info && residual_info->HasPredicate()) {
+		result["Residual Predicate"] = residual_info->predicate->ToString();
 	}
 
 	SetEstimatedCardinality(result, estimated_cardinality);

@@ -71,20 +71,10 @@ public:
 	vector<unique_ptr<BaseStatistics>> join_stats;
 
 	unique_ptr<ResidualPredicateInfo> residual_info;
-	//! Residual predicate for arbitrary conditions
-	unique_ptr<Expression> residual_predicate;
-	vector<idx_t> predicate_build_cols;
-	vector<idx_t> predicate_probe_cols;
-	//! Mapping from build input column index to layout position
-	unordered_map<idx_t, idx_t> build_input_to_layout_map;
 	//! For probe phase (includes predicate columns)
 	JoinProjectionColumns lhs_probe_columns;
 	//! Mapping from lhs_output_columns positions to lhs_probe_columns positions
-	//! e.g., if lhs_probe_columns = [0, 2, 5, 7] and lhs_output_columns = [0, 2, 7]
-	//! then lhs_output_in_probe = [0, 1, 3]
 	vector<idx_t> lhs_output_in_probe;
-	//! Mapping original probe index -> position in lhs_probe_columns
-	unordered_map<idx_t, idx_t> probe_input_to_probe_map;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
