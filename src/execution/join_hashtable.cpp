@@ -854,6 +854,40 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
 	if (ht.residual_info && ht.residual_info->HasPredicate()) {
 		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
 		residual_executor->AddExpression(*ht.residual_info->predicate);
+
+		// initialize residual state
+		residual_state = make_uniq<ResidualPredicateProbeState>();
+
+		// determine column types needed
+		idx_t total_columns = 0;
+		for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+			total_columns = MaxValue(total_columns, entry.first + 1);
+		}
+		for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+			total_columns = MaxValue(total_columns, entry.first + 1);
+		}
+
+		vector<LogicalType> eval_types(total_columns, LogicalType::INVALID);
+		vector<bool> initialize_columns(total_columns, false);
+
+		// Fill in probe types
+		for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+			idx_t orig_idx = entry.first;
+			idx_t probe_data_col = entry.second;
+			eval_types[orig_idx] = ht.layout_ptr->GetTypes()[probe_data_col];
+			initialize_columns[orig_idx] = true;
+		}
+
+		// Fill in build types
+		for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+			idx_t col_with_offset = entry.first;
+			idx_t layout_col = entry.second;
+			eval_types[col_with_offset] = ht.layout_ptr->GetTypes()[layout_col];
+			initialize_columns[col_with_offset] = true;
+		}
+
+		// initialize chunks ONCE
+		residual_state->Initialize(Allocator::Get(ht.context), eval_types, initialize_columns);
 	}
 }
 
