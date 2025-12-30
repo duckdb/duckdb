@@ -25,6 +25,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 		auto width_value = modifiers[0].GetValue();
 		if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 			width = width_value.GetValueUnsafe<uint8_t>();
+			scale = 0; // reset scale to 0 if only width is provided
 		} else {
 			throw BinderException("DECIMAL type width must be a UTINYINT");
 		}
@@ -118,28 +119,30 @@ LogicalType BindIntervalType(const BindLogicalTypeInput &input) {
 // ENUM Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindEnumType(const BindLogicalTypeInput &input) {
-	auto &modifiers = input.modifiers;
+	auto &arguments = input.modifiers;
 
-	Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(modifiers.size()));
-	auto string_data = FlatVector::GetData<string_t>(enum_vector);
-	idx_t pos = 0;
-
-	for (auto &arg : modifiers) {
-		auto &modifier = arg.GetValue();
-
-		if (modifier.type() == LogicalTypeId::VARCHAR) {
-			string_data[pos++] = StringVector::AddString(enum_vector, modifier.GetValue<string>());
-		} else {
-			Value str_value;
-			if (modifier.TryCastAs(input.context, LogicalTypeId::VARCHAR, str_value, nullptr)) {
-				string_data[pos++] = StringVector::AddString(enum_vector, str_value.GetValue<string>());
-			} else {
-				throw BinderException("ENUM type requires string type modifiers");
-			}
-		}
+	if (arguments.empty()) {
+		throw BinderException("ENUM type requires at least one argument");
 	}
 
-	return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(modifiers.size()));
+	Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(arguments.size()));
+	auto string_data = FlatVector::GetData<string_t>(enum_vector);
+
+	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
+		auto &arg = arguments[arg_idx];
+		if (arg.HasName()) {
+			throw BinderException("ENUM type arguments cannot have names (argument %d has name \"%s\")", arg_idx + 1,
+			                      arg.GetName());
+		}
+
+		if (arg.GetValue().type() != LogicalTypeId::VARCHAR) {
+			throw BinderException("ENUM type requires a set of VARCHAR arguments");
+		}
+
+		string_data[arg_idx] = StringVector::AddString(enum_vector, StringValue::Get(arg.GetValue()));
+	}
+
+	return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(arguments.size()));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

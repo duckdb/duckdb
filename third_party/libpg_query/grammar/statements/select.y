@@ -2002,7 +2002,6 @@ BitWithoutLength:
 					else
 					{
 						$$ = SystemTypeName("bit");
-						$$->typmods = list_make1(makeIntConst(1, -1));
 					}
 					$$->location = @1;
 				}
