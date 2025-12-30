@@ -57,18 +57,27 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 	vector<unique_ptr<TypeParameter>> type_params;
 	for (auto typemod = type_name.typmods ? type_name.typmods->head : nullptr; typemod; typemod = typemod->next) {
 		// Type mods are always a list of (name, node) pairs
-		auto &typemod_pair = *PGPointerCast<duckdb_libpgquery::PGList>(typemod->data.ptr_value);
-		D_ASSERT(typemod_pair.length == 2);
-		auto name_node_ptr = typemod_pair.head->data.ptr_value;
 
-		// Extract name of the type modifier (optional)
 		string name_str;
-		if (name_node_ptr) {
-			auto name_node = PGPointerCast<duckdb_libpgquery::PGNode>(name_node_ptr);
-			if (name_node->type != duckdb_libpgquery::T_PGString) {
-				throw ParserException("Expected a constant as type modifier name");
+		auto typemod_node = PGPointerCast<duckdb_libpgquery::PGNode>(typemod->data.ptr_value);
+
+		if (typemod_node->type == duckdb_libpgquery::T_PGList) {
+			auto &typemod_pair = *PGPointerCast<duckdb_libpgquery::PGList>(typemod->data.ptr_value);
+			if (typemod_pair.length != 2) {
+				throw ParserException("Expected type modifier to be a pair of (name, value)");
 			}
-			name_str = PGPointerCast<duckdb_libpgquery::PGValue>(name_node_ptr)->val.str;
+
+			// This is the actual argument node
+			typemod_node = PGPointerCast<duckdb_libpgquery::PGNode>(typemod_pair.tail->data.ptr_value);
+
+			// Extract name of the type modifier (optional)
+			auto name_node = PGPointerCast<duckdb_libpgquery::PGNode>(typemod_pair.head->data.ptr_value);
+			if (name_node) {
+				if (name_node->type != duckdb_libpgquery::T_PGString) {
+					throw ParserException("Expected a constant as type modifier name");
+				}
+				name_str = PGPointerCast<duckdb_libpgquery::PGValue>(name_node.get())->val.str;
+			}
 		}
 
 		// Extract value of the type modifier
@@ -77,23 +86,21 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		// 2. A expression
 		// 3. A type name
 
-		auto value_node_ptr = typemod_pair.tail->data.ptr_value;
-		auto value_node = PGPointerCast<duckdb_libpgquery::PGNode>(value_node_ptr);
-		switch (value_node->type) {
+		switch (typemod_node->type) {
 		case duckdb_libpgquery::T_PGAConst: {
 			// Constant value
-			auto const_node = PGPointerCast<duckdb_libpgquery::PGAConst>(value_node_ptr);
+			auto const_node = PGPointerCast<duckdb_libpgquery::PGAConst>(typemod_node.get());
 			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), TransformValue(const_node->val)));
 		} break;
 		case duckdb_libpgquery::T_PGAExpr:
 		case duckdb_libpgquery::T_PGFuncCall: {
 			// Expression
-			auto expr = TransformExpression(*value_node);
+			auto expr = TransformExpression(*typemod_node);
 			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), std::move(expr)));
 		} break;
 		case duckdb_libpgquery::T_PGTypeName: {
 			// Type name
-			auto type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(value_node_ptr));
+			auto type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(typemod_node.get()));
 			type_params.push_back(TypeParameter::TYPE(std::move(name_str), std::move(type)));
 		} break;
 		default:

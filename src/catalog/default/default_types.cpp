@@ -19,7 +19,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 	auto &modifiers = input.modifiers;
 
 	if (modifiers.size() != 2) {
-		throw BinderException("Decimal type requires two type modifiers: width and scale");
+		throw BinderException("DECIMAL type requires two type modifiers: width and scale");
 	}
 
 	auto width_value = modifiers[0].GetValue();
@@ -31,21 +31,21 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 	if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 		width = width_value.GetValueUnsafe<uint8_t>();
 	} else {
-		throw BinderException("Decimal type width must be a UTINYINT");
+		throw BinderException("DECIMAL type width must be a UTINYINT");
 	}
 
 	if (scale_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 		scale = scale_value.GetValueUnsafe<uint8_t>();
 	} else {
-		throw BinderException("Decimal type scale must be a UTINYINT");
+		throw BinderException("DECIMAL type scale must be a UTINYINT");
 	}
 
 	if (width < 1 || width > Decimal::MAX_WIDTH_DECIMAL) {
-		throw BinderException("Decimal type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
+		throw BinderException("DECIMAL type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
 	}
 
 	if (scale > width) {
-		throw BinderException("Decimal type scale cannot be greater than width");
+		throw BinderException("DECIMAL type scale cannot be greater than width");
 	}
 	return LogicalType::DECIMAL(width, scale);
 }
@@ -94,7 +94,7 @@ LogicalType BindVarcharType(const BindLogicalTypeInput &input) {
 	// Varchar type can have a single modifier indicating the length, but we ignore it for now
 	auto &modifiers = input.modifiers;
 	if (modifiers.size() > 1) {
-		throw BinderException("Varchar type takes at most one type modifier");
+		throw BinderException("VARCHAR type takes at most one type modifier");
 	}
 	return LogicalType::VARCHAR;
 }
@@ -131,7 +131,7 @@ LogicalType BindEnumType(const BindLogicalTypeInput &input) {
 			if (modifier.TryCastAs(input.context, LogicalTypeId::VARCHAR, str_value, nullptr)) {
 				string_data[pos++] = StringVector::AddString(enum_vector, str_value.GetValue<string>());
 			} else {
-				throw BinderException("Enum type requires string type modifiers");
+				throw BinderException("ENUM type requires string type modifiers");
 			}
 		}
 	}
@@ -283,7 +283,7 @@ struct DefaultType {
 	bind_logical_type_function_t bind_function;
 };
 
-using builtin_type_array = std::array<DefaultType, 77>;
+using builtin_type_array = std::array<DefaultType, 78>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
@@ -361,7 +361,8 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"float4", LogicalTypeId::FLOAT, nullptr},
                                            {"double", LogicalTypeId::DOUBLE, nullptr},
                                            {"float8", LogicalTypeId::DOUBLE, nullptr},
-                                           {"geometry", LogicalTypeId::GEOMETRY, nullptr}}};
+                                           {"geometry", LogicalTypeId::GEOMETRY, nullptr},
+                                           {"type", LogicalTypeId::TYPE, nullptr}}};
 
 optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
 	auto &internal_types = BUILTIN_TYPES;
