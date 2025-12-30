@@ -18,26 +18,30 @@ namespace {
 LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 	auto &modifiers = input.modifiers;
 
-	if (modifiers.size() != 2) {
-		throw BinderException("DECIMAL type requires two type modifiers: width and scale");
+
+	uint8_t width = 18;
+	uint8_t scale = 3;
+
+	if (modifiers.size() > 0) {
+		auto width_value = modifiers[0].GetValue();
+		if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
+			width = width_value.GetValueUnsafe<uint8_t>();
+		} else {
+			throw BinderException("DECIMAL type width must be a UTINYINT");
+		}
 	}
 
-	auto width_value = modifiers[0].GetValue();
-	auto scale_value = modifiers[1].GetValue();
-
-	uint8_t width;
-	uint8_t scale;
-
-	if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
-		width = width_value.GetValueUnsafe<uint8_t>();
-	} else {
-		throw BinderException("DECIMAL type width must be a UTINYINT");
+	if (modifiers.size() > 1) {
+		auto scale_value = modifiers[1].GetValue();
+		if (scale_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
+			scale = scale_value.GetValueUnsafe<uint8_t>();
+		} else {
+			throw BinderException("DECIMAL type scale must be a UTINYINT");
+		}
 	}
 
-	if (scale_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
-		scale = scale_value.GetValueUnsafe<uint8_t>();
-	} else {
-		throw BinderException("DECIMAL type scale must be a UTINYINT");
+	if (modifiers.size() > 2) {
+		throw BinderException("DECIMAL type can take at most two type modifiers, width and scale");
 	}
 
 	if (width < 1 || width > Decimal::MAX_WIDTH_DECIMAL) {

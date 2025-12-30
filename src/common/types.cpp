@@ -556,7 +556,7 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
-		type = LogicalTypeId::USER;
+		type = LogicalTypeId::UNBOUND;
 	}
 	return type;
 }
@@ -628,38 +628,13 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	return column_list.GetColumn(LogicalIndex(0)).Type();
 }
 
-LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
-	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
-		auto &type_entry =
-		    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, type.GetAlias());
-		return type_entry.user_type;
-	}
-	// Look for LogicalTypeId::USER in nested types
-	if (type.id() == LogicalTypeId::STRUCT) {
-		child_list_t<LogicalType> children;
-		children.reserve(StructType::GetChildCount(type));
-		for (auto &child : StructType::GetChildTypes(type)) {
-			children.emplace_back(child.first, GetUserTypeRecursive(child.second, context));
-		}
-		return LogicalType::STRUCT(children);
-	}
-	if (type.id() == LogicalTypeId::LIST) {
-		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
-	}
-	if (type.id() == LogicalTypeId::ARRAY) {
-		return LogicalType::ARRAY(GetUserTypeRecursive(ArrayType::GetChildType(type), context),
-		                          ArrayType::GetSize(type));
-	}
-	if (type.id() == LogicalTypeId::MAP) {
-		return LogicalType::MAP(GetUserTypeRecursive(MapType::KeyType(type), context),
-		                        GetUserTypeRecursive(MapType::ValueType(type), context));
-	}
-	// Not LogicalTypeId::USER or a nested type
-	return type;
-}
-
 LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
-	return GetUserTypeRecursive(TransformStringToLogicalType(str), context);
+	auto type = TransformStringToLogicalType(str);
+	if (type.IsUnbound()) {
+		auto binder = Binder::CreateBinder(context, nullptr);
+		binder->BindLogicalType(type);
+	}
+	return type;
 }
 
 bool LogicalType::IsIntegral() const {
