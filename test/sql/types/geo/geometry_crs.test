@@ -37,14 +37,14 @@ EPSG:3857
 
 # CRS Must be a string
 statement error
-select 'POINT(0 1)'::GEOMETRY(abc);
+select 'POINT(0 1)'::GEOMETRY((['abc']));
 ----
-Parser Error: GEOMETRY type modifier must be a string with a coordinate system definition definition
+Binder Error: GEOMETRY type modifier must be a string with a coordinate system definition
 
 statement error
 select 'POINT(0 1)'::GEOMETRY(4326);
 ----
-Parser Error: GEOMETRY type modifier must be a string with a coordinate system definition definition
+Binder Error: GEOMETRY type modifier must be a string with a coordinate system definition
 
 # ST_SetCRS must be constant
 statement ok
