@@ -67,6 +67,29 @@ SELECT * FROM '{DATA_DIR}/csv/glob/./f_1.csv'
 2	eve	eve@email.com
 3r	bob	NULL
 
+# we should be able to go up and down as long as we end up in the allowed directory
+query III
+SELECT * FROM '{DATA_DIR}/csv/glob/../../csv/glob/f_1.csv'
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+3r	bob	NULL
+
+
+# we can go up to the root and back down and its fine
+query III
+SELECT * FROM '{DATA_DIR}/../../../../../../../../../../../../../../../../../../{DATA_DIR}/csv/glob/f_1.csv'
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+3r	bob	NULL
+
+# dot does not change anything
+statement error
+SELECT * FROM '{DATA_DIR}/csv/glob/./../bool.csv'
+----
+
+
 # we cannot read files that are not in the allowed directories
 statement error
 SELECT * FROM '{DATA_DIR}/csv/all_quotes.csv'
