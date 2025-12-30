@@ -497,18 +497,18 @@ string LogicalType::ToString() const {
 		auto &type = UnboundType::GetName(*this);
 
 		if (!catalog.empty()) {
-			result = KeywordHelper::WriteOptionallyQuoted(catalog);
+			result = KeywordHelper::WriteOptionallyQuoted(catalog, '"');
 		}
 		if (!schema.empty()) {
 			if (!result.empty()) {
 				result += ".";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(schema);
+			result += KeywordHelper::WriteOptionallyQuoted(schema, '"');
 		}
 		if (!result.empty()) {
 			result += ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(type);
+		result += KeywordHelper::WriteOptionallyQuoted(type, '"');
 
 		if (!params.empty()) {
 			result += "(";

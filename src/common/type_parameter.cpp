@@ -25,10 +25,10 @@ public:
 	}
 
 	string ToString() const override {
-		if (HasName()) {
-			return GetName() + " " + type.ToString();
+		if (!HasName()) {
+			return type.ToString();
 		}
-		return type.ToString();
+		return StringUtil::Format("%s %s", SQLIdentifier(GetName()), type.ToString());
 	}
 
 	const LogicalType &GetType() const override {
@@ -64,10 +64,10 @@ public:
 	}
 
 	string ToString() const override {
-		if (HasName()) {
-			return GetName() + " (" + expr->ToString() + ")";
+		if (!HasName()) {
+			return expr->ToString();
 		}
-		return expr->ToString();
+		return StringUtil::Format("%s (%s)", SQLIdentifier(GetName()), expr->ToString());
 	}
 
 	const LogicalType &GetType() const override {
