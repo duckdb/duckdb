@@ -58,7 +58,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
 	bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
-	prefer_range_joins = prefer_range_joins && can_iejoin;
+	prefer_range_joins = prefer_range_joins && can_iejoin && !op.predicate;
 	if (has_equality && !prefer_range_joins) {
 		// pass separately to PhysicalHashJoin
 		auto &join = Make<PhysicalHashJoin>(
