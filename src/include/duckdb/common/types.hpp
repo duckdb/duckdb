@@ -288,6 +288,9 @@ struct LogicalType {
 	inline bool IsUnknown() const {
 		return id_ == LogicalTypeId::UNKNOWN;
 	}
+	inline bool IsUnbound() const {
+		return id_ == LogicalTypeId::UNBOUND;
+	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
 		return type_info_;
