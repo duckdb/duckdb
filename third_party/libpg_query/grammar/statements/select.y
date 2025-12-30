@@ -1796,9 +1796,9 @@ qualified_typename:
 
 opt_array_bounds:
 			opt_array_bounds '[' ']'
-					{  $$ = lappend($1, makeInteger(-1)); }
-			| opt_array_bounds '[' Iconst ']'
-					{  $$ = lappend($1, makeInteger($3)); }
+					{  $$ = lappend($1, NULL); }
+			| opt_array_bounds '[' a_expr ']'
+					{  $$ = lappend($1, $3); }
 			| /*EMPTY*/
 					{  $$ = NIL; }
 		;
