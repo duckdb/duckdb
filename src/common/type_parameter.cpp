@@ -25,6 +25,9 @@ public:
 	}
 
 	string ToString() const override {
+		if (HasName()) {
+			return GetName() + " " + type.ToString();
+		}
 		return type.ToString();
 	}
 
@@ -61,6 +64,9 @@ public:
 	}
 
 	string ToString() const override {
+		if (HasName()) {
+			return GetName() + " (" + expr->ToString() + ")";
+		}
 		return expr->ToString();
 	}
 

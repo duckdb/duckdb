@@ -18,7 +18,6 @@ namespace {
 LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 	auto &modifiers = input.modifiers;
 
-
 	uint8_t width = 18;
 	uint8_t scale = 3;
 
@@ -309,6 +308,19 @@ LogicalType BindUnionType(const BindLogicalTypeInput &input) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// VARIANT Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindVariantType(const BindLogicalTypeInput &input) {
+	// We need this function to make sure we always create a VARIANT type with ExtraTypeInfo
+	auto &arguments = input.modifiers;
+
+	if (!arguments.empty()) {
+		throw BinderException("Type 'VARIANT' does not take any type parameters");
+	}
+	return LogicalType::VARIANT();
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // All Types
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -382,7 +394,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"union", LogicalTypeId::UNION, BindUnionType},
                                            {"bit", LogicalTypeId::BIT, nullptr},
                                            {"bitstring", LogicalTypeId::BIT, nullptr},
-                                           {"variant", LogicalTypeId::VARIANT, nullptr},
+                                           {"variant", LogicalTypeId::VARIANT, BindVariantType},
                                            {"bignum", LogicalTypeId::BIGNUM, nullptr},
                                            {"varint", LogicalTypeId::BIGNUM, nullptr},
                                            {"boolean", LogicalTypeId::BOOLEAN, nullptr},
