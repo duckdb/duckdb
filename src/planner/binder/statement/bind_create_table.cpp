@@ -55,7 +55,7 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 			}
 		}
 		auto logical_type = col.GetType();
-		if (logical_type.id() == LogicalTypeId::USER && logical_type.HasAlias()) {
+		if (logical_type.id() == LogicalTypeId::UNBOUND && logical_type.HasAlias()) {
 			// Resolve user type if possible
 			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
 			    context, INVALID_CATALOG, INVALID_SCHEMA, logical_type.GetAlias(), OnEntryNotFound::RETURN_NULL);
@@ -645,6 +645,12 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 				// Don't register dependencies between catalogs
 				return;
 			}
+
+			if (entry.type == CatalogType::TYPE_ENTRY && entry.internal) {
+				// Don't register dependencies on internal types
+				return;
+			}
+
 			dependencies.AddDependency(entry);
 		});
 
