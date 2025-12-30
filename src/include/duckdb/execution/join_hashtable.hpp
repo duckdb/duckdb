@@ -61,6 +61,22 @@ class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
+	struct ResidualPredicateProbeState {
+		//! Evaluation chunk
+		DataChunk eval_chunk;
+		//! Result chunk for predicate evaluation
+		DataChunk result_chunk;
+
+		ResidualPredicateProbeState() {
+		}
+
+		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
+		                const vector<bool> &initialize_columns) {
+			eval_chunk.Initialize(allocator, eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
+			result_chunk.Initialize(allocator, {LogicalType::BOOLEAN});
+		}
+	};
+
 #ifdef DUCKDB_HASH_ZERO
 	//! Verify salt when all hashes are 0
 	static constexpr const idx_t USE_SALT_THRESHOLD = 0;
@@ -132,6 +148,7 @@ public:
 
 	private:
 		unique_ptr<ExpressionExecutor> residual_executor;
+		unique_ptr<ResidualPredicateProbeState> residual_state;
 
 	public:
 		void AdvancePointers();
