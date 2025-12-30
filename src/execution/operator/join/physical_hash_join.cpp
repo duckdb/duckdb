@@ -26,6 +26,7 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/execution/join_hashtable.hpp"
 
 namespace duckdb {
 
@@ -46,16 +47,13 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	auto &lhs_input_types = children[0].get().GetTypes();
 	auto &rhs_input_types = children[1].get().GetTypes();
 
+	vector<idx_t> probe_cols;
+	vector<idx_t> build_cols;
 	if (residual_p) {
-		vector<idx_t> probe_cols;
-		vector<idx_t> build_cols;
-
 		ExtractResidualPredicateColumns(residual_p, lhs_input_types.size(), probe_cols, build_cols);
 
 		// create info struct
 		residual_info = make_uniq<ResidualPredicateInfo>(std::move(residual_p));
-		residual_info->probe_cols = std::move(probe_cols);
-		residual_info->build_cols = std::move(build_cols);
 	}
 
 	// build condition types
@@ -77,7 +75,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 
 	// initialize residual predicate structures if present
 	if (residual_info) {
-		InitializeResidualPredicate(lhs_input_types);
+		InitializeResidualPredicate(lhs_input_types, probe_cols);
 	} else {
 		// lhs_probe_columns = lhs_output_columns
 		lhs_probe_columns = lhs_output_columns;
@@ -88,7 +86,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	}
 
 	// handle build side (RHS)
-	InitializeBuildSide(lhs_input_types, rhs_input_types, right_projection_map);
+	InitializeBuildSide(lhs_input_types, rhs_input_types, right_projection_map, build_cols);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
@@ -123,14 +121,15 @@ void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &p
 	build_column_ids.assign(build_cols.begin(), build_cols.end());
 }
 
-void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types) {
+void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types,
+                                                   const vector<idx_t> &probe_cols) {
 	D_ASSERT(residual_info && residual_info->HasPredicate());
 	// build lhs_probe_columns (output + predicate columns)
 	unordered_set<idx_t> required_probe_cols;
 	for (auto col : lhs_output_columns.col_idxs) {
 		required_probe_cols.insert(col);
 	}
-	for (auto col : residual_info->probe_cols) {
+	for (auto col : probe_cols) {
 		required_probe_cols.insert(col);
 	}
 
@@ -142,7 +141,7 @@ void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lh
 	}
 
 	// build mapping for predicate probe columns
-	for (auto predicate_col_idx : residual_info->probe_cols) {
+	for (auto predicate_col_idx : probe_cols) {
 		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
 			if (lhs_probe_columns.col_idxs[i] == predicate_col_idx) {
 				residual_info->probe_input_to_probe_map[predicate_col_idx] = i;
@@ -165,7 +164,7 @@ void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lh
 
 void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_types,
                                            const vector<LogicalType> &rhs_input_types,
-                                           const vector<idx_t> &right_projection_map) {
+                                           const vector<idx_t> &right_projection_map, const vector<idx_t> &build_cols) {
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
 	unordered_map<idx_t, idx_t> build_input_to_layout;
 
@@ -179,7 +178,8 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 
 	// handle SEMI/ANTI/MARK joins
 	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
-		MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_columns_in_conditions, build_input_to_layout);
+		MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_cols, build_columns_in_conditions,
+		                        build_input_to_layout);
 
 		if (residual_info && residual_info->HasPredicate()) {
 			residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
@@ -196,7 +196,8 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 	}
 
 	// map ALL predicate columns (both in conditions and not)
-	MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_columns_in_conditions, build_input_to_layout);
+	MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_cols, build_columns_in_conditions,
+	                        build_input_to_layout);
 
 	// build rhs_output_columns
 	for (auto &rhs_col : right_projection_map_copy) {
@@ -230,13 +231,14 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 
 void PhysicalHashJoin::MapResidualBuildColumns(const vector<LogicalType> &lhs_input_types,
                                                const vector<LogicalType> &rhs_input_types,
+                                               const vector<idx_t> &build_cols,
                                                const unordered_map<idx_t, idx_t> &build_columns_in_conditions,
                                                unordered_map<idx_t, idx_t> &build_input_to_layout) {
 	if (!residual_info || !residual_info->HasPredicate()) {
 		return;
 	}
 
-	for (auto rhs_idx_with_offset : residual_info->build_cols) {
+	for (auto rhs_idx_with_offset : build_cols) {
 		idx_t rhs_idx = rhs_idx_with_offset - lhs_input_types.size();
 		auto it = build_columns_in_conditions.find(rhs_idx);
 
@@ -400,11 +402,9 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(
-	    context, *this, conditions, payload_columns.col_types, join_type, rhs_output_columns.col_idxs,
-	    (residual_info && residual_info->HasPredicate()) ? residual_info->predicate->Copy() : nullptr,
-	    residual_info ? residual_info->build_input_to_layout_map : unordered_map<idx_t, idx_t>(),
-	    residual_info ? residual_info->probe_input_to_probe_map : unordered_map<idx_t, idx_t>(), lhs_output_in_probe);
+	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
+	                                       rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
+	                                       lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join

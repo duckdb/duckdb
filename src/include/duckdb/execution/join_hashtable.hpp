@@ -27,6 +27,7 @@ class BufferHandle;
 class ColumnDataCollection;
 struct ColumnDataAppendState;
 struct ClientConfig;
+struct ResidualPredicateInfo;
 
 struct JoinHTScanState {
 public:
@@ -177,8 +178,7 @@ public:
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
-	              unique_ptr<Expression> residual = nullptr, const unordered_map<idx_t, idx_t> &build_to_layout = {},
-	              const unordered_map<idx_t, idx_t> &probe_to_probe = {}, const vector<idx_t> &output_in_probe = {});
+	              unique_ptr<ResidualPredicateInfo> residual_p, const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -290,11 +290,7 @@ public:
 	//! Number of probe matches
 	atomic<idx_t> total_probe_matches {0};
 	//! Residual predicate to evaluate during probing
-	unique_ptr<Expression> residual_predicate;
-	//! Mapping from build input index to layout position (for predicate build columns only)
-	unordered_map<idx_t, idx_t> build_input_to_layout_map;
-	//! Mapping from original probe index to position in lhs_probe_data (for predicate probe columns only)
-	unordered_map<idx_t, idx_t> probe_input_to_probe_map;
+	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
 	vector<idx_t> lhs_output_in_probe;
 

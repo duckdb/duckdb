@@ -9,6 +9,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {
 
@@ -35,17 +36,14 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 
 JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
-                             const vector<idx_t> &output_columns_p, unique_ptr<Expression> residual,
-                             const unordered_map<idx_t, idx_t> &build_to_layout,
-                             const unordered_map<idx_t, idx_t> &probe_to_probe, const vector<idx_t> &output_in_probe)
+                             const vector<idx_t> &output_columns_p, unique_ptr<ResidualPredicateInfo> residual_p,
+                             const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
       radix_bits(INITIAL_RADIX_BITS) {
 	// store residual predicate information
-	residual_predicate = std::move(residual);
-	build_input_to_layout_map = build_to_layout;
-	probe_input_to_probe_map = probe_to_probe;
+	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
 
 	for (idx_t i = 0; i < conditions.size(); ++i) {
@@ -853,9 +851,9 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
       found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
       is_null(true), rhs_pointers(LogicalType::POINTER), lhs_sel_vector(STANDARD_VECTOR_SIZE), last_match_count(0),
       last_sel_vector(STANDARD_VECTOR_SIZE) {
-	if (ht.residual_predicate) {
+	if (ht.residual_info && ht.residual_info->HasPredicate()) {
 		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
-		residual_executor->AddExpression(*ht.residual_predicate);
+		residual_executor->AddExpression(*ht.residual_info->predicate);
 	}
 }
 
@@ -926,7 +924,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 		result_count = this->count;
 	}
 
-	if (ht.residual_predicate && result_count > 0) {
+	if (ht.residual_info && ht.residual_info->HasPredicate() && result_count > 0) {
 		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel);
 	}
 
@@ -938,20 +936,16 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 
 idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
                                             SelectionVector *no_match_sel) {
-	if (match_count == 0 || !ht.residual_predicate) {
-		return match_count;
-	}
-
 	// determine total columns needed based on ORIGINAL indices
 	idx_t total_columns = 0;
 
 	// find max probe column index (original position)
-	for (const auto &entry : ht.probe_input_to_probe_map) {
+	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
 		total_columns = MaxValue(total_columns, entry.first + 1);
 	}
 
 	// find max build column index (with offset)
-	for (const auto &entry : ht.build_input_to_layout_map) {
+	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
 		total_columns = MaxValue(total_columns, entry.first + 1);
 	}
 
@@ -960,7 +954,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	vector<bool> initialize_columns(total_columns, false);
 
 	// fill in probe types at their ORIGINAL positions
-	for (const auto &entry : ht.probe_input_to_probe_map) {
+	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
 		idx_t orig_idx = entry.first;
 		idx_t probe_data_col = entry.second;
 
@@ -969,7 +963,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	// fill in build types at their offset positions
-	for (const auto &entry : ht.build_input_to_layout_map) {
+	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
 		idx_t col_with_offset = entry.first;
 		idx_t layout_col = entry.second;
 
@@ -983,7 +977,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	eval_chunk.SetCardinality(match_count);
 
 	// copy probe columns at their ORIGINAL positions
-	for (const auto &entry : ht.probe_input_to_probe_map) {
+	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
 		idx_t orig_idx = entry.first;
 		idx_t probe_data_col = entry.second;
 
@@ -991,7 +985,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	// gather RHS columns from hash table
-	for (const auto &entry : ht.build_input_to_layout_map) {
+	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
 		idx_t col_with_offset = entry.first;
 		idx_t layout_col = entry.second;
 
