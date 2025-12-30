@@ -27,6 +27,21 @@ public:
 		vector<LogicalType> col_types;
 	};
 
+	struct ResidualPredicateInfo {
+		unique_ptr<Expression> predicate;
+		vector<idx_t> build_cols;
+		vector<idx_t> probe_cols;
+		unordered_map<idx_t, idx_t> build_input_to_layout_map;
+		unordered_map<idx_t, idx_t> probe_input_to_probe_map;
+
+		explicit ResidualPredicateInfo(unique_ptr<Expression> pred) : predicate(std::move(pred)) {
+		}
+
+		bool HasPredicate() const {
+			return predicate != nullptr;
+		}
+	};
+
 public:
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
@@ -55,6 +70,7 @@ public:
 	//! Join Keys statistics (optional)
 	vector<unique_ptr<BaseStatistics>> join_stats;
 
+	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! Residual predicate for arbitrary conditions
 	unique_ptr<Expression> residual_predicate;
 	vector<idx_t> predicate_build_cols;
