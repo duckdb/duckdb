@@ -1,7 +1,8 @@
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/common/type_visitor.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
@@ -144,7 +145,18 @@ void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, 
 	if (!vector) {
 		return;
 	}
+
+	// UTF-8 analysis for VARCHAR vectors, which expect valid UTF-8.
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
+		duckdb::UnicodeInvalidReason reason;
+		size_t pos;
+		auto utf_type = duckdb::Utf8Proc::Analyze(str, str_len, &reason, &pos);
+		if (utf_type == duckdb::UnicodeType::INVALID) {
+			return;
+		}
+	}
+
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
 	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
 }
