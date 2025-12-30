@@ -321,6 +321,34 @@ LogicalType BindVariantType(const BindLogicalTypeInput &input) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// GEOMETRY Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindGeometryType(const BindLogicalTypeInput &input) {
+	auto &arguments = input.modifiers;
+
+	if (arguments.empty()) {
+		return LogicalType::GEOMETRY();
+	}
+
+	if (arguments.size() > 1) {
+		throw BinderException(
+		    "GEOMETRY type takes a single optional type modifier with a coordinate system definition");
+	}
+
+	const auto &crs_value = arguments[0].GetValue();
+
+	// Don't do any casting here - only accept string type directly
+	if (crs_value.type() != LogicalTypeId::VARCHAR) {
+		throw BinderException("GEOMETRY type modifier must be a string with a coordinate system definition");
+	}
+
+	// FIXME: Use extension/ClientContext to expand incomplete/shorthand CRS definitions
+	auto &crs = StringValue::Get(crs_value);
+
+	return LogicalType::GEOMETRY(crs);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // All Types
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -409,7 +437,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"float4", LogicalTypeId::FLOAT, nullptr},
                                            {"double", LogicalTypeId::DOUBLE, nullptr},
                                            {"float8", LogicalTypeId::DOUBLE, nullptr},
-                                           {"geometry", LogicalTypeId::GEOMETRY, nullptr},
+                                           {"geometry", LogicalTypeId::GEOMETRY, BindGeometryType},
                                            {"type", LogicalTypeId::TYPE, nullptr}}};
 
 optional_ptr<const DefaultType> TryGetDefaultTypeEntry(const string &name) {
