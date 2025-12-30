@@ -10,32 +10,41 @@
 
 namespace duckdb {
 
-
 LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName &type_name) {
-	if (type_name.names->length > 1) {
-		// qualified typename
-		/*
-		vector<string> names;
-		for (auto cell = type_name.names->head; cell; cell = cell->next) {
-			names.push_back(PGPointerCast<duckdb_libpgquery::PGValue>(cell->data.ptr_value)->val.str);
-		}
-		vector<Value> type_mods = TransformTypeModifiers(type_name);
-		switch (type_name.names->length) {
-		case 2: {
-			return LogicalType::USER(INVALID_CATALOG, std::move(names[0]), std::move(names[1]), std::move(type_mods));
-		}
-		case 3: {
-			return LogicalType::USER(std::move(names[0]), std::move(names[1]), std::move(names[2]),
-			                         std::move(type_mods));
-		}
-		default:
-			throw ParserException(
-			    "Too many qualifications for type name - expected [catalog.schema.name] or [schema.name]");
-		}
-		*/
-	}
+	// Parse typename/any qualifications
 
-	auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
+	string unbound_name;
+	string schema_name;
+	string catalog_name;
+
+	if (type_name.names->length == 0) {
+		throw ParserException("Type name cannot be empty");
+	}
+	if (type_name.names->length == 1) {
+		auto unbound_name_cell = type_name.names->head;
+
+		unbound_name = PGPointerCast<duckdb_libpgquery::PGValue>(unbound_name_cell->data.ptr_value)->val.str;
+	}
+	if (type_name.names->length == 2) {
+		auto schema_name_cell = type_name.names->head;
+		auto unbound_name_cell = schema_name_cell->next;
+
+		schema_name = PGPointerCast<duckdb_libpgquery::PGValue>(schema_name_cell->data.ptr_value)->val.str;
+		unbound_name = PGPointerCast<duckdb_libpgquery::PGValue>(unbound_name_cell->data.ptr_value)->val.str;
+	}
+	if (type_name.names->length == 3) {
+		auto catalog_name_cell = type_name.names->head;
+		auto schema_name_cell = catalog_name_cell->next;
+		auto unbound_name_cell = schema_name_cell->next;
+
+		catalog_name = PGPointerCast<duckdb_libpgquery::PGValue>(catalog_name_cell->data.ptr_value)->val.str;
+		schema_name = PGPointerCast<duckdb_libpgquery::PGValue>(schema_name_cell->data.ptr_value)->val.str;
+		unbound_name = PGPointerCast<duckdb_libpgquery::PGValue>(unbound_name_cell->data.ptr_value)->val.str;
+	}
+	if (type_name.names->length > 4) {
+		throw ParserException(
+		    "Too many qualifications for type name - expected [catalog.schema.name] or [schema.name]");
+	}
 
 	// Parse type modifiers
 	vector<unique_ptr<TypeParameter>> type_params;
@@ -92,7 +101,7 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		}
 	}
 
-	return LogicalType::UNBOUND(name, std::move(type_params));
+	return LogicalType::UNBOUND(catalog_name, schema_name, unbound_name, std::move(type_params));
 }
 
 LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {

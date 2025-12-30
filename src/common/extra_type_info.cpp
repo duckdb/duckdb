@@ -530,18 +530,21 @@ shared_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {
 UnboundTypeInfo::UnboundTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
 }
 
-UnboundTypeInfo::UnboundTypeInfo(string name_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), name(std::move(name_p)) {
-}
-
-UnboundTypeInfo::UnboundTypeInfo(string name_p, vector<unique_ptr<TypeParameter>> parameters_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), name(std::move(name_p)),
-      parameters(std::move(parameters_p)) {
+UnboundTypeInfo::UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
+                                 vector<unique_ptr<TypeParameter>> parameters_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), catalog(catalog_p), schema(schema_p),
+      name(std::move(name_p)), parameters(std::move(parameters_p)) {
 }
 
 bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<UnboundTypeInfo>();
 	if (name != other.name) {
+		return false;
+	}
+	if (catalog != other.catalog) {
+		return false;
+	}
+	if (schema != other.schema) {
 		return false;
 	}
 	if (parameters.size() != other.parameters.size()) {
@@ -556,11 +559,11 @@ bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 }
 
 shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
-	auto res = make_shared_ptr<UnboundTypeInfo>(name);
+	vector<unique_ptr<TypeParameter>> parameters_copy;
 	for (const auto &param : parameters) {
-		res->parameters.push_back(param->Copy());
+		parameters_copy.push_back(param->Copy());
 	}
-	return res;
+	return make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters_copy));
 }
 
 } // namespace duckdb

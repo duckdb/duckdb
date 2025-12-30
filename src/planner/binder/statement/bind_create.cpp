@@ -366,7 +366,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
+static bool IsValidTypeEntry(optional_ptr<CatalogEntry> entry) {
 	if (!entry) {
 		return false;
 	}
@@ -375,112 +375,15 @@ static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
 
 LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog,
                                             const string &schema) {
-	if (type.id() == LogicalTypeId::UNBOUND) {
-		// Unbound type, bind to concrete type
-		auto unbound_type_name = UnboundType::GetName(type);
-		auto &unbound_type_params = UnboundType::GetParameters(type);
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
 
-		vector<TypeArgument> bound_type_params;
-		for (auto &param : unbound_type_params) {
-			if (param->IsExpression()) {
-				ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'"));
-				auto expr = param->GetExpression()->Copy();
-				auto bound_expr = binder.Bind(expr);
+	auto type_name = UnboundType::GetName(type);
+	auto type_schema = UnboundType::GetSchema(type);
+	auto type_catalog = UnboundType::GetCatalog(type);
 
-				if (!bound_expr->IsFoldable()) {
-					// Throw nice error here
-					throw BinderException("Type parameter expression for type '%s' is not constant", unbound_type_name);
-				}
+	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, type_name);
+	optional_ptr<CatalogEntry> entry = nullptr;
 
-				auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-				bound_type_params.emplace_back(param->GetName(), bound_param);
-			} else if (param->IsType()) {
-				// Otherwise, bind the type!
-				auto param_type = param->GetType();
-				BindLogicalType(param_type, catalog, schema);
-				bound_type_params.emplace_back(param->GetName(), Value::TYPE(param_type));
-			}
-		}
-
-		// Lookup the type
-		EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, unbound_type_name);
-		auto entry =
-		    entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup, OnEntryNotFound::THROW_EXCEPTION);
-		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-
-		// Call the bind function
-		// TODO: We should ALWAYS call the bind function. For now, we keep the old behavior for user-defined types
-		if (type_entry.bind_function) {
-			BindLogicalTypeInput input {context, type_entry.user_type, bound_type_params};
-			return type_entry.bind_function(input);
-		} else {
-			if (!bound_type_params.empty()) {
-				throw BinderException("Type '%s' does not take any type parameters", unbound_type_name);
-			}
-
-			return type_entry.user_type;
-		}
-	}
-
-	if (type.id() != LogicalTypeId::USER) {
-		// Nested type, make sure to bind any nested user types recursively
-		LogicalType result;
-		switch (type.id()) {
-		case LogicalTypeId::LIST: {
-			auto child_type = BindLogicalTypeInternal(ListType::GetChildType(type), catalog, schema);
-			result = LogicalType::LIST(child_type);
-			break;
-		}
-		case LogicalTypeId::MAP: {
-			auto key_type = BindLogicalTypeInternal(MapType::KeyType(type), catalog, schema);
-			auto value_type = BindLogicalTypeInternal(MapType::ValueType(type), catalog, schema);
-			result = LogicalType::MAP(std::move(key_type), std::move(value_type));
-			break;
-		}
-		case LogicalTypeId::ARRAY: {
-			auto child_type = BindLogicalTypeInternal(ArrayType::GetChildType(type), catalog, schema);
-			auto array_size = ArrayType::GetSize(type);
-			result = LogicalType::ARRAY(child_type, array_size);
-			break;
-		}
-		case LogicalTypeId::STRUCT: {
-			auto child_types = StructType::GetChildTypes(type);
-			child_list_t<LogicalType> new_child_types;
-			for (auto &entry : child_types) {
-				new_child_types.emplace_back(entry.first, BindLogicalTypeInternal(entry.second, catalog, schema));
-			}
-			result = LogicalType::STRUCT(std::move(new_child_types));
-			break;
-		}
-		case LogicalTypeId::UNION: {
-			child_list_t<LogicalType> member_types;
-			for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
-				auto child_type = BindLogicalTypeInternal(UnionType::GetMemberType(type, i), catalog, schema);
-				member_types.emplace_back(UnionType::GetMemberName(type, i), std::move(child_type));
-			}
-			result = LogicalType::UNION(std::move(member_types));
-			break;
-		}
-		default:
-			return type;
-		}
-
-		// Set the alias and extension info back
-		result.SetAlias(type.GetAlias());
-		auto ext_info = type.HasExtensionInfo() ? make_uniq<ExtensionTypeInfo>(*type.GetExtensionInfo()) : nullptr;
-		result.SetExtensionInfo(std::move(ext_info));
-		return result;
-	}
-
-	// User type, bind the user type
-	auto user_type_name = UserType::GetTypeName(type);
-	auto user_type_schema = UserType::GetSchema(type);
-	auto user_type_mods = UserType::GetTypeModifiers(type);
-
-	bind_logical_type_function_t user_bind_modifiers_func = nullptr;
-
-	LogicalType result;
-	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, user_type_name);
 	if (catalog) {
 		// The search order is:
 		// 1) In the explicitly set schema (my_schema.my_type)
@@ -488,56 +391,82 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		// 3) In the same catalog
 		// 4) System catalog
 
-		optional_ptr<CatalogEntry> entry = nullptr;
-		if (!user_type_schema.empty()) {
-			entry = entry_retriever.GetEntry(*catalog, user_type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
+		if (!type_schema.empty()) {
+			entry = entry_retriever.GetEntry(*catalog, type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
-		if (!IsValidUserType(entry)) {
+		if (!IsValidTypeEntry(entry)) {
 			entry = entry_retriever.GetEntry(*catalog, schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
-		if (!IsValidUserType(entry)) {
+		if (!IsValidTypeEntry(entry)) {
 			entry = entry_retriever.GetEntry(*catalog, INVALID_SCHEMA, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
-		if (!IsValidUserType(entry)) {
+		if (!IsValidTypeEntry(entry)) {
 			entry = entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
 			                                 OnEntryNotFound::THROW_EXCEPTION);
 		}
-		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-		result = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_function;
 	} else {
-		string type_catalog = UserType::GetCatalog(type);
-		string type_schema = UserType::GetSchema(type);
-
 		BindSchemaOrCatalog(context, type_catalog, type_schema);
-		auto entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
-		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-		result = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_function;
+		entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
 	}
 
-	// Now we bind the inner user type
-	BindLogicalType(result, catalog, schema);
+	// By this point we have to have found a type in the catalog
+	D_ASSERT(entry != nullptr);
+	auto &type_entry = entry->Cast<TypeCatalogEntry>();
 
-	// Apply the type modifiers (if any)
-	if (user_bind_modifiers_func) {
-		// If an explicit bind_modifiers function was provided, use that to construct the type
-		throw NotImplementedException("TODO");
-		// BindLogicalTypeInput input {context, result, user_type_mods};
-		// result = user_bind_modifiers_func(input);
-	} else {
-		if (!user_type_mods.empty()) {
-			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
+	// Now handle type parameters
+	auto &unbound_parameters = UnboundType::GetParameters(type);
+
+	if (!type_entry.bind_function) {
+		if (!unbound_parameters.empty()) {
+			// This type does not support type parameters
+			throw BinderException("Type '%s' does not take any type parameters", type_name);
 		}
+
+		// Otherwise, return the user type directly!
+		return type_entry.user_type;
 	}
-	return result;
+
+	// Bind value parameters
+	vector<TypeArgument> bound_parameters;
+
+	for (auto &param : unbound_parameters) {
+		switch (param->GetKind()) {
+		case TypeParameterKind::EXPRESSION: {
+			// We need to constant-fold expression type parameters
+
+			ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'"));
+			auto expr = param->GetExpression()->Copy();
+			auto bound_expr = binder.Bind(expr);
+
+			if (!bound_expr->IsFoldable()) {
+				// Throw nice error here
+				throw BinderException("Type parameter expression for type '%s' is not constant", type_name);
+			}
+
+			auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
+			bound_parameters.emplace_back(param->GetName(), bound_param);
+		} break;
+		case TypeParameterKind::TYPE: {
+			// Nested unbound type needs to be bound as well!
+
+			auto param_type = param->GetType();
+			BindLogicalType(param_type, catalog, schema);
+			bound_parameters.emplace_back(param->GetName(), Value::TYPE(param_type));
+
+		} break;
+		default:
+			throw InternalException("Unknown type parameter kind");
+		}
+	};
+
+	// Call the bind function and return the bound type!
+	BindLogicalTypeInput input {context, type_entry.user_type, bound_parameters};
+	return type_entry.bind_function(input);
 }
 
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
 	// check if we need to bind this type at all
-	if (!TypeVisitor::Contains(type, [](const LogicalType &ty) {
-		    return ty.id() == LogicalTypeId::USER || ty.id() == LogicalTypeId::UNBOUND;
-	    })) {
+	if (type.id() != LogicalTypeId::UNBOUND) {
 		return;
 	}
 
@@ -673,26 +602,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
-			SetCatalogLookupCallback(dependency_callback);
-			// two cases:
-			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
-			// 2: create a type alias with a custom type.
-			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
-			// We set b to be an alias for the underlying type of a
-
-			EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, UserType::GetTypeName(create_type_info.type));
-			auto type_entry_p = entry_retriever.GetEntry(schema.catalog.GetName(), schema.name, type_lookup);
-			D_ASSERT(type_entry_p);
-			auto &type_entry = type_entry_p->Cast<TypeCatalogEntry>();
-			create_type_info.type = type_entry.user_type;
 		} else {
 			SetCatalogLookupCallback(dependency_callback);
-			// This is done so that if the type contains a USER type,
-			// we register this dependency
-			auto preserved_type = create_type_info.type;
+			// Bind the underlying type
 			BindLogicalType(create_type_info.type);
-			create_type_info.type = preserved_type;
 		}
 		break;
 	}

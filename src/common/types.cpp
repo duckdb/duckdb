@@ -490,25 +490,11 @@ string LogicalType::ToString() const {
 			return "UNBOUND";
 		}
 		auto &params = UnboundType::GetParameters(*this);
-		string result = UnboundType::GetName(*this);
-		if (!params.empty()) {
-			result += "(";
-			for (idx_t i = 0; i < params.size(); i++) {
-				result += params[i]->ToString();
-				if (i < params.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
-		}
-		return result;
-	}
-	case LogicalTypeId::USER: {
 		string result;
-		auto &catalog = UserType::GetCatalog(*this);
-		auto &schema = UserType::GetSchema(*this);
-		auto &type = UserType::GetTypeName(*this);
-		auto &mods = UserType::GetTypeModifiers(*this);
+
+		auto &catalog = UnboundType::GetCatalog(*this);
+		auto &schema = UnboundType::GetSchema(*this);
+		auto &type = UnboundType::GetName(*this);
 
 		if (!catalog.empty()) {
 			result = KeywordHelper::WriteOptionallyQuoted(catalog);
@@ -524,18 +510,20 @@ string LogicalType::ToString() const {
 		}
 		result += KeywordHelper::WriteOptionallyQuoted(type);
 
-		if (!mods.empty()) {
+		if (!params.empty()) {
 			result += "(";
-			for (idx_t i = 0; i < mods.size(); i++) {
-				result += mods[i].ToString();
-				if (i < mods.size() - 1) {
+			for (idx_t i = 0; i < params.size(); i++) {
+				result += params[i]->ToString();
+				if (i < params.size() - 1) {
 					result += ", ";
 				}
 			}
 			result += ")";
 		}
-
 		return result;
+	}
+	case LogicalTypeId::USER: {
+		return "USER";
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -1523,7 +1511,7 @@ void LogicalType::SetAlias(string alias) {
 
 string LogicalType::GetAlias() const {
 	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeName(*this);
+		return UnboundType::GetName(*this);
 	}
 	if (type_info_) {
 		return type_info_->alias;
@@ -1532,8 +1520,8 @@ string LogicalType::GetAlias() const {
 }
 
 bool LogicalType::HasAlias() const {
-	if (id() == LogicalTypeId::USER) {
-		return !UserType::GetTypeName(*this).empty();
+	if (id() == LogicalTypeId::UNBOUND) {
+		return !UnboundType::GetName(*this).empty();
 	}
 	if (type_info_ && !type_info_->alias.empty()) {
 		return true;
@@ -1790,64 +1778,15 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 }
 
 //===--------------------------------------------------------------------===//
-// User Type
-//===--------------------------------------------------------------------===//
-const string &UserType::GetCatalog(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().catalog;
-}
-
-const string &UserType::GetSchema(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().schema;
-}
-
-const string &UserType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().user_type_name;
-}
-
-const vector<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().user_type_modifiers;
-}
-
-vector<Value> &UserType::GetTypeModifiers(LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.GetAuxInfoShrPtr();
-	return info->Cast<UserTypeInfo>().user_type_modifiers;
-}
-
-LogicalType LogicalType::USER(const string &user_type_name) {
-	auto info = make_shared_ptr<UserTypeInfo>(user_type_name);
-	return LogicalType(LogicalTypeId::USER, std::move(info));
-}
-
-LogicalType LogicalType::USER(const string &user_type_name, const vector<Value> &user_type_mods) {
-	auto info = make_shared_ptr<UserTypeInfo>(user_type_name, user_type_mods);
-	return LogicalType(LogicalTypeId::USER, std::move(info));
-}
-
-LogicalType LogicalType::USER(string catalog, string schema, string name, vector<Value> user_type_mods) {
-	auto info = make_shared_ptr<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name),
-	                                          std::move(user_type_mods));
-	return LogicalType(LogicalTypeId::USER, std::move(info));
-}
-
-//===--------------------------------------------------------------------===//
 // Unbound Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::UNBOUND(const string &name) {
-	auto info = make_shared_ptr<UnboundTypeInfo>(name);
+LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(INVALID_CATALOG, INVALID_SCHEMA, name, std::move(parameters));
 	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
 }
-
-LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters) {
-	auto info = make_shared_ptr<UnboundTypeInfo>(name, std::move(parameters));
+LogicalType LogicalType::UNBOUND(const string &catalog, const string &schema, const string &name,
+                                 vector<unique_ptr<TypeParameter>> parameters) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters));
 	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
 }
 
@@ -2131,6 +2070,20 @@ const string &UnboundType::GetName(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
 	return info->Cast<UnboundTypeInfo>().name;
+}
+
+const string &UnboundType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
+	return info->Cast<UnboundTypeInfo>().catalog;
+}
+
+const string &UnboundType::GetSchema(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
+	return info->Cast<UnboundTypeInfo>().schema;
 }
 
 const vector<unique_ptr<TypeParameter>> &UnboundType::GetParameters(const LogicalType &type) {
