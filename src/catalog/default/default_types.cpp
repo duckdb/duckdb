@@ -157,6 +157,37 @@ LogicalType BindListType(const BindLogicalTypeInput &input) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// ARRAY Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindArrayType(const BindLogicalTypeInput &input) {
+	auto &arguments = input.modifiers;
+	if (arguments.size() != 2) {
+		throw BinderException("ARRAY type requires exactly two type modifiers");
+	}
+	auto &elem_val = arguments[0].GetValue();
+	if (elem_val.type() != LogicalTypeId::TYPE) {
+		throw BinderException("ARRAY type modifier must be a type, but got %s", elem_val.ToString());
+	}
+
+	auto size_val = arguments[1].GetValue();
+	if (!size_val.TryCastAs(input.context, LogicalTypeId::BIGINT)) {
+		throw BinderException("ARRAY type size modifier must be a BIGINT");
+	}
+
+	auto array_size = size_val.GetValueUnsafe<int64_t>();
+
+	if (array_size < 1) {
+		throw BinderException("ARRAY type size must be at least 1");
+	}
+	if (array_size > static_cast<int64_t>(ArrayType::MAX_ARRAY_SIZE)) {
+		throw BinderException("ARRAY type size must be at most %d", ArrayType::MAX_ARRAY_SIZE);
+	}
+
+	auto child_type = TypeValue::GetType(arguments[0].GetValue());
+	return LogicalType::ARRAY(std::move(child_type), UnsafeNumericCast<idx_t>(array_size));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // STRUCT Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindStructType(const BindLogicalTypeInput &input) {
@@ -283,7 +314,7 @@ struct DefaultType {
 	bind_logical_type_function_t bind_function;
 };
 
-using builtin_type_array = std::array<DefaultType, 78>;
+using builtin_type_array = std::array<DefaultType, 79>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
@@ -342,6 +373,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"struct", LogicalTypeId::STRUCT, BindStructType},
                                            {"row", LogicalTypeId::STRUCT, BindStructType},
                                            {"list", LogicalTypeId::LIST, BindListType},
+                                           {"array", LogicalTypeId::ARRAY, BindArrayType},
                                            {"map", LogicalTypeId::MAP, BindMapType},
                                            {"union", LogicalTypeId::UNION, BindUnionType},
                                            {"bit", LogicalTypeId::BIT, nullptr},
