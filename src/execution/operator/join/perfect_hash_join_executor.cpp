@@ -64,6 +64,7 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 }
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max) {
+	// TODO: Add support for residual predicates
 	if (op.residual_predicate) {
 		return false;
 	}
