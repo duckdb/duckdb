@@ -1,10 +1,10 @@
-# name: test/sql/outofcore/out_of_core_join.test_slow
-# description: Test out of core join
+# name: test/sql/outofcore/out_of_core_hash_join.test_slow
+# description: Test out of core hash join
 # group: [outofcore]
 
 require tpch
 
-load __TEST_DIR__/out_of_core_join.db
+load __TEST_DIR__/out_of_core_hash_join.db
 
 statement ok
 CALL dbgen(sf=1);
