@@ -260,9 +260,7 @@ CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
 	// If we reach here, the query failed before Finalize was called
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file : created_files) {
-		if (fs.FileExists(file)) {
-			fs.RemoveFile(file);
-		}
+		fs.TryRemoveFile(file);
 	}
 }
 
