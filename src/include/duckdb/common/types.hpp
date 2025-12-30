@@ -564,8 +564,6 @@ DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
-DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);
-
 DUCKDB_API LogicalType TransformStringToLogicalType(const string &str, ClientContext &context);
 
 //! The PhysicalType used by the row identifiers column

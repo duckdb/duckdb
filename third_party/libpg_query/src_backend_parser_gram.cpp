@@ -28141,7 +28141,7 @@ yyreduce:
 #line 1754 "third_party/libpg_query/grammar/statements/select.y"
     {
 					(yyval.typnam) = (yyvsp[(1) - (2)].typnam);
-					(yyval.typnam)->arrayBounds = list_make1(makeInteger(-1));
+					(yyval.typnam)->arrayBounds = list_make1(NULL);
 				;}
     break;
 
@@ -28149,7 +28149,7 @@ yyreduce:
 #line 1759 "third_party/libpg_query/grammar/statements/select.y"
     {
 					(yyval.typnam) = (yyvsp[(2) - (3)].typnam);
-					(yyval.typnam)->arrayBounds = list_make1(makeInteger(-1));
+					(yyval.typnam)->arrayBounds = list_make1(NULL);
 					(yyval.typnam)->setof = true;
 				;}
     break;

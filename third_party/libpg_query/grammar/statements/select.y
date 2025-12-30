@@ -1753,12 +1753,12 @@ Typename:	SimpleTypename opt_array_bounds
 			| SimpleTypename ARRAY
 				{
 					$$ = $1;
-					$$->arrayBounds = list_make1(makeInteger(-1));
+					$$->arrayBounds = list_make1(NULL);
 				}
 			| SETOF SimpleTypename ARRAY
 				{
 					$$ = $2;
-					$$->arrayBounds = list_make1(makeInteger(-1));
+					$$->arrayBounds = list_make1(NULL);
 					$$->setof = true;
 				}
 			| qualified_typename opt_array_bounds
