@@ -3961,29 +3961,28 @@ extended_indirection_el:
 					$$ = (PGNode *) ai;
 				}
 			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound ']'
-				{
-					PGAIndices *ai = makeNode(PGAIndices);
-					ai->is_slice = true;
-					ai->lidx = $2;
-					ai->uidx = $4;
-					$$ = (PGNode *) ai;
-				}
-		    	| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
-					PGAIndices *ai = makeNode(PGAIndices);
-					ai->is_slice = true;
-					ai->lidx = $2;
-					ai->uidx = $4;
-					ai->step = $6;
-                 			$$ = (PGNode *) ai;
-                		}
-
+			{
+				PGAIndices *ai = makeNode(PGAIndices);
+				ai->is_slice = true;
+				ai->lidx = $2;
+				ai->uidx = $4;
+				$$ = (PGNode *) ai;
+			}
+			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
+				PGAIndices *ai = makeNode(PGAIndices);
+				ai->is_slice = true;
+				ai->lidx = $2;
+				ai->uidx = $4;
+				ai->step = $6;
+				$$ = (PGNode *) ai;
+			}
 			| '[' opt_slice_bound SINGLE_COLON '-' SINGLE_COLON opt_slice_bound ']' {
-					PGAIndices *ai = makeNode(PGAIndices);
-					ai->is_slice = true;
-					ai->lidx = $2;
-					ai->step = $6;
-					$$ = (PGNode *) ai;
-				}
+				PGAIndices *ai = makeNode(PGAIndices);
+				ai->is_slice = true;
+				ai->lidx = $2;
+				ai->step = $6;
+				$$ = (PGNode *) ai;
+			}
 		;
 
 extended_indirection:
@@ -4194,9 +4193,17 @@ SimpleConst:
 		{
 			$$ = makeFloatConst($1, @1);
 		}
-	| Sconst
+	| Sconst opt_indirection
 		{
-			$$ = makeStringConst($1, @1);
+			if ($2)
+			{
+				PGAIndirection *n = makeNode(PGAIndirection);
+				n->arg = makeStringConst($1, @1);
+				n->indirection = check_indirection($2, yyscanner);
+				$$ = (PGNode *) n;
+			}
+			else
+				$$ = makeStringConst($1, @1);
 		}
 	| BCONST
 		{
