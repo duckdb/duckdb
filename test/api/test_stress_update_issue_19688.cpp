@@ -61,7 +61,8 @@ TEST_CASE("Concurrent stress test: UPDATE/DELETE/INSERT", "[api][concurrent]") {
 
 	// Seed 1000 rows and verify the initial count.
 	for (int idx = 0; idx < STRESS_TEST_NUM_ROWS; idx++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test_stress_update_issue_19688 (id, val) VALUES ($1, $2)", idx, idx * 1000));
+		REQUIRE_NO_FAIL(
+		    con.Query("INSERT INTO test_stress_update_issue_19688 (id, val) VALUES ($1, $2)", idx, idx * 1000));
 	}
 	auto count_result = con.Query("SELECT COUNT(*) FROM test_stress_update_issue_19688");
 	REQUIRE(CHECK_COLUMN(count_result, 0, {STRESS_TEST_NUM_ROWS}));
