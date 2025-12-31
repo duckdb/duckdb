@@ -433,7 +433,14 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		}
 	} else {
 		BindSchemaOrCatalog(context, type_catalog, type_schema);
-		entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
+
+		// TODO: Not sure about this code path, but seems required for WAL lookup to work
+		if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
+			// Look in the system catalog if no catalog was specified
+			entry = entry_retriever.GetEntry(SYSTEM_CATALOG, type_schema, type_lookup);
+		} else {
+			entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
+		}
 	}
 
 	// By this point we have to have found a type in the catalog
