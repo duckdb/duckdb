@@ -188,7 +188,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &comparison_join = join.Cast<LogicalComparisonJoin>();
-		if (comparison_join.predicate && IsUnsatisfiable(optimizer.context, *comparison_join.predicate)) {
+		if (comparison_join.predicate && AddFilter(comparison_join.predicate->Copy()) == FilterResult::UNSATISFIABLE) {
 			has_unsatisfiable_condition = true;
 		}
 	} else if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
