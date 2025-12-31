@@ -58,7 +58,7 @@ public:
 
 public:
 	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
-	                                BaseStatistics &base_stats);
+	                                BaseStatistics &base_stats, ClientContext &context);
 	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	//	                                  BaseStatistics &base_stats);
 	//! Extract Statistics from a LogicalGet.
