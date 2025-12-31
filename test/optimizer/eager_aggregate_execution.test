@@ -36,7 +36,7 @@ DETACH tmp
 query II
 EXPLAIN SELECT count(*), min(i), max(i) FROM t
 ----
-physical_plan	<!REGEX>:.*GROUP_BY.*
+physical_plan	<!REGEX>:.*AGGREGATE.*
 
 query II
 EXPLAIN SELECT count(*), min(i), max(i) FROM t GROUP BY i
@@ -46,7 +46,7 @@ physical_plan	<REGEX>:.*GROUP_BY.*
 query II
 EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i > 100
 ----
-physical_plan	<!REGEX>:.*GROUP_BY.*
+physical_plan	<REGEX>:.*AGGREGATE.*
 
 query III
 SELECT count(*), min(i), max(i) FROM t

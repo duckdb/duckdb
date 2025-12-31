@@ -80,6 +80,10 @@ public:
 		return ObjectType();
 	}
 
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
+
 private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);
 	//! Cache on delimiter|quote|escape|newline

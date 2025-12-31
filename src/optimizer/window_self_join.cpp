@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/count_window_elimination.hpp"
+#include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -20,9 +20,9 @@
 
 namespace duckdb {
 
-class CountWindowTableRebinder : public LogicalOperatorVisitor {
+class WindowSelfJoinTableRebinder : public LogicalOperatorVisitor {
 public:
-	explicit CountWindowTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
+	explicit WindowSelfJoinTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
 	unordered_map<idx_t, idx_t> table_map;
@@ -147,7 +147,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			auto copy_child = original_child->Copy(optimizer.context);
 
 			// Rebind copy_child to avoid duplicate table indices
-			CountWindowTableRebinder rebinder(optimizer);
+			WindowSelfJoinTableRebinder rebinder(optimizer);
 			rebinder.VisitOperator(*copy_child);
 
 			auto aggregate_index = optimizer.binder.GenerateTableIndex();

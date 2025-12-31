@@ -91,6 +91,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
@@ -1207,6 +1208,27 @@ const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value) {
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 	return static_cast<ConstraintType>(StringUtil::StringToEnum(GetConstraintTypeValues(), 5, "ConstraintType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCoordinateReferenceSystemTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::SRID), "SRID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::PROJJSON), "PROJJSON" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CoordinateReferenceSystemType>(CoordinateReferenceSystemType value) {
+	return StringUtil::EnumToString(GetCoordinateReferenceSystemTypeValues(), 5, "CoordinateReferenceSystemType", static_cast<uint32_t>(value));
+}
+
+template<>
+CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType>(const char *value) {
+	return static_cast<CoordinateReferenceSystemType>(StringUtil::StringToEnum(GetCoordinateReferenceSystemTypeValues(), 5, "CoordinateReferenceSystemType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
@@ -3029,7 +3051,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_SUBPLAN), "OPTIMIZER_COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COUNT_WINDOW_ELIMINATION), "OPTIMIZER_COUNT_WINDOW_ELIMINATION" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN), "OPTIMIZER_WINDOW_SELF_JOIN" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
@@ -3286,7 +3308,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" },
 		{ static_cast<uint32_t>(OptimizerType::COMMON_SUBPLAN), "COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" },
-		{ static_cast<uint32_t>(OptimizerType::COUNT_WINDOW_ELIMINATION), "COUNT_WINDOW_ELIMINATION" }
+		{ static_cast<uint32_t>(OptimizerType::WINDOW_SELF_JOIN), "WINDOW_SELF_JOIN" }
 	};
 	return values;
 }

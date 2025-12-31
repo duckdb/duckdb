@@ -25,6 +25,35 @@ static void test_file_system(duckdb_file_system fs, string file_name) {
 	REQUIRE(error_type == DUCKDB_ERROR_IO);
 	duckdb_destroy_error_data(&error_data);
 
+	// Try to open file without options
+	state = duckdb_file_system_open(fs, file_path.c_str(), nullptr, &file);
+	REQUIRE(state == DuckDBError);
+	error_data = duckdb_file_system_error_data(fs);
+	error_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(error_type == DUCKDB_ERROR_IO);
+	duckdb_destroy_error_data(&error_data);
+
+	// Try to open incorrect file
+	state = duckdb_file_system_open(fs, file_path.c_str(), options, nullptr);
+	REQUIRE(state == DuckDBError);
+	error_data = duckdb_file_system_error_data(fs);
+	error_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(error_type == DUCKDB_ERROR_IO);
+	duckdb_destroy_error_data(&error_data);
+
+	// Try to open file with incorrect filename
+	state = duckdb_file_system_open(fs, nullptr, options, &file);
+	REQUIRE(state == DuckDBError);
+	error_data = duckdb_file_system_error_data(fs);
+	error_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(error_type == DUCKDB_ERROR_IO);
+	duckdb_destroy_error_data(&error_data);
+
+	// Try to open with all incorrect input parameters
+	// fs is incorrect, error message verification is not possible
+	state = duckdb_file_system_open(nullptr, nullptr, nullptr, nullptr);
+	REQUIRE(state == DuckDBError);
+
 	// Try to write to a null file handle
 	auto failed_bytes_written = duckdb_file_handle_write(file, "data", 4);
 	REQUIRE(failed_bytes_written == -1);

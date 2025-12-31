@@ -702,6 +702,12 @@
       "paths": [
         "test/sql/outofcore/buffer_managed_query_result.test_slow"
       ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+      "paths": [
+        "test/geoparquet/with_crs.test"
+      ]
     }
   ]
 }

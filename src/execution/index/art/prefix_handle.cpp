@@ -20,7 +20,7 @@ PrefixHandle::PrefixHandle(FixedSizeAllocator &allocator, const Node node, const
 }
 
 PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
-    : segment_handle(std::move(other.segment_handle)), data(other.data), child(other.child) {
+    : data(other.data), child(other.child), segment_handle(std::move(other.segment_handle)) {
 	other.data = nullptr;
 	other.child = nullptr;
 }

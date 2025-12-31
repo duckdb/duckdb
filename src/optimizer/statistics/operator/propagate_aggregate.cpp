@@ -73,7 +73,7 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
-	if (!stats.partition_row_group->MinMaxIsExact(*column_stats)) {
+	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
 		return false;
 	}
 	if (column_stats->GetStatsType() == StatisticsType::NUMERIC_STATS) {
