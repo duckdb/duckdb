@@ -284,6 +284,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			continue;
 		}
 		D_ASSERT(col.Generated());
+
 		auto expression = col.GeneratedExpression().Copy();
 
 		auto bound_expression = expr_binder.Bind(expression);
@@ -654,6 +655,18 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			dependencies.AddDependency(entry);
 		});
 
+		// Bind all physical column types
+		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
+			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
+
+			// bind collations to detect any unsupported collation errors
+			if (column.Type().id() == LogicalTypeId::VARCHAR) {
+				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
+			}
+
+			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
+		}
+
 		auto &config = DBConfig::Get(catalog.GetAttached());
 		VerifyCompressionType(context, storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
@@ -661,14 +674,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindGeneratedColumns(*result);
 		// bind any constraints
 
-		// bind collations to detect any unsupported collation errors
-		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
-			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-			if (column.Type().id() == LogicalTypeId::VARCHAR) {
-				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
-			}
-			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
-		}
 		BindCreateTableConstraints(base, entry_retriever, schema);
 
 		if (AnyConstraintReferencesGeneratedColumn(base)) {

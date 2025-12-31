@@ -451,8 +451,8 @@ public:
 	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
-	DUCKDB_API static LogicalType UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters = {}); // NOLINT
-	DUCKDB_API static LogicalType UNBOUND(const string &catalog, const string &schema, const string &name, vector<unique_ptr<TypeParameter>> parameters = {}); // NOLINT
+	DUCKDB_API static LogicalType UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters = {}, const string &collation = ""); // NOLINT
+	DUCKDB_API static LogicalType UNBOUND(const string &catalog, const string &schema, const string &name, vector<unique_ptr<TypeParameter>> parameters = {}, const string &collation = ""); // NOLINT
 	DUCKDB_API static LogicalType TYPE(); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
@@ -489,6 +489,7 @@ struct UnboundType {
 	DUCKDB_API static const string &GetName(const LogicalType &type);
 	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
+	DUCKDB_API static const string &GetCollation(const LogicalType &type);
 	DUCKDB_API static const vector<unique_ptr<TypeParameter>> &GetParameters(const LogicalType &type);
 };
 

@@ -297,12 +297,15 @@ protected:
 
 struct UnboundTypeInfo : public ExtraTypeInfo {
 	explicit UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
-	                         vector<unique_ptr<TypeParameter>> parameters);
+	                         vector<unique_ptr<TypeParameter>> parameters, const string collation);
 
 	// The name of the unbound type
 	string catalog;
 	string schema;
 	string name;
+
+	// Optional collation of the unbound type
+	string collation;
 
 	// The type parameters of the unbound type
 	vector<unique_ptr<TypeParameter>> parameters;

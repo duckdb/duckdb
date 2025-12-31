@@ -7,7 +7,7 @@ namespace duckdb {
 namespace {
 
 void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto v = Value::TYPE(args.data[0].GetType());
+	Value v(args.data[0].GetType().ToString());
 	result.Reference(v);
 }
 
@@ -18,16 +18,42 @@ unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput 
 		return nullptr;
 	}
 	// emit a constant expression
-	return make_uniq<BoundConstantExpression>(Value::TYPE(return_type));
+	return make_uniq<BoundConstantExpression>(Value(return_type.ToString()));
 }
 
 } // namespace
 
 ScalarFunction TypeOfFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::TYPE(), TypeOfFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindTypeOfFunctionExpression);
 	return fun;
 }
+
+/*
+void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+    auto v = Value::TYPE(args.data[0].GetType());
+    result.Reference(v);
+}
+
+unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput &input) {
+    auto &return_type = input.children[0]->return_type;
+    if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
+        // parameter - unknown return type
+        return nullptr;
+    }
+    // emit a constant expression
+    return make_uniq<BoundConstantExpression>(Value::TYPE(return_type));
+}
+
+} // namespace
+
+ScalarFunction TypeOfFun::GetFunction() {
+    auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::TYPE(), TypeOfFunction);
+    fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+    fun.SetBindExpressionCallback(BindTypeOfFunctionExpression);
+    return fun;
+}
+*/
 
 } // namespace duckdb

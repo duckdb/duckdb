@@ -92,6 +92,23 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
+	// Make sure to bind types for any type-altering operations
+	if (stmt.info->type == AlterType::ALTER_TABLE) {
+		auto &table_info = stmt.info->Cast<AlterTableInfo>();
+		switch (table_info.alter_table_type) {
+		case AlterTableType::ADD_FIELD: {
+			auto &add_info = table_info.Cast<AddFieldInfo>();
+			BindLogicalType(add_info.new_field.TypeMutable());
+		} break;
+		case AlterTableType::ALTER_COLUMN_TYPE: {
+			auto &alter_column_info = table_info.Cast<ChangeColumnTypeInfo>();
+			BindLogicalType(alter_column_info.target_type);
+		} break;
+		default:
+			break;
+		}
+	}
+
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
 		// Extra step for column comments: They can alter a table or a view, and we resolve that here.

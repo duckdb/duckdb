@@ -284,6 +284,11 @@
       },
       {
         "id": 203,
+        "name": "collation",
+        "type": "string"
+      },
+      {
+        "id": 204,
         "name": "parameters",
         "type": "vector<unique_ptr<TypeParameter>>"
       }
