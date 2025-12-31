@@ -21,14 +21,12 @@ statement ok
 Create table test4 as select * from range(400);
 
 statement ok
-EXPLAIN SELECT * FROM test0, test1, test2, test3, test4
+SELECT * FROM test0, test1, test2, test3, test4
 WHERE test1.range + test4.range = test2.range  -- Edge: (test1,test4) ⋈ test2
   AND test1.range + test4.range = test3.range  -- Edge: (test1,test4) ⋈ test3
   AND test1.range = test4.range                -- Edge: test1 ⋈ test4
   AND test1.range = test0.range;               -- Edge: test1 ⋈ test0
 
-# The inequality (test1.range + test4.range > 100) cannot create a join edge,
-# so it will be extracted and pushed down as a FILTER during join reordering
 query II
 EXPLAIN SELECT * FROM test0, test1, test2, test3, test4
 WHERE test1.range + test4.range = test2.range  -- Edge: (test1,test4) ⋈ test2
