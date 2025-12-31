@@ -266,6 +266,32 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			    });
 		}
 
+		// Constant-fold all default parameter expressions
+		for (auto &it : function->default_parameters) {
+			auto &param_name = it.first;
+			auto &param_expr = it.second;
+
+			if (param_expr->type == ExpressionType::VALUE_CONSTANT) {
+				continue;
+			}
+
+			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter '%s'", param_name));
+			auto default_expr = param_expr->Copy();
+			auto bound_default = binder.Bind(default_expr);
+			if (!bound_default->IsFoldable()) {
+				auto msg = StringUtil::Format("Default value '%s' for parameter '%s' is not a constant expression.",
+				                              param_expr->ToString(), param_name);
+				throw BinderException(msg);
+			}
+
+			auto default_val = ExpressionExecutor::EvaluateScalar(context, *bound_default);
+
+			// Save this back as a constant expression
+			auto const_expr = make_uniq<ConstantExpression>(default_val);
+			const_expr->alias = param_name;
+			it.second = std::move(const_expr);
+		}
+
 		// Resolve any user type arguments
 		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
 			auto &type = function->types[param_idx];
