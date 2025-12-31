@@ -21,13 +21,6 @@ static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector
 
 void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperator> &op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
-	if (join.predicate) {
-		// It's HARD to compress, maybe we could compress when the intersection between cols in conditions
-		// and cols in predicate is EMPTY SET but still hard to reason about correctness.
-		idx_t has_range = 0;
-		D_ASSERT(join.HasEquality(has_range));
-		return;
-	}
 	if (join.join_type == JoinType::MARK) {
 		// Tricky to get bindings right. RHS binding stays the same even though it changes type. Skip for now
 		return;
@@ -60,32 +53,47 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	// But we can try to compress the expression directly
 	column_binding_set_t probe_compress_bindings;
 	column_binding_set_t referenced_bindings;
+
+	// mark predicate expressions as not compressible
+	if (join.predicate) {
+		idx_t has_range = 0;
+		D_ASSERT(join.HasEquality(has_range));
+		GetReferencedBindings(*join.predicate, referenced_bindings);
+	}
+
 	for (const auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// We only try to compress the join condition cols if there's one join condition
 			// Else it gets messy with the stats if one column shows up in multiple conditions
 			if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
 			    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				// Both are bound column refs, see if both can be compressed generically to the same type
+				// check if either side is referenced in residual predicate
 				auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
 				auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
-				auto lhs_it = statistics_map.find(lhs_colref.binding);
-				auto rhs_it = statistics_map.find(rhs_colref.binding);
-				if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second &&
-				    rhs_it->second) {
-					// For joins we need to compress both using the same statistics, otherwise comparisons don't work
-					auto merged_stats = lhs_it->second->Copy();
-					merged_stats.Merge(*rhs_it->second);
+				bool lhs_referenced = referenced_bindings.count(lhs_colref.binding) > 0;
+				bool rhs_referenced = referenced_bindings.count(rhs_colref.binding) > 0;
 
-					// If one can be compressed, both can (same stats)
-					auto compress_expr = GetCompressExpression(condition.left->Copy(), merged_stats);
-					if (compress_expr) {
-						D_ASSERT(GetCompressExpression(condition.right->Copy(), merged_stats));
-						// This will be compressed generically, but we have to merge the stats
-						lhs_it->second->Merge(merged_stats);
-						rhs_it->second->Merge(merged_stats);
-						probe_compress_bindings.insert(lhs_colref.binding);
-						continue;
+				if (!lhs_referenced && !rhs_referenced) {
+					// Both are bound column refs, see if both can be compressed generically to the same type
+					auto lhs_it = statistics_map.find(lhs_colref.binding);
+					auto rhs_it = statistics_map.find(rhs_colref.binding);
+					if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second &&
+					    rhs_it->second) {
+						// For joins we need to compress both using the same statistics, otherwise comparisons don't
+						// work
+						auto merged_stats = lhs_it->second->Copy();
+						merged_stats.Merge(*rhs_it->second);
+
+						// If one can be compressed, both can (same stats)
+						auto compress_expr = GetCompressExpression(condition.left->Copy(), merged_stats);
+						if (compress_expr) {
+							D_ASSERT(GetCompressExpression(condition.right->Copy(), merged_stats));
+							// This will be compressed generically, but we have to merge the stats
+							lhs_it->second->Merge(merged_stats);
+							rhs_it->second->Merge(merged_stats);
+							probe_compress_bindings.insert(lhs_colref.binding);
+							continue;
+						}
 					}
 				}
 			}
