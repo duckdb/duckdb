@@ -331,14 +331,21 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		}
 	}
 
-	if (!unused_residual_predicates.empty() && result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
+	if (!unused_residual_predicates.empty()) {
 		unique_ptr<Expression> combined = std::move(unused_residual_predicates[0]);
 		for (idx_t i = 1; i < unused_residual_predicates.size(); i++) {
 			combined = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(combined),
 			                                                 std::move(unused_residual_predicates[i]));
 		}
-		comp_join.predicate = std::move(combined);
+
+		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// attach to join's predicate field
+			auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
+			comp_join.predicate = std::move(combined);
+		} else {
+			// push as filter
+			result_operator = PushFilter(std::move(result_operator), std::move(combined));
+		}
 	}
 
 	// check if we should do a pushdown on this node
