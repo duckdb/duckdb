@@ -319,6 +319,28 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	//	result_operator->estimated_props = node.estimated_props->Copy();
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
+
+	// collect unused residual predicates that belong to THIS join
+	vector<unique_ptr<Expression>> unused_residual_predicates;
+	for (auto &filter_info : filters_and_bindings) {
+		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter) {
+			if (filter_info->set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
+				unused_residual_predicates.push_back(
+				    std::move(filters_and_bindings[filter_info->filter_index]->filter));
+			}
+		}
+	}
+
+	if (!unused_residual_predicates.empty() && result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
+		unique_ptr<Expression> combined = std::move(unused_residual_predicates[0]);
+		for (idx_t i = 1; i < unused_residual_predicates.size(); i++) {
+			combined = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(combined),
+			                                                 std::move(unused_residual_predicates[i]));
+		}
+		comp_join.predicate = std::move(combined);
+	}
+
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
@@ -326,6 +348,11 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
 		if (filters_and_bindings[info.filter_index]->filter) {
+			// skip filters from residual predicates
+			if (info.from_residual_predicate) {
+				continue;
+			}
+
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {

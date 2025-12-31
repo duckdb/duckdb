@@ -32,7 +32,7 @@ EXPLAIN SELECT * FROM orders o
 INNER JOIN customers c ON o.customer_id = c.customer_id
     AND o.amount + c.customer_id > 250;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*Residual Predicate.*
 
 query IIITIT rowsort
 SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
@@ -63,16 +63,16 @@ query II
 EXPLAIN SELECT * FROM orders o
 INNER JOIN customers c ON o.customer_id = c.customer_id
     AND o.amount < c.customer_id
-    AND o.amount + c.customer_id > 200;
+    AND o.amount + c.customer_id > 250;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*Residual Predicate.*
 
 query IIITIT rowsort
 SELECT o.id, o.customer_id, o.amount, c.customer_id, c.name, c.region
 FROM orders o
 INNER JOIN customers c ON o.customer_id = c.customer_id
     AND o.amount < c.customer_id
-    AND o.amount + c.customer_id > 200;
+    AND o.amount + c.customer_id > 250;
 ----
 4	300	80	300	Charlie	East
 

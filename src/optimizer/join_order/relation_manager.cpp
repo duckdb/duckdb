@@ -664,22 +664,14 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 					// add all conjuncts to filters_and_bindings
 					for (auto &conjunct : conjuncts) {
-						if (filter_set.find(*conjunct) != filter_set.end()) {
-							continue;
-						}
 						filter_set.insert(*conjunct);
-
 						unordered_set<idx_t> bindings;
 						ExtractBindings(*conjunct, bindings);
-
-						// skip if no table bindings
-						if (bindings.empty()) {
-							continue;
-						}
 
 						auto &set = set_manager.GetJoinRelation(bindings);
 						auto filter_info = make_uniq<FilterInfo>(std::move(conjunct), set, filters_and_bindings.size(),
 						                                         join.join_type);
+						filter_info->from_residual_predicate = true;
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 
