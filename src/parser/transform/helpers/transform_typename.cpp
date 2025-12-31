@@ -41,10 +41,12 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		schema_name = PGPointerCast<duckdb_libpgquery::PGValue>(schema_name_cell->data.ptr_value)->val.str;
 		unbound_name = PGPointerCast<duckdb_libpgquery::PGValue>(unbound_name_cell->data.ptr_value)->val.str;
 	}
-	if (type_name.names->length > 4) {
+	if (type_name.names->length >= 4) {
 		throw ParserException(
 		    "Too many qualifications for type name - expected [catalog.schema.name] or [schema.name]");
 	}
+
+	D_ASSERT(!unbound_name.empty());
 
 	// Parse type modifiers
 	vector<unique_ptr<TypeParameter>> type_params;
