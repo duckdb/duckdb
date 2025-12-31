@@ -300,9 +300,10 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 			// Update the type in the binding, for future expansions
 			table_binding->SetColumnType(i.index, col.Type());
-		} else {
+		} else if (col.Type().id() == LogicalTypeId::UNBOUND) {
 			// Bind column type
 			BindLogicalType(col.TypeMutable());
+			table_binding->SetColumnType(i.index, col.Type());
 		}
 
 		bound_indices.insert(i);
