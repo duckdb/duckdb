@@ -10,8 +10,7 @@ add_library_unity(
   bitagg.cpp
   bitstring_agg.cpp
   product.cpp
-  bool.cpp
-  max_intersections.cpp)
+  bool.cpp)
 set(CORE_FUNCTION_FILES
     ${CORE_FUNCTION_FILES} $<TARGET_OBJECTS:duckdb_core_functions_distributive>
     PARENT_SCOPE)

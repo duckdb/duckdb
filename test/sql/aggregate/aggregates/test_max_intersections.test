@@ -30,33 +30,56 @@ select max_intersections(i,i) from range(100) tbl(i) where 1 = 0;
 
 # Basic overlaps
 statement ok
-create table intervals (s integer, e integer)
+create table intervals (part string, s integer, e integer)
 
 statement ok
 insert into intervals values
- (1,5), (4,8), (7,9), (2,6), (3,3)
+ ('a',1,5), ('a',4,8), ('a',7,9), ('a',2,6), ('a',3,3), ('b',3,5), ('b',2,7), ('b',3,4), ('b',4,9), ('b',1,2)
 
 query I
 select max_intersections(s,e) from intervals;
 ----
-3
+7
+
+# windows over
+query II
+select part, max_intersections(s,e) over(partition by part) from intervals order by part;
+----
+a	3
+a	3
+a	3
+a	3
+a	3
+b	4
+b	4
+b	4
+b	4
+b	4
+
+# windows over with sort
+query II
+select part, max_intersections(s,e) over(partition by part order by s) from intervals order by part;
+----
+a	1
+a	2
+a	3
+a	3
+a	3
+b	1
+b	2
+b	3
+b	3
+b	4
+
 
 # Group by
 query II
 select s%2, max_intersections(s,e) from intervals group by s%2 order by s%2;
 ----
-0	2
-1	2
+0	4
+1	4
 
-# Window Function
-query I rowsort
-select max_intersections(s,e) over ( partition by s%2) from intervals;
-----
-2
-2
-2
-2
-2
+
 
 # Adjacency counts touching endpoints
 query I

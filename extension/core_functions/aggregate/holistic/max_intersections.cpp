@@ -1,5 +1,6 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include <algorithm>
+#include <iterator>
 #include <vector>
 #include "vergesort.h"
 
@@ -76,7 +77,7 @@ struct MaxIntersectionsFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		if (source.starts.empty()) {
 			return;
 		}
@@ -84,8 +85,16 @@ struct MaxIntersectionsFunction {
 		target.starts.reserve(target.starts.size() + source.starts.size());
 		target.ends.reserve(target.ends.size() + source.ends.size());
 
-		target.starts.insert(target.starts.end(), source.starts.begin(), source.starts.end());
-		target.ends.insert(target.ends.end(), source.ends.begin(), source.ends.end());
+		if (aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
+			auto &mutable_source = const_cast<STATE &>(source);
+			target.starts.insert(target.starts.end(), std::make_move_iterator(mutable_source.starts.begin()),
+			                     std::make_move_iterator(mutable_source.starts.end()));
+			target.ends.insert(target.ends.end(), std::make_move_iterator(mutable_source.ends.begin()),
+			                   std::make_move_iterator(mutable_source.ends.end()));
+		} else {
+			target.starts.insert(target.starts.end(), source.starts.begin(), source.starts.end());
+			target.ends.insert(target.ends.end(), source.ends.begin(), source.ends.end());
+		}
 	}
 
 	template <class T, class STATE>
@@ -167,9 +176,7 @@ struct MaxIntersectionsFunction {
 			if (process_start) {
 				current_count++;
 				start_idx++;
-				if (current_count > max_count) {
-					max_count = current_count;
-				}
+				max_count = MaxValue(max_count, current_count);
 			} else {
 				current_count--;
 				end_idx++;
