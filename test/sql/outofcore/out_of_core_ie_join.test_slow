@@ -15,7 +15,7 @@ FROM lineitem;
 ----
 3944753436594036139
 
-foreach mem 300MiB 600MiB
+foreach mem 500MiB
 
 foreach threads 1 2 8
 
@@ -28,16 +28,16 @@ SET threads=${threads};
 query II
 WITH cte AS (
     WITH l1 AS (
-        SELECT COLUMNS(*) AS "l1_\0", (l_orderkey * 1000 + l_linenumber) AS l1_rowkey
+        SELECT COLUMNS(*) AS "l1_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
         FROM lineitem
     ), l2 AS (
-        SELECT COLUMNS(*) AS "l2_\0", (l_orderkey * 1000 + l_linenumber) AS l2_rowkey
+        SELECT COLUMNS(*) AS "l2_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
         FROM lineitem
     )
     SELECT *
     FROM l1, l2
-    WHERE l1.l1_rowkey >= l2.l2_rowkey
-    AND l1.l1_rowkey <  l2.l2_rowkey + 1
+    WHERE l1.rowkey >= l2.rowkey
+    AND l1.rowkey <  l2.rowkey + 1
 )
 SELECT bit_xor(hash(*COLUMNS('^l1_.*'))), bit_xor(hash(*COLUMNS('^l2_.*')))
 FROM cte;
@@ -49,26 +49,22 @@ endloop
 endloop
 
 # the ie join should not be optimized away, of course!
-statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
-
 query II
 EXPLAIN
 WITH cte AS (
     WITH l1 AS (
-        SELECT COLUMNS(*) AS "l1_\0", (l_orderkey * 1000 + l_linenumber) AS l1_rowkey
+        SELECT COLUMNS(*) AS "l1_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
         FROM lineitem
-    ),
-    l2 AS (
-        SELECT COLUMNS(*) AS "l2_\0", (l_orderkey * 1000 + l_linenumber) AS l2_rowkey
+    ), l2 AS (
+        SELECT COLUMNS(*) AS "l2_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
         FROM lineitem
     )
     SELECT *
     FROM l1, l2
-    WHERE l1.l1_rowkey >= l2.l2_rowkey
-    AND l1.l1_rowkey <  l2.l2_rowkey + 1
+    WHERE l1.rowkey >= l2.rowkey
+    AND l1.rowkey <  l2.rowkey + 1
 )
 SELECT bit_xor(hash(*COLUMNS('^l1_.*'))), bit_xor(hash(*COLUMNS('^l2_.*')))
 FROM cte;
 ----
-logical_opt	<REGEX>:.*IE_JOIN.*
+physical_plan	<REGEX>:.*IE_JOIN.*

@@ -49,9 +49,6 @@ endloop
 endloop
 
 # the asof join should not be optimized away, of course!
-statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
-
 query II
 EXPLAIN
 WITH l1 AS (
@@ -66,4 +63,4 @@ FROM l1
 ASOF JOIN l2
 ON l1.rowkey >= l2.rowkey;
 ----
-logical_opt	<REGEX>:.*ASOF_JOIN.*
+physical_plan	<REGEX>:.*ASOF_JOIN.*

@@ -337,7 +337,7 @@ idx_t PartitionedTupleData::Count() const {
 }
 
 idx_t PartitionedTupleData::SizeInBytes() const {
-	return data_size;
+	return data_size + stl_allocator->AllocationSize();
 }
 
 idx_t PartitionedTupleData::PartitionCount() const {

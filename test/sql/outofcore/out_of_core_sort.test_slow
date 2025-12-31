@@ -40,9 +40,6 @@ endloop
 endloop
 
 # the sort should not be optimized away, of course!
-statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
-
 query II
 EXPLAIN
 WITH cte AS (
@@ -52,4 +49,4 @@ WITH cte AS (
 SELECT bit_xor(hash(*COLUMNS(*)))
 FROM cte;
 ----
-logical_opt	<REGEX>:.*ORDER_BY.*
+physical_plan	<REGEX>:.*ORDER_BY.*
