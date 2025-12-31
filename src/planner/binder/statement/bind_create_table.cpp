@@ -300,7 +300,11 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 			// Update the type in the binding, for future expansions
 			table_binding->SetColumnType(i.index, col.Type());
+		} else {
+			// Bind column type
+			BindLogicalType(col.TypeMutable());
 		}
+
 		bound_indices.insert(i);
 	}
 }
@@ -353,8 +357,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<Cr
 	return result;
 }
 
-void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
-                                       bool &contains_gcol) {
+static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
+                                              bool &contains_gcol) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();
@@ -632,14 +636,13 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 			}
 		}
-		// bind collations to detect any unsupported collation errors
+
+		// Bind all types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-			if (column.Type().id() == LogicalTypeId::VARCHAR) {
-				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
-			}
 			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
 		}
+
 	} else {
 		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
 			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
@@ -658,12 +661,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// Bind all physical column types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-
-			// bind collations to detect any unsupported collation errors
-			if (column.Type().id() == LogicalTypeId::VARCHAR) {
-				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
-			}
-
 			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
 		}
 
@@ -691,6 +688,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+
+#ifdef DEBUG
+	// Ensure all types are bound
+	for (idx_t i = 0; i < base.columns.LogicalColumnCount(); i++) {
+		auto &column = base.columns.GetColumn(LogicalIndex(i));
+		if (TypeVisitor::Contains(column.Type(), LogicalTypeId::UNBOUND)) {
+			throw InternalException("Unbound type remaining in column \"%s\" during Create Table bind", column.Name());
+		}
+	}
+#endif
 
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
