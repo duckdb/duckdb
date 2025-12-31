@@ -94,6 +94,79 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 	return true;
 }
 
+idx_t Iterator::ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+                         idx_t max_count) {
+	idx_t count = 0;
+	bool has_next;
+	do {
+		// Check if we've reached the maximum count.
+		if (count >= max_count) {
+			return count;
+		}
+
+		// Calculate the column key length (excluding any row_id bytes from nested leaves).
+		// For unique indexes (LEAF_INLINED), nested_depth is 0.
+		// For non-unique indexes, nested_depth tracks how many row_id bytes are in current_key.
+		D_ASSERT(current_key.Size() >= nested_depth);
+		auto column_key_len = current_key.Size() - nested_depth;
+
+		switch (last_leaf.GetType()) {
+		case NType::LEAF_INLINED: {
+			D_ASSERT(nested_depth == 0);
+			keys[count] = ARTKey::CreateKeyFromBytes(arena, current_key.Data(), column_key_len);
+			row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, last_leaf.GetRowId());
+			count++;
+			break;
+		}
+		case NType::LEAF: {
+			// Handle deprecated storage - multiple row_ids for same key.
+			D_ASSERT(nested_depth == 0);
+			set<row_t> row_ids;
+			Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, NumericLimits<idx_t>::Maximum());
+			for (auto &rid : row_ids) {
+				if (count >= max_count) {
+					return count;
+				}
+				keys[count] = ARTKey::CreateKeyFromBytes(arena, current_key.Data(), column_key_len);
+				row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
+				count++;
+			}
+			break;
+		}
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF: {
+			// Nested leaves - iterate through all row IDs.
+			// current_key contains column_key + row_id_prefix, we only want column_key.
+			uint8_t byte = 0;
+			while (last_leaf.GetNextByte(art, byte)) {
+				if (count >= max_count) {
+					return count;
+				}
+				row_id[ROW_ID_SIZE - 1] = byte;
+				ARTKey rid_key(&row_id[0], ROW_ID_SIZE);
+
+				keys[count] = ARTKey::CreateKeyFromBytes(arena, current_key.Data(), column_key_len);
+				row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid_key.GetRowId());
+				count++;
+
+				if (byte == NumericLimits<uint8_t>::Maximum()) {
+					break;
+				}
+				byte++;
+			}
+			break;
+		}
+		default:
+			throw InternalException("Invalid leaf type for index scan.");
+		}
+
+		entered_nested_leaf = false;
+		has_next = Next();
+	} while (has_next);
+	return count;
+}
+
 void Iterator::FindMinimum(const Node &node) {
 	reference<const Node> ref(node);
 

@@ -234,6 +234,61 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 unique_ptr<IndexScanState> ART::InitializeFullScan() {
 	return make_uniq<ARTIndexScanState>();
 }
+
+//FIXME : Make this a more efficient structural tree removal merge
+idx_t ART::RemovalMerge(ART &source) {
+	lock_guard<mutex> l(lock);
+
+	if (!source.tree.HasMetadata()) {
+		return 0;
+	}
+
+	ArenaAllocator arena(BufferAllocator::Get(db));
+	idx_t delete_count = 0;
+
+	Iterator it(source);
+	it.FindMinimum(source.tree);
+
+	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
+	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
+
+	idx_t count;
+	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
+		delete_count += DeleteKeys(keys, row_id_keys, count);
+	}
+
+	return delete_count;
+}
+
+// FIXME: We already have a structural tree merge, this only exists right now since the structural merge doesn't
+// handle deprecated leaves. This is being used in merging checkpoint deltas, to avoid a more inefficient table scan.
+// Once the structural merge adds support for deprecated leaves, we can replace the calls of this function with that.
+ErrorData ART::InsertMerge(ART &source) {
+	lock_guard<mutex> l(lock);
+
+	if (!source.tree.HasMetadata()) {
+		return ErrorData();
+	}
+
+	ArenaAllocator arena(BufferAllocator::Get(db));
+
+	Iterator it(source);
+	it.FindMinimum(source.tree);
+
+	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
+	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
+
+	idx_t count;
+	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
+		auto error = InsertKeys(arena, keys, row_id_keys, count, DeleteIndexInfo(), IndexAppendMode::DEFAULT);
+		if (error.HasError()) {
+			return error;
+		}
+	}
+
+	return ErrorData();
+}
+
 //===--------------------------------------------------------------------===//
 // ART Keys
 //===--------------------------------------------------------------------===//
@@ -455,6 +510,71 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 // Insert and Constraint Checking
 //===--------------------------------------------------------------------===//
 
+ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+                          idx_t count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
+                          optional_ptr<DataChunk> chunk) {
+	auto conflict_type = ARTConflictType::NO_CONFLICT;
+	idx_t conflict_idx = 0;
+	auto was_empty = !tree.HasMetadata();
+
+	// Insert the entries into the index.
+	for (idx_t i = 0; i < count; i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i],
+		                                    GateStatus::GATE_NOT_SET, delete_info, append_mode);
+		if (conflict_type != ARTConflictType::NO_CONFLICT) {
+			conflict_idx = i;
+			break;
+		}
+	}
+
+	// Remove any previously inserted entries on conflict.
+	if (conflict_type != ARTConflictType::NO_CONFLICT) {
+		for (idx_t i = 0; i < conflict_idx; i++) {
+			if (keys[i].Empty()) {
+				continue;
+			}
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
+		}
+	}
+
+	if (was_empty) {
+		VerifyAllocationsInternal();
+	}
+
+	if (conflict_type == ARTConflictType::TRANSACTION) {
+		if (chunk) {
+			auto msg = AppendRowError(*chunk, conflict_idx);
+			return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
+		}
+		return ErrorData(TransactionException("write-write conflict during insert"));
+	}
+
+	if (conflict_type == ARTConflictType::CONSTRAINT) {
+		if (chunk) {
+			auto msg = AppendRowError(*chunk, conflict_idx);
+			return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
+		}
+		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation during insert"));
+	}
+
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		D_ASSERT(leaf);
+		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
+	}
+#endif
+
+	return ErrorData();
+}
+
 ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
 	IndexAppendInfo info;
 	return Insert(l, chunk, row_ids, info);
@@ -469,61 +589,7 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(arena, chunk, row_ids, keys, row_id_keys);
 
-	auto conflict_type = ARTConflictType::NO_CONFLICT;
-	optional_idx conflict_idx;
-	auto was_empty = !tree.HasMetadata();
-
-	// Insert the entries into the index.
-	for (idx_t i = 0; i < row_count; i++) {
-		if (keys[i].Empty()) {
-			continue;
-		}
-		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
-		                                    DeleteIndexInfo(info.delete_indexes), info.append_mode);
-		if (conflict_type != ARTConflictType::NO_CONFLICT) {
-			conflict_idx = i;
-			break;
-		}
-	}
-
-	// Remove any previously inserted entries.
-	if (conflict_type != ARTConflictType::NO_CONFLICT) {
-		D_ASSERT(conflict_idx.IsValid());
-		for (idx_t i = 0; i < conflict_idx.GetIndex(); i++) {
-			if (keys[i].Empty()) {
-				continue;
-			}
-			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
-			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
-		}
-	}
-
-	if (was_empty) {
-		// All nodes are in-memory.
-		VerifyAllocationsInternal();
-	}
-
-	if (conflict_type == ARTConflictType::TRANSACTION) {
-		auto msg = AppendRowError(chunk, conflict_idx.GetIndex());
-		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
-	}
-
-	if (conflict_type == ARTConflictType::CONSTRAINT) {
-		auto msg = AppendRowError(chunk, conflict_idx.GetIndex());
-		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
-	}
-
-#ifdef DEBUG
-	for (idx_t i = 0; i < row_count; i++) {
-		if (keys[i].Empty()) {
-			continue;
-		}
-		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		D_ASSERT(leaf);
-		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
-	}
-#endif
-	return ErrorData();
+	return InsertKeys(arena, keys, row_id_keys, row_count, DeleteIndexInfo(info.delete_indexes), info.append_mode, &chunk);
 }
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
@@ -567,23 +633,10 @@ void ART::CommitDrop(IndexLock &index_lock) {
 	tree.Clear();
 }
 
-idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
-                     optional_ptr<SelectionVector> non_deleted_sel) {
-	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
-	// FIXME: but rather all row IDs up to the conflicting row.
-	auto row_count = entries.size();
-
-	DataChunk expr_chunk;
-	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(entries, expr_chunk);
-
-	ArenaAllocator allocator(BufferAllocator::Get(db));
-	unsafe_vector<ARTKey> keys(row_count);
-	unsafe_vector<ARTKey> row_id_keys(row_count);
-	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
-
+idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t count,
+                      optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
 	idx_t delete_count = 0;
-	for (idx_t i = 0; i < row_count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		bool deleted = true;
 		if (!keys[i].Empty()) {
 			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
@@ -606,7 +659,7 @@ idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, opti
 	}
 
 #ifdef DEBUG
-	for (idx_t i = 0; i < row_count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		if (keys[i].Empty()) {
 			continue;
 		}
@@ -618,6 +671,24 @@ idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, opti
 	}
 #endif
 	return delete_count;
+}
+
+idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
+                     optional_ptr<SelectionVector> non_deleted_sel) {
+	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
+	// FIXME: but rather all row IDs up to the conflicting row.
+	auto row_count = entries.size();
+
+	DataChunk expr_chunk;
+	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
+	ExecuteExpressions(entries, expr_chunk);
+
+	ArenaAllocator allocator(BufferAllocator::Get(db));
+	unsafe_vector<ARTKey> keys(row_count);
+	unsafe_vector<ARTKey> row_id_keys(row_count);
+	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
+
+	return DeleteKeys(keys, row_id_keys, row_count, deleted_sel, non_deleted_sel);
 }
 
 //===--------------------------------------------------------------------===//

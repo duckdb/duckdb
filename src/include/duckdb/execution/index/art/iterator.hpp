@@ -43,6 +43,10 @@ public:
 	inline idx_t Size() const {
 		return key_bytes.size();
 	}
+	//! Returns a pointer to the key bytes.
+	inline const_data_ptr_t Data() const {
+		return const_data_ptr_cast(key_bytes.data());
+	}
 
 	//! Returns true, if key_bytes contains all bytes of key.
 	bool Contains(const ARTKey &key) const;
@@ -52,6 +56,7 @@ public:
 private:
 	unsafe_vector<uint8_t> key_bytes;
 };
+
 
 class Iterator {
 public:
@@ -66,6 +71,8 @@ public:
 	//! Scans the tree, starting at the current top node on the stack, and ending at upper_bound.
 	//! If upper_bound is the empty ARTKey, than there is no upper bound.
 	bool Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal);
+	//! Scans the tree and populates key/row_id vectors. Returns the number of entries scanned.
+	idx_t ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t max_count);
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(const Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower

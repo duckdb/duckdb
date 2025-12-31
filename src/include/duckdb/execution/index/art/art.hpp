@@ -18,6 +18,7 @@ enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK 
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
+
 class ConflictManager;
 class ARTKey;
 class ARTKeySection;
@@ -80,6 +81,13 @@ public:
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
+
+	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
+	//! Returns the number of entries deleted.
+	idx_t RemovalMerge(ART &source);
+	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
+	//! Returns error data if constraint violation.
+	ErrorData InsertMerge(ART &source);
 
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
@@ -177,6 +185,16 @@ private:
 	string ToStringInternal(bool display_ascii);
 	void VerifyInternal();
 	void VerifyAllocationsInternal();
+
+	//! Core insert logic after key generation. Handles insert loop, rollback, verification, and error messages.
+	ErrorData InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+	                     idx_t count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
+	                     optional_ptr<DataChunk> chunk = nullptr);
+
+	//! Core delete logic after key generation. Handles delete loop, selection vectors, and verification.
+	idx_t DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t count,
+	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 };
 
 template <>
