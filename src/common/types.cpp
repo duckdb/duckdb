@@ -508,7 +508,7 @@ string LogicalType::ToString() const {
 		if (!result.empty()) {
 			result += ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(type, '"');
+		result += KeywordHelper::WriteOptionallyQuoted(type, '"', true, KeywordCategory::KEYWORD_COL_NAME);
 
 		if (!params.empty()) {
 			result += "(";
