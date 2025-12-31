@@ -157,10 +157,18 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			ss << column.Type().ToString();
 		}
 		auto extra_type_info = column_type.AuxInfo();
-		if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-			auto &string_info = extra_type_info->Cast<StringTypeInfo>();
-			if (!string_info.collation.empty()) {
-				ss << " COLLATE " + string_info.collation;
+		if (extra_type_info) {
+			if (extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+				auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+				if (!string_info.collation.empty()) {
+					ss << " COLLATE " + string_info.collation;
+				}
+			}
+			if (extra_type_info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
+				auto &colllation = UnboundType::GetCollation(column_type);
+				if (!colllation.empty()) {
+					ss << " COLLATE " + colllation;
+				}
 			}
 		}
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();

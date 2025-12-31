@@ -531,9 +531,9 @@ UnboundTypeInfo::UnboundTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TY
 }
 
 UnboundTypeInfo::UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
-                                 vector<unique_ptr<TypeParameter>> parameters_p)
+                                 vector<unique_ptr<TypeParameter>> parameters_p, string collation_p)
     : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), catalog(catalog_p), schema(schema_p),
-      name(std::move(name_p)), parameters(std::move(parameters_p)) {
+      name(std::move(name_p)), collation(std::move(collation_p)), parameters(std::move(parameters_p)) {
 }
 
 bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
@@ -545,6 +545,9 @@ bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 		return false;
 	}
 	if (schema != other.schema) {
+		return false;
+	}
+	if (collation != other.collation) {
 		return false;
 	}
 	if (parameters.size() != other.parameters.size()) {
@@ -563,7 +566,7 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
 	for (const auto &param : parameters) {
 		parameters_copy.push_back(param->Copy());
 	}
-	return make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters_copy));
+	return make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters_copy), collation);
 }
 
 } // namespace duckdb

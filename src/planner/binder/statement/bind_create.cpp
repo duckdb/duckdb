@@ -380,6 +380,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 	auto type_name = UnboundType::GetName(type);
 	auto type_schema = UnboundType::GetSchema(type);
 	auto type_catalog = UnboundType::GetCatalog(type);
+	auto type_collation = UnboundType::GetCollation(type);
 
 	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, type_name);
 	optional_ptr<CatalogEntry> entry = nullptr;
@@ -422,6 +423,14 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 			throw BinderException("Type '%s' does not take any type parameters", type_name);
 		}
 
+		if (!type_collation.empty()) {
+			if (type_entry.user_type != LogicalType::VARCHAR) {
+				throw BinderException("Only VARCHAR types can have collations");
+			}
+			ExpressionBinder::TestCollation(context, type_collation);
+			return LogicalType::VARCHAR_COLLATION(type_collation);
+		}
+
 		// Otherwise, return the user type directly!
 		return type_entry.user_type;
 	}
@@ -459,18 +468,38 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		}
 	};
 
-	// Call the bind function and return the bound type!
+	// Call the bind function
 	BindLogicalTypeInput input {context, type_entry.user_type, bound_parameters};
-	return type_entry.bind_function(input);
+	auto result_type = type_entry.bind_function(input);
+
+	// Handle collation
+	if (!type_collation.empty()) {
+		if (result_type != LogicalType::VARCHAR) {
+			throw BinderException("Only VARCHAR types can have collations");
+		}
+		ExpressionBinder::TestCollation(context, type_collation);
+		return LogicalType::VARCHAR_COLLATION(type_collation);
+	}
+
+	// Return the result type!
+	return result_type;
 }
 
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
-	// check if we need to bind this type at all
-	if (type.id() != LogicalTypeId::UNBOUND) {
+	// Check if we need to bind this type at all
+	if (!TypeVisitor::Contains(type, LogicalTypeId::UNBOUND)) {
 		return;
 	}
 
-	type = BindLogicalTypeInternal(type, catalog, schema);
+	// Replace all unbound types within the type
+	//   Normally, the unbound type is the root type, but it can also be nested within other types if we e.g.
+	//   alter-table and change a struct field.
+	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
+		if (ty.id() == LogicalTypeId::UNBOUND) {
+			return BindLogicalTypeInternal(ty, catalog, schema);
+		}
+		return ty;
+	});
 }
 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,

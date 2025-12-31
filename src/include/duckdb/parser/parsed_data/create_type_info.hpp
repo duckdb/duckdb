@@ -26,6 +26,12 @@ public:
 	bool HasName() const {
 		return !name.empty();
 	}
+	bool IsNamed(const char *name_to_check) const {
+		return StringUtil::CIEquals(name, name_to_check);
+	}
+	const LogicalType &GetType() const {
+		return value.type();
+	}
 
 private:
 	string name;

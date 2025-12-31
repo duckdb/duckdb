@@ -1749,13 +1749,15 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 // Unbound Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters) {
-	auto info = make_shared_ptr<UnboundTypeInfo>(INVALID_CATALOG, INVALID_SCHEMA, name, std::move(parameters));
+LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters,
+                                 const string &collation) {
+	auto info =
+	    make_shared_ptr<UnboundTypeInfo>(INVALID_CATALOG, INVALID_SCHEMA, name, std::move(parameters), collation);
 	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
 }
 LogicalType LogicalType::UNBOUND(const string &catalog, const string &schema, const string &name,
-                                 vector<unique_ptr<TypeParameter>> parameters) {
-	auto info = make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters));
+                                 vector<unique_ptr<TypeParameter>> parameters, const string &collation) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters), collation);
 	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
 }
 
@@ -2060,6 +2062,13 @@ const vector<unique_ptr<TypeParameter>> &UnboundType::GetParameters(const Logica
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
 	return info->Cast<UnboundTypeInfo>().parameters;
+}
+
+const string &UnboundType::GetCollation(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
+	return info->Cast<UnboundTypeInfo>().collation;
 }
 
 //===--------------------------------------------------------------------===//
