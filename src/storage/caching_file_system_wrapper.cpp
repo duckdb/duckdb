@@ -8,6 +8,20 @@
 
 namespace duckdb {
 
+namespace {
+// Get database instance from file opener, throw InvalidInput exception.
+DatabaseInstance& GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
+	if (file_opener == nullptr) {
+		throw InvalidInputException("Cannot get database instance out of file opener, because file opener is nullptr.");
+	}
+	auto database_ptr = file_opener->TryGetDatabase();
+	if (database_ptr == nullptr) {
+		throw InvalidInputException("Cannot extract database instance out of file opener.");
+	}
+	return *database_ptr;
+}
+} // namespace
+
 //===----------------------------------------------------------------------===//
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
@@ -15,6 +29,13 @@ CachingFileHandleWrapper::CachingFileHandleWrapper(CachingFileSystemWrapper &fil
                                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
     : FileHandle(file_system, handle->GetPath(), flags), caching_handle(std::move(handle)) {
 	// Flags should already be validated to be read-only in OpenFileExtended
+}
+
+void CachingFileHandleWrapper::PinCachingFileSystem(shared_ptr<CachingFileSystemWrapper> caching_filesystem_p) {
+	if (caching_file_system != nullptr) {
+		throw InvalidInputException("Caching filesystem already set for caching file handle!");
+	}
+	caching_file_system = std::move(caching_filesystem_p);
 }
 
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {
@@ -33,6 +54,10 @@ CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, Data
     : caching_file_system(file_system, db), underlying_file_system(file_system), caching_mode(mode) {
 }
 
+CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener, CachingMode mode) 
+	: caching_file_system(file_system, GetDatabaseInstance(file_opener)), underlying_file_system(file_system), caching_mode(mode) {
+}
+
 CachingFileSystemWrapper CachingFileSystemWrapper::Get(ClientContext &context, CachingMode mode) {
 	return CachingFileSystemWrapper(FileSystem::GetFileSystem(context), *context.db, mode);
 }
@@ -41,6 +66,10 @@ bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {
 	if (caching_mode == CachingMode::ALWAYS_CACHE) {
 		return true;
 	}
+	if (caching_mode == CachingMode::NO_CACHING) {
+		return false;
+	}
+	D_ASSERT(caching_mode == CachingMode::CACHE_REMOTE_ONLY);
 	return FileSystem::IsRemoteFile(path);
 }
 
