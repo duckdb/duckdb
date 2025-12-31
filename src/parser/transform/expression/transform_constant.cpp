@@ -162,20 +162,22 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 		value = constant.value;
 		return true;
 	}
+	/*
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
 		if (!ConstructConstantFromExpression(*cast.child, dummy_value)) {
-			return false;
+		    return false;
 		}
 
 		string error_message;
 		if (!dummy_value.DefaultTryCastAs(cast.cast_type, value, &error_message)) {
-			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
-			                          EnumUtil::ToString(cast.cast_type.id()));
+		    throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
+		                              EnumUtil::ToString(cast.cast_type.id()));
 		}
 		return true;
 	}
+	*/
 	default:
 		return false;
 	}
