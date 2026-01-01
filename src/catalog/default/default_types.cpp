@@ -5,6 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 
@@ -19,7 +20,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 	uint8_t width = 18;
 	uint8_t scale = 3;
 
-	if (modifiers.size() > 0) {
+	if (!modifiers.empty()) {
 		auto width_value = modifiers[0].GetValue();
 		if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 			width = width_value.GetValueUnsafe<uint8_t>();
@@ -157,7 +158,7 @@ LogicalType BindListType(const BindLogicalTypeInput &input) {
 	}
 
 	auto child_type = TypeValue::GetType(arguments[0].GetValue());
-	return LogicalType::LIST(std::move(child_type));
+	return LogicalType::LIST(child_type);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

@@ -87,7 +87,7 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 
 		auto collation = TransformCollation(cdef.collClause);
 
-		target_type = LogicalType::UNBOUND(catalog, schema, name, std::move(args_copy), std::move(collation));
+		target_type = LogicalType::UNBOUND(catalog, schema, name, std::move(args_copy), collation);
 	}
 
 	return ColumnDefinition(name, target_type);
