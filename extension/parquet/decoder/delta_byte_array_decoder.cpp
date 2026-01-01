@@ -50,12 +50,17 @@ void DeltaByteArrayDecoder::InitializePage() {
 	// Plain format for FIXED_LEN_BYTE_ARRAY: [data] repeated (no length prefix)
 	auto &schema = reader.Schema();
 	bool is_fixed_len = (schema.parquet_type == duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY);
+	idx_t fixed_len = is_fixed_len ? schema.type_length : 0;
 
 	// Calculate total buffer size and max value length in one pass
 	idx_t total_size = 0;
 	idx_t max_len = 0;
 	for (idx_t i = 0; i < prefix_count; i++) {
 		idx_t len = prefix_data[i] + suffix_data[i];
+		if (is_fixed_len && len != fixed_len) {
+			throw std::runtime_error(
+			    "DELTA_BYTE_ARRAY on FIXED_LEN_BYTE_ARRAY: decoded length does not match type length");
+		}
 		total_size += len + (is_fixed_len ? 0 : sizeof(uint32_t));
 		max_len = MaxValue(max_len, len);
 	}
