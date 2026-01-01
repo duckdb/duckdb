@@ -4,9 +4,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/catalog/default/builtin_types/types.hpp"
-
-#include <duckdb/common/types/decimal.hpp>
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -101,18 +99,6 @@ LogicalType BindVarcharType(const BindLogicalTypeInput &input) {
 		throw BinderException("VARCHAR type takes at most one type modifier");
 	}
 	return LogicalType::VARCHAR;
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// BIT Type
-//----------------------------------------------------------------------------------------------------------------------
-LogicalType BindBitType(const BindLogicalTypeInput &input) {
-	// Bit type can have a single modifier indicating the length, but we ignore it for now
-	auto &modifiers = input.modifiers;
-	if (modifiers.size() > 1) {
-		throw BinderException("BIT type takes at most one type modifier");
-	}
-	return LogicalType::BIT;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
