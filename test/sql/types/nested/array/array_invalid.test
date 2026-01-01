@@ -43,7 +43,7 @@ Binder Error: ARRAY type size must be at least 1
 statement error
 CREATE TABLE t1(a INT, b INT['foobar']);
 ----
-<REGEX>:.*Binder Error.*ARRAY type size modifier must be a BIGINT.*
+Binder Error: ARRAY type size modifier must be an integral type
 
 # Should not be able to cast array to 0 elements
 statement error
@@ -61,10 +61,10 @@ SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
 ----
-Conversion Error: Cannot cast array of size 3 to array of size 2
+Binder Error: ARRAY type size modifier must be an integral type
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER['foobar'];
 ----
-<REGEX>:.*Binder Error.*ARRAY type size modifier must be a BIGINT.*
+Binder Error: ARRAY type size modifier must be an integral type
