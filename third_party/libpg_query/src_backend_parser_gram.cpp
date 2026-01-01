@@ -28065,7 +28065,7 @@ yyreduce:
   case 888:
 #line 1770 "third_party/libpg_query/grammar/statements/select.y"
     {
-				   (yyval.typnam) = SystemTypeName("STRUCT");
+				   (yyval.typnam) = SystemTypeName("struct");
 				   (yyval.typnam)->arrayBounds = (yyvsp[(5) - (5)].list);
 				   (yyval.typnam)->typmods = (yyvsp[(3) - (5)].list);
 				   (yyval.typnam)->location = (yylsp[(1) - (5)]);
@@ -28075,7 +28075,7 @@ yyreduce:
   case 889:
 #line 1777 "third_party/libpg_query/grammar/statements/select.y"
     {
-				   (yyval.typnam) = SystemTypeName("MAP");
+				   (yyval.typnam) = SystemTypeName("map");
 				   (yyval.typnam)->arrayBounds = (yyvsp[(5) - (5)].list);
 				   (yyval.typnam)->typmods = (yyvsp[(3) - (5)].list);
 				   (yyval.typnam)->location = (yylsp[(1) - (5)]);
@@ -28085,7 +28085,7 @@ yyreduce:
   case 890:
 #line 1784 "third_party/libpg_query/grammar/statements/select.y"
     {
-				   (yyval.typnam) = SystemTypeName("UNION");
+				   (yyval.typnam) = SystemTypeName("union");
 				   (yyval.typnam)->arrayBounds = (yyvsp[(5) - (5)].list);
 				   (yyval.typnam)->typmods = (yyvsp[(3) - (5)].list);
 				   (yyval.typnam)->location = (yylsp[(1) - (5)]);
@@ -28191,7 +28191,7 @@ yyreduce:
   case 908:
 #line 1869 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("INTEGER");
+					(yyval.typnam) = SystemTypeName("int4");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -28199,7 +28199,7 @@ yyreduce:
   case 909:
 #line 1874 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("INTEGER");
+					(yyval.typnam) = SystemTypeName("int4");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -28207,7 +28207,7 @@ yyreduce:
   case 910:
 #line 1879 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("SMALLINT");
+					(yyval.typnam) = SystemTypeName("int2");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -28215,7 +28215,7 @@ yyreduce:
   case 911:
 #line 1884 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("TINYINT");
+					(yyval.typnam) = SystemTypeName("int8");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -28223,7 +28223,7 @@ yyreduce:
   case 912:
 #line 1889 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("FLOAT");
+					(yyval.typnam) = SystemTypeName("float4");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -28239,7 +28239,7 @@ yyreduce:
   case 914:
 #line 1899 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("DOUBLE");
+					(yyval.typnam) = SystemTypeName("float8");
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
     break;
@@ -28247,7 +28247,7 @@ yyreduce:
   case 915:
 #line 1904 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("DECIMAL");
+					(yyval.typnam) = SystemTypeName("numeric");
 					(yyval.typnam)->typmods = (yyvsp[(2) - (2)].list);
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
@@ -28256,7 +28256,7 @@ yyreduce:
   case 916:
 #line 1910 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("DECIMAL");
+					(yyval.typnam) = SystemTypeName("numeric");
 					(yyval.typnam)->typmods = (yyvsp[(2) - (2)].list);
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
@@ -28265,7 +28265,7 @@ yyreduce:
   case 917:
 #line 1916 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("DECIMAL");
+					(yyval.typnam) = SystemTypeName("numeric");
 					(yyval.typnam)->typmods = (yyvsp[(2) - (2)].list);
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
@@ -28274,7 +28274,7 @@ yyreduce:
   case 918:
 #line 1922 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("BOOLEAN");
+					(yyval.typnam) = SystemTypeName("bool");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -28292,9 +28292,9 @@ yyreduce:
 								 errmsg("precision for type float must be at least 1 bit"),
 								 parser_errposition((yylsp[(2) - (3)]))));
 					else if ((yyvsp[(2) - (3)].ival) <= 24)
-						(yyval.typnam) = SystemTypeName("FLOAT");
+						(yyval.typnam) = SystemTypeName("float4");
 					else if ((yyvsp[(2) - (3)].ival) <= 53)
-						(yyval.typnam) = SystemTypeName("DOUBLE");
+						(yyval.typnam) = SystemTypeName("float8");
 					else
 						ereport(ERROR,
 								(errcode(PG_ERRCODE_INVALID_PARAMETER_VALUE),
@@ -28306,7 +28306,7 @@ yyreduce:
   case 920:
 #line 1950 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("FLOAT");
+					(yyval.typnam) = SystemTypeName("float4");
 				;}
     break;
 
@@ -28344,8 +28344,8 @@ yyreduce:
     {
 					const char *typname;
 
-					// typname = $2 ? "varbit" : "bit";
-					(yyval.typnam) = SystemTypeName("BIT");
+					typname = (yyvsp[(2) - (5)].boolean) ? "varbit" : "bit";
+					(yyval.typnam) = SystemTypeName(typname);
 					(yyval.typnam)->typmods = (yyvsp[(4) - (5)].list);
 					(yyval.typnam)->location = (yylsp[(1) - (5)]);
 				;}
@@ -28357,11 +28357,11 @@ yyreduce:
 					/* bit defaults to bit(1), varbit to no limit */
 					if ((yyvsp[(2) - (2)].boolean))
 					{
-						(yyval.typnam) = SystemTypeName("BIT");
+						(yyval.typnam) = SystemTypeName("varbit");
 					}
 					else
 					{
-						(yyval.typnam) = SystemTypeName("BIT");
+						(yyval.typnam) = SystemTypeName("bit");
 					}
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
@@ -28424,32 +28424,32 @@ yyreduce:
 
   case 933:
 #line 2061 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.conststr) = (yyvsp[(2) - (2)].boolean) ? "VARCHAR": "VARCHAR"; ;}
+    { (yyval.conststr) = (yyvsp[(2) - (2)].boolean) ? "varchar": "bpchar"; ;}
     break;
 
   case 934:
 #line 2063 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.conststr) = (yyvsp[(2) - (2)].boolean) ? "VARCHAR": "VARCHAR"; ;}
+    { (yyval.conststr) = (yyvsp[(2) - (2)].boolean) ? "varchar": "bpchar"; ;}
     break;
 
   case 935:
 #line 2065 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.conststr) = "VARCHAR"; ;}
+    { (yyval.conststr) = "varchar"; ;}
     break;
 
   case 936:
 #line 2067 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.conststr) = (yyvsp[(3) - (3)].boolean) ? "VARCHAR": "VARCHAR"; ;}
+    { (yyval.conststr) = (yyvsp[(3) - (3)].boolean) ? "varchar": "bpchar"; ;}
     break;
 
   case 937:
 #line 2069 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.conststr) = (yyvsp[(3) - (3)].boolean) ? "VARCHAR": "VARCHAR"; ;}
+    { (yyval.conststr) = (yyvsp[(3) - (3)].boolean) ? "varchar": "bpchar"; ;}
     break;
 
   case 938:
 #line 2071 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.conststr) = (yyvsp[(2) - (2)].boolean) ? "VARCHAR": "VARCHAR"; ;}
+    { (yyval.conststr) = (yyvsp[(2) - (2)].boolean) ? "varchar": "bpchar"; ;}
     break;
 
   case 939:
@@ -28466,9 +28466,9 @@ yyreduce:
 #line 2084 "third_party/libpg_query/grammar/statements/select.y"
     {
 					if ((yyvsp[(5) - (5)].boolean))
-						(yyval.typnam) = SystemTypeName("TIMESTAMPTZ");
+						(yyval.typnam) = SystemTypeName("timestamptz");
 					else
-						(yyval.typnam) = SystemTypeName("TIMESTAMP");
+						(yyval.typnam) = SystemTypeName("timestamp");
 					(yyval.typnam)->typmods = list_make1(makeIntConst((yyvsp[(3) - (5)].ival), (yylsp[(3) - (5)])));
 					(yyval.typnam)->location = (yylsp[(1) - (5)]);
 				;}
@@ -28478,9 +28478,9 @@ yyreduce:
 #line 2093 "third_party/libpg_query/grammar/statements/select.y"
     {
 					if ((yyvsp[(2) - (2)].boolean))
-						(yyval.typnam) = SystemTypeName("TIMESTAMPTZ");
+						(yyval.typnam) = SystemTypeName("timestamptz");
 					else
-						(yyval.typnam) = SystemTypeName("TIMESTAMP");
+						(yyval.typnam) = SystemTypeName("timestamp");
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
     break;
@@ -28489,9 +28489,9 @@ yyreduce:
 #line 2101 "third_party/libpg_query/grammar/statements/select.y"
     {
 					if ((yyvsp[(5) - (5)].boolean))
-						(yyval.typnam) = SystemTypeName("TIMETZ");
+						(yyval.typnam) = SystemTypeName("timetz");
 					else
-						(yyval.typnam) = SystemTypeName("TIME");
+						(yyval.typnam) = SystemTypeName("time");
 					(yyval.typnam)->typmods = list_make1(makeIntConst((yyvsp[(3) - (5)].ival), (yylsp[(3) - (5)])));
 					(yyval.typnam)->location = (yylsp[(1) - (5)]);
 				;}
@@ -28501,9 +28501,9 @@ yyreduce:
 #line 2110 "third_party/libpg_query/grammar/statements/select.y"
     {
 					if ((yyvsp[(2) - (2)].boolean))
-						(yyval.typnam) = SystemTypeName("TIMETZ");
+						(yyval.typnam) = SystemTypeName("timetz");
 					else
-						(yyval.typnam) = SystemTypeName("TIME");
+						(yyval.typnam) = SystemTypeName("time");
 					(yyval.typnam)->location = (yylsp[(1) - (2)]);
 				;}
     break;
@@ -28511,7 +28511,7 @@ yyreduce:
   case 945:
 #line 2121 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("INTERVAL");
+					(yyval.typnam) = SystemTypeName("interval");
 					(yyval.typnam)->location = (yylsp[(1) - (1)]);
 				;}
     break;
@@ -30785,7 +30785,7 @@ yyreduce:
 					 */
 					(yyval.list) = list_make3((yyvsp[(1) - (2)].node), makeIntConst(1, -1),
 									makeTypeCast((yyvsp[(2) - (2)].node),
-												 SystemTypeName("INTEGER"), 0, -1));
+												 SystemTypeName("int4"), 0, -1));
 				;}
     break;
 

@@ -23,13 +23,15 @@ public:
 	static string EscapeQuotes(const string &text, char quote = '"');
 
 	//! Returns true if the given string needs to be quoted when written as an identifier
-	static bool RequiresQuotes(const string &text, bool allow_caps = true, KeywordCategory category = KeywordCategory::KEYWORD_NONE);
+	static bool RequiresQuotes(const string &text, bool allow_caps = true,
+	                           KeywordCategory category = KeywordCategory::KEYWORD_NONE);
 
 	//! Writes a string that is quoted
 	static string WriteQuoted(const string &text, char quote = '\'');
 
 	//! Writes a string that is optionally quoted + escaped so it can be used as an identifier
-	static string WriteOptionallyQuoted(const string &text, char quote = '"', bool allow_caps = true, KeywordCategory category = KeywordCategory::KEYWORD_NONE);
+	static string WriteOptionallyQuoted(const string &text, char quote = '"', bool allow_caps = true,
+	                                    KeywordCategory category = KeywordCategory::KEYWORD_NONE);
 };
 
 } // namespace duckdb
