@@ -1255,8 +1255,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto colid = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
-	if (type == LogicalTypeId::USER) {
-		type = LogicalType::USER(colid);
+	if (type == LogicalTypeId::UNBOUND) {
+		type = LogicalType::UNBOUND(colid);
 	}
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));

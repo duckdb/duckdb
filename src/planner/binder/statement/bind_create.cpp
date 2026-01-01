@@ -44,8 +44,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
-
-#include <duckdb/common/type_parameter.hpp>
+#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 

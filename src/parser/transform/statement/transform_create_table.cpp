@@ -4,8 +4,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-
-#include <duckdb/common/type_parameter.hpp>
+#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 
