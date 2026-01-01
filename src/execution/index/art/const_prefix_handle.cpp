@@ -21,8 +21,8 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 }
 
 namespace {
-// Tree-style branch characters (UTF-8 encoded)
-const string PREFIX_BRANCH_END = "\342\224\224\342\224\200\342\224\200 "; // "└── "
+// Tree-style branch characters
+const string PREFIX_BRANCH_END = "└── ";
 const string PREFIX_SPACE = "    ";
 
 // ASCII printable character range
@@ -40,9 +40,9 @@ string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOpt
 	};
 
 	// Print prefix bytes (single branch, child follows on next line)
-	string str = options.tree_prefix + PREFIX_BRANCH_END + "Prefix: |";
+	auto str = options.tree_prefix + PREFIX_BRANCH_END + "Prefix: |";
 	reference<const Node> ref(node);
-	ToStringOptions child_options = options;
+	auto child_options = options;
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
 		for (idx_t i = 0; i < handle.data[art.PrefixCount()]; i++) {
 			str += format_byte(handle.data[i]) + "|";

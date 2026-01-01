@@ -468,10 +468,10 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 //===--------------------------------------------------------------------===//
 
 namespace {
-// Tree-style branch characters (UTF-8 encoded)
-const string NODE_BRANCH_MID = "\342\224\234\342\224\200\342\224\200 "; // "├── "
-const string NODE_BRANCH_END = "\342\224\224\342\224\200\342\224\200 "; // "└── "
-const string NODE_VERTICAL = "\342\224\202   ";                         // "│   "
+// Tree-style branch characters
+const string NODE_BRANCH_MID = "├── ";
+const string NODE_BRANCH_END = "└── ";
+const string NODE_VERTICAL = "│   ";
 const string NODE_SPACE = "    ";
 
 // ASCII printable character range
@@ -488,9 +488,9 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 		return to_string(byte);
 	};
 
-	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
-	bool propagate_gate = options.inside_gate || is_gate;
-	bool print_full_tree = propagate_gate || !options.key_path || options.depth_remaining == 0;
+	auto is_gate = GetGateStatus() == GateStatus::GATE_SET;
+	auto propagate_gate = options.inside_gate || is_gate;
+	auto print_full_tree = propagate_gate || !options.key_path || options.depth_remaining == 0;
 
 	string str;
 
@@ -522,7 +522,7 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 		}
 
 		uint8_t expected_byte = 0;
-		bool has_expected_byte = false;
+		auto has_expected_byte = false;
 		if (options.key_path && !print_full_tree && options.key_depth < options.key_path->len) {
 			expected_byte = (*options.key_path)[options.key_depth];
 			has_expected_byte = true;
@@ -530,25 +530,25 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &[child_byte, child_ptr] = children[child_idx];
-			bool is_last = (child_idx == children.size() - 1);
-			bool on_path = !has_expected_byte || (has_expected_byte && child_byte == expected_byte);
+			auto is_last = (child_idx == children.size() - 1);
+			auto on_path = !has_expected_byte || (has_expected_byte && child_byte == expected_byte);
 
 			// When structure_only is true and we're following a path, treat on-path child as last
 			// (since we're hiding off-path siblings, the branch should end here)
-			bool effective_last = is_last || (options.structure_only && has_expected_byte && on_path);
-			string branch = effective_last ? NODE_BRANCH_END : NODE_BRANCH_MID;
-			string child_prefix = options.tree_prefix + (effective_last ? NODE_SPACE : NODE_VERTICAL);
+			auto effective_last = is_last || (options.structure_only && has_expected_byte && on_path);
+			auto branch = effective_last ? NODE_BRANCH_END : NODE_BRANCH_MID;
+			auto child_prefix = options.tree_prefix + (effective_last ? NODE_SPACE : NODE_VERTICAL);
 
 			if (on_path) {
 				str += options.tree_prefix + branch + format_byte(child_byte) + "\n";
 
-				ToStringOptions child_options = options;
+				auto child_options = options;
 				child_options.inside_gate = propagate_gate;
 				child_options.key_depth = has_expected_byte ? options.key_depth + 1 : options.key_depth;
 				child_options.depth_remaining = (options.depth_remaining > 0) ? options.depth_remaining - 1 : 0;
 
 				auto child_type = child_ptr->GetType();
-				bool is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
+				auto is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
 				                    child_type == NType::NODE_48 || child_type == NType::NODE_256);
 				if (is_internal) {
 					str += child_prefix + NODE_BRANCH_END + "Node" + to_string(GetCapacity(child_type)) + "\n";
@@ -570,21 +570,21 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 
 string Node::ToString(ART &art, const ToStringOptions &options) const {
 	auto type = GetType();
-	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
-	bool propagate_gate = options.inside_gate || is_gate;
+	auto is_gate = GetGateStatus() == GateStatus::GATE_SET;
+	auto propagate_gate = options.inside_gate || is_gate;
 
 	switch (type) {
 	case NType::LEAF_INLINED: {
 		return options.tree_prefix + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
 	}
 	case NType::LEAF: {
-		ToStringOptions leaf_options = options;
+		auto leaf_options = options;
 		return Leaf::DeprecatedToString(art, *this, leaf_options);
 	}
 	case NType::PREFIX: {
-		ToStringOptions prefix_options = options;
+		auto prefix_options = options;
 		prefix_options.inside_gate = propagate_gate;
-		string str = ConstPrefixHandle::ToString(art, *this, prefix_options);
+		auto str = ConstPrefixHandle::ToString(art, *this, prefix_options);
 		if (is_gate) {
 			str = options.tree_prefix + "Gate\n" + str;
 		}
@@ -595,7 +595,7 @@ string Node::ToString(ART &art, const ToStringOptions &options) const {
 	}
 
 	// For internal nodes: print header then children
-	string str = options.tree_prefix + "Node" + to_string(GetCapacity(type)) + "\n";
+	auto str = options.tree_prefix + "Node" + to_string(GetCapacity(type)) + "\n";
 	str += ToStringChildren(art, options);
 
 	if (is_gate && type != NType::PREFIX) {

@@ -180,9 +180,6 @@ public:
 	//! - options: Printing options (see ToStringOptions struct for details).
 	string ToString(ART &art, const ToStringOptions &options) const;
 
-	//! Returns only the children part of an internal node (used for tree-style printing).
-	string ToStringChildren(ART &art, const ToStringOptions &options) const;
-
 	//! Returns the node type.
 	inline NType GetType() const {
 		return NType(GetMetadata() & ~AND_GATE);
@@ -227,6 +224,9 @@ public:
 	}
 
 private:
+	//! Prints only the children of an internal node (used for tree-style printing).
+	string ToStringChildren(ART &art, const ToStringOptions &options) const;
+
 	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
 	                                          TransformToDeprecatedState &state) {
