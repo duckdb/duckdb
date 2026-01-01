@@ -506,6 +506,37 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	return result_statement;
 }
 
+static void BindPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, Binder &binder) {
+	switch (expr->GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
+		}
+		entry.values.emplace_back(colref.GetColumnName());
+	} break;
+	case ExpressionType::FUNCTION: {
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.function_name != "row") {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
+		}
+		for (auto &child : function.children) {
+			BindPivotInList(child, entry, binder);
+		}
+	} break;
+	default: {
+		Value val;
+		ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
+		auto bound_expr = const_binder.Bind(expr);
+		if (!bound_expr->IsFoldable()) {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
+		}
+		auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
+		entry.values.push_back(folded_value);
+	} break;
+	}
+}
+
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
 	// keep track of the columns by which we pivot/aggregate
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
@@ -531,6 +562,28 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	}
 	for (auto &aggr : pivot_aggregates) {
 		ExtractPivotExpressions(aggr.get(), handled_columns, macro_binding);
+	}
+
+	// process the in-lists
+	for (auto &pivot_column : ref.pivots) {
+		D_ASSERT(pivot_column.unpivot_names.empty());
+
+		for (auto &pivot_entry : pivot_column.entries) {
+			// bind the expressions in the IN list
+			BindPivotInList(pivot_entry.expr, pivot_entry, *this);
+
+			// check that we have the expected number of values
+			const auto expected_size = pivot_column.pivot_expressions.size();
+			const auto values_size = pivot_entry.values.size();
+
+			if (values_size != expected_size) {
+				throw BinderException("PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
+				                      expected_size, values_size);
+			}
+
+			// clear the expression after binding, we only need the values from now
+			pivot_entry.expr = nullptr;
+		}
 	}
 
 	// first add all pivots to the set of handled columns, and check for duplicates
@@ -640,6 +693,17 @@ struct UnpivotEntry {
 
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
+	// Try to bind the entry expression as values
+	try {
+		auto expr_copy = entry.expr->Copy();
+		BindPivotInList(expr_copy, entry, child_binder);
+		// successfully bound as values - clear the expression
+		entry.expr = nullptr;
+	} catch (...) {
+		// ignore binder exceptions here - we fall back to expression mode
+		entry.values.clear();
+	}
+
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;

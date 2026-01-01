@@ -191,8 +191,6 @@ private:
 	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
 	PivotColumn TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot, bool is_pivot);
 	vector<PivotColumn> TransformPivotList(duckdb_libpgquery::PGList &list, bool is_pivot);
-	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry,
-	                                 bool root_entry = true);
 
 	unique_ptr<SQLStatement> TransformMergeInto(duckdb_libpgquery::PGMergeIntoStmt &stmt);
 	unique_ptr<MergeIntoAction> TransformMergeIntoAction(duckdb_libpgquery::PGMatchAction &action);
