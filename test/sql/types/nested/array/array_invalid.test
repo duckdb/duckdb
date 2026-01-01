@@ -37,7 +37,7 @@ SELECT array_value();
 statement error
 CREATE TABLE t1(a INT, b INT[-1]);
 ----
-<REGEX>:.*Parser Error.*syntax error at or near "-".*
+Binder Error: ARRAY type size must be at least 1
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
