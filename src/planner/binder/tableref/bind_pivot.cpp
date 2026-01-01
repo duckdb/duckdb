@@ -22,6 +22,8 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_pivot.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 namespace duckdb {
 

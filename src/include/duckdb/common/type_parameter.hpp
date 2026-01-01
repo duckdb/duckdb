@@ -1,11 +1,21 @@
 #pragma once
 
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+
 namespace duckdb {
 
 enum class TypeParameterKind : uint8_t {
 	EXPRESSION,
 	TYPE,
 };
+
+class Serializer;
+class Deserializer;
 
 class TypeParameter {
 public:
