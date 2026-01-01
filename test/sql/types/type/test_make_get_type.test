@@ -1,5 +1,5 @@
-# name: test/sql/types/test_make_get_type.test
-# group: [types]
+# name: test/sql/types/type/test_make_get_type.test
+# group: [type]
 
 query I
 SELECT get_type(1);
