@@ -508,6 +508,17 @@ string LogicalType::ToString() const {
 		if (!result.empty()) {
 			result += ".";
 		}
+
+		// LIST and ARRAY have special syntax
+		if (result.empty() && StringUtil::CIEquals(type, "LIST") && params.size() == 1) {
+			return params[0]->ToString() + "[]";
+		}
+		if (result.empty() && StringUtil::CIEquals(type, "ARRAY") && params.size() == 2) {
+			auto &type_param = params[0];
+			auto &size_param = params[1];
+			return type_param->ToString() + "[" + size_param->ToString() + "]";
+		}
+
 		result += KeywordHelper::WriteOptionallyQuoted(type, '"', true, KeywordCategory::KEYWORD_COL_NAME);
 
 		if (!params.empty()) {
