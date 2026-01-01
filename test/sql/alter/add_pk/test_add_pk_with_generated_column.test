@@ -16,3 +16,24 @@ statement ok
 INSERT INTO test VALUES (5, 4);
 
 # Cannot add a PK to generated columns.
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (b);
+----
+<REGEX>:Binder Error.*cannot create a PRIMARY KEY on a generated column: b.*
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (b, c);
+----
+<REGEX>:Binder Error.*cannot create a PRIMARY KEY on a generated column: b.*
+
+# Can add a PK to a non-generated column.
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (c);
+
+statement error
+INSERT INTO test VALUES (1, 4);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
