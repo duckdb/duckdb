@@ -114,7 +114,7 @@ INSERT INTO bits VALUES('1A10')
 statement error
 SELECT ('0101011'::BIT(10))
 ----
-<REGEX>:Binder Error.*Type 'bit' does not take any type parameters.*
+<REGEX>:Binder Error.*Type 'BIT' does not take any type parameters.*
 
 # bit null test and empty values
 query I

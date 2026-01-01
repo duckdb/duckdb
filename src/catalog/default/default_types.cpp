@@ -104,6 +104,18 @@ LogicalType BindVarcharType(const BindLogicalTypeInput &input) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// BIT Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindBitType(const BindLogicalTypeInput &input) {
+	// Bit type can have a single modifier indicating the length, but we ignore it for now
+	auto &modifiers = input.modifiers;
+	if (modifiers.size() > 1) {
+		throw BinderException("BIT type takes at most one type modifier");
+	}
+	return LogicalType::BIT;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // INTERVAL Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindIntervalType(const BindLogicalTypeInput &input) {
@@ -361,7 +373,7 @@ struct DefaultType {
 	bind_logical_type_function_t bind_function;
 };
 
-using builtin_type_array = std::array<DefaultType, 79>;
+using builtin_type_array = std::array<DefaultType, 81>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
@@ -376,7 +388,9 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"timestamp_ns", LogicalTypeId::TIMESTAMP_NS, nullptr},
                                            {"timestamp_s", LogicalTypeId::TIMESTAMP_SEC, nullptr},
                                            {"timestamptz", LogicalTypeId::TIMESTAMP_TZ, nullptr},
+                                           {"timestamp with time zone", LogicalTypeId::TIMESTAMP_TZ, nullptr},
                                            {"timetz", LogicalTypeId::TIME_TZ, nullptr},
+                                           {"time with time zone", LogicalTypeId::TIME_TZ, nullptr},
                                            {"interval", LogicalTypeId::INTERVAL, BindIntervalType},
                                            {"varchar", LogicalTypeId::VARCHAR, BindVarcharType},
                                            {"bpchar", LogicalTypeId::VARCHAR, BindVarcharType},
