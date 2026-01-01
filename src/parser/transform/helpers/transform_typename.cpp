@@ -88,26 +88,13 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		// 1. A constant value
 		// 2. A expression
 		// 3. A type name
-
-		switch (typemod_node->type) {
-		case duckdb_libpgquery::T_PGAConst: {
-			// Constant value
-			auto const_node = PGPointerCast<duckdb_libpgquery::PGAConst>(typemod_node.get());
-			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), TransformValue(const_node->val)));
-		} break;
-		case duckdb_libpgquery::T_PGAExpr:
-		case duckdb_libpgquery::T_PGFuncCall: {
+		if (typemod_node->type == duckdb_libpgquery::T_PGTypeName) {
+			auto type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(typemod_node.get()));
+			type_params.push_back(TypeParameter::TYPE(std::move(name_str), std::move(type)));
+		} else {
 			// Expression
 			auto expr = TransformExpression(*typemod_node);
 			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), std::move(expr)));
-		} break;
-		case duckdb_libpgquery::T_PGTypeName: {
-			// Type name
-			auto type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(typemod_node.get()));
-			type_params.push_back(TypeParameter::TYPE(std::move(name_str), std::move(type)));
-		} break;
-		default:
-			throw ParserException("Expected a constant, expression or type name as type modifier value");
 		}
 	}
 

@@ -1684,8 +1684,7 @@ typemod
 
 named_typemod
 	: IDENT Typename 		{ $$ = list_make2(makeString($1), $2); }
-	| IDENT SimpleConst { $$ = list_make2(makeString($1), $2); }
-	| IDENT ':' '=' Typename { $$ = list_make2(makeString($1), $4); }
+	| IDENT COLON_EQUALS Typename { $$ = list_make2(makeString($1), $3); }
 	;
 
 opt_named_typemod

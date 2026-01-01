@@ -198,6 +198,9 @@ LogicalType BindArrayType(const BindLogicalTypeInput &input) {
 	if (size_val.IsNull()) {
 		throw BinderException("ARRAY type size modifier cannot be NULL");
 	}
+	if (!size_val.type().IsIntegral()) {
+		throw BinderException("ARRAY type size modifier must be an integral type");
+	}
 	if (!size_val.TryCastAs(input.context, LogicalTypeId::BIGINT)) {
 		throw BinderException("ARRAY type size modifier must be a BIGINT");
 	}
