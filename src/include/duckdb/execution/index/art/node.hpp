@@ -75,10 +75,6 @@ private:
 
 //! Options for ToString printing functions
 struct ToStringOptions {
-	// Indentation for root node.
-	idx_t indent_level = 0;
-	// Amount to increase idnentation when traversing to a child node.
-	idx_t indent_amount = 4;
 	bool inside_gate = false;
 	bool display_ascii = false;
 	// Optional key argument to only print the path along to a specific key.
@@ -98,15 +94,16 @@ struct ToStringOptions {
 	// printing node contents. This gives a very barebones skeleton of the node structure leading to a key, and this
 	// can also be short circuited by depth_remaining.
 	bool structure_only = false;
+	// Accumulated prefix for tree-style rendering (contains "│   " and "    " segments)
+	string tree_prefix = "";
 
 	ToStringOptions() = default;
 
-	ToStringOptions(idx_t indent_level, bool inside_gate, bool display_ascii, optional_ptr<const ARTKey> key_path,
-	                idx_t key_depth, idx_t depth_remaining, bool print_deprecated_leaves, bool structure_only,
-	                idx_t indent_amount = 2)
-	    : indent_level(indent_level), indent_amount(indent_amount), inside_gate(inside_gate),
-	      display_ascii(display_ascii), key_path(key_path), key_depth(key_depth), depth_remaining(depth_remaining),
-	      print_deprecated_leaves(print_deprecated_leaves), structure_only(structure_only) {
+	ToStringOptions(bool inside_gate, bool display_ascii, optional_ptr<const ARTKey> key_path, idx_t key_depth,
+	                idx_t depth_remaining, bool print_deprecated_leaves, bool structure_only)
+	    : inside_gate(inside_gate), display_ascii(display_ascii), key_path(key_path), key_depth(key_depth),
+	      depth_remaining(depth_remaining), print_deprecated_leaves(print_deprecated_leaves),
+	      structure_only(structure_only) {
 	}
 };
 
@@ -182,6 +179,9 @@ public:
 	//! - art: root node of tree being printed.
 	//! - options: Printing options (see ToStringOptions struct for details).
 	string ToString(ART &art, const ToStringOptions &options) const;
+
+	//! Returns only the children part of an internal node (used for tree-style printing).
+	string ToStringChildren(ART &art, const ToStringOptions &options) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {

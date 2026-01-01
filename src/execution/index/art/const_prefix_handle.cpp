@@ -20,23 +20,30 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 	return data[pos];
 }
 
+namespace {
+// Tree-style branch characters (UTF-8 encoded)
+const string PREFIX_BRANCH_END = "\342\224\224\342\224\200\342\224\200 ";  // "└── "
+const string PREFIX_SPACE = "    ";
+
+// ASCII printable character range
+constexpr uint8_t PREFIX_ASCII_PRINTABLE_MIN = 32;
+constexpr uint8_t PREFIX_ASCII_PRINTABLE_MAX = 126;
+} // namespace
+
 string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOptions &options) {
-	auto indent = [](string &str, const idx_t n) {
-		str.append(n, ' ');
-	};
 	auto format_byte = [&](const uint8_t byte) {
-		if (!options.inside_gate && options.display_ascii && byte >= 32 && byte <= 126) {
+		if (!options.inside_gate && options.display_ascii &&
+		    byte >= PREFIX_ASCII_PRINTABLE_MIN && byte <= PREFIX_ASCII_PRINTABLE_MAX) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);
 	};
 
-	string str = "";
-	indent(str, options.indent_level);
+	// Print prefix bytes (single branch, child follows on next line)
+	string str = options.tree_prefix + PREFIX_BRANCH_END + "Prefix: |";
 	reference<const Node> ref(node);
 	ToStringOptions child_options = options;
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
-		str += "Prefix: |";
 		for (idx_t i = 0; i < handle.data[art.PrefixCount()]; i++) {
 			str += format_byte(handle.data[i]) + "|";
 			if (options.key_path) {
@@ -44,9 +51,12 @@ string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOpt
 			}
 		}
 	});
+	str += "\n";
 
-	auto child = ref.get().ToString(art, child_options);
-	return str + "\n" + child;
+	// Child is printed indented under the prefix (not as a sibling)
+	child_options.tree_prefix = options.tree_prefix + PREFIX_SPACE;
+	str += ref.get().ToString(art, child_options);
+	return str;
 }
 
 void ConstPrefixHandle::Verify(ART &art, const Node &node) {
