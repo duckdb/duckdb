@@ -74,7 +74,7 @@ SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChu
 			throw CatalogException("option \"%s\" cannot be set globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
-		config.SetOption(&db, *option, input_val);
+		config.SetOption(&context.client, &db, *option, input_val);
 		break;
 	}
 	case SetScope::SESSION:
