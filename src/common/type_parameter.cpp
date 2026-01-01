@@ -1,4 +1,6 @@
 #include "duckdb/common/type_parameter.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
