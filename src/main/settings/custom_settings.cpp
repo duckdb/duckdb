@@ -47,6 +47,7 @@ constexpr const char *LoggingStorage::Name;
 constexpr const char *EnabledLogTypes::Name;
 constexpr const char *DisabledLogTypes::Name;
 constexpr const char *DisabledFilesystemsSetting::Name;
+constexpr const char *ForceVariantShredding::Name;
 
 const string GetDefaultUserAgent() {
 	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
@@ -60,6 +61,14 @@ static DatabaseInstance &GetDB(DatabaseInstance *db) {
 		throw InvalidInputException("Cannot change/set %s before the database is started", T::Name);
 	}
 	return *db;
+}
+
+template <class T>
+static ClientContext &GetContext(ClientContext *context) {
+	if (!context) {
+		throw InvalidInputException("Cannot change/set %s without a connection", T::Name);
+	}
+	return *context;
 }
 
 } // namespace
@@ -95,7 +104,7 @@ bool AllocatorBackgroundThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBCo
 //===----------------------------------------------------------------------===//
 // Allocator Bulk Deallocation Flush Threshold
 //===----------------------------------------------------------------------===//
-void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
+void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
                                                                const Value &input) {
 	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
@@ -121,7 +130,8 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 //===----------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===----------------------------------------------------------------------===//
-void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllocatorFlushThresholdSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                               const Value &input) {
 	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
@@ -188,7 +198,8 @@ bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DB
 //===----------------------------------------------------------------------===//
 // Allow Persistent Secrets
 //===----------------------------------------------------------------------===//
-void AllowPersistentSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowPersistentSecretsSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                              const Value &input) {
 	auto value = input.DefaultCastAs(LogicalType::BOOLEAN);
 	config.secret_manager->SetEnablePersistentSecrets(value.GetValue<bool>());
 }
@@ -256,7 +267,7 @@ bool AllowUnsignedExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfi
 //===----------------------------------------------------------------------===//
 // Allowed Directories
 //===----------------------------------------------------------------------===//
-void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowedDirectoriesSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
@@ -289,7 +300,7 @@ Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allowed Paths
 //===----------------------------------------------------------------------===//void
-void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowedPathsSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (!config.options.enable_external_access) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
@@ -323,7 +334,8 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Block Allocator Memory
 //===----------------------------------------------------------------------===//
-void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void BlockAllocatorMemorySetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                            const Value &input) {
 	const auto input_string = input.ToString();
 	idx_t size;
 	if (!input_string.empty() && input_string.back() == '%') {
@@ -358,7 +370,8 @@ Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
-void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void CheckpointThresholdSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                           const Value &input) {
 	idx_t new_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	config.options.checkpoint_wal_size = new_limit;
 }
@@ -562,7 +575,7 @@ Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Custom User Agent
 //===----------------------------------------------------------------------===//
-void CustomUserAgentSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void CustomUserAgentSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_value = input.GetValue<string>();
 	if (db) {
 		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
@@ -581,7 +594,7 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 //===----------------------------------------------------------------------===//
 // Default Block Size
 //===----------------------------------------------------------------------===//
-void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DefaultBlockSizeSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto block_alloc_size = input.GetValue<uint64_t>();
 	Storage::VerifyBlockAllocSize(block_alloc_size);
 	config.options.default_block_alloc_size = block_alloc_size;
@@ -645,7 +658,8 @@ void DefaultOrderSetting::OnSet(SettingCallbackInfo &, Value &input) {
 //===----------------------------------------------------------------------===//
 // Default Secret Storage
 //===----------------------------------------------------------------------===//
-void DefaultSecretStorageSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DefaultSecretStorageSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                            const Value &input) {
 	config.secret_manager->SetDefaultStorage(input.ToString());
 }
 
@@ -661,7 +675,8 @@ Value DefaultSecretStorageSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Disabled Compression Methods
 //===----------------------------------------------------------------------===//
-void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DisabledCompressionMethodsSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                                  const Value &input) {
 	auto list = StringUtil::Split(input.ToString(), ",");
 	vector<CompressionType> disabled_compression_methods;
 	for (auto &entry : list) {
@@ -706,7 +721,8 @@ Value DisabledCompressionMethodsSetting::GetSetting(const ClientContext &context
 //===----------------------------------------------------------------------===//
 // Disabled Filesystems
 //===----------------------------------------------------------------------===//
-void DisabledFilesystemsSetting::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &input) {
+void DisabledFilesystemsSetting::SetGlobal(ClientContext *, DatabaseInstance *db_p, DBConfig &config,
+                                           const Value &input) {
 	auto &db = GetDB<DisabledFilesystemsSetting>(db_p);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto list = StringUtil::Split(input.ToString(), ",");
@@ -726,7 +742,7 @@ Value DisabledFilesystemsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Disabled Optimizers
 //===----------------------------------------------------------------------===//
-void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DisabledOptimizersSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto list = StringUtil::Split(input.ToString(), ",");
 	set<OptimizerType> disabled_optimizers;
 	for (auto &entry : list) {
@@ -759,7 +775,7 @@ Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Duckdb Api
 //===----------------------------------------------------------------------===//
-void DuckDBAPISetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DuckDBAPISetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_value = input.GetValue<string>();
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
@@ -817,7 +833,8 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 //===----------------------------------------------------------------------===//
 // Enable External File Cache
 //===----------------------------------------------------------------------===//
-void EnableExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void EnableExternalFileCacheSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                               const Value &input) {
 	config.options.enable_external_file_cache = input.GetValue<bool>();
 	if (db) {
 		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
@@ -842,7 +859,8 @@ Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
 Value EnableLogging::GetSetting(const ClientContext &context) {
 	return context.db->GetLogManager().GetConfig().enabled;
 }
-void EnableLogging::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+void EnableLogging::SetGlobal(ClientContext *context, DatabaseInstance *db_p, DBConfig &config,
+                              const Value &parameter) {
 	auto &db = GetDB<EnableLogging>(db_p);
 	db.GetLogManager().SetEnableLogging(parameter.GetValue<bool>());
 }
@@ -856,7 +874,8 @@ void EnableLogging::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 // Force VARIANT Shredding
 //===----------------------------------------------------------------------===//
 
-void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, const Value &value) {
+void ForceVariantShredding::SetGlobal(ClientContext *context, DatabaseInstance *_, DBConfig &config,
+                                      const Value &value) {
 	auto &force_variant_shredding = config.options.force_variant_shredding;
 
 	if (value.type().id() != LogicalTypeId::VARCHAR) {
@@ -864,8 +883,9 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		                            value.type().ToString());
 	}
 
-	// FIXME: Use client context to determine the logical type for shredding
-	auto logical_type = config.ParseLogicalType(value.GetValue<string>());
+	auto &ctx = GetContext<ForceVariantShredding>(context);
+	auto logical_type = TransformStringToLogicalType(value.GetValue<string>(), ctx);
+
 	TypeVisitor::Contains(logical_type, [](const LogicalType &type) {
 		if (type.IsNested()) {
 			if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::LIST) {
@@ -935,7 +955,8 @@ Value ForceVariantShredding::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Extension Directory
 //===----------------------------------------------------------------------===//
-void ExtensionDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ExtensionDirectoriesSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                            const Value &input) {
 	config.options.extension_directories.clear();
 
 	auto &list = ListValue::GetChildren(input);
@@ -963,7 +984,7 @@ Value ExtensionDirectoriesSetting::GetSetting(const ClientContext &context) {
 Value LoggingMode::GetSetting(const ClientContext &context) {
 	return EnumUtil::ToString(context.db->GetLogManager().GetConfig().mode);
 }
-void LoggingMode::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+void LoggingMode::SetGlobal(ClientContext *, DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<LoggingMode>(db_p);
 	db.GetLogManager().SetLogMode(EnumUtil::FromString<LogMode>(parameter.GetValue<string>()));
 }
@@ -979,7 +1000,7 @@ void LoggingMode::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 Value LoggingLevel::GetSetting(const ClientContext &context) {
 	return EnumUtil::ToString(context.db->GetLogManager().GetConfig().level);
 }
-void LoggingLevel::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+void LoggingLevel::SetGlobal(ClientContext *, DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<LoggingLevel>(db_p);
 	db.GetLogManager().SetLogLevel(EnumUtil::FromString<LogLevel>(parameter.GetValue<string>()));
 }
@@ -995,7 +1016,7 @@ void LoggingLevel::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 Value LoggingStorage::GetSetting(const ClientContext &context) {
 	return context.db->GetLogManager().GetConfig().storage;
 }
-void LoggingStorage::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+void LoggingStorage::SetGlobal(ClientContext *, DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<LoggingStorage>(db_p);
 	db.GetLogManager().SetLogStorage(db, parameter.GetValue<string>());
 }
@@ -1015,7 +1036,7 @@ Value EnabledLogTypes::GetSetting(const ClientContext &context) {
 	}
 	return StringUtil::Join(loggers, ",");
 }
-void EnabledLogTypes::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+void EnabledLogTypes::SetGlobal(ClientContext *, DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<EnabledLogTypes>(db_p);
 
 	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
@@ -1042,7 +1063,7 @@ Value DisabledLogTypes::GetSetting(const ClientContext &context) {
 	}
 	return StringUtil::Join(loggers, ",");
 }
-void DisabledLogTypes::SetGlobal(DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
+void DisabledLogTypes::SetGlobal(ClientContext *, DatabaseInstance *db_p, DBConfig &config, const Value &parameter) {
 	auto &db = GetDB<DisabledLogTypes>(db_p);
 	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
 	unordered_set<string> set;
@@ -1221,7 +1242,8 @@ Value FileSearchPathSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
-void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ForceBitpackingModeSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                           const Value &input) {
 	auto mode_str = StringUtil::Lower(input.ToString());
 	auto mode = BitpackingModeFromString(mode_str);
 	if (mode == BitpackingMode::INVALID) {
@@ -1242,7 +1264,7 @@ Value ForceBitpackingModeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
-void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ForceCompressionSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
 	if (compression == "none" || compression == "auto") {
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
@@ -1393,7 +1415,7 @@ Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Max Memory
 //===----------------------------------------------------------------------===//
-void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void MaxMemorySetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
 		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
@@ -1412,7 +1434,8 @@ Value MaxMemorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Max Temp Directory Size
 //===----------------------------------------------------------------------===//
-void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void MaxTempDirectorySizeSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                            const Value &input) {
 	if (input == "90% of available disk space") {
 		ResetGlobal(db, config);
 		return;
@@ -1471,7 +1494,7 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 //===----------------------------------------------------------------------===//
 // Password
 //===----------------------------------------------------------------------===//
-void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void PasswordSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	// nop
 }
 
@@ -1665,7 +1688,7 @@ Value SearchPathSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Secret Directory
 //===----------------------------------------------------------------------===//
-void SecretDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void SecretDirectorySetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.secret_manager->SetPersistentSecretPath(input.ToString());
 }
 
@@ -1681,7 +1704,8 @@ Value SecretDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Storage Compatibility Version
 //===----------------------------------------------------------------------===//
-void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void StorageCompatibilityVersionSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config,
+                                                   const Value &input) {
 	auto version_string = input.GetValue<string>();
 	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
 	config.options.serialization_compatibility = serialization_compatibility;
@@ -1719,7 +1743,7 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
-void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void TempDirectorySetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
@@ -1751,7 +1775,7 @@ Value TempDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Temporary File Encryption
 //===----------------------------------------------------------------------===//
-void TempFileEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void TempFileEncryptionSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto setting = input.GetValue<bool>();
 	if (config.options.temp_file_encryption == setting) {
 		// setting is the current setting
@@ -1794,7 +1818,7 @@ Value TempFileEncryptionSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Threads
 //===----------------------------------------------------------------------===//
-void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ThreadsSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_val = input.GetValue<int64_t>();
 	if (new_val < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
@@ -1822,7 +1846,7 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Username
 //===----------------------------------------------------------------------===//
-void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void UsernameSetting::SetGlobal(ClientContext *, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	// nop
 }
 
