@@ -19,6 +19,8 @@ class QualifyBinder : public BaseSelectBinder {
 public:
 	QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
+	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
+
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
