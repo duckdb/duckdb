@@ -22,7 +22,7 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 
 namespace {
 // Tree-style branch characters (UTF-8 encoded)
-const string PREFIX_BRANCH_END = "\342\224\224\342\224\200\342\224\200 ";  // "└── "
+const string PREFIX_BRANCH_END = "\342\224\224\342\224\200\342\224\200 "; // "└── "
 const string PREFIX_SPACE = "    ";
 
 // ASCII printable character range
@@ -32,8 +32,8 @@ constexpr uint8_t PREFIX_ASCII_PRINTABLE_MAX = 126;
 
 string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOptions &options) {
 	auto format_byte = [&](const uint8_t byte) {
-		if (!options.inside_gate && options.display_ascii &&
-		    byte >= PREFIX_ASCII_PRINTABLE_MIN && byte <= PREFIX_ASCII_PRINTABLE_MAX) {
+		if (!options.inside_gate && options.display_ascii && byte >= PREFIX_ASCII_PRINTABLE_MIN &&
+		    byte <= PREFIX_ASCII_PRINTABLE_MAX) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);

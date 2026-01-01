@@ -469,9 +469,9 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 
 namespace {
 // Tree-style branch characters (UTF-8 encoded)
-const string NODE_BRANCH_MID = "\342\224\234\342\224\200\342\224\200 ";    // "├── "
-const string NODE_BRANCH_END = "\342\224\224\342\224\200\342\224\200 ";    // "└── "
-const string NODE_VERTICAL = "\342\224\202   ";                             // "│   "
+const string NODE_BRANCH_MID = "\342\224\234\342\224\200\342\224\200 "; // "├── "
+const string NODE_BRANCH_END = "\342\224\224\342\224\200\342\224\200 "; // "└── "
+const string NODE_VERTICAL = "\342\224\202   ";                         // "│   "
 const string NODE_SPACE = "    ";
 
 // ASCII printable character range
@@ -481,8 +481,8 @@ constexpr uint8_t NODE_ASCII_PRINTABLE_MAX = 126;
 
 string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 	auto format_byte = [&](const uint8_t byte) {
-		if (!options.inside_gate && options.display_ascii &&
-		    byte >= NODE_ASCII_PRINTABLE_MIN && byte <= NODE_ASCII_PRINTABLE_MAX) {
+		if (!options.inside_gate && options.display_ascii && byte >= NODE_ASCII_PRINTABLE_MIN &&
+		    byte <= NODE_ASCII_PRINTABLE_MAX) {
 			return string(1, static_cast<char>(byte));
 		}
 		return to_string(byte);
