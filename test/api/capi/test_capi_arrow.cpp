@@ -359,7 +359,7 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		for (size_t idx = 0, offset = 0; idx < arrow_arrays.size(); idx++) {
 			ArrowArray *duckdb_arrow_array = &arrow_arrays[idx];
 			// Prepare output chunk
-			duckdb_data_chunk out_chunk;
+			duckdb_data_chunk out_chunk = nullptr;
 			// Convert Arrow array to DuckDB chunk
 			err = duckdb_data_chunk_from_arrow(tester.connection, duckdb_arrow_array, converted_schema, &out_chunk);
 			REQUIRE(err == nullptr);
@@ -450,5 +450,209 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		duckdb_destroy_error_data(&err);
 		duckdb_destroy_arrow_options(&arrow_options);
 		free((void *)names[0]);
+	}
+
+	SECTION("Test reusing pre-initialized chunk with matching schema") {
+		// 1. Create and populate table
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test_table(i INTEGER, j BIGINT);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO test_table VALUES (42, 100), (43, 200);"));
+
+		// 2. Query and get chunks
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT i, j FROM test_table ORDER BY i", &result) == DuckDBSuccess);
+		duckdb_data_chunk chunk = duckdb_result_get_chunk(result, 0);
+
+		// 3. Convert to Arrow
+		ArrowArray duckdb_arrow_array;
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+		duckdb_error_data err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &duckdb_arrow_array);
+		REQUIRE(err == nullptr);
+
+		// 4. Prepare schema
+		duckdb_logical_type types[2];
+		types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+		const char *names[2] = {strdup("i"), strdup("j")};
+
+		ArrowSchemaWrapper arrow_schema_wrapper;
+		err = duckdb_to_arrow_schema(arrow_options, types, names, 2, &arrow_schema_wrapper.arrow_schema);
+		REQUIRE(err == nullptr);
+
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		err = duckdb_schema_from_arrow(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
+		REQUIRE(err == nullptr);
+
+		// 5. First conversion - create new chunk
+		duckdb_data_chunk out_chunk = nullptr;
+		err = duckdb_data_chunk_from_arrow(tester.connection, &duckdb_arrow_array, converted_schema, &out_chunk);
+		REQUIRE(err == nullptr);
+		REQUIRE(out_chunk != nullptr);
+
+		// Verify first chunk
+		idx_t chunk_size = duckdb_data_chunk_get_size(out_chunk);
+		REQUIRE(chunk_size == 2);
+		auto vec1 = duckdb_data_chunk_get_vector(out_chunk, 0);
+		auto data1 = static_cast<int32_t *>(duckdb_vector_get_data(vec1));
+		REQUIRE(data1[0] == 42);
+		REQUIRE(data1[1] == 43);
+
+		// 6. Prepare second arrow array
+		duckdb_data_chunk chunk2 = duckdb_result_get_chunk(result, 0);
+		ArrowArray duckdb_arrow_array2;
+		err = duckdb_data_chunk_to_arrow(arrow_options, chunk2, &duckdb_arrow_array2);
+		REQUIRE(err == nullptr);
+
+		// 7. Second conversion - reuse existing chunk (out_chunk is already initialized)
+		err = duckdb_data_chunk_from_arrow(tester.connection, &duckdb_arrow_array2, converted_schema, &out_chunk);
+		REQUIRE(err == nullptr);
+
+		// Verify second chunk reused the same pointer
+		chunk_size = duckdb_data_chunk_get_size(out_chunk);
+		REQUIRE(chunk_size == 2);
+		vec1 = duckdb_data_chunk_get_vector(out_chunk, 0);
+		data1 = static_cast<int32_t *>(duckdb_vector_get_data(vec1));
+		REQUIRE(data1[0] == 42);
+		REQUIRE(data1[1] == 43);
+
+		// 8. Cleanup
+		duckdb_destroy_data_chunk(&out_chunk);
+		duckdb_destroy_arrow_converted_schema(&converted_schema);
+		if (duckdb_arrow_array2.release) {
+			duckdb_arrow_array2.release(&duckdb_arrow_array2);
+		}
+		duckdb_destroy_logical_type(&types[0]);
+		duckdb_destroy_logical_type(&types[1]);
+		free((void *)names[0]);
+		free((void *)names[1]);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_data_chunk(&chunk2);
+		duckdb_destroy_result(&result);
+		duckdb_destroy_arrow_options(&arrow_options);
+	}
+
+	SECTION("Test pre-initialized chunk with mismatched column count") {
+		// 1. Create schema with 2 columns
+		duckdb_logical_type types[2];
+		types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+		const char *names[2] = {strdup("i"), strdup("j")};
+
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+
+		ArrowSchemaWrapper arrow_schema_wrapper;
+		duckdb_error_data err =
+		    duckdb_to_arrow_schema(arrow_options, types, names, 2, &arrow_schema_wrapper.arrow_schema);
+		REQUIRE(err == nullptr);
+
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		err = duckdb_schema_from_arrow(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
+		REQUIRE(err == nullptr);
+
+		// 2. Create a chunk with only 1 column
+		duckdb_logical_type single_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		duckdb_data_chunk out_chunk = duckdb_create_data_chunk(&single_type, 1);
+		REQUIRE(out_chunk != nullptr);
+
+		// 3. Prepare arrow array with 2 columns
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test_table2(i INTEGER, j BIGINT);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO test_table2 VALUES (42, 100);"));
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT i, j FROM test_table2", &result) == DuckDBSuccess);
+		duckdb_data_chunk chunk = duckdb_result_get_chunk(result, 0);
+
+		ArrowArray duckdb_arrow_array;
+		err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &duckdb_arrow_array);
+		REQUIRE(err == nullptr);
+
+		// 4. Try to convert - should fail due to column count mismatch
+		err = duckdb_data_chunk_from_arrow(tester.connection, &duckdb_arrow_array, converted_schema, &out_chunk);
+		REQUIRE(err != nullptr);
+
+		// Verify error message mentions column count
+		const char *error_msg = duckdb_error_data_message(err);
+		REQUIRE(std::string(error_msg).find("Schema mismatch") != std::string::npos);
+		REQUIRE(std::string(error_msg).find("columns") != std::string::npos);
+
+		// 5. Cleanup
+		duckdb_destroy_error_data(&err);
+		duckdb_destroy_data_chunk(&out_chunk);
+		duckdb_destroy_arrow_converted_schema(&converted_schema);
+		if (duckdb_arrow_array.release) {
+			duckdb_arrow_array.release(&duckdb_arrow_array);
+		}
+		duckdb_destroy_logical_type(&types[0]);
+		duckdb_destroy_logical_type(&types[1]);
+		duckdb_destroy_logical_type(&single_type);
+		free((void *)names[0]);
+		free((void *)names[1]);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
+		duckdb_destroy_arrow_options(&arrow_options);
+	}
+
+	SECTION("Test pre-initialized chunk with mismatched column type") {
+		// 1. Create schema with INTEGER, BIGINT
+		duckdb_logical_type types[2];
+		types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+		const char *names[2] = {strdup("i"), strdup("j")};
+
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+
+		ArrowSchemaWrapper arrow_schema_wrapper;
+		duckdb_error_data err =
+		    duckdb_to_arrow_schema(arrow_options, types, names, 2, &arrow_schema_wrapper.arrow_schema);
+		REQUIRE(err == nullptr);
+
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		err = duckdb_schema_from_arrow(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
+		REQUIRE(err == nullptr);
+
+		// 2. Create a chunk with BIGINT, INTEGER (types swapped)
+		duckdb_logical_type wrong_types[2];
+		wrong_types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT); // Wrong order
+		wrong_types[1] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		duckdb_data_chunk out_chunk = duckdb_create_data_chunk(wrong_types, 2);
+		REQUIRE(out_chunk != nullptr);
+
+		// 3. Prepare arrow array
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test_table3(i INTEGER, j BIGINT);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO test_table3 VALUES (42, 100);"));
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT i, j FROM test_table3", &result) == DuckDBSuccess);
+		duckdb_data_chunk chunk = duckdb_result_get_chunk(result, 0);
+
+		ArrowArray duckdb_arrow_array;
+		err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &duckdb_arrow_array);
+		REQUIRE(err == nullptr);
+
+		// 4. Try to convert - should fail due to type mismatch
+		err = duckdb_data_chunk_from_arrow(tester.connection, &duckdb_arrow_array, converted_schema, &out_chunk);
+		REQUIRE(err != nullptr);
+
+		// Verify error message mentions column type
+		const char *error_msg = duckdb_error_data_message(err);
+		REQUIRE(std::string(error_msg).find("Schema mismatch") != std::string::npos);
+		REQUIRE(std::string(error_msg).find("type") != std::string::npos);
+
+		// 5. Cleanup
+		duckdb_destroy_error_data(&err);
+		duckdb_destroy_data_chunk(&out_chunk);
+		duckdb_destroy_arrow_converted_schema(&converted_schema);
+		if (duckdb_arrow_array.release) {
+			duckdb_arrow_array.release(&duckdb_arrow_array);
+		}
+		duckdb_destroy_logical_type(&types[0]);
+		duckdb_destroy_logical_type(&types[1]);
+		duckdb_destroy_logical_type(&wrong_types[0]);
+		duckdb_destroy_logical_type(&wrong_types[1]);
+		free((void *)names[0]);
+		free((void *)names[1]);
+		duckdb_destroy_data_chunk(&chunk);
+		duckdb_destroy_result(&result);
+		duckdb_destroy_arrow_options(&arrow_options);
 	}
 }
