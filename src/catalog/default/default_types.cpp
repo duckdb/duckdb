@@ -6,6 +6,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
@@ -211,7 +212,7 @@ LogicalType BindArrayType(const BindLogicalTypeInput &input) {
 	}
 
 	auto child_type = TypeValue::GetType(arguments[0].GetValue());
-	return LogicalType::ARRAY(std::move(child_type), UnsafeNumericCast<idx_t>(array_size));
+	return LogicalType::ARRAY(child_type, UnsafeNumericCast<idx_t>(array_size));
 }
 
 //----------------------------------------------------------------------------------------------------------------------

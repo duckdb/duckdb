@@ -29,6 +29,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/const_stream.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 
@@ -1815,7 +1816,8 @@ LogicalType TypeValue::GetType(const Value &value) {
 	D_ASSERT(value.type().id() == LogicalTypeId::TYPE);
 	D_ASSERT(value.value_info_);
 	auto &type_str = value.value_info_->Get<StringValueInfo>().GetString();
-	MemoryStream stream((data_ptr_cast(const_cast<char *>(type_str.data()))), type_str.size());
+
+	ConstReadStream stream(const_data_ptr_cast(type_str.data()), type_str.size());
 	BinaryDeserializer deserializer(stream);
 
 	return LogicalType::Deserialize(deserializer);
