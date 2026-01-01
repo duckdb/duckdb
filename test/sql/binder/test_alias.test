@@ -73,3 +73,16 @@ select i as b, b as c, c as d, d as e from integers where e = 3;
 3	3	3	3
 
 
+# Test function chain in QUALIFY
+query II
+SELECT c1, row_number() over(partition BY c1 order by c2) as rk FROM VALUES ('a', 1), ('b', 2), ('b', 3), ('c', 4) AS t(c1, c2) qualify rk.add(1) > 2
+----
+b	2
+
+
+query I
+FROM VALUES ('CS', 'Bachelor'), ('CS', 'Bachelor'), ('CS', 'PhD'), ('Math', 'Masters') AS t(c1, c2)
+SELECT list(c2) over(partition BY c1) AS "c3"
+QUALIFY "c3".len() = 1;
+----
+[Masters]
