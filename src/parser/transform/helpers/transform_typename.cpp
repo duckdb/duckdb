@@ -48,6 +48,14 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 
 	D_ASSERT(!unbound_name.empty());
 
+	// The postgres parser emits a bunch of strange type names - we want to normalize them here so that the alias for
+	// columns from expressions containing these types actually use the DuckDB type name.
+	// Eventually we should make the parser emit the correct names directly.
+	auto known_type_id = TransformStringToLogicalTypeId(unbound_name);
+	if (known_type_id != LogicalTypeId::UNBOUND) {
+		unbound_name = LogicalTypeIdToString(known_type_id);
+	}
+
 	// Parse type modifiers
 	vector<unique_ptr<TypeParameter>> type_params;
 	for (auto typemod = type_name.typmods ? type_name.typmods->head : nullptr; typemod; typemod = typemod->next) {
