@@ -53,6 +53,10 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
+		if (TypeVisitor::Contains(col_def.Type(), LogicalTypeId::TYPE)) {
+			throw NotImplementedException("A table cannot be created from a TYPE column yet");
+		}
+
 		column_defs.push_back(col_def.Copy());
 	}
 	storage = make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
