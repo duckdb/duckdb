@@ -22,6 +22,9 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 
 	if (!modifiers.empty()) {
 		auto width_value = modifiers[0].GetValue();
+		if (width_value.IsNull()) {
+			throw BinderException("DECIMAL type width cannot be NULL");
+		}
 		if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 			width = width_value.GetValueUnsafe<uint8_t>();
 			scale = 0; // reset scale to 0 if only width is provided
@@ -32,6 +35,9 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 
 	if (modifiers.size() > 1) {
 		auto scale_value = modifiers[1].GetValue();
+		if (scale_value.IsNull()) {
+			throw BinderException("DECIMAL type scale cannot be NULL");
+		}
 		if (scale_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 			scale = scale_value.GetValueUnsafe<uint8_t>();
 		} else {
@@ -68,6 +74,9 @@ LogicalType BindTimestampType(const BindLogicalTypeInput &input) {
 	}
 
 	auto precision_value = modifiers[0].GetValue();
+	if (precision_value.IsNull()) {
+		throw BinderException("TIMESTAMP type precision cannot be NULL");
+	}
 	uint8_t precision;
 	if (precision_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
 		precision = precision_value.GetValueUnsafe<uint8_t>();
@@ -138,6 +147,10 @@ LogicalType BindEnumType(const BindLogicalTypeInput &input) {
 			throw BinderException("ENUM type requires a set of VARCHAR arguments");
 		}
 
+		if (arg.GetValue().IsNull()) {
+			throw BinderException("ENUM type arguments cannot be NULL (argument %d is NULL)", arg_idx + 1);
+		}
+
 		string_data[arg_idx] = StringVector::AddString(enum_vector, StringValue::Get(arg.GetValue()));
 	}
 
@@ -153,6 +166,9 @@ LogicalType BindListType(const BindLogicalTypeInput &input) {
 		throw BinderException("LIST type requires exactly one type modifier");
 	}
 	auto &child_val = arguments[0].GetValue();
+	if (child_val.IsNull()) {
+		throw BinderException("LIST type modifier cannot be NULL");
+	}
 	if (child_val.type() != LogicalTypeId::TYPE) {
 		throw BinderException("LIST type modifier must be a type, but got %s", child_val.ToString());
 	}
@@ -170,11 +186,17 @@ LogicalType BindArrayType(const BindLogicalTypeInput &input) {
 		throw BinderException("ARRAY type requires exactly two type modifiers");
 	}
 	auto &elem_val = arguments[0].GetValue();
+	if (elem_val.IsNull()) {
+		throw BinderException("ARRAY type modifier cannot be NULL");
+	}
 	if (elem_val.type() != LogicalTypeId::TYPE) {
 		throw BinderException("ARRAY type modifier must be a type, but got %s", elem_val.ToString());
 	}
 
 	auto size_val = arguments[1].GetValue();
+	if (size_val.IsNull()) {
+		throw BinderException("ARRAY type size modifier cannot be NULL");
+	}
 	if (!size_val.TryCastAs(input.context, LogicalTypeId::BIGINT)) {
 		throw BinderException("ARRAY type size modifier must be a BIGINT");
 	}
@@ -214,6 +236,11 @@ LogicalType BindStructType(const BindLogicalTypeInput &input) {
 		// Also check if all arguments are types
 		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
 			throw BinderException("STRUCT type arguments must be types");
+		}
+
+		// And not null!
+		if (arg.GetValue().IsNull()) {
+			throw BinderException("STRUCT type arguments cannot be NULL");
 		}
 	}
 
@@ -263,6 +290,12 @@ LogicalType BindMapType(const BindLogicalTypeInput &input) {
 	if (key_val.type() != LogicalTypeId::TYPE || val_val.type() != LogicalTypeId::TYPE) {
 		throw BinderException("MAP type modifiers must be types");
 	}
+	if (key_val.IsNull()) {
+		throw BinderException("MAP type key type modifier cannot be NULL");
+	}
+	if (val_val.IsNull()) {
+		throw BinderException("MAP type value type modifier cannot be NULL");
+	}
 
 	auto key_type = TypeValue::GetType(arguments[0].GetValue());
 	auto val_type = TypeValue::GetType(arguments[1].GetValue());
@@ -293,6 +326,9 @@ LogicalType BindUnionType(const BindLogicalTypeInput &input) {
 		}
 		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
 			throw BinderException("UNION type modifiers must be types");
+		}
+		if (arg.GetValue().IsNull()) {
+			throw BinderException("UNION type modifiers cannot be NULL");
 		}
 
 		auto &entry_name = arg.GetName();
@@ -342,6 +378,9 @@ LogicalType BindGeometryType(const BindLogicalTypeInput &input) {
 	// Don't do any casting here - only accept string type directly
 	if (crs_value.type() != LogicalTypeId::VARCHAR) {
 		throw BinderException("GEOMETRY type modifier must be a string with a coordinate system definition");
+	}
+	if (crs_value.IsNull()) {
+		throw BinderException("GEOMETRY type modifier cannot be NULL");
 	}
 
 	// FIXME: Use extension/ClientContext to expand incomplete/shorthand CRS definitions
