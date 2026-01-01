@@ -547,7 +547,6 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 				child_options.key_depth = has_expected_byte ? options.key_depth + 1 : options.key_depth;
 				child_options.depth_remaining = (options.depth_remaining > 0) ? options.depth_remaining - 1 : 0;
 
-				// For internal nodes, show them with a connector and extra indentation
 				auto child_type = child_ptr->GetType();
 				bool is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
 				                    child_type == NType::NODE_48 || child_type == NType::NODE_256);
