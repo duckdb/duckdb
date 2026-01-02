@@ -3151,6 +3151,17 @@ int wmain(int argc, wchar_t **wargv) {
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
 	}
+
+	// Validate: encryption key requires a file database, not in-memory
+	if (!data.config.options.encryption_key.empty()) {
+		if (data.zDbFilename == ":memory:") {
+			data.PrintF(PrintOutput::STDERR,
+			            "%s: Error: -encryption-key requires a database file path, not an in-memory database\n",
+			            data.program_name);
+			return 1;
+		}
+	}
+
 	data.out = stdout;
 
 	// Open the database file

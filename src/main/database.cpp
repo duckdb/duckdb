@@ -318,6 +318,14 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	LoadExtensionSettings();
 
+	// Preload httpfs extension if encryption is enabled for the main database (write mode only).
+	// The httpfs extension provides the crypto module needed for encrypted database writes.
+	// Read-only mode can use the built-in mbedtls module.
+	if (!config.options.encryption_key.empty() && config.options.access_mode != AccessMode::READ_ONLY) {
+		DuckDB temp_db(*this);
+		ExtensionHelper::LoadExtension(temp_db, "httpfs");
+	}
+
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
 	}
