@@ -121,7 +121,7 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	for (auto &path : paths) {
 		open_files.emplace_back(path);
 	}
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input);
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input, true /* sorted */);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -132,6 +132,20 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
                                                           const FileGlobInput &glob_input) {
 	auto paths = ParsePaths(input);
 	return CreateFileList(context, paths, glob_input);
+}
+
+shared_ptr<MultiFileList> MultiFileReader::CreateUnorderedFileList(ClientContext &context, const Value &input,
+                                                                   const FileGlobInput &glob_input) {
+	auto paths = ParsePaths(input);
+	vector<OpenFileInfo> open_files;
+	for (auto &path : paths) {
+		open_files.emplace_back(path);
+	}
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input, false /* unordered */);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
+		throw IOException("%s needs at least one file to read", function_name);
+	}
+	return std::move(res);
 }
 
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
