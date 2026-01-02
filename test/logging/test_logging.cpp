@@ -245,3 +245,25 @@ TEST_CASE("Add LogType with VARCHAR type", "[logging][.]") {
 
 	REQUIRE_NOTHROW(log_manager.RegisterLogType(make_uniq<CorrectLogType>()));
 }
+
+TEST_CASE("Test WaitEventLogType", "[logging]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("set logging_level='DEBUG';"));
+
+	// Log a WaitEvent
+	duckdb::vector<pair<string, string>> metadata = {{"key1", "value1"}, {"key2", "value2"}};
+	optional_idx connection_id(1);
+	optional_idx query_id(2);
+	optional_idx thread_id(3);
+
+	DUCKDB_LOG(*con.context, WaitEventLogType, "test_event", "started", connection_id, query_id, thread_id, metadata);
+
+	auto res = con.Query("SELECT message FROM duckdb_logs WHERE type = 'WaitEvent'");
+	REQUIRE(res->RowCount() == 1);
+
+	string message = res->GetValue(0, 0).ToString();
+	REQUIRE(message == "{'event': test_event, 'state': started, 'connection_id': 1, 'query_id': 2, 'thread_id': 3, 'metadata': {key1=value1, key2=value2}}");
+}
