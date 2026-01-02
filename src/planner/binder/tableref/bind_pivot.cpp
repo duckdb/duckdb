@@ -455,6 +455,11 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 		result.bound_pivot.aggregates = std::move(expanded_aggs);
 	}
 
+	if (aggregates.size() != ref.bound_aggregate_names.size()) {
+		throw InternalException("Pivot aggregate count mismatch (expected %llu, found %llu)",
+		                        ref.bound_aggregate_names.size(), aggregates.size());
+	}
+
 	vector<string> child_names;
 	vector<LogicalType> child_types;
 	result.child_binder->bind_context.GetTypesAndNames(child_names, child_types);
