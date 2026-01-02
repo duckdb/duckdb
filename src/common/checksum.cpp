@@ -67,14 +67,16 @@ hash_t ChecksumRemainder(void *ptr, size_t len) noexcept {
 uint64_t Checksum(uint8_t *buffer, size_t size) {
 	uint64_t result = 5381;
 	uint64_t *ptr = reinterpret_cast<uint64_t *>(buffer);
+	D_ASSERT((cast_pointer_to_uint64(buffer) % sizeof(uint64_t)) == 0);
+
 	size_t i;
 	// for efficiency, we first checksum uint64_t values
-	for (i = 0; i < size / 8; i++) {
+	for (i = 0; i < size / sizeof(uint64_t); i++) {
 		result ^= Checksum(ptr[i]);
 	}
-	if (size - i * 8 > 0) {
+	if (size - i * sizeof(uint64_t) > 0) {
 		// the remaining 0-7 bytes we hash using a string hash
-		result ^= ChecksumRemainder(buffer + i * 8, size - i * 8);
+		result ^= ChecksumRemainder(buffer + i * sizeof(uint64_t), size - i * sizeof(uint64_t));
 	}
 	return result;
 }

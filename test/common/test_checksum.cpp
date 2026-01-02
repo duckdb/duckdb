@@ -10,7 +10,7 @@ using namespace std;
 
 TEST_CASE("Checksum tests", "[checksum]") {
 	// create a buffer
-	int vals[NUM_INTS];
+	uint64_t vals[NUM_INTS];
 	for (size_t i = 0; i < NUM_INTS; i++) {
 		vals[i] = i + 1;
 	}
