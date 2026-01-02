@@ -373,15 +373,22 @@ bind_aggregate_function_t GetBindFunction(const ArgMinMaxNullHandling null_handl
 	}
 }
 
+static void EnableStructArgumentPruning(AggregateFunction &function) {
+	// arg_min/arg_max return the first argument, which may be a struct needing pruning.
+	function.SetStructArgumentPruning(0);
+}
+
 template <class OP>
 AggregateFunction GetGenericArgMinMaxFunction(const ArgMinMaxNullHandling null_handling) {
 	using STATE = ArgMinMaxState<string_t, string_t>;
 	auto bind = GetBindFunction<OP>(null_handling);
-	return AggregateFunction(
+	auto function = AggregateFunction(
 	    {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
 	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>, OP::template Update<STATE>,
 	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind,
 	    AggregateFunction::StateDestroy<STATE, OP>);
+	EnableStructArgumentPruning(function);
+	return function;
 }
 
 template <class OP, class ARG_TYPE, class BY_TYPE>
@@ -390,11 +397,13 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 #ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
 	auto bind = GetBindFunction<OP>(null_handling);
-	return AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
-	                         AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
-	                         OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
-	                         AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind,
-	                         AggregateFunction::StateDestroy<STATE, OP>);
+	auto function = AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
+	                                  AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+	                                  OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+	                                  AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, bind,
+	                                  AggregateFunction::StateDestroy<STATE, OP>);
+	EnableStructArgumentPruning(function);
+	return function;
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.arguments = {type, by_type};
@@ -456,6 +465,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 		function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	}
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
+	EnableStructArgumentPruning(function);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.arguments = {type, by_type};
