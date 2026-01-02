@@ -1137,7 +1137,7 @@ class DataFrame:
 
             df2 = other.select(
                 *[
-                    c if c in df1.relation.columns else
+                    col(c) if c in df1.relation.columns else
                     lit(None).alias(c)
 
                     for c in df1.relation.columns
