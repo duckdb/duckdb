@@ -153,8 +153,8 @@ ScalarFunction StructUpdateFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, nullptr, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.varargs = LogicalType::ANY;
-	fun.serialize = VariableReturnBindData::Serialize;
-	fun.deserialize = VariableReturnBindData::Deserialize;
+	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
+	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;
 }
 

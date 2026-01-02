@@ -11,16 +11,17 @@
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
-
-#include <functional>
+#include "duckdb/common/enums/order_preservation_type.hpp"
 
 namespace duckdb {
 
@@ -110,20 +111,6 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
-};
-
-struct RowGroupOrderOptions {
-	RowGroupOrderOptions(column_t column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
-	                     OrderByColumnType column_type_p, optional_idx row_limit_p = optional_idx())
-	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p),
-	      row_limit(row_limit_p) {
-	}
-
-	const column_t column_idx;
-	const OrderByStatistics order_by;
-	const RowGroupOrderType order_type;
-	const OrderByColumnType column_type;
-	const optional_idx row_limit;
 };
 
 struct TableFunctionInitInput {
@@ -235,6 +222,17 @@ public:
 	const OperatorPartitionInfo &partition_info;
 };
 
+struct TableFunctionGetStatisticsInput {
+public:
+	TableFunctionGetStatisticsInput(const FunctionData *bind_data, const ColumnIndex &column_index)
+	    : bind_data(bind_data), column_index(column_index) {
+	}
+
+public:
+	optional_ptr<const FunctionData> bind_data;
+	ColumnIndex column_index;
+};
+
 struct GetPartitionStatsInput {
 	GetPartitionStatsInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
 	    : table_function(table_function_p), bind_data(bind_data_p) {
@@ -299,6 +297,8 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
                                                                            GlobalTableFunctionState *global_state);
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
+typedef unique_ptr<BaseStatistics> (*table_statistics_extended_t)(ClientContext &context,
+                                                                  TableFunctionGetStatisticsInput &input);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
@@ -313,11 +313,15 @@ typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(co
 
 typedef bool (*table_function_supports_pushdown_type_t)(const FunctionData &bind_data, idx_t col_idx);
 
+typedef bool (*table_function_supports_pushdown_extract_t)(const FunctionData &bind_data, const LogicalIndex &col_idx);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
+typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
+                                               LocalTableFunctionState &local_state);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
@@ -370,6 +374,28 @@ public:
 	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 
+	bool HasBindCallback() const {
+		return bind != nullptr;
+	}
+	table_function_bind_t GetBindCallback() const {
+		return bind;
+	}
+	bool HasSerializationCallbacks() const {
+		return serialize != nullptr && deserialize != nullptr;
+	}
+	void SetSerializeCallback(table_function_serialize_t callback) {
+		serialize = callback;
+	}
+	void SetDeserializeCallback(table_function_deserialize_t callback) {
+		deserialize = callback;
+	}
+	table_function_serialize_t GetSerializeCallback() const {
+		return serialize;
+	}
+	table_function_deserialize_t GetDeserializeCallback() const {
+		return deserialize;
+	}
+
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
@@ -401,12 +427,17 @@ public:
 	//! (Optional) statistics function
 	//! Returns the statistics of a specified column
 	table_statistics_t statistics;
+	//! (Optional) statistics function fed a ColumnIndex instead of a column_t
+	//! Returns the statistics of a specified column
+	table_statistics_extended_t statistics_extended;
 	//! (Optional) dependency function
 	//! Sets up which catalog entries this table function depend on
 	table_function_dependency_t dependency;
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
+	//! (Optional) returns the number of rows that have benn scanned
+	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
@@ -428,6 +459,8 @@ public:
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
 	table_function_supports_pushdown_type_t supports_pushdown_type;
+	//! (Optional) If this scanner supports projection pushdown of struct extracts
+	table_function_supports_pushdown_extract_t supports_pushdown_extract;
 	//! Get partition info of the table
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table
@@ -459,6 +492,8 @@ public:
 	bool late_materialization;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
+	//! The order preservation type of the table function
+	OrderPreservationType order_preservation_type = OrderPreservationType::INSERTION_ORDER;
 
 	//! When to call init_global
 	//! By default init_global is called when the pipeline is ready for execution

@@ -30,6 +30,10 @@ unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddIndex(Binder &binder, Table
 
 BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
                                          unique_ptr<AlterInfo> alter_info) {
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		throw BinderException("Cannot execute the `ALTER TABLE` statement on `%s`, only `Table` entries are accepted.",
+		                      CatalogTypeToString(entry.type));
+	}
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &table = entry.Cast<TableCatalogEntry>();
@@ -81,7 +85,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (stmt.info->type == AlterType::ALTER_DATABASE) {
 		auto &properties = GetStatementProperties();
 		properties.return_type = StatementReturnType::NOTHING;
-		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context);
+		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context, DatabaseModificationType::ALTER_TABLE);
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}
@@ -114,7 +118,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	}
 	if (!entry->temporary) {
 		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context);
+		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
 	stmt.info->catalog = catalog.GetName();
 	stmt.info->schema = entry->ParentSchema().name;

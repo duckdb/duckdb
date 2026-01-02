@@ -85,8 +85,9 @@ public:
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context) const;
-	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
+	                            const vector<ColumnIndex> &column_indexes);
+	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -97,6 +98,8 @@ public:
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
+	void FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,
+	                    idx_t fetch_count, ColumnFetchState &state);
 	//! Returns true, if the transaction can fetch the row ID.
 	bool CanFetch(DuckTransaction &transaction, const row_t row_id);
 
@@ -159,7 +162,7 @@ public:
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Fetches an append lock
-	void AppendLock(TableAppendState &state);
+	void AppendLock(DuckTransaction &transaction, TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
@@ -187,16 +190,17 @@ public:
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
 	                                 DataChunk &table_chunk, DataChunk &index_chunk,
 	                                 const vector<StorageIndex> &mapped_column_ids, row_t row_start,
-	                                 const IndexAppendMode index_append_mode);
+	                                 const IndexAppendMode index_append_mode, optional_idx active_checkpoint);
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
 	                          DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
-	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
-	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
-	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
-	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
+	//! Revert a previous append made to indexes in a chunk with the row ids [row_start, ..., row_start + chunk.size()]
+	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start);
+	//! Revert a previous append made to indexes with the given row-ids
+	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
@@ -215,15 +219,13 @@ public:
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	//! Obtains a shared lock to prevent checkpointing while operations are running
-	unique_ptr<StorageLockKey> GetSharedCheckpointLock();
 	//! Obtains a lock during a checkpoint operation that prevents other threads from reading this table
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer

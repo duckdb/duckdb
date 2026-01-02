@@ -44,7 +44,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -84,9 +84,11 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Install
       shell: bash
@@ -119,9 +121,12 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/cleanup_runner
+
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
@@ -153,7 +158,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -195,7 +200,7 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -224,7 +229,7 @@ jobs:
      needs: linux-memory-leaks
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -253,7 +258,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -285,23 +290,18 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Cleanup disk before build
-        run: |
-          echo "Disk usage before clean up:"
-          df -h
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          docker system prune -af || true
-          rm -rf ~/.cache
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          echo "Disk usage after clean up:"
-          df -h
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - name: Checkout duckdb-httpfs
+        uses: actions/checkout@v4
+        with:
+          repository: duckdb/duckdb-httpfs
+          submodules: 'true'
+          path: duckdb-httpfs
 
       - name: Install
         shell: bash
@@ -326,15 +326,17 @@ jobs:
         run: CORE_EXTENSIONS="tpch" make
 
       - name: Start Minio
+        working-directory: ${{ github.workspace }}/duckdb-httpfs
         shell: bash
         run: |
+          export PATH="${{ github.workspace }}/build/release:$PATH"
           sudo ./scripts/install_s3_test_server.sh
           ./scripts/generate_presigned_url.sh
           source ./scripts/run_s3_test_server.sh
           source ./scripts/set_s3_test_server_variables.sh
           sleep 60
 
-      - name: Build
+      - name: Run Extension Medata Tests
         shell: bash
         run: |
           ./scripts/run_extension_medata_tests.sh
@@ -353,12 +355,12 @@ jobs:
 
    steps:
      - name: Checkout
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
      - name: Checkout tools repo
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
          path: unsafe
@@ -429,9 +431,11 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
@@ -468,7 +472,7 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -506,9 +510,11 @@ jobs:
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
@@ -553,7 +559,7 @@ jobs:
         git submodule update
         git rm -r submodules/duckdb
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         path: duckdb-wasm/submodules/duckdb
@@ -616,9 +622,11 @@ jobs:
      DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
 
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash

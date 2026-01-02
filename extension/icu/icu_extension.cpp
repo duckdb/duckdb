@@ -199,8 +199,8 @@ static ScalarFunction GetICUCollateFunction(const string &collation, const strin
 	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
-	result.serialize = IcuBindData::Serialize;
-	result.deserialize = IcuBindData::Deserialize;
+	result.SetSerializeCallback(IcuBindData::Serialize);
+	result.SetDeserializeCallback(IcuBindData::Deserialize);
 	return result;
 }
 
@@ -230,8 +230,16 @@ static string NormalizeTimeZone(const string &tz_str) {
 		}
 
 		idx_t pos = 3;
-		const auto sign = tz_str[pos++];
-		if (sign != '+' && sign != '-') {
+		const auto utc = tz_str[pos++];
+		// Invert the sign (UTC and Etc use opposite sign conventions)
+		// https://en.wikipedia.org/wiki/Tz_database#Area
+		auto sign = utc;
+		if (utc == '+') {
+			sign = '-';
+			;
+		} else if (utc == '-') {
+			sign = '+';
+		} else {
 			break;
 		}
 
@@ -423,12 +431,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto locales = icu::Collator::getAvailableLocales(count);
 	for (int32_t i = 0; i < count; i++) {
 		string collation;
-		if (string(locales[i].getCountry()).empty()) {
+		const auto &locale = locales[i]; // NOLINT
+		if (string(locale.getCountry()).empty()) {
 			// language only
-			collation = locales[i].getLanguage();
+			collation = locale.getLanguage();
 		} else {
 			// language + country
-			collation = locales[i].getLanguage() + string("_") + locales[i].getCountry();
+			collation = locale.getLanguage() + string("_") + locale.getCountry();
 		}
 		collation = StringUtil::Lower(collation);
 

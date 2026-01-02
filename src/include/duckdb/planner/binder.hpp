@@ -70,7 +70,7 @@ struct CopyInfo;
 struct CopyOption;
 struct BoundSetOpChild;
 struct BoundCTEData;
-
+enum class CopyToType : uint8_t;
 template <class T, class INDEX_TYPE>
 class IndexVector;
 

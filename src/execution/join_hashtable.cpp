@@ -101,9 +101,9 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	pointer_offset = offsets.back();
 	entry_size = layout_ptr->GetRowWidth();
 
-	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
-	sink_collection =
-	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, radix_bits, layout_ptr->ColumnCount() - 1);
+	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE);
+	sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
+	                                                       radix_bits, layout_ptr->ColumnCount() - 1);
 
 	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout_ptr->GetRowWidth());
 	memset(dead_end.get(), 0, layout_ptr->GetRowWidth());
@@ -715,6 +715,10 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 
 void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataChunkState &chunk_state,
                                  InsertState &insert_state, bool parallel) {
+	// Insert Hashes into the BF
+	if (bloom_filter.IsInitialized()) {
+		bloom_filter.InsertHashes(hashes_v, count);
+	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);
 	auto row_locations = chunk_state.row_locations;
 	if (parallel) {
@@ -731,6 +735,10 @@ void JoinHashTable::AllocatePointerTable() {
 	constexpr uint64_t MAX_HASHTABLE_CAPACITY = (1ULL << 48) - 1;
 	if (capacity >= MAX_HASHTABLE_CAPACITY) {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
+	}
+
+	if (should_build_bloom_filter) {
+		bloom_filter.Initialize(context, Count());
 	}
 
 	if (hash_map.get()) {
@@ -1452,6 +1460,23 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 	return key_count;
 }
 
+idx_t JoinHashTable::ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const {
+	// nothing to scan if the build side is empty
+	if (data_collection->ChunkCount() == 0) {
+		return 0;
+	}
+	D_ASSERT(result.GetType() == layout_ptr->GetTypes()[column_index]);
+	JoinHTScanState join_ht_state(*data_collection, 0, data_collection->ChunkCount(),
+	                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	auto key_count = FillWithHTOffsets(join_ht_state, addresses);
+	if (key_count == 0) {
+		return 0;
+	}
+	const auto &sel = *FlatVector::IncrementalSelectionVector();
+	data_collection->Gather(addresses, sel, key_count, column_index, result, sel, nullptr);
+	return key_count;
+}
+
 idx_t JoinHashTable::GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
                                   idx_t &max_partition_size, idx_t &max_partition_count) const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
@@ -1533,8 +1558,8 @@ void JoinHashTable::SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t
 		}
 	}
 	radix_bits += added_bits;
-	sink_collection =
-	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, radix_bits, layout_ptr->ColumnCount() - 1);
+	sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
+	                                                       radix_bits, layout_ptr->ColumnCount() - 1);
 
 	// Need to initialize again after changing the number of bits
 	InitializePartitionMasks();
@@ -1564,8 +1589,8 @@ idx_t JoinHashTable::FinishedPartitionCount() const {
 }
 
 void JoinHashTable::Repartition(JoinHashTable &global_ht) {
-	auto new_sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, global_ht.radix_bits,
-	                                                                layout_ptr->ColumnCount() - 1);
+	auto new_sink_collection = make_uniq<RadixPartitionedTupleData>(
+	    buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, global_ht.radix_bits, layout_ptr->ColumnCount() - 1);
 	sink_collection->Repartition(context, *new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);

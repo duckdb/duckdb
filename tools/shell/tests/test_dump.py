@@ -144,7 +144,7 @@ def test_dump_quoted_schema(shell):
     )
     result = test.run()
     result.check_stdout('CREATE SCHEMA IF NOT EXISTS "my-schema";')
-    result.check_stdout('CREATE TABLE IF NOT EXISTS "my-schema"."my-table"(a INTEGER);')
+    result.check_stdout('CREATE TABLE "my-schema"."my-table"(a INTEGER);')
 
 def test_dump_if_not_exists(shell):
     test = (

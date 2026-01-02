@@ -311,9 +311,9 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	                   LambdaFunctions::ListReduceFunction, ListReduceBind, nullptr, nullptr);
 
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.serialize = ListLambdaBindData::Serialize;
-	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.bind_lambda = ListReduceBindLambda;
+	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
+	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
+	fun.SetBindLambdaCallback(ListReduceBindLambda);
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);

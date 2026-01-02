@@ -154,8 +154,8 @@ void WindowSegmentTree::Finalize(ExecutionContext &context, CollectionPtr collec
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
                                              unique_ptr<WindowCursor> cursor_p, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
-      order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT),
-      filter_mask(filter_mask), state_size(aggr.function.state_size(aggr.function)),
+      order_insensitive(aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT),
+      filter_mask(filter_mask), state_size(aggr.function.GetStateSizeCallback()(aggr.function)),
       state(state_size * STANDARD_VECTOR_SIZE), cursor(std::move(cursor_p)), statep(LogicalType::POINTER),
       statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {
 	auto &inputs = cursor->chunk;
@@ -197,11 +197,12 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	if (combining) {
 		statel.Verify(flush_count);
-		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
+		aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 	} else {
 		auto &scanned = cursor->chunk;
 		leaves.Slice(scanned, filter_sel, flush_count);
-		aggr.function.update(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep, flush_count);
+		aggr.function.GetStateUpdateCallback()(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep,
+		                                       flush_count);
 	}
 
 	flush_count = 0;
@@ -209,7 +210,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 
 void WindowSegmentTreePart::Combine(WindowSegmentTreePart &other, idx_t count) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.combine(other.statef, statef, aggr_input_data, count);
+	aggr.function.GetStateCombineCallback()(other.statef, statef, aggr_input_data, count);
 }
 
 void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t state_ptr) {
@@ -280,11 +281,11 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates and write to result if write_result is set
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
+	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
-	if (aggr.function.destructor) {
-		aggr.function.destructor(statef, aggr_input_data, count);
+	if (aggr.function.HasStateDestructorCallback()) {
+		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
 	}
 }
 
@@ -456,7 +457,7 @@ void WindowSegmentTreePart::Initialize(idx_t count) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	for (idx_t rid = 0; rid < count; ++rid) {
 		auto state_ptr = fdata[rid];
-		aggr.function.initialize(aggr.function, state_ptr);
+		aggr.function.GetStateInitCallback()(aggr.function, state_ptr);
 	}
 }
 

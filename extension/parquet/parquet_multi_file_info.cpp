@@ -299,7 +299,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		}
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
-		auto is_valid = metadata_entry->IsValid(file);
+		const auto is_valid = metadata_entry->IsValid(file, context);
 		if (is_valid != ParquetCacheValidity::VALID) {
 			return result;
 		}
@@ -525,17 +525,18 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 
 shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	auto result = make_uniq<ParquetUnionData>(file);
+	result->names.reserve(columns.size());
+	result->types.reserve(columns.size());
 	for (auto &column : columns) {
 		result->names.push_back(column.name);
 		result->types.push_back(column.type);
 	}
+
+	result->options = parquet_options;
+	result->metadata = metadata;
 	if (file_idx == 0) {
-		result->options = parquet_options;
-		result->metadata = metadata;
 		result->reader = shared_from_this();
 	} else {
-		result->options = std::move(parquet_options);
-		result->metadata = std::move(metadata);
 		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);

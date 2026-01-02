@@ -21,6 +21,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>();
 	auto qname = TransformQualifiedName(*stmt.into->rel);
+	if (qname.name.empty()) {
+		throw ParserException("Empty table name not supported");
+	}
 	auto query = TransformSelectStmt(*stmt.query, false);
 
 	// push a LIMIT 0 if 'WITH NO DATA' is specified

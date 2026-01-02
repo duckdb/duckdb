@@ -55,6 +55,9 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
 
 public:
 public:
@@ -74,6 +77,7 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
+	mutable mutex lock;
 	std::unordered_map<std::string, EncryptionKey> derived_keys;
 };
 

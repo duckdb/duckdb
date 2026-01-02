@@ -97,6 +97,8 @@ public:
 
 	//! Interrupt execution of a query
 	DUCKDB_API void Interrupt();
+	DUCKDB_API bool IsInterrupted() const;
+	DUCKDB_API void ClearInterrupt();
 	DUCKDB_API void CancelTransaction();
 
 	//! Enable query profiling

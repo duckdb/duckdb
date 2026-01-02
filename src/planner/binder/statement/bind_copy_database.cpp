@@ -126,7 +126,11 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
-	properties.RegisterDBModify(target_catalog, context);
+
+	DatabaseModificationType modification;
+	modification |= DatabaseModificationType::INSERT_DATA;
+	modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
+	properties.RegisterDBModify(target_catalog, context, modification);
 	return result;
 }
 

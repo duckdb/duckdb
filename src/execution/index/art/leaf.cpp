@@ -88,8 +88,8 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(arena, leaf.row_ids[i]);
-			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr,
-			                                         IndexAppendMode::INSERT_DUPLICATES);
+			auto conflict_type = ARTOperator::Insert(arena, art, root, row_id, 0, row_id, GateStatus::GATE_SET,
+			                                         DeleteIndexInfo(), IndexAppendMode::INSERT_DUPLICATES);
 			if (conflict_type != ARTConflictType::NO_CONFLICT) {
 				throw InternalException("invalid conflict type in Leaf::TransformToNested");
 			}
@@ -190,18 +190,28 @@ void Leaf::DeprecatedVacuum(ART &art, Node &node) {
 	}
 }
 
-string Leaf::DeprecatedToString(ART &art, const Node &node) {
+string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options) {
+	auto indent = [](string &str, const idx_t n) {
+		str.append(n, ' ');
+	};
 	string str = "";
+
+	if (!options.print_deprecated_leaves) {
+		indent(str, options.indent_level);
+		str += "[deprecated leaves]\n";
+		return str;
+	}
+
 	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
-
+		indent(str, options.indent_level);
 		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			str += to_string(leaf.row_ids[i]) + "-";
 		}
-		str += "] ";
+		str += "]\n";
 		ref = leaf.ptr;
 	}
 

@@ -8,6 +8,9 @@ SET profiling_mode='standard';
 statement ok
 SET profiling_mode='detailed';
 
+statement ok
+SET profiling_mode='all';
+
 statement error
 SET profiling_mode='unknown';
 ----

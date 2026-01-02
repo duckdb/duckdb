@@ -9,21 +9,6 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context, optional_ptr<Co
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
-	if (!result.HasError() || !column_alias_binder) {
-		return result;
-	}
-
-	BindResult alias_result;
-	auto found_alias = column_alias_binder->BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
-	if (found_alias) {
-		return alias_result;
-	}
-
-	return result;
-}
-
 BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
@@ -31,8 +16,6 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 		return BindUnsupportedExpression(expr, depth, "WHERE clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
 		return BindUnsupportedExpression(expr, depth, "WHERE clause cannot contain window functions!");
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
@@ -42,9 +25,17 @@ string WhereBinder::UnsupportedAggregateMessage() {
 	return "WHERE clause cannot contain aggregates!";
 }
 
-bool WhereBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+bool WhereBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
+                                           BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+	if (!column_alias_binder) {
+		return false;
+	}
+	return column_alias_binder->BindAlias(*this, expr_ptr, depth, root_expression, result);
+}
+
+bool WhereBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
 	if (column_alias_binder) {
-		return column_alias_binder->QualifyColumnAlias(colref);
+		return column_alias_binder->DoesColumnAliasExist(colref);
 	}
 	return false;
 }

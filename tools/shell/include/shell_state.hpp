@@ -29,8 +29,7 @@ using duckdb::unique_ptr;
 using duckdb::vector;
 struct ColumnarResult;
 struct RowResult;
-class ColumnRenderer;
-class RowRenderer;
+class ShellRenderer;
 using duckdb::atomic;
 using duckdb::ErrorData;
 using duckdb::KeywordHelper;
@@ -47,6 +46,8 @@ struct Prompt;
 struct ShellProgressBar;
 struct PagerState;
 struct ShellTableInfo;
+struct RenderingQueryResult;
+enum class HighlightElementType : uint32_t;
 
 using idx_t = uint64_t;
 
@@ -99,6 +100,7 @@ enum class ReadLineVersion { LINENOISE, FALLBACK };
 enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
+enum class HighlightMode : uint32_t { AUTOMATIC, MIXED_MODE, DARK_MODE, LIGHT_MODE };
 
 enum class ExecuteSQLSingleValueResult {
 	SUCCESS,
@@ -185,6 +187,8 @@ public:
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! The maximum number of rows to analyze in order to determine column widths in DuckBox mode
+	idx_t max_analyze_rows = 0;
 	//! Decimal separator (if any)
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)
@@ -200,6 +204,8 @@ public:
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	//! If the following flag is set, then command execution stops at an error
 	bool bail_on_error = false;
+	//! Table name when rendering a DESCRIBE statement
+	string describe_table_name;
 
 	/*
 	** Treat stdin as an interactive input if the following variable
@@ -241,10 +247,18 @@ public:
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
 	unique_ptr<Prompt> main_prompt;
-	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
-	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Continuation prompt
+	char continuePrompt[MAX_PROMPT_SIZE];
+	//! Selected continuation prompt
+	char continuePromptSelected[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available up
+	char scrollUpPrompt[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available down
+	char scrollDownPrompt[MAX_PROMPT_SIZE];
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
+	//! User-configured highlight elements
+	duckdb::unordered_set<HighlightElementType> user_configured_elements;
 
 #ifdef HAVE_LINENOISE
 	ReadLineVersion rl_version = ReadLineVersion::LINENOISE;
@@ -258,10 +272,10 @@ public:
 	string pager_command;
 	// In automatic mode, only show a pager when this row count is exceeded
 	idx_t pager_min_rows = 50;
-	// In automatic mode, only show a pager when this column count is exceeded
-	idx_t pager_min_columns = 5;
 	//! Whether or not the pager is currently active
 	bool pager_is_active = false;
+	//! Shell highlighting mode
+	HighlightMode highlight_mode = HighlightMode::AUTOMATIC;
 
 #if defined(_WIN32) || defined(WIN32)
 	//! When enabled, sets the console page to UTF8 and renders using that code page
@@ -276,19 +290,9 @@ public:
 	void PushOutputMode();
 	void PopOutputMode();
 	void OutputCSV(const char *z, int bSep);
-	void PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth);
-	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<duckdb::LogicalType> &colTypes,
-	                            const vector<idx_t> &actualWidth);
-	void OutputCString(const char *z);
-	void OutputQuotedString(const char *z);
-	void OutputQuotedEscapedString(const char *z);
-	void OutputHexBlob(const void *pBlob, int nBlob);
-	void PrintSchemaLine(const char *z, const char *zTail);
-	void PrintSchemaLineN(char *z, int n, const char *zTail);
-	void PrintOptionallyQuotedIdentifier(const char *z);
-	void OutputJSONString(const char *z, int n);
-	void PrintDashes(idx_t N);
-	void UTF8WidthPrint(idx_t w, const string &str, bool right_align);
+	string EscapeCString(const string &z);
+	string GetSchemaLine(const string &str, const string &tail);
+	string GetSchemaLineN(const string &str, idx_t n, const string &tail);
 	bool SetOutputMode(const string &mode, const char *tbl_name);
 	bool ImportData(const vector<string> &args);
 	bool OpenDatabase(const vector<string> &args);
@@ -298,19 +302,24 @@ public:
 	MetadataResult DisplayEntries(const vector<string> &args, char type);
 	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
+	void ClearInterrupt();
 
-	static idx_t RenderLength(const char *z);
+	static idx_t RenderLength(const char *str, idx_t str_len);
+	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
 	static bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
+	void Print(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str);
+	void Print(PrintOutput output, duckdb::string_t str);
 	void Print(PrintOutput output, const string &str);
+	void Print(const char *str, idx_t len);
+	void Print(duckdb::string_t str);
 	void Print(const char *str);
 	void Print(const string &str);
-	void PrintPadded(const char *str, idx_t len);
 	template <typename... ARGS>
 	void PrintF(PrintOutput stream, const string &str, ARGS... params) {
 		Print(stream, StringUtil::Format(str, params...));
@@ -320,23 +329,16 @@ public:
 		PrintF(PrintOutput::STDOUT, str, std::forward<ARGS>(params)...);
 	}
 	bool ColumnTypeIsInteger(const char *type);
-	void ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result);
-	unique_ptr<ColumnRenderer> GetColumnRenderer();
-	unique_ptr<RowRenderer> GetRowRenderer();
-	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
-	void RenderColumnarResult(duckdb::QueryResult &res);
+	unique_ptr<ShellRenderer> GetRenderer();
+	unique_ptr<ShellRenderer> GetRenderer(RenderMode mode);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
-	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
-	SuccessState RenderDescribe(duckdb::QueryResult &res);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
 	int RunInitialCommand(const char *sql, bool bail);
 	void AddError();
-
-	int RenderRow(RowRenderer &renderer, RowResult &result);
 
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
@@ -356,9 +358,10 @@ public:
 		shellFlgs &= ~static_cast<uint32_t>(flag);
 	}
 	void ResetOutput();
-	bool ShouldUsePager(duckdb::QueryResult &result);
+	bool ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result);
 	bool ShouldUsePager();
 	bool ShouldUsePager(idx_t line_count);
+	idx_t GetMaxRenderWidth() const;
 	string GetSystemPager();
 	unique_ptr<PagerState> SetupPager();
 	static void StartPagerDisplay();
@@ -389,6 +392,7 @@ public:
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
 	void PrintUsage();
+	void DetectDarkLightMode();
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
@@ -407,8 +411,9 @@ public:
 	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
-	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
-	SuccessState RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &result);
+	SuccessState RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite);
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result,
+	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 
@@ -426,9 +431,6 @@ public:
 private:
 	ShellState();
 	~ShellState();
-
-private:
-	string describe_table_name;
 };
 
 struct PagerState {

@@ -10,9 +10,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
-#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/error_data.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -74,6 +73,18 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
+	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
+	                                      BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+		return false;
+	}
+
+	virtual bool DoesColumnAliasExist(const ColumnRefExpression &colref) {
+		return false;
+	}
+
+	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
+	static bool IsPotentialAlias(const ColumnRefExpression &colref);
+
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
@@ -133,9 +144,6 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
-	virtual bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result);
-	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
-
 	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -165,7 +173,8 @@ protected:
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression,
+	                          unique_ptr<ParsedExpression> &expr_ptr);
 	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);

@@ -149,7 +149,7 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 
 static const CommandLineOption command_line_options[] = {
     {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
-    {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error'"},
+    {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error"},
     {"batch", 0, "", EnableBatch, EnableBatch, "force batch I/O'"},
     {"box", 0, "", nullptr, ToggleOutputMode<RenderMode::BOX>, "set output mode to 'box'"},
     {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
@@ -160,7 +160,7 @@ static const CommandLineOption command_line_options[] = {
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
-    {"help", 0, "", PrintHelpAndExit, nullptr, "show this message"},
+    {"help", 0, "", EnableBatch, PrintHelpAndExit, "show this message"},
     {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
@@ -208,15 +208,15 @@ optional_ptr<const CommandLineOption> ShellState::FindCommandLineOption(const st
 	}
 	if (!c.IsValid()) {
 		// not found
-		string error = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", option);
+		error_msg = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", option);
 		vector<string> option_names;
 		for (idx_t c = 0; command_line_options[c].option; c++) {
 			auto &option = command_line_options[c];
 			option_names.push_back(string("-") + option.option);
 		}
 		auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, "-" + option, "Did you mean");
-		error += candidates_msg + "\n";
-		error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+		error_msg += candidates_msg + "\n";
+		error_msg += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
 		return nullptr;
 	}
 	return command_line_options[c.GetIndex()];

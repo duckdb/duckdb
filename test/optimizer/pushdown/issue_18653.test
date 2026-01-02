@@ -18,7 +18,7 @@ select id, value
 from test_table
 cross join unnest(values) as values(value) where id = 87100;
 ----
-analyzed_plan	<REGEX>:.*LEFT_DELIM_JOIN.*FILTER.*
+analyzed_plan	<REGEX>:.*DELIM_JOIN.*FILTER.*
 
 query II
 select id, value
@@ -36,7 +36,7 @@ from test_table t
 left join lateral unnest(t.values) as value on true
 where id = 87100;
 ----
-analyzed_plan	<REGEX>:.*LEFT_DELIM_JOIN.*FILTER.*
+analyzed_plan	<REGEX>:.*DELIM_JOIN.*FILTER.*
 
 require json
 
@@ -49,10 +49,25 @@ statement ok
 create index test_table2_id_idx on test_table2(id);
 
 query II
+select t.id,  value
+from test_table2 t
+cross join json_each(t.values) as kv(key, value)
+where t.id = 87100
+order by all;
+----
+87100	1
+87100	2
+87100	3
+
+query II
 explain analyze
 select t.id, key, value
 from test_table2 t
 cross join json_each(t.values) as kv(key, value)
 where t.id = 87100;
 ----
-analyzed_plan	<REGEX>:.*LEFT_DELIM_JOIN.*Filters:.*id=87100.*
+analyzed_plan	<REGEX>:.*DELIM_JOIN.*Filters:.*id=87100.*
+
+
+
+

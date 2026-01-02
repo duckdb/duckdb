@@ -28,7 +28,7 @@ bool BoundFunctionExpression::IsConsistent() const {
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
-	if (function.bind_lambda) {
+	if (function.HasBindLambdaCallback()) {
 		// This is a lambda function
 		D_ASSERT(bind_info);
 		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
@@ -116,12 +116,12 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
 
-	if (entry.first.bind_expression) {
+	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression
 		auto &context = deserializer.Get<ClientContext &>();
 		auto bind_input = FunctionBindExpressionInput(context, entry.second, children);
 		// replace the function expression with the bound expression
-		auto bound_expression = entry.first.bind_expression(bind_input);
+		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
 		if (bound_expression) {
 			return bound_expression;
 		}

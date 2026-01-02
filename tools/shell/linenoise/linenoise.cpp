@@ -34,8 +34,6 @@
 namespace duckdb {
 
 static linenoiseCompletionCallback *completionCallback = NULL;
-static linenoiseHintsCallback *hintsCallback = NULL;
-static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 
 int linenoiseHistoryAdd(const char *line);
 
@@ -44,26 +42,6 @@ int linenoiseHistoryAdd(const char *line);
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
-}
-
-/* Register a hits function to be called to show hits to the user at the
- * right of the prompt. */
-void Linenoise::SetHintsCallback(linenoiseHintsCallback *fn) {
-	hintsCallback = fn;
-}
-
-/* Register a function to free the hints returned by the hints callback
- * registered with linenoiseSetHintsCallback(). */
-void Linenoise::SetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
-	freeHintsCallback = fn;
-}
-
-linenoiseHintsCallback *Linenoise::HintsCallback() {
-	return hintsCallback;
-}
-
-linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
-	return freeHintsCallback;
 }
 
 CompletionType Linenoise::GetCompletionType(const char *type) {
@@ -204,6 +182,12 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 					completion_idx = (completion_idx.GetIndex() + 1) % completions.size();
 				}
 				render_completion_suggestion = true;
+				break;
+			case CTRL_C:
+				// ctrl + c cancels auto-complete
+				next_key.action = KEY_NULL;
+				accept_completion = false;
+				stop = true;
 				break;
 			case ESC: { /* escape */
 				switch (key_press.sequence) {
@@ -416,8 +400,7 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 	PositionToColAndRow(plen, buf, len, target_pos, out_row, out_col, rows, cols);
 }
 
-size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
-	int plen = GetPromptWidth();
+size_t Linenoise::ColAndRowToPosition(int plen, const char *buf, idx_t len, int target_row, int target_col) const {
 	int rows = 1;
 	int cols = plen;
 	size_t last_cpos = 0;
@@ -442,6 +425,11 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 		NextPosition(buf, len, cpos, rows, cols, plen);
 	}
 	return cpos;
+}
+
+size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
+	int plen = GetPromptWidth();
+	return ColAndRowToPosition(plen, buf, len, target_row, target_col);
 }
 
 /* Insert the character 'c' at cursor current position.
@@ -828,6 +816,22 @@ void Linenoise::EditDeleteAll() {
 	RefreshLine();
 }
 
+void Linenoise::SetCursorPosition(int x, int y) {
+	int current_row, current_col, cols, rows;
+	// key presses are *relative to the current cursor*
+	// first get the current cursor location
+	PositionToColAndRow(pos, current_row, current_col, rows, cols);
+	// adjust the location based on the provided x / y
+	current_col += x;
+	current_row += y;
+	if (current_col < 0 || current_row < 0 || current_row > rows) {
+		// out of bounds - ignore
+		return;
+	}
+	pos = ColAndRowToPosition(current_row, current_col);
+	RefreshLine();
+}
+
 void Linenoise::EditCapitalizeNextWord(Capitalization capitalization) {
 	size_t next_pos = pos;
 
@@ -1098,8 +1102,8 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
-	completion_idx = optional_idx();
 	rendered_completion_lines = 0;
+	completion_idx = optional_idx();
 	render_completion_suggestion = false;
 
 	/* Buffer starts empty. */
@@ -1136,7 +1140,37 @@ void Linenoise::HandleTerminalResize() {
 		}
 		PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, cursor_row, cursor_col, rows, cols);
 		rendered_completion_lines = rows;
+		maxrows += rows;
 	}
+}
+
+BufferedKeyPresses::BufferedKeyPresses() {
+}
+
+BufferedKeyPresses &BufferedKeyPresses::Get() {
+	static BufferedKeyPresses buffered_key_presses;
+	return buffered_key_presses;
+}
+
+void BufferedKeyPresses::BufferKeyPress(KeyPress key_press) {
+	auto &instance = Get();
+	instance.remaining_presses.push(key_press);
+}
+
+bool BufferedKeyPresses::TryGetKeyPress(KeyPress &result) {
+	auto &instance = Get();
+	if (instance.remaining_presses.empty()) {
+		return false;
+	}
+	result = instance.remaining_presses.front();
+	instance.remaining_presses.pop();
+	Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(instance.remaining_presses.size()));
+	return true;
+}
+
+bool BufferedKeyPresses::HasMoreData() {
+	auto &instance = Get();
+	return !instance.remaining_presses.empty();
 }
 
 #if defined(_WIN32) || defined(WIN32)
@@ -1157,15 +1191,12 @@ struct KeyPressEntry {
 #endif
 
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
-#if defined(_WIN32) || defined(WIN32)
-	if (!remaining_presses.empty()) {
+	if (BufferedKeyPresses::TryGetKeyPress(key_press)) {
 		// there are still characters left to consume
-		key_press = remaining_presses.back();
-		remaining_presses.pop_back();
-		Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(remaining_presses.size()));
-		has_more_data = !remaining_presses.empty();
+		has_more_data = BufferedKeyPresses::HasMoreData();
 		return true;
 	}
+#if defined(_WIN32) || defined(WIN32)
 	INPUT_RECORD rec;
 	DWORD count;
 	has_more_data = false;
@@ -1287,13 +1318,11 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 		return false;
 	}
 	// we have key actions - turn them into KeyPress objects
-	// first invert the list
-	std::reverse(key_presses.begin(), key_presses.end());
 	// now process the key presses
 	for (auto &key_action : key_presses) {
 		if (!key_action.is_unicode) {
 			// standard key press - just add it
-			remaining_presses.push_back(key_action.key_press);
+			BufferedKeyPresses::BufferKeyPress(key_action.key_press);
 			continue;
 		}
 		auto allocate_size = key_action.unicode.size() * 10;
@@ -1306,8 +1335,8 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 		                              data.get(),                 // Output buffer
 		                              allocate_size,              // Output buffer size
 		                              NULL, NULL);
-		// process the characters in REVERSE order and add the key presses
-		for (int i = len - 1; i >= 0; i--) {
+		// process the characters in ORDER and add the key presses
+		for (int i = 0; i < len; i++) {
 			char c = data[i];
 			key_press.sequence = EscapeSequence::INVALID;
 			if (c > 0 && c <= BACKSPACE) {
@@ -1335,15 +1364,17 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 			} else {
 				key_press.action = c;
 			}
-			remaining_presses.push_back(key_press);
+			BufferedKeyPresses::BufferKeyPress(key_press);
 		}
 	}
 
 	// emit the first key press on the stack
-	key_press = remaining_presses.back();
-	remaining_presses.pop_back();
-	has_more_data = !remaining_presses.empty();
-	return true;
+	if (BufferedKeyPresses::TryGetKeyPress(key_press)) {
+		// there are still characters left to consume
+		has_more_data = BufferedKeyPresses::HasMoreData();
+		return true;
+	}
+	return false;
 
 #else
 	char c;
@@ -1360,7 +1391,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 	key_press.action = c;
 	if (key_press.action == ESC) {
 		// for ESC we need to read an escape sequence
-		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
+		key_press.sequence = Terminal::ReadEscapeSequence(ifd, key_press);
 	}
 	return true;
 #endif
@@ -1504,14 +1535,6 @@ int Linenoise::Edit() {
 				} else {
 					EditMoveEnd();
 				}
-			}
-			if (hintsCallback) {
-				/* Force a refresh without hints to leave the previous
-				 * line as the user typed it after a newline. */
-				linenoiseHintsCallback *hc = hintsCallback;
-				hintsCallback = NULL;
-				RefreshLine();
-				hintsCallback = hc;
 			}
 			// rewrite \r\n to \n
 			idx_t new_len = 0;
@@ -1664,6 +1687,10 @@ int Linenoise::Edit() {
 			case EscapeSequence::DELETE_KEY:
 				EditDelete();
 				break;
+			case EscapeSequence::MOUSE_CLICK:
+				// mouse click
+				SetCursorPosition(key_press.position.ws_col, key_press.position.ws_row);
+				break;
 			default:
 				Linenoise::Log("Unrecognized escape\n");
 				break;
@@ -1694,6 +1721,9 @@ int Linenoise::Edit() {
 			break;
 		case CTRL_X: /* ctrl+x, insert newline */
 			EditInsertMulti("\r\n");
+			break;
+		case CTRL_Q: /* ctrl+q enables mouse tracking for a single click */
+			Terminal::EnableMouseTracking();
 			break;
 		case CTRL_Y:
 			// unsupported

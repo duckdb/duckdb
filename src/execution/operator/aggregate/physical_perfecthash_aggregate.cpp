@@ -37,7 +37,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		bindings.push_back(&aggr);
 
 		D_ASSERT(!aggr.IsDistinct());
-		D_ASSERT(aggr.function.combine);
+		D_ASSERT(aggr.function.HasStateCombineCallback());
 		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);
 		}

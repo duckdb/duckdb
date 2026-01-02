@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/winapi.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_lock.hpp"
@@ -54,6 +55,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API idx_t SeekPosition();
+	DUCKDB_API void Seek(idx_t location);
 
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
@@ -86,8 +89,8 @@ private:
 	OpenFileInfo path;
 	//! Flags used to open the file
 	FileOpenFlags flags;
-	//! Whether to validate the cache entry
-	bool validate;
+	//! Cache validation mode for this file
+	CacheValidationMode validate;
 	//! The associated CachedFile with cached ranges
 	CachedFile &cached_file;
 
@@ -109,6 +112,7 @@ private:
 	friend struct CachingFileHandle;
 
 public:
+	// Notice, the provided [file_system] should be a raw, non-caching filesystem.
 	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 	DUCKDB_API ~CachingFileSystem();
 
@@ -124,6 +128,8 @@ private:
 	FileSystem &file_system;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
+	//! The DatabaseInstance.
+	DatabaseInstance &db;
 };
 
 } // namespace duckdb

@@ -84,10 +84,19 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
+	string extension = "";
+	if (FileSystem::IsRemoteFile(info.path, extension)) {
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
+	}
+
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
 		// Start timing the ATTACH-delay step.
-		auto profiler = context.client_data->profiler;
-		profiler->StartTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+		auto profiler = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
 
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
@@ -95,7 +104,6 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			auto &meta_transaction = MetaTransaction::Get(context);
 			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
 			if (existing_db) {
-				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				// it does! return it
 				return existing_db;
 			}
@@ -106,17 +114,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			auto entry = databases.find(info.name);
 			if (entry != databases.end()) {
 				// The database ACTUALLY exists, so we return it.
-				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				return entry->second;
 			}
 			if (context.interrupted) {
-				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				throw InterruptException();
 			}
 		}
-		profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 	}
-
 	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
 	if (!options.db_type.empty()) {
@@ -127,17 +131,10 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
-	string extension = "";
-	if (FileSystem::IsRemoteFile(info.path, extension)) {
+	if (!extension.empty()) {
 		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
 			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", info.path,
 			                                extension);
-		}
-		if (options.access_mode == AccessMode::AUTOMATIC) {
-			// Attaching of remote files gets bumped to READ_ONLY
-			// This is due to the fact that on most (all?) remote files writes to DB are not available
-			// and having this raised later is not super helpful
-			options.access_mode = AccessMode::READ_ONLY;
 		}
 	}
 
@@ -211,6 +208,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 
 	attached_db->OnDetach(context);
+
+	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
+	AttachedDatabase::InvokeCloseIfLastReference(attached_db);
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
@@ -319,7 +319,8 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	if (config.storage_extensions.find(options.db_type) != config.storage_extensions.end()) {
+	auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+	if (config.storage_extensions.find(extension_name) != config.storage_extensions.end()) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
@@ -396,10 +397,10 @@ vector<shared_ptr<AttachedDatabase>> DatabaseManager::GetDatabases() {
 	return result;
 }
 
-void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
-	auto databases = GetDatabases();
-	for (auto &entry : databases) {
-		entry->Close();
+void DatabaseManager::ResetDatabases() {
+	auto shared_db_pointers = GetDatabases();
+	for (auto &entry : shared_db_pointers) {
+		entry->Close(DatabaseCloseAction::TRY_CHECKPOINT);
 		entry.reset();
 	}
 }

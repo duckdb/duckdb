@@ -17,11 +17,12 @@ void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses,
 	for (const auto &aggr : layout.GetAggregates()) {
 		if (sel.IsSet()) {
 			for (idx_t i = 0; i < count; ++i) {
-				aggr.function.initialize(aggr.function, pointers[sel.get_index_unsafe(i)] + offsets[aggr_idx]);
+				aggr.function.GetStateInitCallback()(aggr.function,
+				                                     pointers[sel.get_index_unsafe(i)] + offsets[aggr_idx]);
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i) {
-				aggr.function.initialize(aggr.function, pointers[i] + offsets[aggr_idx]);
+				aggr.function.GetStateInitCallback()(aggr.function, pointers[i] + offsets[aggr_idx]);
 			}
 		}
 		++aggr_idx;
@@ -35,9 +36,9 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 	//	Move to the first aggregate state
 	VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()), count);
 	for (const auto &aggr : layout.GetAggregates()) {
-		if (aggr.function.destructor) {
+		if (aggr.function.HasStateDestructorCallback()) {
 			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-			aggr.function.destructor(addresses, aggr_input_data, count);
+			aggr.function.GetStateDestructorCallback()(addresses, aggr_input_data, count);
 		}
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggr.payload_size), count);
@@ -47,8 +48,8 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
                                  DataChunk &payload, idx_t arg_idx, idx_t count) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data, aggr.child_count,
-	                     addresses, count);
+	aggr.function.GetStateUpdateCallback()(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data,
+	                                       aggr.child_count, addresses, count);
 }
 
 void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data,
@@ -78,10 +79,10 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 	idx_t offset = layout.GetAggrOffset();
 
 	for (auto &aggr : layout.GetAggregates()) {
-		D_ASSERT(aggr.function.combine);
+		D_ASSERT(aggr.function.HasStateCombineCallback());
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
-		aggr.function.combine(sources, targets, aggr_input_data, count);
+		aggr.function.GetStateCombineCallback()(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, UnsafeNumericCast<int64_t>(aggr.payload_size), count);
@@ -113,7 +114,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-		aggr.function.finalize(addresses_copy, aggr_input_data, target, result.size(), 0);
+		aggr.function.GetStateFinalizeCallback()(addresses_copy, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(aggr.payload_size), result.size());

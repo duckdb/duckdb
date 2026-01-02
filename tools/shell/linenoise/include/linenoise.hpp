@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/queue.hpp"
 #include "terminal.hpp"
 #include "linenoise.h"
 
@@ -67,6 +68,24 @@ struct TabCompletion {
 	vector<Completion> completions;
 };
 
+enum class RenderTruncation { NO_TRUNCATE, TRUNCATE_TOP, TRUNCATE_BOTTOM, TRUNCATE_BOTH };
+
+struct BufferedKeyPresses {
+public:
+	static BufferedKeyPresses &Get();
+
+	static void BufferKeyPress(KeyPress key_press);
+	static bool TryGetKeyPress(KeyPress &result);
+	static bool HasMoreData();
+
+private:
+	//! Remaining key presses that haven't been consumed yet
+	queue<KeyPress> remaining_presses;
+
+private:
+	BufferedKeyPresses();
+};
+
 class Linenoise {
 public:
 	Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt);
@@ -75,13 +94,9 @@ public:
 	int Edit();
 
 	static void SetCompletionCallback(linenoiseCompletionCallback *fn);
-	static void SetHintsCallback(linenoiseHintsCallback *fn);
-	static void SetFreeHintsCallback(linenoiseFreeHintsCallback *fn);
 
-	static linenoiseHintsCallback *HintsCallback();
-	static linenoiseFreeHintsCallback *FreeHintsCallback();
-
-	static void SetPrompt(const char *continuation, const char *continuationSelected);
+	static void SetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUpPrompt,
+	                      const char *scrollDownPrompt);
 	static size_t ComputeRenderWidth(const char *buf, size_t len);
 	static int GetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 
@@ -114,6 +129,7 @@ public:
 	void EditRemoveSpaces();
 	void EditSwapCharacter();
 	void EditSwapWord();
+	void SetCursorPosition(int x, int y);
 
 	void StartSearch();
 	void CancelSearch();
@@ -132,7 +148,6 @@ public:
 	void RefreshMultiLine();
 	void RefreshSingleLine() const;
 	void RefreshSearch();
-	void RefreshShowHints(AppendBuffer &append_buffer, int plen) const;
 
 	size_t PrevChar() const;
 	size_t NextChar() const;
@@ -141,11 +156,12 @@ public:
 	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const;
 	void PositionToColAndRow(int plen, const char *buf, idx_t len, size_t target_pos, int &out_row, int &out_col,
 	                         int &rows, int &cols) const;
+	size_t ColAndRowToPosition(int plen, const char *buf, idx_t len, int target_row, int target_col) const;
 	size_t ColAndRowToPosition(int target_row, int target_col) const;
 	static bool HandleANSIEscape(const char *buf, size_t len, size_t &cpos);
 
-	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
-	                              vector<highlightToken> &tokens) const;
+	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row, idx_t rows_to_render,
+	                              vector<highlightToken> &tokens, RenderTruncation truncation) const;
 	void AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
 
 	bool AddCompletionMarker(const char *buf, idx_t len, string &result_buffer, vector<highlightToken> &tokens) const;
@@ -219,7 +235,6 @@ public:
 	optional_idx completion_idx;             //! Index in set of tab completions
 	idx_t rendered_completion_lines;         //! The number of completion lines rendered
 	bool render_completion_suggestion;       //! Whether or not to render auto-complete suggestions
-	vector<KeyPress> remaining_presses;      //! Remaining key presses that haven't been consumed yet
 };
 
 } // namespace duckdb

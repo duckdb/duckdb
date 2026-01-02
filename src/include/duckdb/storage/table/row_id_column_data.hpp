@@ -36,8 +36,8 @@ public:
 	                     bool allow_updates) override;
 
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-	              idx_t result_idx) override;
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
+	              Vector &result, idx_t result_idx) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
@@ -54,7 +54,7 @@ public:
 	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
 	                  idx_t row_group_start) override;
 
-	void CommitDropColumn() override;
+	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;

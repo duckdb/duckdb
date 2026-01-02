@@ -1,0 +1,73 @@
+# name: test/sql/storage/types/variant/test_all_types_single_table.test
+# group: [variant]
+
+load __TEST_DIR__/variant_test_all_types_single_table.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table tbl (col VARIANT)
+
+foreach col <all_types_columns>
+
+statement ok
+insert into tbl select "${col}"::VARIANT from test_all_types()
+
+statement ok
+checkpoint
+
+endloop
+
+statement ok
+checkpoint
+
+restart
+
+query I nosort expected_res
+select * from tbl
+----
+
+loop i 0 40
+
+statement ok
+set variable my_type = (
+	select column_type from (
+		describe from test_all_types()
+	)
+	where
+		column_type NOT ILIKE '%union%' AND
+		column_type NOT ILIKE '%enum%' AND
+		column_type NOT ILIKE '%map%'
+	limit 1 offset ${i}
+);
+
+statement ok
+SET force_variant_shredding = getvariable('my_type');
+
+statement ok
+create or replace table "tbl2" as select * from tbl;
+
+statement ok
+checkpoint
+
+query I nosort expected_res
+select * from "tbl2";
+----
+
+endloop
+
+# Never shred
+statement ok
+SET variant_minimum_shredding_size = -1;
+
+statement ok
+create or replace table "tbl2" as select * from tbl;
+
+statement ok
+checkpoint
+
+query I nosort expected_res
+select * from "tbl2";
+----

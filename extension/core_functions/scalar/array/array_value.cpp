@@ -74,6 +74,7 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		list_child_stats.Merge(child_stats[i]);
 	}
+	list_stats.SetHasNoNullFast();
 	return list_stats.ToUnique();
 }
 

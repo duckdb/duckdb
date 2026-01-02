@@ -19,6 +19,14 @@ public:
 	TableInOutGlobalState() {
 	}
 
+	idx_t MaxThreads(idx_t source_max_threads) override {
+		// If no state assume maximum parallelism as the source.
+		if (!global_state) {
+			return source_max_threads;
+		}
+		return global_state->MaxThreads();
+	}
+
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 

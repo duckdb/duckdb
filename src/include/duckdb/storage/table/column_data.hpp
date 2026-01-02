@@ -96,7 +96,7 @@ public:
 	}
 
 	bool HasParent() const {
-		return parent != nullptr;
+		return parent;
 	}
 	void SetParent(optional_ptr<ColumnData> parent) {
 		this->parent = parent;
@@ -167,8 +167,8 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-	                      idx_t result_idx);
+	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	                      row_t row_id, Vector &result, idx_t result_idx);
 
 	virtual void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
 	                    row_t *row_ids, idx_t update_count, idx_t row_group_start);
@@ -177,7 +177,7 @@ public:
 	                          idx_t row_group_start);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
-	virtual void CommitDropColumn();
+	virtual void VisitBlockIds(BlockIdVisitor &visitor) const;
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
@@ -198,7 +198,7 @@ public:
 	                                  vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
-	FilterPropagateResult CheckZonemap(TableFilter &filter);
+	FilterPropagateResult CheckZonemap(const StorageIndex &index, TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           const LogicalType &type,
@@ -207,7 +207,7 @@ public:
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics();
+	unique_ptr<BaseStatistics> GetStatistics() const;
 
 protected:
 	//! Append a transient segment
@@ -277,8 +277,9 @@ public:
 };
 
 struct PersistentColumnData {
-	explicit PersistentColumnData(PhysicalType physical_type);
-	PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers);
+public:
+	explicit PersistentColumnData(const LogicalType &logical_type);
+	PersistentColumnData(const LogicalType &logical_type, vector<DataPointer> pointers);
 	// disable copy constructors
 	PersistentColumnData(const PersistentColumnData &other) = delete;
 	PersistentColumnData &operator=(const PersistentColumnData &) = delete;
@@ -287,16 +288,21 @@ struct PersistentColumnData {
 	PersistentColumnData &operator=(PersistentColumnData &&) = default;
 	~PersistentColumnData();
 
-	PhysicalType physical_type;
-	vector<DataPointer> pointers;
-	vector<PersistentColumnData> child_columns;
-	bool has_updates = false;
-
+public:
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
 	bool HasUpdates() const;
+	void SetVariantShreddedType(const LogicalType &shredded_type);
+
+public:
+	PhysicalType physical_type;
+	LogicalTypeId logical_type_id;
+	vector<DataPointer> pointers;
+	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
+	LogicalType variant_shredded_type;
 };
 
 struct PersistentRowGroupData {

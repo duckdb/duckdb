@@ -66,6 +66,7 @@ public:
 
 	void SetDisabledFileSystems(const vector<string> &names) override;
 	bool SubSystemIsDisabled(const string &name) override;
+	bool IsDisabledForPath(const string &path) override;
 
 	string PathSeparator(const string &path) override;
 

@@ -51,8 +51,8 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	                                           table_data_writer);
 }
 
-CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
-	return checkpoint_manager.GetCheckpointType();
+CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {
+	return checkpoint_manager.GetCheckpointOptions();
 }
 
 MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
@@ -62,6 +62,10 @@ MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
 void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
 	existing_pointer = pointer;
 	existing_rows = total_rows;
+}
+
+void SingleFileTableDataWriter::FlushPartialBlocks() {
+	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
@@ -114,11 +118,13 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
-	case_insensitive_map_t<Value> options;
+	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
-		options.emplace("v1_0_0_storage", v1_0_0_storage);
+		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
+	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
+
+	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
 	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
 	if (debug_verify_blocks) {

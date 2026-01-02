@@ -1165,6 +1165,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				load_db_path = string();
 			}
+			auto initial_db = test_config.GetInitialDBPath();
+			if (!initial_db.empty() && !is_read_only && (!db || db->instance->config.options.database_path.empty())) {
+				load_db_path = initial_db;
+			}
 
 			auto command = make_uniq<LoadCommand>(*this, load_db_path, is_read_only, version);
 			ExecuteCommand(std::move(command));

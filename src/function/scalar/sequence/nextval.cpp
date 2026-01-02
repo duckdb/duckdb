@@ -132,7 +132,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 		return;
 	}
 	auto &seq = input.bind_data->Cast<NextvalBindData>();
-	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context);
+	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context, DatabaseModificationType::SEQUENCE);
 }
 
 } // namespace
@@ -140,11 +140,11 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
-	next_val.bind_extended = NextValBind;
-	next_val.serialize = Serialize;
-	next_val.deserialize = Deserialize;
-	next_val.get_modified_databases = NextValModifiedDatabases;
-	next_val.init_local_state = NextValLocalFunction;
+	next_val.SetBindExtendedCallback(NextValBind);
+	next_val.SetSerializeCallback(Serialize);
+	next_val.SetDeserializeCallback(Deserialize);
+	next_val.SetModifiedDatabasesCallback(NextValModifiedDatabases);
+	next_val.SetInitStateCallback(NextValLocalFunction);
 	next_val.SetVolatile();
 	next_val.SetFallible();
 	return next_val;
@@ -153,10 +153,10 @@ ScalarFunction NextvalFun::GetFunction() {
 ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
-	curr_val.bind_extended = NextValBind;
-	curr_val.serialize = Serialize;
-	curr_val.deserialize = Deserialize;
-	curr_val.init_local_state = NextValLocalFunction;
+	curr_val.SetBindExtendedCallback(NextValBind);
+	curr_val.SetSerializeCallback(Serialize);
+	curr_val.SetDeserializeCallback(Deserialize);
+	curr_val.SetInitStateCallback(NextValLocalFunction);
 	curr_val.SetVolatile();
 	curr_val.SetFallible();
 	return curr_val;

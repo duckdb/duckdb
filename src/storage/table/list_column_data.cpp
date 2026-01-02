@@ -60,8 +60,8 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(LogicalType::UBIGINT, 1);
-	auto index_in_segment = UnsafeNumericCast<row_t>(row_idx - segment->row_start);
-	segment->node->FetchRow(fetch_state, index_in_segment, result, 0U);
+	auto index_in_segment = UnsafeNumericCast<row_t>(row_idx - segment->GetRowStart());
+	segment->GetNode().FetchRow(fetch_state, index_in_segment, result, 0U);
 
 	// initialize the child scan with the required offset
 	return FlatVector::GetData<uint64_t>(result)[0];
@@ -281,8 +281,8 @@ unique_ptr<BaseStatistics> ListColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                              idx_t result_idx) {
+void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                              row_t row_id, Vector &result, idx_t result_idx) {
 	// insert any child states that are required
 	// we need two (validity & list child)
 	// note that we need a scan state for the child vector
@@ -295,7 +295,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// now perform the fetch within the segment
 	auto start_offset = row_id == 0 ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	auto &validity_mask = FlatVector::Validity(result);
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
@@ -326,10 +326,10 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	}
 }
 
-void ListColumnData::CommitDropColumn() {
-	ColumnData::CommitDropColumn();
-	validity->CommitDropColumn();
-	child_column->CommitDropColumn();
+void ListColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	ColumnData::VisitBlockIds(visitor);
+	validity->VisitBlockIds(visitor);
+	child_column->VisitBlockIds(visitor);
 }
 
 void ListColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
@@ -377,6 +377,7 @@ public:
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
+		stats.Merge(*validity_state->GetStatistics());
 		ListStats::SetChildStats(stats, child_state->GetStatistics());
 		return stats.ToUnique();
 	}

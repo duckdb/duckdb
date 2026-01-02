@@ -39,7 +39,6 @@ jobs:
     - name: Build with cov-build
       run: cov-analysis-linux64/bin/cov-build --dir cov-int make
       env:
-        BUILD_TPCE: 1
         CORE_EXTENSIONS: "autocomplete;icu;tpcds;tpch;fts;httpfs;json;inet"
 
     - name: Upload the result

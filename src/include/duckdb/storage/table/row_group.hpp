@@ -19,7 +19,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -37,6 +37,7 @@ class TableStatistics;
 struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
+struct PartitionStatistics;
 struct PersistentColumnData;
 struct PersistentRowGroupData;
 struct RowGroupPointer;
@@ -56,7 +57,7 @@ enum class ColumnDataType;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
-	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT);
+	                  CheckpointOptions options = CheckpointOptions());
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
 	                  vector<unique_ptr<PartialBlockManager>> &column_partial_block_managers_p);
 
@@ -65,7 +66,7 @@ private:
 
 public:
 	const vector<CompressionType> &compression_types;
-	CheckpointType checkpoint_type;
+	CheckpointOptions options;
 
 public:
 	PartialBlockManager &GetPartialBlockManager(idx_t column_idx);
@@ -79,7 +80,9 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
+	bool should_checkpoint = true;
 	vector<idx_t> existing_extra_metadata_blocks;
+	optional_idx write_count;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -112,10 +115,6 @@ public:
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
-	//! Returns the list of meta block pointers used by the deletes
-	const vector<MetaBlockPointer> &GetDeletesPointers() const {
-		return deletes_pointers;
-	}
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
 
@@ -144,6 +143,8 @@ public:
 	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
 
+	//! Whether or not this RowGroup should be
+	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
 	                            SelectionVector &sel_vector, idx_t max_count);
@@ -192,10 +193,11 @@ public:
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	void MergeIntoStatistics(TableStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
+	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
+	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats(idx_t row_group_start) const;
+	PartitionStatistics GetPartitionStats(idx_t row_group_start);
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
@@ -215,9 +217,13 @@ public:
 	idx_t GetRowGroupSize() const;
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
+	idx_t GetColumnCount() const;
+
+	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
+	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
 	void SetVersionInfo(shared_ptr<RowVersionManager> version);
@@ -225,15 +231,12 @@ private:
 	ColumnData &GetColumn(storage_t c) const;
 	void LoadColumn(storage_t c) const;
 	ColumnData &GetColumn(const StorageIndex &c) const;
-	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 

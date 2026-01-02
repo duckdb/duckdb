@@ -174,6 +174,15 @@ void MetaTransaction::Rollback() {
 	}
 }
 
+void MetaTransaction::Finalize() {
+	// Try to checkpoint any attached databases potentially still held by this transaction.
+	for (auto &database : referenced_databases) {
+		// If the use count is down to one, then we already detached the database.
+		// That means new transactions can no longer obtain a shared pointer to it.
+		AttachedDatabase::InvokeCloseIfLastReference(database.second);
+	}
+}
+
 idx_t MetaTransaction::GetActiveQuery() {
 	return active_query;
 }
@@ -226,7 +235,7 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	return db_ref;
 }
 
-void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
+void MetaTransaction::ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification) {
 	if (IsReadOnly()) {
 		throw TransactionException("Cannot write to database \"%s\" - transaction is launched in read-only mode",
 		                           db.GetName());
@@ -235,6 +244,7 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	if (transaction.IsReadOnly()) {
 		transaction.SetReadWrite();
 	}
+	transaction.SetModifications(modification);
 	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases
 		return;

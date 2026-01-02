@@ -31,7 +31,7 @@ unique_ptr<ParsedExpression> HavingBinder::QualifyColumnName(ColumnRefExpression
 	if (group_index != DConstants::INVALID_INDEX) {
 		return qualified_colref;
 	}
-	if (column_alias_binder.QualifyColumnAlias(colref)) {
+	if (column_alias_binder.DoesColumnAliasExist(colref)) {
 		return nullptr;
 	}
 	return qualified_colref;

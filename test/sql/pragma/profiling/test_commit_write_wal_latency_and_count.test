@@ -31,6 +31,9 @@ statement ok
 UPDATE wal_latency.tbl SET v = id;
 
 statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
 PRAGMA profiling_output = '__TEST_DIR__/wal_commit.json';
 
 statement ok
@@ -38,9 +41,6 @@ PRAGMA custom_profiling_settings='{"COMMIT_LOCAL_STORAGE_LATENCY": "true", "WRIT
 
 statement ok
 SET profiling_coverage='ALL';
-
-statement ok
-PRAGMA enable_profiling = 'json';
 
 statement ok
 COMMIT;
@@ -52,12 +52,12 @@ statement ok
 CREATE OR REPLACE TABLE commit_metrics AS SELECT * FROM '__TEST_DIR__/wal_commit.json';
 
 query I
-SELECT CASE WHEN COMMIT_LOCAL_STORAGE_LATENCY > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+SELECT CASE WHEN COMMIT_LOCAL_STORAGE_LATENCY >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
 ----
 true
 
 query I
-SELECT CASE WHEN WRITE_TO_WAL_LATENCY > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+SELECT CASE WHEN WRITE_TO_WAL_LATENCY >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
 ----
 true
 

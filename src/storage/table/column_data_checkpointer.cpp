@@ -85,7 +85,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
-		auto &segment = *segment_node.node;
+		auto &segment = segment_node.GetNode();
 		ColumnScanState scan_state(nullptr);
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
@@ -94,7 +94,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.offset_in_column = segment_node.row_start + base_row_index;
+			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
@@ -249,13 +249,24 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
 
 		auto &best_function = *functions[compression_idx];
-		DUCKDB_LOG_INFO(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
-		                EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
-		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
+		DUCKDB_LOG_TRACE(db, "ColumnDataCheckpointer FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
+		                 EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
+		                 col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;
 }
+
+struct CheckpointBlockIdDropper : public BlockIdVisitor {
+	explicit CheckpointBlockIdDropper(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockAsModified(block_id);
+	}
+
+	BlockManager &manager;
+};
 
 void ColumnDataCheckpointer::DropSegments() {
 	// first we check the current segments
@@ -267,8 +278,9 @@ void ColumnDataCheckpointer::DropSegments() {
 		auto &col_data = state.get().original_column;
 
 		// Drop the segments, as we'll be replacing them with new ones, because there are changes
+		CheckpointBlockIdDropper dropper(storage_manager.GetBlockManager());
 		for (auto &segment : col_data.data.Segments()) {
-			segment.CommitDropSegment();
+			segment.VisitBlockIds(dropper);
 		}
 	}
 }
@@ -282,10 +294,8 @@ bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeR
 	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 }
 
-void ColumnDataCheckpointer::WriteToDisk() {
-	DropSegments();
-
-	// Analyze the candidate functions to select one of them to use for compression
+void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions to select one of them to use for
+	                                         // compression
 	auto analyze_result = DetectBestCompressionMethod();
 	if (ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
@@ -308,8 +318,8 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &col_data = checkpoint_state.get().GetResultColumn();
 
-		checkpoint_data[i] = ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group,
-		                                              checkpoint_info, storage_manager);
+		checkpoint_data[i] =
+		    ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group, storage_manager);
 		compression_states[i] = function->init_compression(checkpoint_data[i], std::move(analyze_state));
 	}
 
@@ -328,6 +338,13 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &compression_state = compression_states[i];
 		function->compress_finalize(*compression_state);
 	}
+
+	// after we finish checkpointing we can drop this segment
+	DropSegments();
+}
+
+bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
+	return col_data.HasAnyChanges();
 }
 
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
@@ -339,8 +356,8 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	optional_idx error_segment_start;
 	idx_t current_row = 0;
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
-		auto &segment = *segment_node.node;
-		auto segment_start = segment_node.row_start;
+		auto &segment = segment_node.GetNode();
+		auto segment_start = segment_node.GetRowStart();
 		if (segment_start != current_row) {
 			error_segment_start = segment_start;
 			break;
@@ -356,7 +373,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		string extra_info;
 		for (auto &s : col_data.data.SegmentNodes()) {
 			extra_info += "\n";
-			extra_info += StringUtil::Format("Start %d, count %d", s.row_start, s.node->count.load());
+			extra_info += StringUtil::Format("Start %d, count %d", s.GetRowStart(), s.GetNode().count.load());
 		}
 		throw InternalException(
 		    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
@@ -366,6 +383,17 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		    col_data.type, col_data.info.GetSchemaName(), col_data.info.GetTableName(), extra_info);
 	}
 }
+
+struct CheckpointBlockIdMarker : public BlockIdVisitor {
+	explicit CheckpointBlockIdMarker(BlockManager &manager) : manager(manager) {
+	}
+
+	void Visit(block_id_t block_id) override {
+		manager.MarkBlockACheckpointed(block_id);
+	}
+
+	BlockManager &manager;
+};
 
 void ColumnDataCheckpointer::Checkpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
@@ -380,6 +408,13 @@ void ColumnDataCheckpointer::Checkpoint() {
 	if (!has_changes) {
 		// Nothing has undergone any changes, no need to checkpoint
 		// just move on to finalizing
+		// mark block ids as checkpointed
+		CheckpointBlockIdMarker marker(storage_manager.GetBlockManager());
+		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+			auto &state = checkpoint_states[i];
+			auto &col_data = state.get().original_column;
+			col_data.VisitBlockIds(marker);
+		}
 		return;
 	}
 

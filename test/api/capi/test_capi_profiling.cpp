@@ -42,22 +42,22 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		auto value_str = duckdb::string(value_c_str);
 
 		if (depth == 0) {
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_CARDINALITY));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_ROWS_SCANNED));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TIMING));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_NAME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TYPE));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_CARDINALITY));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_ROWS_SCANNED));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TIMING));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_NAME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TYPE));
 		} else {
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::QUERY_NAME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::BLOCKED_THREAD_TIME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::LATENCY));
-			REQUIRE(key_str != EnumUtil::ToString(MetricsType::ROWS_RETURNED));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::QUERY_NAME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::BLOCKED_THREAD_TIME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::LATENCY));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::ROWS_RETURNED));
 		}
 
-		if (key_str == EnumUtil::ToString(MetricsType::QUERY_NAME) ||
-		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_NAME) ||
-		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_TYPE) ||
-		    key_str == EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
+		if (key_str == EnumUtil::ToString(MetricType::QUERY_NAME) ||
+		    key_str == EnumUtil::ToString(MetricType::OPERATOR_NAME) ||
+		    key_str == EnumUtil::ToString(MetricType::OPERATOR_TYPE) ||
+		    key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
 			REQUIRE(!value_str.empty());
 		} else {
 			double result = 0;
@@ -298,7 +298,7 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 		auto value_c_str = duckdb_get_varchar(value);
 		auto value_str = duckdb::string(value_c_str);
 
-		if (key_str == EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
+		if (key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
 			REQUIRE(value_str.find("__order_by__"));
 			REQUIRE(value_str.find("ASC"));
 			found_extra_info = true;

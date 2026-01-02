@@ -137,7 +137,22 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBCon
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
                                                         bool cache_instance,
                                                         const std::function<void(DuckDB &)> &on_create) {
+	auto cache_behavior = cache_instance ? CacheBehavior::ALWAYS_CACHE : CacheBehavior::NEVER_CACHE;
+	return GetOrCreateInstance(database, config_dict, cache_behavior, on_create);
+}
+
+shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
+                                                        CacheBehavior cache_behavior,
+                                                        const std::function<void(DuckDB &)> &on_create) {
 	unique_lock<mutex> lock(cache_lock, std::defer_lock);
+	bool cache_instance = cache_behavior == CacheBehavior::ALWAYS_CACHE;
+	if (cache_behavior == CacheBehavior::AUTOMATIC) {
+		// cache all unnamed in-memory connections
+		cache_instance = true;
+		if (database == IN_MEMORY_PATH || database.empty()) {
+			cache_instance = false;
+		}
+	}
 	if (cache_instance) {
 		// While we do not own the lock, we cannot definitively say that the database instance does not exist.
 		while (!lock.owns_lock()) {

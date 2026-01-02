@@ -909,6 +909,22 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
 	}
+
+	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
+	// Throw an error about the schema instead of the table
+	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		string schema_name = lookups[0].schema;
+		if (!IsInvalidSchema(schema_name)) {
+			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
+			string relation_name = schema_name + "." + lookup_info.GetEntryName();
+			auto except =
+			    CatalogException(schema_lookup.GetErrorContext(),
+			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
+			                     relation_name, schema_name);
+			return {nullptr, nullptr, ErrorData(except)};
+		}
+	}
+
 	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
 	// otherwise.
 	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {

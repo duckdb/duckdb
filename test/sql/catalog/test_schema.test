@@ -76,4 +76,53 @@ ROLLBACK;
 statement error con2
 SELECT * FROM test.hello
 ----
-Table with name hello does not exist
+Catalog Error: Table with name "test.hello" does not exist because schema "test" does not exist.
+
+statement error
+SELECT COUNT(*) FROM non_exist_schema.data
+----
+Catalog Error: Table with name "non_exist_schema.data" does not exist because schema "non_exist_schema" does not exist.
+
+statement ok
+SET catalog_error_max_schemas = 0;
+
+statement error
+SELECT COUNT(*) FROM nonexistent_schema.some_table
+----
+Catalog Error: Table with name "nonexistent_schema.some_table" does not exist because schema "nonexistent_schema" does not exist.
+
+statement ok
+ATTACH ':memory:' AS test_catalog;
+
+
+statement ok
+CREATE TABLE test_catalog.main.existing_table(i INTEGER);
+
+statement error
+SELECT COUNT(*) FROM test_catalog.nonexistent_schema.some_table
+----
+Catalog Error: Table with name "nonexistent_schema.some_table" does not exist because schema "nonexistent_schema" does not exist.
+
+statement error
+SELECT COUNT(*) FROM test_catalog.main.nonexistent_table
+----
+Catalog Error: Table with name nonexistent_table does not exist!
+
+statement error
+SELECT * FROM test_catalog.missing_schema.missing_table
+----
+Catalog Error: Table with name "missing_schema.missing_table" does not exist because schema "missing_schema" does not exist.
+
+statement ok
+ATTACH ':memory:' AS another_catalog;
+
+statement error
+SELECT COUNT(*) FROM another_catalog.invalid_schema.table_name
+----
+Catalog Error: Table with name "invalid_schema.table_name" does not exist because schema "invalid_schema" does not exist.
+
+statement ok
+DETACH test_catalog;
+
+statement ok
+DETACH another_catalog;

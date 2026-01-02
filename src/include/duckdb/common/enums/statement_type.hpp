@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/enums/database_modification_type.hpp"
 
 namespace duckdb {
 
@@ -86,10 +87,15 @@ struct StatementProperties {
 		}
 	};
 
+	struct ModificationInfo {
+		CatalogIdentity identity;
+		DatabaseModificationType modifications;
+	};
+
 	//! The set of databases this statement will read from
 	unordered_map<string, CatalogIdentity> read_databases;
 	//! The set of databases this statement will modify
-	unordered_map<string, CatalogIdentity> modified_databases;
+	unordered_map<string, ModificationInfo> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
 	//! exception of ROLLBACK
 	bool requires_valid_transaction;
@@ -109,8 +115,7 @@ struct StatementProperties {
 	}
 
 	void RegisterDBRead(Catalog &catalog, ClientContext &context);
-
-	void RegisterDBModify(Catalog &catalog, ClientContext &context);
+	void RegisterDBModify(Catalog &catalog, ClientContext &context, DatabaseModificationType modification);
 };
 
 } // namespace duckdb

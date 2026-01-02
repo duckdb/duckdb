@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression_binder.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -8,6 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::COLLATE:
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression, expr);
 	case ExpressionClass::LAMBDA_REF:
 		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
@@ -166,7 +166,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		}
 		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
 		candidates.insert(candidate);
-		scores.emplace_back(make_pair(std::move(candidate), score));
+		scores.emplace_back(std::move(candidate), score);
 	}
 	// get a new top-n
 	auto top_candidates = StringUtil::TopNStrings(scores);
@@ -398,7 +398,14 @@ bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
-bool ExpressionBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
+	// traditional alias (unqualified), or qualified with table name "alias"
+	if (!colref.IsQualified()) {
+		return true;
+	}
+	if (colref.column_names.size() == 2) {
+		return StringUtil::CIEquals(colref.GetTableName(), "alias");
+	}
 	return false;
 }
 
