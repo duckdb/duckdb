@@ -529,7 +529,9 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 		}
 
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-			auto &[child_byte, child_ptr] = children[child_idx];
+			auto &child_entry = children[child_idx];
+			auto child_byte = child_entry.first;
+			auto &child_ptr = child_entry.second;
 			auto is_last = (child_idx == children.size() - 1);
 			auto on_path = !has_expected_byte || (has_expected_byte && child_byte == expected_byte);
 
@@ -578,8 +580,7 @@ string Node::ToString(ART &art, const ToStringOptions &options) const {
 		return options.tree_prefix + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
 	}
 	case NType::LEAF: {
-		auto leaf_options = options;
-		return Leaf::DeprecatedToString(art, *this, leaf_options);
+		return Leaf::DeprecatedToString(art, *this, options);
 	}
 	case NType::PREFIX: {
 		auto prefix_options = options;
