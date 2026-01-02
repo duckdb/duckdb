@@ -563,6 +563,142 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+//===--------------------------------------------------------------------===//
+// OR Clause Pushdown Helpers
+//===--------------------------------------------------------------------===//
+
+// Extract column ref and constant from a simple comparison expression
+// Returns true if successful, with column_ref, const_val, and invert set appropriately
+static bool TryExtractComparisonInfo(Expression &expr, optional_ptr<BoundColumnRefExpression> &column_ref,
+                                     optional_ptr<BoundConstantExpression> &const_val, bool &invert) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+		return false;
+	}
+	auto &comp = expr.Cast<BoundComparisonExpression>();
+	invert = false;
+
+	if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+	    comp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		column_ref = comp.left->Cast<BoundColumnRefExpression>();
+		const_val = comp.right->Cast<BoundConstantExpression>();
+	} else if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	           comp.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		column_ref = comp.right->Cast<BoundColumnRefExpression>();
+		const_val = comp.left->Cast<BoundConstantExpression>();
+		invert = true;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+// Create appropriate TableFilter from a comparison
+// Returns nullptr for null comparisons that should be skipped (no-ops in OR context)
+static unique_ptr<TableFilter> TryCreateFilterFromComparison(ExpressionType comparison_type, const Value &value) {
+	if (value.IsNull()) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return make_uniq<IsNotNullFilter>();
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return make_uniq<IsNullFilter>();
+		default:
+			// x = NULL, x != NULL, etc. are no-ops in OR context
+			return nullptr;
+		}
+	}
+	return make_uniq<ConstantFilter>(comparison_type, value);
+}
+
+// Validate and update column_id for consistency checking across OR branches
+// Returns false if column doesn't match expected column_id
+static bool ValidateColumnConsistency(const BoundColumnRefExpression &column_ref, const vector<ColumnIndex> &column_ids,
+                                      idx_t &column_id, bool is_first_comparison) {
+	idx_t child_column_id = column_ids[column_ref.binding.column_index].GetPrimaryIndex();
+	if (is_first_comparison) {
+		column_id = child_column_id;
+		return true;
+	}
+	return column_id == child_column_id;
+}
+
+// Process a single OR child - can be either a simple comparison or an AND conjunction
+// Returns nullptr on failure, otherwise returns the appropriate TableFilter
+static unique_ptr<TableFilter> TryProcessOrChild(Expression &child, const vector<ColumnIndex> &column_ids,
+                                                 idx_t &column_id, bool is_first_child) {
+	// Case 1: Simple comparison (existing behavior)
+	if (child.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		optional_ptr<BoundColumnRefExpression> column_ref;
+		optional_ptr<BoundConstantExpression> const_val;
+		bool invert = false;
+
+		if (!TryExtractComparisonInfo(child, column_ref, const_val, invert)) {
+			return nullptr;
+		}
+
+		if (!ValidateColumnConsistency(*column_ref, column_ids, column_id, is_first_child)) {
+			return nullptr;
+		}
+
+		auto &comp = child.Cast<BoundComparisonExpression>();
+		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+		return TryCreateFilterFromComparison(comparison_type, const_val->value);
+	}
+
+	// Case 2: AND conjunction (new behavior for complex OR expressions)
+	if (child.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		auto &conj = child.Cast<BoundConjunctionExpression>();
+		if (conj.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
+			return nullptr;
+		}
+		if (conj.children.empty()) {
+			return nullptr;
+		}
+
+		auto and_filter = make_uniq<ConjunctionAndFilter>();
+
+		for (idx_t j = 0; j < conj.children.size(); j++) {
+			auto &and_child = conj.children[j];
+
+			optional_ptr<BoundColumnRefExpression> column_ref;
+			optional_ptr<BoundConstantExpression> const_val;
+			bool invert = false;
+
+			if (!TryExtractComparisonInfo(*and_child, column_ref, const_val, invert)) {
+				return nullptr;
+			}
+
+			// For column consistency: first comparison of first OR child sets the column_id
+			bool is_first_comparison = is_first_child && (j == 0);
+			if (!ValidateColumnConsistency(*column_ref, column_ids, column_id, is_first_comparison)) {
+				return nullptr;
+			}
+
+			auto &comp = and_child->Cast<BoundComparisonExpression>();
+			auto comparison_type =
+			    invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+			auto filter = TryCreateFilterFromComparison(comparison_type, const_val->value);
+			if (filter) {
+				and_filter->child_filters.push_back(std::move(filter));
+			}
+			// Note: null filters that return nullptr are skipped but don't fail the pushdown
+		}
+
+		// An AND filter with no children is invalid
+		if (and_filter->child_filters.empty()) {
+			return nullptr;
+		}
+
+		// An AND filter with a single child can be simplified
+		if (and_filter->child_filters.size() == 1) {
+			return std::move(and_filter->child_filters[0]);
+		}
+
+		return std::move(and_filter);
+	}
+
+	return nullptr;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_filters,
                                                          const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
@@ -572,64 +708,26 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	if (conj.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto conj_filter = make_uniq<ConjunctionOrFilter>();
 	if (conj.children.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+
+	auto conj_filter = make_uniq<ConjunctionOrFilter>();
 	idx_t column_id = 0;
+
 	for (idx_t i = 0; i < conj.children.size(); i++) {
-		auto &child = conj.children[i];
-		if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+		auto child_filter = TryProcessOrChild(*conj.children[i], column_ids, column_id, i == 0);
+		if (!child_filter) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
-		optional_ptr<BoundColumnRefExpression> column_ref;
-		optional_ptr<BoundConstantExpression> const_val;
-		auto &comp = child->Cast<BoundComparisonExpression>();
-		bool invert = false;
-		if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-		    comp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			column_ref = comp.left->Cast<BoundColumnRefExpression>();
-			const_val = comp.right->Cast<BoundConstantExpression>();
-		} else if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-		           comp.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			column_ref = comp.right->Cast<BoundColumnRefExpression>();
-			const_val = comp.left->Cast<BoundConstantExpression>();
-			invert = true;
-		} else {
-			// child of OR filter is not simple so we do not push the or filter down at all
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-
-		if (i == 0) {
-			auto &col_id = column_ids[column_ref->binding.column_index];
-			column_id = col_id.GetPrimaryIndex();
-		} else if (column_id != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
-
-		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
-		if (const_val->value.IsNull()) {
-			switch (comparison_type) {
-			case ExpressionType::COMPARE_DISTINCT_FROM: {
-				auto null_filter = make_uniq<IsNotNullFilter>();
-				conj_filter->child_filters.push_back(std::move(null_filter));
-				break;
-			}
-			case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
-				auto null_filter = make_uniq<IsNullFilter>();
-				conj_filter->child_filters.push_back(std::move(null_filter));
-				break;
-			}
-			default:
-				// if any other comparison type (i.e EQUAL, NOT_EQUAL) do not push a table filter - this is a nop
-				// since x = NULL is always falsey, and this is a chain of OR conditions, we can just ignore it
-				break;
-			}
-		} else {
-			auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
-			conj_filter->child_filters.push_back(std::move(const_filter));
-		}
+		conj_filter->child_filters.push_back(std::move(child_filter));
 	}
+
+	// Don't push if we ended up with empty filters
+	if (conj_filter->child_filters.empty()) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
 	auto optional_filter = make_uniq<OptionalFilter>();
 	optional_filter->child_filter = std::move(conj_filter);
 	table_filters.PushFilter(ColumnIndex(column_id), std::move(optional_filter));
