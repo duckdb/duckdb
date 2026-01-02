@@ -513,18 +513,20 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					// we have not! output the using column
 					if (!using_binding.primary_binding.IsSet()) {
 						// no primary binding: output a coalesce
-						auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+						auto coalesce =
+						    make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding.bindings) {
-							coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, child_binding));
+							coalesce->Cast<OperatorExpression>().children.push_back(
+							    make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->SetAlias(column_name);
-						unique_ptr<ParsedExpression> coalesce = std::move(coalesce);
 						if (HandleRename(expr, qualified_column, coalesce, exclusion_info)) {
 							new_select_list.push_back(std::move(coalesce));
 						}
 					} else {
 						// primary binding: output the qualified column ref
-						auto new_expr = make_uniq<ColumnRefExpression>(column_name, using_binding.primary_binding);
+						auto new_expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(
+						    column_name, using_binding.primary_binding);
 						if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
 							new_select_list.push_back(std::move(new_expr));
 						}
