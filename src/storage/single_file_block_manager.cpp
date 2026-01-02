@@ -370,7 +370,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 			throw InvalidConfigurationException(
 			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
 			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`. "
-			    " To write encrypted database that ar NOT securely encrypted, one can use SET enable_mbedtls = "
+			    " To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = "
 			    "'true'.");
 		}
 	}
@@ -501,11 +501,13 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			//! Encryption is set
 
 			//! Check if our encryption module can write, if not, we should throw here
-			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
+			auto const &config = DBConfig::Get(db);
+			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only && !config.options.enable_mbedtls) {
 				throw InvalidConfigurationException(
 				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
 				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
-				    "httpfs`.");
+				    "httpfs`. To write an encrypted database that is NOT securely encrypted, one can use SET "
+				    "enable_mbedtls = 'true'");
 			}
 
 			//! Check if the given key upon attach is correct

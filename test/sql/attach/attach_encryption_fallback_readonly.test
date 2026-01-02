@@ -16,7 +16,7 @@ set autoinstall_known_extensions=false
 statement error
 ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
-Invalid Configuration Error: The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD httpfs`.
+Invalid Configuration Error: The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD httpfs`. To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = 'true'
 
 # It works again by setting READONLY
 statement ok
@@ -38,7 +38,7 @@ DETACH enc
 statement error
 ATTACH '__TEST_DIR__/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
-Invalid Configuration Error: The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`. To write encrypted database that ar NOT securely encrypted, one can use SET enable_mbedtls = 'true'.
+Invalid Configuration Error: The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = 'true'.
 
 statement ok
 SET enable_mbedtls = 'true'

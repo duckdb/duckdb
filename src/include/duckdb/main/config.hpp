@@ -144,8 +144,6 @@ struct DBConfigOptions {
 	bool enable_external_access = true;
 	//! Enable mbedtls explicitly (overrides OpenSSL if available)
 	bool enable_mbedtls = false;
-	//! Enabl OpenSSL explicitly (overrides mbedtls setting)
-	bool enable_openssl = false;
 	//! Whether or not the global http metadata cache is used
 	bool http_metadata_cache_enable = false;
 	//! HTTP Proxy config as 'hostname:port'

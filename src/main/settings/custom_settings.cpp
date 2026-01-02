@@ -1252,7 +1252,7 @@ void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 		// check if there are attached databases encrypted that are not read only
 		bool encrypted_db_attached = false;
 		for (auto &database : db->GetDatabaseManager().GetDatabases()) {
-			if (database->GetStorageManager().IsEncrypted() && !database->IsReadOnly()) {
+			if (database->HasStorageManager() && database->GetStorageManager().IsEncrypted() && !database->IsReadOnly()) {
 				encrypted_db_attached = true;
 				break;
 			};
