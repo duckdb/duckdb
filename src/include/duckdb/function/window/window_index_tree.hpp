@@ -16,7 +16,7 @@ class WindowIndexTree;
 
 class WindowIndexTreeLocalState : public WindowMergeSortTreeLocalState {
 public:
-	explicit WindowIndexTreeLocalState(WindowIndexTree &index_tree);
+	WindowIndexTreeLocalState(ExecutionContext &context, WindowIndexTree &index_tree);
 
 	//! Process sorted leaf data
 	void BuildLeaves() override;
@@ -33,7 +33,7 @@ public:
 	                const idx_t count);
 	~WindowIndexTree() override = default;
 
-	unique_ptr<WindowAggregatorState> GetLocalState() override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) override;
 
 	//! Find the Nth index in the set of subframes
 	//! Returns {nth index, 0} or {nth offset, overflow}

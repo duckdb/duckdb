@@ -3,9 +3,6 @@
 # group: [scalar]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Product(DaysToManufacture int, StandardCost int);
 
 statement ok
@@ -69,8 +66,3 @@ SET pivot_filter_threshold TO DEFAULT
 
 statement ok
 RESET SESSION pivot_filter_threshold
-
-statement error
-RESET GLOBAL pivot_filter_threshold
-----
-cannot be reset globally

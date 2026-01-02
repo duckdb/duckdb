@@ -1,0 +1,35 @@
+# name: test/sql/logging/file_system_logging_attach_deadlock.test
+# group: [logging]
+
+# We directly compare to the number of bytes written in the last statement,
+# which is the block size.
+require block_size 262144
+
+require parquet
+
+require noforcestorage
+
+require no_alternative_verify
+
+statement ok
+SET memory_limit='1000kb';
+
+statement ok
+SET enable_logging=true;
+
+statement ok
+SET logging_level='trace';
+
+statement ok
+ATTACH '__TEST_DIR__/filehandle_logging.db' AS db;
+
+statement ok
+CREATE TABLE db.test AS SELECT 1;
+
+statement ok
+DETACH db;
+
+statement error
+SELECT * FROM duckdb_logs;
+----
+Out of Memory Error

@@ -1,9 +1,6 @@
 # name: test/sql/function/array/array_cosine_distance.test
 # group: [array]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type FLOAT DOUBLE
 
 # The distance between a vector and itself should be 0

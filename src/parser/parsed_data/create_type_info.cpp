@@ -1,7 +1,4 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
@@ -26,13 +23,7 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 }
 
 string CreateTypeInfo::ToString() const {
-	string result = "";
-	result += "CREATE";
-	if (temporary) {
-		// These are created by PIVOT
-		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
-	}
-	result += " TYPE ";
+	string result = GetCreatePrefix("TYPE");
 	result += QualifierToString(temporary ? "" : catalog, schema, name);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);

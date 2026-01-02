@@ -29,6 +29,8 @@ public:
 
 public:
 	BoundStatement Bind(Binder &binder) override;
+	unique_ptr<QueryNode> GetQueryNode() override;
+	string GetQuery() override;
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 	bool IsReadOnly() override {

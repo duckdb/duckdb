@@ -20,6 +20,10 @@ public:
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
+
+	string TaskType() const override {
+		return "PipelinePreFinishTask";
+	}
 };
 
 void PipelinePrepareFinishEvent::Schedule() {

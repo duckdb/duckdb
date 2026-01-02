@@ -1,6 +1,6 @@
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 
@@ -12,15 +12,15 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	auto &source_children = StructType::GetChildTypes(source);
 	auto &target_children = StructType::GetChildTypes(target);
 
-	auto target_is_unnamed = StructType::IsUnnamed(target);
-	auto source_is_unnamed = StructType::IsUnnamed(source);
+	auto target_is_unnamed = target_children.empty() || StructType::IsUnnamed(target);
+	auto source_is_unnamed = source_children.empty() || StructType::IsUnnamed(source);
 
 	auto is_unnamed = target_is_unnamed || source_is_unnamed;
 	if (is_unnamed && source_children.size() != target_children.size()) {
 		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
 
-	case_insensitive_map_t<idx_t> target_children_map;
+	InsertionOrderPreservingMap<idx_t> target_children_map;
 	if (!is_unnamed) {
 		for (idx_t i = 0; i < target_children.size(); i++) {
 			auto &name = target_children[i].first;
@@ -229,6 +229,126 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	return true;
 }
 
+unique_ptr<BoundCastData> StructToMapBoundCastData::BindStructToMapCast(BindCastInput &input, const LogicalType &source,
+                                                                        const LogicalType &target) {
+	if (StructType::IsUnnamed(source)) {
+		throw TypeMismatchException(input.query_location, source, target, "Cannot cast unnamed STRUCTs to MAP");
+	}
+	// Get a cast function for the keys (struct has varchar keys, map has single-type keys)
+	auto key_cast = input.GetCastFunction(LogicalType::VARCHAR, MapType::KeyType(target));
+	// Get cast function for the values (struct may have different value types per key, map has single-type values)
+	vector<BoundCastInfo> value_casts;
+	auto target_value_type = MapType::ValueType(target);
+	for (idx_t i = 0; i < StructType::GetChildCount(source); i++) {
+		auto value_cast = input.GetCastFunction(StructType::GetChildType(source, i), target_value_type);
+		value_casts.push_back(std::move(value_cast));
+	}
+	return make_uniq<StructToMapBoundCastData>(std::move(key_cast), std::move(value_casts));
+}
+
+unique_ptr<FunctionLocalState>
+StructToMapBoundCastData::InitStructToMapCastLocalState(CastLocalStateParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<StructToMapBoundCastData>();
+	auto result = make_uniq<StructToMapCastLocalState>();
+
+	if (cast_data.key_cast.init_local_state) {
+		CastLocalStateParameters child_params(parameters, cast_data.key_cast.cast_data);
+		result->key_state = cast_data.key_cast.init_local_state(child_params);
+	}
+
+	for (auto &entry : cast_data.value_casts) {
+		unique_ptr<FunctionLocalState> child_state;
+		if (entry.init_local_state) {
+			CastLocalStateParameters child_params(parameters, entry.cast_data);
+			child_state = entry.init_local_state(child_params);
+		}
+		result->value_states.push_back(std::move(child_state));
+	}
+	return std::move(result);
+}
+
+static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// Optimization: if the source vector is constant, we only have a single physical element, so we can set the
+		// result vectortype to ConstantVector as well and set the (logical) count to 1
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		count = 1;
+		if (ConstantVector::IsNull(source)) {
+			// If there's only a null in there we don't need to cast anything
+			ConstantVector::SetNull(result, true);
+			return true;
+		}
+	}
+
+	auto &cast_data = parameters.cast_data->Cast<StructToMapBoundCastData>();
+	auto &local_state = parameters.local_state->Cast<StructToMapCastLocalState>();
+
+	// Grab all struct columns
+	auto &source_children = StructVector::GetEntries(source);
+	idx_t field_count = source_children.size();
+	idx_t total_count = count * field_count;
+
+	// Allocate result
+	ListVector::Reserve(result, total_count);
+
+	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
+	Vector varchar_keys(LogicalType::VARCHAR, total_count);
+	auto key_data = FlatVector::GetData<string_t>(varchar_keys);
+	auto &field_types = StructType::GetChildTypes(source.GetType());
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
+			auto global_idx = row_idx * field_count + field_idx;
+			auto &field_name = field_types[field_idx].first;
+			key_data[global_idx] = StringVector::AddString(varchar_keys, field_name);
+		}
+	}
+
+	// Cast keys to result
+	auto &map_keys = MapVector::GetKeys(result);
+	CastParameters key_parameters(parameters, cast_data.key_cast.cast_data, local_state.key_state);
+	auto keys_converted = cast_data.key_cast.function(varchar_keys, map_keys, total_count, key_parameters);
+
+	// Fill the values vector
+	bool values_converted = true;
+	auto &map_values = MapVector::GetValues(result);
+	for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
+		auto &source_field = *source_children[field_idx];
+		Vector temp_converted(MapType::ValueType(result.GetType()), count);
+		CastParameters child_params(parameters, cast_data.value_casts[field_idx].cast_data,
+		                            local_state.value_states[field_idx]);
+		auto success = cast_data.value_casts[field_idx].function(source_field, temp_converted, count, child_params);
+		if (!success) {
+			values_converted = false;
+		}
+
+		// Interleave results
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+			auto target_idx = row_idx * field_count + field_idx;
+			// Copy also does a validity check
+			VectorOperations::Copy(temp_converted, map_values, row_idx + 1, row_idx, target_idx);
+		}
+	}
+
+	// Check for nulls in the source rows, and set the list data
+	UnifiedVectorFormat format;
+	source.ToUnifiedFormat(count, format);
+	auto &validity = format.validity;
+	auto list_data = ListVector::GetData(result);
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(format.sel->get_index(i))) { // is row null?
+			// Note: this must be a FlatVector because if we set it to be a ConstantVector and that was null then we've
+			// already returned
+			FlatVector::SetNull(result, i, true);
+		} else {
+			list_data[i] = list_entry_t(i * field_count, field_count);
+		}
+	}
+	// Set the size
+	ListVector::SetListSize(result, total_count);
+
+	return keys_converted && values_converted;
+}
+
 BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const LogicalType &source,
                                              const LogicalType &target) {
 	switch (target.id()) {
@@ -246,6 +366,10 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(StructToVarcharCast,
 		                     StructBoundCastData::BindStructToStructCast(input, source, varchar_type),
 		                     StructBoundCastData::InitStructCastLocalState);
+	}
+	case LogicalTypeId::MAP: {
+		return BoundCastInfo(StructToMapCast, StructToMapBoundCastData::BindStructToMapCast(input, source, target),
+		                     StructToMapBoundCastData::InitStructToMapCastLocalState);
 	}
 	default:
 		return TryVectorNullCast;

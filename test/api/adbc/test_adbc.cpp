@@ -3,7 +3,10 @@
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include <iostream>
+#include <cstdio>
+#include <fstream>
 
 namespace duckdb {
 
@@ -99,7 +102,11 @@ public:
 				adbc_error.release(&adbc_error);
 				InitializeADBCError(&adbc_error);
 				REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
-				arrow_stream.release = nullptr;
+				// Release the input_data stream since we didn't transfer ownership
+				if (input_data.release) {
+					input_data.release(&input_data);
+				}
+				input_data.release = nullptr;
 				return;
 			}
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
@@ -112,8 +119,10 @@ public:
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 		// Release the statement
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		if (input_data.release) {
+			input_data.release(&input_data);
+		}
 		input_data.release = nullptr;
-		arrow_stream.release = nullptr;
 	}
 
 	AdbcError adbc_error;
@@ -140,12 +149,47 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+}
+
+TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create Arrow Result
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("my_table", input_data);
+
+	// Append data with extra column
+	input_data = db.QueryArrow("SELECT 42 as value1, 29 as value2");
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &db.adbc_error)));
+	// We need to use append mode
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	REQUIRE(!SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error)));
+	REQUIRE((std::strcmp(db.adbc_error.message, "incorrect column count in AppendDataChunk, expected 1, got 2") == 0));
+	// Release error
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	// Release the statement
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
@@ -155,7 +199,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data, "", true);
@@ -170,13 +214,15 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
-	// Since this is temporary and has a schema, it will fail in a internal code path
+	// Since this is temporary and has a schema, it will fail in an internal code path
 	db.CreateTable("my_table", input_data, "my_schema", true);
 
-	// we can then reuse the same input data to properly insert into a table with a schema
-	db.CreateTable("my_table", input_data, "my_schema");
+	// We released it in the error, hence we create it again
+	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
+
+	db.CreateTable("my_table", input_data_2, "my_schema");
 
 	// we can check it works
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
@@ -187,22 +233,95 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 		return;
 	}
 	ADBCTestDatabase db;
-	db.Query("CREATE SCHEMA \"my schema\";");
+	db.Query("CREATE SCHEMA \"my_schema\";");
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
 	// Create table with name requiring quoting
-	db.CreateTable("my table", input_data, "my schema");
+	db.CreateTable("my_table", input_data, "my_schema");
 
 	// Validate that we can get its schema
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
-	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my schema", "my table", &arrow_schema,
+	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my_schema", "my_table", &arrow_schema,
 	                                             &adbc_error)));
 	REQUIRE((arrow_schema.n_children == 1));
 	arrow_schema.release(&arrow_schema);
+}
+
+TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	std::vector<std::string> column_names = {"column.with.dots", "column\"with\"quotes", "column with whitespace"};
+	std::string table_name = "my.table\"is 😵";
+	std::string schema_name = "my schema\"is.😬";
+	// Create a schema and allocate space for a single child
+	ArrowSchema arrow_schema;
+	duckdb_nanoarrow::ArrowSchemaInit(&arrow_schema, duckdb_nanoarrow::ArrowType::NANOARROW_TYPE_STRUCT);
+	duckdb_nanoarrow::ArrowSchemaAllocateChildren(&arrow_schema, static_cast<int64_t>(column_names.size()));
+
+	// Create the child schemas and build the select query to get test data
+	std::string query = "SELECT ";
+	for (size_t i = 0; i < column_names.size(); i++) {
+		duckdb_nanoarrow::ArrowSchemaInit(arrow_schema.children[i], duckdb_nanoarrow::ArrowType::NANOARROW_TYPE_INT32);
+		duckdb_nanoarrow::ArrowSchemaSetName(arrow_schema.children[i], column_names.at(i).c_str());
+		if (i > 0) {
+			query += ",";
+		}
+		query += std::to_string(i);
+	}
+
+	// Create input data
+	auto &input_data = db.QueryArrow(query);
+	ArrowArray prepared_array;
+	input_data.get_next(&input_data, &prepared_array);
+
+	// Create the schema
+	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+
+	// Create ADBC statement that will create a table called "test"
+	AdbcStatement adbc_stmt;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_stmt, &adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_stmt, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_CREATE, &adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_stmt, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, schema_name.c_str(), &adbc_error)));
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_stmt, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBind(&adbc_stmt, &prepared_array, &arrow_schema, &adbc_error)));
+
+	// Now execute: this should create the table and put the test data in
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_stmt, nullptr, nullptr, &adbc_error)));
+
+	// Release everything
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_stmt, &adbc_error)));
+	if (arrow_schema.release) {
+		arrow_schema.release(&arrow_schema);
+	}
+	if (adbc_error.release) {
+		adbc_error.release(&adbc_error);
+	}
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	if (prepared_array.release) {
+		prepared_array.release(&prepared_array);
+	}
+
+	// Check we can query
+	auto schema_table =
+	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	auto res = db.Query("select * from " + schema_table);
+	for (size_t i = 0; i < column_names.size(); i++) {
+		REQUIRE((res->ColumnName(i) == column_names.at(i)));
+		REQUIRE((res->GetValue(i, 0) == i));
+	}
 }
 
 TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
@@ -212,7 +331,7 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
+	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
 
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("lineitem", input_data);
@@ -226,7 +345,7 @@ TEST_CASE("ADBC - Pivot", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
+	auto &input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
 
 	db.CreateTable("flights", input_data);
 
@@ -310,7 +429,7 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 	// Insert some data
 	// Create Arrow Result
 	ADBCTestDatabase db;
-	auto &input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	string table_name = "my_table";
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
@@ -329,11 +448,11 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 		arrow_stream.release(&arrow_stream);
 	}
 
-	input_data = db.QueryArrow("SELECT 42");
+	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
 
 	StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error);
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_2, &adbc_error)));
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
@@ -510,22 +629,28 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 
 	AdbcStatusCode status = ADBC_STATUS_OK;
 	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
 
 	// ==== UNHAPPY PATH ====
 
-	static uint32_t test_info_codes[] = {100, 4, 3};
+	static uint32_t test_info_codes[] = {ADBC_INFO_DRIVER_NAME, ADBC_INFO_DRIVER_ARROW_VERSION,
+	                                     ADBC_INFO_DRIVER_VERSION};
 	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
 
 	// No error
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
 	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(out_stream.release == nullptr);
 
 	// Invalid connection
 	AdbcConnection bogus_connection;
 	bogus_connection.private_data = nullptr;
 	bogus_connection.private_driver = nullptr;
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
 	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(out_stream.release == nullptr);
 
 	// No stream
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
@@ -534,11 +659,50 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	// ==== HAPPY PATH ====
 
 	// This returns all known info codes
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
 	REQUIRE((status == ADBC_STATUS_OK));
 	REQUIRE((out_stream.release != nullptr));
+	{
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 
-	out_stream.release(&out_stream);
+		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
+		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto res = rel->Project("info_name")->Execute();
+		REQUIRE(!res->HasError());
+		auto &mat = res->Cast<MaterializedQueryResult>();
+
+		bool found_adbc_version = false;
+		for (idx_t row = 0; row < mat.RowCount(); row++) {
+			found_adbc_version |= (mat.GetValue(0, row).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		}
+		REQUIRE(found_adbc_version);
+	}
+	out_stream.release = nullptr;
+
+	{
+		// Validate ADBC_INFO_DRIVER_ADBC_VERSION is returned as int64
+		static uint32_t version_code[] = {ADBC_INFO_DRIVER_ADBC_VERSION};
+		ArrowArrayStream version_stream;
+		version_stream.release = nullptr;
+		status = AdbcConnectionGetInfo(&adbc_connection, version_code, 1, &version_stream, &adbc_error);
+		REQUIRE((status == ADBC_STATUS_OK));
+		REQUIRE((version_stream.release != nullptr));
+
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+
+		auto params = ArrowTestHelper::ConstructArrowScan(version_stream);
+		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto res = rel->Project("info_name, info_value.int64_value AS adbc_version")->Execute();
+		REQUIRE(!res->HasError());
+		auto &mat = res->Cast<MaterializedQueryResult>();
+		REQUIRE(mat.RowCount() == 1);
+		REQUIRE(mat.GetValue(0, 0).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		REQUIRE(mat.GetValue(1, 0).ToString() == std::to_string(ADBC_VERSION_1_1_0));
+		version_stream.release = nullptr;
+	}
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -698,6 +862,84 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
+TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Create connection
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	// Test 1: Query with no parameters (CREATE TABLE)
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetSqlQuery(&adbc_statement, "CREATE TABLE test_zero_params (id INTEGER)", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+		// Get parameter schema - should have 0 children
+		ArrowSchema param_schema;
+		param_schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &param_schema, &adbc_error)));
+		REQUIRE(param_schema.n_children == 0);
+		REQUIRE(param_schema.format != nullptr);
+		REQUIRE(strcmp(param_schema.format, "+s") == 0); // Should be a struct
+		param_schema.release(&param_schema);
+
+		// Execute the statement without binding any parameters
+		ArrowArrayStream arrow_stream;
+		arrow_stream.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, nullptr, &adbc_error)));
+		arrow_stream.release(&arrow_stream);
+
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test 2: Query with no parameters (SELECT constant)
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 42", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+		// Get parameter schema - should have 0 children
+		ArrowSchema param_schema;
+		param_schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &param_schema, &adbc_error)));
+		REQUIRE(param_schema.n_children == 0);
+		param_schema.release(&param_schema);
+
+		// Execute and verify result
+		ArrowArrayStream arrow_stream;
+		arrow_stream.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, nullptr, &adbc_error)));
+
+		ArrowSchema result_schema;
+		arrow_stream.get_schema(&arrow_stream, &result_schema);
+		REQUIRE(result_schema.n_children == 1); // One column in result
+		result_schema.release(&result_schema);
+
+		arrow_stream.release(&arrow_stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	adbc_error.release(&adbc_error);
+}
+
 TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -706,7 +948,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto &input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	string table_name = "test";
 	string query = "select count(*) from test";
 
@@ -762,7 +1004,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	// Now lets insert with Auto-Commit Off
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_2 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -772,7 +1014,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_2, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
@@ -809,7 +1051,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Lets do a rollback
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_3 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -819,7 +1061,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_3, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -859,7 +1101,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_stream.release(&arrow_stream);
 
 	// Let's change the Auto commit config mid-transaction
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_4 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -868,7 +1110,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_4, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -896,7 +1138,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
-	input_data = db.QueryArrow("SELECT 42;");
+	auto &input_data_5 = db.QueryArrow("SELECT 42;");
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -905,7 +1147,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(
 	    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data_5, &adbc_error)));
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
@@ -1020,7 +1262,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	REQUIRE(StringUtil::Contains(adbc_error.message, "Catalog \"bla\" does not exist"));
 	adbc_error.release(&adbc_error);
 
-	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "memory", "main", "duckdb_indexes", &arrow_schema,
+	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "system", "main", "duckdb_indexes", &arrow_schema,
 	                                             &adbc_error)));
 	REQUIRE((arrow_schema.n_children == 14));
 	arrow_schema.release(&arrow_schema);
@@ -1099,21 +1341,19 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
-	auto input_data = db.QueryArrow("SELECT 42");
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 	ArrowArrayStream arrow_stream;
 	AdbcError adbc_error;
 	InitializeADBCError(&adbc_error);
-	AdbcConnectionGetTableTypes(&db.adbc_connection, &arrow_stream, &adbc_error);
-
+	REQUIRE(SUCCESS(AdbcConnectionGetTableTypes(&db.adbc_connection, &arrow_stream, &adbc_error)));
 	db.CreateTable("result", arrow_stream);
-	auto path_db = db.path;
-	db.arrow_stream.release = nullptr;
 
 	auto res = db.Query("Select * from result");
 	REQUIRE((res->ColumnCount() == 1));
 	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
+	adbc_error.release(&adbc_error);
 }
 
 TEST_CASE("Test Segfault Option Set", "[adbc]") {
@@ -1148,6 +1388,7 @@ TEST_CASE("Test Segfault Option Set", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	adbc_error.release(&adbc_error);
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
@@ -1159,15 +1400,15 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_catalog_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
 		AdbcError adbc_error;
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, nullptr, nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, nullptr, nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1181,8 +1422,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		db.Query("Drop table result;");
 
 		// Test Filters
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "bla", nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "bla", nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1193,7 +1434,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1201,8 +1442,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1231,16 +1472,16 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		db.Query("Drop table result;");
 
 		// Test Filters
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, "bla", nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, "bla", nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 0));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, "bla", nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, "bla",
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1254,17 +1495,33 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	{
 		ADBCTestDatabase db("test_table_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
+		// Create View 'my_view'
+		db.Query("Create view my_view as from my_table;");
 
 		AdbcError adbc_error;
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
@@ -1276,18 +1533,24 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             })";
 		string expected_result_2 = R"({
                 'db_schema_name': main,
+                'db_schema_tables': NULL
+            })";
+		string expected_result_3 = R"({
+                'db_schema_name': main,
                 'db_schema_tables': [
                     {
                         'table_name': my_table,
                         'table_type': BASE TABLE,
                         'table_columns': [],
                         'table_constraints': []
+                    },
+                    {
+                        'table_name': my_view,
+                        'table_type': VIEW,
+                        'table_columns': [],
+                        'table_constraints': []
                     }
                 ]
-            })";
-		string expected_result_3 = R"({
-                'db_schema_name': pg_catalog,
-                'db_schema_tables': NULL
             })";
 		string expected_1_clean = StringUtil::Replace(
 		    StringUtil::Replace(StringUtil::Replace(expected_result_1, "\n", ""), "\t", ""), " ", "");
@@ -1295,22 +1558,25 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		    StringUtil::Replace(StringUtil::Replace(expected_result_2, "\n", ""), "\t", ""), " ", "");
 		string expected_3_clean = StringUtil::Replace(
 		    StringUtil::Replace(StringUtil::Replace(expected_result_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_1_clean) >= 0));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_2_clean) >= 0));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_2_clean) >= 0));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected_1_clean) != string::npos));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected_2_clean) != string::npos));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_3_clean) != string::npos));
 		db.Query("Drop table result;");
 
 		// Test Filters
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, "bla", nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+
+		// catalog
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, "bla", nullptr, nullptr,
+		                                         nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 0));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, "bla", nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		// db_schema
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, "bla", nullptr,
+		                                         nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1320,34 +1586,142 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla", nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		// table_name
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_table_depth'
+        )";
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla",
+		                                         nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
-		               "'test_table_depth' order by unnest_a asc");
+		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->ColumnCount() == 1));
 		REQUIRE((res->RowCount() == 1));
-		string expected = "{'db_schema_name': main, 'db_schema_tables': NULL}";
-
+		string expected = "[{'db_schema_name': main, 'db_schema_tables': NULL}]";
 		REQUIRE((res->GetValue(0, 0).ToString() == expected));
-
 		db.Query("Drop table result;");
+
+		{
+			// table_type: Empty table_type returns all tables and views
+			std::vector<const char *> table_type = {nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			REQUIRE(
+			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_3_clean) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: ["BASE TABLE", "VIEW"] returns all tables and views
+			std::vector<const char *> table_type = {"BASE TABLE", "VIEW", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			REQUIRE(
+			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_3_clean) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: BASE TABLE returns all tables
+			std::vector<const char *> table_type = {"BASE TABLE", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			string expected_result = R"([{
+                'db_schema_name': main,
+                'db_schema_tables': [
+                    {
+                        'table_name': my_table,
+                        'table_type': BASE TABLE,
+                        'table_columns': [],
+                        'table_constraints': []
+                    }
+                ]
+            }])";
+			string expected_clean = StringUtil::Replace(
+			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: VIEW returns all views
+			std::vector<const char *> table_type = {"VIEW", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			string expected_result = R"([{
+                'db_schema_name': main,
+                'db_schema_tables': [
+                    {
+                        'table_name': my_view,
+                        'table_type': VIEW,
+                        'table_columns': [],
+                        'table_constraints': []
+                    }
+                ]
+            }])";
+			string expected_clean = StringUtil::Replace(
+			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			db.Query("Drop table result;");
+		}
 	}
-	// 4.Test ADBC_OBJECT_DEPTH_COLUMNS
+	// 4. Test ADBC_OBJECT_DEPTH_COLUMNS
 	{
 		ADBCTestDatabase db("test_column_depth");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
+		// Create View 'my_view'
+		db.Query("Create view my_view as from my_table;");
 
 		AdbcError adbc_error;
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
@@ -1361,15 +1735,48 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		string expected_2 = R"(
             {
                 'db_schema_name': main,
+                'db_schema_tables': NULL
+            })";
+		string expected_3 = R"(
+            {
+                'db_schema_name': main,
                 'db_schema_tables': [
                     {
                         'table_name': my_table,
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': value,
                                 'ordinal_position': 1,
-                                'remarks': ,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            }
+                        ],
+                        'table_constraints': NULL
+                    },
+                    {
+                        'table_name': my_view,
+                        'table_type': VIEW,
+                        'table_columns': [
+                            {
+                                'column_name': value,
+                                'ordinal_position': 1,
+                                'remarks': '',
                                 'xdbc_data_type': NULL,
                                 'xdbc_type_name': NULL,
                                 'xdbc_column_size': NULL,
@@ -1392,12 +1799,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                     }
                 ]
             })";
-		string expected_3 = R"(
-            {
-                'db_schema_name': pg_catalog,
-                'db_schema_tables': NULL
-            }
-        )";
 		string expected[3];
 		expected[0] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_1, "\n", ""), "\t", ""), " ", "");
@@ -1405,22 +1806,25 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_2, "\n", ""), "\t", ""), " ", "");
 		expected[2] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected[0]) >= 0));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected[1]) >= 0));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[2]) >= 0));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected[0]) != string::npos));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected[1]) != string::npos));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[2]) != string::npos));
 		db.Query("Drop table result;");
 
 		// Test Filters
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+
+		// catalog
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 0));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		// db_schema
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla",
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1430,45 +1834,196 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		// table_name
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_column_depth'
+        )";
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+		                                         "bla", nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result order by catalog_name asc");
-		REQUIRE((res->ColumnCount() == 2));
-		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() ==
-		         "[{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}, {'db_schema_name': information_schema, "
-		         "'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}]"));
+		res = db.Query(select_catalog_db_schemas);
+		REQUIRE((res->ColumnCount() == 1));
+		REQUIRE((res->RowCount() == 1));
+		REQUIRE((res->GetValue(0, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]"));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
-		                         "bla", &arrow_stream, &adbc_error);
+		// column_name
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+		                                         nullptr, nullptr, "bla", &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
-		               "'test_column_depth' order by unnest_a asc");
-		auto expected_value = "{'db_schema_name': main, "
+		res = db.Query(select_catalog_db_schemas);
+		auto expected_value = "[{'db_schema_name': main, "
 		                      "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		                      "'table_columns': NULL, 'table_constraints': NULL}]}";
-
+		                      "'table_columns': NULL, 'table_constraints': NULL}, "
+		                      "{'table_name': my_view, 'table_type': VIEW, "
+		                      "'table_columns': NULL, 'table_constraints': NULL}]}]";
 		REQUIRE((res->GetValue(0, 0).ToString() == expected_value));
-
 		db.Query("Drop table result;");
+
+		{
+			// table_type: Empty table_type returns all tables and views
+			std::vector<const char *> table_type = {nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: ["BASE TABLE", "VIEW"] returns all tables and views
+			std::vector<const char *> table_type = {"BASE TABLE", "VIEW", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: BASE TABLE returns all tables
+			std::vector<const char *> table_type = {"BASE TABLE", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			string expected_result = R"({
+                'db_schema_name': main,
+                'db_schema_tables': [
+                    {
+                        'table_name': my_table,
+                        'table_type': BASE TABLE,
+                        'table_columns': [
+                            {
+                                'column_name': value,
+                                'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            }
+                        ],
+                        'table_constraints': NULL
+                    }
+                ]
+            })";
+			string expected_clean = StringUtil::Replace(
+			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
+			REQUIRE(
+			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_clean) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: VIEW returns all views
+			std::vector<const char *> table_type = {"VIEW", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			string expected_result = R"({
+                'db_schema_name': main,
+                'db_schema_tables': [
+                    {
+                        'table_name': my_view,
+                        'table_type': VIEW,
+                        'table_columns': [
+                            {
+                                'column_name': value,
+                                'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            }
+                        ],
+                        'table_constraints': NULL
+                    }
+                ]
+            })";
+			string expected_clean = StringUtil::Replace(
+			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
+			REQUIRE(
+			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_clean) != string::npos));
+			db.Query("Drop table result;");
+		}
 	}
-	// 5.Test ADBC_OBJECT_DEPTH_ALL
+	// 5. Test ADBC_OBJECT_DEPTH_ALL
 	{
 		ADBCTestDatabase db("test_all_depth");
-		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
-		// Create Table 'my_table' from the Arrow Result
-		db.CreateTable("my_table", input_data);
+		// Create Table 'my_table' with primary key
+		db.Query("Create table my_table (a int, b int, primary key (a, b))");
+		// Create View 'my_view'
+		db.Query("Create view my_view as from my_table;");
 
 		AdbcError adbc_error;
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr,
+		                                         nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result order by catalog_name asc");
+		auto res = db.Query(R"(
+			SELECT
+				catalog_name,
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				)
+			FROM result
+			ORDER BY catalog_name ASC
+		)");
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
 		REQUIRE((res->GetValue(0, 1).ToString() == "temp"));
@@ -1481,15 +2036,97 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		string expected_2 = R"(
             {
                 'db_schema_name': main,
+                'db_schema_tables': NULL
+            })";
+		string expected_3 = R"(
+            {
+                'db_schema_name': main,
                 'db_schema_tables': [
                     {
                         'table_name': my_table,
                         'table_type': BASE TABLE,
                         'table_columns': [
                             {
-                                'column_name': 42,
+                                'column_name': a,
                                 'ordinal_position': 1,
-                                'remarks': ,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            }
+                        ],
+                        'table_constraints': [
+                            {
+                                'constraint_name': my_table_a_b_pkey,
+                                'constraint_type': PRIMARY KEY,
+                                'constraint_column_names': [a, b],
+                                'constraint_column_usage': []
+                            }
+                        ]
+                    },
+                    {
+                        'table_name': my_view,
+                        'table_type': VIEW,
+                        'table_columns': [
+                            {
+                                'column_name': a,
+                                'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
+                                'remarks': '',
                                 'xdbc_data_type': NULL,
                                 'xdbc_type_name': NULL,
                                 'xdbc_column_size': NULL,
@@ -1512,33 +2149,31 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
                     }
                 ]
             })";
-		string expected_3 = R"(
-            {
-                'db_schema_name': pg_catalog,
-                'db_schema_tables': NULL
-            }
-        )";
 		string expected_1_clean =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_1, "\n", ""), "\t", ""), " ", "");
 		string expected_2_clean =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_2, "\n", ""), "\t", ""), " ", "");
 		string expected_3_clean =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_1_clean) >= 0));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_2_clean) >= 0));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_2_clean) >= 0));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected_1_clean) != string::npos));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected_2_clean) != string::npos));
+		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_3_clean) != string::npos));
 		db.Query("Drop table result;");
+
 		// Test Filters
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr, nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+
+		// catalog
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr,
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 0));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		// db_schema
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla",
+		                                         nullptr, nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
@@ -1548,42 +2183,331 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->GetValue(1, 2).ToString() == "NULL"));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
-		                         nullptr, &arrow_stream, &adbc_error);
+		// table_name
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_name: catalog_db_schema.db_schema_name,
+							db_schema_tables: list_sort(catalog_db_schema.db_schema_tables),
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_all_depth'
+        )";
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+		                                         "bla", nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
-		               "'test_column_depth' order by unnest_a asc");
-		string expected[3];
-		expected[0] = "{'db_schema_name': information_schema, 'db_schema_tables': NULL}";
-		expected[1] = "{'db_schema_name': main, 'db_schema_tables': NULL}";
-		expected[2] = "{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}";
-
-		for (idx_t i = 0; i < res->RowCount(); i++) {
-			REQUIRE((res->GetValue(0, i).ToString() == expected[i]));
-		}
+		res = db.Query(select_catalog_db_schemas);
+		REQUIRE((res->RowCount() == 1));
+		string expected = "[{'db_schema_name': main, 'db_schema_tables': NULL}]";
+		REQUIRE((res->GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
-		                         "bla", &arrow_stream, &adbc_error);
+		// column_name
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+		                                         nullptr, nullptr, "bla", &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
-		               "'test_column_depth' order by unnest_a asc");
-		expected[0] = "{'db_schema_name': information_schema, 'db_schema_tables': NULL}";
-		expected[1] = "{'db_schema_name': main, "
-		              "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		              "'table_columns': NULL, 'table_constraints': NULL}]}";
-		expected[2] = "{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}";
-
-		for (idx_t i = 0; i < res->RowCount(); i++) {
-			REQUIRE((res->GetValue(0, i).ToString() == expected[i]));
-		}
+		res = db.Query(select_catalog_db_schemas);
+		REQUIRE((res->RowCount() == 1));
+		// clang-format off
+		expected = "["
+			"{"
+				"'db_schema_name': main, "
+				"'db_schema_tables': ["
+					"{"
+						"'table_name': my_table, "
+						"'table_type': BASE TABLE, "
+						"'table_columns': NULL, "
+						"'table_constraints': NULL"
+					"}, "
+					"{"
+						"'table_name': my_view, "
+						"'table_type': VIEW, "
+						"'table_columns': NULL, "
+						"'table_constraints': NULL"
+					"}"
+				"]"
+			"}"
+		"]";
+		// clang-format on
+		REQUIRE((res->GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
+
+		{
+			// table_type: Empty table_type returns all tables and views
+			std::vector<const char *> table_type = {nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: ["BASE TABLE", "VIEW"] returns all tables and views
+			std::vector<const char *> table_type = {"BASE TABLE", "VIEW", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: BASE TABLE returns all tables
+			std::vector<const char *> table_type = {"BASE TABLE", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			string expected_result = R"([{
+                'db_schema_name': main,
+                'db_schema_tables': [
+                    {
+                        'table_name': my_table,
+                        'table_type': BASE TABLE,
+                        'table_columns': [
+                            {
+                                'column_name': a,
+                                'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            }
+                        ],
+                        'table_constraints': [
+                            {
+                                'constraint_name': my_table_a_b_pkey,
+                                'constraint_type': PRIMARY KEY,
+                                'constraint_column_names': [a, b],
+                                'constraint_column_usage': []
+                            }
+                        ]
+                    }
+                ]
+            }])";
+			string expected_clean = StringUtil::Replace(
+			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			db.Query("Drop table result;");
+		}
+
+		{
+			// table_type: VIEW returns all views
+			std::vector<const char *> table_type = {"VIEW", nullptr};
+			REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+			                                         nullptr, table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+			db.CreateTable("result", arrow_stream);
+			res = db.Query(select_catalog_db_schemas);
+			REQUIRE((res->ColumnCount() == 1));
+			REQUIRE((res->RowCount() == 1));
+			string expected_result = R"([{
+                'db_schema_name': main,
+                'db_schema_tables': [
+                    {
+                        'table_name': my_view,
+                        'table_type': VIEW,
+                        'table_columns': [
+                            {
+                                'column_name': a,
+                                'ordinal_position': 1,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            },
+                            {
+                                'column_name': b,
+                                'ordinal_position': 2,
+                                'remarks': '',
+                                'xdbc_data_type': NULL,
+                                'xdbc_type_name': NULL,
+                                'xdbc_column_size': NULL,
+                                'xdbc_decimal_digits': NULL,
+                                'xdbc_num_prec_radix': NULL,
+                                'xdbc_nullable': NULL,
+                                'xdbc_column_def': NULL,
+                                'xdbc_sql_data_type': NULL,
+                                'xdbc_datetime_sub': NULL,
+                                'xdbc_char_octet_length': NULL,
+                                'xdbc_is_nullable': NULL,
+                                'xdbc_scope_catalog': NULL,
+                                'xdbc_scope_schema': NULL,
+                                'xdbc_scope_table': NULL,
+                                'xdbc_is_autoincrement': NULL,
+                                'xdbc_is_generatedcolumn': NULL
+                            }
+                        ],
+                        'table_constraints': NULL
+                    }
+                ]
+            }])";
+			string expected_clean = StringUtil::Replace(
+			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
+			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			db.Query("Drop table result;");
+		}
 	}
-	//  Now lets test some errors
+	// 6. Test constraints
+	//
+	// Available constraints: https://duckdb.org/docs/stable/sql/constraints.html
+	{
+		ADBCTestDatabase db("test_constraints");
+		// Create table 'foreign_table'
+		db.Query("CREATE TABLE foreign_table (id INTEGER PRIMARY KEY)");
+		// Create table 'my_table' with constraints
+		db.Query(R"(
+			CREATE TABLE my_table (
+				primary_key INTEGER PRIMARY KEY,
+				not_null INTEGER NOT NULL,
+				custom_check INTEGER CHECK (custom_check > 0),
+				unique_single INTEGER UNIQUE,
+				unique_multi1 INTEGER,
+				unique_multi2 INTEGER,
+				UNIQUE (unique_multi2, unique_multi1),
+				foreign_id INTEGER REFERENCES foreign_table(id)
+			)
+		)");
+
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
+		                                         "my_table", nullptr, nullptr, &arrow_stream, &adbc_error)));
+		db.CreateTable("result", arrow_stream);
+		string select_catalog_db_schemas = R"(
+			SELECT
+				list_sort(
+					list_transform(
+						catalog_db_schemas,
+						lambda catalog_db_schema: {
+							db_schema_tables: list_sort(
+								list_transform(
+									catalog_db_schema.db_schema_tables,
+									lambda db_schema_table: {
+										table_name: db_schema_table.table_name,
+										table_constraints: list_sort(db_schema_table.table_constraints)
+									}
+								)
+							)
+						}
+					)
+				) as catalog_db_schemas
+			FROM result
+			WHERE catalog_name == 'test_constraints'
+		)";
+		auto res = db.Query(select_catalog_db_schemas);
+		REQUIRE((res->RowCount() == 1));
+		// clang-format off
+		std::string expected = "["
+			"{"
+				"'db_schema_tables': ["
+					"{"
+						"'table_name': my_table, "
+						"'table_constraints': [{"
+							"'constraint_name': my_table_custom_check_check, "
+							"'constraint_type': CHECK, "
+							"'constraint_column_names': [custom_check], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_foreign_id_id_fkey, "
+							"'constraint_type': FOREIGN KEY, "
+							"'constraint_column_names': [foreign_id], "
+							"'constraint_column_usage': [{"
+								"'fk_catalog': test_constraints, "
+								"'fk_db_schema': main, "
+								"'fk_table': foreign_table, "
+								"'fk_column_name': id"
+							"}]"
+						"}, {"
+							"'constraint_name': my_table_primary_key_pkey, "
+							"'constraint_type': PRIMARY KEY, "
+							"'constraint_column_names': [primary_key], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_unique_multi2_unique_multi1_key, "
+							"'constraint_type': UNIQUE, "
+							"'constraint_column_names': [unique_multi2, unique_multi1], "
+							"'constraint_column_usage': []"
+						"}, {"
+							"'constraint_name': my_table_unique_single_key, "
+							"'constraint_type': UNIQUE, "
+							"'constraint_column_names': [unique_single], "
+							"'constraint_column_usage': []"
+						"}]"
+					"}"
+				"]"
+			"}"
+		"]";
+		// clang-format on
+		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		db.Query("DROP TABLE result;");
+	}
+	// Now lets test some errors
 	{
 		ADBCTestDatabase db("test_errors");
 		// Create Arrow Result
-		auto input_data = db.QueryArrow("SELECT 42");
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
@@ -1591,19 +2515,443 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 
-		AdbcConnectionGetObjects(&db.adbc_connection, 42, nullptr, nullptr, nullptr, nullptr, nullptr, &arrow_stream,
-		                         &adbc_error);
+		REQUIRE(!SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, 42, nullptr, nullptr, nullptr, nullptr, nullptr,
+		                                          &arrow_stream, &adbc_error)));
 		REQUIRE((std::strcmp(adbc_error.message, "Invalid value of Depth") == 0));
 		adbc_error.release(&adbc_error);
 
-		constexpr char table_types = '\0';
-		auto table_type_ptr = &table_types;
-		auto table_type_ptr_ptr = &table_type_ptr;
-		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr,
-		                         reinterpret_cast<const char **>(table_type_ptr_ptr), nullptr, &arrow_stream,
-		                         &adbc_error);
-		REQUIRE((strcmp(adbc_error.message, "Table types parameter not yet supported") == 0));
+		// Invalid table type
+		std::vector<const char *> table_type = {"INVALID", nullptr};
+		REQUIRE(!SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr,
+		                                          table_type.data(), nullptr, &arrow_stream, &adbc_error)));
+		REQUIRE((strcmp(adbc_error.message,
+		                "Table type must be \"LOCAL TABLE\", \"BASE TABLE\" or \"VIEW\": \"INVALID\"") == 0));
 		adbc_error.release(&adbc_error);
 	}
+
+	// Test input quoting protection
+	{
+		ADBCTestDatabase db("test_input_quoting");
+		db.CreateTable("test_table", db.QueryArrow("SELECT 42 as value"));
+
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+
+		// Test catalog filter with special characters
+		auto status =
+		    AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "'; DROP TABLE test_table; --",
+		                             nullptr, nullptr, nullptr, nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists after special characters in filter
+		auto res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+
+		// Test schema filter with special characters
+		status = AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
+		                                  "'; DROP TABLE test_table; --", nullptr, nullptr, nullptr, &arrow_stream,
+		                                  &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists
+		res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+
+		// Test table name filter with special characters
+		status = AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+		                                  "'; DROP TABLE test_table; --", nullptr, nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists
+		res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+	}
 }
+
+TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Test CREATE mode (default)
+	{
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
+		db.CreateTable("test_table", input_data);
+		auto result = db.Query("SELECT * FROM test_table");
+		REQUIRE(result->RowCount() == 1);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 42);
+	}
+
+	// Test CREATE mode error (table already exists)
+	{
+		auto &input_data = db.QueryArrow("SELECT 43 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_CREATE,
+		                                       &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test APPEND mode
+	{
+		auto &input_data = db.QueryArrow("SELECT 43 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+		                                       &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table ORDER BY value");
+		REQUIRE(result->RowCount() == 2);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 42);
+		REQUIRE(result->GetValue(0, 1).GetValue<int32_t>() == 43);
+	}
+
+	// Test REPLACE mode
+	{
+		auto &input_data = db.QueryArrow("SELECT 44 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+		                                       ADBC_INGEST_OPTION_MODE_REPLACE, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table");
+		REQUIRE(result->RowCount() == 1);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 44);
+	}
+
+	// Test CREATE_APPEND mode (table exists)
+	{
+		auto &input_data = db.QueryArrow("SELECT 45 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+		                                       ADBC_INGEST_OPTION_MODE_CREATE_APPEND, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table ORDER BY value");
+		REQUIRE(result->RowCount() == 2);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 44);
+		REQUIRE(result->GetValue(0, 1).GetValue<int32_t>() == 45);
+	}
+
+	// Test CREATE_APPEND mode (table does not exist)
+	{
+		auto &input_data = db.QueryArrow("SELECT 46 as value");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table2", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+		                                       ADBC_INGEST_OPTION_MODE_CREATE_APPEND, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 1);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+		auto result = db.Query("SELECT * FROM test_table2");
+		REQUIRE(result->RowCount() == 1);
+		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 46);
+	}
+}
+
+TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Create a test table
+	db.Query("CREATE TABLE test_rows (value INTEGER)");
+	db.Query("INSERT INTO test_rows VALUES (1), (2), (3)");
+
+	// Test rows_affected for INSERT
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "INSERT INTO test_rows VALUES (4), (5)", &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 2);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for UPDATE
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetSqlQuery(&adbc_statement, "UPDATE test_rows SET value = 10 WHERE value < 3", &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 2);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for DELETE
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "DELETE FROM test_rows WHERE value = 10", &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 2);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for SELECT (should return -1)
+	{
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT * FROM test_rows", &adbc_error)));
+		int64_t rows_affected = -999;
+		ArrowArrayStream stream;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == -1);
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
+	// Test rows_affected for ingestion
+	{
+		auto &input_data = db.QueryArrow("SELECT 100 as value UNION ALL SELECT 101 UNION ALL SELECT 102");
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_ingest", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == 3);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+}
+
+TEST_CASE("Test ADBC URI option", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	auto file_exists = [](const char *path) {
+		std::ifstream f(path);
+		return f.good();
+	};
+
+	// Test URI with :memory:
+	{
+		AdbcDatabase adbc_database;
+		AdbcConnection adbc_connection;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", ":memory:", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+		// Execute a simple query
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 42 as value", &adbc_error)));
+		ArrowArrayStream stream;
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	// Test URI with plain path
+	{
+		AdbcDatabase adbc_database;
+		AdbcConnection adbc_connection;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "test_uri_plain.db", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+		// Execute a simple query
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 43 as value", &adbc_error)));
+		ArrowArrayStream stream;
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	// Test file://<relative> is accepted
+	{
+		const char *expected_path = "test_uri_file.db";
+		std::remove(expected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file://test_uri_file.db", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		std::remove(expected_path);
+	}
+
+	// Test URI overrides path (uri takes precedence)
+	{
+		AdbcDatabase adbc_database;
+		AdbcConnection adbc_connection;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", "/invalid/path/db.duckdb", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", ":memory:", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+		// Should succeed because uri overrides the invalid path
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 45 as value", &adbc_error)));
+		ArrowArrayStream stream;
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	// Test file: URI query is stripped
+	{
+		const char *expected_path = "test_uri_query.db";
+		const char *unexpected_path = "test_uri_query.db?mode=ro";
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file:test_uri_query.db?mode=ro", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		REQUIRE(!file_exists(unexpected_path));
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+	}
+
+	// Test file: URI fragment is stripped
+	{
+		const char *expected_path = "test_uri_fragment.db";
+		const char *unexpected_path = "test_uri_fragment.db#fragment";
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(
+		    SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file:test_uri_fragment.db#fragment", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		REQUIRE(!file_exists(unexpected_path));
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+	}
+
+	// Test file://localhost/<abs path> is accepted
+	{
+		auto abs_path = TestCreatePath("test_uri_localhost.db");
+		if (!abs_path.empty() && abs_path[0] != '/') {
+			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+		}
+		std::remove(abs_path.c_str());
+		string uri = string("file://localhost") + abs_path;
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(abs_path.c_str()));
+		std::remove(abs_path.c_str());
+	}
+
+	// Test file://<non-localhost>/<abs path> is rejected
+	{
+		auto abs_path = TestCreatePath("test_uri_non_localhost.db");
+		if (!abs_path.empty() && abs_path[0] != '/') {
+			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+		}
+		string uri = string("file://example.com") + abs_path;
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
+		REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(adbc_error.message);
+		REQUIRE((std::strcmp(adbc_error.message, "file: URI with a non-empty authority is not supported") == 0));
+		adbc_error.release(&adbc_error);
+		InitializeADBCError(&adbc_error);
+		auto release_status = AdbcDatabaseRelease(&adbc_database, &adbc_error);
+		REQUIRE((release_status == ADBC_STATUS_OK || release_status == ADBC_STATUS_INVALID_STATE));
+	}
+
+	adbc_error.release(&adbc_error);
+}
+
 } // namespace duckdb

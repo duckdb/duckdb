@@ -14,6 +14,7 @@
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
+struct MultiFileReaderInterface;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -59,9 +60,12 @@ struct MultiFileReaderGlobalState {
 };
 
 struct MultiFileBindData : public TableFunctionData {
+	~MultiFileBindData() override;
+
 	unique_ptr<TableFunctionData> bind_data;
 	shared_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
+	unique_ptr<MultiFileReaderInterface> interface;
 	vector<MultiFileColumnDefinition> columns;
 	MultiFileReaderBindData reader_bind;
 	MultiFileOptions file_options;
@@ -80,6 +84,11 @@ struct MultiFileBindData : public TableFunctionData {
 	void Initialize(ClientContext &, BaseUnionData &union_data) {
 		Initialize(std::move(union_data.reader));
 	}
+	bool SupportStatementCache() const override {
+		return false;
+	}
+
+	unique_ptr<FunctionData> Copy() const override;
 };
 
 //! Per-file data for the multi file reader
@@ -157,8 +166,11 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	vector<LogicalType> scanned_types;
 	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;
+	atomic<bool> finished {false};
 
 	unique_ptr<GlobalTableFunctionState> global_state;
+
+	optional_ptr<const PhysicalOperator> op;
 
 	idx_t MaxThreads() const override {
 		return max_threads;

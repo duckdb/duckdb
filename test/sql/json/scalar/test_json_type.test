@@ -218,3 +218,19 @@ query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[6]');
 ----
 NULL
+
+# test LIST(JSON) compatibility
+query T
+select json_type(json_extract('{"duck":[1,2,3]}', '$..duck'))
+----
+ARRAY
+
+query T
+select json_type(json_extract('{"a":{"duck":[1]},"b":{"duck":[2,3]}}', '$..duck'))
+----
+ARRAY
+
+query T
+select json_type(json_extract('{"duck":[1,2,3]}', '$.duck[*]'))
+----
+ARRAY

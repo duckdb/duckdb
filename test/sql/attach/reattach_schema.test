@@ -2,8 +2,6 @@
 # description: Re-attach a database with a non-standard schema and re-name the database
 # group: [attach]
 
-require skip_reload
-
 statement ok
 ATTACH '__TEST_DIR__/reattach_schema.db' AS new_db;
 
@@ -79,7 +77,7 @@ USE new_name.my_schema
 statement error
 USE new_name.my_schema.my_table
 ----
-USE database
+Parser Error: Expected "USE database" or "USE database.schema"
 
 query I
 SELECT * FROM my_table

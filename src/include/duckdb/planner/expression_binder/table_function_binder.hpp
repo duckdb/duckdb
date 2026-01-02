@@ -15,7 +15,8 @@ namespace duckdb {
 //! The table function binder can bind standard table function parameters (i.e., non-table-in-out functions)
 class TableFunctionBinder : public ExpressionBinder {
 public:
-	TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name = string());
+	TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name = string(),
+	                    string clause = "Table function");
 
 protected:
 	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);
@@ -26,6 +27,7 @@ protected:
 
 private:
 	string table_function_name;
+	string clause;
 };
 
 } // namespace duckdb

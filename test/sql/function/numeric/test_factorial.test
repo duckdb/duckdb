@@ -2,9 +2,6 @@
 # description: Mod test
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT factorial(0);
 ----
@@ -50,3 +47,4 @@ SELECT factorial(30);
 statement error
 SELECT factorial(40);
 ----
+<REGEX>:.*Out of Range Error.*out of range.*

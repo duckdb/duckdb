@@ -35,7 +35,7 @@ private:
 	static string WriteOptionallyQuoted(const string &input);
 };
 
-enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS };
+enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS, SET_DIRECTLY };
 
 //! The schema search path, in order by which entries are searched if no schema entry is provided
 class CatalogSearchPath {

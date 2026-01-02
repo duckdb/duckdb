@@ -6,6 +6,7 @@
 
 namespace duckdb {
 
+namespace {
 struct BaseCountFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
@@ -211,26 +212,6 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-AggregateFunction CountFunctionBase::GetFunction() {
-	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
-	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
-	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
-	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
-	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
-	fun.name = "count";
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	return fun;
-}
-
-AggregateFunction CountStarFun::GetFunction() {
-	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
-	fun.name = "count_star";
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	fun.window = CountStarFunction::Window<int64_t>;
-	return fun;
-}
-
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                AggregateStatisticsInput &input) {
 	if (!expr.IsDistinct() && !input.child_stats[0].CanHaveNull()) {
@@ -242,9 +223,31 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
 	return nullptr;
 }
 
+} // namespace
+
+AggregateFunction CountFunctionBase::GetFunction() {
+	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
+	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
+	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
+	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
+	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
+	fun.name = "count";
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	return fun;
+}
+
+AggregateFunction CountStarFun::GetFunction() {
+	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
+	fun.name = "count_star";
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetWindowCallback(CountStarFunction::Window<int64_t>);
+	return fun;
+}
+
 AggregateFunctionSet CountFun::GetFunctions() {
 	AggregateFunction count_function = CountFunctionBase::GetFunction();
-	count_function.statistics = CountPropagateStats;
+	count_function.SetStatisticsCallback(CountPropagateStats);
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments

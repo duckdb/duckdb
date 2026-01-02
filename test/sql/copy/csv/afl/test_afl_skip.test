@@ -8,7 +8,7 @@ PRAGMA enable_verification
 loop i 1 3
 
 statement maybe
-FROM read_csv('data/csv/afl/skip/${i}.csv', skip=1)
+FROM read_csv('{DATA_DIR}/csv/afl/skip/${i}.csv', skip=1)
 ----
 
 endloop

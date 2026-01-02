@@ -5,9 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
@@ -95,18 +92,18 @@ void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
 }
 
-bool FunctionExpression::IsLambdaFunction() const {
+optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() const {
 	// Ignore the ->> operator (JSON extension).
 	if (function_name == "->>") {
-		return false;
+		return nullptr;
 	}
 	// Check the children for lambda expressions.
 	for (auto &child : children) {
 		if (child->GetExpressionClass() == ExpressionClass::LAMBDA) {
-			return true;
+			return *child;
 		}
 	}
-	return false;
+	return nullptr;
 }
 
 } // namespace duckdb

@@ -1,0 +1,29 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_multi_statement_string.test_slow
+# description: Test multiple appends across statements within the same transaction
+# group: [optimistic_write]
+
+require parquet
+
+load __TEST_DIR__/optimistic_write_multi_statement_string.db
+
+statement ok
+SET force_compression='uncompressed';
+
+statement ok
+CREATE TABLE main_tbl (v VARCHAR);
+
+statement ok
+BEGIN
+
+foreach file_size 130815 125018 125774 77995
+
+statement ok
+COPY (SELECT uuid()::VARCHAR FROM range(${file_size})) TO '__TEST_DIR__/file.parquet' (ROW_GROUP_SIZE 100000000);
+
+statement ok
+INSERT INTO main_tbl FROM '__TEST_DIR__/file.parquet';
+
+endloop
+
+statement ok
+COMMIT

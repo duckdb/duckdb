@@ -1,0 +1,46 @@
+# name: test/sql/merge/merge_into_multiple_updates.test
+# description: Test MERGE INTO with multiple different update clauses
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Entry(type varchar, number int, text varchar, country VARCHAR, date DATE);
+
+statement ok
+INSERT INTO Entry VALUES
+	('number', 50, NULL, NULL, NULL),
+	('text', NULL, 'Hello', NULL, NULL),
+	('country', NULL, NULL, 'Netherlands', NULL),
+	('date', NULL, NULL, NULL, DATE '2000-01-01');
+
+
+statement ok
+CREATE TABLE NewEntry(type varchar, number int, text varchar, country VARCHAR, date DATE);
+
+statement ok
+INSERT INTO NewEntry VALUES
+	('number', 100, NULL, NULL, NULL),
+	('text', NULL, 'World', NULL, NULL),
+	('country', NULL, NULL, 'Germany', NULL),
+	('date', NULL, NULL, NULL, DATE '2010-01-01');
+
+
+query I
+MERGE INTO Entry USING NewEntry ON Entry.type=NewEntry.type
+WHEN MATCHED AND Entry.type='number' THEN UPDATE SET number=NewEntry.number
+WHEN MATCHED AND Entry.type='text' THEN UPDATE SET text=NewEntry.text
+WHEN MATCHED AND Entry.type='country' THEN UPDATE SET country=NewEntry.country
+WHEN MATCHED AND Entry.type='date' THEN UPDATE SET date=NewEntry.date
+WHEN MATCHED THEN ERROR
+----
+4
+
+query IIIII
+FROM Entry ORDER BY type
+----
+country	NULL	NULL	Germany	NULL
+date	NULL	NULL	NULL	2010-01-01
+number	100	NULL	NULL	NULL
+text	NULL	World	NULL	NULL

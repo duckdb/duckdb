@@ -9,6 +9,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ExtractVersionUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
@@ -29,7 +31,9 @@ struct ExtractTimestampUuidOperator {
 		}
 
 		// UUID v7 begins with a 48 bit big-endian Unix Epoch timestamp with millisecond granularity.
-		const int64_t upper = input.upper;
+		int64_t upper = input.upper;
+		// flip the top byte
+		upper ^= NumericLimits<int64_t>::Minimum();
 		int64_t unix_ts_milli = upper;
 		unix_ts_milli = unix_ts_milli >> 16;
 
@@ -40,7 +44,7 @@ struct ExtractTimestampUuidOperator {
 };
 
 template <typename INPUT, typename OP>
-static void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
@@ -48,7 +52,7 @@ static void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 template <typename INPUT, typename OP>
-static void ExtractTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ExtractTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
@@ -63,7 +67,7 @@ struct RandomLocalState : public FunctionLocalState {
 	RandomEngine random_engine;
 };
 
-static void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
@@ -74,21 +78,14 @@ static void RandomFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 }
 
-static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                           FunctionData *bind_data) {
+unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                    FunctionData *bind_data) {
 	auto &random_engine = RandomEngine::Get(state.GetContext());
 	lock_guard<mutex> guard(random_engine.lock);
 	return make_uniq<RandomLocalState>(random_engine.NextRandomInteger64());
 }
 
-ScalarFunction RandomFun::GetFunction() {
-	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
-	                      RandomInitLocalState);
-	random.stability = FunctionStability::VOLATILE;
-	return random;
-}
-
-static void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &result) {
+void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
@@ -100,7 +97,7 @@ static void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-static void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &result) {
+void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
@@ -112,6 +109,15 @@ static void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
+} // namespace
+
+ScalarFunction RandomFun::GetFunction() {
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
+	                      RandomInitLocalState);
+	random.SetStability(FunctionStability::VOLATILE);
+	return random;
+}
+
 ScalarFunction UUIDFun::GetFunction() {
 	return UUIDv4Fun::GetFunction();
 }
@@ -120,7 +126,7 @@ ScalarFunction UUIDv4Fun::GetFunction() {
 	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v4
-	uuid_v4_function.stability = FunctionStability::VOLATILE;
+	uuid_v4_function.SetStability(FunctionStability::VOLATILE);
 	return uuid_v4_function;
 }
 
@@ -128,7 +134,7 @@ ScalarFunction UUIDv7Fun::GetFunction() {
 	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v7
-	uuid_v7_function.stability = FunctionStability::VOLATILE;
+	uuid_v7_function.SetStability(FunctionStability::VOLATILE);
 	return uuid_v7_function;
 }
 

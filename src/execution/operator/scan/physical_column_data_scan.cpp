@@ -8,16 +8,18 @@
 
 namespace duckdb {
 
-PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
-                                               idx_t estimated_cardinality,
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperatorType op_type, idx_t estimated_cardinality,
                                                optionally_owned_ptr<ColumnDataCollection> collection_p)
-    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(std::move(collection_p)),
-      cte_index(DConstants::INVALID_INDEX) {
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality),
+      collection(std::move(collection_p)), cte_index(DConstants::INVALID_INDEX) {
 }
 
-PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
-                                               idx_t estimated_cardinality, idx_t cte_index)
-    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr), cte_index(cte_index) {
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperatorType op_type, idx_t estimated_cardinality,
+                                               idx_t cte_index)
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality), collection(nullptr),
+      cte_index(cte_index) {
 }
 
 class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
@@ -51,8 +53,8 @@ unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(Executi
 	return make_uniq<PhysicalColumnDataLocalScanState>();
 }
 
-SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalColumnDataScan::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<PhysicalColumnDataGlobalScanState>();
 	auto &lstate = input.local_state.Cast<PhysicalColumnDataLocalScanState>();
 	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);

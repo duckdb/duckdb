@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct EpochSecOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE sec) {
@@ -17,15 +19,10 @@ struct EpochSecOperator {
 	}
 };
 
-static void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	UnaryExecutor::Execute<double, timestamp_t, EpochSecOperator>(input.data[0], result, input.size());
-}
-
-ScalarFunction ToTimestampFun::GetFunction() {
-	// to_timestamp is an alias from Postgres that converts the time in seconds to a timestamp
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
 }
 
 struct NormalizedIntervalOperator {
@@ -35,14 +32,10 @@ struct NormalizedIntervalOperator {
 	}
 };
 
-static void NormalizedIntervalFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+void NormalizedIntervalFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	UnaryExecutor::Execute<interval_t, interval_t, NormalizedIntervalOperator>(input.data[0], result, input.size());
-}
-
-ScalarFunction NormalizedIntervalFun::GetFunction() {
-	return ScalarFunction({LogicalType::INTERVAL}, LogicalType::INTERVAL, NormalizedIntervalFunction);
 }
 
 struct TimeTZSortKeyOperator {
@@ -52,10 +45,21 @@ struct TimeTZSortKeyOperator {
 	}
 };
 
-static void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	UnaryExecutor::Execute<dtime_tz_t, uint64_t, TimeTZSortKeyOperator>(input.data[0], result, input.size());
+}
+
+} // namespace
+
+ScalarFunction ToTimestampFun::GetFunction() {
+	// to_timestamp is an alias from Postgres that converts the time in seconds to a timestamp
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
+}
+
+ScalarFunction NormalizedIntervalFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTERVAL}, LogicalType::INTERVAL, NormalizedIntervalFunction);
 }
 
 ScalarFunction TimeTZSortKeyFun::GetFunction() {

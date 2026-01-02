@@ -97,6 +97,14 @@ SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte);
 1
 42
 
+# cte in nested set operation node
+query I
+SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte UNION ALL SELECT * FROM cte);
+----
+1
+42
+42
+
 # cte in recursive cte
 query I
 WITH RECURSIVE cte(d) AS (
@@ -203,8 +211,24 @@ SELECT * FROM t ORDER BY b;
 7
 
 # reference to CTE before its actually defined, can't with ALTERNATIVE_VERIFY because everything gets materialized
-query I
+statement error
 with cte3 as (select ref2.j as i from cte1 as ref2), cte1 as (Select i as j from a), cte2 as (select ref.j+1 as k from cte1 as ref) select * from cte2 union all select * FROM cte3;
 ----
-43
-42
+Catalog Error: Table with name cte1 does not exist!
+
+statement error
+WITH t(x) AS (SELECT x)
+SELECT *
+FROM  range(10) AS _(x), LATERAL (SELECT * FROM t);
+----
+
+statement error
+WITH cte AS (SELECT x)
+SELECT b.x
+FROM (SELECT 1) _(x), LATERAL (SELECT * FROM cte) b(x)
+----
+
+query III
+WITH RECURSIVE rec(a, b, c) AS (select a,b,c from (values(1,2,3),(1,2,3)) s(a,b,c) union select 1,2,3) select * from rec;
+----
+1	2	3

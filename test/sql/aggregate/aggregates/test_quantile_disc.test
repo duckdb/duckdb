@@ -268,3 +268,25 @@ query I
 SELECT quantile_disc(r, 0.1) FROM quantile WHERE 1=0
 ----
 NULL
+
+# NaNs
+foreach fp float double
+
+loop i 0 10
+
+query I
+with a as (
+	select 'NaN'::${fp} as num 
+	union all 
+	select num::${fp} as num from generate_series(1,99) as tbl(num)
+	union all 
+	select 'NaN'::${fp} as num
+) 
+select quantile_disc(num, 0.9) c1 
+from a;
+----
+91.0
+
+endloop
+
+endloop

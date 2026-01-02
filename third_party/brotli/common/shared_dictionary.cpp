@@ -60,9 +60,9 @@ static BROTLI_BOOL ReadUint16(const uint8_t* encoded, size_t size, size_t* pos,
   return BROTLI_TRUE;
 }
 
-/* Reads a varint into a uint32_t, and returns error if it's too large */
+/* Reads a bignum into a uint32_t, and returns error if it's too large */
 /* Returns BROTLI_TRUE on success, BROTLI_FALSE on failure. */
-static BROTLI_BOOL ReadVarint32(const uint8_t* encoded, size_t size,
+static BROTLI_BOOL ReadBignum32(const uint8_t* encoded, size_t size,
     size_t* pos, uint32_t* result) {
   int num = 0;
   uint8_t byte;
@@ -248,7 +248,7 @@ static BROTLI_BOOL DryParseDictionary(const uint8_t* encoded,
   pos += 2;
 
   /* LZ77_DICTIONARY_LENGTH */
-  if (!ReadVarint32(encoded, size, &pos, &chunk_size)) return BROTLI_FALSE;
+  if (!ReadBignum32(encoded, size, &pos, &chunk_size)) return BROTLI_FALSE;
   if (chunk_size != 0) {
     /* This limitation is not specified but the 32-bit Brotli decoder for now */
     if (chunk_size > 1073741823) return BROTLI_FALSE;
@@ -284,7 +284,7 @@ static BROTLI_BOOL ParseDictionary(const uint8_t* encoded, size_t size,
   pos += 2;
 
   /* LZ77_DICTIONARY_LENGTH */
-  if (!ReadVarint32(encoded, size, &pos, &chunk_size)) return BROTLI_FALSE;
+  if (!ReadBignum32(encoded, size, &pos, &chunk_size)) return BROTLI_FALSE;
   if (chunk_size != 0) {
     if (pos + chunk_size > size) return BROTLI_FALSE;
     dict->prefix_size[dict->num_prefix] = chunk_size;

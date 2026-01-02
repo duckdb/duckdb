@@ -11,6 +11,8 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 namespace duckdb {
 
@@ -21,11 +23,8 @@ struct UpdateInfo;
 
 class CleanupState {
 public:
-	explicit CleanupState(transaction_t lowest_active_transaction);
-	~CleanupState();
-
-	// all tables with indexes that possibly need a vacuum (after e.g. a delete)
-	unordered_map<string, optional_ptr<DataTable>> indexed_tables;
+	explicit CleanupState(DuckTransaction &transaction, transaction_t lowest_active_transaction,
+	                      ActiveTransactionState transaction_state);
 
 public:
 	void CleanupEntry(UndoFlags type, data_ptr_t data);
@@ -33,17 +32,13 @@ public:
 private:
 	//! Lowest active transaction
 	transaction_t lowest_active_transaction;
-	// data for index cleanup
-	optional_ptr<DataTable> current_table;
-	DataChunk chunk;
-	row_t row_numbers[STANDARD_VECTOR_SIZE];
-	idx_t count;
+	ActiveTransactionState transaction_state;
+	//! While cleaning up, we remove data from any delta indexes we added data to during the commit
+	IndexDataRemover index_data_remover;
 
 private:
 	void CleanupDelete(DeleteInfo &info);
 	void CleanupUpdate(UpdateInfo &info);
-
-	void Flush();
 };
 
 } // namespace duckdb

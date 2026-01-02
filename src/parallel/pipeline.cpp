@@ -12,6 +12,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -105,12 +106,16 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
+	auto max_threads = source_state->MaxThreads();
+
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		if (!op.ParallelOperator()) {
 			return false;
 		}
+		max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
 	}
+
 	auto partition_info = sink->RequiredPartitionInfo();
 	if (partition_info.batch_index) {
 		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
@@ -118,7 +123,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
 	}
-	auto max_threads = source_state->MaxThreads();
+
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
 	if (max_threads > active_threads) {
@@ -134,7 +139,6 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 }
 
 bool Pipeline::IsOrderDependent() const {
-	auto &config = DBConfig::GetConfig(executor.context);
 	if (source) {
 		auto source_order = source->SourceOrder();
 		if (source_order == OrderPreservationType::FIXED_ORDER) {
@@ -153,7 +157,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!config.options.preserve_insertion_order) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {
@@ -290,6 +294,10 @@ vector<const_reference<PhysicalOperator>> Pipeline::GetOperators() const {
 		result.push_back(*sink);
 	}
 	return result;
+}
+
+const vector<reference<PhysicalOperator>> &Pipeline::GetIntermediateOperators() const {
+	return operators;
 }
 
 void Pipeline::ClearSource() {

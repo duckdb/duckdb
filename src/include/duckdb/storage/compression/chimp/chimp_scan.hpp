@@ -185,7 +185,6 @@ public:
 	}
 
 	void LoadGroup(CHIMP_TYPE *value_buffer) {
-
 		//! FIXME: If we change the order of this to flag -> leading_zero_blocks -> packed_data
 		//! We can leave out the leading zero block count as well, because it can be derived from
 		//! Extracting all the flags and counting the 3's
@@ -252,7 +251,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> ChimpInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ChimpInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, ChimpScanState<T>>(segment);
 	return result;
 }

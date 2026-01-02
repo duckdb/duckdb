@@ -10,3 +10,4 @@ not found
 statement error
 ATTACH 'file://dummy.csv'
 ----
+IO Error: Cannot open file "file://dummy.csv"

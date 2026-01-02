@@ -11,7 +11,7 @@ cache ads.5M.duck
 
 load
 LOAD httpfs;
-attach 'https://duckdb-blobs.s3.amazonaws.com/data/appian_benchmark_data.duckdb' as appian_db (READ_ONLY);
+attach 'https://blobs.duckdb.org/data/appian_benchmark_data.duckdb' as appian_db (READ_ONLY);
 create table AddressView as select * from appian_db.AddressView;
 create table CustomerView as select * from appian_db.CustomerView;
 create table OrderView as select * from appian_db.OrderView;

@@ -41,19 +41,24 @@ public:
 			return {};
 		}
 		string result;
-		if (end.buffer_idx == begin.buffer_idx) {
-			if (buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
+		if (end.buffer_idx == begin.buffer_idx || begin.buffer_pos == begin.buffer_size) {
+			idx_t buffer_idx = end.buffer_idx;
+			if (buffer_handles.find(buffer_idx) == buffer_handles.end()) {
 				return {};
 			}
-			auto buffer = buffer_handles[begin.buffer_idx]->Ptr();
-			first_char_nl = buffer[begin.buffer_pos] == '\n' || buffer[begin.buffer_pos] == '\r';
-			for (idx_t i = begin.buffer_pos + first_char_nl; i < end.buffer_pos; i++) {
+			idx_t start_pos = begin.buffer_pos == begin.buffer_size ? 0 : begin.buffer_pos;
+			auto buffer = buffer_handles[buffer_idx]->Ptr();
+			first_char_nl = buffer[start_pos] == '\n' || buffer[start_pos] == '\r';
+			for (idx_t i = start_pos + first_char_nl; i < end.buffer_pos; i++) {
 				result += buffer[i];
 			}
 		} else {
 			if (buffer_handles.find(begin.buffer_idx) == buffer_handles.end() ||
 			    buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
 				return {};
+			}
+			if (begin.buffer_pos >= begin.buffer_size) {
+				throw InternalException("CSV reader: buffer pos out of range for buffer");
 			}
 			auto first_buffer = buffer_handles[begin.buffer_idx]->Ptr();
 			auto first_buffer_size = buffer_handles[begin.buffer_idx]->actual_size;
@@ -176,7 +181,7 @@ public:
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
 	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
 	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
-	                  string path, idx_t scan_id);
+	                  const string &path, idx_t scan_id, bool &used_unstrictness);
 
 	~StringValueResult();
 
@@ -217,11 +222,15 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
+	//! If we are trying a row or not when figuring out the next row to start from.
+	bool try_row = false;
+
 	unsafe_unique_array<ParseTypeInfo> parse_types;
 	vector<string> names;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 	idx_t &lines_read;
+	bool &used_unstrictness;
 	//! Information regarding projected columns
 	unsafe_unique_array<bool> projected_columns;
 	bool projecting_columns = false;
@@ -245,7 +254,7 @@ public:
 	//! We store borked rows so we can generate multiple errors during flushing
 	unordered_set<idx_t> borked_rows;
 
-	const string path;
+	String path;
 
 	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
 	//! (i.e., non-comment) line.
@@ -273,7 +282,7 @@ public:
 	//! Force the throw of a Unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
-	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
+	inline void AddValueToVector(const char *value_ptr, idx_t size, bool allocate = false);
 	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
 
@@ -376,7 +385,7 @@ private:
 	idx_t start_pos;
 	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
-	//! Strict state machine, is basically a state machine with rfc 4180 set to true, used to figure out new line.
+	//! Strict state machine is basically a state machine with rfc 4180 set to true, used to figure out a new line.
 	shared_ptr<CSVStateMachine> state_machine_strict;
 };
 

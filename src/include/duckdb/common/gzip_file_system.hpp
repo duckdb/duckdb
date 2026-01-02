@@ -17,14 +17,14 @@ class GZipFileSystem : public CompressedFileSystem {
 	static constexpr const idx_t BUFFER_SIZE = 1u << 15;
 
 public:
-	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) override;
+	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) override;
 
 	std::string GetName() const override {
 		return "GZipFileSystem";
 	}
 
 	//! Verifies that a buffer contains a valid GZIP header
-	static void VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count);
+	static void VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count, optional_ptr<CompressedFile> source_file);
 	static bool CheckIsZip(const char *length, idx_t size);
 
 	//! Consumes a byte stream as a gzip string, returning the decompressed string

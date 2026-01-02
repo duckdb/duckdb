@@ -41,7 +41,8 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
+	BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
+	           idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -54,7 +55,7 @@ public:
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
-	idx_t GetUsedMemory() const;
+	idx_t GetUsedMemory(bool flush = true) const;
 
 	idx_t GetMaxMemory() const;
 
@@ -91,12 +92,14 @@ protected:
 	//! Increments the dead nodes for the queue with specified type
 	void IncrementDeadNodes(const BlockHandle &handle);
 
+	//! How many eviction queue types we have (BLOCK and EXTERNAL_FILE go into same queue)
+	static constexpr idx_t EVICTION_QUEUE_TYPES = FILE_BUFFER_TYPE_COUNT - 1;
 	//! How many eviction queues we have for the different FileBufferTypes
-	static constexpr idx_t BLOCK_QUEUE_SIZE = 1;
+	static constexpr idx_t BLOCK_AND_EXTERNAL_FILE_QUEUE_SIZE = 1;
 	static constexpr idx_t MANAGED_BUFFER_QUEUE_SIZE = 6;
 	static constexpr idx_t TINY_BUFFER_QUEUE_SIZE = 1;
 	//! Mapping and priority order for the eviction queues
-	const array<idx_t, FILE_BUFFER_TYPE_COUNT> eviction_queue_sizes;
+	const array<idx_t, EVICTION_QUEUE_TYPES> eviction_queue_sizes;
 
 protected:
 	enum class MemoryUsageCaches {
@@ -158,6 +161,8 @@ protected:
 	//! and only updates the global counter when the cache value exceeds a threshold.
 	//! Therefore, the statistics may have slight differences from the actual memory usage.
 	mutable MemoryUsage memory_usage;
+	//! The block allocator
+	BlockAllocator &block_allocator;
 };
 
 } // namespace duckdb

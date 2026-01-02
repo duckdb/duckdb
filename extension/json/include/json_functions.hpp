@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
@@ -27,6 +27,7 @@ public:
 	JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONCommon::JSONPathType path_type);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
+	static JSONCommon::JSONPathType CheckPath(const Value &path_val, string &path, idx_t &len);
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
@@ -35,12 +36,12 @@ public:
 	const string path;
 	const JSONCommon::JSONPathType path_type;
 	const char *ptr;
-	const size_t len;
+	const idx_t len;
 };
 
 struct JSONReadManyFunctionData : public FunctionData {
 public:
-	JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
+	JSONReadManyFunctionData(vector<string> paths_p, vector<idx_t> lens_p);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -49,7 +50,7 @@ public:
 public:
 	const vector<string> paths;
 	vector<const char *> ptrs;
-	const vector<size_t> lens;
+	const vector<idx_t> lens;
 };
 
 struct JSONFunctionLocalState : public FunctionLocalState {
@@ -62,7 +63,7 @@ public:
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
 public:
-	JSONAllocator json_allocator;
+	shared_ptr<JSONAllocator> json_allocator;
 };
 
 class JSONFunctions {
@@ -74,9 +75,9 @@ public:
 	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
-	static void RegisterSimpleCastFunctions(CastFunctionSet &casts);
-	static void RegisterJSONCreateCastFunctions(CastFunctionSet &casts);
-	static void RegisterJSONTransformCastFunctions(CastFunctionSet &casts);
+	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
+	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
+	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
 
 private:
 	// Scalar functions
@@ -127,6 +128,9 @@ private:
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+
+	static TableFunctionSet GetJSONEachFunction();
+	static TableFunctionSet GetJSONTreeFunction();
 
 	static TableFunctionSet GetExecuteJsonSerializedSqlFunction();
 };

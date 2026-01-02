@@ -1,0 +1,75 @@
+# name: test/sql/function/variant/variant_extract.test
+# group: [variant]
+
+statement ok
+pragma enable_verification;
+
+require json
+
+query I
+select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
+----
+1234
+
+statement ok
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	]}::VARIANT
+);
+
+statement error
+select variant_extract(a, 'a[1].c') from struct_cast_data();
+----
+Invalid Input Error: VARIANT(OBJECT(a)) is missing key 'a[1].c'
+
+query I
+select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_data();
+----
+NULL
+false
+
+# Using shorthand notation
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[2];
+----
+test
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
+----
+test
+
+# When the argument is a string, it's taken as an object field, not an array index
+statement error
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
+----
+Invalid Input Error: Can't extract key '1' from a VARIANT(ARRAY)
+
+statement error
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[2]'];
+----
+Invalid Input Error: VARIANT(OBJECT(a,b)) is missing key 'b[2]'
+
+query I
+select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
+----
+test

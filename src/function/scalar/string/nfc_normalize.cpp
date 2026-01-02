@@ -4,6 +4,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct NFCNormalizeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
@@ -20,12 +22,14 @@ struct NFCNormalizeOperator {
 	}
 };
 
-static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 
 	UnaryExecutor::ExecuteString<string_t, string_t, NFCNormalizeOperator>(args.data[0], result, args.size());
 	StringVector::AddHeapReference(result, args.data[0]);
 }
+
+} // namespace
 
 ScalarFunction NFCNormalizeFun::GetFunction() {
 	return ScalarFunction("nfc_normalize", {LogicalType::VARCHAR}, LogicalType::VARCHAR, NFCNormalizeFunction);

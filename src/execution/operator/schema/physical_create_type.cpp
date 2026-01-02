@@ -7,8 +7,9 @@
 
 namespace duckdb {
 
-PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_TYPE, {LogicalType::BIGINT}, estimated_cardinality),
+PhysicalCreateType::PhysicalCreateType(PhysicalPlan &physical_plan, unique_ptr<CreateTypeInfo> info_p,
+                                       idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_TYPE, {LogicalType::BIGINT}, estimated_cardinality),
       info(std::move(info_p)) {
 }
 
@@ -69,8 +70,8 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk,
-                                             OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateType::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                     OperatorSourceInput &input) const {
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
 		auto &g_sink_state = sink_state->Cast<CreateTypeGlobalState>();

@@ -17,7 +17,7 @@ CREATE VIEW integers2 AS SELECT 42
 statement error
 CREATE OR REPLACE TABLE integers2(i INTEGER)
 ----
-is of type View
+<REGEX>:.*Catalog Error.*is of type View.*
 
 statement ok
 CREATE TABLE IF NOT EXISTS integers(i INTEGER)
@@ -28,3 +28,4 @@ INSERT INTO integers VALUES (1, 2);
 statement error
 CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)
 ----
+<REGEX>:.*Parser Error: syntax error.*

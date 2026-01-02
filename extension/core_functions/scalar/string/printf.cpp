@@ -41,6 +41,12 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 		case LogicalTypeId::UBIGINT:
 			bound_function.arguments.emplace_back(LogicalType::UBIGINT);
 			break;
+		case LogicalTypeId::HUGEINT:
+			bound_function.arguments.emplace_back(LogicalType::HUGEINT);
+			break;
+		case LogicalTypeId::UHUGEINT:
+			bound_function.arguments.emplace_back(LogicalType::UHUGEINT);
+			break;
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
 			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
@@ -146,6 +152,16 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
+			case LogicalTypeId::HUGEINT: {
+				auto arg_data = FlatVector::GetData<hugeint_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
+			case LogicalTypeId::UHUGEINT: {
+				auto arg_data = FlatVector::GetData<uhugeint_t>(col);
+				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
+				break;
+			}
 			case LogicalTypeId::DOUBLE: {
 				auto arg_data = FlatVector::GetData<double>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
@@ -173,7 +189,7 @@ ScalarFunction PrintfFun::GetFunction() {
 	ScalarFunction printf_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                          PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
 	printf_fun.varargs = LogicalType::ANY;
-	BaseScalarFunction::SetReturnsError(printf_fun);
+	printf_fun.SetFallible();
 	return printf_fun;
 }
 
@@ -182,7 +198,7 @@ ScalarFunction FormatFun::GetFunction() {
 	ScalarFunction format_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                          PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
 	format_fun.varargs = LogicalType::ANY;
-	BaseScalarFunction::SetReturnsError(format_fun);
+	format_fun.SetFallible();
 	return format_fun;
 }
 

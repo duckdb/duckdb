@@ -125,12 +125,12 @@ SELECT a::ROW(a INT, b STRING) r FROM (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))
 statement error
 SELECT struct_extract({'a': a}, a) FROM (SELECT a::VARCHAR AS a FROM range(10) tbl(a));
 ----
-Key name for struct_extract needs to be a constant string
+<REGEX>:.*Binder Error.*Key name for struct_extract needs to be a constant string.*
 
 statement error
 SELECT struct_extract({'a': 42}, 42)
 ----
-can only be used on unnamed structs
+<REGEX>:.*Binder Error.*can only be used on unnamed structs.*
 
 query I
 SELECT struct_extract_at({'a': 42}, 1)
@@ -140,12 +140,12 @@ SELECT struct_extract_at({'a': 42}, 1)
 statement error
 SELECT struct_extract_at({'a': 42}, 0)
 ----
-out of range
+<REGEX>:.*Binder Error.*out of range.*
 
 statement error
 SELECT struct_extract_at({'a': 42}, 42)
 ----
-out of range
+<REGEX>:.*Binder Error.*out of range.*
 
 # Test string to struct cast within struct casting.
 query I

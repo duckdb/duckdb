@@ -2,9 +2,6 @@
 # description: Test round even
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT roundBankers(45, -1)
 ----

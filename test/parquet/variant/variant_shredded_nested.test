@@ -1,0 +1,40 @@
+# name: test/parquet/variant/variant_shredded_nested.test
+# group: [variant]
+
+require parquet
+
+# Array
+query II
+from '{DATA_DIR}/parquet-testing/variant_shredded_array1.parquet';
+----
+1	[[string, iceberg], [apple, banana]]
+
+# Array
+query II
+from '{DATA_DIR}/parquet-testing/variant_shredded_array2.parquet';
+----
+1	[{'a': 123456789, 'c': string}, {'a': 123456789, 'c': string}]
+
+# Array
+query II
+from '{DATA_DIR}/parquet-testing/variant_shredded_array3.parquet';
+----
+1	[iceberg, string]
+
+# Object
+query II
+from '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
+----
+1	{'a': 123456789, 'c': string}
+
+# Object
+query II
+from '{DATA_DIR}/parquet-testing/variant_shredded_object2.parquet';
+----
+1	{'a': NULL, 'd': iceberg}
+
+# Object
+query II
+from '{DATA_DIR}/parquet-testing/variant_shredded_object3.parquet';
+----
+1	{'a': 123456789, 'c': [string, iceberg]}

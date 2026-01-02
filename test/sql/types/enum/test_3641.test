@@ -46,3 +46,4 @@ SELECT * FROM m WHERE m=m_2
 statement error
 SELECT * FROM m WHERE m::mood_2=m_2
 ----
+<REGEX>:.*Conversion Error.*out of range for the destination type.*

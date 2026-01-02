@@ -1,10 +1,151 @@
 {
     "group": "arrow_interface",
-    "deprecated": true,
+    "deprecated": false,
+    "description": "Functions to convert from and to Arrow.",
     "entries": [
+        {
+            "name": "duckdb_to_arrow_schema",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_arrow_options",
+                    "name": "arrow_options"
+                },
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "types"
+                },
+                {
+                    "type": "const char **",
+                    "name": "names"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                },
+                {
+                    "type": "struct ArrowSchema *",
+                    "name": "out_schema"
+                }
+            ],
+            "comment": {
+                "description": "Transforms a DuckDB Schema into an Arrow Schema \n\n",
+                "param_comments": {
+                    "arrow_options": "The Arrow settings used to produce arrow.",
+                    "types": "The DuckDB logical types for each column in the schema.",
+                    "names": "The names for each column in the schema.",
+                    "column_count": "The number of columns that exist in the schema.",
+                    "out_schema": "The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`."
+                },
+                "return_value": "The error data. Must be destroyed with `duckdb_destroy_error_data`."
+            }
+        },
+        {
+            "name": "duckdb_data_chunk_to_arrow",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_arrow_options",
+                    "name": "arrow_options"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "struct ArrowArray *",
+                    "name": "out_arrow_array"
+                }
+            ],
+            "comment": {
+                "description": "Transforms a DuckDB data chunk into an Arrow array.\n\n",
+                "param_comments": {
+                    "arrow_options": "The Arrow settings used to produce arrow.",
+                    "chunk": "The DuckDB data chunk to convert.",
+                    "out_arrow_array": "The output Arrow structure that will hold the converted data. Must be released with `out_arrow_array->release(out_arrow_array)`"
+                },
+                "return_value": "The error data. Must be destroyed with `duckdb_destroy_error_data`."
+            }
+        },
+        {
+          "name": "duckdb_schema_from_arrow",
+          "return_type": "duckdb_error_data",
+          "params": [
+            {
+                "type": "duckdb_connection",
+                "name": "connection"
+            },
+            {
+              "type": "struct ArrowSchema *",
+              "name": "schema"
+            },
+            {
+              "type": "duckdb_arrow_converted_schema *",
+              "name": "out_types"
+            }
+          ],
+          "comment": {
+            "description": "Transforms an Arrow Schema into a DuckDB Schema.\n\n",
+            "param_comments": {
+              "connection": "The connection to get the transformation settings from.",
+              "schema": "The input Arrow schema. Must be released with `schema->release(schema)`.",
+              "out_types": "The Arrow converted schema with extra information about the arrow types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`."
+            },
+            "return_value": "The error data. Must be destroyed with `duckdb_destroy_error_data`."
+          }
+        },
+        {
+          "name": "duckdb_data_chunk_from_arrow",
+          "return_type": "duckdb_error_data",
+          "params": [
+            {
+                "type": "duckdb_connection",
+                "name": "connection"
+            },
+            {
+              "type": "struct ArrowArray *",
+              "name": "arrow_array"
+            },
+            {
+              "type": "duckdb_arrow_converted_schema",
+              "name": "converted_schema"
+            },
+            {
+              "type": "duckdb_data_chunk *",
+              "name": "out_chunk"
+            }
+          ],
+          "comment": {
+            "description": "Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow data. \n\n",
+            "param_comments": {
+              "connection": "The connection to get the transformation settings from.",
+              "arrow_array": "The input Arrow array. Data ownership is passed on to DuckDB's DataChunk, the underlying object does not need to be released and won't have ownership of the data.",
+              "converted_schema" : "The Arrow converted schema with extra information about the arrow types.",
+              "out_chunk": "The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk."
+            },
+            "return_value": "The error data. Must be destroyed with `duckdb_destroy_error_data`."
+          }
+        },
+        {
+            "name": "duckdb_destroy_arrow_converted_schema",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_arrow_converted_schema *",
+                    "name": "arrow_converted_schema"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.\n\n",
+                "param_comments": {
+                    "arrow_converted_schema": "The arrow converted schema to destroy."
+                }
+            }
+        },
         {
             "name": "duckdb_query_arrow",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_connection",
@@ -32,6 +173,7 @@
         {
             "name": "duckdb_query_arrow_schema",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -54,6 +196,7 @@
         {
             "name": "duckdb_prepared_arrow_schema",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_prepared_statement",
@@ -76,6 +219,7 @@
         {
             "name": "duckdb_result_arrow_array",
             "return_type": "void",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_result",
@@ -102,6 +246,7 @@
         {
             "name": "duckdb_query_arrow_array",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -124,6 +269,7 @@
         {
             "name": "duckdb_arrow_column_count",
             "return_type": "idx_t",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -141,6 +287,7 @@
         {
             "name": "duckdb_arrow_row_count",
             "return_type": "idx_t",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -158,6 +305,7 @@
         {
             "name": "duckdb_arrow_rows_changed",
             "return_type": "idx_t",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -175,6 +323,7 @@
         {
             "name": "duckdb_query_arrow_error",
             "return_type": "const char *",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow",
@@ -192,6 +341,7 @@
         {
             "name": "duckdb_destroy_arrow",
             "return_type": "void",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow *",
@@ -208,6 +358,7 @@
         {
             "name": "duckdb_destroy_arrow_stream",
             "return_type": "void",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_arrow_stream *",
@@ -224,6 +375,7 @@
         {
             "name": "duckdb_execute_prepared_arrow",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_prepared_statement",
@@ -246,6 +398,7 @@
         {
             "name": "duckdb_arrow_scan",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_connection",
@@ -273,6 +426,7 @@
         {
             "name": "duckdb_arrow_array_scan",
             "return_type": "duckdb_state",
+            "deprecated": true,
             "params": [
                 {
                     "type": "duckdb_connection",

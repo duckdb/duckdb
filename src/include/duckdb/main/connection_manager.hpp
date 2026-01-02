@@ -40,7 +40,6 @@ private:
 	mutex connections_lock;
 	reference_map_t<ClientContext, weak_ptr<ClientContext>> connections;
 	atomic<idx_t> connection_count;
-
 	atomic<connection_t> current_connection_id;
 };
 

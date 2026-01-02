@@ -13,6 +13,12 @@
 
 #define CPPHTTPLIB_VERSION "0.14.3"
 
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/common/string.hpp"
+#include <exception>
+#include <stdexcept>
+
+
 /*
  * Configuration
  */
@@ -283,6 +289,7 @@ using socket_t = int;
 #include <iostream>
 #include <sstream>
 
+
 // Disabled OpenSSL version check for CI
 //#if OPENSSL_VERSION_NUMBER < 0x1010100fL
 //#error Sorry, OpenSSL versions prior to 1.1.1 are not supported
@@ -317,16 +324,16 @@ namespace detail {
  */
 
 template <class T, class... Args>
-typename std::enable_if<!std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<!std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(Args &&...args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  return duckdb::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <class T>
-typename std::enable_if<std::is_array<T>::value, std::unique_ptr<T>>::type
+typename std::enable_if<std::is_array<T>::value, duckdb::unique_ptr<T>>::type
 make_unique(std::size_t n) {
   typedef typename std::remove_extent<T>::type RT;
-  return std::unique_ptr<T>(new RT[n]);
+  return duckdb::unique_ptr<T>(new RT[n]);
 }
 
 struct ci {
@@ -947,7 +954,7 @@ private:
   using HandlersForContentReader =
       std::vector<std::pair<Regex, HandlerWithContentReader>>;
 
-  static std::unique_ptr<detail::MatcherBase>
+  static duckdb::unique_ptr<detail::MatcherBase>
   make_matcher(const std::string &pattern);
 
   socket_t create_server_socket(const std::string &host, int port,
@@ -1060,7 +1067,7 @@ std::ostream &operator<<(std::ostream &os, const Error &obj);
 class Result {
 public:
   Result() = default;
-  Result(std::unique_ptr<Response> &&res, Error err,
+  Result(duckdb::unique_ptr<Response> &&res, Error err,
          Headers &&request_headers = Headers{})
       : res_(std::move(res)), err_(err),
         request_headers_(std::move(request_headers)) {}
@@ -1087,7 +1094,7 @@ public:
   size_t get_request_header_value_count(const std::string &key) const;
 
 private:
-  std::unique_ptr<Response> res_;
+  duckdb::unique_ptr<Response> res_;
   Error err_ = Error::Unknown;
   Headers request_headers_;
 };
@@ -1445,7 +1452,7 @@ private:
   bool redirect(Request &req, Response &res, Error &error);
   bool handle_request(Stream &strm, Request &req, Response &res,
                       bool close_connection, Error &error);
-  std::unique_ptr<Response> send_with_content_provider(
+  duckdb::unique_ptr<Response> send_with_content_provider(
       Request &req, const char *body, size_t content_length,
       ContentProvider content_provider,
       ContentProviderWithoutLength content_provider_without_length,
@@ -1710,7 +1717,7 @@ public:
 #endif
 
 private:
-  std::unique_ptr<ClientImpl> cli_;
+  duckdb::unique_ptr<ClientImpl> cli_;
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   bool is_ssl_ = false;
@@ -2575,7 +2582,7 @@ inline std::string trim_double_quotes_copy(const std::string &s) {
 
 inline void split(const char *b, const char *e, char d,
                   std::function<void(const char *, const char *)> fn) {
-  return split(b, e, d, std::numeric_limits<size_t>::max(), fn);
+  return split(b, e, d, static_cast<size_t>((std::numeric_limits<size_t>::max)()), fn);
 }
 
 inline void split(const char *b, const char *e, char d, size_t m,
@@ -3423,7 +3430,7 @@ inline unsigned int str2tag(const std::string &s) {
 
 namespace udl {
 
-inline constexpr unsigned int operator "" _t(const char *s, size_t l) {
+inline constexpr unsigned int operator ""_t(const char *s, size_t l) {
   return str2tag_core(s, l, 0);
 }
 
@@ -3438,7 +3445,7 @@ find_content_type(const std::string &path,
   auto it = user_data.find(ext);
   if (it != user_data.end()) { return it->second; }
 
-  using udl::operator "" _t;
+  using udl::operator ""_t;
 
   switch (str2tag(ext)) {
   default: return default_content_type;
@@ -3496,7 +3503,7 @@ find_content_type(const std::string &path,
 }
 
 inline bool can_compress_content_type(const std::string &content_type) {
-  using udl::operator "" _t;
+  using udl::operator ""_t;
 
   auto tag = str2tag(content_type);
 
@@ -3953,7 +3960,7 @@ bool prepare_content_receiver(T &x, int &status,
                               bool decompress, U callback) {
   if (decompress) {
     std::string encoding = x.get_header_value("Content-Encoding");
-    std::unique_ptr<decompressor> decompressor;
+    duckdb::unique_ptr<decompressor> decompressor;
 
     if (encoding == "gzip" || encoding == "deflate") {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
@@ -4860,7 +4867,7 @@ inline bool has_crlf(const std::string &s) {
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
-  auto context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
+  auto context = duckdb::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(
       EVP_MD_CTX_new(), EVP_MD_CTX_free);
 
   unsigned int hash_length = 0;
@@ -4870,7 +4877,7 @@ inline std::string message_digest(const std::string &s, const EVP_MD *algo) {
   EVP_DigestUpdate(context.get(), s.c_str(), s.size());
   EVP_DigestFinal_ex(context.get(), hash, &hash_length);
 
-  std::stringstream ss;
+  duckdb::stringstream ss;
   for (auto i = 0u; i < hash_length; ++i) {
     ss << std::hex << std::setw(2) << std::setfill('0')
        << static_cast<unsigned int>(hash[i]);
@@ -4924,7 +4931,7 @@ inline bool load_system_certs_on_windows(X509_STORE *store) {
 #if TARGET_OS_OSX
 template <typename T>
 using CFObjectPtr =
-    std::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
+    duckdb::unique_ptr<typename std::remove_pointer<T>::type, void (*)(CFTypeRef)>;
 
 inline void cf_object_ptr_deleter(CFTypeRef obj) {
   if (obj) { CFRelease(obj); }
@@ -5038,7 +5045,7 @@ inline std::pair<std::string, std::string> make_digest_authentication_header(
     const std::string &password, bool is_proxy = false) {
   std::string nc;
   {
-    std::stringstream ss;
+    duckdb::stringstream ss;
     ss << std::setfill('0') << std::setw(8) << std::hex << cnonce_count;
     nc = ss.str();
   }
@@ -5627,7 +5634,7 @@ inline Server::Server()
 
 inline Server::~Server() = default;
 
-inline std::unique_ptr<detail::MatcherBase>
+inline duckdb::unique_ptr<detail::MatcherBase>
 Server::make_matcher(const std::string &pattern) {
   if (pattern.find("/:") != std::string::npos) {
     return detail::make_unique<detail::PathParamsMatcher>(pattern);
@@ -5965,7 +5972,7 @@ inline bool Server::write_response_core(Stream &strm, bool close_connection,
   if (close_connection || req.get_header_value("Connection") == "close") {
     res.set_header("Connection", "close");
   } else {
-    std::stringstream ss;
+    duckdb::stringstream ss;
     ss << "timeout=" << keep_alive_timeout_sec_
        << ", max=" << keep_alive_max_count_;
     res.set_header("Keep-Alive", ss.str());
@@ -6053,7 +6060,7 @@ Server::write_content_with_provider(Stream &strm, const Request &req,
     if (res.is_chunked_content_provider_) {
       auto type = detail::encoding_type(req, res);
 
-      std::unique_ptr<detail::compressor> compressor;
+      duckdb::unique_ptr<detail::compressor> compressor;
       if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
         compressor = detail::make_unique<detail::gzip_compressor>();
@@ -6194,7 +6201,7 @@ inline bool Server::handle_file_request(const Request &req, Response &res,
             res.set_header(kv.first, kv.second);
           }
 
-          auto mm = std::make_shared<detail::mmap>(path.c_str());
+          auto mm = duckdb::make_shared_ptr<detail::mmap>(path.c_str());
           if (!mm->is_open()) { return false; }
 
           res.set_content_provider(
@@ -6266,7 +6273,7 @@ inline bool Server::listen_internal() {
   auto se = detail::scope_exit([&]() { is_running_ = false; });
 
   {
-    std::unique_ptr<TaskQueue> task_queue(new_task_queue());
+    duckdb::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
     while (svr_sock_ != INVALID_SOCKET) {
 #ifndef _WIN32
@@ -6510,7 +6517,7 @@ inline void Server::apply_ranges(const Request &req, Response &res,
     }
 
     if (type != detail::EncodingType::None) {
-      std::unique_ptr<detail::compressor> compressor;
+      duckdb::unique_ptr<detail::compressor> compressor;
       std::string content_encoding;
 
       if (type == detail::EncodingType::Gzip) {
@@ -7070,7 +7077,12 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-  if (location.empty()) { return false; }
+  if (location.empty()) {
+    // s3 requests will not return a location header, and instead a
+    // X-Amx-Region-Bucket header. Return true so all response headers
+    // are returned to the httpfs/calling extension
+    return true;
+  }
 
   const Regex re(
       R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
@@ -7127,7 +7139,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 
   if (req.is_chunked_content_provider_) {
     // TODO: Brotli support
-    std::unique_ptr<detail::compressor> compressor;
+    duckdb::unique_ptr<detail::compressor> compressor;
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
     if (compress_) {
       compressor = detail::make_unique<detail::gzip_compressor>();
@@ -7263,7 +7275,7 @@ inline bool ClientImpl::write_request(Stream &strm, Request &req,
   return true;
 }
 
-inline std::unique_ptr<Response> ClientImpl::send_with_content_provider(
+inline duckdb::unique_ptr<Response> ClientImpl::send_with_content_provider(
     Request &req, const char *body, size_t content_length,
     ContentProvider content_provider,
     ContentProviderWithoutLength content_provider_without_length,
@@ -8548,7 +8560,11 @@ inline long SSLClient::get_openssl_verify_result() const {
 inline SSL_CTX *SSLClient::ssl_context() const { return ctx_; }
 
 inline bool SSLClient::create_and_connect_socket(Socket &socket, Error &error) {
-  return is_valid() && ClientImpl::create_and_connect_socket(socket, error);
+  if (!is_valid()) {
+    error = Error::SSLConnection;
+    return false;
+  }
+  return ClientImpl::create_and_connect_socket(socket, error);
 }
 
 // Assumes that socket_mutex_ is locked and that there are no requests in flight

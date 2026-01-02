@@ -2,9 +2,6 @@
 # description: Test aggregation with filter clause
 # group: [filter]
 
-require skip_reload
-
-
 statement ok
 PRAGMA enable_verification
 

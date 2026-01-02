@@ -9,6 +9,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -33,18 +34,28 @@ bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastPara
 }
 
 void HandleCastError::AssignError(const string &error_message, CastParameters &parameters) {
-	AssignError(error_message, parameters.error_message, parameters.query_location);
+	AssignError(error_message, parameters.error_message, parameters.cast_source, parameters.query_location);
 }
 
-static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
-	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
+void HandleCastError::AssignError(const string &error_message, string *error_message_ptr,
+                                  optional_ptr<const Expression> cast_source, optional_idx error_location) {
+	string column;
+	if (cast_source && cast_source->HasAlias()) {
+		column = " when casting from source column " + cast_source->alias;
+	}
+	if (!error_message_ptr) {
+		throw ConversionException(error_location, error_message + column);
+	}
+	if (error_message_ptr->empty()) {
+		*error_message_ptr = error_message + column;
+	}
 }
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
 	if (VectorOperations::HasNotNull(source, count)) {
-		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
+		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -77,9 +88,13 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
                                                    const LogicalType &target) {
 	D_ASSERT(source != target);
 
-	// first check if were casting to a union
+	if (target.id() == LogicalTypeId::VARIANT) {
+		return ImplicitToVariantCast(input, source, target);
+	}
+
+	// then check if were casting to a union
 	if (source.id() != LogicalTypeId::UNION && source.id() != LogicalTypeId::SQLNULL &&
-	    target.id() == LogicalTypeId::UNION) {
+	    source.id() != LogicalTypeId::VARIANT && target.id() == LogicalTypeId::UNION) {
 		return ImplicitToUnionCast(input, source, target);
 	}
 
@@ -109,6 +124,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return DateCastSwitch(input, source, target);
 	case LogicalTypeId::TIME:
 		return TimeCastSwitch(input, source, target);
+	case LogicalTypeId::TIME_NS:
+		return TimeNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIME_TZ:
 		return TimeTzCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP:
@@ -139,12 +156,16 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
 		return UnionCastSwitch(input, source, target);
+	case LogicalTypeId::VARIANT:
+		return VariantCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
 		return ArrayCastSwitch(input, source, target);
-	case LogicalTypeId::VARINT:
-		return VarintCastSwitch(input, source, target);
+	case LogicalTypeId::GEOMETRY:
+		return GeoCastSwitch(input, source, target);
+	case LogicalTypeId::BIGNUM:
+		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

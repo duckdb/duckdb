@@ -1,0 +1,23 @@
+# name: test/sql/storage/memory/in_memory_compress.test
+# description: Test in-memory compression
+# group: [memory]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH ':memory:' AS memory_compressed (COMPRESS)
+
+statement ok
+CREATE TABLE memory_compressed.a(i INTEGER)
+
+statement ok
+INSERT INTO memory_compressed.a FROM range(10000000)
+
+# uncompressed this would take 10M * 4 bytes = ~40MB
+# this compresses very well, so we should be able to store it in far less space
+# assert this takes less than 1 MB
+query I
+SELECT case when memory_usage_bytes < 1000000 then 'success' else error(concat('Expected less than ', 1000000, ' bytes, but got ', memory_usage_bytes)) end FROM duckdb_memory() WHERE tag='IN_MEMORY_TABLE'
+----
+success

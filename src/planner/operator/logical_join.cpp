@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,23 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	}
 	left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
 	return left_bindings;
+}
+
+vector<idx_t> LogicalJoin::GetTableIndex() const {
+	vector<idx_t> result;
+	if (join_type == JoinType::MARK) {
+		result.emplace_back(mark_index);
+	}
+	return result;
+}
+
+string LogicalJoin::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings && join_type == JoinType::MARK) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", mark_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 void LogicalJoin::ResolveTypes() {
@@ -57,13 +75,12 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &
 	}
 }
 
-void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &bindings) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		bindings.insert(colref.binding.table_index);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
+void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<idx_t> &bindings) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
+	                                                              [&](const BoundColumnRefExpression &colref) {
+		                                                              D_ASSERT(colref.depth == 0);
+		                                                              bindings.insert(colref.binding.table_index);
+	                                                              });
 }
 
 } // namespace duckdb

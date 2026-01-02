@@ -44,10 +44,12 @@ baz
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)
 ----
+<REGEX>:.*Invalid Input Error: Group index must be.*
 
 statement error
 SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)
 ----
+<REGEX>:.*Invalid Input Error: Group index must be.*
 
 statement ok
 CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)
@@ -63,6 +65,7 @@ INSERT INTO test VALUES
 statement error
 SELECT regexp_extract(s, p, i) FROM test
 ----
+<REGEX>:.*Invalid Input Error.*must be a constant.*
 
 query T
 SELECT regexp_extract(s, p, 0) FROM test
@@ -85,7 +88,7 @@ bar
 statement error
 SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
 ----
-Invalid Input Error: Group specification field must be a constant!
+<REGEX>:.*Invalid Input Error.*must be a constant.*
 
 # null values
 query T
@@ -106,3 +109,4 @@ NULL
 statement error
 SELECT regexp_extract('foobarbaz', 'b..', '1')
 ----
+<REGEX>:.*Binder Error.*Could not choose a best candidate.*

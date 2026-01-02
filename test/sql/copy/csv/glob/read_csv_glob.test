@@ -6,23 +6,23 @@ statement ok
 PRAGMA enable_verification
 
 query IIIII
-select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv('data/csv/per_thread/*.csv') limit 1
+select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv('{DATA_DIR}/csv/per_thread/*.csv') limit 1
 ----
 VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
 
 query IIIII
-select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['data/csv/per_thread/c1.csv', 'data/csv/per_thread/c2.csv']) limit 1
+select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['{DATA_DIR}/csv/per_thread/c1.csv', '{DATA_DIR}/csv/per_thread/c2.csv']) limit 1
 ----
 VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
 
 query IIIII
-select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['data/csv/per_thread/c2.csv', 'data/csv/per_thread/c1.csv', 'data/csv/per_thread/c3.csv']) limit 1
+select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['{DATA_DIR}/csv/per_thread/c2.csv', '{DATA_DIR}/csv/per_thread/c1.csv', '{DATA_DIR}/csv/per_thread/c3.csv']) limit 1
 ----
 VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
 
 # simple globbing
 query I
-SELECT * FROM read_csv('data/csv/glob/a?/*.csv') ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/a?/*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -35,7 +35,7 @@ SELECT * FROM read_csv('data/csv/glob/a?/*.csv') ORDER BY 1
 2019-08-25
 
 query I
-SELECT * FROM read_csv('data/csv/glob/a?/a*.csv') ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/a?/a*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -46,7 +46,7 @@ SELECT * FROM read_csv('data/csv/glob/a?/a*.csv') ORDER BY 1
 
 # list parameter
 query I
-SELECT * FROM read_csv(['data/csv/glob/a1/a1.csv', 'data/csv/glob/a2/a2.csv']) ORDER BY 1
+SELECT * FROM read_csv(['{DATA_DIR}/csv/glob/a1/a1.csv', '{DATA_DIR}/csv/glob/a2/a2.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -56,7 +56,7 @@ SELECT * FROM read_csv(['data/csv/glob/a1/a1.csv', 'data/csv/glob/a2/a2.csv']) O
 2019-07-25
 
 query I
-SELECT * FROM read_csv_auto(['data/csv/glob/a1/a1.csv', 'data/csv/glob/a2/a2.csv']) ORDER BY 1
+SELECT * FROM read_csv_auto(['{DATA_DIR}/csv/glob/a1/a1.csv', '{DATA_DIR}/csv/glob/a2/a2.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -67,7 +67,7 @@ SELECT * FROM read_csv_auto(['data/csv/glob/a1/a1.csv', 'data/csv/glob/a2/a2.csv
 
 # multiple globs
 query I
-SELECT * FROM read_csv(['data/csv/glob/a?/a*.csv', 'data/csv/glob/a?/a*.csv']) ORDER BY 1
+SELECT * FROM read_csv(['{DATA_DIR}/csv/glob/a?/a*.csv', '{DATA_DIR}/csv/glob/a?/a*.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-05
@@ -84,7 +84,7 @@ SELECT * FROM read_csv(['data/csv/glob/a?/a*.csv', 'data/csv/glob/a?/a*.csv']) O
 
 # more asterisks for directories
 query I
-SELECT * FROM read_csv('data/csv/*/a?/a*.csv') ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/*/a?/a*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -94,7 +94,7 @@ SELECT * FROM read_csv('data/csv/*/a?/a*.csv') ORDER BY 1
 2019-07-25
 
 query II
-SELECT a, b LIKE '%a1.csv%' FROM read_csv('data/csv/*/a?/a*.csv', filename=1) t1(a,b) ORDER BY 1
+SELECT a, b LIKE '%a1.csv%' FROM read_csv('{DATA_DIR}/csv/*/a?/a*.csv', filename=1) t1(a,b) ORDER BY 1
 ----
 2019-06-05	1
 2019-06-15	1
@@ -105,13 +105,13 @@ SELECT a, b LIKE '%a1.csv%' FROM read_csv('data/csv/*/a?/a*.csv', filename=1) t1
 
 # read-csv auto fails here because of a type mismatch: most files contain dates, but one file contains integers
 statement error
-SELECT * FROM read_csv('data/csv/glob/*/*.csv') ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv') ORDER BY 1
 ----
 Schema mismatch between globbed files.
 
 # forcing string parsing works
 query I
-SELECT * FROM read_csv('data/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING')) ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING')) ORDER BY 1
 ----
 1
 2
@@ -127,7 +127,7 @@ SELECT * FROM read_csv('data/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING
 3
 
 query II
-SELECT a, b LIKE '%a_.csv' FROM read_csv('data/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1) t(a,b) ORDER BY 1
+SELECT a, b LIKE '%a_.csv' FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1) t(a,b) ORDER BY 1
 ----
 1	0
 2	0
@@ -144,51 +144,51 @@ SELECT a, b LIKE '%a_.csv' FROM read_csv('data/csv/glob/*/*.csv', columns=STRUCT
 
 # test glob parsing
 query I
-SELECT COUNT(*) FROM glob('data/csv/glob/*/*.csv')
+SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/*.csv')
 ----
 5
 
 query I
-SELECT COUNT(*) FROM glob(['data/csv/glob/*/*.csv'])
+SELECT COUNT(*) FROM glob(['{DATA_DIR}/csv/glob/*/*.csv'])
 ----
 5
 
 
 query I
-SELECT COUNT(*) FROM glob(['data/csv/glob/*/*.csv', 'data/csv/glob/*/*.csv'])
+SELECT COUNT(*) FROM glob(['{DATA_DIR}/csv/glob/*/*.csv', '{DATA_DIR}/csv/glob/*/*.csv'])
 ----
 10
 
 # we can also use windows file slashes
 query I
-SELECT COUNT(*) FROM glob('data\csv\glob\*\*.csv')
+SELECT COUNT(*) FROM glob('{DATA_DIR}\csv\glob\*\*.csv')
 ----
 5
 
 # consecutive slashes are ignored
 query I
-SELECT COUNT(*) FROM glob('data//csv///glob///*//////*.csv')
+SELECT COUNT(*) FROM glob('{DATA_DIR}//csv///glob///*//////*.csv')
 ----
 5
 
 # nothing matches the glob
 statement error
-SELECT * FROM read_csv('data/csv/glob/*/a*a.csv') ORDER BY 1
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/a*a.csv') ORDER BY 1
 ----
-No files found that match the pattern "data/csv/glob/*/a*a.csv"
+No files found that match the pattern "{DATA_DIR}/csv/glob/*/a*a.csv"
 
 statement error
-SELECT * FROM read_csv(['data/csv/glob/*/a*a.csv']) ORDER BY 1
+SELECT * FROM read_csv(['{DATA_DIR}/csv/glob/*/a*a.csv']) ORDER BY 1
 ----
-No files found that match the pattern "data/csv/glob/*/a*a.csv"
+No files found that match the pattern "{DATA_DIR}/csv/glob/*/a*a.csv"
 
 statement error
-SELECT * FROM read_csv_auto(['data/csv/glob/*/a*a.csv']) ORDER BY 1
+SELECT * FROM read_csv_auto(['{DATA_DIR}/csv/glob/*/a*a.csv']) ORDER BY 1
 ----
-No files found that match the pattern "data/csv/glob/*/a*a.csv"
+No files found that match the pattern "{DATA_DIR}/csv/glob/*/a*a.csv"
 
 query I
-SELECT COUNT(*) FROM glob('data/csv/glob/*/a*a.csv')
+SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/a*a.csv')
 ----
 0
 
@@ -206,7 +206,7 @@ require skip_reload
 
 # file_search_path with one path
 statement ok
-set file_search_path='data/csv/glob';
+set file_search_path='{DATA_DIR}/csv/glob';
 
 query I
 SELECT COUNT(*) FROM glob('*/*.csv');
@@ -215,7 +215,7 @@ SELECT COUNT(*) FROM glob('*/*.csv');
 
 # file_search_path with multiple paths
 statement ok
-set file_search_path='data/csv/glob/a1,data/csv/glob/a2';
+set file_search_path='{DATA_DIR}/csv/glob/a1,data/csv/glob/a2';
 
 query I
 SELECT COUNT(*) FROM glob('*.csv');
@@ -224,7 +224,7 @@ SELECT COUNT(*) FROM glob('*.csv');
 
 # file_search_path with a non-existent path
 statement ok
-set file_search_path='data/csv/glob,garbage';
+set file_search_path='{DATA_DIR}/csv/glob,garbage';
 
 query I
 SELECT COUNT(*) FROM glob('*/*.csv');
@@ -233,7 +233,7 @@ SELECT COUNT(*) FROM glob('*/*.csv');
 
 # Only file_search_path is searched
 query I
-SELECT COUNT(*) FROM glob('data/csv/glob/*/*.csv');
+SELECT COUNT(*) FROM glob('csv/glob/*/*.csv');
 ----
 0
 
@@ -242,7 +242,7 @@ statement ok
 set file_search_path='';
 
 query I
-SELECT COUNT(*) FROM glob('data/csv/glob/*/*.csv');
+SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/*.csv');
 ----
 5
 
@@ -282,6 +282,6 @@ statement ok
 SET threads=1;
 
 statement error
-FROM read_csv('data/csv/glob/*/*.csv');
+FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv');
 ----
 Schema mismatch between globbed files.

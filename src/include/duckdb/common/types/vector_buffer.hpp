@@ -104,6 +104,10 @@ public:
 		SetAuxiliaryData(std::move(source_buffer.aux_data));
 	}
 
+	virtual optional_ptr<Allocator> GetAllocator() const {
+		return data.GetAllocator();
+	}
+
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
@@ -182,6 +186,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
+	explicit VectorStringBuffer(Allocator &allocator);
 	explicit VectorStringBuffer(VectorBufferType type);
 
 public:
@@ -198,6 +203,9 @@ public:
 		return heap.EmptyString(len);
 	}
 
+	ArenaAllocator &GetStringAllocator() {
+		return heap.GetAllocator();
+	}
 	//! Allocate a buffer to store up to "len" bytes for a string
 	//! This can be turned into a proper string by using FinalizeBuffer afterwards
 	//! Note that alloc_len only has to be an upper bound, the final string may be smaller

@@ -14,7 +14,7 @@ loop i 27 100
 
 # Test read_csv auto with \n
 query IIII
-select * from read_csv_auto('data/csv/test/multi_column_string.csv', buffer_size=${i})
+select * from read_csv_auto('{DATA_DIR}/csv/test/multi_column_string.csv', buffer_size=${i})
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -28,7 +28,7 @@ select * from read_csv_auto('data/csv/test/multi_column_string.csv', buffer_size
 
 # Test read_csv auto with \r
 query IIII
-select * from read_csv_auto('data/csv/auto/multi_column_string_r.csv', buffer_size=${i})
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_r.csv', buffer_size=${i})
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -42,12 +42,12 @@ select * from read_csv_auto('data/csv/auto/multi_column_string_r.csv', buffer_si
 
 # Test read_csv auto with mix \r and \n
 statement error
-select * from read_csv_auto('data/csv/auto/multi_column_string_mix_r_n.csv', buffer_size=${i})
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size=${i})
 ----
 * Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query IIII
-select * from read_csv_auto('data/csv/auto/multi_column_string_mix_r_n.csv', buffer_size=${i}, strict_mode = False)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix_r_n.csv', buffer_size=${i}, strict_mode = False)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -62,7 +62,7 @@ select * from read_csv_auto('data/csv/auto/multi_column_string_mix_r_n.csv', buf
 
 # Test read_csv auto with \r\n
 query IIII
-select * from read_csv_auto('data/csv/test/multi_column_string_rn.csv', buffer_size=${i}, header=False)
+select * from read_csv_auto('{DATA_DIR}/csv/test/multi_column_string_rn.csv', buffer_size=${i}, header=False)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -78,12 +78,12 @@ endloop
 
 # Test read_csv auto with mix \r, \n and \r\n (This must always run single threaded)
 statement error
-select * from read_csv_auto('data/csv/auto/multi_column_string_mix.csv')
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv')
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query IIII
-select * from read_csv_auto('data/csv/auto/multi_column_string_mix.csv', strict_mode=false)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/multi_column_string_mix.csv', strict_mode=false)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -101,7 +101,7 @@ require notwindows
 
 # Test read_csv with user defined variable
 query IIII
-select * from read_csv('data/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\n')
+select * from read_csv('{DATA_DIR}/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\n')
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -114,7 +114,7 @@ select * from read_csv('data/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_
 100000000	15519	785	p9
 
 query IIII
-select * from read_csv_auto('data/csv/test/multi_column_string.csv',   new_line = '\n')
+select * from read_csv_auto('{DATA_DIR}/csv/test/multi_column_string.csv',   new_line = '\n')
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -127,5 +127,5 @@ select * from read_csv_auto('data/csv/test/multi_column_string.csv',   new_line 
 100000000	15519	785	p9
 
 statement error
-select * from read_csv_auto('data/csv/test/multi_column_string.csv',  new_line = 'not_valid')
+select * from read_csv_auto('{DATA_DIR}/csv/test/multi_column_string.csv',  new_line = 'not_valid')
 ----

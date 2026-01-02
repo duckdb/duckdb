@@ -20,8 +20,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DELETE_OPERATOR;
 
 public:
-	PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-	               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
+	PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
+	               DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
 	               idx_t estimated_cardinality, bool return_chunk);
 
 	TableCatalogEntry &tableref;
@@ -33,7 +33,8 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

@@ -20,19 +20,20 @@
 #include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
-class ColumnSegment;
+
+class BaseStatistics;
 class BlockManager;
 class ColumnData;
+class ColumnSegment;
 class DatabaseInstance;
-class Transaction;
-class BaseStatistics;
-class UpdateSegment;
 class TableFilter;
-struct TableFilterState;
+class Transaction;
+class UpdateSegment;
+struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
-struct ColumnAppendState;
 struct PrefetchState;
+struct TableFilterState;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
@@ -41,24 +42,23 @@ class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
-	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-	              const idx_t offset, const idx_t segment_size_p,
-	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	              const ColumnSegmentType segment_type, const idx_t count, CompressionFunction &function_p,
+	              BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
+	              const idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
-	ColumnSegment(ColumnSegment &other, const idx_t start);
+	ColumnSegment(ColumnSegment &other);
 	~ColumnSegment();
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
-	                                                         idx_t start, idx_t count, CompressionType compression_type,
+	                                                         idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
-	                                                        const LogicalType &type, const idx_t start,
-	                                                        const idx_t segment_size, const idx_t block_size);
+	                                                        const LogicalType &type, const idx_t segment_size,
+	                                                        BlockManager &block_manager);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
@@ -95,16 +95,17 @@ public:
 	//! Returns the number of bytes occupied within the segment
 	idx_t FinalizeAppend(ColumnAppendState &state);
 	//! Revert an append made to this segment
-	void RevertAppend(idx_t start_row);
+	void RevertAppend(idx_t new_count);
 
-	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
+	//! Convert a transient in-memory segment to a persistent segment backed by an on-disk block.
 	//! Only used during checkpointing.
-	void ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id);
+	void ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager, const block_id_t block_id);
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
+	void SetBlock(shared_ptr<BlockHandle> block, uint32_t offset);
 	//! Gets a data pointer from a persistent column segment
-	DataPointer GetDataPointer();
+	DataPointer GetDataPointer(idx_t row_start);
 
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
@@ -123,17 +124,11 @@ public:
 		return offset;
 	}
 
-	idx_t GetRelativeIndex(idx_t row_index) {
-		D_ASSERT(row_index >= this->start);
-		D_ASSERT(row_index <= this->start + this->count);
-		return row_index - this->start;
-	}
-
-	optional_ptr<CompressedSegmentState> GetSegmentState() {
+	optional_ptr<CompressedSegmentState> GetSegmentState() const {
 		return segment_state.get();
 	}
 
-	void CommitDropSegment();
+	void VisitBlockIds(BlockIdVisitor &visitor) const;
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);

@@ -28,12 +28,12 @@ public:
 	};
 
 public:
-	PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
-	                 JoinType join_type, const vector<idx_t> &left_projection_map,
+	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
 	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
-	PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
-	                 JoinType join_type, idx_t estimated_cardinality);
+	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
@@ -74,7 +74,8 @@ protected:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 

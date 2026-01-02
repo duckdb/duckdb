@@ -51,6 +51,8 @@ public:
 	ofstream out_file;
 	ofstream log_file;
 	uint32_t threads = MaxValue<uint32_t>(std::thread::hardware_concurrency(), 1u);
+	string memory_limit;
+	unordered_map<string, string> custom_arguments;
 };
 
 } // namespace duckdb

@@ -1,6 +1,7 @@
 {
     "group": "table_function",
     "deprecated": false,
+    "description": "Functions to implement the execution callback of a table function. The execution callback (i.e., the main function) produces a data chunk output based on a data chunk input, and has access to both the bind and init data.",
     "entries": [
         {
             "name": "duckdb_function_get_extra_info",
@@ -29,11 +30,11 @@
                 }
             ],
             "comment": {
-                "description": "Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.\n\nNote that the bind data should be considered as read-only.\nFor tracking state, use the init data instead.\n\n",
+                "description": "Gets the table function's bind data set by `duckdb_bind_set_bind_data`. \n\nNote that the bind data is read-only.\nFor tracking state, use the init data instead.\n\n",
                 "param_comments": {
-                    "info": "The info object"
+                    "info": "The function info object."
                 },
-                "return_value": "The bind data object"
+                "return_value": "The bind data object."
             }
         },
         {

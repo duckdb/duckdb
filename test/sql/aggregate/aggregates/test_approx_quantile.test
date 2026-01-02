@@ -2,16 +2,13 @@
 # description: Test approx quantile operator
 # group: [aggregates]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
 statement ok
 PRAGMA verify_external
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
@@ -111,6 +108,25 @@ SELECT CASE
 	  FROM (SELECT approx_quantile(r, 0.9)  as approx_quantile ,quantile(r, 0.9)  as true_quantile from quantile) AS T
 ----
 1
+
+# TIMETZ Support. Note this is not exact because we use DOUBLEs internally.
+query I
+SELECT approx_quantile('1:02:03.000000+05:30'::TIMETZ, 0.5);
+----
+01:02:42+05:30:39
+
+# TIME test, fixes issue 19874
+query I
+SELECT
+  APPROX_QUANTILE(a, [0.43::float, 0.64::float, 0.7::float]) AS call_0_result
+FROM (
+  VALUES (
+  (CAST('12:13:14' AS TIME)),          
+  (CAST('12:13:14' AS TIME)),    
+  (CAST('12:13:14' AS TIME))
+  )) AS t(a);
+----
+['12:13:14', '12:13:14', '12:13:14']
 
 # List versions
 query I
@@ -240,6 +256,9 @@ PRAGMA disable_verification;
 
 statement ok
 PRAGMA disable_verify_external;
+
+statement ok
+PRAGMA disable_verify_fetch_row;
 
 statement ok
 SELECT reservoir_quantile(r, 0.9)  from quantile

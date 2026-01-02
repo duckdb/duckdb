@@ -19,7 +19,7 @@ SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
 ----
 0
 
-# we can filter out the IS NULL clause
+# we can filter out the IS NULL clause if there are no NULL values
 query II
 EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
 ----
@@ -38,7 +38,21 @@ SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
 ----
 1
 
-# we cannot filter out the IS NULL clause
+# we can also filter out the IS NULL clause when everything is NULL
+query II
+EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+----
+logical_opt	<!REGEX>:.*IS.*NULL.*
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+----
+1
+
+statement ok
+COPY (SELECT * FROM VALUES (42), (NULL) tbl(i)) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+
+# we cannot filter out the IS NULL clause when there are mixed NULL/valid
 query II
 EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
 ----

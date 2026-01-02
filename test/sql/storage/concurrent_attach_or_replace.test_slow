@@ -1,0 +1,52 @@
+# name: test/sql/storage/concurrent_attach_or_replace.test_slow
+# description: Test concurrent running attach or replace
+# group: [storage]
+
+# create the databases
+loop db_index 0 20
+
+statement ok
+attach '__TEST_DIR__/attached_db${db_index}.duckdb' AS db_name
+
+statement ok
+create table db_name.integers(i integer);
+
+statement ok
+detach db_name
+
+endloop
+
+statement ok
+attach '__TEST_DIR__/attached_db0.duckdb' AS db_name
+
+concurrentloop i 0 10
+
+loop db_index 1 20
+
+onlyif i<1
+statement ok
+begin
+
+onlyif i<1
+statement ok
+attach or replace '__TEST_DIR__/attached_db${db_index}.duckdb' AS db_name
+
+onlyif i<1
+statement ok
+select count(*) from db_name.integers
+
+onlyif i<1
+statement ok
+commit
+
+endloop
+
+loop insert_idx 0 100
+
+onlyif i>=1
+statement ok
+insert into db_name.integers values (42);
+
+endloop
+
+endloop

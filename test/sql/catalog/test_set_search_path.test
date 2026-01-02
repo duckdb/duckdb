@@ -19,6 +19,8 @@ CREATE SCHEMA test2;
 
 statement ok
 CREATE TABLE test2.bye(i INTEGER);
+
+statement ok
 CREATE TABLE test2.test2_table(i INTEGER);
 
 statement ok
@@ -56,6 +58,7 @@ SET SEARCH_PATH = '"test","test2"';
 statement error
 SET SEARCH_PATH = 'does_not_exist';
 ----
+<REGEX>:Catalog Error.*No catalog.*schema named.*
 
 # Setting the default value through 'schema'
 
@@ -70,6 +73,7 @@ expected a single entry
 statement error
 SET SCHEMA = 'does_not_exist';
 ----
+<REGEX>:Catalog Error.*No catalog.*schema named.*
 
 # Reading out to see how aliasing works.
 
@@ -79,6 +83,7 @@ SET SEARCH_PATH = 'test,test2';
 statement error
 SET SEARCH_PATH = '"invalid quoted string list';
 ----
+<REGEX>:Parser Error.*Unterminated quote in qualified name.*
 
 query I
 SELECT MAIN.CURRENT_SETTING('search_path');
@@ -172,14 +177,15 @@ CREATE TABLE test2.table_with_same_name(in_test2 INTEGER);
 statement error
 SELECT in_main FROM table_with_same_name;
 ----
+<REGEX>:Binder Error.*not found in FROM clause.*
 
 statement error
 SELECT in_test2 FROM table_with_same_name;
 ----
+<REGEX>:Binder Error.*not found in FROM clause.*
 
 statement ok
 SELECT in_test FROM table_with_same_name;
-
 
 # Or even more schemas
 
@@ -226,10 +232,12 @@ SELECT i FROM test_table;
 statement error con2
 SELECT i FROM test_table;
 ----
+<REGEX>:Catalog Error.*does not exist.*
 
 statement error con1
 SELECT i FROM test2_table;
 ----
+<REGEX>:Catalog Error.*does not exist.*
 
 statement ok con2
 SELECT i FROM test2_table;

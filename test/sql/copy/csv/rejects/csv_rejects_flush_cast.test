@@ -9,7 +9,7 @@ require notwindows
 
 query IIIII
 SELECT first(a), first(b), typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
-    'data/csv/error/flush_cast.csv',
+    '{DATA_DIR}/csv/error/flush_cast.csv',
     columns = {'a': 'DATE', 'b': 'VARCHAR'},
     store_rejects = true,
     delim = ',',

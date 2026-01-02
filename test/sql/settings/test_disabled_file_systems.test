@@ -24,7 +24,7 @@ SET disabled_filesystems='';
 
 # we can read from the local file system
 statement ok
-SELECT * FROM read_csv_auto('data/csv/auto/skip_row.csv')
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
 
 statement ok
 SET disabled_filesystems='LocalFileSystem';
@@ -35,7 +35,7 @@ RESET disabled_filesystems;
 File system "LocalFileSystem" has been disabled previously
 
 statement error
-SELECT * FROM read_csv_auto('data/csv/auto/skip_row.csv')
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
 ----
 File system LocalFileSystem has been disabled by configuration
 
@@ -48,3 +48,20 @@ statement error
 SET disabled_filesystems='';
 ----
 has been disabled previously
+
+# querying a non-existent catalog or schema should not trigger the disabled filesystem error
+statement error
+SELECT * FROM abc.main.t1;
+----
+Catalog "abc" does not exist
+
+statement error
+SELECT * FROM abc.t1;
+----
+schema "abc" does not exist
+
+# but querying a known extension should still trigger the disabled filesystem error
+statement error
+SELECT * FROM abc.csv;
+----
+File system LocalFileSystem has been disabled by configuration

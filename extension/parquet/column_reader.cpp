@@ -24,9 +24,12 @@
 
 #include "zstd.h"
 
-#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+
+#include "parquet_crypto.hpp"
 
 namespace duckdb {
 
@@ -109,7 +112,7 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p)
     : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
-      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this) {
+      delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
 }
 
 ColumnReader::~ColumnReader() {
@@ -131,7 +134,7 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 }
 
 unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
-	return Schema().Stats(reader, row_group_idx_p, columns);
+	return Schema().Stats(*reader.GetFileMetadata(), reader.parquet_options, row_group_idx_p, columns);
 }
 
 uint64_t ColumnReader::TotalCompressedSize() {
@@ -192,7 +195,8 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 	D_ASSERT(chunk->__isset.meta_data);
 
 	if (chunk->__isset.file_path) {
-		throw std::runtime_error("Only inlined data files are supported (no references)");
+		throw InvalidInputException("Failed to read file \"%s\": Only inlined data files are supported (no references)",
+		                            Reader().GetFileName());
 	}
 
 	// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
@@ -231,6 +235,36 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
+void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
+	aad_crypto_metadata.module = ParquetCrypto::GetModuleHeader(*chunk, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.page_ordinal =
+	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
+	reader.ReadEncrypted(object, *protocol, aad_crypto_metadata);
+}
+
+void ColumnReader::ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
+	aad_crypto_metadata.module = ParquetCrypto::GetModule(*chunk, page_type, aad_crypto_metadata.page_ordinal);
+	aad_crypto_metadata.page_ordinal =
+	    ParquetCrypto::GetFinalPageOrdinal(*chunk, aad_crypto_metadata.module, aad_crypto_metadata.page_ordinal);
+	reader.ReadDataEncrypted(*protocol, buffer, buffer_size, aad_crypto_metadata);
+}
+
+void ColumnReader::Read(PageHeader &page_hdr) {
+	if (reader.parquet_options.encryption_config) {
+		ReadEncrypted(page_hdr);
+	} else {
+		reader.Read(page_hdr, *protocol);
+	}
+}
+
+void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type) {
+	if (reader.parquet_options.encryption_config) {
+		ReadDataEncrypted(buffer, buffer_size, page_type);
+	} else {
+		reader.ReadData(*protocol, buffer, buffer_size);
+	}
+}
+
 void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
@@ -238,21 +272,22 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	block.reset();
 	PageHeader page_hdr;
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+
 	if (trans.HasPrefetch()) {
 		// Already has some data prefetched, let's not mess with it
-		reader.Read(page_hdr, *protocol);
+		Read(page_hdr);
 	} else {
 		// No prefetch yet, prefetch the full header in one go (so thrift won't read byte-by-byte from storage)
 		// 256 bytes should cover almost all headers (unless it's a V2 header with really LONG string statistics)
 		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
 		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
 		trans.Prefetch(trans.GetLocation(), prefetch_size);
-		reader.Read(page_hdr, *protocol);
+		Read(page_hdr);
 		trans.ClearPrefetch();
 	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
-		throw std::runtime_error("Page sizes can't be < 0");
+		throw InvalidInputException("Failed to read file \"%s\": Page sizes can't be < 0", Reader().GetFileName());
 	}
 
 	if (PageIsFilteredOut(page_hdr)) {
@@ -273,7 +308,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		PreparePage(page_hdr);
 		auto dictionary_size = page_hdr.dictionary_page_header.num_values;
 		if (dictionary_size < 0) {
-			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
+			throw InvalidInputException("Failed to read file \"%s\": Invalid dictionary page header (num_values < 0)",
+			                            Reader().GetFileName());
 		}
 		dictionary_decoder.InitializeDictionary(dictionary_size, filter, filter_state, HasDefines());
 		break;
@@ -289,7 +325,6 @@ void ColumnReader::ResetPage() {
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	bool uncompressed = false;
@@ -298,12 +333,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			throw std::runtime_error("Page size mismatch");
+			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
 		}
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
+		ReadData(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
 		return;
 	}
 
@@ -311,17 +346,21 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
 	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
-		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
-		                         "repetition_levels_byte_length + definition_levels_byte_length");
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
+		    "repetition_levels_byte_length + definition_levels_byte_length",
+		    Reader().GetFileName());
 	}
-	trans.read(block->ptr, uncompressed_bytes);
+
+	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
 		compressed_buffer.resize(GetAllocator(), compressed_bytes);
-		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
+
+		ReadData(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
 
 		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
 		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
@@ -338,19 +377,32 @@ void ColumnReader::AllocateBlock(idx_t size) {
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	uint32_t compressed_page_size = page_hdr.compressed_page_size;
+
+	if (chunk->__isset.crypto_metadata) {
+		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
+		if (!file_aad.empty()) {
+			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
+			// Arrow adds the bytes for encryption (len + nonce + tag)
+			// to the compressed page size
+			compressed_page_size -=
+			    (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
+		}
+	}
+
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
 			throw std::runtime_error("Page size mismatch");
 		}
-		reader.ReadData(*protocol, block->ptr, page_hdr.compressed_page_size);
+		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
 	}
 
 	ResizeableBuffer compressed_buffer;
-	compressed_buffer.resize(GetAllocator(), page_hdr.compressed_page_size + 1);
-	reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size);
+	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
+	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
 
-	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
+	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);
 }
 
@@ -369,7 +421,8 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		    duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst),
 		                                    UnsafeNumericCast<int32_t>(src_size), UnsafeNumericCast<int32_t>(dst_size));
 		if (res != NumericCast<int>(dst_size)) {
-			throw std::runtime_error("LZ4 decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": LZ4 decompression failure",
+			                            Reader().GetFileName());
 		}
 		break;
 	}
@@ -378,22 +431,27 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 			size_t uncompressed_size = 0;
 			auto res = duckdb_snappy::GetUncompressedLength(const_char_ptr_cast(src), src_size, &uncompressed_size);
 			if (!res) {
-				throw std::runtime_error("Snappy decompression failure");
+				throw InvalidInputException("Failed to read file \"%s\": Snappy decompression failure",
+				                            Reader().GetFileName());
 			}
 			if (uncompressed_size != dst_size) {
-				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
+				throw InvalidInputException(
+				    "Failed to read file \"%s\": Snappy decompression failure: Uncompressed data size mismatch",
+				    Reader().GetFileName());
 			}
 		}
 		auto res = duckdb_snappy::RawUncompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst));
 		if (!res) {
-			throw std::runtime_error("Snappy decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": Snappy decompression failure",
+			                            Reader().GetFileName());
 		}
 		break;
 	}
 	case CompressionCodec::ZSTD: {
 		auto res = duckdb_zstd::ZSTD_decompress(dst, dst_size, src, src_size);
 		if (duckdb_zstd::ZSTD_isError(res) || res != dst_size) {
-			throw std::runtime_error("ZSTD Decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": ZSTD Decompression failure",
+			                            Reader().GetFileName());
 		}
 		break;
 	}
@@ -406,27 +464,31 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
 		                                                        &total_out);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
-			throw std::runtime_error("Brotli Decompression failure");
+			throw InvalidInputException("Failed to read file \"%s\": Brotli Decompression failure",
+			                            Reader().GetFileName());
 		}
 		duckdb_brotli::BrotliDecoderDestroyInstance(state);
 		break;
 	}
 
 	default: {
-		std::stringstream codec_name;
+		duckdb::stringstream codec_name;
 		codec_name << codec;
-		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd");
+		throw InvalidInputException("Failed to read file \"%s\": Unsupported compression codec \"%s\". Supported "
+		                            "options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd",
+		                            Reader().GetFileName(), codec_name.str());
 	}
 	}
 }
 
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
-		throw std::runtime_error("Missing data page header from data page");
+		throw InvalidInputException("Failed to read file \"%s\": Missing data page header from data page",
+		                            Reader().GetFileName());
 	}
 	if (page_hdr.type == PageType::DATA_PAGE_V2 && !page_hdr.__isset.data_page_header_v2) {
-		throw std::runtime_error("Missing data page header from data page v2");
+		throw InvalidInputException("Failed to read file \"%s\": Missing data page header from data page v2",
+		                            Reader().GetFileName());
 	}
 
 	bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
@@ -493,7 +555,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		break;
 
 	default:
-		throw std::runtime_error("Unsupported page encoding");
+		throw InvalidInputException("Failed to read file \"%s\": Unsupported page encoding", Reader().GetFileName());
 	}
 }
 
@@ -510,8 +572,11 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
                                     optional_ptr<TableFilterState> filter_state) {
+	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
+		aad_crypto_metadata.page_ordinal = page_ordinal;
 		PrepareRead(filter, filter_state);
+		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
 }
@@ -714,6 +779,12 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 
 	while (to_skip > 0) {
 		auto skip_now = ReadPageHeaders(to_skip);
+		if (page_is_filtered_out) {
+			// the page has been filtered out entirely - skip
+			page_rows_available -= skip_now;
+			to_skip -= skip_now;
+			continue;
+		}
 		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
 
 		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
@@ -750,7 +821,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(reader, schema);
@@ -758,6 +829,8 @@ unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const Parque
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	case PhysicalType::INT64:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+	case PhysicalType::INT128:
+		return make_uniq<TemplatedColumnReader<hugeint_t, TemplatedParquetValueConversion<T>>>(reader, schema);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
@@ -829,11 +902,22 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::TIME:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetMsIntToTime>>(reader, schema);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(reader, schema);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetNsIntToTime>>(reader, schema);
+		default:
+			throw InternalException("TIME requires type info");
+		}
+	case LogicalTypeId::TIME_NS:
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int32_t, dtime_ns_t, ParquetMsIntToTimeNs>>(reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetUsIntToTimeNs>>(reader, schema);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetIntToTimeNs>>(reader, schema);
 		default:
 			throw InternalException("TIME requires type info");
 		}
@@ -863,7 +947,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		default:
 			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
-		break;
 	case LogicalTypeId::UUID:
 		return make_uniq<UUIDColumnReader>(reader, schema);
 	case LogicalTypeId::INTERVAL:

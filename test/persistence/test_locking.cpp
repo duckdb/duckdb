@@ -1,16 +1,11 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb.hpp"
-#include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
 #include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-#ifdef __MVS__
-#define MAP_ANONYMOUS 0x0
-#endif
 
 using namespace duckdb;
 using namespace std;

@@ -2,8 +2,6 @@
 # description: Issue #9252: Sequences defined with offset and custom increment always start with 1 instead of using the offset
 # group: [sequence]
 
-require skip_reload
-
 statement ok
 create sequence xx start 100 increment by 2;
 

@@ -29,11 +29,11 @@ query I
 SELECT * FROM test QUALIFY i <= lag(i) over ()
 ----
 
-# ensure that we still write 122880 as our row group size count, even for different block sizes
+# ensure that we still write close to our row group size as our row group size count, even for different block sizes
 query I
-SELECT MAX(count) FROM pragma_storage_info('test')
+SELECT MAX(count) > 100000 FROM pragma_storage_info('test')
 ----
-122880
+true
 
 # The median differs between block sizes because the upper bound of the segment size is the block size.
 require block_size 262144

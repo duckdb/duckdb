@@ -1,0 +1,52 @@
+{
+  "description": "Run on persistent databases as storage with row verification enabled.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__verify_fetch_row.db",
+  "on_init": "PRAGMA enable_verification;PRAGMA verify_fetch_row;",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/enable_verification.json",
+  "skip_tests": [
+    {
+      "reason": "Wrong result",
+      "paths": [
+        "test/sql/show_select/test_describe_all.test",
+        "test/sql/catalog/function/attached_macro.test",
+        "test/sql/pragma/test_show_tables_temp_views.test",
+        "test/sql/attach/attach_table_info.test",
+        "test/sql/attach/attach_defaults.test",
+        "test/sql/attach/attach_did_you_mean.test",
+        "test/sql/attach/attach_default_table.test",
+        "test/sql/attach/attach_show_all_tables.test",
+        "test/sql/attach/attach_issue7711.test",
+        "test/sql/attach/attach_issue_7660.test",
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/attach_views.test",
+        "test/sql/copy_database/copy_table_with_sequence.test",
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+      ]
+    },
+    {
+      "reason": "FIXME: crash/error in test",
+      "paths": [
+        "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_inverted_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
+        "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple_w_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_inverted_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_first_is_null.test",
+        "test/sql/storage/compression/roaring/roaring_bool_fetch_row.test",
+        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
+      ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+        "paths": [
+          "test/geoparquet/with_crs.test"
+        ]
+    }
+  ]
+}

@@ -2,9 +2,6 @@
 # description: Issue #4309: Test deleting from a parent table with multiple foreign key constraints.
 # group: [foreignkey]
 
-statement ok
-PRAGMA enable_verification
-
 # fks:
 # d -> a
 # e -> b

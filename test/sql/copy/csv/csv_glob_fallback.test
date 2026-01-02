@@ -6,12 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 query III
-SELECT * FROM 'data/csv/[avalon]_daily-avg.csv'
+SELECT * FROM '{DATA_DIR}/csv/[avalon]_daily-avg.csv'
 ----
 1	2	3
 3	4	5
 4	5	6
 
 statement error
-SELECT * FROM 'data/csv/[avxalon]_daily-avg.csv'
+SELECT * FROM '{DATA_DIR}/csv/[avxalon]_daily-avg.csv'
 ----
+<REGEX>:.*IO Error: No files found.*

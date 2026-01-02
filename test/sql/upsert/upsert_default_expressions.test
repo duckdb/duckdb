@@ -31,12 +31,12 @@ select * from tbl;
 
 # DEFAULT in ON CONFLICT (..) WHERE <expr>
 statement error
-insert into tbl VALUES (4,8) ON CONFLICT (a) WHERE a = DEFAULT DO UPDATE SET b = excluded.b;
+insert into tbl VALUES (4,8) ON CONFLICT (a) DO UPDATE SET b = excluded.b WHERE a = DEFAULT;
 ----
-Binder Error: WHERE clause cannot contain DEFAULT clause
+WHERE clause cannot contain DEFAULT clause
 
 # DEFAULT in DO UPDATE SET .. WHERE <expr>
 statement error
 insert into tbl VALUES (4,3) ON CONFLICT (a) DO UPDATE SET b = excluded.b WHERE excluded.b = DEFAULT * 2;
 ----
-Binder Error: WHERE clause cannot contain DEFAULT clause
+WHERE clause cannot contain DEFAULT clause

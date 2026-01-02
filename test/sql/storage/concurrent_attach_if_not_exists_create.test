@@ -1,0 +1,17 @@
+# name: test/sql/storage/concurrent_attach_if_not_exists_create.test
+# description: Test concurrent ATTACH IF NOT EXISTS followed by a create
+# group: [storage]
+
+concurrentloop x 0 10
+
+foreach name db1 db2 db3 db4 db5
+
+statement ok
+attach if not exists '__TEST_DIR__/concurrent_attach_${name}.duckdb' AS ${name}
+
+statement ok
+create table ${name}.tbl${x}(i INTEGER)
+
+endloop
+
+endloop

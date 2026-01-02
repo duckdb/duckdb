@@ -7,6 +7,8 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -74,19 +76,19 @@ struct ExtensionAccess {
 		load_state.has_error = true;
 		load_state.error_data =
 		    error ? ErrorData(error)
-		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occured during "
+		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occurred during "
 		                                                   "initialization, but did not set an error message.");
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
-	static duckdb_database *GetDatabase(duckdb_extension_info info) {
+	static duckdb_database GetDatabase(duckdb_extension_info info) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
 		try {
 			// Create the duckdb_database
 			load_state.database_data = make_uniq<DatabaseWrapper>();
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
-			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
+			return reinterpret_cast<duckdb_database>(load_state.database_data.get());
 		} catch (std::exception &ex) {
 			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
@@ -139,11 +141,9 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 // The C++ init function
-typedef void (*ext_init_fun_t)(DatabaseInstance &);
+typedef void (*ext_init_fun_t)(ExtensionLoader &);
 // The C init function
 typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
-typedef const char *(*ext_version_fun_t)(void);
-typedef bool (*ext_is_storage_t)(void);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
@@ -350,19 +350,53 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		filename = address;
 #else
 
-		string local_path = !db.config.options.extension_directory.empty()
-		                        ? db.config.options.extension_directory
-		                        : ExtensionHelper::DefaultExtensionFolder(fs);
+		// Local function to process local path
+		auto ComputeLocalExtensionPath = [&fs](const string &base_path, const string &extension_name) -> string {
+			// convert random separators to platform-canonic
+			string local_path = fs.ConvertSeparators(base_path);
+			// expand ~ in extension directory
+			local_path = fs.ExpandPath(local_path);
+			auto path_components = PathComponents();
+			for (auto &path_ele : path_components) {
+				local_path = fs.JoinPath(local_path, path_ele);
+			}
+			return fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+		};
 
-		// convert random separators to platform-canonic
-		local_path = fs.ConvertSeparators(local_path);
-		// expand ~ in extension directory
-		local_path = fs.ExpandPath(local_path);
-		auto path_components = PathComponents();
-		for (auto &path_ele : path_components) {
-			local_path = fs.JoinPath(local_path, path_ele);
+		// Collect all directories to search for extensions
+		vector<string> search_directories;
+		if (!db.config.options.extension_directory.empty()) {
+			search_directories.push_back(db.config.options.extension_directory);
 		}
-		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+
+		if (!db.config.options.extension_directories.empty()) {
+			// Add all configured extension directories
+			for (const auto &dir : db.config.options.extension_directories) {
+				search_directories.push_back(dir);
+			}
+		}
+
+		// Add default extension directory if no custom directories configured
+		if (search_directories.empty()) {
+			for (const auto &path : ExtensionHelper::DefaultExtensionFolders(fs)) {
+				search_directories.push_back(path);
+			}
+		}
+
+		// Try each directory in sequence until extension is found
+		bool found = false;
+		for (const auto &directory : search_directories) {
+			filename = ComputeLocalExtensionPath(directory, extension_name);
+			if (fs.FileExists(filename)) {
+				found = true;
+				break;
+			}
+		}
+
+		// If not found in any directory, use the first directory for error reporting
+		if (!found) {
+			filename = ComputeLocalExtensionPath(search_directories[0], extension_name);
+		}
 #endif
 	} else {
 		direct_load = true;
@@ -405,7 +439,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		if (!signature_valid) {
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
-	} else if (!db.config.options.allow_extensions_metadata_mismatch) {
+	} else if (!DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(db)) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
@@ -517,9 +551,22 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
-	if (db.ExtensionIsLoaded(extension)) {
+	auto &manager = ExtensionManager::Get(db);
+	auto info = manager.BeginLoad(extension);
+	if (!info) {
 		return;
 	}
+	try {
+		LoadExternalExtensionInternal(db, fs, extension, *info);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		info->LoadFail(error);
+		throw;
+	}
+}
+
+void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                                    ExtensionActiveLoad &info) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -527,7 +574,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
-		auto init_fun_name = extension_init_result.filebase + "_init";
+		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
 		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
 		                                                                 extension_init_result.filename);
 		if (!init_fun) {
@@ -536,7 +583,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			(*init_fun)(db);
+			ExtensionLoader loader(info);
+			(*init_fun)(loader);
+			loader.FinalizeLoad();
 		} catch (std::exception &e) {
 			ErrorData error(e);
 			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
@@ -545,7 +594,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
@@ -576,7 +625,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		if (result == false) {
 			throw FatalException(
 			    "Extension '%s' failed to initialize but did not return an error. This indicates an "
-			    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+			    "error in the extension: C API extensions should return a boolean `true` to indicate successful "
 			    "initialization. "
 			    "This means that the Extension may be partially initialized resulting in an inconsistent state of "
 			    "DuckDB.",
@@ -585,7 +634,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 

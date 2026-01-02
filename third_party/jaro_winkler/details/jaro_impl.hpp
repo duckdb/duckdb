@@ -448,7 +448,7 @@ double jaro_winkler_similarity(InputIt1 P_first, InputIt1 P_last, InputIt2 T_fir
 
     double jaro_score_cutoff = score_cutoff;
     if (jaro_score_cutoff > 0.7) {
-        double prefix_sim = prefix * prefix_weight;
+        double prefix_sim = static_cast<double>(prefix) * prefix_weight;
 
         if (prefix_sim >= 1.0) {
             jaro_score_cutoff = 0.7;
@@ -461,7 +461,7 @@ double jaro_winkler_similarity(InputIt1 P_first, InputIt1 P_last, InputIt2 T_fir
 
     double Sim = jaro_similarity(P_first, P_last, T_first, T_last, jaro_score_cutoff);
     if (Sim > 0.7) {
-        Sim += prefix * prefix_weight * (1.0 - Sim);
+        Sim += static_cast<double>(prefix) * prefix_weight * (1.0 - Sim);
     }
 
     return common::result_cutoff(Sim, score_cutoff);
@@ -486,7 +486,7 @@ double jaro_winkler_similarity(const common::BlockPatternMatchVector& PM, InputI
 
     double jaro_score_cutoff = score_cutoff;
     if (jaro_score_cutoff > 0.7) {
-        double prefix_sim = prefix * prefix_weight;
+        double prefix_sim = static_cast<double>(prefix) * prefix_weight;
 
         if (prefix_sim >= 1.0) {
             jaro_score_cutoff = 0.7;
@@ -499,7 +499,7 @@ double jaro_winkler_similarity(const common::BlockPatternMatchVector& PM, InputI
 
     double Sim = jaro_similarity(PM, P_first, P_last, T_first, T_last, jaro_score_cutoff);
     if (Sim > 0.7) {
-        Sim += prefix * prefix_weight * (1.0 - Sim);
+        Sim += static_cast<double>(prefix) * prefix_weight * (1.0 - Sim);
     }
 
     return common::result_cutoff(Sim, score_cutoff);

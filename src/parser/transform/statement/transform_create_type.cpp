@@ -28,7 +28,6 @@ Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> colum
 		}
 
 		auto entry_value = string(entry_value_node.val.str);
-		D_ASSERT(!entry_value.empty());
 		result_ptr[size++] = StringVector::AddStringOrBlob(result, entry_value);
 	}
 	return result;
@@ -42,6 +41,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->name = qualified_name.name;
+	info->temporary = !stmt.typeName->relpersistence;
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
 	switch (stmt.kind) {
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {

@@ -1,0 +1,117 @@
+# name: test/sql/merge/merge_into.test
+# description: Test MERGE INTO
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int);
+
+statement ok
+CREATE TABLE Buy(item_id int, volume int);
+
+statement ok
+INSERT INTO Buy values(10, 1000);
+
+statement ok
+INSERT INTO Buy values(30, 300);
+
+# insert using merge into with a CTE
+query I
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks ON FALSE
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
+----
+2
+
+# DO NOTHING is the default - this is a nop
+query I
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks USING (item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (item_id, initial_stocks.balance)
+----
+0
+
+query II
+FROM Stock ORDER BY item_id
+----
+10	2200
+20	1900
+
+# update and insert
+query I
+MERGE INTO Stock AS s USING Buy AS b ON s.item_id = b.item_id
+WHEN MATCHED THEN UPDATE SET balance = balance + b.volume
+WHEN NOT MATCHED THEN INSERT VALUES (b.item_id, b.volume)
+----
+2
+
+query II
+FROM Stock ORDER BY item_id
+----
+10	3200
+20	1900
+30	300
+
+# sell - deleting all rows that are fully sold
+statement ok
+CREATE TABLE Sale(item_id int, volume int);
+
+statement ok
+INSERT INTO Sale VALUES (10, 2200);
+
+statement ok
+INSERT INTO Sale VALUES (20, 1900);
+
+query I
+MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
+WHEN MATCHED AND Sale.volume > balance THEN ERROR
+WHEN MATCHED AND Sale.volume = balance THEN DELETE
+WHEN MATCHED AND TRUE THEN UPDATE SET balance = balance - Sale.volume
+WHEN MATCHED THEN ERROR
+WHEN NOT MATCHED THEN ERROR
+----
+2
+
+query II
+FROM Stock ORDER BY item_id
+----
+10	1000
+30	300
+
+# abort - row does not exist
+statement error
+MERGE INTO Stock USING Sale ON Stock.item_id = Sale.item_id
+WHEN MATCHED AND Sale.volume >= balance THEN DELETE
+WHEN MATCHED THEN UPDATE SET balance = balance - Sale.volume
+WHEN NOT MATCHED THEN ERROR CONCAT('Sale item with item id ', Sale.item_id, ' not found');
+----
+Sale item with item id 20 not found
+
+# we need to specify at least one match action
+statement error
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)
+----
+Parser
+
+# we cannot specify an unconditional WHEN NOT MATCHED clause
+statement error
+WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))
+MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)
+WHEN NOT MATCHED THEN ERROR;
+----
+only one unconditional WHEN NOT MATCHED clause
+
+# we cannot merge into views
+statement ok
+CREATE VIEW my_view AS SELECT 42 item_id
+
+statement error
+MERGE INTO my_view USING Sale ON my_view.item_id = Sale.item_id
+WHEN NOT MATCHED THEN INSERT
+----
+base tables

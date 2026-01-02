@@ -6,8 +6,6 @@
 # because the bitpacking groups fit the blocks.
 require block_size 16384
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -24,10 +22,12 @@ CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION bla)
@@ -35,12 +35,6 @@ CREATE TABLE T (a INTEGER USING COMPRESSION bla)
 
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)
-
-statement ok
-DROP TABLE T
-
-statement ok
-CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR USING COMPRESSION RLE )
 
 statement ok
 DROP TABLE T

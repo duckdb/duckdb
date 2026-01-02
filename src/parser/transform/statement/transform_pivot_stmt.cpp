@@ -95,7 +95,7 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	}
 
 	auto select = make_uniq<SelectStatement>();
-	select->node = TransformMaterializedCTE(std::move(subselect));
+	select->node = std::move(subselect);
 	info->query = std::move(select);
 	info->type = LogicalType::INVALID;
 
@@ -125,6 +125,8 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 		}
 		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
 	}
+	result->stmt_location = statement->stmt_location;
+	result->stmt_length = statement->stmt_length;
 	result->statements.push_back(std::move(statement));
 	// FIXME: drop the types again!?
 	//	for(auto &pivot : pivot_entries) {

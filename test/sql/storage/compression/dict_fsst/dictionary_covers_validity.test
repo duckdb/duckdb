@@ -1,0 +1,75 @@
+# name: test/sql/storage/compression/dict_fsst/dictionary_covers_validity.test
+# group: [dict_fsst]
+
+load __TEST_DIR__/dictionary_covers_validity readwrite v1.3.0
+
+statement ok
+set checkpoint_threshold='10mb';
+
+statement ok
+CREATE TABLE tbl AS SELECT
+	{
+		'a': i,
+		'b': NULL::VARCHAR
+	} col
+FROM range(5000) t(i)
+union all
+select
+	{
+		'a': 10000,
+		'b': 'hello'
+	}
+
+statement ok
+set force_compression='dict_fsst';
+
+statement ok
+force checkpoint;
+
+# Dictionary FSST covers the validity mask replacing it with "Empty Validity".
+# The BIGINT segment type is either bitpacking (256kB blocks), or uncompressed (16kB blocks).
+query II
+SELECT segment_type, compression FROM pragma_storage_info('tbl') WHERE segment_type != 'BIGINT';
+----
+VALIDITY	Constant
+VALIDITY	Constant
+VARCHAR	DICT_FSST
+VALIDITY	Empty Validity
+
+# Now force a different compression method, that doesn't cover the validity
+statement ok
+set force_compression='zstd';
+
+statement ok
+CREATE OR REPLACE TABLE tbl AS SELECT
+	{
+		'a': i,
+		'b': NULL::VARCHAR
+	} col
+FROM range(5000) t(i)
+union all
+select
+	{
+		'a': 10000,
+		'b': 'hello'
+	} FROM range(2)
+
+statement ok
+force checkpoint;
+
+# During checkpoint this will scan the dictionary compressed segments to get the validity
+# this then gets compressed as normal (since FSST does not cover the validity)
+query II
+select segment_type, compression from pragma_storage_info('tbl') where segment_type IN ('VARCHAR', 'VALIDITY') order by all;
+----
+VALIDITY	Constant
+VALIDITY	Constant
+VALIDITY	Roaring
+VARCHAR	ZSTD
+
+query I
+SELECT col FROM tbl ORDER BY col.a DESC LIMIT 3;
+----
+{'a': 10000, 'b': hello}
+{'a': 10000, 'b': hello}
+{'a': 4999, 'b': NULL}

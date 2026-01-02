@@ -29,7 +29,7 @@ SELECT multi_add(),
 statement error
 SELECT multi_add(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
 ----
-does not support 10 parameters
+does not support the supplied arguments
 
 # named parameters
 statement ok
@@ -37,8 +37,14 @@ CREATE MACRO arithmetic
 	(a, b, mult := 1) AS (a + b) * mult,
 	(a, b, c, division := 1) AS  (a + b + c) / division
 
+statement error
+select arithmetic(100, 200, 300)
+----
+multiple overloads that match the supplied arguments
+
+# disambiguate arithmetic(100, 200, 300) using c := 300
 query IIII
-SELECT arithmetic(42, 84), arithmetic(42, 84, mult := 10), arithmetic(100, 200, 300), arithmetic(100, 200, 300, division := 10)
+SELECT arithmetic(42, 84), arithmetic(42, 84, mult := 10), arithmetic(100, 200, c := 300), arithmetic(100, 200, 300, division := 10)
 ----
 126	1260	600	60
 
@@ -80,7 +86,7 @@ CREATE MACRO ambiguous_macro
 	(a) AS a,
 	(a) AS a + 1
 ----
-has multiple definitions with 1 parameters
+Ambiguity in macro overloads
 
 # error in macro overload definition
 statement error
@@ -88,4 +94,4 @@ CREATE MACRO error_in_definition
 	(a) AS a,
 	(a, b) AS a + y
 ----
-Referenced column "y" not found in FROM clause
+Referenced column "y" was not found because the FROM clause is missing

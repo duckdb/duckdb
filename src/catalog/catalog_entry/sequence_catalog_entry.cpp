@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+constexpr const char *SequenceCatalogEntry::Name;
+
 SequenceData::SequenceData(CreateSequenceInfo &info)
     : usage_count(info.usage_count), counter(info.start_value), last_value(info.start_value), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
@@ -108,7 +110,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 string SequenceCatalogEntry::ToSQL() const {
 	auto seq_data = GetData();
 
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
 	ss << name;
 	ss << " INCREMENT BY " << seq_data.increment;

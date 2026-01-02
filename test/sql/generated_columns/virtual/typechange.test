@@ -24,6 +24,7 @@ SELECT total_profit FROM unit;
 statement error
 ALTER TABLE unit ALTER COLUMN total_profit TYPE BOOLEAN;
 ----
+<REGEX>:.*Binder Error.*generated columns in alter statement.*
 
 statement ok
 INSERT INTO unit VALUES (5,0);
@@ -43,3 +44,4 @@ CREATE TABLE tbl (
 statement error
 INSERT INTO tbl VALUES (5);
 ----
+<REGEX>:.*Constraint Error.*Incorrect value for generated column.*

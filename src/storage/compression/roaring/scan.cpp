@@ -203,11 +203,20 @@ void BitsetContainerScanState::Verify() const {
 RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	handle = buffer_manager.Pin(segment.block);
-	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
+	auto segment_size = segment.SegmentSize();
+	auto segment_block_offset = segment.GetBlockOffset();
+	if (segment_block_offset >= segment_size) {
+		throw InternalException("invalid segment_block_offset in RoaringScanState constructor");
+	}
+
+	auto base_ptr = handle.Ptr() + segment_block_offset;
 	data_ptr = base_ptr + sizeof(idx_t);
 
 	// Deserialize the container metadata for this segment
 	auto metadata_offset = Load<idx_t>(base_ptr);
+	if (metadata_offset >= segment_size) {
+		throw InternalException("invalid metadata offset in RoaringScanState constructor");
+	}
 	auto metadata_ptr = data_ptr + metadata_offset;
 
 	auto segment_count = segment.count.load();
@@ -285,7 +294,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 			current_container = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
 			                                                               number_of_runs, segments, data_ptr);
 		} else {
-			D_ASSERT(AlignValue<sizeof(RunContainerRLEPair)>(data_ptr) == data_ptr);
+			D_ASSERT(AlignPointer<sizeof(RunContainerRLEPair)>(data_ptr) == data_ptr);
 			current_container =
 			    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
 		}
@@ -302,7 +311,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 				    container_index, container_size, cardinality, segments, data_ptr);
 			}
 		} else {
-			D_ASSERT(AlignValue<sizeof(uint16_t)>(data_ptr) == data_ptr);
+			D_ASSERT(AlignPointer<sizeof(uint16_t)>(data_ptr) == data_ptr);
 			if (metadata.IsInverted()) {
 				current_container =
 				    make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size, cardinality, data_ptr);

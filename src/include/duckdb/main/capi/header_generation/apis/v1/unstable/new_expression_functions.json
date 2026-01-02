@@ -1,0 +1,10 @@
+{
+  "version": "unstable_new_expression_functions",
+  "description": "API to create and manipulate expressions",
+  "entries": [
+    "duckdb_destroy_expression",
+    "duckdb_expression_return_type",
+    "duckdb_expression_is_foldable",
+    "duckdb_expression_fold"
+  ]
+}

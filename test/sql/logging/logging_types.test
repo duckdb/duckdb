@@ -1,0 +1,42 @@
+# name: test/sql/logging/logging_types.test
+# group: [logging]
+
+require noforcestorage
+
+statement ok
+CALL enable_logging('FileSystem');
+
+statement ok
+copy (select 1 as a) to '__TEST_DIR__/par.csv'
+
+statement ok
+FROM '__TEST_DIR__/par.csv'
+
+query IIIIIIII
+SELECT type, log_level, scope, fs, parse_filename(path), op, bytes, pos FROM duckdb_logs_parsed('FileSystem') ORDER BY timestamp
+----
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	OPEN	NULL	NULL
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	WRITE	4	0
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	OPEN	NULL	NULL
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	READ	4	0
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	READ	0	4
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging('QueryLog');
+
+statement ok
+SELECT 'hallo' as value;
+
+query IIII
+SELECT type, log_level, scope, message FROM duckdb_logs_parsed('QueryLog') ORDER BY timestamp
+----
+QueryLog	INFO	CONNECTION	SELECT 'hallo' as value;
+
+statement ok
+SELECT type, log_level, scope, message FROM duckdb_logs WHERE type='QueryLog';
+

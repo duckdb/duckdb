@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -30,6 +31,19 @@ vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }
 
+idx_t LogicalOperator::GetRootIndex() {
+	auto bindings = GetColumnBindings();
+	if (bindings.empty()) {
+		throw InternalException("Empty bindings in GetRootIndex");
+	}
+	auto root_index = bindings[0].table_index;
+	for (idx_t i = 1; i < bindings.size(); i++) {
+		if (bindings[i].table_index != root_index) {
+			throw InternalException("GetRootIndex - multiple column bindings found");
+		}
+	}
+	return root_index;
+}
 void LogicalOperator::SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const {
 	if (has_estimated_cardinality) {
 		result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
@@ -126,7 +140,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 
 string LogicalOperator::ToString(ExplainFormat format) const {
 	auto renderer = TreeRenderer::CreateRenderer(format);
-	stringstream ss;
+	duckdb::stringstream ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
 	return ss.str();

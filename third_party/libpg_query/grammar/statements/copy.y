@@ -108,34 +108,13 @@ opt_program:
 
 
 copy_options: copy_opt_list							{ $$ = $1; }
-			| '(' copy_generic_opt_list ')'			{ $$ = $2; }
+			| '(' generic_opt_list ')'				{ $$ = $2; }
 		;
-
-
-copy_generic_opt_arg:
-			opt_boolean_or_string			{ $$ = (PGNode *) makeString($1); }
-			| NumericOnly					{ $$ = (PGNode *) $1; }
-			| list_expr                     { $$ = (PGNode *) $1; }
-			| '*'							{ $$ = (PGNode *) makeNode(PGAStar); }
-			| '(' copy_generic_opt_arg_list ')'		{ $$ = (PGNode *) $2; }
-			| struct_expr					{ $$ = (PGNode *) $1; }
-			| map_expr					    { $$ = (PGNode *) $1; }
-			| /* EMPTY */					{ $$ = NULL; }
-		;
-
-
-copy_generic_opt_elem:
-			ColLabel copy_generic_opt_arg
-				{
-					$$ = makeDefElem($1, $2, @1);
-				}
-		;
-
 
 opt_oids:
 			WITH OIDS
 				{
-					$$ = makeDefElem("oids", (PGNode *)makeInteger(true), @1);
+					$$ = makeDefElem("oids", NULL, @1);
 				}
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -150,7 +129,7 @@ copy_opt_list:
 opt_binary:
 			BINARY
 				{
-					$$ = makeDefElem("format", (PGNode *)makeString("binary"), @1);
+					$$ = makeDefElem("format", (PGNode *)makeStringConst("binary", @1), @1);
 				}
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
@@ -159,39 +138,39 @@ opt_binary:
 copy_opt_item:
 			BINARY
 				{
-					$$ = makeDefElem("format", (PGNode *)makeString("binary"), @1);
+					$$ = makeDefElem("format", (PGNode *)makeStringConst("binary", @1), @1);
 				}
 			| OIDS
 				{
-					$$ = makeDefElem("oids", (PGNode *)makeInteger(true), @1);
+					$$ = makeDefElem("oids", NULL, @1);
 				}
 			| FREEZE
 				{
-					$$ = makeDefElem("freeze", (PGNode *)makeInteger(true), @1);
+					$$ = makeDefElem("freeze", NULL, @1);
 				}
 			| DELIMITER opt_as Sconst
 				{
-					$$ = makeDefElem("delimiter", (PGNode *)makeString($3), @1);
+					$$ = makeDefElem("delimiter", (PGNode *)makeStringConst($3, @3), @1);
 				}
 			| NULL_P opt_as Sconst
 				{
-					$$ = makeDefElem("null", (PGNode *)makeString($3), @1);
+					$$ = makeDefElem("null", (PGNode *)makeStringConst($3, @3), @1);
 				}
 			| CSV
 				{
-					$$ = makeDefElem("format", (PGNode *)makeString("csv"), @1);
+					$$ = makeDefElem("format", (PGNode *)makeStringConst("csv", @1), @1);
 				}
 			| HEADER_P
 				{
-					$$ = makeDefElem("header", (PGNode *)makeInteger(true), @1);
+					$$ = makeDefElem("header", NULL, @1);
 				}
 			| QUOTE opt_as Sconst
 				{
-					$$ = makeDefElem("quote", (PGNode *)makeString($3), @1);
+					$$ = makeDefElem("quote", (PGNode *)makeStringConst($3, @3), @1);
 				}
 			| ESCAPE opt_as Sconst
 				{
-					$$ = makeDefElem("escape", (PGNode *)makeString($3), @1);
+					$$ = makeDefElem("escape", (PGNode *)makeStringConst($3, @3), @1);
 				}
 			| FORCE QUOTE columnList
 				{
@@ -219,7 +198,7 @@ copy_opt_item:
 				}
 			| ENCODING Sconst
 				{
-					$$ = makeDefElem("encoding", (PGNode *)makeString($2), @1);
+					$$ = makeDefElem("encoding", (PGNode *)makeStringConst($2, @2), @1);
 				}
 		;
 
@@ -228,24 +207,12 @@ copy_generic_opt_arg_list_item:
 			opt_boolean_or_string	{ $$ = (PGNode *) makeString($1); }
 		;
 
-
 copy_file_name:
-			Sconst									{ $$ = $1; }
-			| STDIN									{ $$ = NULL; }
-			| STDOUT								{ $$ = NULL; }
-			| IDENT '.' ColId						{ $$ = psprintf("%s.%s", $1, $3); }
-			| IDENT									{ $$ = $1; }
-
-		;
-
-
-copy_generic_opt_list:
-			copy_generic_opt_elem
-				{
-					$$ = list_make1($1);
-				}
-			| copy_generic_opt_list ',' copy_generic_opt_elem
-				{
-					$$ = lappend($1, $3);
-				}
+			Sconst									{ $$ = makeStringConst($1, @1); }
+			| STDIN									{ $$ = makeStringConst("/dev/stdin", @1); }
+			| STDOUT								{ $$ = makeStringConst("/dev/stdout", @1); }
+			| IDENT '.' ColId						{ $$ = makeStringConst(psprintf("%s.%s", $1, $3), @1); }
+			| IDENT									{ $$ = makeStringConst($1, @1); }
+			| '(' a_expr ')'						{ $$ = $2; }
+			| param_expr							{ $$ = $1; }
 		;

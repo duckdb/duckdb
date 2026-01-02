@@ -5,46 +5,56 @@
 require parquet
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_bigint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_bigint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_date.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_int.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_int.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_smallint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_smallint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_timestamp.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_timestamp.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_timestamp_ms.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_timestamp_ms.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_tinyint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_tinyint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_ubigint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_ubigint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_uinteger.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_uinteger.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_usmallint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_usmallint.parquet';
 ----
+<REGEX>:.*IO Error.*converted type.*
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_utinyint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_utinyint.parquet';
 ----
-
+<REGEX>:.*IO Error.*converted type.*

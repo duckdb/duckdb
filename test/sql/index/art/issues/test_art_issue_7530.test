@@ -3,9 +3,6 @@
 # group: [issues]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t14(c0 BIGINT);
 
 statement ok

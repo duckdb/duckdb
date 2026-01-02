@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -97,8 +98,14 @@ public:
 		return value.inlined.length;
 	}
 
-	void SetSizeAndFinalize(uint32_t size) {
+	void SetSizeAndFinalize(uint32_t size, idx_t allocated_size) {
 		value.inlined.length = size;
+		if (allocated_size > INLINE_LENGTH && IsInlined()) {
+			//! Data was written to the 'value.pointer.ptr', has to be copied to the inlined bytes
+			D_ASSERT(value.pointer.ptr);
+			auto ptr = value.pointer.ptr;
+			memcpy(GetDataWriteable(), ptr, size);
+		}
 		Finalize();
 		VerifyCharacters();
 	}
@@ -188,22 +195,14 @@ public:
 			uint32_t a_prefix = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
 			uint32_t b_prefix = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
 
-			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
-			auto byte_swap = [](uint32_t v) -> uint32_t {
-				uint32_t t1 = (v >> 16u) | (v << 16u);
-				uint32_t t2 = t1 & 0x00ff00ff;
-				uint32_t t3 = t1 & 0xff00ff00;
-				return (t2 << 8u) | (t3 >> 8u);
-			};
-
 			// Check on prefix -----
-			// We dont' need to mask since:
+			// We don't need to mask since:
 			//	if the prefix is greater(after bswap), it will stay greater regardless of the extra bytes
 			// 	if the prefix is smaller(after bswap), it will stay smaller regardless of the extra bytes
 			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
 
 			if (a_prefix != b_prefix) {
-				return byte_swap(a_prefix) > byte_swap(b_prefix);
+				return BSwapIfLE(a_prefix) > BSwapIfLE(b_prefix);
 			}
 #endif
 			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);

@@ -15,6 +15,7 @@ void ColumnCountResult::AddValue(ColumnCountResult &result, idx_t buffer_pos) {
 inline void ColumnCountResult::InternalAddRow() {
 	const idx_t column_count = current_column_count + 1;
 	column_counts[result_position].number_of_columns = column_count;
+	column_counts[result_position].empty_lines = empty_lines;
 	rows_per_column_count[column_count]++;
 	current_column_count = 0;
 }
@@ -76,7 +77,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 }
 
 void ColumnCountResult::SetComment(ColumnCountResult &result, idx_t buffer_pos) {
-	if (!result.states.WasStandard()) {
+	if (!result.states.WasStandard() && !result.states.WasState(CSVState::DELIMITER)) {
 		result.cur_line_starts_as_comment = true;
 	}
 	result.comment = true;
@@ -102,7 +103,7 @@ void ColumnCountResult::InvalidState(ColumnCountResult &result) {
 }
 
 bool ColumnCountResult::EmptyLine(ColumnCountResult &result, idx_t buffer_pos) {
-	// nop
+	result.empty_lines++;
 	return false;
 }
 
@@ -128,8 +129,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	idx_t rows_to_skip =
-	    std::max(state_machine->dialect_options.skip_rows.GetValue(), state_machine->dialect_options.rows_until_header);
+	idx_t rows_to_skip = state_machine->dialect_options.skip_rows.GetValue();
 	auto iterator = SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	if (iterator.done) {
 		CSVIterator it {};

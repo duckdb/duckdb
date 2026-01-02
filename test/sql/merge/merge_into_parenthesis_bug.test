@@ -1,0 +1,37 @@
+# name: test/sql/merge/merge_into_parenthesis_bug.test
+# description: Test MERGE issue when condition is in parenthesis
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE my_timeseries (ts TIMESTAMP, x DOUBLE PRECISION, y DOUBLE PRECISION);
+
+statement ok
+insert into my_timeseries VALUES ('2025-09-15', 43, 39)
+
+statement ok
+CREATE TABLE my_timeseries_new (ts TIMESTAMP, x DOUBLE PRECISION, y DOUBLE PRECISION);
+
+statement ok
+insert into my_timeseries_new VALUES ('2025-09-15', 43, 39)
+
+statement ok
+MERGE INTO my_timeseries old
+    USING my_timeseries_new new
+    ON (
+        old.x = new.x AND
+         (  old.ts != new.ts
+            OR old.x = 1
+        )
+    )
+WHEN MATCHED THEN UPDATE;
+
+statement ok
+MERGE INTO my_timeseries old
+    USING my_timeseries_new new
+    USING(ts)
+WHEN MATCHED AND (
+    old.x  IS DISTINCT FROM new.y
+) THEN UPDATE;

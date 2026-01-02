@@ -1,0 +1,26 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_delta_for.test
+# description: Test bitpacking delta for
+# group: [bitpacking]
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+require block_size 262144
+
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+create table aux as select range::INT x from range(-2_000_000_000, 2_000_000_000, 2_000_000);
+
+statement ok
+create table tt as select (x + if (random() > 0.5, 1, -1)) x from aux;
+
+statement ok
+CHECKPOINT;
+
+query I
+select compression from pragma_storage_info('tt') where segment_type != 'VALIDITY';
+----
+BitPacking

@@ -21,7 +21,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PERFECT_HASH_GROUP_BY;
 
 public:
-	PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types,
+	PhysicalPerfectHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
 	                             vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups,
 	                             const vector<unique_ptr<BaseStatistics>> &group_stats, vector<idx_t> required_bits,
 	                             idx_t estimated_cardinality);
@@ -34,7 +34,8 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

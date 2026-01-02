@@ -4,17 +4,22 @@
 
 require noforcestorage
 
-query IIIIIIIII
+query IIIIIIIIII
 from duckdb_logs
 ----
 
+statement error
+PRAGMA enable_logging;
+----
+Pragma Function with name enable_logging does not exist, but a table function with the same name exists, try
+
 statement ok
-pragma enable_logging;
+ CALL enable_logging();
 
 statement ok
 set logging_level='info';
 
-# We use these to offet the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
+# We use these to offset the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
 statement ok
 set variable base_connection_id = current_connection_id()
 
@@ -37,17 +42,17 @@ statement ok
 from duckdb_logs
 
 query IIII
-SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
+SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
 ----
-client_context_type	INFO	hello from the connection log scope	CONNECTION
-client_context_type	INFO	hello from the connection log scope	CONNECTION
-client_context_type	INFO	hello from the connection log scope	CONNECTION
-opener_type	INFO	hello from the file_opener log scope	CONNECTION
-opener_type	INFO	hello from the file_opener log scope	CONNECTION
-opener_type	INFO	hello from the file_opener log scope	CONNECTION
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
+CONNECTION	client_context_type	INFO	hello from the connection log scope
+CONNECTION	client_context_type	INFO	hello from the connection log scope
+CONNECTION	client_context_type	INFO	hello from the connection log scope
+CONNECTION	opener_type	INFO	hello from the file_opener log scope
+CONNECTION	opener_type	INFO	hello from the file_opener log scope
+CONNECTION	opener_type	INFO	hello from the file_opener log scope
+DATABASE	global_type	INFO	hello from the global log scope
+DATABASE	global_type	INFO	hello from the global log scope
+DATABASE	global_type	INFO	hello from the global log scope
 
 query IIII
 SELECT

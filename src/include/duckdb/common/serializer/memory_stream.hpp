@@ -50,10 +50,12 @@ public:
 	//! Write data to the stream.
 	//! Throws if the write would exceed the capacity of the stream and the backing buffer is not owned by the stream
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
+	void GrowCapacity(idx_t write_size);
 
 	//! Read data from the stream.
 	//! Throws if the read would exceed the capacity of the stream
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
+	void ReadData(QueryContext context, data_ptr_t buffer, idx_t read_size) override;
 
 	//! Rewind the stream to the start, keeping the capacity and the backing buffer intact
 	void Rewind();

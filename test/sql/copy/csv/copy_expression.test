@@ -1,0 +1,40 @@
+# name: test/sql/copy/csv/copy_expression.test
+# description: Test copy with expressions
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET VARIABLE copy_target = '__TEST_DIR__/copy_expression_target.csv';
+
+statement ok
+COPY (SELECT * FROM range(5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+query I
+COPY tbl FROM (getvariable('copy_target'));
+----
+5
+
+query I
+SELECT * FROM tbl
+----
+0
+1
+2
+3
+4
+
+statement ok
+PREPARE v1 AS COPY (SELECT 'hello world' str) TO $1;
+
+statement ok
+EXECUTE v1('__TEST_DIR__/prepared_copy.csv');
+
+query I
+FROM '__TEST_DIR__/prepared_copy.csv'
+----
+hello world

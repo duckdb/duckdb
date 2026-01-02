@@ -9,11 +9,17 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
+
+struct date_t;
+struct timestamp_t;
+struct timestamp_ns_t;
 
 //! StringCast
 class Vector;
@@ -59,6 +65,8 @@ template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(date_t input, Vector &result);
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(dtime_t input, Vector &result);
+template <>
+DUCKDB_API duckdb::string_t StringCast::Operation(dtime_ns_t input, Vector &result);
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(timestamp_t input, Vector &result);
 template <>

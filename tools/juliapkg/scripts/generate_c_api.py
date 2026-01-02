@@ -51,6 +51,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'threading_information',
     'streaming_result_interface',
     'cast_functions',
+    'expression_interface',
 ]
 
 

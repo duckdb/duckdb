@@ -14,7 +14,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 	D_ASSERT(op.children.size() == 1);
 	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
 	if (!op.expressions.empty()) {
-		D_ASSERT(!plan.get().GetTypes().empty());
 		// create a filter if there is anything to filter
 		auto &filter = Make<PhysicalFilter>(plan.get().GetTypes(), std::move(op.expressions), op.estimated_cardinality);
 		filter.children.push_back(plan);

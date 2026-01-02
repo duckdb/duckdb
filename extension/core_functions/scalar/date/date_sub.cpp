@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct DateSub {
 	static int64_t SubtractMicros(timestamp_t startdate, timestamp_t enddate) {
 		const auto start = Timestamp::GetEpochMicroSeconds(startdate);
@@ -35,7 +37,6 @@ struct DateSub {
 	struct MonthOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA start_ts, TB end_ts) {
-
 			if (start_ts > end_ts) {
 				return -MonthOperator::Operation<TA, TB, TR>(end_ts, start_ts);
 			}
@@ -311,7 +312,7 @@ int64_t DateSub::HoursOperator::Operation(dtime_t startdate, dtime_t enddate) {
 }
 
 template <typename TA, typename TB, typename TR>
-static int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddate) {
+int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddate) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 	case DatePartSpecifier::ISOYEAR:
@@ -364,7 +365,7 @@ struct DateSubTernaryOperator {
 };
 
 template <typename TA, typename TB, typename TR>
-static void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, Vector &result, idx_t count) {
+void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, Vector &result, idx_t count) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 	case DatePartSpecifier::ISOYEAR:
@@ -418,7 +419,7 @@ static void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &
 }
 
 template <typename T>
-static void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 	auto &part_arg = args.data[0];
 	auto &start_arg = args.data[1];
@@ -439,6 +440,8 @@ static void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &res
 		    DateSubTernaryOperator::Operation<string_t, T, T, int64_t>);
 	}
 }
+
+} // namespace
 
 ScalarFunctionSet DateSubFun::GetFunctions() {
 	ScalarFunctionSet date_sub("date_sub");

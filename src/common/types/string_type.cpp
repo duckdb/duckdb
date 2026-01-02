@@ -6,6 +6,8 @@
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
+constexpr idx_t string_t::MAX_STRING_SIZE;
+constexpr idx_t string_t::INLINE_LENGTH;
 
 void string_t::Verify() const {
 #ifdef DEBUG

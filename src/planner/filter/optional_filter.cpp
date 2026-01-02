@@ -8,7 +8,7 @@ OptionalFilter::OptionalFilter(unique_ptr<TableFilter> filter)
     : TableFilter(TableFilterType::OPTIONAL_FILTER), child_filter(std::move(filter)) {
 }
 
-FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) const {
 	return child_filter->CheckStatistics(stats);
 }
 
@@ -18,6 +18,12 @@ string OptionalFilter::ToString(const string &column_name) const {
 
 unique_ptr<Expression> OptionalFilter::ToExpression(const Expression &column) const {
 	return child_filter->ToExpression(column);
+}
+
+idx_t OptionalFilter::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
+                                      TableFilterState &filter_state, const idx_t scan_count,
+                                      idx_t &approved_tuple_count) const {
+	return scan_count;
 }
 
 unique_ptr<TableFilter> OptionalFilter::Copy() const {

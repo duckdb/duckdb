@@ -17,12 +17,13 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DUMMY_SCAN;
 
 public:
-	explicit PhysicalDummyScan(vector<LogicalType> types, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, std::move(types), estimated_cardinality) {
+	explicit PhysicalDummyScan(PhysicalPlan &physical_plan, vector<LogicalType> types, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::DUMMY_SCAN, std::move(types), estimated_cardinality) {
 	}
 
 public:
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

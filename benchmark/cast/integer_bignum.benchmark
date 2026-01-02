@@ -1,0 +1,12 @@
+# name: benchmark/cast/integer_bignum.benchmark
+# description: Casting of a UBIGINT to Bignum
+# group: [cast]
+
+name Casting of Double to Bignum
+group csv
+
+load
+CREATE TABLE t1 AS select 18446744073709551615::UBIGINT as a from range(0,10000000) tbl(i);
+
+run
+create or replace table t2 as select a::bignum from t1

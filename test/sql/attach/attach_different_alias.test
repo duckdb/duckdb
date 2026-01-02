@@ -2,11 +2,6 @@
 # description: Test ATTACH of a database with a different alias
 # group: [attach]
 
-require noforcestorage
-
-statement ok
-PRAGMA enable_verification
-
 statement ok
 ATTACH '__TEST_DIR__/attach_alias.db' AS alias1
 

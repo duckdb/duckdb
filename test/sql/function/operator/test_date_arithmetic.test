@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE dates(d DATE);
 
 statement ok
@@ -190,3 +187,4 @@ NULL	20:08:10.001-15:59	NULL
 statement error
 SELECT '294247-01-10'::DATE + '04:00:54.775808'::TIME;
 ----
+<REGEX>:.*Out of Range Error.*out of range.*

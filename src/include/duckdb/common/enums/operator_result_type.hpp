@@ -31,6 +31,9 @@ enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FIN
 //! HAVE_MORE_OUTPUT means the operator contains more results.
 enum class OperatorFinalizeResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED };
 
+//! OperatorFinalResultType is used for the final call
+enum class OperatorFinalResultType : uint8_t { FINISHED, BLOCKED };
+
 //! SourceResultType is used to indicate the result of data being pulled out of a source.
 //! There are three possible results:
 //! HAVE_MORE_OUTPUT means the source has more output, this flag should only be set when data is returned, empty results
@@ -38,6 +41,20 @@ enum class OperatorFinalizeResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED };
 //! FINISHED means the source is exhausted
 //! BLOCKED means the source is currently blocked, e.g. by some async I/O
 enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
+
+//! AsyncResultType is used to indicate the result of a AsyncResult, in the context of a wider operation being executed
+enum class AsyncResultType : uint8_t {
+	INVALID,  // current result is in an invalid state (eg: it's in the process of being initialized)
+	IMPLICIT, // current result depends on external context (eg: in the context of TableFunctions, either FINISHED or
+	          // HAVE_MORE_OUTPUT depending on output_chunk.size())
+	HAVE_MORE_OUTPUT, // current result is not completed, finished (eg: in the context of TableFunctions, function
+	                  // accept more iterations and might produce further results)
+	FINISHED,         // current result is completed, no subsequent calls on the same state should be attempted
+	BLOCKED // current result is blocked, no subsequent calls on the same state should be attempted (eg: in the context
+	        // of AsyncResult, BLOCKED will be associated with a vector of AsyncTasks to be scheduled)
+};
+
+bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out);
 
 //! The SinkResultType is used to indicate the result of data flowing into a sink
 //! There are three possible results:

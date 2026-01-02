@@ -17,12 +17,13 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EMPTY_RESULT;
 
 public:
-	explicit PhysicalEmptyResult(vector<LogicalType> types, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::EMPTY_RESULT, std::move(types), estimated_cardinality) {
+	explicit PhysicalEmptyResult(PhysicalPlan &physical_plan, vector<LogicalType> types, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::EMPTY_RESULT, std::move(types), estimated_cardinality) {
 	}
 
 public:
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

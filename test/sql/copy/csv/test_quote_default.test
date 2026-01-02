@@ -6,11 +6,11 @@ statement ok
 PRAGMA enable_verification
 
 query II
-from read_csv('data/csv/test_default_option.csv', columns = {'a':'varchar', 'b':'integer'}, auto_detect = false, header = true) where b = 1
+from read_csv('{DATA_DIR}/csv/test_default_option.csv', columns = {'a':'varchar', 'b':'integer'}, auto_detect = false, header = true) where b = 1
 ----
 x,y	1
 
 query II
-from read_csv('data/csv/test_default_option_2.csv', columns = {'a':'varchar', 'b':'integer'}, auto_detect = false, header = true, delim = '|') where b = 1
+from read_csv('{DATA_DIR}/csv/test_default_option_2.csv', columns = {'a':'varchar', 'b':'integer'}, auto_detect = false, header = true, delim = '|') where b = 1
 ----
 x|y	1

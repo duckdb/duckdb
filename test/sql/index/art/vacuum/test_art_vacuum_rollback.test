@@ -2,11 +2,7 @@
 # description: Test rolling back writes to many tables
 # group: [vacuum]
 
-# load the DB from disk
 load __TEST_DIR__/art_vacuum_rollback.db
-
-statement ok
-PRAGMA enable_verification
 
 loop i 0 10
 

@@ -6,19 +6,19 @@ statement ok
 PRAGMA enable_verification
 
 query III
-from read_csv('data/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true);
+from read_csv('{DATA_DIR}/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true);
 ----
 1	2	NULL
 3	4	NULL
 
 query III
-from read_csv('data/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true, parallel = false, auto_detect = false);
+from read_csv('{DATA_DIR}/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true, parallel = false, auto_detect = false);
 ----
 1	2	NULL
 3	4	NULL
 
 query III
-from read_csv('data/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true, parallel = false);
+from read_csv('{DATA_DIR}/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true, parallel = false);
 ----
 1	2	NULL
 3	4	NULL

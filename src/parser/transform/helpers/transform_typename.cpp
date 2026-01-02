@@ -17,7 +17,6 @@ struct SizeModifiers {
 };
 
 static SizeModifiers GetSizeModifiers(duckdb_libpgquery::PGTypeName &type_name, LogicalTypeId base_type) {
-
 	SizeModifiers result;
 
 	if (base_type == LogicalTypeId::DECIMAL) {
@@ -56,17 +55,16 @@ vector<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTypeName 
 	vector<Value> type_mods;
 	if (type_name.typmods) {
 		for (auto node = type_name.typmods->head; node; node = node->next) {
-			if (type_mods.size() > 9) {
-				const auto &name =
-				    *PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
-				throw ParserException("'%s': a maximum of 9 type modifiers is allowed", name);
-			}
 			const auto &const_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
 			if (const_val.type != duckdb_libpgquery::T_PGAConst) {
 				throw ParserException("Expected a constant as type modifier");
 			}
 			const auto const_expr = TransformValue(const_val.val);
 			type_mods.push_back(std::move(const_expr->value));
+		}
+		if (type_mods.size() > 9) {
+			const auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
+			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", name);
 		}
 	}
 	return type_mods;
@@ -118,6 +116,23 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		}
 		return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(type_name.typmods->length));
 	}
+	if (base_type == LogicalTypeId::GEOMETRY) {
+		if (!type_name.typmods || type_name.typmods->length == 0) {
+			return LogicalType::GEOMETRY();
+		}
+		// Expect a single type modifier with the CRS definition
+		if (type_name.typmods->length != 1) {
+			throw ParserException(
+			    "GEOMETRY type takes a single optional type modifier with a coordinate system definition");
+		}
+		auto crs_node = PGPointerCast<duckdb_libpgquery::PGAConst>(type_name.typmods->head->data.ptr_value);
+		if (crs_node->type != duckdb_libpgquery::T_PGAConst || crs_node->val.type != duckdb_libpgquery::T_PGString) {
+			throw ParserException(
+			    "GEOMETRY type modifier must be a string with a coordinate system definition definition");
+		}
+		return LogicalType::GEOMETRY(crs_node->val.val.str);
+	}
+
 	if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
@@ -149,6 +164,9 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		}
 		D_ASSERT(!children.empty());
 		return LogicalType::STRUCT(children);
+	}
+	if (base_type == LogicalTypeId::VARIANT) {
+		return LogicalType::VARIANT();
 	}
 	if (base_type == LogicalTypeId::MAP) {
 		if (!type_name.typmods || type_name.typmods->length != 2) {

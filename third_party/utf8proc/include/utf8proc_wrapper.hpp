@@ -16,7 +16,7 @@
 namespace duckdb {
 class GraphemeIterator;
 
-enum class UnicodeType { INVALID, ASCII, UNICODE };
+enum class UnicodeType { INVALID, ASCII, UTF8 };
 enum class UnicodeInvalidReason { BYTE_MISMATCH, INVALID_UNICODE };
 
 class Utf8Proc {
@@ -29,6 +29,8 @@ public:
 	static bool IsValid(const char *s, size_t len);
 	//! Makes Invalid Unicode valid by replacing invalid parts with a given character
 	static void MakeValid(char *s, size_t len, char special_flag = '?');
+	//! Creates a new string with invalid UTF-8 characters removed
+	static std::string RemoveInvalid(const char *s, size_t len);
 	//! Returns the position (in bytes) of the next grapheme cluster
 	static size_t NextGraphemeCluster(const char *s, size_t len, size_t pos);
 	//! Returns the position (in bytes) of the previous grapheme cluster

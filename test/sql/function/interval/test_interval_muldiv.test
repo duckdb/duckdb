@@ -2,9 +2,6 @@
 # description: Test PG INTERVAL DOUBLE multiply and divide.
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # From src/test/regress/sql/interval.sql
 # Test multiplication and division with intervals.
 # Floating point arithmetic rounding errors can lead to unexpected results,
@@ -79,3 +76,25 @@ FROM INTERVAL_MULDIV_TBL;
 1 day 04:48:00
 4 days 04:48:00
 9 months 39 days 16:33:36
+
+# Commutativity
+query I
+select (interval '1 days') * 0.5::DOUBLE;
+----
+12:00:00
+
+query I
+select 0.5::DOUBLE * (interval '1 days');
+----
+12:00:00
+
+query I
+select 2::BIGINT * (interval '1 days');
+----
+2 days
+
+query I
+select (interval '1 days') * 2::BIGINT;
+----
+2 days
+

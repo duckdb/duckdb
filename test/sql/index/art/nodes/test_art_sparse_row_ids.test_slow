@@ -59,6 +59,6 @@ SELECT COUNT(i) FROM tbl1 WHERE rowid = (SELECT MAX(rowid) FROM tbl1);
 1
 
 query I
-SELECT COUNT(i) FROM tbl2 WHERE rowid = (SELECT MAX(rowid) FROM tbl1);
+SELECT COUNT(i) FROM tbl2 WHERE rowid = (SELECT MAX(rowid) FROM tbl2);
 ----
 1

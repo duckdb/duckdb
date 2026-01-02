@@ -15,9 +15,9 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/original/std/sstream.hpp"
 
 #include <iostream>
-#include <sstream>
 
 namespace duckdb {
 struct MultiFilePushdownInfo;

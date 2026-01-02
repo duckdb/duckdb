@@ -145,11 +145,10 @@ struct VectorCastHelpers {
 		return TemplatedTryCastLoop<SRC, DST, VectorTryCastStringOperator<OP>>(source, result, count, parameters);
 	}
 
-	template <class SRC, class OP>
+	template <class SRC, class OP, class RES = string_t>
 	static bool StringCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
-		UnaryExecutor::GenericExecute<SRC, string_t, VectorStringCastOperator<OP>>(source, result, count,
-		                                                                           (void *)&result);
+		UnaryExecutor::GenericExecute<SRC, RES, VectorStringCastOperator<OP>>(source, result, count, (void *)&result);
 		return true;
 	}
 
@@ -197,9 +196,9 @@ struct VectorCastHelpers {
 
 		if (STRUCT_KEY) {
 			needs_quotes = true;
-		} else if (isspace(string_data[0])) {
+		} else if (StringUtil::CharacterIsSpace(string_data[0])) {
 			needs_quotes = true;
-		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+		} else if (base_length >= 2 && StringUtil::CharacterIsSpace(string_data[base_length - 1])) {
 			needs_quotes = true;
 		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
 			needs_quotes = true;

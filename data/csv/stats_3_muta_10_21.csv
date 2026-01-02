@@ -1,0 +1,2048 @@
+Contient la liste des mutations vers de la forêt entre les millésimes 2010 et 2021 pour le territoire choisi.
+n_admin,id_admin,ocs_cod_10,ocs_cod_21,ocs_ha_chg
+commune,08008,5 - Surfaces en eau,31 - Forêts,0.10522
+commune,08008,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10765
+commune,08008,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.29654
+commune,08010,5 - Surfaces en eau,31 - Forêts,0.01322
+commune,08010,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.44156
+commune,08010,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.09930
+commune,08024,5 - Surfaces en eau,31 - Forêts,0.23217
+commune,08024,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06661
+commune,08024,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.09843
+commune,08025,5 - Surfaces en eau,31 - Forêts,0.20271
+commune,08025,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11747
+commune,08025,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.05697
+commune,08026,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07196
+commune,08039,5 - Surfaces en eau,31 - Forêts,0.10443
+commune,08048,5 - Surfaces en eau,31 - Forêts,0.07911
+commune,08048,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.08718
+commune,08001,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26051
+commune,08082,5 - Surfaces en eau,31 - Forêts,0.19507
+commune,08082,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.06201
+commune,08097,5 - Surfaces en eau,31 - Forêts,0.11770
+commune,08097,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.07617
+commune,08097,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.36933
+commune,08107,5 - Surfaces en eau,31 - Forêts,0.09428
+commune,08107,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.09375
+commune,08110,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.80914
+commune,08120,5 - Surfaces en eau,31 - Forêts,0.02505
+commune,08145,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.03877
+commune,08146,5 - Surfaces en eau,31 - Forêts,0.06568
+commune,08148,5 - Surfaces en eau,31 - Forêts,0.17146
+commune,08148,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10680
+commune,08116,1 - Emprises urbaines,31 - Forêts,0.22433
+commune,08164,5 - Surfaces en eau,31 - Forêts,0.20275
+commune,08190,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01039
+commune,08193,5 - Surfaces en eau,31 - Forêts,0.06998
+commune,08193,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.41733
+commune,08193,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.26501
+commune,08198,5 - Surfaces en eau,31 - Forêts,0.30805
+commune,08198,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.30980
+commune,08203,5 - Surfaces en eau,31 - Forêts,0.02179
+commune,08218,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.15659
+commune,08249,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.82991
+commune,08274,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.05259
+commune,08310,5 - Surfaces en eau,31 - Forêts,0.52322
+commune,08310,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.60481
+commune,08311,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.12962
+commune,08313,5 - Surfaces en eau,31 - Forêts,0.16242
+commune,08319,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06266
+commune,08333,5 - Surfaces en eau,31 - Forêts,0.14728
+commune,08333,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.04962
+commune,08364,5 - Surfaces en eau,31 - Forêts,0.00654
+commune,08364,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.16539
+commune,08364,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.04275
+commune,08378,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03939
+commune,08381,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15393
+commune,08383,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.05540
+commune,08384,5 - Surfaces en eau,31 - Forêts,0.04799
+commune,08384,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02966
+commune,08405,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.19769
+commune,08406,5 - Surfaces en eau,31 - Forêts,0.12188
+commune,08412,5 - Surfaces en eau,31 - Forêts,0.35866
+commune,08412,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.10566
+commune,08416,5 - Surfaces en eau,31 - Forêts,0.49510
+commune,08416,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.49653
+commune,08416,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.45191
+commune,08438,5 - Surfaces en eau,31 - Forêts,0.12075
+commune,08448,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.36815
+commune,08452,5 - Surfaces en eau,31 - Forêts,0.18623
+commune,08452,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08130
+commune,08452,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.52482
+commune,08456,5 - Surfaces en eau,31 - Forêts,0.05631
+commune,08461,5 - Surfaces en eau,31 - Forêts,0.17877
+commune,08463,5 - Surfaces en eau,31 - Forêts,0.05161
+commune,08469,5 - Surfaces en eau,31 - Forêts,0.07864
+commune,08473,5 - Surfaces en eau,31 - Forêts,0.13960
+commune,08473,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.04405
+commune,08489,5 - Surfaces en eau,31 - Forêts,0.12474
+commune,08489,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.20525
+commune,08490,5 - Surfaces en eau,31 - Forêts,0.07306
+commune,10030,5 - Surfaces en eau,31 - Forêts,0.20029
+commune,10063,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10406
+commune,10054,1 - Emprises urbaines,31 - Forêts,0.06323
+commune,10131,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06177
+commune,10139,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.28099
+commune,10142,5 - Surfaces en eau,31 - Forêts,0.05711
+commune,10144,5 - Surfaces en eau,31 - Forêts,0.04780
+commune,10148,1 - Emprises urbaines,31 - Forêts,0.15496
+commune,10176,5 - Surfaces en eau,31 - Forêts,0.54190
+commune,10176,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.10125
+commune,10184,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08258
+commune,10192,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06806
+commune,10203,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07832
+commune,10214,5 - Surfaces en eau,31 - Forêts,0.06975
+commune,10233,5 - Surfaces en eau,31 - Forêts,0.13639
+commune,10250,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.03964
+commune,10282,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15136
+commune,10284,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.06993
+commune,10286,5 - Surfaces en eau,31 - Forêts,0.02462
+commune,10287,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06241
+commune,10298,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15780
+commune,10314,5 - Surfaces en eau,31 - Forêts,0.05327
+commune,10286,1 - Emprises urbaines,31 - Forêts,0.15153
+commune,10320,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.08118
+commune,10323,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.50152
+commune,10326,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.17062
+commune,10327,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.91247
+commune,10331,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.63168
+commune,10323,1 - Emprises urbaines,31 - Forêts,0.44807
+commune,10349,5 - Surfaces en eau,31 - Forêts,0.03584
+commune,10367,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.26925
+commune,10397,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07614
+commune,10426,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03140
+commune,51001,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06770
+commune,51008,5 - Surfaces en eau,31 - Forêts,0.05839
+commune,51009,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.10279
+commune,51016,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.44793
+commune,51018,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03861
+commune,51023,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.00306
+commune,51030,5 - Surfaces en eau,31 - Forêts,0.43494
+commune,51059,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.29688
+commune,51028,1 - Emprises urbaines,31 - Forêts,0.12680
+commune,51065,5 - Surfaces en eau,31 - Forêts,0.37411
+commune,51065,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.00620
+commune,51072,5 - Surfaces en eau,31 - Forêts,0.38270
+commune,51085,5 - Surfaces en eau,31 - Forêts,0.05816
+commune,51133,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.21393
+commune,51144,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.24245
+commune,51158,5 - Surfaces en eau,31 - Forêts,0.00925
+commune,51162,5 - Surfaces en eau,31 - Forêts,0.15601
+commune,51162,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.19882
+commune,51163,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11499
+commune,51174,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14612
+commune,51183,5 - Surfaces en eau,31 - Forêts,0.08975
+commune,51218,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.82665
+commune,10329,1 - Emprises urbaines,31 - Forêts,0.26853
+commune,51262,5 - Surfaces en eau,31 - Forêts,0.81609
+commune,51262,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.47687
+commune,51269,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.37012
+commune,51275,5 - Surfaces en eau,31 - Forêts,0.00135
+commune,51275,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.20817
+commune,51277,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.24533
+commune,51286,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.55398
+commune,51300,5 - Surfaces en eau,31 - Forêts,0.45837
+commune,51300,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.38088
+commune,51308,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.25318
+commune,51316,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.11459
+commune,51326,5 - Surfaces en eau,31 - Forêts,0.24196
+commune,51334,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07777
+commune,51339,5 - Surfaces en eau,31 - Forêts,0.57164
+commune,51339,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.87115
+commune,51339,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.35347
+commune,51356,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.04872
+commune,51357,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.04070
+commune,51373,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.35494
+commune,10331,1 - Emprises urbaines,31 - Forêts,0.11249
+commune,51061,1 - Emprises urbaines,31 - Forêts,0.23424
+commune,51433,5 - Surfaces en eau,31 - Forêts,0.15689
+commune,51433,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.42244
+commune,51440,5 - Surfaces en eau,31 - Forêts,0.05576
+commune,51445,5 - Surfaces en eau,31 - Forêts,0.21182
+commune,51446,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05269
+commune,51457,5 - Surfaces en eau,31 - Forêts,0.14369
+commune,51479,5 - Surfaces en eau,31 - Forêts,0.09092
+commune,51482,5 - Surfaces en eau,31 - Forêts,0.12724
+commune,51500,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11797
+commune,51457,1 - Emprises urbaines,31 - Forêts,0.04639
+commune,51507,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10966
+commune,51522,5 - Surfaces en eau,31 - Forêts,0.00472
+commune,51522,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06790
+commune,51536,5 - Surfaces en eau,31 - Forêts,0.03635
+commune,51537,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.18263
+commune,51538,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.37954
+commune,51552,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.20009
+commune,51557,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.98679
+commune,51557,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14195
+commune,51574,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.17327
+commune,51616,5 - Surfaces en eau,31 - Forêts,0.08170
+commune,51616,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.34381
+commune,51616,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.28526
+commune,51632,5 - Surfaces en eau,31 - Forêts,0.23242
+commune,51632,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.16051
+commune,51647,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.27883
+commune,51649,5 - Surfaces en eau,31 - Forêts,0.13358
+commune,51244,1 - Emprises urbaines,31 - Forêts,0.04538
+commune,52019,5 - Surfaces en eau,31 - Forêts,0.05476
+commune,52088,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.43293
+commune,52094,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.12442
+commune,52061,1 - Emprises urbaines,31 - Forêts,0.33521
+commune,52105,5 - Surfaces en eau,31 - Forêts,0.30549
+commune,52105,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.58642
+commune,52115,5 - Surfaces en eau,31 - Forêts,0.12789
+commune,52115,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06707
+commune,52182,5 - Surfaces en eau,31 - Forêts,0.13102
+commune,52182,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.57592
+commune,52155,1 - Emprises urbaines,31 - Forêts,0.00882
+commune,52206,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05289
+commune,52213,5 - Surfaces en eau,31 - Forêts,0.09311
+commune,52244,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.26344
+commune,52274,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08525
+commune,52280,5 - Surfaces en eau,31 - Forêts,0.63029
+commune,52280,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.82231
+commune,52280,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",4.08599
+commune,52292,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.08746
+commune,52315,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05841
+commune,52331,5 - Surfaces en eau,31 - Forêts,0.00131
+commune,52356,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08875
+commune,52363,5 - Surfaces en eau,31 - Forêts,0.16927
+commune,52363,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.00967
+commune,52380,5 - Surfaces en eau,31 - Forêts,0.34899
+commune,52380,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",6.47217
+commune,52386,5 - Surfaces en eau,31 - Forêts,0.00019
+commune,52386,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.44500
+commune,52411,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.13734
+commune,08003,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.82427
+commune,52448,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.32810
+commune,52465,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03745
+commune,52529,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.33133
+commune,52543,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07715
+commune,52550,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.35738
+commune,54013,5 - Surfaces en eau,31 - Forêts,0.02234
+commune,54027,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.16644
+commune,54042,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.24814
+commune,54042,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",4.61165
+commune,54054,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.88605
+commune,08004,1 - Emprises urbaines,31 - Forêts,0.09060
+commune,54079,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.64498
+commune,54099,5 - Surfaces en eau,31 - Forêts,0.02734
+commune,54099,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.35024
+commune,54115,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.17756
+commune,54118,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11825
+commune,54138,5 - Surfaces en eau,31 - Forêts,0.12743
+commune,54138,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.26621
+commune,54144,5 - Surfaces en eau,31 - Forêts,0.04593
+commune,54144,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11381
+commune,54157,5 - Surfaces en eau,31 - Forêts,0.01190
+commune,54157,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.37195
+commune,54177,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.40345
+commune,54196,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10246
+commune,54196,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.19614
+commune,54206,5 - Surfaces en eau,31 - Forêts,0.02977
+commune,54206,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01260
+commune,54206,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.00516
+commune,54232,5 - Surfaces en eau,31 - Forêts,0.03602
+commune,54232,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05224
+commune,54232,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.02729
+commune,51248,1 - Emprises urbaines,31 - Forêts,0.03979
+commune,54238,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.81550
+commune,54250,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02980
+commune,54300,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.64915
+commune,54303,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03166
+commune,54320,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.41111
+commune,54324,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.09083
+commune,54329,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.08730
+commune,54344,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.22751
+commune,54344,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",3.04212
+commune,54364,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.53706
+commune,54366,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06300
+commune,54373,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01970
+commune,54373,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.11683
+commune,54393,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03089
+commune,52114,1 - Emprises urbaines,31 - Forêts,1.09161
+commune,54426,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.43271
+commune,54432,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.09258
+commune,54449,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.12876
+commune,54472,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.16757
+commune,54479,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.00101
+commune,54527,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.85681
+commune,54527,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.87014
+commune,54528,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08393
+commune,54546,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,5.60162
+commune,54550,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.28746
+commune,54559,5 - Surfaces en eau,31 - Forêts,0.00620
+commune,54559,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.54673
+commune,54585,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07735
+commune,54585,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",3.78989
+commune,55027,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.42603
+commune,55058,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.13965
+commune,55058,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.10403
+commune,55097,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.21023
+commune,55099,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.35899
+commune,55100,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.18739
+commune,55102,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.83343
+commune,55106,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14906
+commune,55125,5 - Surfaces en eau,31 - Forêts,0.11656
+commune,55139,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.02193
+commune,08016,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14180
+commune,55145,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08618
+commune,55159,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.12053
+commune,55166,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.37867
+commune,55186,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.09215
+commune,55229,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.28354
+commune,08024,1 - Emprises urbaines,31 - Forêts,0.19802
+commune,55236,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14018
+commune,55268,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.05682
+commune,55288,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.00910
+commune,55312,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.12354
+commune,55321,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.04353
+commune,55347,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.21605
+commune,52321,1 - Emprises urbaines,31 - Forêts,0.34130
+commune,55396,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.35161
+commune,55414,5 - Surfaces en eau,31 - Forêts,0.99702
+commune,55414,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.18156
+commune,55415,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.18063
+commune,55388,1 - Emprises urbaines,31 - Forêts,0.06163
+commune,55427,5 - Surfaces en eau,31 - Forêts,1.57493
+commune,55427,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.57217
+commune,55427,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.63371
+commune,55458,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02136
+commune,55469,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.12267
+commune,55502,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14939
+commune,55523,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.37110
+commune,55533,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.07536
+commune,55582,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.00706
+commune,55584,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.15496
+commune,57028,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.09906
+commune,57126,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03205
+commune,57155,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01877
+commune,57193,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.22976
+commune,54186,1 - Emprises urbaines,31 - Forêts,0.02955
+commune,57303,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.58552
+commune,57325,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05666
+commune,57333,5 - Surfaces en eau,31 - Forêts,0.06632
+commune,57474,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.09232
+commune,57483,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.32097
+commune,55302,1 - Emprises urbaines,31 - Forêts,0.38663
+commune,57535,5 - Surfaces en eau,31 - Forêts,0.05667
+commune,57571,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.17050
+commune,67046,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.42688
+commune,67073,5 - Surfaces en eau,31 - Forêts,0.55363
+commune,67108,5 - Surfaces en eau,31 - Forêts,0.02798
+commune,67151,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.03184
+commune,67118,1 - Emprises urbaines,31 - Forêts,0.48548
+commune,67180,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02255
+commune,67235,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02138
+commune,67355,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10302
+commune,67315,1 - Emprises urbaines,31 - Forêts,0.75140
+commune,67462,5 - Surfaces en eau,31 - Forêts,0.32871
+commune,67505,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.01112
+commune,68005,5 - Surfaces en eau,31 - Forêts,0.07619
+commune,68011,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.33589
+commune,68015,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.14144
+commune,68026,5 - Surfaces en eau,31 - Forêts,0.07746
+commune,68060,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06587
+commune,68063,5 - Surfaces en eau,31 - Forêts,0.40786
+commune,68063,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.07905
+commune,68066,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.00874
+commune,68066,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.16437
+commune,68072,5 - Surfaces en eau,31 - Forêts,0.11700
+commune,68072,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.12871
+commune,68115,5 - Surfaces en eau,31 - Forêts,0.42367
+commune,68115,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08971
+commune,68066,1 - Emprises urbaines,31 - Forêts,0.06812
+commune,68136,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01875
+commune,68145,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05384
+commune,68145,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.03617
+commune,68163,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.34592
+commune,68180,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.35590
+commune,68185,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.04757
+commune,68201,1 - Emprises urbaines,31 - Forêts,0.67373
+commune,68253,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.21596
+commune,68266,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.45498
+commune,68266,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.50815
+commune,68286,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.21075
+commune,68286,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.71309
+commune,68289,5 - Surfaces en eau,31 - Forêts,0.27600
+commune,68289,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.16048
+commune,68289,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.01209
+commune,68286,1 - Emprises urbaines,31 - Forêts,0.02709
+commune,68302,5 - Surfaces en eau,31 - Forêts,0.61852
+commune,68302,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.04863
+commune,68321,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10267
+commune,68343,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15824
+commune,68349,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.23953
+commune,88011,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.01841
+commune,88021,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08752
+commune,88084,5 - Surfaces en eau,31 - Forêts,0.15861
+commune,88084,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.09743
+commune,88084,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.08515
+commune,88089,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05628
+commune,88090,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.27705
+commune,88094,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.45224
+commune,88094,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.48377
+commune,88098,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.77865
+commune,88099,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14090
+commune,88135,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.07748
+commune,88136,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.24548
+commune,88160,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.44905
+commune,88165,5 - Surfaces en eau,31 - Forêts,0.05157
+commune,88165,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05831
+commune,88176,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.13735
+commune,88209,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.18151
+commune,88247,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.39177
+commune,88251,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03114
+commune,88319,5 - Surfaces en eau,31 - Forêts,0.04744
+commune,88319,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.16062
+commune,88327,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.00015
+commune,88355,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08609
+commune,88355,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.15846
+commune,88388,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.16885
+commune,88413,5 - Surfaces en eau,31 - Forêts,0.03343
+commune,88415,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14555
+commune,88428,5 - Surfaces en eau,31 - Forêts,0.12142
+commune,88439,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.81229
+commune,88458,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.72127
+commune,88465,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.57124
+commune,88497,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.88599
+departement,08,5 - Surfaces en eau,31 - Forêts,4.88146
+departement,08,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,11.14931
+departement,08,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",3.70054
+departement,10,5 - Surfaces en eau,31 - Forêts,1.16695
+departement,10,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,7.71035
+departement,10,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.22207
+departement,51,5 - Surfaces en eau,31 - Forêts,4.92783
+departement,51,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,10.57191
+departement,51,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",5.38742
+commune,88499,1 - Emprises urbaines,31 - Forêts,0.58938
+departement,52,5 - Surfaces en eau,31 - Forêts,1.86232
+departement,52,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,4.59645
+departement,52,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",12.93042
+departement,54,5 - Surfaces en eau,31 - Forêts,0.30694
+departement,54,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,11.90410
+departement,54,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",18.93957
+departement,55,5 - Surfaces en eau,31 - Forêts,2.68851
+departement,55,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.01498
+departement,55,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",6.78764
+departement,57,5 - Surfaces en eau,31 - Forêts,0.12299
+departement,57,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,4.43510
+departement,57,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.17050
+departement,68,5 - Surfaces en eau,31 - Forêts,1.99670
+departement,68,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.41364
+departement,68,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.28285
+departement,88,5 - Surfaces en eau,31 - Forêts,0.41247
+departement,88,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.05711
+departement,88,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",13.70292
+epci,200000545,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.50152
+epci,200005957,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11866
+epci,200006716,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.49698
+epci,200027308,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.12442
+epci,200027308,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.41879
+epci,200033025,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.09215
+epci,200034718,5 - Surfaces en eau,31 - Forêts,1.32514
+epci,200034718,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.60414
+epci,200034718,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.83319
+epci,200035772,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.47566
+epci,200035772,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",8.46927
+epci,200036465,5 - Surfaces en eau,31 - Forêts,1.02637
+epci,200036465,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.81948
+epci,200039949,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,4.00665
+epci,200040137,5 - Surfaces en eau,31 - Forêts,0.06975
+epci,200040137,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.34274
+epci,200041283,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02138
+epci,200041325,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.03184
+epci,200041515,5 - Surfaces en eau,31 - Forêts,0.01190
+epci,200041515,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,7.19611
+epci,200041622,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.13463
+epci,200042000,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.07748
+epci,200042703,5 - Surfaces en eau,31 - Forêts,0.23242
+epci,200042703,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.78470
+epci,200042992,5 - Surfaces en eau,31 - Forêts,0.45837
+epci,200042992,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,2.12649
+epci,200042992,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.91379
+epci,200043156,5 - Surfaces en eau,31 - Forêts,1.90399
+epci,200043156,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.59217
+epci,200043156,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.55819
+epci,200043438,5 - Surfaces en eau,31 - Forêts,0.78059
+epci,200043438,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.76776
+epci,200043438,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.63873
+epci,200043693,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11825
+epci,200044253,5 - Surfaces en eau,31 - Forêts,0.05476
+epci,200044253,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08875
+epci,200049187,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.83343
+epci,200049187,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.08479
+epci,200066009,5 - Surfaces en eau,31 - Forêts,0.39300
+epci,200066009,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.69153
+epci,200066009,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.22806
+epci,200066025,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01875
+epci,200066058,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.21075
+epci,200066058,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.29854
+epci,200066132,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.27911
+epci,200066140,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.15496
+epci,200066157,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.13965
+epci,200066157,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.93772
+epci,200066165,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.59473
+epci,200066173,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08618
+epci,200066835,5 - Surfaces en eau,31 - Forêts,0.15601
+epci,200066835,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.30161
+epci,200066850,5 - Surfaces en eau,31 - Forêts,0.20186
+epci,200066850,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.11499
+epci,200066850,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14612
+epci,200066876,5 - Surfaces en eau,31 - Forêts,0.24196
+epci,200066876,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.04376
+epci,200066892,5 - Surfaces en eau,31 - Forêts,0.02462
+epci,200066892,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,3.35217
+epci,200067213,5 - Surfaces en eau,31 - Forêts,0.86731
+epci,200067213,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.25318
+epci,200067379,5 - Surfaces en eau,31 - Forêts,0.15689
+epci,200067379,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,3.52792
+epci,200067502,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.32097
+epci,200067643,5 - Surfaces en eau,31 - Forêts,0.05213
+epci,200067643,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.19218
+epci,200067643,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",6.31350
+epci,200067684,5 - Surfaces en eau,31 - Forêts,0.00925
+epci,200067684,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03861
+epci,200067759,5 - Surfaces en eau,31 - Forêts,0.05631
+epci,200067759,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,7.16378
+epci,200067841,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10302
+epci,200067874,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.44942
+epci,200067957,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01877
+epci,200068146,5 - Surfaces en eau,31 - Forêts,0.06632
+epci,200068377,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14555
+epci,200068658,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05841
+epci,200068666,5 - Surfaces en eau,31 - Forêts,0.19562
+epci,200068666,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,3.62314
+epci,200068666,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.91136
+epci,200068757,5 - Surfaces en eau,31 - Forêts,0.15861
+epci,200068757,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.66323
+epci,200068757,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",13.47989
+departement,57,1 - Emprises urbaines,31 - Forêts,59.33965
+epci,200069003,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.63168
+epci,200069250,5 - Surfaces en eau,31 - Forêts,0.29324
+epci,200069250,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15136
+epci,200069433,5 - Surfaces en eau,31 - Forêts,0.02234
+epci,200069433,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.40345
+epci,200069441,5 - Surfaces en eau,31 - Forêts,0.05667
+epci,200070126,5 - Surfaces en eau,31 - Forêts,0.18418
+epci,200070126,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06177
+epci,200070126,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.08118
+epci,200070324,5 - Surfaces en eau,31 - Forêts,0.02977
+epci,200070324,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.09485
+epci,200070324,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.79309
+epci,200070332,5 - Surfaces en eau,31 - Forêts,0.09311
+epci,200070563,5 - Surfaces en eau,31 - Forêts,0.03602
+epci,200070563,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.56888
+epci,200070563,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.02729
+epci,200070589,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02980
+epci,200070746,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05666
+epci,200070746,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.17050
+epci,200070845,5 - Surfaces en eau,31 - Forêts,0.02734
+epci,200070845,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.35024
+epci,200071066,5 - Surfaces en eau,31 - Forêts,0.25386
+epci,200071066,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.27522
+epci,200071777,5 - Surfaces en eau,31 - Forêts,0.05327
+epci,200072999,5 - Surfaces en eau,31 - Forêts,1.58192
+epci,200072999,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.92684
+epci,200072999,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",12.15425
+epci,240800821,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.01039
+epci,240800847,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.16839
+epci,240800862,5 - Surfaces en eau,31 - Forêts,0.61806
+epci,240800862,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.93509
+epci,240800862,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.36473
+epci,240800920,5 - Surfaces en eau,31 - Forêts,2.30311
+epci,240800920,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.31325
+epci,240800920,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.60922
+epci,241000223,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06241
+epci,241000405,5 - Surfaces en eau,31 - Forêts,0.54190
+epci,241000405,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10972
+epci,241000405,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14089
+epci,245100615,5 - Surfaces en eau,31 - Forêts,0.43494
+epci,245200597,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08525
+epci,245400171,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.70252
+epci,245400171,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.28872
+epci,245400189,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.85681
+epci,245400189,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.87014
+epci,245400262,5 - Surfaces en eau,31 - Forêts,0.12743
+epci,245400262,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.26621
+epci,245400601,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.17756
+epci,245400676,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.64915
+epci,245500327,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.18063
+epci,245500327,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.01047
+epci,245501184,5 - Surfaces en eau,31 - Forêts,2.68851
+epci,245501184,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.75372
+epci,245501184,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.63371
+epci,245501242,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.02136
+epci,245200597,1 - Emprises urbaines,31 - Forêts,1.60650
+epci,245701206,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.03205
+epci,246700967,5 - Surfaces en eau,31 - Forêts,0.88234
+epci,246700967,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.01112
+epci,246701064,5 - Surfaces en eau,31 - Forêts,0.02798
+epci,246800395,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.04757
+epci,246800445,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.45498
+epci,246800445,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.50815
+epci,246800551,5 - Surfaces en eau,31 - Forêts,0.07619
+epci,246800577,5 - Surfaces en eau,31 - Forêts,0.07746
+epci,246701064,1 - Emprises urbaines,31 - Forêts,0.17225
+epci,246800676,5 - Surfaces en eau,31 - Forêts,0.42367
+epci,246800676,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15558
+epci,246800726,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.06258
+epci,246800726,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.20054
+pnr,02,5 - Surfaces en eau,31 - Forêts,0.05631
+pnr,02,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,7.30880
+pnr,05,5 - Surfaces en eau,31 - Forêts,0.15365
+pnr,05,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.35590
+pnr,05,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.04757
+pnr,14,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.41323
+pnr,24,5 - Surfaces en eau,31 - Forêts,0.01190
+pnr,24,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.69223
+pnr,24,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.44439
+pnr,30,5 - Surfaces en eau,31 - Forêts,1.26407
+scot,00099,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.83343
+scot,00099,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.67952
+commune,10063,1 - Emprises urbaines,31 - Forêts,0.88782
+scot,00102,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,4.02542
+scot,00123,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.44942
+scot,00126,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.10302
+scot,00157,5 - Surfaces en eau,31 - Forêts,0.15861
+scot,00157,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.66323
+commune,10070,1 - Emprises urbaines,31 - Forêts,0.00590
+scot,00157,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",13.47989
+scot,00183,5 - Surfaces en eau,31 - Forêts,0.05631
+scot,00183,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,7.30880
+scot,00183,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.16839
+scot,00204,5 - Surfaces en eau,31 - Forêts,0.64604
+scot,00204,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.15360
+scot,00204,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14612
+scot,00212,5 - Surfaces en eau,31 - Forêts,0.39300
+scot,00212,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.69153
+scot,00212,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.22806
+scot,00234,5 - Surfaces en eau,31 - Forêts,0.98277
+scot,00234,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,4.65009
+scot,00234,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.14089
+scot,00260,5 - Surfaces en eau,31 - Forêts,1.02255
+scot,00260,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.81152
+scot,00260,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.63873
+scot,00261,5 - Surfaces en eau,31 - Forêts,0.86731
+scot,00261,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.25318
+scot,00276,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.05322
+scot,00279,5 - Surfaces en eau,31 - Forêts,1.45005
+scot,00279,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.97506
+epci,246800494,1 - Emprises urbaines,31 - Forêts,0.12241
+scot,00281,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.45498
+scot,00281,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.50815
+scot,00282,5 - Surfaces en eau,31 - Forêts,0.15365
+scot,00283,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.21075
+scot,00283,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",1.29854
+scot,00494,5 - Surfaces en eau,31 - Forêts,0.15477
+scot,00494,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.73471
+scot,00978,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.13965
+scot,00978,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.93772
+scot,01037,5 - Surfaces en eau,31 - Forêts,0.05667
+scot,01037,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.05666
+scot,01037,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.17050
+scot,01355,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.32097
+scot,03041,5 - Surfaces en eau,31 - Forêts,0.15216
+scot,03041,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,11.16940
+scot,03041,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",18.93957
+scot,03367,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.08132
+scot,03367,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.20054
+scot,06828,5 - Surfaces en eau,31 - Forêts,0.88234
+scot,06828,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.05869
+scot,06938,5 - Surfaces en eau,31 - Forêts,0.02798
+scot,08999,5 - Surfaces en eau,31 - Forêts,4.82515
+scot,08999,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,3.84051
+scot,08999,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",3.53214
+scot,10247,5 - Surfaces en eau,31 - Forêts,2.68851
+scot,10247,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.75372
+scot,10247,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",2.72585
+scot,10331,5 - Surfaces en eau,31 - Forêts,0.06632
+scot,10418,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.14366
+scot,10419,5 - Surfaces en eau,31 - Forêts,0.25038
+scot,10419,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,3.71189
+scot,10419,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.91136
+scot,10420,5 - Surfaces en eau,31 - Forêts,1.94040
+scot,10420,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,7.25855
+scot,10420,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",3.74698
+scot,10999,5 - Surfaces en eau,31 - Forêts,0.18418
+scot,10999,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,3.06027
+scot,10999,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.08118
+scot,51999,5 - Surfaces en eau,31 - Forêts,0.15601
+scot,51999,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.30161
+scot,52999,5 - Surfaces en eau,31 - Forêts,1.67504
+scot,52999,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,1.05126
+scot,52999,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",12.57304
+scot,88999,5 - Surfaces en eau,31 - Forêts,0.25386
+scot,88999,5 - Surfaces en eau,32 - Formations naturelles herbacées ou arbustives,0.27522
+scot,88999,5 - Surfaces en eau,"33 - Espaces ouverts, sans ou avec peu de végétation",0.22303
+commune,08024,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.46463
+commune,08028,1 - Emprises urbaines,31 - Forêts,0.01104
+commune,08034,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.17535
+commune,08038,1 - Emprises urbaines,31 - Forêts,0.17215
+commune,08038,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06560
+commune,08040,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14910
+commune,08046,1 - Emprises urbaines,31 - Forêts,0.14435
+commune,08047,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39583
+commune,08053,1 - Emprises urbaines,31 - Forêts,0.71460
+commune,08053,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.18289
+commune,08055,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02024
+commune,08056,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.70624
+commune,08063,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13254
+commune,08080,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10828
+commune,08081,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.20845
+commune,08090,1 - Emprises urbaines,31 - Forêts,0.00232
+commune,08090,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.97488
+commune,08095,1 - Emprises urbaines,31 - Forêts,0.25788
+commune,08096,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07353
+commune,08102,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01778
+commune,08105,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.33994
+commune,08107,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27698
+commune,08110,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.82004
+commune,08113,1 - Emprises urbaines,31 - Forêts,0.31140
+commune,08113,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.51053
+commune,08115,1 - Emprises urbaines,31 - Forêts,0.27009
+commune,08115,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.79508
+commune,08116,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.83948
+commune,08130,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17033
+commune,08135,1 - Emprises urbaines,31 - Forêts,0.23544
+commune,08137,1 - Emprises urbaines,31 - Forêts,0.01538
+commune,08137,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56045
+commune,08142,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.26080
+commune,08144,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.89447
+commune,08145,1 - Emprises urbaines,31 - Forêts,0.02613
+commune,08145,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.62645
+commune,08150,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10562
+commune,08156,1 - Emprises urbaines,31 - Forêts,0.20902
+commune,08160,1 - Emprises urbaines,31 - Forêts,0.13155
+commune,08160,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42450
+commune,08162,1 - Emprises urbaines,31 - Forêts,0.17411
+commune,08162,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20695
+commune,08166,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11834
+commune,08173,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.45722
+commune,08179,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13595
+commune,08180,1 - Emprises urbaines,31 - Forêts,0.00934
+commune,08180,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01231
+commune,08185,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.84214
+commune,08188,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34003
+commune,08189,1 - Emprises urbaines,31 - Forêts,0.08837
+commune,08190,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21331
+commune,08191,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.05901
+commune,08194,1 - Emprises urbaines,31 - Forêts,0.42301
+commune,08194,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22627
+commune,08195,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12064
+commune,08198,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27744
+commune,08199,1 - Emprises urbaines,31 - Forêts,0.24055
+commune,08203,1 - Emprises urbaines,31 - Forêts,0.20562
+commune,08207,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31718
+commune,08210,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14649
+commune,08211,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.86483
+commune,08218,1 - Emprises urbaines,31 - Forêts,0.18040
+commune,10223,1 - Emprises urbaines,31 - Forêts,0.12093
+commune,08218,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22535
+commune,08222,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.40706
+commune,08229,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21105
+commune,08234,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06573
+commune,08235,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32424
+commune,08236,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15356
+commune,08239,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17432
+commune,08248,1 - Emprises urbaines,31 - Forêts,0.56993
+commune,08248,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17370
+commune,08249,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09981
+commune,08259,1 - Emprises urbaines,31 - Forêts,0.08557
+commune,08259,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07048
+commune,08260,1 - Emprises urbaines,31 - Forêts,0.18154
+commune,08262,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11123
+commune,08264,1 - Emprises urbaines,31 - Forêts,0.13473
+commune,08271,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17926
+commune,08277,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56374
+commune,08287,1 - Emprises urbaines,31 - Forêts,0.05005
+commune,08287,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.82349
+commune,08302,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10272
+commune,08311,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07668
+commune,08312,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08475
+commune,08315,1 - Emprises urbaines,31 - Forêts,0.04743
+commune,08320,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24984
+commune,08327,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32602
+commune,08330,1 - Emprises urbaines,31 - Forêts,0.42973
+commune,08330,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04641
+commune,08333,1 - Emprises urbaines,31 - Forêts,0.34686
+commune,08336,1 - Emprises urbaines,31 - Forêts,1.25492
+commune,10157,1 - Emprises urbaines,31 - Forêts,0.07109
+commune,08336,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.89821
+commune,08349,1 - Emprises urbaines,31 - Forêts,0.30490
+commune,08349,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34651
+commune,08355,1 - Emprises urbaines,31 - Forêts,0.43040
+commune,08356,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18225
+commune,08358,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02367
+commune,08361,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.77648
+commune,08362,1 - Emprises urbaines,31 - Forêts,0.12633
+commune,08362,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36159
+commune,08363,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00238
+commune,08365,1 - Emprises urbaines,31 - Forêts,0.11222
+commune,08365,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15130
+commune,08367,1 - Emprises urbaines,31 - Forêts,0.38379
+commune,08369,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20132
+commune,08375,1 - Emprises urbaines,31 - Forêts,0.14813
+commune,08379,1 - Emprises urbaines,31 - Forêts,0.30358
+commune,08383,1 - Emprises urbaines,31 - Forêts,0.17227
+commune,08383,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.03273
+commune,08384,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23218
+commune,08385,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02114
+commune,08386,1 - Emprises urbaines,31 - Forêts,0.26048
+commune,08387,1 - Emprises urbaines,31 - Forêts,0.07249
+commune,08387,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37434
+commune,08388,1 - Emprises urbaines,31 - Forêts,0.03761
+commune,08388,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09644
+commune,08395,1 - Emprises urbaines,31 - Forêts,0.11645
+commune,08395,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.06114
+commune,08397,1 - Emprises urbaines,31 - Forêts,2.37264
+commune,08397,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.90145
+commune,08400,1 - Emprises urbaines,31 - Forêts,0.42583
+commune,08402,1 - Emprises urbaines,31 - Forêts,0.05422
+commune,08402,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.29205
+commune,08405,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17064
+commune,08408,1 - Emprises urbaines,31 - Forêts,0.05972
+commune,08409,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09518
+commune,08417,1 - Emprises urbaines,31 - Forêts,0.00651
+commune,08418,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.66557
+commune,08419,1 - Emprises urbaines,31 - Forêts,0.40658
+commune,08419,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.29419
+commune,08426,1 - Emprises urbaines,31 - Forêts,0.12246
+commune,08435,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13775
+commune,08446,1 - Emprises urbaines,31 - Forêts,0.14647
+commune,08449,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37816
+commune,51293,1 - Emprises urbaines,31 - Forêts,0.08688
+commune,08450,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31466
+commune,08451,1 - Emprises urbaines,31 - Forêts,0.03583
+commune,08457,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.82553
+commune,08458,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29308
+commune,08468,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11919
+commune,08469,1 - Emprises urbaines,31 - Forêts,1.46092
+commune,08469,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.68343
+commune,08473,1 - Emprises urbaines,31 - Forêts,0.11190
+commune,08473,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29017
+commune,08476,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19425
+commune,08482,1 - Emprises urbaines,31 - Forêts,0.26377
+commune,08483,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24709
+commune,08486,1 - Emprises urbaines,31 - Forêts,0.38534
+commune,08487,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.86794
+commune,08488,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42417
+commune,08489,1 - Emprises urbaines,31 - Forêts,0.07348
+commune,08491,1 - Emprises urbaines,31 - Forêts,0.32870
+commune,08491,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.39421
+commune,08494,1 - Emprises urbaines,31 - Forêts,0.25531
+commune,08494,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34430
+commune,08497,1 - Emprises urbaines,31 - Forêts,0.32117
+commune,08497,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.60479
+commune,08499,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08837
+commune,08501,1 - Emprises urbaines,31 - Forêts,0.18525
+commune,08502,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.70706
+commune,10002,1 - Emprises urbaines,31 - Forêts,0.05597
+commune,10002,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19257
+commune,10003,1 - Emprises urbaines,31 - Forêts,0.11234
+commune,10003,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17504
+commune,10005,1 - Emprises urbaines,31 - Forêts,1.02372
+commune,10005,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22240
+commune,10011,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35134
+commune,10012,1 - Emprises urbaines,31 - Forêts,0.11020
+commune,10012,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.76919
+commune,10020,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.45328
+commune,10022,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16071
+commune,10025,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02962
+commune,10029,1 - Emprises urbaines,31 - Forêts,0.03110
+commune,10030,1 - Emprises urbaines,31 - Forêts,0.84480
+commune,10030,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.44775
+commune,10031,1 - Emprises urbaines,31 - Forêts,0.19877
+commune,10031,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.52168
+commune,10032,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.71995
+commune,10033,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.60107
+commune,10034,1 - Emprises urbaines,31 - Forêts,0.71290
+commune,10034,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10032
+commune,10035,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00404
+commune,10038,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39207
+commune,10042,1 - Emprises urbaines,31 - Forêts,0.05870
+commune,10042,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25155
+commune,10043,1 - Emprises urbaines,31 - Forêts,0.02845
+commune,10043,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04947
+commune,10048,1 - Emprises urbaines,31 - Forêts,0.07427
+commune,10048,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.79295
+commune,10051,1 - Emprises urbaines,31 - Forêts,0.53646
+commune,10051,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.50295
+commune,10052,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26445
+commune,10055,1 - Emprises urbaines,31 - Forêts,0.16837
+commune,10058,1 - Emprises urbaines,31 - Forêts,0.06251
+commune,10059,1 - Emprises urbaines,31 - Forêts,0.08737
+commune,10060,1 - Emprises urbaines,31 - Forêts,0.12812
+commune,10060,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.50474
+commune,10063,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,7.87908
+commune,10064,1 - Emprises urbaines,31 - Forêts,0.87004
+commune,10064,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.44695
+commune,10067,1 - Emprises urbaines,31 - Forêts,0.19708
+commune,10068,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42164
+commune,10070,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.60346
+commune,10074,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08419
+commune,10079,1 - Emprises urbaines,31 - Forêts,0.27315
+commune,10081,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21047
+commune,10082,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11244
+commune,10083,1 - Emprises urbaines,31 - Forêts,0.08094
+commune,10089,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.49556
+commune,10090,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20419
+commune,10092,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07055
+commune,10094,1 - Emprises urbaines,31 - Forêts,0.03457
+commune,10094,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.40391
+commune,10095,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36677
+commune,10096,1 - Emprises urbaines,31 - Forêts,0.03874
+commune,10100,1 - Emprises urbaines,31 - Forêts,0.08577
+commune,10100,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.55776
+commune,10105,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.05302
+commune,10113,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07148
+commune,10114,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06492
+commune,10119,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.48445
+commune,10123,1 - Emprises urbaines,31 - Forêts,0.17400
+commune,10123,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.96992
+commune,10126,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31346
+commune,10131,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.96987
+commune,10132,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.63202
+commune,10135,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07201
+commune,10136,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13908
+commune,10139,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21653
+commune,10141,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,6.52194
+commune,10143,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43183
+commune,10144,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08340
+commune,10146,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20310
+commune,10148,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.01188
+commune,10150,1 - Emprises urbaines,31 - Forêts,0.11663
+commune,10150,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26164
+commune,10151,1 - Emprises urbaines,31 - Forêts,0.08311
+commune,10155,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43682
+commune,10156,1 - Emprises urbaines,31 - Forêts,0.22864
+commune,10157,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16630
+commune,10160,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14522
+commune,10164,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.60638
+commune,10166,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32259
+commune,10169,1 - Emprises urbaines,31 - Forêts,0.08211
+commune,10169,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37004
+commune,10170,1 - Emprises urbaines,31 - Forêts,0.20751
+commune,10170,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.94895
+commune,10176,1 - Emprises urbaines,31 - Forêts,0.12801
+commune,10182,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11556
+commune,10185,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11473
+commune,10187,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.08700
+commune,10189,1 - Emprises urbaines,31 - Forêts,0.05800
+commune,10189,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37091
+commune,10191,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32247
+commune,10193,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11124
+commune,10194,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.33272
+commune,10195,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.90575
+commune,10199,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.91600
+commune,10202,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16067
+commune,10203,1 - Emprises urbaines,31 - Forêts,0.11133
+commune,10203,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31193
+commune,10207,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12340
+commune,10208,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42501
+commune,10215,1 - Emprises urbaines,31 - Forêts,0.08314
+commune,10220,1 - Emprises urbaines,31 - Forêts,0.13708
+commune,10223,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56422
+commune,10224,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.49292
+commune,10231,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08802
+commune,10232,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26002
+commune,10233,1 - Emprises urbaines,31 - Forêts,0.21014
+commune,10233,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.57224
+commune,10242,1 - Emprises urbaines,31 - Forêts,0.10126
+commune,10242,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18862
+commune,10246,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06882
+commune,10248,1 - Emprises urbaines,31 - Forêts,0.23485
+commune,10253,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00824
+commune,10254,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26559
+commune,10259,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12407
+commune,10262,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.30489
+commune,10264,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.18475
+commune,10268,1 - Emprises urbaines,31 - Forêts,4.66193
+commune,10268,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.86073
+commune,10276,1 - Emprises urbaines,31 - Forêts,0.08326
+commune,10280,1 - Emprises urbaines,31 - Forêts,0.70861
+commune,10280,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.44121
+commune,10281,1 - Emprises urbaines,31 - Forêts,0.27082
+commune,10282,1 - Emprises urbaines,31 - Forêts,0.06665
+commune,10282,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.09065
+commune,10283,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14218
+commune,10284,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,11.75684
+commune,10285,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41457
+commune,10289,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.65004
+commune,10290,1 - Emprises urbaines,31 - Forêts,0.28391
+commune,10293,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07266
+commune,10295,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.30533
+commune,10296,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.54009
+commune,10297,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04285
+commune,10298,1 - Emprises urbaines,31 - Forêts,0.14738
+commune,10298,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.27785
+commune,10299,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14339
+commune,10304,1 - Emprises urbaines,31 - Forêts,0.01557
+commune,10310,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29655
+commune,10317,1 - Emprises urbaines,31 - Forêts,0.38639
+commune,10317,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.36216
+commune,10318,1 - Emprises urbaines,31 - Forêts,0.08470
+commune,10318,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33175
+commune,10323,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.95274
+commune,10325,1 - Emprises urbaines,31 - Forêts,0.36414
+commune,10326,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,7.70849
+commune,10327,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.55310
+commune,10331,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.03601
+commune,10335,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13805
+commune,10337,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.07092
+commune,10339,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41161
+commune,10340,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15391
+commune,10341,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10954
+commune,10344,1 - Emprises urbaines,31 - Forêts,0.06687
+commune,10344,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15702
+commune,10345,1 - Emprises urbaines,31 - Forêts,0.10756
+commune,10346,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19435
+commune,10347,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.61681
+commune,10348,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10675
+commune,10349,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.41588
+commune,10352,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.55517
+commune,10354,1 - Emprises urbaines,31 - Forêts,0.07554
+commune,10355,1 - Emprises urbaines,31 - Forêts,0.13502
+commune,10356,1 - Emprises urbaines,31 - Forêts,0.24439
+commune,10356,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21900
+commune,10358,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.28916
+commune,10361,1 - Emprises urbaines,31 - Forêts,0.09631
+commune,10367,1 - Emprises urbaines,31 - Forêts,0.14270
+commune,10367,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41713
+commune,10369,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22137
+commune,10372,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.61769
+commune,10374,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18065
+commune,54378,1 - Emprises urbaines,31 - Forêts,0.12893
+commune,10377,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.19262
+commune,10383,1 - Emprises urbaines,31 - Forêts,0.15157
+commune,10389,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04799
+commune,10390,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17897
+commune,10393,1 - Emprises urbaines,31 - Forêts,0.03370
+commune,10393,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14821
+commune,10399,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.48683
+commune,10403,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12886
+commune,10410,1 - Emprises urbaines,31 - Forêts,0.23460
+commune,10412,1 - Emprises urbaines,31 - Forêts,0.05454
+commune,10420,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.71449
+commune,10421,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01772
+commune,10426,1 - Emprises urbaines,31 - Forêts,0.14093
+commune,10426,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.23319
+commune,10427,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09519
+commune,10428,1 - Emprises urbaines,31 - Forêts,0.04351
+commune,10438,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13018
+commune,10439,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00441
+commune,10440,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32101
+commune,10441,1 - Emprises urbaines,31 - Forêts,0.15656
+commune,10442,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11324
+commune,51001,1 - Emprises urbaines,31 - Forêts,0.17631
+commune,51002,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22823
+commune,51005,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.78894
+commune,51007,1 - Emprises urbaines,31 - Forêts,0.05277
+commune,51007,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06480
+commune,51014,1 - Emprises urbaines,31 - Forêts,0.33658
+commune,51017,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19111
+commune,51018,1 - Emprises urbaines,31 - Forêts,0.17261
+commune,51018,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.65120
+commune,51025,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33422
+commune,51028,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.48480
+commune,51029,1 - Emprises urbaines,31 - Forêts,0.17094
+commune,51030,1 - Emprises urbaines,31 - Forêts,0.34711
+commune,51030,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.29049
+commune,51032,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08973
+commune,51036,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20511
+commune,51037,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.78789
+commune,51039,1 - Emprises urbaines,31 - Forêts,0.03430
+commune,51043,1 - Emprises urbaines,31 - Forêts,0.01883
+commune,51043,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.46598
+commune,51046,1 - Emprises urbaines,31 - Forêts,0.21813
+commune,51054,1 - Emprises urbaines,31 - Forêts,0.63916
+commune,51054,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.56115
+commune,51055,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.84070
+commune,51056,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.77937
+commune,51057,1 - Emprises urbaines,31 - Forêts,1.53212
+commune,51057,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,15.13340
+commune,51061,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.85244
+commune,51066,1 - Emprises urbaines,31 - Forêts,0.14804
+commune,51066,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09670
+commune,51071,1 - Emprises urbaines,31 - Forêts,0.04011
+commune,51073,1 - Emprises urbaines,31 - Forêts,0.15215
+commune,51074,1 - Emprises urbaines,31 - Forêts,0.12443
+commune,51074,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31753
+commune,51077,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09932
+commune,51089,1 - Emprises urbaines,31 - Forêts,0.10316
+commune,51089,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33787
+commune,51092,1 - Emprises urbaines,31 - Forêts,1.87639
+commune,51095,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27338
+commune,51098,1 - Emprises urbaines,31 - Forêts,0.63053
+commune,51098,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28899
+commune,51099,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32082
+commune,51102,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.05981
+commune,51107,1 - Emprises urbaines,31 - Forêts,0.01712
+commune,51108,1 - Emprises urbaines,31 - Forêts,0.14191
+commune,51108,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.60407
+commune,51117,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27014
+commune,51119,1 - Emprises urbaines,31 - Forêts,0.06662
+commune,51120,1 - Emprises urbaines,31 - Forêts,0.07445
+commune,51122,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00582
+commune,51124,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17662
+commune,54382,1 - Emprises urbaines,31 - Forêts,0.20762
+commune,51138,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01940
+commune,51139,1 - Emprises urbaines,31 - Forêts,0.04868
+commune,51139,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19861
+commune,51140,1 - Emprises urbaines,31 - Forêts,0.20265
+commune,51141,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25998
+commune,51142,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.03965
+commune,51144,1 - Emprises urbaines,31 - Forêts,1.17983
+commune,51144,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,15.16706
+commune,51147,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.60575
+commune,51148,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.05642
+commune,51153,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.75145
+commune,51161,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34286
+commune,51162,1 - Emprises urbaines,31 - Forêts,0.18782
+commune,51165,1 - Emprises urbaines,31 - Forêts,0.05404
+commune,51165,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32583
+commune,51172,1 - Emprises urbaines,31 - Forêts,0.48998
+commune,51172,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29922
+commune,51177,1 - Emprises urbaines,31 - Forêts,0.15969
+commune,51179,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19971
+commune,51184,1 - Emprises urbaines,31 - Forêts,0.14786
+commune,51184,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15608
+commune,51186,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22679
+commune,51191,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17719
+commune,51192,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22356
+commune,51194,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09530
+commune,51195,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.57286
+commune,51196,1 - Emprises urbaines,31 - Forêts,0.31231
+commune,51196,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42533
+commune,51197,1 - Emprises urbaines,31 - Forêts,0.06966
+commune,51198,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42635
+commune,51199,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21687
+commune,51200,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.24035
+commune,51202,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10798
+commune,51203,1 - Emprises urbaines,31 - Forêts,3.05832
+commune,51204,1 - Emprises urbaines,31 - Forêts,0.17194
+commune,51204,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24898
+commune,51206,1 - Emprises urbaines,31 - Forêts,0.42261
+commune,51208,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14681
+commune,51216,1 - Emprises urbaines,31 - Forêts,0.10055
+commune,51216,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.00302
+commune,51217,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.81712
+commune,51219,1 - Emprises urbaines,31 - Forêts,0.03989
+commune,51224,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36068
+commune,51230,1 - Emprises urbaines,31 - Forêts,0.19638
+commune,51230,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.29162
+commune,51232,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22870
+commune,51234,1 - Emprises urbaines,31 - Forêts,0.10998
+commune,51237,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13840
+commune,51239,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16620
+commune,51242,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43811
+commune,51248,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12090
+commune,51249,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.96030
+commune,51250,1 - Emprises urbaines,31 - Forêts,0.73633
+commune,51250,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17492
+commune,51253,1 - Emprises urbaines,31 - Forêts,0.22737
+commune,51255,1 - Emprises urbaines,31 - Forêts,0.19328
+commune,51256,1 - Emprises urbaines,31 - Forêts,0.48175
+commune,51256,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.57097
+commune,51259,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.05536
+commune,51262,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23719
+commune,51264,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42086
+commune,51265,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15857
+commune,51266,1 - Emprises urbaines,31 - Forêts,0.77260
+commune,51267,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42896
+commune,51268,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11667
+commune,51269,1 - Emprises urbaines,31 - Forêts,0.15457
+commune,51273,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18222
+commune,51275,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.90078
+commune,51281,1 - Emprises urbaines,31 - Forêts,0.04314
+commune,51281,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.44744
+commune,51283,1 - Emprises urbaines,31 - Forêts,0.05583
+commune,51283,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26155
+commune,51285,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18455
+commune,51286,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07745
+commune,51287,1 - Emprises urbaines,31 - Forêts,0.05243
+commune,51287,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21165
+commune,51289,1 - Emprises urbaines,31 - Forêts,0.96667
+commune,51291,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13100
+commune,51299,1 - Emprises urbaines,31 - Forêts,0.34917
+commune,51299,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.98974
+commune,51307,1 - Emprises urbaines,31 - Forêts,0.04794
+commune,51307,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36837
+commune,51308,1 - Emprises urbaines,31 - Forêts,0.24055
+commune,51313,1 - Emprises urbaines,31 - Forêts,11.47049
+commune,51314,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20368
+commune,51316,1 - Emprises urbaines,31 - Forêts,0.69196
+commune,51316,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,8.35545
+commune,51324,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.91022
+commune,51328,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33850
+commune,51333,1 - Emprises urbaines,31 - Forêts,0.18944
+commune,51333,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.30646
+commune,51334,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.85468
+commune,51338,1 - Emprises urbaines,31 - Forêts,0.00808
+commune,51338,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36603
+commune,51342,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29249
+commune,51343,1 - Emprises urbaines,31 - Forêts,2.81648
+commune,51350,1 - Emprises urbaines,31 - Forêts,0.01004
+commune,51356,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,14.46688
+commune,51358,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12507
+commune,51360,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.54917
+commune,51369,1 - Emprises urbaines,31 - Forêts,0.13537
+commune,51376,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23500
+commune,51380,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.57122
+commune,51393,1 - Emprises urbaines,31 - Forêts,0.00432
+commune,51395,1 - Emprises urbaines,31 - Forêts,0.84202
+commune,51396,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15576
+commune,51399,1 - Emprises urbaines,31 - Forêts,0.10121
+commune,51406,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19764
+commune,51410,1 - Emprises urbaines,31 - Forêts,0.06438
+commune,51410,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33898
+commune,51413,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.32371
+commune,51416,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43309
+commune,51417,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01584
+commune,51422,1 - Emprises urbaines,31 - Forêts,0.08337
+commune,51423,1 - Emprises urbaines,31 - Forêts,0.08713
+commune,51423,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.84176
+commune,51428,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56308
+commune,51433,1 - Emprises urbaines,31 - Forêts,2.74598
+commune,51433,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.65413
+commune,51434,1 - Emprises urbaines,31 - Forêts,0.35748
+commune,51435,1 - Emprises urbaines,31 - Forêts,0.28044
+commune,51435,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04640
+commune,51437,1 - Emprises urbaines,31 - Forêts,0.68486
+commune,51440,1 - Emprises urbaines,31 - Forêts,0.17148
+commune,51440,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,10.76937
+commune,51445,1 - Emprises urbaines,31 - Forêts,0.10486
+commune,51446,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18998
+commune,51447,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.70398
+commune,51448,1 - Emprises urbaines,31 - Forêts,0.10719
+commune,51448,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.52650
+commune,51449,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31856
+commune,51450,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.75422
+commune,51451,1 - Emprises urbaines,31 - Forêts,0.08783
+commune,51452,1 - Emprises urbaines,31 - Forêts,0.55665
+commune,51454,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.31291
+commune,51457,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.89753
+commune,51468,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.66216
+commune,51471,1 - Emprises urbaines,31 - Forêts,0.04613
+commune,51474,1 - Emprises urbaines,31 - Forêts,0.65868
+commune,51474,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.42166
+commune,51478,1 - Emprises urbaines,31 - Forêts,0.55443
+commune,51478,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.02192
+commune,51487,1 - Emprises urbaines,31 - Forêts,0.12701
+commune,51487,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.20020
+commune,51488,1 - Emprises urbaines,31 - Forêts,0.85580
+commune,51491,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.74228
+commune,51492,1 - Emprises urbaines,31 - Forêts,0.05060
+commune,51492,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35260
+commune,55040,1 - Emprises urbaines,31 - Forêts,0.49164
+commune,51495,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33458
+commune,51496,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16540
+commune,51501,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08133
+commune,51503,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.58693
+commune,51504,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.53856
+commune,51505,1 - Emprises urbaines,31 - Forêts,0.58357
+commune,51505,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.40754
+commune,51507,1 - Emprises urbaines,31 - Forêts,0.33967
+commune,51507,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.13670
+commune,51508,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18544
+commune,51511,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.05819
+commune,51518,1 - Emprises urbaines,31 - Forêts,0.10145
+commune,51522,1 - Emprises urbaines,31 - Forêts,0.02193
+commune,51522,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29027
+commune,51525,1 - Emprises urbaines,31 - Forêts,0.29305
+commune,51525,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13924
+commune,51529,1 - Emprises urbaines,31 - Forêts,0.18109
+commune,51529,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.98746
+commune,51530,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.47887
+commune,51531,1 - Emprises urbaines,31 - Forêts,0.97389
+commune,51532,1 - Emprises urbaines,31 - Forêts,0.89588
+commune,51532,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43334
+commune,51533,1 - Emprises urbaines,31 - Forêts,0.02641
+commune,51533,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12240
+commune,51535,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33802
+commune,51536,1 - Emprises urbaines,31 - Forêts,0.53302
+commune,51536,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.09361
+commune,51537,1 - Emprises urbaines,31 - Forêts,0.72414
+commune,51539,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11783
+commune,51544,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43474
+commune,51545,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.94660
+commune,51546,1 - Emprises urbaines,31 - Forêts,0.03747
+commune,51546,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24068
+commune,51550,1 - Emprises urbaines,31 - Forêts,0.32909
+commune,51550,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.30921
+commune,51553,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33559
+commune,51559,1 - Emprises urbaines,31 - Forêts,0.01410
+commune,51559,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.90068
+commune,51562,1 - Emprises urbaines,31 - Forêts,0.26621
+commune,51564,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.11325
+commune,51567,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.44384
+commune,51571,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56710
+commune,51572,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.59966
+commune,51576,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24714
+commune,51577,1 - Emprises urbaines,31 - Forêts,0.11640
+commune,51580,1 - Emprises urbaines,31 - Forêts,0.04356
+commune,51580,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10797
+commune,51582,1 - Emprises urbaines,31 - Forêts,0.70175
+commune,51582,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.63304
+commune,51585,1 - Emprises urbaines,31 - Forêts,0.02573
+commune,51585,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.58697
+commune,51588,1 - Emprises urbaines,31 - Forêts,0.41867
+commune,51588,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01856
+commune,51598,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.68609
+commune,51603,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02040
+commune,51604,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35169
+commune,51605,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.68885
+commune,51607,1 - Emprises urbaines,31 - Forêts,0.19212
+commune,51609,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.50730
+commune,51610,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.45619
+commune,51611,1 - Emprises urbaines,31 - Forêts,0.72295
+commune,51612,1 - Emprises urbaines,31 - Forêts,0.90726
+commune,51612,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.49723
+commune,51613,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19787
+commune,51614,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22924
+commune,51616,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.51857
+commune,51617,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.26195
+commune,51619,1 - Emprises urbaines,31 - Forêts,2.16540
+commune,51619,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22145
+commune,51624,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06413
+commune,51628,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.38313
+commune,51638,1 - Emprises urbaines,31 - Forêts,0.17172
+commune,51639,1 - Emprises urbaines,31 - Forêts,0.17550
+commune,51640,1 - Emprises urbaines,31 - Forêts,0.05932
+commune,51643,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42738
+commune,51647,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.23185
+commune,51649,1 - Emprises urbaines,31 - Forêts,0.80121
+commune,51649,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.74101
+commune,51652,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08010
+commune,51654,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.99916
+commune,51655,1 - Emprises urbaines,31 - Forêts,0.01681
+commune,51656,1 - Emprises urbaines,31 - Forêts,0.06447
+commune,51660,1 - Emprises urbaines,31 - Forêts,1.09785
+commune,51660,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.81427
+commune,52001,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19669
+commune,52006,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36046
+commune,52007,1 - Emprises urbaines,31 - Forêts,0.11544
+commune,52007,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08192
+commune,52008,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42892
+commune,52009,1 - Emprises urbaines,31 - Forêts,0.12452
+commune,52017,1 - Emprises urbaines,31 - Forêts,0.27395
+commune,52017,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.60136
+commune,52022,1 - Emprises urbaines,31 - Forêts,0.10025
+commune,52022,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15212
+commune,52023,1 - Emprises urbaines,31 - Forêts,0.03953
+commune,52043,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13205
+commune,52045,1 - Emprises urbaines,31 - Forêts,0.44030
+commune,52045,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.79101
+commune,52050,1 - Emprises urbaines,31 - Forêts,0.07591
+commune,52058,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.22995
+commune,52060,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.57703
+commune,52061,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25533
+commune,52063,1 - Emprises urbaines,31 - Forêts,0.05518
+commune,52064,1 - Emprises urbaines,31 - Forêts,0.15303
+commune,52064,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18068
+commune,52072,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.54104
+commune,52075,1 - Emprises urbaines,31 - Forêts,0.11530
+commune,52079,1 - Emprises urbaines,31 - Forêts,0.51429
+commune,52079,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.72430
+commune,52084,1 - Emprises urbaines,31 - Forêts,0.08864
+commune,52087,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22899
+commune,52088,1 - Emprises urbaines,31 - Forêts,0.07204
+commune,52088,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28953
+commune,52091,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06995
+commune,52092,1 - Emprises urbaines,31 - Forêts,0.03572
+commune,52093,1 - Emprises urbaines,31 - Forêts,0.07797
+commune,52093,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.62442
+commune,52094,1 - Emprises urbaines,31 - Forêts,0.04678
+commune,52094,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24112
+commune,52097,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33569
+commune,52099,1 - Emprises urbaines,31 - Forêts,0.20503
+commune,52099,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.48408
+commune,52102,1 - Emprises urbaines,31 - Forêts,0.17754
+commune,52104,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26071
+commune,52113,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42813
+commune,52114,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.30867
+commune,52120,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14551
+commune,52121,1 - Emprises urbaines,31 - Forêts,2.54801
+commune,52121,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,11.40410
+commune,52123,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20328
+commune,52125,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.05842
+commune,52126,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01471
+commune,52128,1 - Emprises urbaines,31 - Forêts,0.18883
+commune,52128,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20133
+commune,52129,1 - Emprises urbaines,31 - Forêts,0.19785
+commune,52131,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.78661
+commune,52134,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43619
+commune,52137,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35011
+commune,52140,1 - Emprises urbaines,31 - Forêts,0.16052
+commune,52140,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.47011
+commune,52156,1 - Emprises urbaines,31 - Forêts,0.17818
+commune,52158,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.40517
+commune,52160,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33191
+commune,52163,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20643
+commune,52165,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16734
+commune,52170,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17015
+commune,52175,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.57070
+commune,52177,1 - Emprises urbaines,31 - Forêts,0.15639
+commune,52177,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35624
+commune,52182,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.44091
+commune,52187,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41650
+commune,52190,1 - Emprises urbaines,31 - Forêts,0.07693
+commune,52190,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27345
+commune,52193,1 - Emprises urbaines,31 - Forêts,0.09646
+commune,52193,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12751
+commune,52194,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13428
+commune,52203,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24465
+commune,52205,1 - Emprises urbaines,31 - Forêts,0.35787
+commune,52205,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13551
+commune,52211,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27539
+commune,52216,1 - Emprises urbaines,31 - Forêts,0.15201
+commune,52217,1 - Emprises urbaines,31 - Forêts,0.17426
+commune,52222,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11889
+commune,52230,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.93634
+commune,52231,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23331
+commune,52235,1 - Emprises urbaines,31 - Forêts,0.33542
+commune,52235,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.95616
+commune,52237,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.67342
+commune,52244,1 - Emprises urbaines,31 - Forêts,0.37784
+commune,52244,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.82220
+commune,52246,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02777
+commune,52250,1 - Emprises urbaines,31 - Forêts,0.14567
+commune,52250,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41995
+commune,52254,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37625
+commune,52258,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35869
+commune,52265,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.84361
+commune,52269,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.05792
+commune,52271,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32179
+commune,52272,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23595
+commune,52274,1 - Emprises urbaines,31 - Forêts,0.14069
+commune,52274,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.56386
+commune,52287,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02919
+commune,52288,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13279
+commune,52289,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20915
+commune,52290,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16626
+commune,52292,1 - Emprises urbaines,31 - Forêts,0.01781
+commune,52294,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06811
+commune,52297,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14387
+commune,52300,1 - Emprises urbaines,31 - Forêts,0.02896
+commune,52300,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.05365
+commune,52305,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35866
+commune,52306,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.46579
+commune,52307,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.44335
+commune,52308,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35077
+commune,52310,1 - Emprises urbaines,31 - Forêts,0.02545
+commune,52313,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23371
+commune,52327,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15828
+commune,52332,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14094
+commune,52349,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.05781
+commune,52353,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23197
+commune,52354,1 - Emprises urbaines,31 - Forêts,0.04695
+commune,52355,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15042
+commune,52356,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.66829
+commune,52357,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.62627
+commune,52359,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.63405
+commune,52369,1 - Emprises urbaines,31 - Forêts,0.36631
+commune,52370,1 - Emprises urbaines,31 - Forêts,0.26591
+commune,52370,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23101
+commune,52372,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18992
+commune,52376,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10067
+commune,52384,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08597
+commune,52386,1 - Emprises urbaines,31 - Forêts,0.25392
+commune,52386,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.86099
+commune,52393,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39216
+commune,52394,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41209
+commune,52395,1 - Emprises urbaines,31 - Forêts,0.26926
+commune,52395,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13957
+commune,52396,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14946
+commune,52405,1 - Emprises urbaines,31 - Forêts,0.14496
+commune,52405,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.93339
+commune,52407,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11556
+commune,52411,1 - Emprises urbaines,31 - Forêts,0.09113
+commune,52411,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11747
+commune,52414,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.58030
+commune,52421,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.42559
+commune,52422,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11412
+commune,52423,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.31243
+commune,52424,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32598
+commune,52425,1 - Emprises urbaines,31 - Forêts,0.05055
+commune,52431,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.63492
+commune,52432,1 - Emprises urbaines,31 - Forêts,0.12117
+commune,52438,1 - Emprises urbaines,31 - Forêts,2.23057
+commune,52438,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.28239
+commune,52439,1 - Emprises urbaines,31 - Forêts,0.36081
+commune,52444,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42482
+commune,52447,1 - Emprises urbaines,31 - Forêts,0.17884
+commune,52448,1 - Emprises urbaines,31 - Forêts,0.90178
+commune,52448,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.41883
+commune,52449,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07261
+commune,52452,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06905
+commune,52457,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.03370
+commune,52461,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35303
+commune,52463,1 - Emprises urbaines,31 - Forêts,0.01006
+commune,52464,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.11054
+commune,52470,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.06637
+commune,52483,1 - Emprises urbaines,31 - Forêts,0.08806
+commune,52483,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19448
+commune,52484,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.47125
+commune,52486,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24231
+commune,52491,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09936
+commune,52493,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11302
+commune,52497,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10697
+commune,52500,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.39190
+commune,52502,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28388
+commune,52510,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08722
+commune,52512,1 - Emprises urbaines,31 - Forêts,0.10131
+commune,52512,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25709
+commune,52514,1 - Emprises urbaines,31 - Forêts,0.09678
+commune,52517,1 - Emprises urbaines,31 - Forêts,0.22278
+commune,52520,1 - Emprises urbaines,31 - Forêts,0.69643
+commune,52522,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35534
+commune,52524,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.96407
+commune,52534,1 - Emprises urbaines,31 - Forêts,0.06085
+commune,52534,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08335
+commune,52538,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.40658
+commune,52540,1 - Emprises urbaines,31 - Forêts,0.05955
+commune,52541,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28409
+commune,52543,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23472
+commune,52544,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.34200
+commune,52545,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21575
+commune,52547,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27809
+commune,52550,1 - Emprises urbaines,31 - Forêts,0.27198
+commune,52550,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.92864
+commune,52550,1 - Emprises urbaines,"33 - Espaces ouverts, sans ou avec peu de végétation",0.20031
+commune,54006,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09915
+commune,54007,1 - Emprises urbaines,31 - Forêts,0.11044
+commune,54007,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.86813
+commune,54011,1 - Emprises urbaines,31 - Forêts,0.04045
+commune,54011,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08337
+commune,54013,1 - Emprises urbaines,31 - Forêts,0.59721
+commune,54013,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.69466
+commune,54022,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28688
+commune,54025,1 - Emprises urbaines,31 - Forêts,2.84613
+commune,54027,1 - Emprises urbaines,31 - Forêts,0.42101
+commune,54027,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.05235
+commune,54028,1 - Emprises urbaines,31 - Forêts,0.29858
+commune,54028,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14234
+commune,54029,1 - Emprises urbaines,31 - Forêts,0.62564
+commune,54029,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.96792
+commune,54034,1 - Emprises urbaines,31 - Forêts,2.43543
+commune,54034,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.38723
+commune,54036,1 - Emprises urbaines,31 - Forêts,3.80496
+commune,54036,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.08446
+commune,54038,1 - Emprises urbaines,31 - Forêts,0.01654
+commune,54040,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39724
+commune,54043,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.50807
+commune,54045,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.18985
+commune,54052,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10892
+commune,54054,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12090
+commune,54055,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14661
+commune,54061,1 - Emprises urbaines,31 - Forêts,0.29480
+commune,54062,1 - Emprises urbaines,31 - Forêts,0.07778
+commune,54066,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.78103
+commune,54069,1 - Emprises urbaines,31 - Forêts,0.13328
+commune,54069,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14228
+commune,54070,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14029
+commune,54077,1 - Emprises urbaines,31 - Forêts,7.00934
+commune,54077,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17528
+commune,54079,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.50609
+commune,54084,1 - Emprises urbaines,31 - Forêts,0.79753
+commune,54087,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.38312
+commune,54091,1 - Emprises urbaines,31 - Forêts,3.43218
+commune,54099,1 - Emprises urbaines,31 - Forêts,0.28758
+commune,54099,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56668
+commune,54111,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26593
+commune,54114,1 - Emprises urbaines,31 - Forêts,0.00931
+commune,54114,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.84365
+commune,54115,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.31387
+commune,54122,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.44798
+commune,54123,1 - Emprises urbaines,31 - Forêts,0.15761
+commune,54125,1 - Emprises urbaines,31 - Forêts,0.07301
+commune,54125,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20325
+commune,54128,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34643
+commune,54130,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19341
+commune,54136,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20171
+commune,54138,1 - Emprises urbaines,31 - Forêts,0.00014
+commune,54138,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.89259
+commune,54143,1 - Emprises urbaines,31 - Forêts,0.13632
+commune,54143,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11322
+commune,54144,1 - Emprises urbaines,31 - Forêts,0.19432
+commune,54144,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.20320
+commune,54151,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07065
+commune,54153,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27011
+commune,54157,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.87900
+commune,54158,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12836
+commune,54159,1 - Emprises urbaines,31 - Forêts,0.06677
+commune,54159,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.76202
+commune,54167,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.05649
+commune,54174,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.72124
+commune,54182,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.28120
+commune,54185,1 - Emprises urbaines,31 - Forêts,0.08025
+commune,54187,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09090
+commune,54188,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09941
+commune,54189,1 - Emprises urbaines,31 - Forêts,0.08702
+commune,54197,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11466
+commune,54198,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27682
+commune,54199,1 - Emprises urbaines,31 - Forêts,0.14860
+commune,54201,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35613
+commune,54203,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.60745
+commune,54205,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.47788
+commune,54215,1 - Emprises urbaines,31 - Forêts,0.08057
+commune,54222,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16438
+commune,54226,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28810
+commune,54232,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25266
+commune,54234,1 - Emprises urbaines,31 - Forêts,0.55377
+commune,54234,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.12003
+commune,54236,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27445
+commune,54250,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.74702
+commune,54253,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20632
+commune,54258,1 - Emprises urbaines,31 - Forêts,0.22186
+commune,54258,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09635
+commune,54261,1 - Emprises urbaines,31 - Forêts,0.43721
+commune,54261,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.73506
+commune,54263,1 - Emprises urbaines,31 - Forêts,5.13226
+commune,54263,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,11.45407
+commune,54270,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.87356
+commune,54272,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18789
+commune,54273,1 - Emprises urbaines,31 - Forêts,0.29757
+commune,54273,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.84318
+commune,54274,1 - Emprises urbaines,31 - Forêts,0.00500
+commune,54274,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07682
+commune,54279,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.75205
+commune,54280,1 - Emprises urbaines,31 - Forêts,0.74469
+commune,54280,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.67233
+commune,54282,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.94459
+commune,54290,1 - Emprises urbaines,31 - Forêts,0.02372
+commune,54295,1 - Emprises urbaines,31 - Forêts,0.38617
+commune,54299,1 - Emprises urbaines,31 - Forêts,0.03696
+commune,54300,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.56921
+commune,54301,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19137
+commune,54303,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.53965
+commune,54304,1 - Emprises urbaines,31 - Forêts,0.15380
+commune,54311,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.69370
+commune,54314,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.45583
+commune,54318,1 - Emprises urbaines,31 - Forêts,0.01644
+commune,54320,1 - Emprises urbaines,31 - Forêts,0.12767
+commune,54320,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.03368
+commune,54322,1 - Emprises urbaines,31 - Forêts,0.10321
+commune,54322,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.79158
+commune,54323,1 - Emprises urbaines,31 - Forêts,0.05708
+commune,54323,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.61527
+commune,54324,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.50096
+commune,54327,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35597
+commune,54328,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00631
+commune,54329,1 - Emprises urbaines,31 - Forêts,0.34357
+commune,54329,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.45933
+commune,54336,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17449
+commune,54338,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23642
+commune,54350,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21493
+commune,54357,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.67143
+commune,54358,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.48442
+commune,54364,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.63419
+commune,54366,1 - Emprises urbaines,31 - Forêts,0.07442
+commune,54366,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.46852
+commune,54367,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.89031
+commune,54369,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12097
+commune,54373,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.71607
+commune,54382,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,11.76187
+commune,54391,1 - Emprises urbaines,31 - Forêts,0.12048
+commune,54391,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.47443
+commune,54393,1 - Emprises urbaines,31 - Forêts,0.17387
+commune,54395,1 - Emprises urbaines,31 - Forêts,0.08732
+commune,54395,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01219
+commune,54397,1 - Emprises urbaines,31 - Forêts,0.03832
+commune,54397,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18207
+commune,54399,1 - Emprises urbaines,31 - Forêts,0.27809
+commune,54415,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11423
+commune,54425,1 - Emprises urbaines,31 - Forêts,0.15707
+commune,54425,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.70574
+commune,54426,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.48406
+commune,54429,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.64810
+commune,54431,1 - Emprises urbaines,31 - Forêts,0.09259
+commune,54431,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.98929
+commune,54432,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01508
+commune,54434,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22635
+commune,54459,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.44891
+commune,54462,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.57644
+commune,54471,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27753
+commune,54472,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.45545
+commune,54477,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.39503
+commune,54479,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.84856
+commune,54483,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02642
+commune,54486,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.29116
+commune,54491,1 - Emprises urbaines,31 - Forêts,0.59216
+commune,54493,1 - Emprises urbaines,31 - Forêts,1.84438
+commune,54493,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,8.82475
+commune,54510,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.98670
+commune,54512,1 - Emprises urbaines,31 - Forêts,0.08200
+commune,54512,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.22426
+commune,54514,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16565
+commune,54521,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.46135
+commune,54523,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09960
+commune,54525,1 - Emprises urbaines,31 - Forêts,0.01950
+commune,54526,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.83712
+commune,54527,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.30939
+commune,54528,1 - Emprises urbaines,31 - Forêts,1.00967
+commune,54528,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.97874
+commune,54531,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13831
+commune,54533,1 - Emprises urbaines,31 - Forêts,0.10931
+commune,54536,1 - Emprises urbaines,31 - Forêts,0.34021
+commune,54536,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25763
+commune,54538,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00688
+commune,54542,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.51152
+commune,54549,1 - Emprises urbaines,31 - Forêts,0.28694
+commune,54549,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16840
+commune,54565,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01223
+commune,54570,1 - Emprises urbaines,31 - Forêts,0.15111
+commune,54570,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18466
+commune,54575,1 - Emprises urbaines,31 - Forêts,0.10808
+commune,54575,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.60263
+commune,54580,1 - Emprises urbaines,31 - Forêts,0.06903
+commune,54580,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.55420
+commune,54584,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00001
+commune,54586,1 - Emprises urbaines,31 - Forêts,0.37209
+commune,54595,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24109
+commune,54596,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16297
+commune,54597,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28169
+commune,55001,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.86902
+commune,55005,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20891
+commune,55009,1 - Emprises urbaines,31 - Forêts,0.07067
+commune,55010,1 - Emprises urbaines,31 - Forêts,0.06754
+commune,55010,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37704
+commune,55012,1 - Emprises urbaines,31 - Forêts,0.15440
+commune,55012,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12468
+commune,55014,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33247
+commune,55015,1 - Emprises urbaines,31 - Forêts,0.65186
+commune,55015,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.12639
+commune,55018,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08694
+commune,55024,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25943
+commune,55029,1 - Emprises urbaines,31 - Forêts,0.35318
+commune,55029,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.68876
+commune,55031,1 - Emprises urbaines,31 - Forêts,0.27936
+commune,55040,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24418
+commune,55042,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11300
+commune,55043,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.67923
+commune,55045,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09558
+commune,55047,1 - Emprises urbaines,31 - Forêts,0.09172
+commune,55053,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19837
+commune,55060,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10886
+commune,55063,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.69938
+commune,55075,1 - Emprises urbaines,31 - Forêts,0.09790
+commune,55076,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.33638
+commune,55077,1 - Emprises urbaines,31 - Forêts,0.30888
+commune,55077,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16556
+commune,55084,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.64450
+commune,55088,1 - Emprises urbaines,31 - Forêts,0.43907
+commune,55096,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,8.61706
+commune,55102,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.59393
+commune,55109,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32944
+commune,55117,1 - Emprises urbaines,31 - Forêts,0.07375
+commune,55119,1 - Emprises urbaines,31 - Forêts,0.10157
+commune,55119,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17358
+commune,55121,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.31206
+commune,55122,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.43305
+commune,55123,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.50884
+commune,55138,1 - Emprises urbaines,31 - Forêts,0.38427
+commune,55142,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36878
+commune,55145,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.92145
+commune,55148,1 - Emprises urbaines,31 - Forêts,0.13211
+commune,55148,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.34158
+commune,55154,1 - Emprises urbaines,31 - Forêts,2.89891
+commune,55156,1 - Emprises urbaines,31 - Forêts,0.05935
+commune,55157,1 - Emprises urbaines,31 - Forêts,0.20912
+commune,55157,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25802
+commune,55158,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.02824
+commune,55160,1 - Emprises urbaines,31 - Forêts,0.07111
+commune,55166,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04736
+commune,55167,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.19906
+commune,55171,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34648
+commune,55172,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.25166
+commune,55173,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14370
+commune,55181,1 - Emprises urbaines,31 - Forêts,0.11137
+commune,55181,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20468
+commune,55184,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.85827
+commune,55186,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16758
+commune,55188,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.19294
+commune,55189,1 - Emprises urbaines,31 - Forêts,0.27844
+commune,55191,1 - Emprises urbaines,31 - Forêts,0.06663
+commune,55214,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34395
+commune,55222,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24006
+commune,55228,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.36511
+commune,55229,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09382
+commune,55236,1 - Emprises urbaines,31 - Forêts,0.17470
+commune,55236,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13131
+commune,55237,1 - Emprises urbaines,31 - Forêts,0.19697
+commune,55242,1 - Emprises urbaines,31 - Forêts,0.00950
+commune,55244,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18949
+commune,55248,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27141
+commune,55252,1 - Emprises urbaines,31 - Forêts,13.30068
+commune,55252,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,11.79099
+commune,55252,1 - Emprises urbaines,"33 - Espaces ouverts, sans ou avec peu de végétation",0.81897
+commune,55254,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09859
+commune,55261,1 - Emprises urbaines,31 - Forêts,0.60642
+commune,55261,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.21803
+commune,55262,1 - Emprises urbaines,31 - Forêts,0.50793
+commune,55262,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00612
+commune,55266,1 - Emprises urbaines,31 - Forêts,0.57794
+commune,55274,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10671
+commune,55276,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.67050
+commune,55278,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09686
+commune,55288,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.07937
+commune,55289,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11100
+commune,55291,1 - Emprises urbaines,31 - Forêts,0.40550
+commune,55292,1 - Emprises urbaines,31 - Forêts,0.11762
+commune,55295,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14123
+commune,55296,1 - Emprises urbaines,31 - Forêts,0.15979
+commune,55302,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.38363
+commune,55306,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23177
+commune,55312,1 - Emprises urbaines,31 - Forêts,0.25756
+commune,55313,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12265
+commune,55315,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23469
+commune,55324,1 - Emprises urbaines,31 - Forêts,14.24979
+commune,55324,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,24.45600
+commune,55327,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.40008
+commune,55328,1 - Emprises urbaines,31 - Forêts,0.16688
+commune,55328,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.46684
+commune,55333,1 - Emprises urbaines,31 - Forêts,0.15865
+commune,55338,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20996
+commune,55346,1 - Emprises urbaines,31 - Forêts,0.32913
+commune,55347,1 - Emprises urbaines,31 - Forêts,0.37614
+commune,55351,1 - Emprises urbaines,31 - Forêts,0.31657
+commune,55351,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29103
+commune,55359,1 - Emprises urbaines,31 - Forêts,0.08813
+commune,55364,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.90877
+commune,55365,1 - Emprises urbaines,31 - Forêts,0.03925
+commune,55369,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.31738
+commune,55370,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26431
+commune,55382,1 - Emprises urbaines,31 - Forêts,0.17227
+commune,55382,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.74490
+commune,55391,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.53134
+commune,55394,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23218
+commune,55398,1 - Emprises urbaines,31 - Forêts,0.29283
+commune,55398,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.75994
+commune,55399,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13892
+commune,55401,1 - Emprises urbaines,31 - Forêts,0.55077
+commune,55407,1 - Emprises urbaines,31 - Forêts,0.06614
+commune,55407,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34236
+commune,55410,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39587
+commune,55414,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15560
+commune,55415,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19491
+commune,55423,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00295
+commune,55425,1 - Emprises urbaines,31 - Forêts,0.29857
+commune,55425,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34822
+commune,55427,1 - Emprises urbaines,31 - Forêts,0.11355
+commune,55427,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.44649
+commune,55435,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24027
+commune,55442,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.43750
+commune,55448,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35343
+commune,55456,1 - Emprises urbaines,31 - Forêts,6.88928
+commune,55456,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34680
+commune,55460,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.26424
+commune,55461,1 - Emprises urbaines,31 - Forêts,2.21701
+commune,55461,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.92871
+commune,55465,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.69739
+commune,55467,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.95668
+commune,55469,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.74538
+commune,55470,1 - Emprises urbaines,31 - Forêts,0.11769
+commune,55473,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00116
+commune,55474,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24438
+commune,55477,1 - Emprises urbaines,31 - Forêts,1.35664
+commune,55477,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.41220
+commune,55477,1 - Emprises urbaines,"33 - Espaces ouverts, sans ou avec peu de végétation",0.43395
+commune,55489,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20633
+commune,55492,1 - Emprises urbaines,31 - Forêts,0.01377
+commune,55492,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.20176
+commune,55493,1 - Emprises urbaines,31 - Forêts,0.05643
+commune,55493,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.23974
+commune,55494,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27680
+commune,55496,1 - Emprises urbaines,31 - Forêts,0.87321
+commune,55496,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.09243
+commune,55501,1 - Emprises urbaines,31 - Forêts,0.11669
+commune,55503,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17509
+commune,55519,1 - Emprises urbaines,31 - Forêts,0.11635
+commune,55520,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.50013
+commune,55521,1 - Emprises urbaines,31 - Forêts,0.10046
+commune,55526,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15412
+commune,55528,1 - Emprises urbaines,31 - Forêts,0.36493
+commune,55528,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14938
+commune,55531,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00045
+commune,55533,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24171
+commune,55534,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15840
+commune,55541,1 - Emprises urbaines,31 - Forêts,0.10679
+commune,55541,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.67423
+commune,55543,1 - Emprises urbaines,31 - Forêts,0.00833
+commune,55544,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.18750
+commune,55545,1 - Emprises urbaines,31 - Forêts,0.46806
+commune,55545,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.66539
+commune,55551,1 - Emprises urbaines,31 - Forêts,0.08830
+commune,55551,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.83446
+commune,55556,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.13539
+commune,55574,1 - Emprises urbaines,31 - Forêts,0.03732
+commune,55574,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.08723
+commune,55575,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28456
+commune,55579,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10945
+commune,55581,1 - Emprises urbaines,31 - Forêts,0.22911
+commune,57001,1 - Emprises urbaines,31 - Forêts,0.10422
+commune,57003,1 - Emprises urbaines,31 - Forêts,2.91293
+commune,57003,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.02236
+commune,57011,1 - Emprises urbaines,31 - Forêts,0.09383
+commune,57011,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12330
+commune,57012,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39272
+commune,57013,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00171
+commune,57019,1 - Emprises urbaines,31 - Forêts,0.05879
+commune,57019,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.21412
+commune,57020,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16677
+commune,57028,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.19795
+commune,57032,1 - Emprises urbaines,31 - Forêts,0.92820
+commune,57038,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.19282
+commune,57039,1 - Emprises urbaines,31 - Forêts,0.06760
+commune,57039,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.32621
+commune,57058,1 - Emprises urbaines,31 - Forêts,1.24523
+commune,57058,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.52336
+commune,57061,1 - Emprises urbaines,31 - Forêts,2.95311
+commune,57061,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,8.26605
+commune,57067,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27874
+commune,57069,1 - Emprises urbaines,31 - Forêts,0.04993
+commune,57069,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15892
+commune,57073,1 - Emprises urbaines,31 - Forêts,1.16322
+commune,57073,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.86183
+commune,57085,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.66273
+commune,57088,1 - Emprises urbaines,31 - Forêts,0.08926
+commune,57088,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01645
+commune,57089,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.14073
+commune,57098,1 - Emprises urbaines,31 - Forêts,0.33910
+commune,57100,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.49130
+commune,57106,1 - Emprises urbaines,31 - Forêts,0.41803
+commune,57106,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.65806
+commune,57113,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.03676
+commune,57115,1 - Emprises urbaines,31 - Forêts,0.03461
+commune,57123,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.15234
+commune,57132,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28489
+commune,57143,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.28865
+commune,57144,1 - Emprises urbaines,31 - Forêts,0.13281
+commune,57144,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.97230
+commune,57148,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15823
+commune,57150,1 - Emprises urbaines,31 - Forêts,0.08240
+commune,57151,1 - Emprises urbaines,31 - Forêts,0.47370
+commune,57155,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.52719
+commune,57160,1 - Emprises urbaines,31 - Forêts,2.36544
+commune,57160,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,10.52311
+commune,57163,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29130
+commune,57177,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.44386
+commune,57186,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15262
+commune,57187,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.15960
+commune,57192,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34830
+commune,57193,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.38078
+commune,57195,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.14076
+commune,57202,1 - Emprises urbaines,31 - Forêts,0.00710
+commune,57204,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22557
+commune,57205,1 - Emprises urbaines,31 - Forêts,1.55299
+commune,57205,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.54275
+commune,57206,1 - Emprises urbaines,31 - Forêts,0.06429
+commune,57206,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.99273
+commune,57207,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.88289
+commune,57209,1 - Emprises urbaines,31 - Forêts,0.16523
+commune,57221,1 - Emprises urbaines,31 - Forêts,0.76889
+commune,57221,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,6.40466
+commune,57222,1 - Emprises urbaines,31 - Forêts,0.35146
+commune,57224,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.64141
+commune,57226,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.01704
+commune,57227,1 - Emprises urbaines,31 - Forêts,2.20918
+commune,57227,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,13.12060
+commune,57233,1 - Emprises urbaines,31 - Forêts,1.62122
+commune,57233,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.42072
+commune,57234,1 - Emprises urbaines,31 - Forêts,0.37617
+commune,57240,1 - Emprises urbaines,31 - Forêts,8.49607
+commune,57240,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,7.24679
+commune,57242,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,3.04658
+commune,57256,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.10701
+commune,57259,1 - Emprises urbaines,31 - Forêts,0.40988
+commune,57260,1 - Emprises urbaines,31 - Forêts,0.33122
+commune,57260,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.21482
+commune,57262,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,6.70930
+commune,57269,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.65876
+commune,57270,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08655
+commune,57273,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.12254
+commune,57283,1 - Emprises urbaines,31 - Forêts,0.86918
+commune,57283,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.27489
+commune,57288,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.01473
+commune,57289,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22715
+commune,57299,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.94723
+commune,57300,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.11868
+commune,57301,1 - Emprises urbaines,31 - Forêts,1.28428
+commune,57301,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.34542
+commune,57302,1 - Emprises urbaines,31 - Forêts,0.93133
+commune,57302,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00089
+commune,57306,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.48834
+commune,57314,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17407
+commune,57321,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.02216
+commune,57323,1 - Emprises urbaines,31 - Forêts,0.36800
+commune,57323,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.16190
+commune,57332,1 - Emprises urbaines,31 - Forêts,1.31312
+commune,57332,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09102
+commune,57334,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.03188
+commune,57336,1 - Emprises urbaines,31 - Forêts,0.48596
+commune,57336,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,4.03719
+commune,57350,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.91649
+commune,57352,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.13525
+commune,57357,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09214
+commune,57361,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.39217
+commune,57368,1 - Emprises urbaines,31 - Forêts,0.38706
+commune,57368,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.24742
+commune,57373,1 - Emprises urbaines,31 - Forêts,0.08115
+commune,68162,1 - Emprises urbaines,31 - Forêts,0.77356
+commune,57376,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.83598
+commune,57382,1 - Emprises urbaines,31 - Forêts,0.03422
+commune,57390,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29391
+commune,57398,1 - Emprises urbaines,31 - Forêts,0.02527
+commune,88409,1 - Emprises urbaines,31 - Forêts,0.38790
+commune,57407,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.32711
+commune,57411,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.22749
+commune,57412,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.08399
+commune,57413,1 - Emprises urbaines,31 - Forêts,4.75858
+commune,57413,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.78919
+commune,57416,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04819
+commune,57428,1 - Emprises urbaines,31 - Forêts,0.10077
+commune,57428,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.09187
+commune,57430,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.17689
+commune,57433,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.41298
+commune,57443,1 - Emprises urbaines,31 - Forêts,1.18143
+commune,57443,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.21580
+commune,57447,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.35658
+commune,57460,1 - Emprises urbaines,31 - Forêts,0.12391
+commune,57460,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.37564
+commune,57463,1 - Emprises urbaines,31 - Forêts,0.27388
+commune,57463,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.80070
+commune,57468,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.00228
+commune,57474,1 - Emprises urbaines,31 - Forêts,0.56080
+commune,57474,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.06602
+commune,57480,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.91810
+commune,57481,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.94087
+commune,57483,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.02186
+commune,57484,1 - Emprises urbaines,31 - Forêts,0.28781
+commune,57484,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.70455
+commune,57491,1 - Emprises urbaines,31 - Forêts,0.06868
+commune,57491,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.60705
+commune,57492,1 - Emprises urbaines,31 - Forêts,0.09509
+commune,57492,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.65463
+commune,57498,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.35093
+commune,57508,1 - Emprises urbaines,31 - Forêts,0.12920
+commune,57508,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.34480
+commune,57512,1 - Emprises urbaines,31 - Forêts,0.01630
+commune,57519,1 - Emprises urbaines,31 - Forêts,0.07872
+commune,57521,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.29271
+commune,57529,1 - Emprises urbaines,31 - Forêts,0.08209
+commune,57529,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,2.76663
+commune,57530,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.04578
+commune,57535,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.02124
+commune,57537,1 - Emprises urbaines,31 - Forêts,2.48621
+commune,57543,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.54997
+commune,57549,1 - Emprises urbaines,31 - Forêts,0.58861
+commune,57550,1 - Emprises urbaines,31 - Forêts,0.45057
+commune,57550,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.60896
+commune,57556,1 - Emprises urbaines,31 - Forêts,0.13414
+commune,57564,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.05085
+commune,57566,1 - Emprises urbaines,31 - Forêts,0.10144
+commune,57575,1 - Emprises urbaines,31 - Forêts,0.08588
+commune,57575,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,5.34399
+commune,57578,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,0.10609
+commune,57591,1 - Emprises urbaines,31 - Forêts,0.25018
+commune,57591,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.66175
+commune,57591,1 - Emprises urbaines,32 - Formations naturelles herbacées ou arbustives,1.66175

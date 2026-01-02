@@ -8,7 +8,7 @@ statement ok
 pragma enable_verification;
 
 query III
-from read_csv('data/csv/mixed_new_line.csv', strict_mode=false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', strict_mode=false)
 ----
 1	2	3
 4	5	6
@@ -17,7 +17,7 @@ from read_csv('data/csv/mixed_new_line.csv', strict_mode=false)
 foreach newline '\r' '\n' '\r\n'
 
 query III
-from read_csv('data/csv/mixed_new_line.csv', new_line = ${newline}, strict_mode = false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = ${newline}, strict_mode = false)
 ----
 1	2	3
 4	5	6
@@ -27,66 +27,66 @@ from read_csv('data/csv/mixed_new_line.csv', new_line = ${newline}, strict_mode 
 endloop
 
 statement error
-from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',')
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',')
 ----
-Error when sniffing file "data/csv/mixed_new_line.csv".
+Error when sniffing file "{DATA_DIR}/csv/mixed_new_line.csv".
 
 statement error
-from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',', auto_detect= false)
+from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',', auto_detect= false)
 ----
 The CSV Parser state machine reached an invalid state.
 
 query I
-select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
 ----
 3
 
 statement error
-select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
+select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
 ----
 Expected Number of Columns: 2 Found: 1
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query I
-SELECT column0 FROM read_csv('data/csv/one_r_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 ----
 one
 two
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query I
-SELECT column0 FROM read_csv('data/csv/one_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 ----
 one
 two
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 ----
 Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 

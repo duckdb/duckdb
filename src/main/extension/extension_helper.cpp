@@ -5,10 +5,12 @@
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/settings.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
@@ -116,11 +118,13 @@ static const DefaultExtension internal_extensions[] = {
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
+    {"encodings", "All unicode encodings to UTF-8", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
     {"delta", "Adds support for Delta Lake", false},
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
+    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -138,9 +142,9 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
-                                           "delta",      "iceberg",          "uc_catalog",    "ui",
-                                           nullptr};
+static const char *const auto_install[] = {
+    "motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", "delta", "iceberg", "uc_catalog",
+    "ui",         "ducklake",         nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
@@ -171,7 +175,6 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
-
 	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
 }
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
@@ -209,9 +212,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
-			auto &config = DBConfig::GetConfig(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
-			    StringValue::Get(config.GetSetting<AutoinstallExtensionRepositorySetting>(context)));
+			    StringValue::Get(DBConfig::GetConfig(context).options.autoinstall_extension_repo));
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
@@ -257,8 +259,6 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
 
-	auto &config = DBConfig::GetConfig(db);
-
 	if (!fs.FileExists(full_extension_path)) {
 		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
 		return result;
@@ -274,7 +274,7 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	// Parse the version of the extension before updating
 	auto ext_binary_handle = fs.OpenFile(full_extension_path, FileOpenFlags::FILE_FLAGS_READ);
 	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*ext_binary_handle);
-	if (!parsed_metadata.AppearsValid() && !config.options.allow_extensions_metadata_mismatch) {
+	if (!parsed_metadata.AppearsValid() && !DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(context)) {
 		throw IOException(
 		    "Failed to update extension: '%s', the metadata of the extension appears invalid! To resolve this, either "
 		    "reinstall the extension using 'FORCE INSTALL %s', manually remove the file '%s', or enable '"
@@ -397,161 +397,11 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
-		DUCKDB_LOG_INFO(db, "duckdb.Extensions.ExtensionAutoloaded", extension_name);
-
+		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());
 	}
-}
-
-//===--------------------------------------------------------------------===//
-// Load Statically Compiled Extension
-//===--------------------------------------------------------------------===//
-void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
-	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
-	//		 these can be removed
-	vector<string> extensions {"parquet", "icu",  "tpch",     "tpcds",        "httpfs",        "json",
-	                           "excel",   "inet", "jemalloc", "autocomplete", "core_functions"};
-	for (auto &ext : extensions) {
-		LoadExtensionInternal(db, ext, true);
-	}
-
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	for (const auto &ext : LinkedExtensions()) {
-		LoadExtensionInternal(db, ext, true);
-	}
-#endif
-}
-
-ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
-	return LoadExtensionInternal(db, extension, false);
-}
-
-ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension,
-                                                           bool initial_load) {
-#ifdef DUCKDB_TEST_REMOTE_INSTALL
-	if (!initial_load && StringUtil::Contains(DUCKDB_TEST_REMOTE_INSTALL, extension)) {
-		Connection con(db);
-		auto result = con.Query("INSTALL " + extension);
-		if (result->HasError()) {
-			result->Print();
-			return ExtensionLoadResult::EXTENSION_UNKNOWN;
-		}
-		result = con.Query("LOAD " + extension);
-		if (result->HasError()) {
-			result->Print();
-			return ExtensionLoadResult::EXTENSION_UNKNOWN;
-		}
-		return ExtensionLoadResult::LOADED_EXTENSION;
-	}
-#endif
-
-#ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
-	// Note: weird comma's are on purpose to do easy string contains on a list of extension names
-	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, "," + extension + ",")) {
-		Connection con(db);
-		auto result = con.Query((string) "LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension +
-		                        ".duckdb_extension'");
-		if (result->HasError()) {
-			result->Print();
-			return ExtensionLoadResult::EXTENSION_UNKNOWN;
-		}
-		return ExtensionLoadResult::LOADED_EXTENSION;
-	}
-#endif
-
-	// This is the main extension loading mechanism that loads the extension that are statically linked.
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	if (TryLoadLinkedExtension(db, extension)) {
-		return ExtensionLoadResult::LOADED_EXTENSION;
-	} else {
-		return ExtensionLoadResult::NOT_LOADED;
-	}
-#endif
-
-	// This is the fallback to the "old" extension loading mechanism for non-cmake builds
-	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds
-	if (extension == "parquet") {
-#if DUCKDB_EXTENSION_PARQUET_LINKED
-		db.LoadStaticExtension<ParquetExtension>();
-#else
-		// parquet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "icu") {
-#if DUCKDB_EXTENSION_ICU_LINKED
-		db.LoadStaticExtension<IcuExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "tpch") {
-#if DUCKDB_EXTENSION_TPCH_LINKED
-		db.LoadStaticExtension<TpchExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "tpcds") {
-#if DUCKDB_EXTENSION_TPCDS_LINKED
-		db.LoadStaticExtension<TpcdsExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "httpfs") {
-#if DUCKDB_EXTENSION_HTTPFS_LINKED
-		db.LoadStaticExtension<HttpfsExtension>();
-#else
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "json") {
-#if DUCKDB_EXTENSION_JSON_LINKED
-		db.LoadStaticExtension<JsonExtension>();
-#else
-		// json extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "excel") {
-#if DUCKDB_EXTENSION_EXCEL_LINKED
-		db.LoadStaticExtension<ExcelExtension>();
-#else
-		// excel extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "jemalloc") {
-#if DUCKDB_EXTENSION_JEMALLOC_LINKED
-		db.LoadStaticExtension<JemallocExtension>();
-#else
-		// jemalloc extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "autocomplete") {
-#if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
-		db.LoadStaticExtension<AutocompleteExtension>();
-#else
-		// autocomplete extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "inet") {
-#if DUCKDB_EXTENSION_INET_LINKED
-		db.LoadStaticExtension<InetExtension>();
-#else
-		// inet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "core_functions") {
-#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
-		db.LoadStaticExtension<CoreFunctionsExtension>();
-#else
-		// core_functions extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	}
-
-	return ExtensionLoadResult::LOADED_EXTENSION;
 }
 
 static const char *const public_keys[] = {

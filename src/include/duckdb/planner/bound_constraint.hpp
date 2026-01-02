@@ -38,5 +38,7 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	virtual unique_ptr<BoundConstraint> Copy() const = 0;
 };
 } // namespace duckdb

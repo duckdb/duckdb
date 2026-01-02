@@ -1,0 +1,31 @@
+# name: test/sql/delete/in_memory_bulk_delete.test_slow
+# description: Test that repeated almost full delete of in-memory table frees up memory
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET threads=1
+
+statement ok
+CREATE TABLE a(i INTEGER)
+
+loop i 0 10
+
+statement ok
+INSERT INTO a FROM range(1000000)
+
+# this deletes almost all rows
+statement ok
+DELETE FROM a WHERE i%100000 <> 0
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag='IN_MEMORY_TABLE'
+----
+262144
+
+endloop

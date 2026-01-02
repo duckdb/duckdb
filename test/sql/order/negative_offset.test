@@ -8,17 +8,17 @@ PRAGMA enable_verification
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 3 OFFSET -1;
 ----
-cannot be negative
+<REGEX>:.*Binder Error.*cannot be negative.*
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -3;
 ----
-cannot be negative
+<REGEX>:.*Binder Error.*cannot be negative.*
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -1%
 ----
-out of range
+<REGEX>:.*Out of Range Error.*out of range.*
 
 statement ok
 CREATE TABLE integers AS SELECT -1 k;
@@ -26,8 +26,9 @@ CREATE TABLE integers AS SELECT -1 k;
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT (SELECT k FROM integers);
 ----
-out of range
+<REGEX>:.*Invalid Input Error.*out of range.*
 
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 1 OFFSET (SELECT k FROM integers);
 ----
+<REGEX>:.*Invalid Input Error.*out of range.*

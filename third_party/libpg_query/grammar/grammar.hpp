@@ -177,8 +177,8 @@ static void updateRawStmtEnd(PGRawStmt *rs, int end_location);
 static PGNode *makeColumnRef(char *colname, PGList *indirection,
 						   int location, core_yyscan_t yyscanner);
 static PGNode *makeTypeCast(PGNode *arg, PGTypeName *tpname, int trycast, int location);
-static PGNode *makeStringConst(char *str, int location);
-static PGNode *makeStringConstCast(char *str, int location, PGTypeName *tpname);
+static PGNode *makeStringConst(const char *str, int location);
+static PGNode *makeStringConstCast(const char *str, int location, PGTypeName *tpname);
 static PGNode *makeIntervalNode(char *str, int location, PGList *typmods);
 static PGNode *makeIntervalNode(int val, int location, PGList *typmods);
 static PGNode *makeIntervalNode(PGNode *arg, int location, PGList *typmods);

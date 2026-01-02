@@ -2,20 +2,15 @@
 # description: Write the lineitem of TPC-H SF1 to a Parquet file
 # group: [parquet]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Write Lineitem Parquet
 group parquet
 
-cache tpch_sf1.duckdb
-
 require parquet
-
-require tpch
-
-load
-CALL dbgen(sf=1);
 
 run
 COPY lineitem TO '${BENCHMARK_DIR}/lineitem.parquet';
 
-result I
+result I sf=1
 6001215

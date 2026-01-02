@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct CurrentSequenceValueOperator {
 	static int64_t Operation(DuckTransaction &, SequenceCatalogEntry &seq) {
 		return seq.CurrentValue();
@@ -69,7 +71,7 @@ unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, cons
 }
 
 template <class OP>
-static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (!func_expr.bind_info) {
 		// no bind info - return null
@@ -88,8 +90,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-static unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, ScalarFunction &,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, ScalarFunction &,
+                                     vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -130,31 +132,33 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 		return;
 	}
 	auto &seq = input.bind_data->Cast<NextvalBindData>();
-	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context);
+	input.properties.RegisterDBModify(seq.sequence.ParentCatalog(), context, DatabaseModificationType::SEQUENCE);
 }
+
+} // namespace
 
 ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
-	next_val.bind_extended = NextValBind;
-	next_val.stability = FunctionStability::VOLATILE;
-	next_val.serialize = Serialize;
-	next_val.deserialize = Deserialize;
-	next_val.get_modified_databases = NextValModifiedDatabases;
-	next_val.init_local_state = NextValLocalFunction;
-	BaseScalarFunction::SetReturnsError(next_val);
+	next_val.SetBindExtendedCallback(NextValBind);
+	next_val.SetSerializeCallback(Serialize);
+	next_val.SetDeserializeCallback(Deserialize);
+	next_val.SetModifiedDatabasesCallback(NextValModifiedDatabases);
+	next_val.SetInitStateCallback(NextValLocalFunction);
+	next_val.SetVolatile();
+	next_val.SetFallible();
 	return next_val;
 }
 
 ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
-	curr_val.bind_extended = NextValBind;
-	curr_val.stability = FunctionStability::VOLATILE;
-	curr_val.serialize = Serialize;
-	curr_val.deserialize = Deserialize;
-	curr_val.init_local_state = NextValLocalFunction;
-	BaseScalarFunction::SetReturnsError(curr_val);
+	curr_val.SetBindExtendedCallback(NextValBind);
+	curr_val.SetSerializeCallback(Serialize);
+	curr_val.SetDeserializeCallback(Deserialize);
+	curr_val.SetInitStateCallback(NextValLocalFunction);
+	curr_val.SetVolatile();
+	curr_val.SetFallible();
 	return curr_val;
 }
 

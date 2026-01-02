@@ -1,0 +1,60 @@
+# name: test/optimizer/cte_inlining.test
+# description: Test the CTE Inlining optimizer
+# group: [optimizer]
+
+statement ok
+SET default_null_order='nulls_first';
+
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# in alternative verify mode, CTEs may not be inlined
+require no_alternative_verify
+
+# single reference to CTE, should be inlined
+query II
+explain with cte1 as (Select i as j from a) select * from cte1;
+----
+logical_opt	<!REGEX>:.*CTE.*
+
+# multiple references to CTE, not inlined by default, but can be forced
+query II
+explain with cte1 as NOT MATERIALIZED (Select i as j from a) select * from cte1;
+----
+logical_opt	<!REGEX>:.*CTE.*
+
+# Test chained CTEs
+query II
+explain
+with
+  cte1 as (select i as j from a),
+  cte2 as (select * from cte1)
+select * from cte2;
+----
+logical_opt	<!REGEX>:.*cte1.*
+
+# Test complex case with both materialized and not materialized CTEs
+query II
+explain
+with
+  cte1 as MATERIALIZED (select i as j from a),
+  cte2 as NOT MATERIALIZED (select * from cte1)
+select * from cte2;
+----
+logical_opt	<REGEX>:.*CTE.*
+
+# Test non-referenced CTE
+query II
+explain
+with
+  cte1 as (select i as j from a)
+select * from a;
+----
+logical_opt	<!REGEX>:.*CTE.*

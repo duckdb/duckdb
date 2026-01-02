@@ -41,6 +41,11 @@ idx_t CSVIterator::BytesPerThread(const CSVReaderOptions &reader_options) {
 		// If we are setting up the buffer size directly, we must make sure each thread will read the full buffer.
 		return max_row_size;
 	}
+	if (bytes_per_thread == 0) {
+		// Bytes per thread can never be zero, but it might happen if max_row_size = 0
+		// Not sure why a human being would do that...
+		return 1;
+	}
 	return bytes_per_thread;
 }
 

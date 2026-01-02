@@ -40,6 +40,10 @@ public:
 	physical_index_set_t pk_key_set;
 	//! The same keys but stored as an unordered set
 	physical_index_set_t fk_key_set;
+
+	unique_ptr<BoundConstraint> Copy() const override {
+		return make_uniq<BoundForeignKeyConstraint>(info, pk_key_set, fk_key_set);
+	}
 };
 
 } // namespace duckdb

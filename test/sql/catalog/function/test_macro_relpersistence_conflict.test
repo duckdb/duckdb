@@ -2,9 +2,6 @@
 # description: Test Macro temporary/if exists/or replace
 # group: [function]
 
-require skip_reload
-
-# load the DB from disk
 load __TEST_DIR__/my_macro_database.db
 
 statement ok
@@ -73,3 +70,4 @@ restart
 statement error
 select test(4, 2)
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

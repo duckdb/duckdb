@@ -14,7 +14,7 @@ cache real_nest.duckdb
 load benchmark/realnest/micro/load.sql
 
 run
-SELECT list_unique(list_transform(lt, s -> length(s))) 
+SELECT list_unique(list_transform(lt, lambda s: length(s)))
 FROM (
     SELECT list(text) AS lt 
     FROM (

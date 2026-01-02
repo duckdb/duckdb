@@ -10,6 +10,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,10 @@ unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 	return std::move(select->node);
 }
 
+string QueryRelation::GetQuery() {
+	return query;
+}
+
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
 	auto subquery_ref = make_uniq<SubqueryRef>(GetSelectStatement(), GetAlias());
 	return std::move(subquery_ref);
@@ -60,8 +65,6 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	auto result = Relation::Bind(binder);
 	auto &replacements = binder.GetReplacementScans();
 	if (first_bind) {
-		auto &query_node = *select_stmt->node;
-		auto &cte_map = query_node.cte_map;
 		for (auto &kv : replacements) {
 			auto &name = kv.first;
 			auto &tableref = kv.second;
@@ -81,7 +84,15 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 			auto cte_info = make_uniq<CommonTableExpressionInfo>();
 			cte_info->query = std::move(select);
 
+			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt), "query_relation");
+			auto top_level_select = make_uniq<SelectStatement>();
+			auto top_level_select_node = make_uniq<SelectNode>();
+			top_level_select_node->select_list.push_back(make_uniq<StarExpression>());
+			top_level_select_node->from_table = std::move(subquery);
+			auto &cte_map = top_level_select_node->cte_map;
+			top_level_select->node = std::move(top_level_select_node);
 			cte_map.map[name] = std::move(cte_info);
+			select_stmt = std::move(top_level_select);
 		}
 	}
 	replacements.clear();

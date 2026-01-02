@@ -1,0 +1,26 @@
+# name: test/sql/show_select/describe_rowid.test
+# group: [show_select]
+
+statement ok
+create table sometable (
+	column1 varchar
+);
+
+statement ok
+insert into sometable values
+	('abc');
+
+statement ok
+create view someview as select
+	rowid as table_rowid,
+	*
+from sometable;
+
+statement ok
+select * from someview;
+
+query II
+select column_name, column_type from (describe someview);
+----
+table_rowid	BIGINT
+column1	VARCHAR

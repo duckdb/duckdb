@@ -11,3 +11,4 @@ CREATE TABLE tbl (
 	gcol AS (price) STORED,
 );
 ----
+<REGEX>:.*Invalid Input Error.*Can not create.*

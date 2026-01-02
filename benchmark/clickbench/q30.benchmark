@@ -2,6 +2,7 @@
 # description: Run query 30 from the ClickBench benchmark
 # group: [clickbench]
 
-template benchmark/clickbench/clickbench.benchmark.in
+template benchmark/clickbench/clickbench-noresult.benchmark.in
 QUERY_NUMBER=30
 QUERY_NUMBER_PADDED=30
+RESULT_QUERY=SELECT * FROM __answer ORDER BY c DESC, ClientIP LIMIT 9

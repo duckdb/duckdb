@@ -1,0 +1,31 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpch]
+
+argument sf 1
+
+require tpch
+
+require parquet
+
+cache tpch_sf${sf}_parquet.duckdb
+
+load
+call dbgen(sf=${sf});
+EXPORT DATABASE '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/' (FORMAT PARQUET);
+drop table lineitem;
+drop table customer;
+drop table nation;
+drop table orders;
+drop table part;
+drop table partsupp;
+drop table region;
+drop table supplier;
+create view lineitem as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/lineitem.parquet';
+create view customer as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/customer.parquet';
+create view nation as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/nation.parquet';
+create view orders as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/orders.parquet';
+create view part as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/part.parquet';
+create view partsupp as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/partsupp.parquet';
+create view region as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/region.parquet';
+create view supplier as select * from '${BENCHMARK_DIR}/tpch_sf${sf}_parquet/supplier.parquet';

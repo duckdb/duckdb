@@ -5,9 +5,10 @@
 
 namespace duckdb {
 
-PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, PhysicalOperator &left,
-                                               PhysicalOperator &right, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
+PhysicalPositionalJoin::PhysicalPositionalJoin(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperator &left, PhysicalOperator &right,
+                                               idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
 	children.push_back(left);
 	children.push_back(right);
 }
@@ -170,8 +171,8 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 	output.SetCardinality(count);
 }
 
-SourceResultType PhysicalPositionalJoin::GetData(ExecutionContext &context, DataChunk &result,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalPositionalJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,
+                                                         OperatorSourceInput &input) const {
 	auto &sink = sink_state->Cast<PositionalJoinGlobalState>();
 	sink.GetData(result);
 

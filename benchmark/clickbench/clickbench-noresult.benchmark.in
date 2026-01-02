@@ -2,16 +2,10 @@
 # description: ${DESCRIPTION}
 # group: [clickbench]
 
-require httpfs
-
-require parquet
+include benchmark/clickbench/clickbench_load.benchmark.in
 
 name Q${QUERY_NUMBER_PADDED}
 group Clickbench
-
-cache clickbench.duckdb
-
-load benchmark/clickbench/queries/load.sql
 
 run benchmark/clickbench/queries/q${QUERY_NUMBER_PADDED}.sql
 

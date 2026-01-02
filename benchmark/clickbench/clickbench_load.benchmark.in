@@ -1,0 +1,11 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpch]
+
+require parquet load_only
+
+require httpfs load_only
+
+cache hits.db
+
+load benchmark/clickbench/queries/load.sql

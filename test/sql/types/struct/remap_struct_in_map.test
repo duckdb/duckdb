@@ -1,0 +1,155 @@
+# name: test/sql/types/struct/remap_struct_in_map.test
+# description: Test struct remapping
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# Remapping operations:
+# - rename 'value.i' -> 'value.v1'
+# - rename 'value.j' -> 'value.v2'
+# - add column 'value.v2.y'
+# - add column 'value.v3'
+
+# remap nested types
+query I
+SELECT remap_struct(
+	MAP {
+		'my_key1' : {
+			'i': 10,
+			'j': {
+				'x': 42,
+				'z': 100
+			}
+		},
+		'my_key2' : {
+			'i': 20,
+			'j': {
+				'x': 21,
+				'z': 50
+			}
+		}
+	}, -- data
+	NULL::MAP(VARCHAR, STRUCT(
+		v1 INT,
+		v2 STRUCT(
+			x INT,
+			y INT,
+			z INT
+		),
+		v3 VARCHAR
+	)), -- target type
+	{
+		'key': 'key',
+		'value': ROW(
+			'value', {
+				'v1': 'i',
+				'v2': ROW(
+					'j', {
+						'x': 'x',
+						'z': 'z'
+					}
+				)
+			}
+		)
+	}, -- remapping data -> target_type
+	{
+		'value': {
+			'v2': {
+				'y': NULL::INT
+			},
+			'v3': NULL::VARCHAR
+		}
+	}
+); -- defaults
+----
+{my_key1={'v1': 10, 'v2': {'x': 42, 'y': NULL, 'z': 100}, 'v3': NULL}, my_key2={'v1': 20, 'v2': {'x': 21, 'y': NULL, 'z': 50}, 'v3': NULL}}
+
+# Entirely a no-op, no defaults are given, mapping is directly the same
+query I
+SELECT remap_struct(
+	MAP {
+		[1,2,3] : 'test',
+		[6,4,5] : 'world'
+	}, -- data
+	NULL::MAP(INT[], VARCHAR), -- target type
+	{
+		'key': 'key',
+		'value': 'value'
+	}, -- remapping data -> target_type
+	NULL -- defaults
+);
+----
+{[1, 2, 3]=test, [6, 4, 5]=world}
+
+# Type modification of the key in any way is not allowed
+query I
+SELECT remap_struct(
+	MAP {
+		[1,2,3] : 'test',
+		[6,4,5] : 'world'
+	}, -- data
+	NULL::MAP(BIGINT[], VARCHAR), -- target type
+	{
+		'key': 'key',
+		'value': 'value'
+	}, -- remapping data -> target_type
+	NULL -- defaults
+);
+----
+{[1, 2, 3]=test, [6, 4, 5]=world}
+
+# Type modification from MAP -> STRUCT is not allowed
+statement error
+SELECT remap_struct(
+	MAP {
+		[1,2,3] : 'test',
+		[6,4,5] : 'world'
+	}, -- data
+	NULL::STRUCT("key" BIGINT[], "value" VARCHAR), -- target type
+	{
+		'key': 'key',
+		'value': 'value'
+	}, -- remapping data -> target_type
+	NULL -- defaults
+);
+----
+Can't change source type
+
+# Type modification of LIST -> MAP is not allowed (nested type this time)
+statement error
+SELECT remap_struct(
+	MAP {
+		[1,2,3] : ['test'],
+		[6,4,5] : ['world']
+	}, -- data
+	NULL::MAP(BIGINT[], MAP(VARCHAR, VARCHAR)), -- target type
+	{
+		'key': 'key',
+		'value': 'value'
+	}, -- remapping data -> target_type
+	NULL -- defaults
+);
+----
+Can't change source type
+
+# Type remapping the 'key', as a no-op
+query I
+SELECT remap_struct(
+	MAP {
+		[1,2,3] : ['test'],
+		[6,4,5] : ['world']
+	}, -- data
+	NULL::MAP(INT[], VARCHAR[]), -- target type
+	{
+		'key': ROW(
+			'key', {
+				'list': 'list'
+			}
+		),
+		'value': 'value'
+	}, -- remapping data -> target_type
+	NULL -- defaults
+);
+----
+{[1, 2, 3]=[test], [6, 4, 5]=[world]}

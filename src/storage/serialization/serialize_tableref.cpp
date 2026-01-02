@@ -94,12 +94,12 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 void ColumnDataRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
-	serializer.WritePropertyWithDefault<shared_ptr<ColumnDataCollection>>(202, "collection", collection);
+	serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
 }
 
 unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
 	auto expected_names = deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names");
-	auto collection = deserializer.ReadPropertyWithDefault<shared_ptr<ColumnDataCollection>>(202, "collection");
+	auto collection = deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
 	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef(std::move(collection), std::move(expected_names)));
 	return std::move(result);
 }
@@ -138,6 +138,9 @@ void JoinRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(205, "using_columns", using_columns);
 	serializer.WritePropertyWithDefault<bool>(206, "delim_flipped", delim_flipped);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", duplicate_eliminated_columns);
+	if (serializer.ShouldSerialize(6)) {
+		serializer.WritePropertyWithDefault<bool>(208, "is_implicit", is_implicit, true);
+	}
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
@@ -150,6 +153,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(205, "using_columns", result->using_columns);
 	deserializer.ReadPropertyWithDefault<bool>(206, "delim_flipped", result->delim_flipped);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "is_implicit", result->is_implicit, true);
 	return std::move(result);
 }
 
@@ -181,6 +185,8 @@ void ShowRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "table_name", table_name);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
 	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
+	serializer.WritePropertyWithDefault<string>(203, "catalog_name", catalog_name);
+	serializer.WritePropertyWithDefault<string>(204, "schema_name", schema_name);
 }
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
@@ -188,6 +194,8 @@ unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(200, "table_name", result->table_name);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
 	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
+	deserializer.ReadPropertyWithDefault<string>(203, "catalog_name", result->catalog_name);
+	deserializer.ReadPropertyWithDefault<string>(204, "schema_name", result->schema_name);
 	return std::move(result);
 }
 
@@ -208,12 +216,14 @@ void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
+	serializer.WritePropertyWithDefault<OrdinalityType>(202, "with_ordinality", with_ordinality, OrdinalityType::WITHOUT_ORDINALITY);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", result->function);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "column_name_alias", result->column_name_alias);
+	deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(202, "with_ordinality", result->with_ordinality, OrdinalityType::WITHOUT_ORDINALITY);
 	return std::move(result);
 }
 

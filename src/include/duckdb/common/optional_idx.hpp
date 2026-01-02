@@ -47,6 +47,10 @@ public:
 		return index == rhs.index;
 	}
 
+	inline bool operator!=(const optional_idx &rhs) const {
+		return index != rhs.index;
+	}
+
 private:
 	idx_t index;
 };

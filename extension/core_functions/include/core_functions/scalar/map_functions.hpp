@@ -32,7 +32,7 @@ struct MapFun {
 	static constexpr const char *Example = "map(['key1', 'key2'], ['val1', 'val2'])";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MapEntriesFun {
@@ -85,7 +85,7 @@ struct MapConcatFun {
 	static constexpr const char *Name = "map_concat";
 	static constexpr const char *Parameters = "any,...";
 	static constexpr const char *Description = "Returns a map created from merging the input maps, on key collision the value is taken from the last map with that key";
-	static constexpr const char *Example = "map_concat(map([1,2], ['a', 'b']), map([2,3], ['c', 'd']));";
+	static constexpr const char *Example = "map_concat(map([1, 2], ['a', 'b']), map([2, 3], ['c', 'd']));";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -109,6 +109,16 @@ struct MapValuesFun {
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+};
+
+struct SwitchFun {
+	static constexpr const char *Name = "switch";
+	static constexpr const char *Parameters = "key,map,value";
+	static constexpr const char *Description = "Creates a switch statement similar to CASE WHEN/THEN";
+	static constexpr const char *Example = "switch(x, map({1 : 1}, default)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

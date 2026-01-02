@@ -1,0 +1,16 @@
+# name: test/optimizer/optimize_unsigned_vs_signed_ints.test
+# description: Test move constants
+# group: [optimizer]
+
+query II
+SELECT i, TRY_CAST(i - 4 AS UINT32) as b from range(10) tbl(i) where b < 2;
+----
+4	0
+5	1
+
+
+query III
+SELECT *, b<2 FROM (SELECT i, TRY_CAST(i - 4 AS UINT32) as b from range(10) tbl(i) where b < 2);
+----
+4	0	true
+5	1	true

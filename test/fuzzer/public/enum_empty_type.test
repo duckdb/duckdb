@@ -1,0 +1,22 @@
+# name: test/fuzzer/public/enum_empty_type.test
+# description: Test creating an enum with empty strings
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TYPE c AS ENUM('');
+
+statement error
+CREATE TYPE c AS ENUM('', '');
+----
+Invalid Input Error: Attempted to create ENUM type with duplicate value
+
+statement error
+CREATE TYPE f AS M();
+----
+Catalog Error: Type with name M does not exist!
+
+statement ok
+SELECT * FROM(VALUES(''::text))

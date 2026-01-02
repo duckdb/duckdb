@@ -47,7 +47,7 @@ already exists
 statement error
 ALTER TABLE test RENAME s.j.x TO v2
 ----
-not a struct
+Catalog Error: Cannot rename field from column "s" - not a nested type
 
 statement error
 ALTER TABLE test RENAME s.i TO v2

@@ -1,0 +1,24 @@
+# name: benchmark/micro/logger/logging_overhead/parquet_q1_with_filesystem_logging.benchmark
+# description: Execute Q1 over lineitem stored in a parquet file with filesystem logging enabled. This comes at a significant, but reasonable overhead.
+# group: [logging_overhead]
+
+name Q1 (Parquet)
+group logger
+subgroup logging_overhead
+
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+CALL enable_logging('FileSystem', storage_path='${BENCHMARK_DIR}/parquet_q1_with_logging')
+
+run
+COPY lineitem_normal TO '${BENCHMARK_DIR}/parquet_q1_with_logging.parquet';
+CREATE OR REPLACE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/parquet_q1_with_logging.parquet');
+PRAGMA tpch(1)
+
+cleanup
+CALL truncate_duckdb_logs()
+
+result extension/tpch/dbgen/answers/sf1/q01.csv

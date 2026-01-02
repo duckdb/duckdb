@@ -2,7 +2,6 @@
 # description: Test RLE where we can emit ConstantVectors when scanning
 # group: [rle]
 
-# load the DB from disk
 load __TEST_DIR__/test_rle.db
 
 require vector_size 2048

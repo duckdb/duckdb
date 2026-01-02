@@ -1,0 +1,13 @@
+# name: test/sql/json/issues/internal_issue4794.test
+# description: Test internal issue 4794 - AFL++ issue: internal exception due to format string json key
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement error
+FROM read_json('{DATA_DIR}/json/format_string_key.json');
+----
+Invalid Input Error

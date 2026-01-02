@@ -63,6 +63,10 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	virtual idx_t MaxThreads(idx_t source_max_threads) {
+		return source_max_threads;
+	}
 };
 
 class GlobalSinkState : public StateWithBlockableTasks {
@@ -168,6 +172,11 @@ struct OperatorSinkCombineInput {
 
 struct OperatorSinkFinalizeInput {
 	GlobalSinkState &global_state;
+	InterruptState &interrupt_state;
+};
+
+struct OperatorFinalizeInput {
+	GlobalOperatorState &global_state;
 	InterruptState &interrupt_state;
 };
 

@@ -1,0 +1,73 @@
+# name: test/sql/storage/compression/compression_selection_dict_fsst.test
+# description: Test that the right scheme is chosen for the right data.
+# group: [compression]
+
+require vector_size 2048
+
+load __TEST_DIR__/test_compression_simple.db readwrite v1.3.0
+
+statement ok
+CREATE TABLE test_rle (a INTEGER);
+
+statement ok
+INSERT INTO test_rle SELECT 2147480000 FROM range(0, 10000) tbl(i);
+
+statement ok
+INSERT INTO test_rle SELECT 2147480001 FROM range(0, 10000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_rle') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+RLE
+
+# Constant
+statement ok
+CREATE TABLE test_constant (a INTEGER);
+
+statement ok
+INSERT INTO test_constant SELECT 1 FROM range(0, 2000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_constant') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+Constant
+
+# Dictionary
+statement ok
+CREATE TABLE test_dict (a VARCHAR);
+
+statement ok
+INSERT INTO test_dict SELECT concat('foobar-', (i%2)::VARCHAR) FROM range(0, 2000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+DICT_FSST
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+require block_size 262144
+
+# Bitpacking
+statement ok
+CREATE TABLE test_bp (a INTEGER);
+
+statement ok
+INSERT INTO test_bp SELECT i FROM range(0, 2000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_bp') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+BitPacking

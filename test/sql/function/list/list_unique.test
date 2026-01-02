@@ -4,6 +4,9 @@
 
 # test null or empty
 
+statement ok
+pragma enable_verification
+
 query I
 SELECT list_unique(NULL)
 ----
@@ -222,3 +225,8 @@ query I
 SELECT list_unique(['a', 'b、c', 'a'])
 ----
 2
+
+query I
+select list_unique([1,2,3]::INT[3]);
+----
+3

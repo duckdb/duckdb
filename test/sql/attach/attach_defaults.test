@@ -2,11 +2,6 @@
 # description: Test default behavior of ATTACH statement
 # group: [attach]
 
-require noforcestorage
-
-statement ok
-PRAGMA enable_verification
-
 # attach a new database
 statement ok
 ATTACH DATABASE ':memory:' AS new_database;

@@ -18,14 +18,16 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COPY_DATABASE;
 
 public:
-	PhysicalCopyDatabase(vector<LogicalType> types, idx_t estimated_cardinality, unique_ptr<CopyDatabaseInfo> info_p);
+	PhysicalCopyDatabase(PhysicalPlan &physical_plan, vector<LogicalType> types, idx_t estimated_cardinality,
+	                     unique_ptr<CopyDatabaseInfo> info_p);
 	~PhysicalCopyDatabase() override;
 
 	unique_ptr<CopyDatabaseInfo> info;
 
 public:
 	// Source interface
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

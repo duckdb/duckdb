@@ -6,54 +6,7 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ListHasAnyOrAllBind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
-
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
-
-	const auto lhs_is_param = arguments[0]->HasParameter();
-	const auto rhs_is_param = arguments[1]->HasParameter();
-
-	if (lhs_is_param && rhs_is_param) {
-		throw ParameterNotResolvedException();
-	}
-
-	const auto &lhs_list = arguments[0]->return_type;
-	const auto &rhs_list = arguments[1]->return_type;
-
-	if (lhs_is_param) {
-		bound_function.arguments[0] = rhs_list;
-		bound_function.arguments[1] = rhs_list;
-		return nullptr;
-	}
-	if (rhs_is_param) {
-		bound_function.arguments[0] = lhs_list;
-		bound_function.arguments[1] = lhs_list;
-		return nullptr;
-	}
-
-	bound_function.arguments[0] = lhs_list;
-	bound_function.arguments[1] = rhs_list;
-
-	const auto &lhs_child = ListType::GetChildType(bound_function.arguments[0]);
-	const auto &rhs_child = ListType::GetChildType(bound_function.arguments[1]);
-
-	if (lhs_child != LogicalType::SQLNULL && rhs_child != LogicalType::SQLNULL && lhs_child != rhs_child) {
-		LogicalType common_child;
-		if (!LogicalType::TryGetMaxLogicalType(context, lhs_child, rhs_child, common_child)) {
-			throw BinderException("'%s' cannot compare lists of different types: '%s' and '%s'", bound_function.name,
-			                      lhs_child.ToString(), rhs_child.ToString());
-		}
-		bound_function.arguments[0] = LogicalType::LIST(common_child);
-		bound_function.arguments[1] = LogicalType::LIST(common_child);
-	}
-
-	return nullptr;
-}
-
 static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &result) {
-
 	auto &l_vec = args.data[0];
 	auto &r_vec = args.data[1];
 
@@ -109,7 +62,6 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		    // Use the smaller list to build the set
 		    if (r_list.length < l_list.length) {
-
 			    build_list = r_list;
 			    probe_list = l_list;
 
@@ -142,7 +94,6 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 }
 
 static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto swap = func_expr.function.name == "<@";
 
@@ -213,14 +164,14 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunction ListHasAnyFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)}, LogicalType::BOOLEAN,
-	                   ListHasAnyFunction, ListHasAnyOrAllBind);
+	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
+	                   LogicalType::BOOLEAN, ListHasAnyFunction);
 	return fun;
 }
 
 ScalarFunction ListHasAllFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)}, LogicalType::BOOLEAN,
-	                   ListHasAllFunction, ListHasAnyOrAllBind);
+	ScalarFunction fun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
+	                   LogicalType::BOOLEAN, ListHasAllFunction);
 	return fun;
 }
 

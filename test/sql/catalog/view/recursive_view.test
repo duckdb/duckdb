@@ -6,9 +6,6 @@ statement ok
 set storage_compatibility_version='v0.10.2'
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE IF NOT EXISTS test (val INTEGER);
 
 statement ok
@@ -24,6 +21,7 @@ CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
 statement error
 SELECT * FROM foo;
 ----
+<REGEX>:.*Binder Error.*infinite recursion detected.*
 
 # more complex recursive view definition
 statement ok
@@ -38,3 +36,4 @@ CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
 statement error
 SELECT * FROM foo;
 ----
+<REGEX>:.*Binder Error.*infinite recursion detected.*

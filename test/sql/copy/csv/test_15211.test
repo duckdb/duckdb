@@ -9,7 +9,7 @@ statement ok
 set threads=1
 
 query I
-select count(*) FROM read_csv(['data/csv/drug_exposure.csv', 'data/csv/drug_exposure.csv','data/csv/drug_exposure.csv', 'data/csv/drug_exposure.csv','data/csv/drug_exposure.csv', 'data/csv/drug_exposure.csv','data/csv/drug_exposure.csv', 'data/csv/drug_exposure.csv','data/csv/drug_exposure.csv'], buffer_size = 500)
+select count(*) FROM read_csv(['{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv'], buffer_size = 500)
 ----
 37017
 

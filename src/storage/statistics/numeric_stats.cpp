@@ -215,7 +215,7 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 
 template <class T>
 FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
-                                            array_ptr<Value> constants) {
+                                            array_ptr<const Value> constants) {
 	T min_value = NumericStats::GetMinUnsafe<T>(stats);
 	T max_value = NumericStats::GetMaxUnsafe<T>(stats);
 	for (auto &constant_value : constants) {
@@ -233,10 +233,11 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 }
 
 FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                 array_ptr<Value> constants) {
+                                                 array_ptr<const Value> constants) {
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	D_ASSERT(stats.CanHaveNoNull());
 	switch (stats.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constants);
@@ -375,7 +376,8 @@ Value NumericValueUnionToValue(const LogicalType &type, const NumericValueUnion 
 }
 
 bool NumericStats::HasMinMax(const BaseStatistics &stats) {
-	return NumericStats::HasMin(stats) && NumericStats::HasMax(stats);
+	return NumericStats::HasMin(stats) && NumericStats::HasMax(stats) &&
+	       NumericStats::Min(stats) <= NumericStats::Max(stats);
 }
 
 bool NumericStats::HasMin(const BaseStatistics &stats) {

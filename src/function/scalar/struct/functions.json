@@ -41,5 +41,21 @@
         "description": "Merge the multiple STRUCTs into a single STRUCT.",
         "example": "struct_concat(struct_pack(i := 4), struct_pack(s := 'string'))",
         "type": "scalar_function"
+    },
+    {
+        "name": "struct_contains",
+        "parameters": "struct,'entry'",
+        "description": "Check if an unnamed STRUCT contains the value.",
+        "example": "struct_contains(ROW(3, 3, 0), 3)",
+        "type": "scalar_function",
+        "aliases": ["struct_has"]
+    },
+    {
+        "name": "struct_position",
+        "parameters": "struct,'entry'",
+        "description": "Get the position of the entry in an unnamed STRUCT, starting at 1.",
+        "example": "struct_position(ROW(3, 3, 0), 3)",
+        "type": "scalar_function",
+        "aliases": ["struct_indexof"]
     }
 ]

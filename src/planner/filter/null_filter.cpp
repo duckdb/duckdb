@@ -7,7 +7,7 @@ namespace duckdb {
 IsNullFilter::IsNullFilter() : TableFilter(TableFilterType::IS_NULL) {
 }
 
-FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (!stats.CanHaveNull()) {
 		// no null values are possible: always false
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -36,7 +36,7 @@ unique_ptr<Expression> IsNullFilter::ToExpression(const Expression &column) cons
 IsNotNullFilter::IsNotNullFilter() : TableFilter(TableFilterType::IS_NOT_NULL) {
 }
 
-FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (!stats.CanHaveNoNull()) {
 		// no non-null values are possible: always false
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;

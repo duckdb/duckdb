@@ -1,2 +1,6 @@
 %type <str> opt_database_alias
 %type <list> ident_list ident_name
+
+%type <node> generic_opt_arg
+%type <list> generic_opt_list opt_attach_options
+%type <defelt> generic_opt_elem

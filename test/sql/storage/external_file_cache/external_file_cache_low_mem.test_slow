@@ -1,0 +1,38 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_low_mem.test_slow
+# description: Test the external file cache with low memory limit
+# group: [external_file_cache]
+
+require tpch
+
+require parquet
+
+statement ok
+call dbgen(sf=1);
+
+statement ok
+export database '__TEST_DIR__/efc_tpch_sf1' (format parquet)
+
+foreach table customer lineitem nation orders part partsupp region supplier
+
+statement ok
+drop table ${table};
+
+statement ok
+CREATE VIEW ${table} AS FROM '__TEST_DIR__/efc_tpch_sf1/${table}.parquet';
+
+endloop
+
+statement ok
+set prefetch_all_parquet_files=true;
+
+statement ok
+pragma tpch(9);
+
+statement ok
+set threads=1;
+
+statement ok
+set memory_limit='100mb';
+
+statement ok
+pragma tpch(9);

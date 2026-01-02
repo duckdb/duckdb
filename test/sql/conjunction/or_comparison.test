@@ -3,9 +3,6 @@
 # group: [conjunction]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 VARCHAR, col3 INTEGER, col4 FLOAT, col5 VARCHAR);;
 
 statement ok
@@ -48,3 +45,9 @@ SELECT pk FROM tab0 WHERE col0 < 84 OR col0 < 8 ;
 5
 7
 8
+
+query I
+select pk from tab0 where col0 = 37 or col0 = 86
+----
+0
+1

@@ -236,5 +236,29 @@
         "type": "Value"
       }
     ]
+  },
+  {
+    "class": "TemplateTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "TEMPLATE_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "GeoTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "GEO_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "crs",
+        "type": "CoordinateReferenceSystem"
+      }
+    ]
   }
 ]

@@ -1,0 +1,186 @@
+# name: test/sql/function/list/list_value_nested_lists.test
+# description: Test the list_value function
+# group: [list]
+
+statement ok
+pragma enable_verification
+
+# nested lists
+query I
+SELECT LIST_VALUE([1, 7], [2], [3]);
+----
+[[1, 7], [2], [3]]
+
+query I
+SELECT LIST_VALUE([1, 7], [2], [3], NULL);
+----
+[[1, 7], [2], [3], NULL]
+
+query I
+SELECT LIST_VALUE([1, 7], [2], NULL, [3]);
+----
+[[1, 7], [2], NULL, [3]]
+
+query I
+SELECT LIST_VALUE([1, 7], [NULL], [2], [3]);
+----
+[[1, 7], [NULL], [2], [3]]
+
+# nested lists in table
+statement ok
+CREATE TABLE test_table (c1 INTEGER[], c2 INTEGER[], c3 INTEGER[]);
+
+statement ok
+INSERT INTO test_table VALUES ([1, 1], [2, 2], [3]);
+
+statement ok
+INSERT INTO test_table VALUES ([4], [5, 5, 5], [6, 6]);
+
+statement ok
+INSERT INTO test_table VALUES ([7, 7, 7, 7], [8], [9, 9, 9]);
+
+statement ok
+INSERT INTO test_table VALUES ([], [], []);
+
+statement ok
+INSERT INTO test_table VALUES ([-1, -1, NULL], NULL, [-2, -2]);
+
+query I
+SELECT LIST_VALUE(c1, c2, c3) FROM test_table;
+----
+[[1, 1], [2, 2], [3]]
+[[4], [5, 5, 5], [6, 6]]
+[[7, 7, 7, 7], [8], [9, 9, 9]]
+[[], [], []]
+[[-1, -1, NULL], NULL, [-2, -2]]
+
+# structs in nested lists
+query I
+SELECT LIST_VALUE([ROW(1, 1), ROW(2, 2)], [ROW(3, 3)]);
+----
+[[(1, 1), (2, 2)], [(3, 3)]]
+
+query I
+SELECT LIST_VALUE([ROW(1, 1), ROW(2, 2)], [ROW(3, 3), NULL]);
+----
+[[(1, 1), (2, 2)], [(3, 3), NULL]]
+
+query I
+SELECT LIST_VALUE([ROW(1, 1), ROW(NULL, 2)], [NULL], [ROW(3, 3)]);
+----
+[[(1, 1), (NULL, 2)], [NULL], [(3, 3)]]
+
+statement ok
+CREATE TABLE struct_table(a ROW(a INTEGER, b INTEGER)[], b ROW(a INTEGER, b INTEGER)[], c ROW(a INTEGER, b INTEGER)[]);
+
+statement ok
+INSERT INTO STRUCT_TABLE VALUES ([ROW(1, 1), ROW(2, 2)], [ROW(3, 3), ROW(4, 4)], [ROW(5, 5), ROW(6, 6)]);
+
+statement ok
+INSERT INTO STRUCT_TABLE VALUES ([ROW(7, 7), ROW(8, 8)], [ROW(9, 9)], [ROW(10, 10), ROW(11, 11), ROW(12, 12)]);
+
+statement ok
+INSERT INTO STRUCT_TABLE VALUES ([ROW(13, 13)], [ROW(14, 14), ROW(15, 15), ROW(16, 16)], [ROW(17, 17), ROW(18, 18)]);
+
+statement ok
+INSERT INTO STRUCT_TABLE VALUES ([NULL, ROW(20, 20)], NULL, [ROW(23, 23), ROW(24, 24), ROW(25, 25), ROW(26, 26)]);
+
+query I
+SELECT LIST_VALUE([a, b], [c]) FROM struct_table;
+----
+[[[{'a': 1, 'b': 1}, {'a': 2, 'b': 2}], [{'a': 3, 'b': 3}, {'a': 4, 'b': 4}]], [[{'a': 5, 'b': 5}, {'a': 6, 'b': 6}]]]
+[[[{'a': 7, 'b': 7}, {'a': 8, 'b': 8}], [{'a': 9, 'b': 9}]], [[{'a': 10, 'b': 10}, {'a': 11, 'b': 11}, {'a': 12, 'b': 12}]]]
+[[[{'a': 13, 'b': 13}], [{'a': 14, 'b': 14}, {'a': 15, 'b': 15}, {'a': 16, 'b': 16}]], [[{'a': 17, 'b': 17}, {'a': 18, 'b': 18}]]]
+[[[NULL, {'a': 20, 'b': 20}], NULL], [[{'a': 23, 'b': 23}, {'a': 24, 'b': 24}, {'a': 25, 'b': 25}, {'a': 26, 'b': 26}]]]
+
+# strings in nested lists
+query I
+SELECT LIST_VALUE(['a', 'a'], ['b', 'b', 'b'], ['c']);
+----
+[[a, a], [b, b, b], [c]]
+
+query I
+SELECT LIST_VALUE(['a', 'a'], ['b', 'b', 'b'], ['c'], NULL);
+----
+[[a, a], [b, b, b], [c], NULL]
+
+query I
+SELECT LIST_VALUE(['a', 'a'], ['b', 'b', NULL], NULL, ['c']);
+----
+[[a, a], [b, b, NULL], NULL, [c]]
+
+statement ok
+CREATE TABLE string_table(a VARCHAR[], b VARCHAR[], c VARCHAR[]);
+
+statement ok
+INSERT INTO string_table VALUES (['a', 'a'], ['b', 'b', 'b'], ['c']);
+
+statement ok
+INSERT INTO string_table VALUES (['d'], ['e', 'e', 'e', 'e'], ['f', 'f']);
+
+statement ok
+INSERT INTO string_table VALUES (['g', 'g', 'g', 'g'], ['h'], ['i', 'i', 'i']);
+
+statement ok
+INSERT INTO string_table VALUES (['j', 'j'], NULL, ['k', 'k', 'k']);
+
+statement ok
+INSERT INTO string_table VALUES (['l', 'l', 'l'], ['m', 'm'], [NULL, 'n', 'n']);
+
+query I
+SELECT LIST_VALUE(a, b, c) FROM string_table;
+----
+[[a, a], [b, b, b], [c]]
+[[d], [e, e, e, e], [f, f]]
+[[g, g, g, g], [h], [i, i, i]]
+[[j, j], NULL, [k, k, k]]
+[[l, l, l], [m, m], [NULL, n, n]]
+
+# nested lists in lists
+query I
+SELECT LIST_VALUE([[1, 1], [2]], [[3, 3], [4, 4, 4, 4], [5, 5]], [[6, 6]]);
+----
+[[[1, 1], [2]], [[3, 3], [4, 4, 4, 4], [5, 5]], [[6, 6]]]
+
+query I
+SELECT LIST_VALUE([[1, 1], [2]], [[3, 3], [4, 4, 4, 4], [5, 5]], [[6, 6]], NULL);
+----
+[[[1, 1], [2]], [[3, 3], [4, 4, 4, 4], [5, 5]], [[6, 6]], NULL]
+
+query I
+SELECT LIST_VALUE([[1, 1], [2]], [[3, 3], [4, 4, NULL, 4], [5, 5]], NULL, [[6, 6]]);
+----
+[[[1, 1], [2]], [[3, 3], [4, 4, NULL, 4], [5, 5]], NULL, [[6, 6]]]
+
+statement ok
+CREATE TABLE nested_list_table(a INTEGER[][], b INTEGER[][], c INTEGER[][]);
+
+statement ok
+INSERT INTO nested_list_table VALUES ([[1, 1, 1], [2]], [[3, 3], [4, 4, 4, 4], [5, 5]], [[6, 6]]);
+
+statement ok
+INSERT INTO nested_list_table VALUES ([[7, 7], [8, 8, 8]], [[9]], [[10, 10], [11, 11, 11]]);
+
+statement ok
+INSERT INTO nested_list_table VALUES ([[12, NULL]], [NULL, [13, 13, 13]], NULL);
+
+query I
+SELECT LIST_VALUE(a, b, c) FROM nested_list_table;
+----
+[[[1, 1, 1], [2]], [[3, 3], [4, 4, 4, 4], [5, 5]], [[6, 6]]]
+[[[7, 7], [8, 8, 8]], [[9]], [[10, 10], [11, 11, 11]]]
+[[[12, NULL]], [NULL, [13, 13, 13]], NULL]
+
+# errors
+statement error
+SELECT LIST_VALUE([1, 1], ['a', 'a'], [ROW(2, 2), ROW(3, 3)]);
+----
+Binder Error: Cannot deduce template type
+
+# list with array
+query I
+SELECT list_value([ARRAY_VALUE(1,2,3)], 
+				  [ARRAY_VALUE(4,5,6)], 
+				  [ARRAY_VALUE(7,8,9)]);
+----
+[[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]]]

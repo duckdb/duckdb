@@ -58,9 +58,60 @@
 
 #include "mbedtls/platform.h"
 
-enum mbedtls_cipher_base_index : uint8_t {
-    MBEDTLS_CIPHER_BASE_INDEX_AES = 0,
-    MBEDTLS_CIPHER_BASE_INDEX_GCM_AES = 1,
+enum mbedtls_cipher_base_index {
+#if defined(MBEDTLS_AES_C)
+    MBEDTLS_CIPHER_BASE_INDEX_AES,
+#endif
+#if defined(MBEDTLS_ARIA_C)
+    MBEDTLS_CIPHER_BASE_INDEX_ARIA,
+#endif
+#if defined(MBEDTLS_CAMELLIA_C)
+    MBEDTLS_CIPHER_BASE_INDEX_CAMELLIA,
+#endif
+#if defined(MBEDTLS_CIPHER_HAVE_CCM_AES_VIA_LEGACY_OR_USE_PSA)
+    MBEDTLS_CIPHER_BASE_INDEX_CCM_AES,
+#endif
+#if defined(MBEDTLS_CCM_C) && defined(MBEDTLS_ARIA_C)
+    MBEDTLS_CIPHER_BASE_INDEX_CCM_ARIA,
+#endif
+#if defined(MBEDTLS_CCM_C) && defined(MBEDTLS_CAMELLIA_C)
+    MBEDTLS_CIPHER_BASE_INDEX_CCM_CAMELLIA,
+#endif
+#if defined(MBEDTLS_CHACHA20_C)
+    MBEDTLS_CIPHER_BASE_INDEX_CHACHA20_BASE,
+#endif
+#if defined(MBEDTLS_CHACHAPOLY_C)
+    MBEDTLS_CIPHER_BASE_INDEX_CHACHAPOLY_BASE,
+#endif
+#if defined(MBEDTLS_DES_C)
+    MBEDTLS_CIPHER_BASE_INDEX_DES_EDE3,
+#endif
+#if defined(MBEDTLS_DES_C)
+    MBEDTLS_CIPHER_BASE_INDEX_DES_EDE,
+#endif
+#if defined(MBEDTLS_DES_C)
+    MBEDTLS_CIPHER_BASE_INDEX_DES,
+#endif
+#if defined(MBEDTLS_CIPHER_HAVE_GCM_AES_VIA_LEGACY_OR_USE_PSA)
+    MBEDTLS_CIPHER_BASE_INDEX_GCM_AES,
+#endif
+#if defined(MBEDTLS_GCM_C) && defined(MBEDTLS_ARIA_C)
+    MBEDTLS_CIPHER_BASE_INDEX_GCM_ARIA,
+#endif
+#if defined(MBEDTLS_GCM_C) && defined(MBEDTLS_CAMELLIA_C)
+    MBEDTLS_CIPHER_BASE_INDEX_GCM_CAMELLIA,
+#endif
+#if defined(MBEDTLS_NIST_KW_C)
+    MBEDTLS_CIPHER_BASE_INDEX_KW_AES,
+#endif
+#if defined(MBEDTLS_CIPHER_NULL_CIPHER)
+    MBEDTLS_CIPHER_BASE_INDEX_NULL_BASE,
+#endif
+#if defined(MBEDTLS_CIPHER_MODE_XTS) && defined(MBEDTLS_AES_C)
+    MBEDTLS_CIPHER_BASE_INDEX_XTS_AES,
+#endif
+    /* Prevent compile failure due to empty enum */
+    MBEDTLS_CIPHER_BASE_PREVENT_EMPTY_ENUM
 };
 
 #if defined(MBEDTLS_GCM_C) && \
@@ -80,7 +131,7 @@ static void *gcm_ctx_alloc(void)
 
 static void gcm_ctx_free(void *ctx)
 {
-    mbedtls_gcm_free((mbedtls_gcm_context *)ctx);
+    mbedtls_gcm_free((mbedtls_gcm_context *) ctx);
     mbedtls_free(ctx);
 }
 #endif /* MBEDTLS_GCM_C */
@@ -195,7 +246,7 @@ static int aes_setkey_enc_wrap(void *ctx, const unsigned char *key,
 
 static void *aes_ctx_alloc(void)
 {
-    mbedtls_aes_context *aes = (mbedtls_aes_context *)mbedtls_calloc(1, sizeof(mbedtls_aes_context));
+    mbedtls_aes_context *aes = (mbedtls_aes_context *) mbedtls_calloc(1, sizeof(mbedtls_aes_context));
 
     if (aes == NULL) {
         return NULL;
@@ -777,7 +828,7 @@ static int camellia_setkey_enc_wrap(void *ctx, const unsigned char *key,
 static void *camellia_ctx_alloc(void)
 {
     mbedtls_camellia_context *ctx;
-    ctx = (mbedtls_camellia_context *)mbedtls_calloc(1, sizeof(mbedtls_camellia_context));
+    ctx = mbedtls_calloc(1, sizeof(mbedtls_camellia_context));
 
     if (ctx == NULL) {
         return NULL;
@@ -1195,7 +1246,7 @@ static int aria_setkey_enc_wrap(void *ctx, const unsigned char *key,
 static void *aria_ctx_alloc(void)
 {
     mbedtls_aria_context *ctx;
-    ctx = (mbedtls_aria_context *)mbedtls_calloc(1, sizeof(mbedtls_aria_context));
+    ctx = mbedtls_calloc(1, sizeof(mbedtls_aria_context));
 
     if (ctx == NULL) {
         return NULL;
@@ -2374,9 +2425,58 @@ const mbedtls_cipher_definition_t mbedtls_cipher_definitions[] =
                      sizeof(mbedtls_cipher_definitions[0]))
 int mbedtls_cipher_supported[NUM_CIPHERS];
 
-const mbedtls_cipher_base_t *mbedtls_cipher_base_lookup_table[] = {
-   /* MBEDTLS_CIPHER_BASE_INDEX_AES */ &aes_info,
-   /* MBEDTLS_CIPHER_BASE_INDEX_GCM_AES */ &gcm_aes_info,
+const mbedtls_cipher_base_t * const mbedtls_cipher_base_lookup_table[] = {
+#if defined(MBEDTLS_AES_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_AES] = */ &aes_info,
+#endif
+#if defined(MBEDTLS_ARIA_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_ARIA] = */ &aria_info,
+#endif
+#if defined(MBEDTLS_CAMELLIA_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_CAMELLIA] = */ &camellia_info,
+#endif
+#if defined(MBEDTLS_CIPHER_HAVE_CCM_AES_VIA_LEGACY_OR_USE_PSA)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_CCM_AES] = */ &ccm_aes_info,
+#endif
+#if defined(MBEDTLS_CCM_C) && defined(MBEDTLS_ARIA_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_CCM_ARIA] = */ &ccm_aria_info,
+#endif
+#if defined(MBEDTLS_CCM_C) && defined(MBEDTLS_CAMELLIA_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_CCM_CAMELLIA] = */ &ccm_camellia_info,
+#endif
+#if defined(MBEDTLS_CHACHA20_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_CHACHA20_BASE] = */ &chacha20_base_info,
+#endif
+#if defined(MBEDTLS_CHACHAPOLY_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_CHACHAPOLY_BASE] = */ &chachapoly_base_info,
+#endif
+#if defined(MBEDTLS_DES_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_DES_EDE3] = */ &des_ede3_info,
+#endif
+#if defined(MBEDTLS_DES_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_DES_EDE] = */ &des_ede_info,
+#endif
+#if defined(MBEDTLS_DES_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_DES] = */ &des_info,
+#endif
+#if defined(MBEDTLS_CIPHER_HAVE_GCM_AES_VIA_LEGACY_OR_USE_PSA)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_AES] =  */ &gcm_aes_info,
+#endif
+#if defined(MBEDTLS_GCM_C) && defined(MBEDTLS_ARIA_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_ARIA] = */ &gcm_aria_info,
+#endif
+#if defined(MBEDTLS_GCM_C) && defined(MBEDTLS_CAMELLIA_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_GCM_CAMELLIA] =*/  &gcm_camellia_info,
+#endif
+#if defined(MBEDTLS_NIST_KW_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_KW_AES] = */ &kw_aes_info,
+#endif
+#if defined(MBEDTLS_CIPHER_NULL_CIPHER)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_NULL_BASE] = */ &null_base_info,
+#endif
+#if defined(MBEDTLS_CIPHER_MODE_XTS) && defined(MBEDTLS_AES_C)
+    /* [MBEDTLS_CIPHER_BASE_INDEX_XTS_AES] = */ &xts_aes_info
+#endif
 };
 
 #endif /* MBEDTLS_CIPHER_C */

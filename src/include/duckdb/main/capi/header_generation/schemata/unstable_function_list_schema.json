@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "title": "DuckDB C API unstable function list definition",
+  "description": "The schema of a C API unstable function list.",
+  "required": ["version", "description", "entries"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "The version name for the corresponding #ifdef section in the header files."
+    },
+    "description": {
+      "type": "string",
+      "description": "A description of the functions in the list."
+    },
+    "entries": {
+      "type": "array",
+      "description": "The list of functions.",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

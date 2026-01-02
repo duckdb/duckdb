@@ -12,7 +12,7 @@
         "name": "**",
         "parameters": "x,y",
         "description": "Computes x to the power of y",
-        "example": "pow(2, 3)",
+        "examples": ["pow(2, 3)", "power(2, 3)", "2 ** 3", "2 ^ 3"],
         "type": "scalar_function",
         "struct": "PowOperatorFun",
         "aliases": ["pow", "power", "^"]

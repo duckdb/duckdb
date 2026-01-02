@@ -7,6 +7,8 @@
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+#include "yyjson.hpp"
+
 namespace duckdb {
 
 ArrowTypeExtension::ArrowTypeExtension(string extension_name, string arrow_format,
@@ -316,16 +318,16 @@ struct ArrowBit {
 	}
 };
 
-struct ArrowVarint {
+struct ArrowBignum {
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "z") {
-			return make_uniq<ArrowType>(LogicalType::VARINT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::BIGNUM, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "Z") {
-			return make_uniq<ArrowType>(LogicalType::VARINT,
+			return make_uniq<ArrowType>(LogicalType::BIGNUM,
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 		}
-		throw InvalidInputException("Arrow extension type \"%s\" not supported for Varint", format.c_str());
+		throw InvalidInputException("Arrow extension type \"%s\" not supported for Bignum", format.c_str());
 	}
 
 	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
@@ -358,8 +360,76 @@ struct ArrowBool8 {
 		auto source_ptr = reinterpret_cast<bool *>(format.data);
 		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
-			result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			if (format.validity.RowIsValid(i)) {
+				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			}
 		}
+	}
+};
+
+struct ArrowGeometry {
+	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+		// Validate extension metadata. This metadata also contains a CRS, which we drop
+		// because the GEOMETRY type does not implement a CRS at the type level (yet).
+		const auto extension_metadata = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_METADATA_KEY);
+		if (!extension_metadata.empty()) {
+			unique_ptr<duckdb_yyjson::yyjson_doc, void (*)(duckdb_yyjson::yyjson_doc *)> doc(
+			    duckdb_yyjson::yyjson_read(extension_metadata.data(), extension_metadata.size(),
+			                               duckdb_yyjson::YYJSON_READ_NOFLAG),
+			    duckdb_yyjson::yyjson_doc_free);
+			if (!doc) {
+				throw SerializationException("Invalid JSON in GeoArrow metadata");
+			}
+
+			duckdb_yyjson::yyjson_val *val = yyjson_doc_get_root(doc.get());
+			if (!yyjson_is_obj(val)) {
+				throw SerializationException("Invalid GeoArrow metadata: not a JSON object");
+			}
+
+			duckdb_yyjson::yyjson_val *edges = yyjson_obj_get(val, "edges");
+			if (edges && yyjson_is_str(edges) && std::strcmp(yyjson_get_str(edges), "planar") != 0) {
+				throw NotImplementedException("Can't import non-planar edges");
+			}
+		}
+
+		const auto format = string(schema.format);
+		if (format == "z") {
+			return make_uniq<ArrowType>(LogicalType::GEOMETRY(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		}
+		if (format == "Z") {
+			return make_uniq<ArrowType>(LogicalType::GEOMETRY(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		}
+		if (format == "vz") {
+			return make_uniq<ArrowType>(LogicalType::GEOMETRY(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+		}
+		throw InvalidInputException("Arrow extension type \"%s\" not supported for geoarrow.wkb", format.c_str());
+	}
+
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
+		ArrowSchemaMetadata schema_metadata;
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "geoarrow.wkb");
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "{}");
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+
+		const auto options = context.GetClientProperties();
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			schema.format = "Z";
+		} else {
+			schema.format = "z";
+		}
+	}
+
+	static void ArrowToDuck(ClientContext &, Vector &source, Vector &result, idx_t count) {
+		Geometry::FromBinary(source, result, count, true);
+	}
+
+	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		Geometry::ToBinary(source, result, count);
 	}
 };
 
@@ -378,14 +448,19 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	config.RegisterArrowExtension(
 	    {"DuckDB", "time_tz", "w:8", make_shared_ptr<ArrowTypeExtensionData>(LogicalType::TIME_TZ)});
 
+	config.RegisterArrowExtension(
+	    {"geoarrow.wkb", ArrowGeometry::PopulateSchema, ArrowGeometry::GetType,
+	     make_shared_ptr<ArrowTypeExtensionData>(LogicalType::GEOMETRY(), LogicalType::BLOB, ArrowGeometry::ArrowToDuck,
+	                                             ArrowGeometry::DuckToArrow)});
+
 	// Types that are 1:n
 	config.RegisterArrowExtension({"arrow.json", &ArrowJson::PopulateSchema, &ArrowJson::GetType,
-	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARCHAR)});
+	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::JSON())});
 
 	config.RegisterArrowExtension({"DuckDB", "bit", &ArrowBit::PopulateSchema, &ArrowBit::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIT), nullptr, nullptr});
 
-	config.RegisterArrowExtension({"DuckDB", "varint", &ArrowVarint::PopulateSchema, &ArrowVarint::GetType,
-	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARINT), nullptr, nullptr});
+	config.RegisterArrowExtension({"DuckDB", "bignum", &ArrowBignum::PopulateSchema, &ArrowBignum::GetType,
+	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIGNUM), nullptr, nullptr});
 }
 } // namespace duckdb

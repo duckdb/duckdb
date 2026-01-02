@@ -22,8 +22,8 @@ public:
 	static constexpr const idx_t MAX_LIMIT_VALUE = 1ULL << 62ULL;
 
 public:
-	PhysicalLimit(vector<LogicalType> types, BoundLimitNode limit_val, BoundLimitNode offset_val,
-	              idx_t estimated_cardinality);
+	PhysicalLimit(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundLimitNode limit_val,
+	              BoundLimitNode offset_val, idx_t estimated_cardinality);
 
 	BoundLimitNode limit_val;
 	BoundLimitNode offset_val;
@@ -36,7 +36,8 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

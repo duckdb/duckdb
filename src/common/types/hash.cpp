@@ -10,16 +10,15 @@
 
 namespace duckdb {
 
-template <>
-hash_t Hash(uint64_t val) {
-	return MurmurHash64(val);
+#ifdef DUCKDB_HASH_ZERO
+hash_t Hash(const char *val, size_t size) {
+	return 0;
 }
 
-template <>
-hash_t Hash(int64_t val) {
-	return MurmurHash64((uint64_t)val);
+hash_t Hash(uint8_t *val, size_t size) {
+	return 0;
 }
-
+#else
 template <>
 hash_t Hash(hugeint_t val) {
 	return MurmurHash64(val.lower) ^ MurmurHash64(static_cast<uint64_t>(val.upper));
@@ -85,7 +84,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 	// Hash/combine in blocks of 8 bytes
 	const auto remainder = len & 7U;
 	for (const auto end = ptr + len - remainder; ptr != end; ptr += 8U) {
-		h ^= Load<hash_t>(ptr);
+		h ^= LoadLE<hash_t>(ptr);
 		h *= 0xd6e8feb86659fd93U;
 	}
 
@@ -94,7 +93,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 			D_ASSERT(len >= 8);
 			// Load remaining (<8) bytes (with a Load instead of a memcpy)
 			const auto inv_rem = 8U - remainder;
-			const auto hr = Load<hash_t>(ptr - inv_rem) >> (inv_rem * 8U);
+			const auto hr = LoadLE<hash_t>(ptr - inv_rem) >> (inv_rem * 8U);
 
 			h ^= hr;
 			h *= 0xd6e8feb86659fd93U;
@@ -102,6 +101,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 			// Load remaining (<8) bytes (with a memcpy)
 			hash_t hr = 0;
 			memcpy(&hr, ptr, remainder);
+			hr = BSwapIfBE(hr);
 
 			h ^= hr;
 			h *= 0xd6e8feb86659fd93U;
@@ -123,7 +123,7 @@ hash_t Hash(string_t val) {
 
 		// Hash/combine the first 8-byte block
 		if (!val.Empty()) {
-			h ^= Load<hash_t>(const_data_ptr_cast(val.GetPrefix()));
+			h ^= LoadLE<hash_t>(const_data_ptr_cast(val.GetPrefix()));
 			h *= 0xd6e8feb86659fd93U;
 		}
 
@@ -131,6 +131,7 @@ hash_t Hash(string_t val) {
 		if (val.GetSize() > sizeof(hash_t)) {
 			hash_t hr = 0;
 			memcpy(&hr, const_data_ptr_cast(val.GetPrefix()) + sizeof(hash_t), 4U);
+			hr = BSwapIfBE(hr);
 
 			h ^= hr;
 			h *= 0xd6e8feb86659fd93U;
@@ -161,5 +162,6 @@ hash_t Hash(const char *val, size_t size) {
 hash_t Hash(uint8_t *val, size_t size) {
 	return HashBytes(const_data_ptr_cast(val), size);
 }
+#endif
 
 } // namespace duckdb

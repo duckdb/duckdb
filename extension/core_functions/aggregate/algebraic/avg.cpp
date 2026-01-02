@@ -8,6 +8,8 @@
 
 namespace duckdb {
 
+namespace {
+
 template <class T>
 struct AvgState {
 	uint64_t count;
@@ -270,10 +272,12 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 	function = GetAverageAggregate(decimal_type.InternalType());
 	function.name = "avg";
 	function.arguments[0] = decimal_type;
-	function.return_type = LogicalType::DOUBLE;
+	function.SetReturnType(LogicalType::DOUBLE);
 	return make_uniq<AverageDecimalBindData>(
 	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
 }
+
+} // namespace
 
 AggregateFunctionSet AvgFun::GetFunctions() {
 	AggregateFunctionSet avg;

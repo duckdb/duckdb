@@ -16,6 +16,7 @@ CREATE TABLE test (
 statement error
 INSERT INTO test (bar) VALUES (5)
 ----
+<REGEX>:.*Binder Error.*Cannot insert.*
 
 #Using column names
 statement ok
@@ -35,6 +36,7 @@ SELECT * FROM test
 statement error
 INSERT INTO test VALUES (22)
 ----
+<REGEX>:.*Binder Error.*table test has 2 columns.*
 
 #Using VALUES correctly
 statement ok
@@ -44,6 +46,7 @@ INSERT INTO test VALUES (22, 10);
 statement error
 INSERT INTO test VALUES (22, 10, 10)
 ----
+<REGEX>:.*Binder Error.*table test has 2 columns.*
 
 statement ok
 CREATE TABLE tbl (
@@ -77,3 +80,4 @@ CREATE TABLE tbl2 (
 statement error
 INSERT INTO tbl2 VALUES ('test');
 ----
+<REGEX>:.*Constraint Error.*Incorrect value for generated column.*

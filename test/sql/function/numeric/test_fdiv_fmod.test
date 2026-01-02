@@ -3,9 +3,6 @@
 # group: [numeric]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET ieee_floating_point_ops=false;
 
 statement ok

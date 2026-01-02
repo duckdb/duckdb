@@ -13,6 +13,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
+#include "duckdb/main/client_context.hpp"
+
 namespace duckdb {
 class Allocator;
 class FileSystem;
@@ -20,7 +22,7 @@ struct CSVReaderOptions;
 
 class CSVFileHandle {
 public:
-	CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handle_p, const OpenFileInfo &file,
+	CSVFileHandle(ClientContext &context, unique_ptr<FileHandle> file_handle_p, const OpenFileInfo &file,
 	              const CSVReaderOptions &options);
 
 	mutex main_mutex;
@@ -44,13 +46,14 @@ public:
 
 	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
 	                                             FileCompressionType compression);
-	static unique_ptr<CSVFileHandle> OpenFile(DBConfig &config, FileSystem &fs, Allocator &allocator,
-	                                          const OpenFileInfo &file, const CSVReaderOptions &options);
+	static unique_ptr<CSVFileHandle> OpenFile(ClientContext &context, const OpenFileInfo &file,
+	                                          const CSVReaderOptions &options);
 	FileCompressionType compression_type;
 
 	double GetProgress() const;
 
 private:
+	QueryContext context;
 	unique_ptr<FileHandle> file_handle;
 	CSVEncoder encoder;
 	const OpenFileInfo file;

@@ -3,8 +3,6 @@
 # group: [pg_catalog]
 
 # avoid loading a storage database because it changes the initial database name
-require noforcestorage
-
 query I
 SELECT CURRENT_USER
 ----
@@ -93,3 +91,8 @@ query I
 select pg_typeof(1);
 ----
 integer
+
+statement error
+SELECT temp.current_user()
+----
+main.current_user

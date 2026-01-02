@@ -34,10 +34,13 @@ add_library_unity(
   bind_helpers.cpp
   box_renderer.cpp
   cgroups.cpp
+  csv_writer.cpp
   complex_json.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
+  encryption_functions.cpp
+  encryption_key_manager.cpp
   encryption_state.cpp
   exception.cpp
   exception_format_value.cpp
@@ -48,7 +51,6 @@ add_library_unity(
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
-  http_util.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   error_data.cpp
@@ -62,8 +64,10 @@ add_library_unity(
   enum_util.cpp
   symbols.cpp
   render_tree.cpp
+  thread_util.cpp
   tree_renderer.cpp
   types.cpp
+  bignum.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

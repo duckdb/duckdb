@@ -1,0 +1,50 @@
+# name: test/issues/general/test_18803.test
+# description: Issue 18803 - MATERIALIZED CTE with FALSE condition causes incorrect empty result in multi-table JOIN
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c INT)
+
+statement ok
+CREATE TABLE t1(c INT)
+
+statement ok
+CREATE TABLE t2(c INT)
+
+statement ok
+INSERT INTO t0 VALUES (1)
+
+statement ok
+INSERT INTO t1 VALUES (1)
+
+statement ok
+INSERT INTO t2 VALUES (1)
+
+query I
+WITH foo AS MATERIALIZED (
+  SELECT 1 AS one
+  FROM t0
+  WHERE FALSE
+)
+SELECT t0.c
+FROM t0
+JOIN t1 ON TRUE
+JOIN t2 ON TRUE
+----
+1
+
+query I
+WITH foo AS MATERIALIZED (
+  SELECT 1 AS one
+  FROM t0
+  WHERE FALSE
+)
+SELECT t0.c
+FROM t0
+JOIN t1 ON NOT EXISTS (SELECT one FROM foo)
+JOIN t2 ON NOT EXISTS (SELECT one FROM foo)
+----
+1

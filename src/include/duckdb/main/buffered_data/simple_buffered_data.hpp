@@ -24,7 +24,7 @@ public:
 	static constexpr const BufferedData::Type TYPE = BufferedData::Type::SIMPLE;
 
 public:
-	explicit SimpleBufferedData(weak_ptr<ClientContext> context);
+	explicit SimpleBufferedData(ClientContext &context);
 	~SimpleBufferedData() override;
 
 public:

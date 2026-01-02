@@ -17,7 +17,7 @@ BoundReferenceExpression::BoundReferenceExpression(LogicalType type, storage_t i
 string BoundReferenceExpression::ToString() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return "#" + to_string(index);
+		return StringUtil::Format("#%llu (%s)", index, return_type.ToString());
 	}
 #endif
 	if (!alias.empty()) {

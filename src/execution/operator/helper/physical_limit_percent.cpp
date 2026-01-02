@@ -7,9 +7,10 @@
 
 namespace duckdb {
 
-PhysicalLimitPercent::PhysicalLimitPercent(vector<LogicalType> types, BoundLimitNode limit_val_p,
-                                           BoundLimitNode offset_val_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LIMIT_PERCENT, std::move(types), estimated_cardinality),
+PhysicalLimitPercent::PhysicalLimitPercent(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                           BoundLimitNode limit_val_p, BoundLimitNode offset_val_p,
+                                           idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::LIMIT_PERCENT, std::move(types), estimated_cardinality),
       limit_val(std::move(limit_val_p)), offset_val(std::move(offset_val_p)) {
 	D_ASSERT(limit_val.Type() == LimitNodeType::CONSTANT_PERCENTAGE ||
 	         limit_val.Type() == LimitNodeType::EXPRESSION_PERCENTAGE);
@@ -117,8 +118,8 @@ unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientC
 	return make_uniq<LimitPercentOperatorState>(*this);
 }
 
-SourceResultType PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk,
-                                               OperatorSourceInput &input) const {
+SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                       OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<LimitPercentGlobalState>();
 	auto &state = input.global_state.Cast<LimitPercentOperatorState>();
 	auto &percent_limit = gstate.limit_percent;

@@ -20,8 +20,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::IE_JOIN;
 
 public:
-	PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
-	               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+	               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
+	               unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+	               PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+	               idx_t estimated_cardinality);
 
 	vector<LogicalType> join_key_types;
 	vector<BoundOrderByNode> lhs_orders;
@@ -37,7 +41,8 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -66,10 +71,6 @@ public:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-
-private:
-	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state) const;
 };
 
 } // namespace duckdb

@@ -1,6 +1,7 @@
 {
     "group": "logical_type_interface",
     "deprecated": false,
+    "description": "Functions to create and interact with `duckdb_logical_type`.",
     "entries": [
         {
             "name": "duckdb_create_logical_type",

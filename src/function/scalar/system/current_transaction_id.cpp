@@ -8,6 +8,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct CurrentTransactionIdData : FunctionData {
 	explicit CurrentTransactionIdData(Value transaction_id_p) : transaction_id(std::move(transaction_id_p)) {
 	}
@@ -32,11 +34,13 @@ unique_ptr<FunctionData> CurrentTransactionIdBind(ClientContext &context, Scalar
 	return make_uniq<CurrentTransactionIdData>(transaction_id);
 }
 
-static void CurrentTransactionIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void CurrentTransactionIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<CurrentTransactionIdData>();
 	result.Reference(info.transaction_id);
 }
+
+} // namespace
 
 ScalarFunction CurrentTransactionId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentTransactionIdFunction, CurrentTransactionIdBind, nullptr,

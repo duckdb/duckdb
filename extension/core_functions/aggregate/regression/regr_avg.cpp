@@ -5,6 +5,9 @@
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
+
+namespace {
+
 struct RegrState {
 	double sum;
 	size_t count;
@@ -50,6 +53,8 @@ struct RegrAvgYFunction : RegrAvgFunction {
 		state.count++;
 	}
 };
+
+} // namespace
 
 AggregateFunction RegrAvgxFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(

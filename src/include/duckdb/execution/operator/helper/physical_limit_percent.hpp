@@ -20,8 +20,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LIMIT_PERCENT;
 
 public:
-	PhysicalLimitPercent(vector<LogicalType> types, BoundLimitNode limit_val_p, BoundLimitNode offset_val_p,
-	                     idx_t estimated_cardinality);
+	PhysicalLimitPercent(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundLimitNode limit_val_p,
+	                     BoundLimitNode offset_val_p, idx_t estimated_cardinality);
 
 	BoundLimitNode limit_val;
 	BoundLimitNode offset_val;
@@ -34,7 +34,8 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

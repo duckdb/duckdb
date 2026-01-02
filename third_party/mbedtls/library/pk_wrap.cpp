@@ -489,28 +489,26 @@ static void rsa_debug(mbedtls_pk_context *pk, mbedtls_pk_debug_item *items)
 }
 
 const mbedtls_pk_info_t mbedtls_rsa_info = {
-    /* type */ MBEDTLS_PK_RSA,
-    /* name */ "RSA",
-    /* get_bitlen */ rsa_get_bitlen,
-    /* can_do */ rsa_can_do,
-    /* verify_func */ rsa_verify_wrap,
-    /* sign_func */ rsa_sign_wrap,
+    /* .type = */ MBEDTLS_PK_RSA,
+    /* .name = */ "RSA",
+    /* .get_bitlen = */ rsa_get_bitlen,
+    /* .can_do = */ rsa_can_do,
+    /* .verify_func = */ rsa_verify_wrap,
+    /* .sign_func = */ rsa_sign_wrap,
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-    /* verify_rs_func */ NULL,
-    /* sign_rs_func */ NULL,
-    /* rs_alloc_func */ NULL,
-    /* rs_free_func */ NULL,
+    /* .verify_rs_func = */ NULL,
+    /* .sign_rs_func = */ NULL,
 #endif /* MBEDTLS_ECDSA_C && MBEDTLS_ECP_RESTARTABLE */
-    /* decrypt_func */ rsa_decrypt_wrap,
-    /* encrypt_func */ rsa_encrypt_wrap,
-    /* check_pair_func */ rsa_check_pair_wrap,
-    /* ctx_alloc_func */ rsa_alloc_wrap,
-    /* ctx_free_func */  rsa_free_wrap,
+    /* .decrypt_func = */ rsa_decrypt_wrap,
+    /* .encrypt_func = */ rsa_encrypt_wrap,
+    /* .check_pair_func = */ rsa_check_pair_wrap,
+    /* .ctx_alloc_func = */ rsa_alloc_wrap,
+    /* .ctx_free_func = */ rsa_free_wrap,
 #if defined(MBEDTLS_ECDSA_C) && defined(MBEDTLS_ECP_RESTARTABLE)
-	/* rs_alloc_func */ NULL,
-	/* rs_free_func */ NULL,
+	/* .rs_alloc_func = */ NULL,
+	/* .rs_free_func = */ NULL,
 #endif
-    /* debug_func */ rsa_debug
+	/* .debug_func = */ rsa_debug
 };
 #endif /* MBEDTLS_RSA_C */
 

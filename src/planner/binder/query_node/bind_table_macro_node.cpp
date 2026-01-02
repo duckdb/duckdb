@@ -19,42 +19,27 @@ namespace duckdb {
 unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func,
                                              idx_t depth) {
 	// validate the arguments and separate positional and default arguments
-	vector<unique_ptr<ParsedExpression>> positionals;
-	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
-	auto bind_result =
-	    MacroFunction::BindMacroFunction(macro_func.macros, macro_func.name, function, positionals, defaults);
+	vector<unique_ptr<ParsedExpression>> positional_arguments;
+	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
+
+	auto bind_result = MacroFunction::BindMacroFunction(*this, macro_func.macros, macro_func.name, function,
+	                                                    positional_arguments, named_arguments, depth);
 	if (!bind_result.error.empty()) {
-		// cannot use error below as binder rnot in scope
-		// return BindResult(binder. FormatError(*expr->get(), error));
 		throw BinderException(function, bind_result.error);
 	}
-	auto &macro_def = macro_func.macros[bind_result.function_idx.GetIndex()]->Cast<TableMacroFunction>();
-	auto node = macro_def.query_node->Copy();
+	auto &macro_def = *macro_func.macros[bind_result.function_idx.GetIndex()];
 
-	// create a MacroBinding to bind this macro's parameters to its arguments
-	vector<LogicalType> types;
-	vector<string> names;
-	// positional parameters
-	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
-		types.emplace_back(LogicalTypeId::UNKNOWN);
-		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
-		names.push_back(param.GetColumnName());
-	}
-	// default parameters
-	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		types.emplace_back(LogicalTypeId::UNKNOWN);
-		names.push_back(it->first);
-		// now push the defaults into the positionals
-		positionals.push_back(std::move(defaults[it->first]));
-	}
-	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func.name);
-	new_macro_binding->arguments = &positionals;
+	auto new_macro_binding =
+	    MacroFunction::CreateDummyBinding(macro_def, macro_func.name, positional_arguments, named_arguments);
+	new_macro_binding->arguments = &positional_arguments;
 
 	// We need an ExpressionBinder so that we can call ExpressionBinder::ReplaceMacroParametersRecursive()
 	auto eb = ExpressionBinder(*this, this->context);
 
 	eb.macro_binding = new_macro_binding.get();
 	vector<unordered_set<string>> lambda_params;
+
+	auto node = macro_def.Cast<TableMacroFunction>().query_node->Copy();
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *node, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParameters(child, lambda_params); });
 

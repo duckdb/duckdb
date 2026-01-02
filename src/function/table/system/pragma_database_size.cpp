@@ -15,7 +15,7 @@ struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	}
 
 	idx_t index;
-	vector<reference<AttachedDatabase>> databases;
+	vector<shared_ptr<AttachedDatabase>> databases;
 	Value memory_usage;
 	Value memory_limit;
 };
@@ -68,7 +68,7 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 	auto &data = data_p.global_state->Cast<PragmaDatabaseSizeData>();
 	idx_t row = 0;
 	for (; data.index < data.databases.size() && row < STANDARD_VECTOR_SIZE; data.index++) {
-		auto &db = data.databases[data.index].get();
+		auto &db = *data.databases[data.index];
 		if (db.IsSystem() || db.IsTemporary()) {
 			continue;
 		}

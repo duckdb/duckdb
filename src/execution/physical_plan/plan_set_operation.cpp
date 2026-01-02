@@ -23,37 +23,47 @@ static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(const ve
 	return res;
 }
 
-static JoinCondition CreateNotDistinctComparison(const LogicalType &type, idx_t i) {
+static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i) {
 	JoinCondition cond;
 	cond.left = make_uniq<BoundReferenceExpression>(type, i);
 	cond.right = make_uniq<BoundReferenceExpression>(type, i);
 	cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+
+	ExpressionBinder::PushCollation(context, cond.left, type);
+	ExpressionBinder::PushCollation(context, cond.right, type);
+
 	return cond;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
-	D_ASSERT(op.children.size() == 2);
-
-	reference<PhysicalOperator> left = CreatePlan(*op.children[0]);
-	reference<PhysicalOperator> right = CreatePlan(*op.children[1]);
-
-	if (left.get().GetTypes() != right.get().GetTypes()) {
-		throw InvalidInputException("Type mismatch for SET OPERATION");
+	ArenaLinkedList<reference<PhysicalOperator>> children(physical_plan->ArenaRef());
+	for (auto &child : op.children) {
+		children.push_back(CreatePlan(*child));
+	}
+	for (idx_t i = 1; i < children.size(); i++) {
+		if (children[i].get().GetTypes() != children[0].get().GetTypes()) {
+			throw InvalidInputException("Type mismatch for SET OPERATION");
+		}
 	}
 
 	optional_ptr<PhysicalOperator> result;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result = Make<PhysicalUnion>(op.types, left, right, op.estimated_cardinality, op.allow_out_of_order);
+		result = Make<PhysicalUnion>(op.types, std::move(children), op.estimated_cardinality, op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		if (children.size() != 2) {
+			throw InternalException("EXCEPT / INTERSECT must have exactly two children");
+		}
+		auto &left = children[0];
+		auto &right = children[1];
 		auto &types = left.get().GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
 		for (idx_t i = 0; i < types.size(); i++) {
-			conditions.push_back(CreateNotDistinctComparison(types[i], i));
+			conditions.push_back(CreateNotDistinctComparison(context, types[i], i));
 		}
 		// For EXCEPT ALL / INTERSECT ALL we push a window operator with a ROW_NUMBER into the scans and join to get bag
 		// semantics.
@@ -74,7 +84,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 			right = right_window;
 
 			// add window expression result to join condition
-			conditions.push_back(CreateNotDistinctComparison(LogicalType::BIGINT, types.size()));
+			conditions.push_back(CreateNotDistinctComparison(context, LogicalType::BIGINT, types.size()));
 			// join (created below) now includes the row number result column
 			op.types.push_back(LogicalType::BIGINT);
 		}

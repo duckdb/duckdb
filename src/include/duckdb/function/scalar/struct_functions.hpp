@@ -76,4 +76,36 @@ struct StructConcatFun {
 	static ScalarFunction GetFunction();
 };
 
+struct StructContainsFun {
+	static constexpr const char *Name = "struct_contains";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Check if an unnamed STRUCT contains the value.";
+	static constexpr const char *Example = "struct_contains(ROW(3, 3, 0), 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StructHasFun {
+	using ALIAS = StructContainsFun;
+
+	static constexpr const char *Name = "struct_has";
+};
+
+struct StructPositionFun {
+	static constexpr const char *Name = "struct_position";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Get the position of the entry in an unnamed STRUCT, starting at 1.";
+	static constexpr const char *Example = "struct_position(ROW(3, 3, 0), 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StructIndexofFun {
+	using ALIAS = StructPositionFun;
+
+	static constexpr const char *Name = "struct_indexof";
+};
+
 } // namespace duckdb

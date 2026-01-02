@@ -37,6 +37,9 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 
 	auto entry = input.named_parameters.find("redact");
 	if (entry != input.named_parameters.end()) {
+		if (entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for redact");
+		}
 		if (BooleanValue::Get(entry->second)) {
 			result->redact = SecretDisplayType::REDACTED;
 		} else {

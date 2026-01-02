@@ -59,6 +59,12 @@ MemoryStream &MemoryStream::operator=(MemoryStream &&other) noexcept {
 }
 
 void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
+	GrowCapacity(write_size);
+	memcpy(data + position, source, write_size);
+	position += write_size;
+}
+
+void MemoryStream::GrowCapacity(idx_t write_size) {
 	const auto old_capacity = capacity;
 	while (position + write_size > capacity) {
 		if (allocator) {
@@ -70,11 +76,13 @@ void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
 	if (capacity != old_capacity) {
 		data = allocator->ReallocateData(data, old_capacity, capacity);
 	}
-	memcpy(data + position, source, write_size);
-	position += write_size;
 }
 
 void MemoryStream::ReadData(data_ptr_t destination, idx_t read_size) {
+	ReadData(QueryContext(), destination, read_size);
+}
+
+void MemoryStream::ReadData(QueryContext context, data_ptr_t destination, idx_t read_size) {
 	if (position + read_size > capacity) {
 		throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
 	}

@@ -9,6 +9,8 @@
 
 namespace duckdb {
 
+namespace {
+
 // length returns the number of unicode codepoints
 struct StringLengthOperator {
 	template <class TA, class TR>
@@ -55,13 +57,13 @@ struct BitStringLenOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>;
+		expr.function.SetFunctionCallback(ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
 	}
 	return nullptr;
 }
@@ -69,7 +71,7 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 //------------------------------------------------------------------
 // ARRAY / LIST LENGTH
 //------------------------------------------------------------------
-static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
 	UnaryExecutor::Execute<list_entry_t, int64_t>(
@@ -79,7 +81,7 @@ static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
-static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
 	UnifiedVectorFormat format;
@@ -108,17 +110,17 @@ static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector 
 	}
 }
 
-static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
+                                               vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	const auto &arg_type = arguments[0]->return_type.id();
 	if (arg_type == LogicalTypeId::ARRAY) {
-		bound_function.function = ArrayLengthFunction;
+		bound_function.SetFunctionCallback(ArrayLengthFunction);
 	} else if (arg_type == LogicalTypeId::LIST) {
-		bound_function.function = ListLengthFunction;
+		bound_function.SetFunctionCallback(ListLengthFunction);
 	} else {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
@@ -130,7 +132,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, Sc
 //------------------------------------------------------------------
 // ARRAY / LIST WITH DIMENSION
 //------------------------------------------------------------------
-static void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector &result) {
+void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto type = args.data[0].GetType();
 	auto &input = args.data[0];
 	auto &dimension = args.data[1];
@@ -161,7 +163,7 @@ struct ArrayLengthBinaryFunctionData : public FunctionData {
 	}
 };
 
-static void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto type = args.data[0].GetType();
 	auto &dimension = args.data[1];
 
@@ -183,15 +185,15 @@ static void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, V
 	}
 }
 
-static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,
-                                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,
+                                                     vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	auto type = arguments[0]->return_type;
 	if (type.id() == LogicalTypeId::ARRAY) {
 		bound_function.arguments[0] = type;
-		bound_function.function = ArrayLengthBinaryFunction;
+		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);
 
 		// If the input is an array, the dimensions are constant, so we can calculate them at bind time
 		vector<int64_t> dimensions;
@@ -208,7 +210,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		return std::move(data);
 
 	} else if (type.id() == LogicalTypeId::LIST) {
-		bound_function.function = ListLengthBinaryFunction;
+		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
 		bound_function.arguments[0] = type;
 		return nullptr;
 	} else {
@@ -216,6 +218,8 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		throw BinderException("array_length can only be used on arrays or lists");
 	}
 }
+
+} // namespace
 
 ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
@@ -244,7 +248,7 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
 	for (auto &func : array_length.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return (array_length);
 }

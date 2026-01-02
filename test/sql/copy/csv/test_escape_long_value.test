@@ -9,7 +9,7 @@ PRAGMA enable_verification
 loop buffer_size 28 50
 
 statement ok
-CREATE TABLE T AS FROM read_csv('data/csv/big_escape.csv', buffer_size = ${buffer_size}, quote = '"', escape = '"', delim = ';', columns = {'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, auto_detect = false)
+CREATE TABLE T AS FROM read_csv('{DATA_DIR}/csv/big_escape.csv', buffer_size = ${buffer_size}, quote = '"', escape = '"', delim = ';', columns = {'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, auto_detect = false)
 
 query I
 select count(*) from T;
@@ -27,7 +27,7 @@ statement ok
 CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);
 
 query I
-COPY long_escaped_value FROM 'data/csv/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE, QUOTE '"', ESCAPE '"');
+COPY long_escaped_value FROM '{DATA_DIR}/csv/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE, QUOTE '"', ESCAPE '"');
 ----
 1
 
@@ -42,7 +42,7 @@ statement ok
 CREATE TABLE long_escaped_value_unicode (a INTEGER, b INTEGER, c VARCHAR);
 
 query I
-COPY long_escaped_value_unicode FROM 'data/csv/test/long_escaped_value_unicode.csv';
+COPY long_escaped_value_unicode FROM '{DATA_DIR}/csv/test/long_escaped_value_unicode.csv';
 ----
 1
 

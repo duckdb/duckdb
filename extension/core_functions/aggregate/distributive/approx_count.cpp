@@ -11,6 +11,8 @@ namespace duckdb {
 // Algorithms from
 // "New cardinality estimation algorithms for HyperLogLog sketches"
 // Otmar Ertl, arXiv:1702.01284
+namespace {
+
 struct ApproxDistinctCountState {
 	HyperLogLog hll;
 };
@@ -36,8 +38,8 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
-static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count,
-                                                    data_ptr_t state, idx_t count) {
+void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, data_ptr_t state,
+                                             idx_t count) {
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
 
@@ -51,8 +53,8 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
 	agg_state->hll.Update(input, hash_vec, count);
 }
 
-static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count,
-                                              Vector &state_vector, idx_t count) {
+void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
+                                       idx_t count) {
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
 	UnifiedVectorFormat idata;
@@ -88,9 +90,11 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctSimpleUpdateFunction);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
+
+} // namespace
 
 AggregateFunction ApproxCountDistinctFun::GetFunction() {
 	return GetApproxCountDistinctFunction(LogicalType::ANY);

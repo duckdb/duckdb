@@ -1,0 +1,11 @@
+# name: test/fuzzer/public/pragma_named_parameters.test
+# description: Test pragma with named parameter that should throw normal exception
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement error
+PRAGMA e=r=0,0;
+----
+Parser Error: PRAGMA statement with assignment cannot have named parameters

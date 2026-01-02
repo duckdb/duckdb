@@ -2,9 +2,6 @@
 # description: Test Sequence Macro
 # group: [function]
 
-require skip_reload
-
-
 statement ok
 CREATE TABLE integers (i INT)
 

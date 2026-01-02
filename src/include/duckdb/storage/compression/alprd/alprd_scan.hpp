@@ -158,7 +158,15 @@ public:
 		// Load the vector data
 		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
+
+		const bool uncompressed_mode = vector_state.exceptions_count == AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			if (!SKIP) {
+				// Read uncompressed values
+				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			}
+			return;
+		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
@@ -208,7 +216,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpRDInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(segment);
 	return result;
 }
@@ -223,7 +231,7 @@ void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values
-	auto current_result_ptr = FlatVector::GetData<EXACT_TYPE>(result);
+	auto current_result_ptr = FlatVector::GetDataUnsafe<EXACT_TYPE>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	current_result_ptr += result_offset;
 

@@ -73,7 +73,7 @@ struct DecimalScaleUpCheckOperator {
 };
 
 template <class SOURCE, class DEST, class POWERS_SOURCE, class POWERS_DEST>
-bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto source_scale = DecimalType::GetScale(source.GetType());
 	auto source_width = DecimalType::GetWidth(source.GetType());
 	auto result_scale = DecimalType::GetScale(result.GetType());
@@ -116,7 +116,7 @@ struct DecimalScaleDownOperator {
 
 // This function detects if we can scale a decimal down to another.
 template <class INPUT_TYPE>
-bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) {
+static bool CanScaleDownDecimal(INPUT_TYPE input, DecimalScaleInput<INPUT_TYPE> &data) {
 	int64_t divisor = UnsafeNumericCast<int64_t>(NumericHelper::POWERS_OF_TEN[data.source_scale]);
 	auto value = input % divisor;
 	auto rounded_input = input;
@@ -160,7 +160,7 @@ struct DecimalScaleDownCheckOperator {
 };
 
 template <class SOURCE, class DEST, class POWERS_SOURCE>
-bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto source_scale = DecimalType::GetScale(source.GetType());
 	auto source_width = DecimalType::GetWidth(source.GetType());
 	auto result_scale = DecimalType::GetScale(result.GetType());

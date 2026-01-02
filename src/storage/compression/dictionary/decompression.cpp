@@ -48,10 +48,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		return;
 	}
 
-	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
 	dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
-	FlatVector::SetNull(*dictionary, 0, true);
+	auto dict_child_data = FlatVector::GetData<string_t>(dictionary->data);
+	FlatVector::SetNull(dictionary->data, 0, true);
 	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(i);
@@ -90,11 +90,11 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
                                                        idx_t start, idx_t scan_count) {
-	D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
 	D_ASSERT(result_offset == 0);
 
-	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count);
+	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
 
 	// Create a selection vector of sufficient size if we don't already have one.
 	if (!sel_vec || sel_vec_size < decompress_count) {
@@ -104,12 +104,17 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 
 	// Scanning 2048 values, emitting a dict vector
 	data_ptr_t dst = data_ptr_cast(sel_vec->data());
-	data_ptr_t src = data_ptr_cast(&base_data[(start * current_width) / 8]);
+	data_ptr_t src = data_ptr_cast(&base_data[((start - start_offset) * current_width) / 8]);
 
-	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, current_width);
+	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, decompress_count, current_width);
 
-	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
-	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+	if (start_offset != 0) {
+		for (idx_t i = 0; i < scan_count; i++) {
+			sel_vec->set_index(i, sel_vec->get_index(i + start_offset));
+		}
+	}
+
+	result.Dictionary(dictionary, *sel_vec);
 }
 
 } // namespace duckdb

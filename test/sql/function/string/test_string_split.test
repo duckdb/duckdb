@@ -346,12 +346,15 @@ select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
 statement error
 select string_split()
 ----
+<REGEX>:.*Binder Error.*No function matches.*
 
 statement error
 select string_split('a')
 ----
+<REGEX>:.*Binder Error.*No function matches.*
 
 # incorrect regex
 statement error
 SELECT string_split_regex(a, '[') FROM test ORDER BY a;
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

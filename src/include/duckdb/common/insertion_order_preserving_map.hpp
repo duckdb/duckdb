@@ -95,6 +95,10 @@ public:
 		map.resize(nz);
 	}
 
+	void clear() { // NOLINT: match stl API
+		map.clear();
+	}
+
 	void insert(const string &key, V &&value) { // NOLINT: match stl API
 		if (contains(key)) {
 			return;
@@ -146,6 +150,14 @@ public:
 			insert(key, std::move(v));
 		}
 		return map[map_idx[key]].second;
+	}
+
+	bool operator==(const InsertionOrderPreservingMap &other) const {
+		return map == other.map && map_idx == other.map_idx;
+	}
+
+	bool operator!=(const InsertionOrderPreservingMap &other) const {
+		return !(*this == other);
 	}
 };
 

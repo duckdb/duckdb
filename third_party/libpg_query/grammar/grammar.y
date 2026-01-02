@@ -60,6 +60,7 @@
 	PGInsertColumnOrder bynameorposition;
 	PGLoadInstallType loadinstalltype;
 	PGTransactionStmtType transactiontype;
+	PGMergeAction mergeaction;
 }
 
 %type <node> stmt
@@ -78,7 +79,7 @@
  */
 %token <str>	IDENT FCONST SCONST BCONST XCONST Op
 %token <ival>	ICONST PARAM
-%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER INTEGER_DIVISION POWER_OF LAMBDA_ARROW DOUBLE_ARROW
+%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER INTEGER_DIVISION POWER_OF SINGLE_ARROW DOUBLE_ARROW SINGLE_COLON
 %token			LESS_EQUALS GREATER_EQUALS NOT_EQUALS
 
 /*
@@ -105,10 +106,11 @@
 
 
 /* Precedence: lowest to highest */
+%left	SINGLE_COLON
 %nonassoc	SET				/* see */
 %left		UNION EXCEPT
 %left		INTERSECT
-%left		LAMBDA_ARROW DOUBLE_ARROW
+%left		SINGLE_ARROW DOUBLE_ARROW
 %left		OR
 %left		AND
 %right		NOT

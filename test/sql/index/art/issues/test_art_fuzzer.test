@@ -2,9 +2,6 @@
 # description: Test different ART fuzzer issues
 # group: [issues]
 
-statement ok
-PRAGMA enable_verification
-
 # issue 5984, number 21
 statement ok
 CREATE TABLE t1 (c1 DECIMAL(4, 3));

@@ -9,7 +9,10 @@ statement ok
 CREATE TABLE integers2 AS SELECT * FROM (VALUES (1), (2), (NULL)) tbl(i);
 
 statement ok
-PRAGMA enable_verification
+CREATE TABLE t1 AS SELECT * FROM (VALUES (1)) tbl(c0);
+
+statement ok
+CREATE TABLE t2 AS SELECT * FROM (VALUES (NULL)) tbl(c0);
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
@@ -70,3 +73,22 @@ SELECT * FROM integers WHERE i>j ORDER BY i;
 ----
 10	1
 20	2
+
+# relate issue 17338
+query II
+SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
+----
+
+statement ok
+INSERT INTO t2 VALUES(1);
+
+# t2.c0>=t2.c0 means always true or null which is equals to is not null
+query II
+EXPLAIN SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
+----
+logical_opt	<REGEX>:.*IS NOT NULL.*
+
+query II
+SELECT * FROM t1 INNER JOIN t2 ON ((t2.c0)>=(t2.c0));
+----
+1	1

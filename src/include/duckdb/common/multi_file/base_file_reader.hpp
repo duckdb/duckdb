@@ -19,9 +19,14 @@
 
 namespace duckdb {
 
+class BaseStatistics;
+class BaseUnionData;
+struct GlobalTableFunctionState;
+struct LocalTableFunctionState;
+
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
-class BaseFileReader {
+class BaseFileReader : public enable_shared_from_this<BaseFileReader> {
 public:
 	explicit BaseFileReader(OpenFileInfo file_p) : file(std::move(file_p)) {
 	}
@@ -55,7 +60,6 @@ public:
 	const string &GetFileName() {
 		return file.path;
 	}
-	virtual string GetReaderType() const = 0;
 	virtual bool UseCastMap() const {
 		//! Whether or not to push casts into the cast map
 		return false;
@@ -64,6 +68,25 @@ public:
 	virtual void AddVirtualColumn(column_t virtual_column_id) {
 		throw InternalException("Reader %s does not support AddVirtualColumn", GetReaderType());
 	}
+
+public:
+	DUCKDB_API virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
+	//! Get statistics for a specific column
+	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
+	//! Prepare reader for scanning
+	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
+
+	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                               LocalTableFunctionState &lstate) = 0;
+	//! Scan a chunk from the read state
+	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
+	//! Finish scanning a given file
+	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
+	//! Get progress within a given file
+	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
+
+	virtual string GetReaderType() const = 0;
 
 public:
 	template <class TARGET>
@@ -112,6 +135,8 @@ public:
 	const string &GetFileName() {
 		return file.path;
 	}
+
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
 
 public:
 	template <class TARGET>

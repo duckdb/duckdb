@@ -2,8 +2,6 @@
 # description: Test duckdb_views function
 # group: [table_function]
 
-require noforcestorage
-
 query I
 SELECT COUNT(*) FROM duckdb_views;
 ----
@@ -21,16 +19,34 @@ CREATE SCHEMA myschema;
 statement ok
 CREATE VIEW myschema.v2 AS SELECT 42;
 
-query IIII
-SELECT database_name, schema_name, view_name, temporary FROM duckdb_views() WHERE NOT internal ORDER BY view_name;
+query III
+SELECT schema_name, view_name, temporary
+FROM duckdb_views() WHERE NOT internal ORDER BY ALL;
 ----
-memory	main	v1	False
-memory	myschema	v2	False
-temp	main	v2	True
+main	v1	False
+main	v2	True
+myschema	v2	False
 
-query IIII
-SELECT database_name, schema_name, view_name, temporary FROM duckdb_views ORDER BY view_name;
+query I
+SELECT database_name = current_database() OR database_name = 'temp'
+FROM duckdb_views() WHERE NOT internal ORDER BY view_name;
 ----
-memory	main	v1	False
-memory	myschema	v2	False
-temp	main	v2	True
+True
+True
+True
+
+query III
+SELECT schema_name, view_name, temporary
+FROM duckdb_views ORDER BY ALL;
+----
+main	v1	False
+main	v2	True
+myschema	v2	False
+
+query I
+SELECT database_name = current_database() OR database_name = 'temp'
+FROM duckdb_views ORDER BY view_name;
+----
+True
+True
+True

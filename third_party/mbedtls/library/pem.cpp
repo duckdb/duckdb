@@ -243,7 +243,10 @@ exit:
 #if defined(MBEDTLS_DES_C) || defined(MBEDTLS_AES_C)
 static int pem_check_pkcs_padding(unsigned char *input, size_t input_len, size_t *data_len)
 {
-    /* input_len > 0 is guaranteed by mbedtls_pem_read_buffer(). */
+    /* input_len > 0 is not guaranteed by mbedtls_pem_read_buffer(). */
+    if (input_len < 1) {
+        return MBEDTLS_ERR_PEM_INVALID_DATA;
+    }
     size_t pad_len = input[input_len - 1];
     size_t i;
 
@@ -416,7 +419,7 @@ int mbedtls_pem_read_buffer(mbedtls_pem_context *ctx, const char *header, const 
         return MBEDTLS_ERR_PEM_BAD_INPUT_DATA;
     }
 
-    if ((buf = (unsigned char *)mbedtls_calloc(1, len)) == NULL) {
+    if ((buf = (unsigned char *) mbedtls_calloc(1, len)) == NULL) {
         return MBEDTLS_ERR_PEM_ALLOC_FAILED;
     }
 

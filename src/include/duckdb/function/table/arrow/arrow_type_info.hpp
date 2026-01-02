@@ -21,6 +21,8 @@ namespace duckdb {
 
 class ArrowType;
 
+enum class ArrowArrayPhysicalType : uint8_t { DICTIONARY_ENCODED, RUN_END_ENCODED, DEFAULT };
+
 struct ArrowTypeInfo {
 public:
 	explicit ArrowTypeInfo() : type() {
@@ -82,6 +84,23 @@ public:
 
 private:
 	ArrowDateTimeType size_type;
+};
+
+enum class DecimalBitWidth : uint8_t { DECIMAL_32, DECIMAL_64, DECIMAL_128, DECIMAL_256 };
+
+struct ArrowDecimalInfo final : public ArrowTypeInfo {
+public:
+	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::DECIMAL;
+
+public:
+	explicit ArrowDecimalInfo(DecimalBitWidth bit_width);
+	~ArrowDecimalInfo() override;
+
+public:
+	DecimalBitWidth GetBitWidth() const;
+
+private:
+	DecimalBitWidth bit_width;
 };
 
 struct ArrowStringInfo : public ArrowTypeInfo {

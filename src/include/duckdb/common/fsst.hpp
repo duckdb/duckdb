@@ -28,7 +28,8 @@ private:
 	// The decode will overflow a bit into "extra_space", but "str" will contain the full string
 	struct StringWithExtraSpace {
 		string_t str;
-		uint64_t extra_space[string_t::INLINE_LENGTH];
+		// INLINE_BYTES instead of INLINE_LENGTH so this isn't 0-length array when building with DUCKDB_DEBUG_NO_INLINE
+		uint64_t extra_space[string_t::INLINE_BYTES];
 	};
 
 public:
@@ -56,7 +57,7 @@ public:
 			                  decompressed_string_size, string_t::INLINE_LENGTH);
 		}
 		D_ASSERT(decompressed_string_size <= string_t::INLINE_LENGTH);
-		result.str.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(decompressed_string_size));
+		result.str.SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(decompressed_string_size), string_t::INLINE_LENGTH);
 		return result.str;
 	}
 	static string DecompressValue(void *duckdb_fsst_decoder, const char *compressed_string,

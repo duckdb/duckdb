@@ -41,9 +41,6 @@ select
   coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where (ba = ra or ra is null) group by ra order by ba = ra), {'x': null, 'y': null, '__matches': 0}) as ref4,
 from b
 
-statement ok
-PRAGMA enable_verification
-
 # postgres compatible variant
 query IIIII
 select

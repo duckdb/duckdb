@@ -10,7 +10,7 @@ CREATE TABLE t1 AS SELECT i as v1, i as v2 from range (0,1000) t(i);
 CREATE TABLE t2 AS SELECT i as v1, i as v2 from range (0,10000000) t(i);
 
 run
-SELECT t1.v2,t2.v2,count(*) from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2  limit 5
+SELECT t1.v2 AS c0,t2.v2 AS c1, count(*) AS c2 from t1 inner join t2 on (t1.v1 = t2.v1) group by t1.v2,t2.v2 order by t1.v2  limit 5
 
 result III
 0	0	1

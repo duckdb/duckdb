@@ -1,0 +1,28 @@
+# name: benchmark/tpch/upsert/bulk_upsert_full_table.benchmark
+# description: Bulk upsert on a full table
+# group: [upsert]
+
+argument sf 1
+
+require tpch
+
+load
+CALL dbgen(sf=${sf});
+CREATE TABLE target_lineitem AS SELECT * REPLACE (0 AS l_partkey, 0 as l_suppkey) FROM lineitem;
+ALTER TABLE target_lineitem
+  ADD CONSTRAINT lineitem_pkey
+     PRIMARY KEY (L_ORDERKEY, L_LINENUMBER);
+
+run
+INSERT OR REPLACE INTO target_lineitem FROM lineitem
+
+cleanup
+DROP TABLE target_lineitem;
+CREATE TABLE target_lineitem AS SELECT * REPLACE (0 AS l_partkey, 0 as l_suppkey) FROM lineitem;
+ALTER TABLE target_lineitem
+  ADD CONSTRAINT lineitem_pkey
+     PRIMARY KEY (L_ORDERKEY, L_LINENUMBER);
+
+result_query IIIIIIIIIIIIIIII
+SELECT * FROM target_lineitem EXCEPT FROM lineitem
+----

@@ -18,7 +18,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = 2 and t2.i = 4) or (t1.i = 0 and t2.i = 2)
 ----
-physical_plan	<REGEX>:.*FILTER.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*Filters.*
 
 # not if the constants are volatile however
 query II
@@ -62,7 +62,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = t2.i and t1.i > 7) or (t1.i != t2.i and t1.i < 3)
 ----
-physical_plan	<REGEX>:.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*
 
 # a predicate for a column must show up on both sides,
 # so, adding a predicate for t2.i to only one side won't create a filter
@@ -93,7 +93,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = t2.i and t1.i > 7 and t2.i = 0) or (t1.i != t2.i and t1.i < 3 and t2.i = 5)
 ----
-physical_plan	<REGEX>:.*FILTER.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*Filters.*
 
 # one side filters t1, and the other side filter t2, so we can't derive a filter
 query I
@@ -123,7 +123,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4)
 ----
-physical_plan	<REGEX>:.*FILTER.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*Filters.*
 
 # not everything in the OR needs to be an AND
 # we can still derive one filter (on t2.i)
@@ -139,7 +139,7 @@ explain select count(*)
 from test t1, test t2
 where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4) or (t2.i = 8)
 ----
-physical_plan	<REGEX>:.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*
 
 # also works if we have a restriction i on and j, just needs to be the same table
 query I
@@ -232,7 +232,7 @@ ORDER BY
     cust_nation,
     l_year;
 ----
-physical_plan	<REGEX>:.*FILTER.*FILTER.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*Filters.*Filters.*
 
 # results should still be the same
 query IIII
@@ -251,4 +251,4 @@ ON ((n1.n_name = 'FRANCE'
     OR (n1.n_name = 'GERMANY'
         AND n2.n_name = 'FRANCE'))
 ----
-physical_plan	<REGEX>:.*FILTER.*FILTER.*
+physical_plan	<REGEX>:.*Filters.*Filters.*

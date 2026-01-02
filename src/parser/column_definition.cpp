@@ -1,8 +1,8 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 
@@ -122,16 +122,13 @@ bool ColumnDefinition::Generated() const {
 // Generated Columns (VIRTUAL)
 //===--------------------------------------------------------------------===//
 
-static void VerifyColumnRefs(ParsedExpression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr.Cast<ColumnRefExpression>();
+static void VerifyColumnRefs(const ParsedExpression &expr) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(expr, [&](const ColumnRefExpression &column_ref) {
 		if (column_ref.IsQualified()) {
 			throw ParserException(
 			    "Qualified (tbl.name) column references are not allowed inside of generated column expressions");
 		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { VerifyColumnRefs((ParsedExpression &)child); });
+	});
 }
 
 static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {

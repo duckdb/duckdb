@@ -1,1 +1,0 @@
-VacuumStatement <- 'VACUUM'i 'FULL'i? QualifiedName?

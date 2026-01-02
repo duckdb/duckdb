@@ -23,6 +23,10 @@ BufferedFileReader::BufferedFileReader(FileSystem &fs, unique_ptr<FileHandle> ha
 }
 
 void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) {
+	ReadData(QueryContext(), target_buffer, read_size);
+}
+
+void BufferedFileReader::ReadData(QueryContext context, data_ptr_t target_buffer, uint64_t read_size) {
 	// first copy anything we can from the buffer
 	data_ptr_t end_ptr = target_buffer + read_size;
 	while (true) {

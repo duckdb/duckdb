@@ -2,9 +2,12 @@
 # description: Pivot with non-aggregate function
 # group: [duckfuzz]
 
+require icu;
+
 statement ok
 PRAGMA enable_verification
 
 statement error
 FROM (VALUES (42)) t(i) PIVOT (current_date() FOR (i) IN (41))
 ----
+Binder Error: Pivot expression must contain exactly one aggregate

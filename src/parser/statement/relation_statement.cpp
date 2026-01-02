@@ -5,10 +5,7 @@ namespace duckdb {
 
 RelationStatement::RelationStatement(shared_ptr<Relation> relation_p)
     : SQLStatement(StatementType::RELATION_STATEMENT), relation(std::move(relation_p)) {
-	if (relation->type == RelationType::QUERY_RELATION) {
-		auto &query_relation = relation->Cast<QueryRelation>();
-		query = query_relation.query;
-	}
+	query = relation->GetQuery();
 }
 
 unique_ptr<SQLStatement> RelationStatement::Copy() const {

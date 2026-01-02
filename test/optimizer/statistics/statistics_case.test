@@ -3,9 +3,6 @@
 # group: [statistics]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok

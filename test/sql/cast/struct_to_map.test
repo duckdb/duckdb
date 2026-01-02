@@ -1,0 +1,354 @@
+# name: test/sql/cast/struct_to_map.test
+# group: [cast]
+
+# enable query verification
+statement ok
+PRAGMA enable_verification
+
+# Basic functionality tests
+
+# Simple cast - VARCHAR keys to VARCHAR values
+query I
+SELECT {"name": 'Alice', "city": 'NYC'}::MAP(VARCHAR, VARCHAR);
+----
+{name=Alice, city=NYC}
+
+# Simple cast - VARCHAR keys to INT values
+query I
+SELECT {"age": 25, "score": 100}::MAP(VARCHAR, INT);
+----
+{age=25, score=100}
+
+# Multiple rows with same field structure
+query I
+SELECT col::MAP(VARCHAR, INT)
+FROM VALUES ({"duck": 1}),({"duck": 2}),({"duck": 3}),({"duck": 4}),({"duck": 5})
+AS tab(col);
+----
+{duck=1}
+{duck=2}
+{duck=3}
+{duck=4}
+{duck=5}
+
+# Multiple fields in a single struct
+query I
+SELECT {"name": 'Alice', "age": 25, "score": 95}::MAP(VARCHAR, VARCHAR);
+----
+{name=Alice, age=25, score=95}
+
+# Key type casting tests
+
+# Cast VARCHAR keys to INT keys (keeps null values)
+query I
+SELECT col::MAP(INT, INT)
+FROM VALUES ({"1": 1}),({"2": 2}),({"3": 3}),({"4": 4}),({"5": 5})
+AS tab(col);
+----
+{1=1, 2=NULL, 3=NULL, 4=NULL, 5=NULL}
+{1=NULL, 2=2, 3=NULL, 4=NULL, 5=NULL}
+{1=NULL, 2=NULL, 3=3, 4=NULL, 5=NULL}
+{1=NULL, 2=NULL, 3=NULL, 4=4, 5=NULL}
+{1=NULL, 2=NULL, 3=NULL, 4=NULL, 5=5}
+
+# Cast VARCHAR keys to BIGINT keys
+query I
+SELECT {"123456789": 42}::MAP(BIGINT, INT);
+----
+{123456789=42}
+
+# Cast VARCHAR keys to DOUBLE keys
+query I
+SELECT {"3.14": 100}::MAP(DOUBLE, INT);
+----
+{3.14=100}
+
+# Value type casting tests
+
+# Cast INT values to VARCHAR
+query I
+SELECT {"age": 25, "score": 100}::MAP(VARCHAR, VARCHAR);
+----
+{age=25, score=100}
+
+# Cast different numeric types to BIGINT
+query I
+SELECT {"small": 1, "big": 999999999}::MAP(VARCHAR, BIGINT);
+----
+{small=1, big=999999999}
+
+# Cast to DOUBLE values
+query I
+SELECT {"pi": 3, "e": 2}::MAP(VARCHAR, DOUBLE);
+----
+{pi=3.0, e=2.0}
+
+# Mixed type casting - both keys and values
+query I
+SELECT {"1": 100, "2": 200}::MAP(INT, BIGINT);
+----
+{1=100, 2=200}
+
+# NULL handling tests
+
+# NULL struct becomes NULL map
+query I
+SELECT (NULL::STRUCT(name VARCHAR, age INT))::MAP(VARCHAR, VARCHAR);
+----
+NULL
+
+# NULL field values are preserved
+query I
+SELECT {"name": 'Alice', "age": NULL}::MAP(VARCHAR, VARCHAR);
+----
+{name=Alice, age=NULL}
+
+# Multiple NULL values
+query I
+SELECT {"a": NULL, "b": NULL, "c": 'value'}::MAP(VARCHAR, VARCHAR);
+----
+{a=NULL, b=NULL, c=value}
+
+# Constant vector tests
+
+# Single constant struct
+query I
+SELECT x::MAP(VARCHAR, INT) FROM (SELECT {"constant": 42} as x FROM range(5));
+----
+{constant=42}
+{constant=42}
+{constant=42}
+{constant=42}
+{constant=42}
+
+# Complex nested type tests
+
+# STRUCT values to STRUCT values
+query I
+SELECT {"person": {"name": 'Alice', "age": 25}}::MAP(VARCHAR, STRUCT(name VARCHAR, age INT));
+----
+{person={'name': Alice, 'age': 25}}
+
+# LIST values to LIST values
+query I
+SELECT {"numbers": [1,2,3], "letters": ['a','b']}::MAP(VARCHAR, VARCHAR[]);
+----
+{numbers=[1, 2, 3], letters=[a, b]}
+
+# Nested MAP values
+query I
+SELECT {meta: MAP{'key': 'value'}}::MAP(VARCHAR, MAP(VARCHAR, VARCHAR));
+----
+{meta={key=value}}
+
+# Complex nested structure
+query I
+SELECT col::MAP(VARCHAR, MAP(VARCHAR, INT))
+FROM VALUES ({ data: MAP{'count': 10, 'total': 100} })
+AS tab(col);
+----
+{data={count=10, total=100}}
+
+# Edge cases
+
+# Constant vector select
+query I
+SELECT {"value": 42}::MAP(VARCHAR, INT)
+FROM range(1, 1001)
+LIMIT 5;
+----
+{value=42}
+{value=42}
+{value=42}
+{value=42}
+{value=42}
+
+# Make sure nothing breaks if we change the vector type
+statement ok
+pragma debug_verify_vector='dictionary_expression'
+
+query I
+SELECT TRY_CAST(col AS MAP(VARCHAR, integer))
+FROM (
+    SELECT CASE WHEN (i % 5 == 0) THEN NULL else {'a': i::varchar} END as col
+    FROM range(1, 1001) t(i)
+)
+LIMIT 5;
+----
+{a=1}
+{a=2}
+{a=3}
+{a=4}
+NULL
+
+statement ok
+pragma debug_verify_vector='none'
+
+# Single field struct
+query I
+SELECT {"single": 'value'}::MAP(VARCHAR, VARCHAR);
+----
+{single=value}
+
+# Large number of fields
+query I
+SELECT {
+    "f1": 1, "f2": 2, "f3": 3, "f4": 4, "f5": 5,
+    "f6": 6, "f7": 7, "f8": 8, "f9": 9, "f10": 10
+}::MAP(VARCHAR, INT);
+----
+{f1=1, f2=2, f3=3, f4=4, f5=5, f6=6, f7=7, f8=8, f9=9, f10=10}
+
+# Error cases
+
+# Cannot cast unnamed struct to MAP
+statement error
+SELECT (1, 2, 3)::MAP(INT, INT);
+----
+Cannot cast unnamed STRUCTs to MAP
+
+# Key casting can fail
+statement error
+SELECT col::MAP(INT, INT)
+FROM VALUES ({"duck": 1}),({"goose": 2})
+AS tab(col);
+----
+Conversion Error: Could not convert string 'duck' to INT32
+
+# Value casting can fail  
+statement error
+SELECT {"number": 'not_a_number'}::MAP(VARCHAR, INT);
+----
+Conversion Error: Could not convert string 'not_a_number' to INT32
+
+# Special character handling in keys
+
+# Keys with spaces
+query I
+SELECT {"first name": 'Alice', "last name": 'Smith'}::MAP(VARCHAR, VARCHAR);
+----
+{first name=Alice, last name=Smith}
+
+# Keys with special characters
+query I
+SELECT {"key-with-dashes": 1, "key_with_underscores": 2, "key.with.dots": 3}::MAP(VARCHAR, INT);
+----
+{key-with-dashes=1, key_with_underscores=2, key.with.dots=3}
+
+# Unicode keys
+query I
+SELECT {"测试": 'test', "🦆": 'duck'}::MAP(VARCHAR, VARCHAR);
+----
+{测试=test, 🦆=duck}
+
+# Case sensitivity preservation
+query I
+SELECT {"CamelCase": 1, "lowercase": 2, "UPPERCASE": 3}::MAP(VARCHAR, INT);
+----
+{CamelCase=1, lowercase=2, UPPERCASE=3}
+
+# Performance and batching tests
+
+# Large batch of rows
+query I
+SELECT col::MAP(VARCHAR, INT)
+FROM (
+    SELECT {"value": i} as col 
+    FROM range(1, 1001) t(i)
+) 
+LIMIT 5;
+----
+{value=1}
+{value=2}
+{value=3}
+{value=4}
+{value=5}
+
+# Mixed field counts across rows
+query I
+SELECT col::MAP(VARCHAR, VARCHAR)
+FROM VALUES 
+    ({"a": '1'}),
+    ({"A": '1', "b": '2'}),
+    ({"a": '1', "B": '2', "c": '3'}),
+    ({"x": 'single'}),
+    ({"many": '1', "fields": '2', "here": '3', "total": '4', "five": '5'})
+AS tab(col);
+----
+{a=1, b=NULL, c=NULL, x=NULL, many=NULL, fields=NULL, here=NULL, total=NULL, five=NULL}
+{a=1, b=2, c=NULL, x=NULL, many=NULL, fields=NULL, here=NULL, total=NULL, five=NULL}
+{a=1, b=2, c=3, x=NULL, many=NULL, fields=NULL, here=NULL, total=NULL, five=NULL}
+{a=NULL, b=NULL, c=NULL, x=single, many=NULL, fields=NULL, here=NULL, total=NULL, five=NULL}
+{a=NULL, b=NULL, c=NULL, x=NULL, many=1, fields=2, here=3, total=4, five=5}
+
+# Type compatibility tests
+
+# All numeric types as values
+query I
+SELECT {
+    "tinyint": 1::TINYINT,
+    "smallint": 2::SMALLINT, 
+    "int": 3::INT,
+    "bigint": 4::BIGINT
+}::MAP(VARCHAR, BIGINT);
+----
+{tinyint=1, smallint=2, int=3, bigint=4}
+
+# String types as values
+query I
+SELECT {
+    "varchar": 'hello'::VARCHAR,
+    "text": 'world'::TEXT
+}::MAP(VARCHAR, VARCHAR);
+----
+{varchar=hello, text=world}
+
+# Date/time types as values
+query I
+SELECT {
+    "date": '2023-01-01'::DATE,
+    "time": '12:00:00'::TIME
+}::MAP(VARCHAR, VARCHAR);
+----
+{date=2023-01-01, time='12:00:00'}
+
+# Boolean values
+query I
+SELECT {"true_val": true, "false_val": false}::MAP(VARCHAR, VARCHAR);
+----
+{true_val=true, false_val=false}
+
+# Decimal values
+query I
+SELECT {"price": 19.99::DECIMAL(10,2)}::MAP(VARCHAR, VARCHAR);
+----
+{price=19.99}
+
+# Interoperability tests
+
+# Use in WHERE clause
+query I
+SELECT *
+FROM VALUES ({"status": 'active'}), ({"status": 'inactive'})
+AS tab(col)
+WHERE (col::MAP(VARCHAR, VARCHAR))['status'] = 'active';
+----
+{'status': active}
+
+# Use in aggregations
+query I
+SELECT COUNT(*)
+FROM VALUES ({"type": 'A'}), ({"type": 'B'}), ({"type": 'A'})
+AS tab(col)
+WHERE (col::MAP(VARCHAR, VARCHAR))['type'] = 'A';
+----
+2
+
+# Complex nested example from original test
+query I
+SELECT col::MAP(VARCHAR, MAP(VARCHAR, INT))
+FROM VALUES ({ nested: MAP { 'inner_key': 707 } })
+AS tab(col);
+----
+{nested={inner_key=707}}
+

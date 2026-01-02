@@ -3,12 +3,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_context_state.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -20,6 +18,12 @@ TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
 			Rollback(nullptr);
+		} catch (std::exception &ex) {
+			ErrorData data(ex);
+			try {
+				DUCKDB_LOG_ERROR(context, "TransactionContext::~TransactionContext()\t\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
 		} catch (...) { // NOLINT
 		}
 	}
@@ -52,11 +56,11 @@ void TransactionContext::Commit() {
 			s->TransactionRollback(*transaction, context, error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
-	} else {
-		for (auto &state : context.registered_state->States()) {
-			state->TransactionCommit(*transaction, context);
-		}
 	}
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionCommit(*transaction, context);
+	}
+	transaction->Finalize();
 }
 
 void TransactionContext::SetAutoCommit(bool value) {
@@ -76,6 +80,8 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
+	context.client_data->profiler->Reset();
+
 	ErrorData rollback_error;
 	try {
 		transaction->Rollback();
@@ -89,6 +95,7 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (rollback_error.HasError()) {
 		rollback_error.Throw();
 	}
+	transaction->Finalize();
 }
 
 void TransactionContext::ClearTransaction() {

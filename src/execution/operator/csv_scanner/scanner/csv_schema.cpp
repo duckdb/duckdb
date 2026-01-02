@@ -113,6 +113,14 @@ vector<LogicalType> CSVSchema::GetTypes() const {
 	return types;
 }
 
+void CSVSchema::ReplaceNullWithVarchar() {
+	for (auto &column : columns) {
+		if (column.type.id() == LogicalTypeId::SQLNULL) {
+			column.type = LogicalType::VARCHAR;
+		}
+	}
+}
+
 bool CSVSchema::Empty() const {
 	return columns.empty();
 }
@@ -207,7 +215,12 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 	}
 
 	// Lets suggest some potential fixes
-	error << "Potential Fix: Since your schema has a mismatch, consider setting union_by_name=true.";
+	error << "Potential Fixes "
+	      << "\n";
+	error << "* Consider setting union_by_name=true."
+	      << "\n";
+	error << "* Consider setting files_to_sniff to a higher value (e.g., files_to_sniff = -1)"
+	      << "\n";
 	if (!match) {
 		error_message = error.str();
 	}

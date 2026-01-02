@@ -17,7 +17,7 @@ TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p
 	D_ASSERT(chunk_idx_to <= collection.ChunkCount());
 	idx_t overall_chunk_index = 0;
 	for (idx_t segment_idx = 0; segment_idx < collection.segments.size(); segment_idx++) {
-		const auto &segment = collection.segments[segment_idx];
+		const auto &segment = *collection.segments[segment_idx];
 		if (chunk_idx_from >= overall_chunk_index && chunk_idx_from <= overall_chunk_index + segment.ChunkCount()) {
 			// We start in this segment
 			start_segment_idx = segment_idx;
@@ -35,7 +35,7 @@ TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p
 }
 
 void TupleDataChunkIterator::InitializeCurrentChunk() {
-	auto &segment = collection.segments[current_segment_idx];
+	auto &segment = *collection.segments[current_segment_idx];
 	segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, current_chunk_idx, init_heap);
 }
 
@@ -51,7 +51,7 @@ bool TupleDataChunkIterator::Next() {
 	const auto segment_idx_before = current_segment_idx;
 	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) || Done()) {
 		// Drop pins / stores them if TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-		collection.FinalizePinState(state.pin_state, collection.segments[segment_idx_before]);
+		collection.FinalizePinState(state.pin_state, *collection.segments[segment_idx_before]);
 		current_segment_idx = end_segment_idx;
 		current_chunk_idx = end_chunk_idx;
 		return false;
@@ -59,7 +59,7 @@ bool TupleDataChunkIterator::Next() {
 
 	// Finalize pin state when moving from one segment to the next
 	if (current_segment_idx != segment_idx_before) {
-		collection.FinalizePinState(state.pin_state, collection.segments[segment_idx_before]);
+		collection.FinalizePinState(state.pin_state, *collection.segments[segment_idx_before]);
 	}
 
 	InitializeCurrentChunk();
@@ -74,7 +74,7 @@ void TupleDataChunkIterator::Reset() {
 }
 
 idx_t TupleDataChunkIterator::GetCurrentChunkCount() const {
-	return collection.segments[current_segment_idx].chunks[current_chunk_idx].count;
+	return collection.segments[current_segment_idx]->chunks[current_chunk_idx]->count;
 }
 
 TupleDataChunkState &TupleDataChunkIterator::GetChunkState() {

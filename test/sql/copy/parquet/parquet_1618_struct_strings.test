@@ -5,19 +5,19 @@
 require parquet
 
 query I
-SELECT "inner"['str_field'] FROM parquet_scan('data/parquet-testing/bug1618_struct_strings.parquet')
+SELECT "inner"['str_field'] FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1618_struct_strings.parquet')
 ----
 hello
 NULL
 
 query I
-SELECT "inner"['f64_field'] FROM parquet_scan('data/parquet-testing/bug1618_struct_strings.parquet')
+SELECT "inner"['f64_field'] FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1618_struct_strings.parquet')
 ----
 NULL
 1.23
 
 query I
-SELECT "inner" FROM parquet_scan('data/parquet-testing/bug1618_struct_strings.parquet')
+SELECT "inner" FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1618_struct_strings.parquet')
 ----
 {'str_field': hello, 'f64_field': NULL}
 {'str_field': NULL, 'f64_field': 1.23}

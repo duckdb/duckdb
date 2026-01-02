@@ -1,0 +1,10 @@
+# name: test/issues/internal/test_5994.test
+# description: Internal Issue 5994: (>=1.4) varchar != filter gives wrong result reading from specific parquet
+# group: [internal]
+
+require parquet
+
+query I
+SELECT COUNT(*) FROM '{DATA_DIR}/parquet-testing/internal_5994.parquet' WHERE eventName != 'ListObjects';
+----
+118

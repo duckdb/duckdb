@@ -1,0 +1,36 @@
+# name: test/sql/catalog/function/test_drop_macro.test
+# description: Test dropping scalar/table macros
+# group: [function]
+
+# create scalar and table macro with same name
+statement ok
+create macro m() as 42;
+
+statement ok
+create macro m() as table (select 42 i);
+
+# table macros are explicitly dropped with "drop macro table"
+# however, we also want to support dropping them with drop macro
+# we disambiguate by first trying to drop the scalar macro, then the table macro
+statement ok
+drop macro m;
+
+# scalar macros are dropped first so this fails
+statement error
+select m();
+----
+is a table function but it was used as a scalar function
+
+# table macro is still available
+query I
+from m();
+----
+42
+
+statement ok
+drop macro m;
+
+statement error
+from m();
+----
+with name m does not exist

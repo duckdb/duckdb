@@ -2,21 +2,16 @@
 # description: Grouped aggregate over lineitem (grouped by an integer column)
 # group: [aggregate]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Lineitem Group By Integer
 group aggregate
 subgroup tpch
 
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
-
 run
 SELECT l_quantity, SUM(l_quantity) FROM lineitem GROUP BY l_quantity ORDER BY 1
 
-result II
+result II sf=1
 1	120401
 2	238920
 3	360141

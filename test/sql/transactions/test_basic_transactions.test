@@ -22,6 +22,7 @@ SELECT * FROM integers
 statement error con2
 SELECT * FROM integers
 ----
+<REGEX>:.*Catalog Error.*Table.*not exist.*
 
 # if we rollback, nobody should be able to query the table
 statement ok con1
@@ -30,10 +31,12 @@ ROLLBACK
 statement error con1
 SELECT * FROM integers
 ----
+<REGEX>:.*Catalog Error.*Table.*not exist.*
 
 statement error con2
 SELECT * FROM integers
 ----
+<REGEX>:.*Catalog Error.*Table.*not exist.*
 
 # now if we commit the table
 statement ok con1
@@ -50,6 +53,7 @@ COMMIT
 statement error con2
 SELECT * FROM integers
 ----
+<REGEX>:.*Catalog Error.*Table.*not exist.*
 
 # but if we rollback and start a new transaction it should see it
 statement ok con2
@@ -75,4 +79,4 @@ CREATE TABLE integers2(i INTEGER)
 statement error con1
 CREATE TABLE integers2(i INTEGER)
 ----
-
+<REGEX>:.*Catalog Error.*Table.*already exists.*

@@ -93,6 +93,7 @@ static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t
 	return result_str;
 }
 
+namespace {
 template <bool IS_UPPER>
 struct CaseConvertOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -102,12 +103,14 @@ struct CaseConvertOperator {
 		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
 	}
 };
+} // namespace
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
 }
 
+namespace {
 template <bool IS_UPPER>
 struct CaseConvertOperatorASCII {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -117,6 +120,7 @@ struct CaseConvertOperatorASCII {
 		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);
 	}
 };
+} // namespace
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -131,7 +135,7 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = CaseConvertFunctionASCII<IS_UPPER>;
+		expr.function.SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
 	return nullptr;
 }

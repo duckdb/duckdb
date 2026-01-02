@@ -9,7 +9,7 @@ require notwindows
 
 query III
 SELECT * FROM read_csv(
-    'data/csv/rejects/frankstein/nightmare.csv',
+    '{DATA_DIR}/csv/rejects/frankstein/nightmare.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'VARCHAR'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=20, strict_mode=true);
 ----
@@ -63,4 +63,4 @@ SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 0	19	205	207	2	b	CAST	1,bla,"pedro"	Error when converting column "b". Could not convert string "bla" to 'INTEGER'
 0	22	243	247	3	c	UNQUOTED VALUE	1,2,"pedro"bla	Value with unterminated quote found.
 0	32	366	366	NULL	NULL	LINE SIZE OVER MAXIMUM	1,2,"pedro thiago timbo holanda"	Maximum line size of 20 bytes exceeded. Actual Size:32 bytes.
-0	38	459	463	3	c	INVALID UNICODE	1,2,"pedro??"	Invalid unicode (byte sequence mismatch) detected.
+0	38	459	463	3	c	INVALID ENCODING	1,2,"pedro??"	Invalid unicode (byte sequence mismatch) detected. This file is not utf-8 encoded.

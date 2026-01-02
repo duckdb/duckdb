@@ -41,7 +41,7 @@ interval_t MultiplyOperator::Operation(int64_t left, interval_t right) {
 
 // TSROUND.
 // Avoid std::rint because it can raise exceptions and we know that can't happen.
-inline double PGTimestampRound(const double &j) {
+static inline double PGTimestampRound(const double &j) {
 	return (std::nearbyint(((double)(j)) * Interval::MICROS_PER_SEC) / Interval::MICROS_PER_SEC);
 }
 
@@ -125,6 +125,7 @@ interval_t MultiplyOperator::Operation(double left, interval_t right) {
 //===--------------------------------------------------------------------===//
 // * [multiply] with overflow check
 //===--------------------------------------------------------------------===//
+namespace {
 struct OverflowCheckedMultiply {
 	template <class SRCTYPE, class UTYPE>
 	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
@@ -136,6 +137,7 @@ struct OverflowCheckedMultiply {
 		return true;
 	}
 };
+} // namespace
 
 template <>
 bool TryMultiplyOperator::Operation(uint8_t left, uint8_t right, uint8_t &result) {
@@ -276,7 +278,7 @@ bool TryMultiplyOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
 template <class T, T min, T max>
-bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
+static bool TryDecimalMultiplyTemplated(T left, T right, T &result) {
 	if (!TryMultiplyOperator::Operation(left, right, result) || result < min || result > max) {
 		return false;
 	}

@@ -1,0 +1,65 @@
+# name: test/sql/types/uuid/test_uuid_cast.test
+# description: Test UUID-BLOB casting operations
+# group: [uuid]
+
+statement ok
+PRAGMA enable_verification
+
+# Test the specific round-trip conversion: UUID -> BLOB -> UUID
+query I
+select try_cast(try_cast('00112233-4455-6677-8899-aabbccddeeff'::UUID AS BLOB) as uuid) as test;
+----
+00112233-4455-6677-8899-aabbccddeeff
+
+# Test basic UUID to BLOB casting
+query T
+SELECT '00112233-4455-6677-8899-aabbccddeeff'::UUID::BLOB;
+----
+\x00\x11\x223DUfw\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF
+
+# Test basic BLOB to UUID casting
+query I
+SELECT '\x00\x11\x223DUfw\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF'::BLOB::UUID;
+----
+00112233-4455-6677-8899-aabbccddeeff
+
+# Test round-trip: UUID -> BLOB -> UUID
+query I
+SELECT '00112233-4455-6677-8899-aabbccddeeff'::UUID::BLOB::UUID;
+----
+00112233-4455-6677-8899-aabbccddeeff
+
+# Test with different UUID formats (with braces)
+query I
+SELECT try_cast(try_cast('{00112233-4455-6677-8899-aabbccddeeff}'::UUID AS BLOB) as uuid) as test;
+----
+00112233-4455-6677-8899-aabbccddeeff
+
+# Test with NULL values
+query I
+SELECT try_cast(try_cast(NULL::UUID AS BLOB) as uuid) as test;
+----
+NULL
+
+query I
+SELECT try_cast(NULL::BLOB as uuid) as test;
+----
+NULL
+
+# Test with invalid BLOB size (too short)
+query I
+SELECT try_cast('\x00\x11\x22\x33'::BLOB as uuid) as test;
+----
+NULL
+
+# Test with invalid BLOB size (too long)
+query I
+SELECT try_cast('\x00\x11\x223DUfw\x88\x99\xAA\xBB\xCC\xDD\xEE\xFF\x00'::BLOB as uuid) as test;
+----
+NULL
+
+# Test with empty BLOB
+query I
+SELECT try_cast(''::BLOB as uuid) as test;
+----
+NULL

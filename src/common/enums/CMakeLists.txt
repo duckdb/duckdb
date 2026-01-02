@@ -6,6 +6,7 @@ add_library_unity(
   date_part_specifier.cpp
   expression_type.cpp
   file_compression_type.cpp
+  http_status_code.cpp
   join_type.cpp
   logical_operator_type.cpp
   metric_type.cpp

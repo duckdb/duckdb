@@ -3,10 +3,12 @@ add_library_unity(
   OBJECT
   alias.cpp
   binning.cpp
+  cast_to_type.cpp
   can_implicitly_cast.cpp
   current_setting.cpp
   hash.cpp
   least.cpp
+  replace_type.cpp
   stats.cpp
   typeof.cpp
   system_functions.cpp)

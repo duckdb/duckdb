@@ -46,7 +46,7 @@ volatile mbedtls_ct_uint_t mbedtls_ct_zero = 0;
 /* We check pointer sizes to avoid issues with them not matching register size requirements */
 #define MBEDTLS_EFFICIENT_UNALIGNED_VOLATILE_ACCESS
 
-inline uint32_t mbedtls_get_unaligned_volatile_uint32(volatile const unsigned char *p)
+static inline uint32_t mbedtls_get_unaligned_volatile_uint32(volatile const unsigned char *p)
 {
     /* This is UB, even where it's safe:
      *    return *((volatile uint32_t*)p);

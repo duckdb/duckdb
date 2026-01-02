@@ -4,9 +4,8 @@
 
 namespace duckdb {
 
-BufferedData::BufferedData(Type type, weak_ptr<ClientContext> context_p) : type(type), context(std::move(context_p)) {
-	auto client_context = context.lock();
-	auto &config = ClientConfig::GetConfig(*client_context);
+BufferedData::BufferedData(Type type, ClientContext &context_p) : type(type), context(context_p.shared_from_this()) {
+	auto &config = ClientConfig::GetConfig(context_p);
 	total_buffer_size = config.streaming_buffer_size;
 }
 

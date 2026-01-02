@@ -72,6 +72,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, current_file_ptr, false, current_boundary);
+
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 	// We initialize the scan
 	return csv_scanner;
@@ -179,7 +180,7 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	auto limit = options.rejects_limit;
 	auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
 	                                            options.rejects_table_name.GetValue());
-	lock_guard<mutex> lock(rejects->write_lock);
+	const lock_guard<mutex> lock(rejects->write_lock);
 	auto &errors_table = rejects->GetErrorsTable(context);
 	auto &scans_table = rejects->GetScansTable(context);
 	InternalAppender errors_appender(context, errors_table);

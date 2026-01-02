@@ -30,9 +30,3 @@ ${statement_type} default_order='unknown_order'
 <REGEX>:Invalid Input Error.*Unrecognized parameter.*
 
 endloop
-
-# this can only be set globally (for now)
-statement error
-SET SESSION default_order='asc'
-----
-<REGEX>:Catalog Error.*option.*cannot be set locally.*

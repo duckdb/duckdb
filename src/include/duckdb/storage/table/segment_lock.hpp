@@ -31,6 +31,10 @@ public:
 		return *this;
 	}
 
+	void Release() {
+		lock.unlock();
+	}
+
 private:
 	unique_lock<mutex> lock;
 };

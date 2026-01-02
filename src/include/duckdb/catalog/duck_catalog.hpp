@@ -21,6 +21,7 @@ public:
 public:
 	bool IsDuckCatalog() override;
 	void Initialize(bool load_builtin) override;
+
 	string GetCatalogType() override {
 		return "duckdb";
 	}
@@ -28,6 +29,12 @@ public:
 	mutex &GetWriteLock() {
 		return write_lock;
 	}
+
+	// Encryption Functions
+	void SetEncryptionKeyId(const string &key_id);
+	string &GetEncryptionKeyId();
+	void SetIsEncrypted();
+	bool GetIsEncrypted();
 
 public:
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
@@ -46,6 +53,8 @@ public:
 	                                        PhysicalOperator &plan) override;
 	DUCKDB_API PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
 	                                        PhysicalOperator &plan) override;
+	DUCKDB_API PhysicalOperator &PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
+	                                           LogicalMergeInto &op, PhysicalOperator &plan) override;
 	DUCKDB_API unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt,
 	                                                       TableCatalogEntry &table,
 	                                                       unique_ptr<LogicalOperator> plan) override;
@@ -61,6 +70,8 @@ public:
 
 	DUCKDB_API bool InMemory() override;
 	DUCKDB_API string GetDBPath() override;
+	DUCKDB_API bool IsEncrypted() const override;
+	DUCKDB_API string GetEncryptionCipher() const override;
 
 	DUCKDB_API optional_idx GetCatalogVersion(ClientContext &context) override;
 
@@ -79,6 +90,11 @@ private:
 	mutex write_lock;
 	//! The catalog set holding the schemas
 	unique_ptr<CatalogSet> schemas;
+
+	//! Identifies whether the db is encrypted
+	bool is_encrypted = false;
+	//! If is encrypted, store the encryption key_id
+	string encryption_key_id;
 };
 
 } // namespace duckdb

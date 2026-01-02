@@ -8,9 +8,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -47,12 +49,9 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 }
 
-void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_ref = expr.Cast<BoundColumnRefExpression>();
-		bindings.push_back(bound_ref.binding);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractColumnBindings(child, bindings); });
+void ColumnLifetimeAnalyzer::ExtractColumnBindings(const Expression &expr, vector<ColumnBinding> &bindings) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    expr, [&](const BoundColumnRefExpression &bound_ref) { bindings.push_back(bound_ref.binding); });
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
@@ -83,7 +82,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// FIXME: for now, we only push into the projection map for equality (hash) joins
 		idx_t has_range = 0;
-		if (!comp_join.HasEquality(has_range) || optimizer.context.config.prefer_range_joins) {
+		bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(optimizer.context);
+		if (!comp_join.HasEquality(has_range) || prefer_range_joins) {
 			return;
 		}
 
@@ -105,6 +105,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
 		//! We still need to project all values from these operators so the projection
 		//! on top of them can select from only the table values being inserted.
@@ -142,9 +143,31 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		// distinct, all projected columns are used for the DISTINCT computation
-		// mark all columns as used and continue to the children
-		// FIXME: DISTINCT with expression list does not implicitly reference everything
+		// DISTINCT ON only references the expressions specified in the target list (and optional ORDER BY),
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
+			auto add_bindings = [&](Expression &expr) {
+				vector<ColumnBinding> bindings;
+				ExtractColumnBindings(expr, bindings);
+				for (auto &binding : bindings) {
+					column_references.insert(binding);
+				}
+			};
+			for (auto &target : distinct.distinct_targets) {
+				if (target) {
+					add_bindings(*target);
+				}
+			}
+			if (distinct.order_by) {
+				for (auto &order : distinct.order_by->orders) {
+					if (order.expression) {
+						add_bindings(*order.expression);
+					}
+				}
+			}
+			break;
+		}
+		// DISTINCT without targets references the entire projection list
 		everything_referenced = true;
 		break;
 	}

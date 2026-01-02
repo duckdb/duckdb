@@ -9,7 +9,7 @@ require notwindows
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
-    'data/csv/error/mismatch/big_bad*.csv',
+    '{DATA_DIR}/csv/error/mismatch/big_bad*.csv',
     sample_size=1,
     store_rejects=true);
 ----
@@ -32,7 +32,7 @@ DROP TABLE reject_scans;
 # Test with lots of errors 
 query I
 SELECT SUM(num) FROM read_csv_auto(
-	'data/csv/error/mismatch/half1.csv',
+	'{DATA_DIR}/csv/error/mismatch/half1.csv',
 	header=true,
 	sample_size=1,
 	store_rejects=true)
@@ -53,7 +53,7 @@ DROP TABLE reject_scans;
 # Test with more errors than STANDARD_VECTOR_SIZE
 query I
 SELECT SUM(num) FROM read_csv_auto(
-	'data/csv/error/mismatch/half2.csv',
+	'{DATA_DIR}/csv/error/mismatch/half2.csv',
 	header=true,
 	ignore_errors=true,
 	sample_size=1,

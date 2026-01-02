@@ -10,6 +10,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct DateTrunc {
 	template <class TA, class TR, class OP>
 	static inline TR UnaryFunction(TA input) {
@@ -458,7 +460,7 @@ interval_t DateTrunc::MicrosecondOperator::Operation(interval_t input) {
 }
 
 template <class TA, class TR>
-static TR TruncateElement(DatePartSpecifier type, TA element) {
+TR TruncateElement(DatePartSpecifier type, TA element) {
 	if (!Value::IsFinite(element)) {
 		return Cast::template Operation<TA, TR>(element);
 	}
@@ -511,7 +513,7 @@ struct DateTruncBinaryOperator {
 };
 
 template <typename TA, typename TR>
-static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result, idx_t count) {
+void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result, idx_t count) {
 	switch (type) {
 	case DatePartSpecifier::MILLENNIUM:
 		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillenniumOperator>(left, result, count);
@@ -567,7 +569,7 @@ static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 }
 
 template <typename TA, typename TR>
-static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto &part_arg = args.data[0];
 	auto &date_arg = args.data[1];
@@ -588,7 +590,7 @@ static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 template <class TA, class TR, class OP>
-static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_stats) {
+unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &child_stats) {
 	// we can only propagate date stats if the child has stats
 	auto &nstats = child_stats[1];
 	if (!NumericStats::HasMinMax(nstats)) {
@@ -615,12 +617,12 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<BaseStatistics> &ch
 }
 
 template <class TA, class TR, class OP>
-static unique_ptr<BaseStatistics> PropagateDateTruncStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> PropagateDateTruncStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 	return DateTruncStatistics<TA, TR, OP>(input.child_stats);
 }
 
 template <typename TA, typename TR>
-static function_statistics_t DateTruncStats(DatePartSpecifier type) {
+function_statistics_t DateTruncStats(DatePartSpecifier type) {
 	switch (type) {
 	case DatePartSpecifier::MILLENNIUM:
 		return PropagateDateTruncStatistics<TA, TR, DateTrunc::MillenniumOperator>;
@@ -661,8 +663,8 @@ static function_statistics_t DateTruncStats(DatePartSpecifier type) {
 	}
 }
 
-static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &bound_function,
+                                       vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[0]->IsFoldable()) {
 		return nullptr;
 	}
@@ -674,51 +676,22 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 	}
 	const auto part_name = part_value.ToString();
 	const auto part_code = GetDatePartSpecifier(part_name);
-	switch (part_code) {
-	case DatePartSpecifier::MILLENNIUM:
-	case DatePartSpecifier::CENTURY:
-	case DatePartSpecifier::DECADE:
-	case DatePartSpecifier::YEAR:
-	case DatePartSpecifier::QUARTER:
-	case DatePartSpecifier::MONTH:
-	case DatePartSpecifier::WEEK:
-	case DatePartSpecifier::YEARWEEK:
-	case DatePartSpecifier::ISOYEAR:
-	case DatePartSpecifier::DAY:
-	case DatePartSpecifier::DOW:
-	case DatePartSpecifier::ISODOW:
-	case DatePartSpecifier::DOY:
-	case DatePartSpecifier::JULIAN_DAY:
-		switch (bound_function.arguments[1].id()) {
-		case LogicalType::TIMESTAMP:
-			bound_function.function = DateTruncFunction<timestamp_t, date_t>;
-			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
-			break;
-		case LogicalType::DATE:
-			bound_function.function = DateTruncFunction<date_t, date_t>;
-			bound_function.statistics = DateTruncStats<date_t, date_t>(part_code);
-			break;
-		default:
-			throw NotImplementedException("Temporal argument type for DATETRUNC");
-		}
-		bound_function.return_type = LogicalType::DATE;
+
+	switch (bound_function.arguments[1].id()) {
+	case LogicalType::TIMESTAMP:
+		bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, timestamp_t>(part_code));
+		break;
+	case LogicalType::DATE:
+		bound_function.SetStatisticsCallback(DateTruncStats<date_t, timestamp_t>(part_code));
 		break;
 	default:
-		switch (bound_function.arguments[1].id()) {
-		case LogicalType::TIMESTAMP:
-			bound_function.statistics = DateTruncStats<timestamp_t, timestamp_t>(part_code);
-			break;
-		case LogicalType::DATE:
-			bound_function.statistics = DateTruncStats<date_t, timestamp_t>(part_code);
-			break;
-		default:
-			throw NotImplementedException("Temporal argument type for DATETRUNC");
-		}
-		break;
+		throw NotImplementedException("Temporal argument type for DATETRUNC");
 	}
 
 	return nullptr;
 }
+
+} // namespace
 
 ScalarFunctionSet DateTruncFun::GetFunctions() {
 	ScalarFunctionSet date_trunc("date_trunc");
@@ -729,7 +702,7 @@ ScalarFunctionSet DateTruncFun::GetFunctions() {
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
 	for (auto &func : date_trunc.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return date_trunc;
 }

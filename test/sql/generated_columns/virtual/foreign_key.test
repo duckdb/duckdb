@@ -18,7 +18,7 @@ CREATE TABLE tbl2 (
 	b AS (a) REFERENCES tbl1(a),
 );
 ----
-generated
+<REGEX>:.*Binder Error.*Failed to create foreign key.*
 
 #Creating a foreign key constraint on a generated column
 statement error
@@ -28,7 +28,7 @@ CREATE TABLE tbl2 (
 	FOREIGN KEY (b) REFERENCES tbl1 (a)
 );
 ----
-generated
+<REGEX>:.*Binder Error.*Failed to create foreign key.*
 
 # Referencing a generated column is not supported because in order to do that
 # you have to create a UNIQUE/PRIMARY KEY constraint on a generated column first - which isn't supported (yet)
@@ -40,7 +40,7 @@ CREATE TABLE tbl2 (
 	also_price AS (price) UNIQUE
 );
 ----
-generated
+<REGEX>:.*Binder Error.*not supported.*
 
 statement ok
 CREATE TABLE tbl2 (
@@ -55,7 +55,7 @@ CREATE TABLE tbl3 (
 	FOREIGN KEY (a) REFERENCES tbl2 (also_price)
 );
 ----
-no primary key
+<REGEX>:.*Binder Error.*Failed to create foreign key.*
 
 #Show that normal uses of FOREIGN_KEY constraint work mixed with generated columns
 statement ok
@@ -81,3 +81,4 @@ INSERT INTO a VALUES (5);
 statement error
 INSERT INTO a VALUES (5);
 ----
+<REGEX>:.*Constraint Error.*Duplicate key.*

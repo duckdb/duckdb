@@ -5,21 +5,23 @@
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
-#include "duckdb/transaction/rollback_state.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/transaction/wal_write_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/transaction/wal_write_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
 UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
-    : transaction(transaction_p), allocator(BufferManager::GetBufferManager(context_p)) {
+    : transaction(transaction_p), allocator(DatabaseInstance::GetDatabase(context_p).GetBufferManager()) {
 }
 
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
@@ -39,6 +41,7 @@ template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
 	// iterate in insertion order: start with the tail
 	state.current = allocator.tail.get();
+	state.started = true;
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
 		state.start = state.handle.Ptr();
@@ -58,6 +61,9 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 
 template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
+	if (!end_state.started) {
+		return;
+	}
 	// iterate in insertion order: start with the tail
 	state.current = allocator.tail.get();
 	while (state.current) {
@@ -175,16 +181,9 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state(lowest_active_transaction);
+	CleanupState state(transaction, lowest_active_transaction, active_transaction_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
-
-#ifdef DEBUG
-	// Verify that our index memory is stable.
-	for (auto &table : state.indexed_tables) {
-		table.second->VerifyIndexBuffers();
-	}
-#endif
 }
 
 void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state) {
@@ -193,15 +192,21 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id) {
-	CommitState state(transaction, commit_id);
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
+	active_transaction_state = info.active_transactions;
+
+	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+
+	state.Verify();
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction, transaction_id);
+	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
+
+	state.Verify();
 }
 
 void UndoBuffer::Rollback() {

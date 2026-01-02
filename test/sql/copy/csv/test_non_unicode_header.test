@@ -11,7 +11,7 @@ statement ok
 drop table if exists reject_errors;
 
 query IIIIIII
-FROM read_csv('data/csv/error/banklist.csv', store_rejects=true) order by all limit 5
+FROM read_csv('{DATA_DIR}/csv/error/banklist.csv', store_rejects=true) order by all limit 5
 ----
 1st American State Bank of Minnesota	Hancock	MN	15448	Community Development Bank, FSB	5-Feb-10	10183
 1st Centennial Bank	Redlands	CA	33025	First California Bank	23-Jan-09	10030
@@ -24,8 +24,8 @@ endloop
 query IIIIIIIII
 select * exclude(scan_id ) from reject_errors order by all limit 5
 ----
-0	1	1	1	1	column0	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
-0	1	1	12	2	column1	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
-0	1	1	18	3	column2	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
+0	1	1	1	1	column0	INVALID ENCODING	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected. This file is not utf-8 encoded.
+0	1	1	12	2	column1	INVALID ENCODING	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected. This file is not utf-8 encoded.
+0	1	1	18	3	column2	INVALID ENCODING	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected. This file is not utf-8 encoded.
 0	1	1	25	4	column3	CAST	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Error when converting column "column3". Could not convert string "Cert?" to 'BIGINT'
-0	1	1	31	5	column4	INVALID UNICODE	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected.
+0	1	1	31	5	column4	INVALID ENCODING	Bank Name?,City?,State?,Cert?,Acquiring Institution?,Closing Date?,Fund	Invalid unicode (byte sequence mismatch) detected. This file is not utf-8 encoded.

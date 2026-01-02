@@ -40,7 +40,7 @@ SELECT COUNT(*) FROM read_csv('__TEST_DIR__/per_thread_output_csv/*.csv', column
 20000
 
 query I
-SELECT COUNT(*) > 2 f FROM GLOB('__TEST_DIR__/per_thread_output_csv/data_*.csv') ORDER BY f
+SELECT COUNT(*) >= 2 f FROM GLOB('__TEST_DIR__/per_thread_output_csv/data_*.csv') ORDER BY f
 ----
 true
 

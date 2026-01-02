@@ -20,19 +20,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, string view_name)
 }
 
 string CreateViewInfo::ToString() const {
-	string result;
-
-	result += "CREATE";
-	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-		result += " OR REPLACE";
-	}
-	if (temporary) {
-		result += " TEMPORARY";
-	}
-	result += " VIEW ";
-	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-		result += " IF NOT EXISTS ";
-	}
+	string result = GetCreatePrefix("VIEW");
 	result += QualifierToString(temporary ? "" : catalog, schema, view_name);
 	if (!aliases.empty()) {
 		result += " (";

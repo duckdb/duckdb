@@ -13,19 +13,15 @@ public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::BOUND_SUBQUERY_NODE;
 
 public:
-	BoundSubqueryNode(shared_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
+	BoundSubqueryNode(shared_ptr<Binder> subquery_binder, BoundStatement bound_node,
 	                  unique_ptr<SelectStatement> subquery)
 	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(std::move(subquery_binder)),
 	      bound_node(std::move(bound_node)), subquery(std::move(subquery)) {
 	}
 
 	shared_ptr<Binder> subquery_binder;
-	unique_ptr<BoundQueryNode> bound_node;
+	BoundStatement bound_node;
 	unique_ptr<SelectStatement> subquery;
-
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		throw InternalException("Cannot get select list of bound subquery node");
-	}
 
 	string ToString() const override {
 		throw InternalException("Cannot ToString bound subquery node");
@@ -116,15 +112,15 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		idx_t expected_columns = 1;
 		if (expr.child) {
 			auto &child = BoundExpression::GetExpression(*expr.child);
-			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node->types);
+			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node.types);
 			if (child_expressions.empty()) {
 				child_expressions.push_back(std::move(child));
 			}
 			expected_columns = child_expressions.size();
 		}
-		if (bound_subquery.bound_node->types.size() != expected_columns) {
+		if (bound_subquery.bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
-			                      bound_subquery.bound_node->types.size(), expected_columns);
+			                      bound_subquery.bound_node.types.size(), expected_columns);
 		}
 	}
 	// both binding the child and binding the subquery was successful
@@ -132,7 +128,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto subquery_binder = std::move(bound_subquery.subquery_binder);
 	auto bound_node = std::move(bound_subquery.bound_node);
 	LogicalType return_type =
-	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
+	    expr.subquery_type == SubqueryType::SCALAR ? bound_node.types[0] : LogicalType(LogicalTypeId::BOOLEAN);
 	if (return_type.id() == LogicalTypeId::UNKNOWN) {
 		return_type = LogicalType::SQLNULL;
 	}
@@ -144,7 +140,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		for (idx_t child_idx = 0; child_idx < child_expressions.size(); child_idx++) {
 			auto &child = child_expressions[child_idx];
 			auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
-			auto &subquery_type = bound_node->types[child_idx];
+			auto &subquery_type = bound_node.types[child_idx];
 			LogicalType compare_type;
 			if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
 				throw BinderException(

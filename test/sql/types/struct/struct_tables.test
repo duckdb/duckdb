@@ -5,8 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -59,20 +57,25 @@ NULL
 statement error
 INSERT INTO a VALUES (ROW(1, 2, 3))
 ----
+<REGEX>:.*Mismatch Type Error.*Cannot cast STRUCTs of different size.*
 
 statement error
 INSERT INTO a VALUES (ROW(1))
 ----
+<REGEX>:.*Mismatch Type Error.*Cannot cast STRUCTs of different size.*
 
 # incorrect types
 statement error
 INSERT INTO a VALUES (ROW('hello', 1))
 ----
+<REGEX>:.*Conversion Error.*Could not convert string.*to INT32.*
 
 statement error
 INSERT INTO a VALUES (ROW('hello', [1, 2]))
 ----
+<REGEX>:.*Conversion Error.*Could not convert string.*to INT32.*
 
 statement error
 INSERT INTO a VALUES (ROW(1, ROW(1, 7)))
 ----
+<REGEX>:.*Conversion Error.*Unimplemented type for cast.*

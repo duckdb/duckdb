@@ -19,11 +19,21 @@ void SkipResult::QuotedNewLine(SkipResult &result) {
 	// nop
 }
 
+void SkipResult::SetComment(SkipResult &result, idx_t buffer_pos) {
+	if (!result.states.WasStandard()) {
+		result.cur_line_starts_as_comment = true;
+	}
+	result.comment = true;
+}
+
 bool SkipResult::UnsetComment(SkipResult &result, idx_t buffer_pos) {
 	// If we are unsetting a comment, it means this row started with a comment char.
-	// We add the row but tag it as a comment
-	bool done = result.AddRow(result, buffer_pos);
+	bool done = false;
+	if (!result.cur_line_starts_as_comment) {
+		done = result.AddRow(result, buffer_pos);
+	}
 	result.comment = false;
+	result.cur_line_starts_as_comment = false;
 	return done;
 }
 
@@ -41,10 +51,7 @@ void SkipResult::InvalidState(SkipResult &result) {
 }
 
 bool SkipResult::EmptyLine(SkipResult &result, const idx_t buffer_pos) {
-	if (result.state_machine.dialect_options.num_cols == 1) {
-		return AddRow(result, buffer_pos);
-	}
-	return false;
+	return AddRow(result, buffer_pos);
 }
 
 SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,

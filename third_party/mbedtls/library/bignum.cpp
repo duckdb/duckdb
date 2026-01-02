@@ -45,7 +45,7 @@
  * (MPI sign is the field s in mbedtls_mpi. It is unsigned short and only 1 and -1 are valid
  * values.)
  */
-inline signed short mbedtls_ct_mpi_sign_if(mbedtls_ct_condition_t cond,
+static inline signed short mbedtls_ct_mpi_sign_if(mbedtls_ct_condition_t cond,
                                                   signed short sign1, signed short sign2)
 {
     return (signed short) mbedtls_ct_uint_if(cond, sign1 + 1, sign2 + 1) - 1;
@@ -88,7 +88,7 @@ int mbedtls_mpi_lt_mpi_ct(const mbedtls_mpi *X,
     /* This array is used to conditionally swap the pointers in const time */
     void * const p[2] = { X->p, Y->p };
     size_t i = mbedtls_ct_size_if_else_0(X_is_negative, 1);
-    mbedtls_ct_condition_t lt = mbedtls_mpi_core_lt_ct((const mbedtls_mpi_uint *)p[i], (const mbedtls_mpi_uint *)p[i ^ 1], X->n);
+    mbedtls_ct_condition_t lt = mbedtls_mpi_core_lt_ct((const mbedtls_mpi_uint *) p[i], (const mbedtls_mpi_uint *) p[i ^ 1], X->n);
 
     /*
      * Store in result iff the signs are the same (i.e., iff different_sign == false). If
@@ -355,7 +355,7 @@ void mbedtls_mpi_swap(mbedtls_mpi *X, mbedtls_mpi *Y)
     memcpy(Y, &T, sizeof(mbedtls_mpi));
 }
 
-inline mbedtls_mpi_uint mpi_sint_abs(mbedtls_mpi_sint z)
+static inline mbedtls_mpi_uint mpi_sint_abs(mbedtls_mpi_sint z)
 {
     if (z >= 0) {
         return z;

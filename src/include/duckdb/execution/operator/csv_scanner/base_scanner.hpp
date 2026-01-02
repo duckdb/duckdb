@@ -101,6 +101,7 @@ public:
 	const idx_t result_size;
 
 	CSVStateMachine &state_machine;
+	bool cur_line_starts_as_comment = false;
 
 	void Print() const {
 		state_machine.Print();
@@ -119,6 +120,8 @@ public:
 	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, const CSVIterator &iterator = {});
 
 	virtual ~BaseScanner() = default;
+
+	void Print() const;
 
 	//! Returns true if the scanner is finished
 	bool FinishedFile() const;
@@ -147,6 +150,9 @@ public:
 
 	CSVStateMachine &GetStateMachine() const;
 
+	//! Removes thousands separator
+	static string RemoveSeparator(const char *value_ptr, const idx_t size, char thousands_separator);
+
 	shared_ptr<CSVFileScan> csv_file_scan;
 
 	//! If this scanner is being used for sniffing
@@ -160,9 +166,14 @@ public:
 	//! States
 	CSVStates states;
 
+	//! If the scanner ever entered a quoted state
 	bool ever_quoted = false;
 
+	//! If the scanner ever entered an escaped state.
 	bool ever_escaped = false;
+
+	//! If the scanner ever used advantage of the non-strict mode.
+	bool used_unstrictness = false;
 
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
@@ -291,6 +302,17 @@ protected:
 					ever_escaped = true;
 					T::SetEscaped(result);
 				}
+				if ((states.states[0] == CSVState::ESCAPE || states.states[0] == CSVState::ESCAPED_RETURN ||
+				     states.states[0] == CSVState::UNQUOTED_ESCAPE) &&
+				    (buffer_handle_ptr[iterator.pos.buffer_pos] ==
+				         state_machine->dialect_options.state_machine_options.quote.GetValue() ||
+				     !state_machine->dialect_options.state_machine_options.strict_mode.GetValue())) {
+					// We only set the ever escaped variable if this is either a quote char OR strict mode is off
+					ever_escaped = true;
+					if (states.states[0] == CSVState::UNQUOTED_ESCAPE) {
+						used_unstrictness = true;
+					}
+				}
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
@@ -320,11 +342,14 @@ protected:
 				break;
 			}
 			case CSVState::ESCAPE:
-			case CSVState::UNQUOTED_ESCAPE:
 			case CSVState::ESCAPED_RETURN:
 				T::SetEscaped(result);
-				ever_escaped = true;
 				iterator.pos.buffer_pos++;
+				break;
+			case CSVState::UNQUOTED_ESCAPE:
+				T::SetEscaped(result);
+				iterator.pos.buffer_pos++;
+				used_unstrictness = true;
 				break;
 			case CSVState::STANDARD: {
 				iterator.pos.buffer_pos++;

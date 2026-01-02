@@ -1,0 +1,12 @@
+# name: test/sql/catalog/function/test_macro_issue_19119.test
+# description: Test Issue 19119 - Regression: combination of window functions and RAISE_EVEN raises "Not implemented Error: Unimplemented expression class"
+# group: [function]
+
+statement ok
+CREATE TABLE t (x INT);
+
+statement ok
+INSERT INTO t (x) VALUES (1), (2);
+
+statement ok
+SELECT ROUND_EVEN(SUM(x) OVER (), 0) AS y FROM t;

@@ -20,8 +20,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BLOCKWISE_NL_JOIN;
 
 public:
-	PhysicalBlockwiseNLJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-	                        unique_ptr<Expression> condition, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalBlockwiseNLJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+	                        PhysicalOperator &right, unique_ptr<Expression> condition, JoinType join_type,
+	                        idx_t estimated_cardinality);
 
 	unique_ptr<Expression> condition;
 
@@ -43,7 +44,8 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return PropagatesBuildSide(join_type);

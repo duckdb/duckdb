@@ -18,6 +18,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 
 namespace duckdb {
 
@@ -59,9 +60,14 @@ class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
+#ifdef DUCKDB_HASH_ZERO
+	//! Verify salt when all hashes are 0
+	static constexpr const idx_t USE_SALT_THRESHOLD = 0;
+#else
 	//! only compare salts with the ht entries if the capacity is larger than 8192 so
 	//! that it does not fit into the CPU cache
 	static constexpr const idx_t USE_SALT_THRESHOLD = 8192;
+#endif
 
 	//! Scan structure that can be used to resume scans, as a single probe can
 	//! return 1024*N values (where N is the size of the HT). This is
@@ -81,6 +87,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 		bool is_null;
+		bool has_null_value_filter = false;
 
 		// it records the RHS pointers for the result chunk
 		Vector rhs_pointers;
@@ -139,21 +146,17 @@ public:
 	struct SharedState {
 		SharedState();
 
-		// The ptrs to the row to which a key should be inserted into during building
-		// or matched against during probing
-		Vector rhs_row_locations;
 		Vector salt_v;
 
-		SelectionVector salt_match_sel;
-		SelectionVector key_no_match_sel;
+		SelectionVector keys_to_compare_sel;
+		SelectionVector keys_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
 		ProbeState();
 
-		Vector ht_offsets_v;
-		Vector ht_offsets_dense_v;
-
+		Vector ht_offsets_and_salts_v;
+		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
 	};
 
@@ -163,12 +166,16 @@ public:
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
 
+		// The ptrs to the row to which a key should be inserted into during building
+		// or matched against during probing
+		Vector rhs_row_locations;
+
 		DataChunk lhs_data;
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions, vector<LogicalType> build_types,
-	              JoinType type, const vector<idx_t> &output_columns);
+	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -208,11 +215,16 @@ public:
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
 	}
+	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
+	//! Returns the number of tuples found (can be smaller than the vector capacity).
+	idx_t ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const;
+
 	bool NullValuesAreEqual(idx_t col_idx) const {
 		return null_values_are_equal[col_idx];
 	}
 
 	ClientContext &context;
+	const PhysicalOperator &op;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
@@ -270,6 +282,10 @@ public:
 	uint64_t bitmask = DConstants::INVALID_INDEX;
 	//! Whether or not we error on multiple rows found per match in a SINGLE join
 	bool single_join_error_on_multiple_rows = true;
+	//! Whether or not to perform deduplication based on join_keys when building ht
+	bool insert_duplicate_keys = true;
+	//! Number of probe matches
+	atomic<idx_t> total_probe_matches {0};
 
 	struct {
 		mutex mj_lock;
@@ -298,8 +314,8 @@ private:
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
 	//! key_match_sel vector and the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
-	                    SelectionVector &match_sel);
+	                    const SelectionVector *sel, idx_t &count, Vector &pointers_result_v, SelectionVector &match_sel,
+	                    bool has_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
@@ -323,6 +339,10 @@ private:
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
 	unsafe_unique_array<data_t> dead_end;
+
+	//! Whether or not to use a bloom filter will be determined by the operator
+	BloomFilter bloom_filter;
+	bool should_build_bloom_filter = false;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
@@ -388,19 +408,27 @@ public:
 	static constexpr double DEFAULT_LOAD_FACTOR = 2.0;
 	//! For a LOAD_FACTOR of 1.5, the HT is between 33% and 67% full
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
+	//! Minimum capacity of the pointer table
+	static constexpr idx_t MINIMUM_CAPACITY = 16384;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
 	//! Capacity of the pointer table given the ht count
 	idx_t PointerTableCapacity(idx_t count) const {
-		static constexpr idx_t MINIMUM_CAPACITY = 16384;
-
 		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
 		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);
 	}
 	//! Size of the pointer table (in bytes)
 	idx_t PointerTableSize(idx_t count) const {
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
+	}
+
+	void SetBuildBloomFilter(const bool should_build) {
+		this->should_build_bloom_filter = should_build;
+	}
+
+	BloomFilter &GetBloomFilter() {
+		return bloom_filter;
 	}
 
 	//! Get total size of HT if all partitions would be built

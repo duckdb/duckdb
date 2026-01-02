@@ -1,14 +1,10 @@
-#define DUCKDB_EXTENSION_MAIN
-#include "tpcds_extension.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include "dsdgen.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/main/extension_util.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#endif
+#include "tpcds_extension.hpp"
 
 namespace duckdb {
 
@@ -25,9 +21,15 @@ struct DSDGenFunctionData : public TableFunctionData {
 	bool keys = false;
 };
 
-static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DSDGenFunctionData>();
+
+	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	result->catalog = current_catalog;
+	result->schema = current_schema;
+
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
 			throw BinderException("Cannot use NULL as function argument");
@@ -49,7 +51,10 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 	if (input.binder) {
 		auto &catalog = Catalog::GetCatalog(context, result->catalog);
 		auto &properties = input.binder->GetStatementProperties();
-		properties.RegisterDBModify(catalog, context);
+		DatabaseModificationType modification;
+		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
+		modification |= DatabaseModificationType::INSERT_DATA;
+		properties.RegisterDBModify(catalog, context, modification);
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
@@ -154,9 +159,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }
 
-static void LoadInternal(DuckDB &db) {
-	auto &db_instance = *db.instance;
-
+static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
@@ -164,24 +167,26 @@ static void LoadInternal(DuckDB &db) {
 	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	ExtensionUtil::RegisterFunction(db_instance, dsdgen_func);
+
+	loader.RegisterFunction(dsdgen_func);
 
 	// create the TPCDS pragma that allows us to run the query
 	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
-	ExtensionUtil::RegisterFunction(db_instance, tpcds_func);
+	loader.RegisterFunction(tpcds_func);
 
 	// create the TPCDS_QUERIES function that returns the query
 	TableFunction tpcds_query_func("tpcds_queries", {}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
-	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_func);
+	loader.RegisterFunction(tpcds_query_func);
 
 	// create the TPCDS_ANSWERS that returns the query result
 	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
 	                                      TPCDSInit);
-	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_answer_func);
+
+	loader.RegisterFunction(tpcds_query_answer_func);
 }
 
-void TpcdsExtension::Load(DuckDB &db) {
-	LoadInternal(db);
+void TpcdsExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string TpcdsExtension::GetQuery(int query) {
@@ -207,16 +212,7 @@ std::string TpcdsExtension::Version() const {
 } // namespace duckdb
 
 extern "C" {
-DUCKDB_EXTENSION_API void tpcds_init(duckdb::DatabaseInstance &db) {
-	duckdb::DuckDB db_wrapper(db);
-	duckdb::LoadInternal(db_wrapper);
-}
-
-DUCKDB_EXTENSION_API const char *tpcds_version() {
-	return duckdb::DuckDB::LibraryVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(tpcds, loader) {
+	duckdb::LoadInternal(loader);
 }
 }
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
-#endif

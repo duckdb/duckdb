@@ -88,7 +88,7 @@ CREATE TABLE hugeints (z HUGEINT);
 
 statement ok
 insert into hugeints values
-	(-168123123123200005565479978461862821890), 
+	(-168123123123200005565479978461862821890),
 	(-168123123123200005565479978461862821889),
 	(-168123123123200005565479978461862821888),
 	(-168123123123200005565479978461862821893)
@@ -160,9 +160,12 @@ select arg_min(name,salary),arg_max(name,salary)  from names;
 Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
 
 statement ok
+drop table names;
+
+statement ok
 CREATE OR REPLACE TABLE employees(
-	employee_id NUMERIC, 
-	department_id NUMERIC, 
+	employee_id NUMERIC,
+	department_id NUMERIC,
 	salary NUMERIC);
 
 statement ok
@@ -181,13 +184,13 @@ statement ok
 SET old_implicit_casting=${casting};
 
 query I
-SELECT MAX_BY(employee_id, salary) as employee_with_biggest_salary 
+SELECT MAX_BY(employee_id, salary) as employee_with_biggest_salary
 FROM employees;
 ----
 900
 
 query I
-SELECT MIN_BY(employee_id, salary) as employee_with_least_salary 
+SELECT MIN_BY(employee_id, salary) as employee_with_least_salary
 FROM employees;
 ----
 1030
@@ -198,3 +201,14 @@ query I
 SELECT max_by(c0, c1) FROM (values (1, null)) t(c0,c1);
 ----
 NULL
+
+statement ok
+create table names (first_name string, last_name string)
+
+statement ok
+insert into names values ('PedroPedroPedroPedroPedro','HolandaHolandaHolandaHolandaHolanda'), ('HannesHannesHannesHannesHannesHannes','MuhleisenMuhleisenMuhleisenMuhleisenMuhleisenMuhleisen'), ('MarkMarkMark','RaasveldtRaasveldtRaasveldtRaasveldtRaasveldtRaasveldt'), ('Hubert-BlaineHubert-BlaineHubert-BlaineHubert-Blaine','WolfeschlegelsteinhausenbergerdorffWolfeschlegelsteinhausenbergerdorffWolfeschlegelsteinhausenbergerdorff')
+
+query II
+select arg_min(first_name,last_name),arg_max(first_name,last_name)  from names;
+----
+PedroPedroPedroPedroPedro	Hubert-BlaineHubert-BlaineHubert-BlaineHubert-Blaine

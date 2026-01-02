@@ -1,0 +1,584 @@
+diff --git a/third_party/mbedtls/VERSION b/third_party/mbedtls/VERSION
+index 77a069e39b..c3f6bdc3de 100644
+--- a/third_party/mbedtls/VERSION
++++ b/third_party/mbedtls/VERSION
+@@ -1 +1 @@
+-3.6.2
+\ No newline at end of file
++3.6.4
+\ No newline at end of file
+diff --git a/third_party/mbedtls/library/aes.cpp b/third_party/mbedtls/library/aes.cpp
+index b1a5c3ed10..00d64c6173 100644
+--- a/third_party/mbedtls/library/aes.cpp
++++ b/third_party/mbedtls/library/aes.cpp
+@@ -52,7 +52,6 @@
+ #include "aesce.h"
+ #endif
+ 
+-#include "mbedtls/platform.h"
+ #include "ctr.h"
+ 
+ /*
+diff --git a/third_party/mbedtls/library/asn1parse.cpp b/third_party/mbedtls/library/asn1parse.cpp
+index e33fdf71da..8db38d8921 100644
+--- a/third_party/mbedtls/library/asn1parse.cpp
++++ b/third_party/mbedtls/library/asn1parse.cpp
+@@ -315,7 +315,7 @@ static int asn1_get_sequence_of_cb(void *ctx,
+         cb_ctx->cur;
+ 
+     if (cur->buf.p != NULL) {
+-        cur->next =
++        cur->next = (mbedtls_asn1_sequence *)
+             mbedtls_calloc(1, sizeof(mbedtls_asn1_sequence));
+ 
+         if (cur->next == NULL) {
+diff --git a/third_party/mbedtls/library/asn1write.cpp b/third_party/mbedtls/library/asn1write.cpp
+index 97f9db039b..431c7ba8bb 100644
+--- a/third_party/mbedtls/library/asn1write.cpp
++++ b/third_party/mbedtls/library/asn1write.cpp
+@@ -391,7 +391,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
+         }
+ 
+         cur->oid.len = oid_len;
+-        cur->oid.p = mbedtls_calloc(1, oid_len);
++        cur->oid.p = (unsigned char *) mbedtls_calloc(1, oid_len);
+         if (cur->oid.p == NULL) {
+             mbedtls_free(cur);
+             return NULL;
+@@ -401,7 +401,7 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
+ 
+         cur->val.len = val_len;
+         if (val_len != 0) {
+-            cur->val.p = mbedtls_calloc(1, val_len);
++            cur->val.p = (unsigned char *) mbedtls_calloc(1, val_len);
+             if (cur->val.p == NULL) {
+                 mbedtls_free(cur->oid.p);
+                 mbedtls_free(cur);
+@@ -421,13 +421,13 @@ mbedtls_asn1_named_data *mbedtls_asn1_store_named_data(
+          * Preserve old data until the allocation succeeded, to leave list in
+          * a consistent state in case allocation fails.
+          */
+-        void *p = mbedtls_calloc(1, val_len);
++        void *p = (unsigned char *) mbedtls_calloc(1, val_len);
+         if (p == NULL) {
+             return NULL;
+         }
+ 
+         mbedtls_free(cur->val.p);
+-        cur->val.p = p;
++        cur->val.p = (unsigned char *) p;
+         cur->val.len = val_len;
+     }
+ 
+diff --git a/third_party/mbedtls/library/bignum.cpp b/third_party/mbedtls/library/bignum.cpp
+index 424490951d..3e743b0291 100644
+--- a/third_party/mbedtls/library/bignum.cpp
++++ b/third_party/mbedtls/library/bignum.cpp
+@@ -88,7 +88,7 @@ int mbedtls_mpi_lt_mpi_ct(const mbedtls_mpi *X,
+     /* This array is used to conditionally swap the pointers in const time */
+     void * const p[2] = { X->p, Y->p };
+     size_t i = mbedtls_ct_size_if_else_0(X_is_negative, 1);
+-    mbedtls_ct_condition_t lt = mbedtls_mpi_core_lt_ct(p[i], p[i ^ 1], X->n);
++    mbedtls_ct_condition_t lt = mbedtls_mpi_core_lt_ct((const mbedtls_mpi_uint *) p[i], (const mbedtls_mpi_uint *) p[i ^ 1], X->n);
+ 
+     /*
+      * Store in result iff the signs are the same (i.e., iff different_sign == false). If
+diff --git a/third_party/mbedtls/library/bignum_core.cpp b/third_party/mbedtls/library/bignum_core.cpp
+index 88582c2d38..c8bc21c5f9 100644
+--- a/third_party/mbedtls/library/bignum_core.cpp
++++ b/third_party/mbedtls/library/bignum_core.cpp
+@@ -19,7 +19,6 @@
+ 
+ #include "bignum_core.h"
+ #include "bn_mul.h"
+-#include "constant_time_internal.h"
+ 
+ size_t mbedtls_mpi_core_clz(mbedtls_mpi_uint a)
+ {
+diff --git a/third_party/mbedtls/library/cipher.cpp b/third_party/mbedtls/library/cipher.cpp
+index 2ae01dd84d..8d473a7597 100644
+--- a/third_party/mbedtls/library/cipher.cpp
++++ b/third_party/mbedtls/library/cipher.cpp
+@@ -1451,7 +1451,7 @@ static int mbedtls_cipher_aead_encrypt(mbedtls_cipher_context_t *ctx,
+ #if defined(MBEDTLS_GCM_C)
+     if (MBEDTLS_MODE_GCM == ((mbedtls_cipher_mode_t) ctx->cipher_info->mode)) {
+         *olen = ilen;
+-        return mbedtls_gcm_crypt_and_tag(ctx->cipher_ctx, MBEDTLS_GCM_ENCRYPT,
++        return mbedtls_gcm_crypt_and_tag((mbedtls_gcm_context *) ctx->cipher_ctx, MBEDTLS_GCM_ENCRYPT,
+                                          ilen, iv, iv_len, ad, ad_len,
+                                          input, output, tag_len, tag);
+     }
+@@ -1531,7 +1531,7 @@ static int mbedtls_cipher_aead_decrypt(mbedtls_cipher_context_t *ctx,
+         int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
+ 
+         *olen = ilen;
+-        ret = mbedtls_gcm_auth_decrypt(ctx->cipher_ctx, ilen,
++        ret = mbedtls_gcm_auth_decrypt((mbedtls_gcm_context *) ctx->cipher_ctx, ilen,
+                                        iv, iv_len, ad, ad_len,
+                                        tag, tag_len, input, output);
+ 
+diff --git a/third_party/mbedtls/library/cipher_wrap.cpp b/third_party/mbedtls/library/cipher_wrap.cpp
+index b4c21ee395..005e99d313 100644
+--- a/third_party/mbedtls/library/cipher_wrap.cpp
++++ b/third_party/mbedtls/library/cipher_wrap.cpp
+@@ -131,7 +131,7 @@ static void *gcm_ctx_alloc(void)
+ 
+ static void gcm_ctx_free(void *ctx)
+ {
+-    mbedtls_gcm_free(ctx);
++    mbedtls_gcm_free((mbedtls_gcm_context *) ctx);
+     mbedtls_free(ctx);
+ }
+ #endif /* MBEDTLS_GCM_C */
+@@ -246,7 +246,7 @@ static int aes_setkey_enc_wrap(void *ctx, const unsigned char *key,
+ 
+ static void *aes_ctx_alloc(void)
+ {
+-    mbedtls_aes_context *aes = mbedtls_calloc(1, sizeof(mbedtls_aes_context));
++    mbedtls_aes_context *aes = (mbedtls_aes_context *) mbedtls_calloc(1, sizeof(mbedtls_aes_context));
+ 
+     if (aes == NULL) {
+         return NULL;
+diff --git a/third_party/mbedtls/library/constant_time.cpp b/third_party/mbedtls/library/constant_time.cpp
+index d212ddfd81..285f963b3c 100644
+--- a/third_party/mbedtls/library/constant_time.cpp
++++ b/third_party/mbedtls/library/constant_time.cpp
+@@ -150,7 +150,7 @@ int mbedtls_ct_memcmp_partial(const void *a,
+ 
+ void mbedtls_ct_memmove_left(void *start, size_t total, size_t offset)
+ {
+-    volatile unsigned char *buf = start;
++    volatile unsigned char *buf = (unsigned char *) start;
+     for (size_t i = 0; i < total; i++) {
+         mbedtls_ct_condition_t no_op = mbedtls_ct_uint_gt(total - offset, i);
+         /* The first `total - offset` passes are a no-op. The last
+diff --git a/third_party/mbedtls/library/md.cpp b/third_party/mbedtls/library/md.cpp
+index c95846aa04..00addd62c3 100644
+--- a/third_party/mbedtls/library/md.cpp
++++ b/third_party/mbedtls/library/md.cpp
+@@ -283,7 +283,7 @@ void mbedtls_md_free(mbedtls_md_context_t *ctx)
+ #endif
+ #if defined(MBEDTLS_SHA1_C)
+             case MBEDTLS_MD_SHA1:
+-                mbedtls_sha1_free(ctx->md_ctx);
++                mbedtls_sha1_free((mbedtls_sha1_context *) ctx->md_ctx);
+                 break;
+ #endif
+ #if defined(MBEDTLS_SHA224_C)
+@@ -293,7 +293,7 @@ void mbedtls_md_free(mbedtls_md_context_t *ctx)
+ #endif
+ #if defined(MBEDTLS_SHA256_C)
+             case MBEDTLS_MD_SHA256:
+-                mbedtls_sha256_free(ctx->md_ctx);
++                mbedtls_sha256_free((mbedtls_sha256_context *) ctx->md_ctx);
+                 break;
+ #endif
+ #if defined(MBEDTLS_SHA384_C)
+@@ -368,7 +368,7 @@ int mbedtls_md_clone(mbedtls_md_context_t *dst,
+ #endif
+ #if defined(MBEDTLS_SHA1_C)
+         case MBEDTLS_MD_SHA1:
+-            mbedtls_sha1_clone(dst->md_ctx, src->md_ctx);
++            mbedtls_sha1_clone((mbedtls_sha1_context *) dst->md_ctx, (mbedtls_sha1_context *) src->md_ctx);
+             break;
+ #endif
+ #if defined(MBEDTLS_SHA224_C)
+@@ -378,7 +378,7 @@ int mbedtls_md_clone(mbedtls_md_context_t *dst,
+ #endif
+ #if defined(MBEDTLS_SHA256_C)
+         case MBEDTLS_MD_SHA256:
+-            mbedtls_sha256_clone(dst->md_ctx, src->md_ctx);
++            mbedtls_sha256_clone((mbedtls_sha256_context *) dst->md_ctx, (mbedtls_sha256_context *) src->md_ctx);
+             break;
+ #endif
+ #if defined(MBEDTLS_SHA384_C)
+@@ -411,7 +411,7 @@ int mbedtls_md_clone(mbedtls_md_context_t *dst,
+         ctx->md_ctx = mbedtls_calloc(1, sizeof(mbedtls_##type##_context)); \
+         if (ctx->md_ctx == NULL)                                       \
+         return MBEDTLS_ERR_MD_ALLOC_FAILED;                      \
+-        mbedtls_##type##_init(ctx->md_ctx);                           \
++        mbedtls_##type##_init((mbedtls_##type##_context *) ctx->md_ctx);                           \
+     }                                                                   \
+     while (0)
+ 
+@@ -535,7 +535,7 @@ int mbedtls_md_starts(mbedtls_md_context_t *ctx)
+ #endif
+ #if defined(MBEDTLS_SHA1_C)
+         case MBEDTLS_MD_SHA1:
+-            return mbedtls_sha1_starts(ctx->md_ctx);
++            return mbedtls_sha1_starts((mbedtls_sha1_context *)ctx->md_ctx);
+ #endif
+ #if defined(MBEDTLS_SHA224_C)
+         case MBEDTLS_MD_SHA224:
+@@ -543,7 +543,7 @@ int mbedtls_md_starts(mbedtls_md_context_t *ctx)
+ #endif
+ #if defined(MBEDTLS_SHA256_C)
+         case MBEDTLS_MD_SHA256:
+-            return mbedtls_sha256_starts(ctx->md_ctx, 0);
++            return mbedtls_sha256_starts((mbedtls_sha256_context *)ctx->md_ctx, 0);
+ #endif
+ #if defined(MBEDTLS_SHA384_C)
+         case MBEDTLS_MD_SHA384:
+@@ -594,7 +594,7 @@ int mbedtls_md_update(mbedtls_md_context_t *ctx, const unsigned char *input, siz
+ #endif
+ #if defined(MBEDTLS_SHA1_C)
+         case MBEDTLS_MD_SHA1:
+-            return mbedtls_sha1_update(ctx->md_ctx, input, ilen);
++            return mbedtls_sha1_update((mbedtls_sha1_context *)ctx->md_ctx, input, ilen);
+ #endif
+ #if defined(MBEDTLS_SHA224_C)
+         case MBEDTLS_MD_SHA224:
+@@ -602,7 +602,7 @@ int mbedtls_md_update(mbedtls_md_context_t *ctx, const unsigned char *input, siz
+ #endif
+ #if defined(MBEDTLS_SHA256_C)
+         case MBEDTLS_MD_SHA256:
+-            return mbedtls_sha256_update(ctx->md_ctx, input, ilen);
++            return mbedtls_sha256_update((mbedtls_sha256_context *)ctx->md_ctx, input, ilen);
+ #endif
+ #if defined(MBEDTLS_SHA384_C)
+         case MBEDTLS_MD_SHA384:
+@@ -652,7 +652,7 @@ int mbedtls_md_finish(mbedtls_md_context_t *ctx, unsigned char *output)
+ #endif
+ #if defined(MBEDTLS_SHA1_C)
+         case MBEDTLS_MD_SHA1:
+-            return mbedtls_sha1_finish(ctx->md_ctx, output);
++            return mbedtls_sha1_finish((mbedtls_sha1_context *)ctx->md_ctx, output);
+ #endif
+ #if defined(MBEDTLS_SHA224_C)
+         case MBEDTLS_MD_SHA224:
+@@ -660,7 +660,7 @@ int mbedtls_md_finish(mbedtls_md_context_t *ctx, unsigned char *output)
+ #endif
+ #if defined(MBEDTLS_SHA256_C)
+         case MBEDTLS_MD_SHA256:
+-            return mbedtls_sha256_finish(ctx->md_ctx, output);
++            return mbedtls_sha256_finish((mbedtls_sha256_context *)ctx->md_ctx, output);
+ #endif
+ #if defined(MBEDTLS_SHA384_C)
+         case MBEDTLS_MD_SHA384:
+diff --git a/third_party/mbedtls/library/oid.cpp b/third_party/mbedtls/library/oid.cpp
+index 1d6b1eb866..fdaa52deeb 100644
+--- a/third_party/mbedtls/library/oid.cpp
++++ b/third_party/mbedtls/library/oid.cpp
+@@ -1071,7 +1071,7 @@ int mbedtls_oid_from_numeric_string(mbedtls_asn1_buf *oid,
+     size_t bytes_per_subidentifier = (((sizeof(unsigned int) * 8) - 1) / 7)
+                                      + 1;
+     size_t max_possible_bytes = num_dots * bytes_per_subidentifier;
+-    oid->p = mbedtls_calloc(max_possible_bytes, 1);
++    oid->p = (unsigned char *) mbedtls_calloc(max_possible_bytes, 1);
+     if (oid->p == NULL) {
+         return MBEDTLS_ERR_ASN1_ALLOC_FAILED;
+     }
+@@ -1142,7 +1142,7 @@ int mbedtls_oid_from_numeric_string(mbedtls_asn1_buf *oid,
+     }
+ 
+     encoded_len = (size_t) (out_ptr - oid->p);
+-    resized_mem = mbedtls_calloc(encoded_len, 1);
++    resized_mem = (unsigned char *) mbedtls_calloc(encoded_len, 1);
+     if (resized_mem == NULL) {
+         ret = MBEDTLS_ERR_ASN1_ALLOC_FAILED;
+         goto error;
+diff --git a/third_party/mbedtls/library/pem.cpp b/third_party/mbedtls/library/pem.cpp
+index 119fd59e12..f2d06b1d22 100644
+--- a/third_party/mbedtls/library/pem.cpp
++++ b/third_party/mbedtls/library/pem.cpp
+@@ -419,7 +419,7 @@ int mbedtls_pem_read_buffer(mbedtls_pem_context *ctx, const char *header, const
+         return MBEDTLS_ERR_PEM_BAD_INPUT_DATA;
+     }
+ 
+-    if ((buf = mbedtls_calloc(1, len)) == NULL) {
++    if ((buf = (unsigned char *) mbedtls_calloc(1, len)) == NULL) {
+         return MBEDTLS_ERR_PEM_ALLOC_FAILED;
+     }
+ 
+diff --git a/third_party/mbedtls/library/pk_wrap.cpp b/third_party/mbedtls/library/pk_wrap.cpp
+index 19196b559a..380144ae3d 100644
+--- a/third_party/mbedtls/library/pk_wrap.cpp
++++ b/third_party/mbedtls/library/pk_wrap.cpp
+@@ -29,7 +29,6 @@
+ #if defined(MBEDTLS_USE_PSA_CRYPTO)
+ #include "psa_util_internal.h"
+ #include "psa/crypto.h"
+-#include "mbedtls/psa_util.h"
+ 
+ #if defined(MBEDTLS_RSA_C)
+ #include "pkwrite.h"
+diff --git a/third_party/mbedtls/library/pkparse.cpp b/third_party/mbedtls/library/pkparse.cpp
+index 4f6ee13986..6f478f0120 100644
+--- a/third_party/mbedtls/library/pkparse.cpp
++++ b/third_party/mbedtls/library/pkparse.cpp
+@@ -471,7 +471,7 @@ static int pk_parse_key_rfc8410_der(mbedtls_pk_context *pk,
+ static int pk_get_pk_alg(unsigned char **p,
+                          const unsigned char *end,
+                          mbedtls_pk_type_t *pk_alg, mbedtls_asn1_buf *params,
+-                         mbedtls_ecp_group_id *ec_grp_id)
++                         void *ec_grp_id)
+ {
+     int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
+     mbedtls_asn1_buf alg_oid;
+@@ -485,7 +485,7 @@ static int pk_get_pk_alg(unsigned char **p,
+     ret = mbedtls_oid_get_pk_alg(&alg_oid, pk_alg);
+ #if defined(MBEDTLS_PK_HAVE_ECC_KEYS)
+     if (ret == MBEDTLS_ERR_OID_NOT_FOUND) {
+-        ret = mbedtls_oid_get_ec_grp_algid(&alg_oid, ec_grp_id);
++        ret = mbedtls_oid_get_ec_grp_algid(&alg_oid, reinterpret_cast<mbedtls_ecp_group_id*>(ec_grp_id));
+         if (ret == 0) {
+             *pk_alg = MBEDTLS_PK_ECKEY;
+         }
+@@ -521,7 +521,7 @@ int mbedtls_pk_parse_subpubkey(unsigned char **p, const unsigned char *end,
+     size_t len;
+     mbedtls_asn1_buf alg_params;
+     mbedtls_pk_type_t pk_alg = MBEDTLS_PK_NONE;
+-    mbedtls_ecp_group_id ec_grp_id = MBEDTLS_ECP_DP_NONE;
++    int ec_grp_id = 0;
+     const mbedtls_pk_info_t *pk_info;
+ 
+     if ((ret = mbedtls_asn1_get_tag(p, end, &len,
+@@ -750,7 +750,7 @@ static int pk_parse_key_pkcs8_unencrypted_der(
+     unsigned char *p = (unsigned char *) key;
+     unsigned char *end = p + keylen;
+     mbedtls_pk_type_t pk_alg = MBEDTLS_PK_NONE;
+-    mbedtls_ecp_group_id ec_grp_id = MBEDTLS_ECP_DP_NONE;
++    int ec_grp_id = 0;
+     const mbedtls_pk_info_t *pk_info;
+ 
+ #if !defined(MBEDTLS_PK_HAVE_ECC_KEYS)
+diff --git a/third_party/mbedtls/library/rsa.cpp b/third_party/mbedtls/library/rsa.cpp
+index 557faaf363..63faf1c8cc 100644
+--- a/third_party/mbedtls/library/rsa.cpp
++++ b/third_party/mbedtls/library/rsa.cpp
+@@ -2458,12 +2458,12 @@ int mbedtls_rsa_rsassa_pkcs1_v15_sign(mbedtls_rsa_context *ctx,
+      * temporary buffer and check it before returning it.
+      */
+ 
+-    sig_try = mbedtls_calloc(1, ctx->len);
++    sig_try = (unsigned char *) mbedtls_calloc(1, ctx->len);
+     if (sig_try == NULL) {
+         return MBEDTLS_ERR_MPI_ALLOC_FAILED;
+     }
+ 
+-    verif = mbedtls_calloc(1, ctx->len);
++    verif = (unsigned char *) mbedtls_calloc(1, ctx->len);
+     if (verif == NULL) {
+         mbedtls_free(sig_try);
+         return MBEDTLS_ERR_MPI_ALLOC_FAILED;
+@@ -2692,8 +2692,8 @@ int mbedtls_rsa_rsassa_pkcs1_v15_verify(mbedtls_rsa_context *ctx,
+      * Prepare expected PKCS1 v1.5 encoding of hash.
+      */
+ 
+-    if ((encoded          = mbedtls_calloc(1, sig_len)) == NULL ||
+-        (encoded_expected = mbedtls_calloc(1, sig_len)) == NULL) {
++    if ((encoded          = (unsigned char *) mbedtls_calloc(1, sig_len)) == NULL ||
++        (encoded_expected = (unsigned char *) mbedtls_calloc(1, sig_len)) == NULL) {
+         ret = MBEDTLS_ERR_MPI_ALLOC_FAILED;
+         goto cleanup;
+     }
+diff --git a/third_party/mbedtls/library/sha1.cpp b/third_party/mbedtls/library/sha1.cpp
+index dfbe481f39..dacfe263f3 100644
+--- a/third_party/mbedtls/library/sha1.cpp
++++ b/third_party/mbedtls/library/sha1.cpp
+@@ -88,7 +88,7 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+ 
+ #define S(x, n) (((x) << (n)) | (((x) & 0xFFFFFFFF) >> (32 - (n))))
+ 
+-#define R(t)                                                    \
++#define SHA1R(t)                                                    \
+     (                                                           \
+         local.temp = local.W[((t) -  3) & 0x0F] ^             \
+                      local.W[((t) -  8) & 0x0F] ^             \
+@@ -97,7 +97,7 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+         (local.W[(t) & 0x0F] = S(local.temp, 1))               \
+     )
+ 
+-#define P(a, b, c, d, e, x)                                          \
++#define SHA1P(a, b, c, d, e, x)                                          \
+     do                                                          \
+     {                                                           \
+         (e) += S((a), 5) + F((b), (c), (d)) + K + (x);             \
+@@ -113,26 +113,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+ #define F(x, y, z) ((z) ^ ((x) & ((y) ^ (z))))
+ #define K 0x5A827999
+ 
+-    P(local.A, local.B, local.C, local.D, local.E, local.W[0]);
+-    P(local.E, local.A, local.B, local.C, local.D, local.W[1]);
+-    P(local.D, local.E, local.A, local.B, local.C, local.W[2]);
+-    P(local.C, local.D, local.E, local.A, local.B, local.W[3]);
+-    P(local.B, local.C, local.D, local.E, local.A, local.W[4]);
+-    P(local.A, local.B, local.C, local.D, local.E, local.W[5]);
+-    P(local.E, local.A, local.B, local.C, local.D, local.W[6]);
+-    P(local.D, local.E, local.A, local.B, local.C, local.W[7]);
+-    P(local.C, local.D, local.E, local.A, local.B, local.W[8]);
+-    P(local.B, local.C, local.D, local.E, local.A, local.W[9]);
+-    P(local.A, local.B, local.C, local.D, local.E, local.W[10]);
+-    P(local.E, local.A, local.B, local.C, local.D, local.W[11]);
+-    P(local.D, local.E, local.A, local.B, local.C, local.W[12]);
+-    P(local.C, local.D, local.E, local.A, local.B, local.W[13]);
+-    P(local.B, local.C, local.D, local.E, local.A, local.W[14]);
+-    P(local.A, local.B, local.C, local.D, local.E, local.W[15]);
+-    P(local.E, local.A, local.B, local.C, local.D, R(16));
+-    P(local.D, local.E, local.A, local.B, local.C, R(17));
+-    P(local.C, local.D, local.E, local.A, local.B, R(18));
+-    P(local.B, local.C, local.D, local.E, local.A, R(19));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[0]);
++    SHA1P(local.E, local.A, local.B, local.C, local.D, local.W[1]);
++    SHA1P(local.D, local.E, local.A, local.B, local.C, local.W[2]);
++    SHA1P(local.C, local.D, local.E, local.A, local.B, local.W[3]);
++    SHA1P(local.B, local.C, local.D, local.E, local.A, local.W[4]);
++    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[5]);
++    SHA1P(local.E, local.A, local.B, local.C, local.D, local.W[6]);
++    SHA1P(local.D, local.E, local.A, local.B, local.C, local.W[7]);
++    SHA1P(local.C, local.D, local.E, local.A, local.B, local.W[8]);
++    SHA1P(local.B, local.C, local.D, local.E, local.A, local.W[9]);
++    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[10]);
++    SHA1P(local.E, local.A, local.B, local.C, local.D, local.W[11]);
++    SHA1P(local.D, local.E, local.A, local.B, local.C, local.W[12]);
++    SHA1P(local.C, local.D, local.E, local.A, local.B, local.W[13]);
++    SHA1P(local.B, local.C, local.D, local.E, local.A, local.W[14]);
++    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[15]);
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(16));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(17));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(18));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(19));
+ 
+ #undef K
+ #undef F
+@@ -140,26 +140,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+ #define F(x, y, z) ((x) ^ (y) ^ (z))
+ #define K 0x6ED9EBA1
+ 
+-    P(local.A, local.B, local.C, local.D, local.E, R(20));
+-    P(local.E, local.A, local.B, local.C, local.D, R(21));
+-    P(local.D, local.E, local.A, local.B, local.C, R(22));
+-    P(local.C, local.D, local.E, local.A, local.B, R(23));
+-    P(local.B, local.C, local.D, local.E, local.A, R(24));
+-    P(local.A, local.B, local.C, local.D, local.E, R(25));
+-    P(local.E, local.A, local.B, local.C, local.D, R(26));
+-    P(local.D, local.E, local.A, local.B, local.C, R(27));
+-    P(local.C, local.D, local.E, local.A, local.B, R(28));
+-    P(local.B, local.C, local.D, local.E, local.A, R(29));
+-    P(local.A, local.B, local.C, local.D, local.E, R(30));
+-    P(local.E, local.A, local.B, local.C, local.D, R(31));
+-    P(local.D, local.E, local.A, local.B, local.C, R(32));
+-    P(local.C, local.D, local.E, local.A, local.B, R(33));
+-    P(local.B, local.C, local.D, local.E, local.A, R(34));
+-    P(local.A, local.B, local.C, local.D, local.E, R(35));
+-    P(local.E, local.A, local.B, local.C, local.D, R(36));
+-    P(local.D, local.E, local.A, local.B, local.C, R(37));
+-    P(local.C, local.D, local.E, local.A, local.B, R(38));
+-    P(local.B, local.C, local.D, local.E, local.A, R(39));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(20));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(21));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(22));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(23));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(24));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(25));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(26));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(27));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(28));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(29));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(30));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(31));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(32));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(33));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(34));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(35));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(36));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(37));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(38));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(39));
+ 
+ #undef K
+ #undef F
+@@ -167,26 +167,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+ #define F(x, y, z) (((x) & (y)) | ((z) & ((x) | (y))))
+ #define K 0x8F1BBCDC
+ 
+-    P(local.A, local.B, local.C, local.D, local.E, R(40));
+-    P(local.E, local.A, local.B, local.C, local.D, R(41));
+-    P(local.D, local.E, local.A, local.B, local.C, R(42));
+-    P(local.C, local.D, local.E, local.A, local.B, R(43));
+-    P(local.B, local.C, local.D, local.E, local.A, R(44));
+-    P(local.A, local.B, local.C, local.D, local.E, R(45));
+-    P(local.E, local.A, local.B, local.C, local.D, R(46));
+-    P(local.D, local.E, local.A, local.B, local.C, R(47));
+-    P(local.C, local.D, local.E, local.A, local.B, R(48));
+-    P(local.B, local.C, local.D, local.E, local.A, R(49));
+-    P(local.A, local.B, local.C, local.D, local.E, R(50));
+-    P(local.E, local.A, local.B, local.C, local.D, R(51));
+-    P(local.D, local.E, local.A, local.B, local.C, R(52));
+-    P(local.C, local.D, local.E, local.A, local.B, R(53));
+-    P(local.B, local.C, local.D, local.E, local.A, R(54));
+-    P(local.A, local.B, local.C, local.D, local.E, R(55));
+-    P(local.E, local.A, local.B, local.C, local.D, R(56));
+-    P(local.D, local.E, local.A, local.B, local.C, R(57));
+-    P(local.C, local.D, local.E, local.A, local.B, R(58));
+-    P(local.B, local.C, local.D, local.E, local.A, R(59));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(40));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(41));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(42));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(43));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(44));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(45));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(46));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(47));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(48));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(49));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(50));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(51));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(52));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(53));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(54));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(55));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(56));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(57));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(58));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(59));
+ 
+ #undef K
+ #undef F
+@@ -194,26 +194,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+ #define F(x, y, z) ((x) ^ (y) ^ (z))
+ #define K 0xCA62C1D6
+ 
+-    P(local.A, local.B, local.C, local.D, local.E, R(60));
+-    P(local.E, local.A, local.B, local.C, local.D, R(61));
+-    P(local.D, local.E, local.A, local.B, local.C, R(62));
+-    P(local.C, local.D, local.E, local.A, local.B, R(63));
+-    P(local.B, local.C, local.D, local.E, local.A, R(64));
+-    P(local.A, local.B, local.C, local.D, local.E, R(65));
+-    P(local.E, local.A, local.B, local.C, local.D, R(66));
+-    P(local.D, local.E, local.A, local.B, local.C, R(67));
+-    P(local.C, local.D, local.E, local.A, local.B, R(68));
+-    P(local.B, local.C, local.D, local.E, local.A, R(69));
+-    P(local.A, local.B, local.C, local.D, local.E, R(70));
+-    P(local.E, local.A, local.B, local.C, local.D, R(71));
+-    P(local.D, local.E, local.A, local.B, local.C, R(72));
+-    P(local.C, local.D, local.E, local.A, local.B, R(73));
+-    P(local.B, local.C, local.D, local.E, local.A, R(74));
+-    P(local.A, local.B, local.C, local.D, local.E, R(75));
+-    P(local.E, local.A, local.B, local.C, local.D, R(76));
+-    P(local.D, local.E, local.A, local.B, local.C, R(77));
+-    P(local.C, local.D, local.E, local.A, local.B, R(78));
+-    P(local.B, local.C, local.D, local.E, local.A, R(79));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(60));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(61));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(62));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(63));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(64));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(65));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(66));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(67));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(68));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(69));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(70));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(71));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(72));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(73));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(74));
++    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(75));
++    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(76));
++    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(77));
++    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(78));
++    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(79));
+ 
+ #undef K
+ #undef F

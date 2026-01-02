@@ -43,24 +43,30 @@ SELECT '14:42:04.500'::TIME::VARCHAR
 statement error
 SELECT '50:42:04.500'::TIME::VARCHAR
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '100:42:04.500'::TIME::VARCHAR
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '14:70:04.500'::TIME::VARCHAR
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '14:100:04.500'::TIME::VARCHAR
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 statement error
 SELECT '14:42:70.500'::TIME::VARCHAR
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*
 
 # invalid separator
 statement error
 SELECT '14-42-04'::TIME::VARCHAR
 ----
+<REGEX>:.*Conversion Error.*time field value out of range.*

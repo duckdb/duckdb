@@ -79,6 +79,7 @@ enum class PhysicalOperatorType : uint8_t {
 	BATCH_INSERT,
 	DELETE_OPERATOR,
 	UPDATE,
+	MERGE_INTO,
 
 	// -----------------------------
 	// Schema

@@ -2,9 +2,6 @@
 # description: Test HASH function
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # Unsupported types
 
 foreach datatype ANY HASH POINTER

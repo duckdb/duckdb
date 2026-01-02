@@ -6,23 +6,23 @@ statement ok
 PRAGMA enable_verification
 
 query II
-FROM read_csv('data/csv/14512.csv', strict_mode=TRUE);
+FROM read_csv('{DATA_DIR}/csv/14512.csv', strict_mode=TRUE);
 ----
 onions	,
 
 query I
-select columns FROM sniff_csv('data/csv/14512.csv')
+select columns FROM sniff_csv('{DATA_DIR}/csv/14512.csv')
 ----
 [{'name': ingredients, 'type': VARCHAR}, {'name': item_tax_data, 'type': VARCHAR}]
 
 query IIIIIIIIIIIIIIIIIIIIIIIIII
-FROM read_csv('data/csv/14512_og.csv', strict_mode = false, delim = ',', quote = '"', escape = '"');
+FROM read_csv('{DATA_DIR}/csv/14512_og.csv', strict_mode = false, delim = ',', quote = '"', escape = '"');
 ----
 00000579000098	13.99	EA	PINE RIDGE CHENIN VOIGNIER	750.0	ML	1	13	NULL	1	NULL	NULL	NULL	NULL	NULL	NULL	DEFAULT BRAND	NULL	NULL	NULL	NULL	BEER & WINE	NULL	NULL	7.25	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.0725}}
 00000609082001	3.99	EA	MADELAINE MINI MILK CHOCOLATE TURKEY	1.0	OZ	1	13	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	MADELEINE	NULL	NULL	NULL	NULL	CANDY	NULL	NULL	7.25	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.0725}}
 00817566020096	9.99	EA	COTSWOLD EW	5.3	OZ	1	13	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	LONG CLAWSON	NULL	NULL	NULL	NULL	DELI	INGREDIENTS: DOUBLE GLOUCESTER CHEESE (PASTEURIZED MILK  SALT  ENZYMES  DAIRY CULTURES  ANNATTO  EXTRACT AS A COLOR)  RECONSTITUTED MINCED ONIONS (2%)  DRIED CHIVES. CONTAINS: MILK     THIS PRODUCT WAS PRODUCED IN AN ENVIRONMENT THAT ALSO USES PEANUTS  TREE NUTS  EGGS  MILK  WHEAT  SOY  FISH  SHELLFISH  AND SESAME.	NULL	2.0	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.02}}
 
 query I
-select columns FROM sniff_csv('data/csv/14512_og.csv', strict_mode = false, delim = ',', quote = '"', escape = '"')
+select columns FROM sniff_csv('{DATA_DIR}/csv/14512_og.csv', strict_mode = false, delim = ',', quote = '"', escape = '"')
 ----
 [{'name': lookup_code, 'type': VARCHAR}, {'name': price, 'type': DOUBLE}, {'name': cost_unit, 'type': VARCHAR}, {'name': item_name, 'type': VARCHAR}, {'name': size, 'type': DOUBLE}, {'name': size_uom, 'type': VARCHAR}, {'name': available, 'type': BIGINT}, {'name': store_code, 'type': BIGINT}, {'name': private_label_item, 'type': VARCHAR}, {'name': alcoholic, 'type': BIGINT}, {'name': alcohol_by_volume, 'type': VARCHAR}, {'name': alcohol_type, 'type': VARCHAR}, {'name': nutri_info, 'type': VARCHAR}, {'name': allergens, 'type': VARCHAR}, {'name': balance_on_hand, 'type': VARCHAR}, {'name': blackout_times, 'type': VARCHAR}, {'name': brand_name, 'type': VARCHAR}, {'name': ca_prop65_text, 'type': VARCHAR}, {'name': ca_prop65_codes, 'type': VARCHAR}, {'name': configurable_products, 'type': VARCHAR}, {'name': country_of_origin, 'type': VARCHAR}, {'name': department, 'type': VARCHAR}, {'name': ingredients, 'type': VARCHAR}, {'name': item_details, 'type': VARCHAR}, {'name': tax_rate, 'type': DOUBLE}, {'name': item_tax_data, 'type': VARCHAR}]

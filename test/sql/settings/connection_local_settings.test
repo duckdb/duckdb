@@ -1,0 +1,53 @@
+# name: test/sql/settings/connection_local_settings.test
+# description: Exhaustive setting tests
+# group: [settings]
+
+require skip_reload
+
+statement ok
+CREATE TABLE tbl AS FROM (VALUES (1), (2), (3), (NULL)) t(i)
+
+# global settings: ASC NULLS FIRST
+statement ok
+SET default_order = 'ASCENDING';
+
+statement ok
+SET default_null_order = 'NULLS FIRST';
+
+# con1: DESC NULLS FIRST
+statement ok con1
+SET SESSION default_order = 'DESCENDING';
+
+statement ok con1
+SET SESSION default_null_order = 'NULLS FIRST';
+
+# con2: ASC NULLS LAST
+statement ok con2
+SET SESSION default_order = 'ASCENDING'
+
+statement ok con2
+SET SESSION default_null_order = 'NULLS LAST'
+
+query I
+SELECT * FROM tbl ORDER BY i
+----
+NULL
+1
+2
+3
+
+query I con1
+SELECT * FROM tbl ORDER BY i
+----
+NULL
+3
+2
+1
+
+query I con2
+SELECT * FROM tbl ORDER BY i
+----
+1
+2
+3
+NULL

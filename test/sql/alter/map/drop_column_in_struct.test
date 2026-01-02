@@ -1,0 +1,98 @@
+# name: test/sql/alter/map/drop_column_in_struct.test
+# group: [map]
+
+statement ok
+CREATE TABLE test(
+	s MAP(
+		STRUCT(
+			n INTEGER,
+			m INTEGER
+		),
+		STRUCT(
+			i INTEGER,
+			j INTEGER
+		)
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(MAP {ROW(3,3): ROW(1, 1)}),
+	(MAP {ROW(4,4): ROW(2, 2)})
+
+# attempt to drop 'key' from the map
+statement error
+ALTER TABLE test DROP COLUMN s.key
+----
+Catalog Error: Cannot drop field 'key' from column 's' - it's not a struct
+
+# attempt to drop 'value' from the map
+statement error
+ALTER TABLE test DROP COLUMN s.value
+----
+Catalog Error: Cannot drop field 'value' from column 's' - it's not a struct
+
+
+# drop a column from the struct inside the 'value'
+statement ok
+ALTER TABLE test DROP COLUMN s.value.j
+
+query I
+select * from test;
+----
+{{'n': 3, 'm': 3}={'i': 1}}
+{{'n': 4, 'm': 4}={'i': 2}}
+
+# drop a column from the struct inside the 'key'
+statement ok
+ALTER TABLE test DROP COLUMN s.key.n
+
+query I
+select * from test;
+----
+{{'m': 3}={'i': 1}}
+{{'m': 4}={'i': 2}}
+
+statement ok
+drop table test;
+
+statement ok
+CREATE TABLE test(
+	s STRUCT(
+		a MAP(
+			STRUCT(
+				n INTEGER,
+				m INTEGER
+			),
+			STRUCT(
+				i INTEGER,
+				j INTEGER
+			)
+		)
+	)
+)
+
+statement ok
+INSERT INTO test VALUES
+	(ROW(MAP {ROW(3,3): ROW(1, 1)})),
+	(ROW(MAP {ROW(4,4): ROW(2, 2)}))
+
+# drop a column from the struct in the 'key'
+statement ok
+ALTER TABLE test DROP COLUMN s.a.key.m
+
+query I
+select * from test;
+----
+{'a': {{'n': 3}={'i': 1, 'j': 1}}}
+{'a': {{'n': 4}={'i': 2, 'j': 2}}}
+
+# drop a column from the struct in the 'value'
+statement ok
+ALTER TABLE test DROP COLUMN s.a.value.j
+
+query I
+select * from test;
+----
+{'a': {{'n': 3}={'i': 1}}}
+{'a': {{'n': 4}={'i': 2}}}

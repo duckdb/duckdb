@@ -30,6 +30,7 @@ public:
 	MetadataManager &GetManager() {
 		return manager;
 	}
+	void SetWrittenPointers(optional_ptr<vector<MetaBlockPointer>> written_pointers);
 
 protected:
 	virtual MetadataHandle NextHandle();

@@ -39,6 +39,18 @@ public:
 		return serializer.GetRootObject();
 	}
 
+	template <class T>
+	static string SerializeToString(T &value) {
+		auto doc = yyjson_mut_doc_new(nullptr);
+		JsonSerializer serializer(doc, false, false, false);
+		value.Serialize(serializer);
+		auto result_obj = serializer.GetRootObject();
+		idx_t len = 0;
+		auto data = yyjson_mut_val_write_opts(result_obj, JSONCommon::WRITE_PRETTY_FLAG, nullptr,
+		                                      reinterpret_cast<size_t *>(&len), nullptr);
+		return string(data, len);
+	}
+
 	yyjson_mut_val *GetRootObject() {
 		D_ASSERT(stack.size() == 1); // or we forgot to pop somewhere
 		return stack.front();

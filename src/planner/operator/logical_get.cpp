@@ -126,8 +126,11 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
 		}
 		return entry->second.type;
+	} else if (index.HasType()) {
+		return index.GetScanType();
+	} else {
+		return returned_types[index.GetPrimaryIndex()];
 	}
-	return returned_types[index.GetPrimaryIndex()];
 }
 
 const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
@@ -183,6 +186,31 @@ void LogicalGet::ResolveTypes() {
 	}
 }
 
+bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const {
+	if (column_index.IsRowIdColumn()) {
+		return false;
+	}
+	if (column_index.IsVirtualColumn()) {
+		return false;
+	}
+
+	auto table = GetTable();
+	if (!table) {
+		//! If there's no table we assume there's no mismatch between
+		//! logical/storage index
+		out_index = StorageIndex::FromColumnIndex(column_index);
+		return true;
+	}
+
+	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
+	if (column.Generated()) {
+		//! This is a generated column, can't use the row group pruner
+		return false;
+	}
+	out_index = table->GetStorageIndex(column_index);
+	return true;
+}
+
 idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	// join order optimizer does better cardinality estimation.
 	if (has_estimated_cardinality) {
@@ -219,6 +247,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
+	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
+	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -247,6 +277,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
+	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -270,10 +302,13 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		if (result->ordinality_idx.IsValid()) {
+			auto ordinality_pos = bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_idx.GetIndex());
+			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
+		}
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
 		}
-
 		for (auto &col_id : result->column_ids) {
 			if (col_id.IsVirtualColumn()) {
 				auto idx = col_id.GetPrimaryIndex();
@@ -281,14 +316,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 				if (ventry == virtual_columns.end()) {
 					throw SerializationException(
 					    "Table function deserialization failure - could not find virtual column with id %d", idx);
-				}
-				auto &ret_type = ventry->second.type;
-				auto &col_name = ventry->second.name;
-				if (bind_return_types[idx] != ret_type) {
-					throw SerializationException(
-					    "Table function deserialization failure in function \"%s\" - virtual column with "
-					    "name %s was serialized with type %s, but now has type %s",
-					    function.name, col_name, ret_type, bind_return_types[idx]);
 				}
 			} else {
 				auto idx = col_id.GetPrimaryIndex();

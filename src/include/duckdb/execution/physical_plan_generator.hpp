@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/joinside.hpp"
@@ -37,8 +38,7 @@ public:
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
-		auto mem = arena.AllocateAligned(sizeof(T));
-		auto ptr = new (mem) T(std::forward<ARGS>(args)...);
+		auto ptr = arena.Make<T>(*this, std::forward<ARGS>(args)...);
 		ops.push_back(*ptr);
 		return *ptr;
 	}
@@ -49,6 +49,10 @@ public:
 	}
 	void SetRoot(PhysicalOperator &op) {
 		root = op;
+	}
+	//! Get a reference to the arena.
+	ArenaAllocator &ArenaRef() {
+		return arena;
 	}
 
 private:
@@ -90,6 +94,7 @@ public:
 	//! The order preservation type of the given operator decided by recursively looking at its children
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
 
+	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
@@ -119,6 +124,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalFilter &op);
 	PhysicalOperator &CreatePlan(LogicalGet &op);
 	PhysicalOperator &CreatePlan(LogicalLimit &op);
+	PhysicalOperator &CreatePlan(LogicalMergeInto &op);
 	PhysicalOperator &CreatePlan(LogicalOrder &op);
 	PhysicalOperator &CreatePlan(LogicalTopN &op);
 	PhysicalOperator &CreatePlan(LogicalPositionalJoin &op);
@@ -147,7 +153,8 @@ protected:
 	PhysicalOperator &PlanComparisonJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &PlanDelimJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &ExtractAggregateExpressions(PhysicalOperator &child, vector<unique_ptr<Expression>> &expressions,
-	                                              vector<unique_ptr<Expression>> &groups);
+	                                              vector<unique_ptr<Expression>> &groups,
+	                                              optional_ptr<vector<GroupingSet>> grouping_sets);
 
 private:
 	ClientContext &context;

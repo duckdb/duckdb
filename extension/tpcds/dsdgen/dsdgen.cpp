@@ -89,6 +89,10 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		assert(table_def.name);
 		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 
+		if (!table_entry.IsDuckTable()) {
+			throw InvalidInputException("dsdgen is only supported for DuckDB database files");
+		}
+
 		auto append = make_uniq<tpcds_append_information>(context, &table_entry);
 		append->table_def = table_def;
 		append_info[table_id] = std::move(append);

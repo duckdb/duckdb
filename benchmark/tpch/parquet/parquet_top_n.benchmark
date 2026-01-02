@@ -1,0 +1,19 @@
+# name: benchmark/tpch/parquet/parquet_top_n.benchmark
+# description: Top-N over lineitem Parquet
+# group: [parquet]
+
+include benchmark/tpch/tpch_load_parquet.benchmark.in
+
+name Lineitem Top N (order key)
+group topn
+subgroup tpch
+
+run
+SELECT * FROM lineitem ORDER BY l_extendedprice DESC, l_orderkey LIMIT 5;
+
+result IIIIIIIIIIIIIIII
+2513090	199999	5038	4	50.00	104949.50	0.02	0.04	A	F	1993-10-05	1993-10-17	1993-10-28	TAKE BACK RETURN	FOB	- ironic, pending pinto be
+82823	199998	5037	2	50.00	104899.50	0.04	0.05	A	F	1992-04-30	1992-07-05	1992-05-29	COLLECT COD	SHIP	orbits. bold fox
+644100	199998	5037	2	50.00	104899.50	0.05	0.04	A	F	1994-08-29	1994-08-05	1994-09-20	COLLECT COD	FOB	ges nag carefully silent r
+3811460	199998	5037	1	50.00	104899.50	0.05	0.05	R	F	1993-10-18	1993-08-10	1993-11-13	TAKE BACK RETURN	MAIL	usly. blithely fin
+2077184	198998	6556	2	50.00	104849.50	0.06	0.01	R	F	1993-07-20	1993-06-19	1993-07-23	DELIVER IN PERSON	MAIL	ffily even pinto beans thrash slyly final t

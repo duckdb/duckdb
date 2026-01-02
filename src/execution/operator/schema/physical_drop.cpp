@@ -12,13 +12,15 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		if (statements.find(info->name) != statements.end()) {
-			statements.erase(info->name);
+		auto stmt_iter = statements.find(info->name);
+		if (stmt_iter != statements.end()) {
+			statements.erase(stmt_iter);
 		}
 		break;
 	}

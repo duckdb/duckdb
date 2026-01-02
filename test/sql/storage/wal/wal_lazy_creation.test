@@ -6,8 +6,6 @@
 # Thus, we'll keep the WAL alive when detaching the database.
 require no_alternative_verify
 
-require noforcestorage
-
 require skip_reload
 
 statement ok

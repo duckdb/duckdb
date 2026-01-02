@@ -71,10 +71,10 @@ select m['Tenacious D'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Bo
 ----
 1
 
-query I
+statement error
 select m[0] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D' ),LIST_VALUE(10,9,10)) as m) as T
 ----
-NULL
+Binder Error: Cannot deduce template type
 
 query I
 select map_extract(m,1) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
@@ -224,22 +224,22 @@ select MAP_EXTRACT(MAP([],[]), NULL)
 query I
 select MAP_EXTRACT(MAP(NULL, NULL), NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT(NULL, NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT(NULL::MAP("NULL", "NULL"), NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT(NULL::MAP(INT, BIGINT), NULL)
 ----
-[]
+NULL
 
 query I
 select MAP_EXTRACT_VALUE(MAP([],[]), NULL)

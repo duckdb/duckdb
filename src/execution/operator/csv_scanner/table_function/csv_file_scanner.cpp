@@ -13,7 +13,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
     : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
-
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
 		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file, per_file_single_threaded);
@@ -84,14 +83,14 @@ CSVUnionData::~CSVUnionData() {
 
 void CSVFileScan::SetStart() {
 	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
-	rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
-	                                          state_machine->dialect_options.header.GetValue());
+
 	if (rows_to_skip == 0) {
 		start_iterator.first_one = true;
 		return;
 	}
 	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, rows_to_skip);
 	skip_scanner.ParseChunk();
+	skipped_rows = skip_scanner.GetLinesRead() - rows_to_skip;
 	start_iterator = skip_scanner.GetIterator();
 }
 

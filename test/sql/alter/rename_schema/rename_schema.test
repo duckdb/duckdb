@@ -5,4 +5,4 @@
 statement error
 ALTER SCHEMA a RENAME TO b;
 ----
-not yet supported
+Not implemented Error: Altering schemas is not yet supported

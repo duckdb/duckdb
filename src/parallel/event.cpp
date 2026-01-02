@@ -81,9 +81,7 @@ void Event::SetTasks(vector<shared_ptr<Task>> tasks) {
 	D_ASSERT(total_tasks == 0);
 	D_ASSERT(!tasks.empty());
 	this->total_tasks = tasks.size();
-	for (auto &task : tasks) {
-		ts.ScheduleTask(executor.GetToken(), std::move(task));
-	}
+	ts.ScheduleTasks(executor.GetToken(), tasks);
 }
 
 } // namespace duckdb

@@ -2,8 +2,7 @@
 # description: Test incorrect usage of the lambda functions
 # group: [lambdas]
 
-statement ok
-PRAGMA enable_verification;
+require no_extension_autoloading "EXPECTED: This tests is not compatible with JSON extension, that will otherwise be autoloaded"
 
 statement ok
 CREATE TABLE incorrect_test (i INTEGER);
@@ -33,7 +32,7 @@ SELECT ${func_name}(NULL, NULL);
 statement error
 SELECT ${func_name}(NULL, x);
 ----
-<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
@@ -48,7 +47,7 @@ SELECT ${func_name}(NULL, i) FROM incorrect_test;
 statement error
 SELECT ${func_name}(NULL, x -> y);
 ----
-<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 SELECT ${func_name}([1]);
@@ -108,7 +107,7 @@ SELECT list_reduce([True], x -> x, x -> x);
 statement error
 SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
@@ -155,12 +154,12 @@ SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
 statement error
 SELECT cos(x -> x + 1);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 SELECT cos([1], x -> x + 1);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
 
 # FIXME: support lambdas in CHECK constraints
 
@@ -240,3 +239,53 @@ statement error
 SELECT list_transform(map_entries(m), x -> UNNEST(range(x.value))) FROM map_tbl;
 ----
 <REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
+
+statement ok
+CREATE TABLE dummy_tbl (y INT);
+
+statement error
+SELECT list_transform([1], lambda x: lambda y: x + y) FROM dummy_tbl;
+----
+<REGEX>:Binder Error.*invalid lambda expression.*
+
+statement error
+SELECT list_transform([1], lambda x: 1 : hello) FROM dummy_tbl;
+----
+<REGEX>:Parser Error.*syntax error.*
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement error
+CREATE OR REPLACE function transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			lambda i: lst[i][j]
+		)
+	)
+);
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*
+
+statement error
+CREATE OR REPLACE FUNCTION transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);
+----
+<REGEX>:Binder Error.*Deprecated lambda arrow.*
+
+statement ok
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
+
+statement ok
+CREATE OR REPLACE FUNCTION transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		j -> list_transform(range(1, length(lst) + 1),
+			i -> lst[i][j]
+		)
+	)
+);

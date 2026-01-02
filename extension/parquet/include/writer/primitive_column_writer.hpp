@@ -57,8 +57,7 @@ public:
 //! Base class for writing non-compound types (ex. numerics, strings)
 class PrimitiveColumnWriter : public ColumnWriter {
 public:
-	PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path,
-	                      bool can_have_nulls);
+	PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path);
 	~PrimitiveColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB
@@ -70,14 +69,16 @@ public:
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
-	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count,
+	             bool vector_can_span_multiple_pages) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
+	void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 
 protected:
-	static void WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
-	                        idx_t start_offset, idx_t count, optional_idx null_count = optional_idx());
+	static void WriteLevels(Allocator &allocator, WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,
+	                        idx_t max_value, idx_t start_offset, idx_t count, optional_idx null_count = optional_idx());
 
 	virtual duckdb_parquet::Encoding::type GetEncoding(PrimitiveColumnWriterState &state);
 

@@ -53,12 +53,7 @@ else
   duckdb_extension_load(json DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpch DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpcds DONT_LINK EXTENSION_VERSION v0.0.1)
-  duckdb_extension_load(inet
-      GIT_URL https://github.com/duckdb/duckdb_inet
-      GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
-      INCLUDE_DIR src/include
-      EXTENSION_VERSION v0.0.1
-      )
+  duckdb_extension_load(icu DONT_LINK EXTENSION_VERSION v0.0.1)
 EOL
 
   # Build the extensions using the first config
@@ -69,10 +64,10 @@ EOL
   DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
 
   # Install the extension from the initial config
-  $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; set custom_extension_repository='$LOCAL_EXTENSION_REPO_UPDATED'; install tpch; install json; INSTALL inet;"
+  $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; set custom_extension_repository='$LOCAL_EXTENSION_REPO_UPDATED'; install tpch; install json; INSTALL icu;"
 
-  # Delete the info file from the inet extension
-  rm $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/inet.duckdb_extension.info
+  # Delete the info file from the icu extension
+  rm $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/icu.duckdb_extension.info
 
   # Install tpcds directly
   cp $DUCKDB_BUILD_DIR/extension/tpcds/tpcds.duckdb_extension $DIRECT_INSTALL_DIR/tpcds.duckdb_extension
@@ -82,19 +77,14 @@ EOL
   cat > $TEST_DIR/extension_config_after.cmake <<EOL
   duckdb_extension_load(json DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpch DONT_LINK EXTENSION_VERSION v0.0.2)
-  duckdb_extension_load(inet
-      GIT_URL https://github.com/duckdb/duckdb_inet
-      GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
-      INCLUDE_DIR src/include
-      EXTENSION_VERSION v0.0.2
-   )
+  duckdb_extension_load(icu DONT_LINK EXTENSION_VERSION v0.0.2)
 EOL
 
   # Build the extensions using the second config
   LOCAL_EXTENSION_REPO=$LOCAL_EXTENSION_REPO_UPDATED EXTENSION_CONFIGS=$TEST_DIR/extension_config_after.cmake BUILD_EXTENSIONS_ONLY=1 make debug
 
   # For good measure, we also gzip one of the files in the repo to ensure we can do both gzipped and non gzipped
-  gzip -1 $LOCAL_EXTENSION_REPO_UPDATED/$DUCKDB_VERSION/$DUCKDB_PLATFORM/inet.duckdb_extension
+  gzip -1 $LOCAL_EXTENSION_REPO_UPDATED/$DUCKDB_VERSION/$DUCKDB_PLATFORM/icu.duckdb_extension
 
   ##########################################
   ### Second repo: Incorrect DuckDB platform
@@ -120,7 +110,7 @@ EOL
 EOL
 
   # Build the extensions using the incorrect platform
-  EXTRA_CMAKE_VARIABLES=-DDUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
+  DUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
 
   cp $DUCKDB_BUILD_DIR/extension/json/json.duckdb_extension $DIRECT_INSTALL_DIR/json_incorrect_version.duckdb_extension
 
@@ -134,7 +124,7 @@ EOL
 EOL
 
   # Build the extensions using the incorrect platform
-  DUCKDB_PLATFORM=test_platform EXTRA_CMAKE_VARIABLES=-DDUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
+  DUCKDB_PLATFORM=test_platform DUCKDB_EXPLICIT_VERSION=v1337 EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake BUILD_EXTENSIONS_ONLY=1 make debug
 
   cp $DUCKDB_BUILD_DIR/extension/json/json.duckdb_extension $DIRECT_INSTALL_DIR/json_incorrect_version_and_platform.duckdb_extension
 

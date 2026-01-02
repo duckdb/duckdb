@@ -4,8 +4,6 @@
 
 require icu
 
-require skip_reload
-
 statement ok
 set default_collation=c;
 

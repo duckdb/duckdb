@@ -142,13 +142,13 @@ TEST_CASE("Test NULL value", "[capi]") {
 	duckdb_destroy_value(&null_value);
 }
 
-TEST_CASE("Test VARINT value", "[capi]") {
+TEST_CASE("Test BIGNUM value", "[capi]") {
 	{
 		uint8_t data[] {0};
-		duckdb_varint input {data, 1, false};
-		auto value = duckdb_create_varint(input);
-		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_VARINT);
-		auto output = duckdb_get_varint(value);
+		duckdb_bignum input {data, 1, false};
+		auto value = duckdb_create_bignum(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto output = duckdb_get_bignum(value);
 		REQUIRE(output.is_negative == input.is_negative);
 		REQUIRE(output.size == input.size);
 		REQUIRE_FALSE(memcmp(output.data, input.data, input.size));
@@ -157,17 +157,17 @@ TEST_CASE("Test VARINT value", "[capi]") {
 	}
 	{
 		uint8_t data[] {1};
-		duckdb_varint input {data, 1, true};
-		auto value = duckdb_create_varint(input);
-		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_VARINT);
-		auto output = duckdb_get_varint(value);
+		duckdb_bignum input {data, 1, true};
+		auto value = duckdb_create_bignum(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto output = duckdb_get_bignum(value);
 		REQUIRE(output.is_negative == input.is_negative);
 		REQUIRE(output.size == input.size);
 		REQUIRE_FALSE(memcmp(output.data, input.data, input.size));
 		duckdb_free(output.data);
 		duckdb_destroy_value(&value);
 	}
-	{ // max varint == max double == 2^1023 * (1 + (1 − 2^−52)) == 2^1024 - 2^971 ==
+	{ // max bignum == max double == 2^1023 * (1 + (1 − 2^−52)) == 2^1024 - 2^971 ==
 	  // 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368
 		uint8_t data[] {
 		    // little endian
@@ -180,17 +180,17 @@ TEST_CASE("Test VARINT value", "[capi]") {
 		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		};
-		duckdb_varint input {data, 128, false};
-		auto value = duckdb_create_varint(input);
-		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_VARINT);
-		auto output = duckdb_get_varint(value);
+		duckdb_bignum input {data, 128, false};
+		auto value = duckdb_create_bignum(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto output = duckdb_get_bignum(value);
 		REQUIRE(output.is_negative == input.is_negative);
 		REQUIRE(output.size == input.size);
 		REQUIRE_FALSE(memcmp(output.data, input.data, input.size));
 		duckdb_free(output.data);
 		duckdb_destroy_value(&value);
 	}
-	{ // min varint == min double == -(2^1023 * (1 + (1 − 2^−52))) == -(2^1024 - 2^971) ==
+	{ // min bignum == min double == -(2^1023 * (1 + (1 − 2^−52))) == -(2^1024 - 2^971) ==
 		// -179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368
 		uint8_t data[] {
 		    // little endian (absolute value)
@@ -203,10 +203,10 @@ TEST_CASE("Test VARINT value", "[capi]") {
 		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		};
-		duckdb_varint input {data, 128, true};
-		auto value = duckdb_create_varint(input);
-		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_VARINT);
-		auto output = duckdb_get_varint(value);
+		duckdb_bignum input {data, 128, true};
+		auto value = duckdb_create_bignum(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto output = duckdb_get_bignum(value);
 		REQUIRE(output.is_negative == input.is_negative);
 		REQUIRE(output.size == input.size);
 		REQUIRE_FALSE(memcmp(output.data, input.data, input.size));

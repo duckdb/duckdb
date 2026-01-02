@@ -11,12 +11,12 @@ statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR DEFAULT('hello'), c INTEGER DEFAULT(3+4));
 
 query I
-COPY test (a) FROM 'data/csv/test/test_default.csv';
+COPY test (a) FROM '{DATA_DIR}/csv/test/test_default.csv';
 ----
 5000
 
 query I
-COPY test (c) FROM 'data/csv/test/test_default.csv';
+COPY test (c) FROM '{DATA_DIR}/csv/test/test_default.csv';
 ----
 5000
 

@@ -59,7 +59,8 @@ statement ok
 CHECKPOINT;
 
 statement ok
-INSERT INTO block_count SELECT total_blocks FROM pragma_database_size();
+INSERT INTO block_count
+SELECT total_blocks FROM pragma_database_size();
 
 query I
 SELECT COUNT(*) - ${i} FROM integers2;
@@ -67,10 +68,16 @@ SELECT COUNT(*) - ${i} FROM integers2;
 2
 
 # Ensure there is only a small difference between the MIN and MAX block counts.
+# Example table contents for 16kB blocks:
+# count: 4766, 4788, 4846, 4749, 4770, 4730, 4711, 4732, 4751, 4711
 
 query I
-SELECT (MAX(count) - MIN(count)) < 20 FROM block_count;
+SELECT
+CASE WHEN get_block_size('reclaim_space_batch_insert') = 16384
+THEN (MAX(count / 100) - MIN(count / 100)) < 3
+ELSE (MAX(count) - MIN(count)) < 3
+END FROM block_count;
 ----
-true
+True
 
 endloop

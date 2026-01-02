@@ -2,9 +2,6 @@
 # description: Test SET function
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # unrecognized configuration parameter
 statement error
 SELECT CURRENT_SETTING('a');
@@ -27,12 +24,12 @@ SET default_null_order = concat('nulls', '_', 'last');
 query I
 SELECT CURRENT_SETTING('default_null_order');
 ----
-nulls_last
+NULLS_LAST
 
 query I
 SELECT CURRENT_SETTING('DEFAULT_NULL_ORDER');
 ----
-nulls_last
+NULLS_LAST
 
 query I
 SELECT * FROM range(3) UNION ALL SELECT NULL ORDER BY 1

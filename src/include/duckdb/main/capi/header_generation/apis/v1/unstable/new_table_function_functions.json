@@ -1,0 +1,7 @@
+{
+  "version": "unstable_new_table_function_functions",
+  "description": "New functions around table function binding",
+  "entries": [
+    "duckdb_table_function_get_client_context"
+  ]
+}

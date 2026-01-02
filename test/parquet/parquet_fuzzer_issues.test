@@ -1,0 +1,17 @@
+# name: test/parquet/parquet_fuzzer_issues.test
+# description: Test Parquet fuzzer issues
+# group: [parquet]
+
+require parquet
+
+# internal issue 6129
+statement error
+from 'data/parquet-testing/broken/internal_6129.parquet'
+----
+invalid number of miniblocks per block
+
+# internal issue 6165
+statement error
+from 'data/parquet-testing/broken/internal_6165.parquet';
+----
+row group does not have enough columns

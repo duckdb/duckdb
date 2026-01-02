@@ -19,6 +19,7 @@ namespace duckdb {
 
 struct date_t;     // NOLINT
 struct dtime_t;    // NOLINT
+struct dtime_ns_t; // NOLINT
 struct dtime_tz_t; // NOLINT
 
 //! Type used to represent a TIMESTAMP. timestamp_t holds the microseconds since 1970-01-01.
@@ -140,25 +141,28 @@ public:
 
 public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
-	DUCKDB_API static timestamp_t FromString(const string &str);
+	DUCKDB_API static timestamp_t FromString(const string &str, bool use_offset);
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
 	//! If has_offset is true, then the result is an instant that was offset from UTC
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
 	DUCKDB_API static TimestampCastResult TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result,
-	                                                            bool &has_offset, string_t &tz,
+	                                                            const bool use_offset, bool &has_offset, string_t &tz,
 	                                                            optional_ptr<int32_t> nanos = nullptr);
 	//! Strict Timestamp does not accept offsets.
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+	                                                          const bool use_offset,
 	                                                          optional_ptr<int32_t> nanos = nullptr,
 	                                                          bool strict = false);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
-	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, bool use_offset = false,
+	                                          optional_ptr<int32_t> nanos = nullptr);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	DUCKDB_API static string ToString(timestamp_t timestamp);
 
 	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
 
 	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
+	DUCKDB_API static dtime_ns_t GetTimeNs(timestamp_ns_t timestamp);
 	//! Create a Timestamp object from a specified (date, time) combination
 	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
 	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
@@ -218,6 +222,8 @@ public:
 
 	//! Decompose a timestamp into its components
 	DUCKDB_API static TimestampComponents GetComponents(timestamp_t timestamp);
+	DUCKDB_API static time_t ToTimeT(timestamp_t);
+	DUCKDB_API static timestamp_t FromTimeT(time_t);
 
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
 

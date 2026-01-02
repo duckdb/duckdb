@@ -13,9 +13,9 @@
 
 namespace duckdb {
 
-#if !defined(DISABLE_POINTER_SALT) && defined(__ANDROID__)
+#if !defined(DUCKDB_DISABLE_POINTER_SALT) && defined(__ANDROID__)
 // Google, why does Android need 18446744 TB of address space?
-#define DISABLE_POINTER_SALT
+#define DUCKDB_DISABLE_POINTER_SALT
 #endif
 
 //! The ht_entry_t struct represents an individual entry within a hash table.
@@ -26,7 +26,7 @@ namespace duckdb {
 */
 struct ht_entry_t { // NOLINT
 public:
-#ifdef DISABLE_POINTER_SALT
+#ifdef DUCKDB_DISABLE_POINTER_SALT
 	//! No salt, all pointer
 	static constexpr const hash_t SALT_MASK = 0x0000000000000000;
 	static constexpr const hash_t POINTER_MASK = 0xFFFFFFFFFFFFFFFF;
@@ -77,6 +77,10 @@ public:
 
 	inline hash_t GetSalt() const {
 		return ExtractSalt(value);
+	}
+
+	inline hash_t GetSaltWithNulls() const {
+		return value & SALT_MASK;
 	}
 
 	inline void SetSalt(const hash_t &salt) {

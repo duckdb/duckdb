@@ -19,8 +19,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_SECRET;
 
 public:
-	PhysicalCreateSecret(CreateSecretInput input_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SECRET, {LogicalType::BOOLEAN}, estimated_cardinality),
+	PhysicalCreateSecret(PhysicalPlan &physical_plan, CreateSecretInput input_p, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_SECRET, {LogicalType::BOOLEAN},
+	                       estimated_cardinality),
 	      create_input(std::move(input_p)) {
 	}
 
@@ -28,7 +29,8 @@ public:
 
 public:
 	// Source interface
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

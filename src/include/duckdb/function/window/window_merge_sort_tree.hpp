@@ -11,86 +11,88 @@
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
-#include "duckdb/function/window/window_aggregator.hpp"
-#include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/sort/partition_state.hpp"
+#include "duckdb/common/sorting/sort.hpp"
 
 namespace duckdb {
 
+enum class WindowMergeSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, FINISHED };
+
 class WindowMergeSortTree;
 
-class WindowMergeSortTreeLocalState : public WindowAggregatorState {
+class WindowMergeSortTreeLocalState : public LocalSinkState {
 public:
-	explicit WindowMergeSortTreeLocalState(WindowMergeSortTree &index_tree);
+	WindowMergeSortTreeLocalState(ExecutionContext &context, WindowMergeSortTree &index_tree);
 
 	//! Add a chunk to the local sort
-	void SinkChunk(DataChunk &chunk, const idx_t row_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
+	void Sink(ExecutionContext &context, DataChunk &chunk, const idx_t row_idx,
+	          optional_ptr<SelectionVector> filter_sel, idx_t filtered, InterruptState &interrupt);
 	//! Sort the data
-	void Sort();
+	void Finalize(ExecutionContext &context, InterruptState &interrupt);
 	//! Process sorted leaf data
 	virtual void BuildLeaves() = 0;
 
 	//! The index tree we are building
 	WindowMergeSortTree &window_tree;
 	//! Thread-local sorting data
-	optional_ptr<LocalSortState> local_sort;
-	//! Buffer for the sort keys
+	optional_ptr<LocalSinkState> local_sink;
+	//! Buffer for the sort data
 	DataChunk sort_chunk;
-	//! Buffer for the payload data
-	DataChunk payload_chunk;
 	//! Build stage
-	PartitionSortStage build_stage = PartitionSortStage::INIT;
+	WindowMergeSortStage build_stage = WindowMergeSortStage::INIT;
 	//! Build task number
 	idx_t build_task;
 
 private:
-	void ExecuteSortTask();
+	void ExecuteSortTask(ExecutionContext &context, InterruptState &interrupt);
 };
 
 class WindowMergeSortTree {
 public:
-	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
-	using LocalSortStatePtr = unique_ptr<LocalSortState>;
+	using GlobalSortStatePtr = unique_ptr<GlobalSinkState>;
+	using LocalSortStatePtr = unique_ptr<LocalSinkState>;
 
 	WindowMergeSortTree(ClientContext &context, const vector<BoundOrderByNode> &orders,
-	                    const vector<column_t> &sort_idx, const idx_t count, bool unique = false);
+	                    const vector<column_t> &order_idx, const idx_t count, bool unique = false);
 	virtual ~WindowMergeSortTree() = default;
 
-	virtual unique_ptr<WindowAggregatorState> GetLocalState() = 0;
+	virtual unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) = 0;
 
 	//! Make a local sort for a thread
-	optional_ptr<LocalSortState> AddLocalSort();
+	optional_ptr<LocalSinkState> InitializeLocalSort(ExecutionContext &context) const;
 
 	//! Thread-safe post-sort cleanup
-	virtual void CleanupSort();
+	virtual void Finished();
 
 	//! Sort state machine
 	bool TryPrepareSortStage(WindowMergeSortTreeLocalState &lstate);
 	//! Build the MST in parallel from the sorted data
 	void Build();
 
-	//! The query context
-	ClientContext &context;
-	//! Thread memory limit
-	const idx_t memory_per_thread;
 	//! The column indices for sorting
-	const vector<column_t> sort_idx;
+	const vector<column_t> order_idx;
+	//! The sorted data schema
+	vector<LogicalType> scan_types;
+	vector<idx_t> scan_cols;
+	//! The sort key columns
+	vector<idx_t> key_cols;
+	//! The sort specification
+	unique_ptr<Sort> sort;
 	//! The sorted data
-	GlobalSortStatePtr global_sort;
+	GlobalSortStatePtr global_sink;
+	//! The resulting sorted data
+	unique_ptr<ColumnDataCollection> sorted;
 	//! Finalize guard
-	mutex lock;
+	mutable mutex lock;
 	//! Local sort set
-	vector<LocalSortStatePtr> local_sorts;
+	mutable vector<LocalSortStatePtr> local_sinks;
 	//! Finalize stage
-	atomic<PartitionSortStage> build_stage;
+	atomic<WindowMergeSortStage> build_stage;
 	//! Tasks launched
 	idx_t total_tasks = 0;
 	//! Tasks launched
 	idx_t tasks_assigned = 0;
 	//! Tasks landed
 	atomic<idx_t> tasks_completed;
-	//! The block starts (the scanner doesn't know this) plus the total count
-	vector<idx_t> block_starts;
 
 	// Merge sort trees for various sizes
 	// Smaller is probably not worth the effort.

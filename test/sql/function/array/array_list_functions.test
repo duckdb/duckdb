@@ -1,9 +1,6 @@
 # name: test/sql/function/array/array_list_functions.test
 # group: [array]
 
-statement ok
-PRAGMA enable_verification
-
 # Just test that arrays are propely cast to lists when calling some list functions with special binding logic
 # Aggregate example
 query I
@@ -25,13 +22,13 @@ true
 
 # Transform example
 query I
-SELECT list_transform(array_value(3,2,1), x -> x + 1) = list_transform([3,2,1], x -> x + 1);
+SELECT list_transform(array_value(3,2,1), lambda x: x + 1) = list_transform([3,2,1], lambda x: x + 1);
 ----
 true
 
 # Filter example
 query I
-SELECT list_filter(array_value(3,2,1), x -> x > 1) = list_filter([3,2,1], x -> x > 1);
+SELECT list_filter(array_value(3,2,1), lambda x: x > 1) = list_filter([3,2,1], lambda x: x > 1);
 ----
 true
 

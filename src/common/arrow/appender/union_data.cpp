@@ -14,7 +14,6 @@ void ArrowUnionData::Initialize(ArrowAppendData &result, const LogicalType &type
 		auto child_buffer = ArrowAppender::InitializeChild(child.second, capacity, result.options);
 		result.child_data.push_back(std::move(child_buffer));
 	}
-	(void)AppendValidity; // silence a compiler warning about unused static functiondep
 }
 
 void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {

@@ -9,7 +9,8 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
-#include <ctgmath>
+#include <complex>
+#include <cmath>
 
 namespace duckdb {
 
@@ -65,8 +66,8 @@ struct STDDevBaseOperation {
 			const double target_count = static_cast<double>(target.count);
 			const double source_count = static_cast<double>(source.count);
 			const double total_count = static_cast<double>(count);
-			const auto mean = (source_count * source.mean + target_count * target.mean) / total_count;
 			const auto delta = source.mean - target.mean;
+			const auto mean = std::fma(source_count / total_count, delta, target.mean);
 			target.dsquared =
 			    source.dsquared + target.dsquared + delta * delta * source_count * target_count / total_count;
 			target.mean = mean;

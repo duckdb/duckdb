@@ -180,14 +180,14 @@ SELECT a FROM UNNEST(ARRAY[1,2,3]) t(a);
 2
 3
 
-query I
+query I rowsort
 SELECT unnest FROM (SELECT ARRAY[1,2,3] AS x), UNNEST(x);
 ----
 1
 2
 3
 
-query I
+query I rowsort
 SELECT b FROM (SELECT ARRAY[1,2,3] AS x), UNNEST(x) t(b);
 ----
 1

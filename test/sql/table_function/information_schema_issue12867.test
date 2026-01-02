@@ -2,8 +2,6 @@
 # description: Issue #12867: INFORMATION_SCHEMA.KEY_COLUMN_USAGE only lists first column of composite keys
 # group: [table_function]
 
-require skip_reload
-
 statement ok
 CREATE TABLE a (a1 int, a2 int, PRIMARY KEY (a1, a2));
 

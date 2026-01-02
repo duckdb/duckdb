@@ -242,6 +242,30 @@ private:
 	idx_t size;
 };
 
+enum class ArgMinMaxNullHandling { IGNORE_ANY_NULL, HANDLE_ARG_NULL, HANDLE_ANY_NULL };
+
+struct ArgMinMaxFunctionData : FunctionData {
+	explicit ArgMinMaxFunctionData(ArgMinMaxNullHandling null_handling_p = ArgMinMaxNullHandling::IGNORE_ANY_NULL,
+	                               bool nulls_last_p = true)
+	    : null_handling(null_handling_p), nulls_last(nulls_last_p) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto copy = make_uniq<ArgMinMaxFunctionData>();
+		copy->null_handling = null_handling;
+		copy->nulls_last = nulls_last;
+		return std::move(copy);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ArgMinMaxFunctionData>();
+		return other.null_handling == null_handling && other.nulls_last == nulls_last;
+	}
+
+	ArgMinMaxNullHandling null_handling;
+	bool nulls_last;
+};
+
 //------------------------------------------------------------------------------
 // Specializations for fixed size types, strings, and anything else (using sortkey)
 //------------------------------------------------------------------------------
@@ -254,7 +278,7 @@ struct MinMaxFixedValue {
 		return UnifiedVectorFormat::GetData<T>(format)[idx];
 	}
 
-	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
 		FlatVector::GetData<T>(vector)[idx] = value;
 	}
 
@@ -263,7 +287,8 @@ struct MinMaxFixedValue {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format) {
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
 		input.ToUnifiedFormat(count, format);
 	}
 };
@@ -276,7 +301,7 @@ struct MinMaxStringValue {
 		return UnifiedVectorFormat::GetData<string_t>(format)[idx];
 	}
 
-	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
 		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
@@ -285,7 +310,8 @@ struct MinMaxStringValue {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format) {
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
 		input.ToUnifiedFormat(count, format);
 	}
 };
@@ -299,8 +325,9 @@ struct MinMaxFallbackValue {
 		return UnifiedVectorFormat::GetData<string_t>(format)[idx];
 	}
 
-	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
-		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
+		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
 		CreateSortKeyHelpers::DecodeSortKey(value, vector, idx, modifiers);
 	}
 
@@ -308,11 +335,58 @@ struct MinMaxFallbackValue {
 		return Vector(LogicalTypeId::BLOB);
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
-		const OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
+		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		const OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
 		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
 		input.Flatten(count);
 		extra_state.ToUnifiedFormat(count, format);
+	}
+};
+
+template <class T, bool NULLS_LAST>
+struct ValueOrNull {
+	T value;
+	bool is_valid;
+
+	bool operator==(const ValueOrNull &other) const {
+		return is_valid == other.is_valid && value == other.value;
+	}
+
+	bool operator>(const ValueOrNull &other) const {
+		if (is_valid && other.is_valid) {
+			return value > other.value;
+		}
+		if (!is_valid && !other.is_valid) {
+			return false;
+		}
+
+		return is_valid ^ NULLS_LAST;
+	}
+};
+
+template <class T, bool NULLS_LAST>
+struct MinMaxFixedValueOrNull {
+	using TYPE = ValueOrNull<T, NULLS_LAST>;
+	using EXTRA_STATE = bool;
+
+	static TYPE Create(const UnifiedVectorFormat &format, const idx_t idx) {
+		return TYPE {UnifiedVectorFormat::GetData<T>(format)[idx], format.validity.RowIsValid(idx)};
+	}
+
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
+		FlatVector::Validity(vector).Set(idx, value.is_valid);
+		FlatVector::GetData<T>(vector)[idx] = value.value;
+	}
+
+	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+		return false;
+	}
+
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
+		input.ToUnifiedFormat(count, format);
 	}
 };
 
@@ -343,7 +417,11 @@ struct MinMaxNOperation {
 	}
 
 	template <class STATE>
-	static void Finalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+	static void Finalize(Vector &state_vector, AggregateInputData &input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
+		// We only expect bind data from arg_max, otherwise nulls last is the default
+		const bool nulls_last =
+		    input_data.bind_data ? input_data.bind_data->Cast<ArgMinMaxFunctionData>().nulls_last : true;
 
 		UnifiedVectorFormat state_format;
 		state_vector.ToUnifiedFormat(count, state_format);
@@ -387,7 +465,7 @@ struct MinMaxNOperation {
 			auto heap = state.heap.SortAndGetHeap();
 
 			for (idx_t slot = 0; slot < state.heap.Size(); slot++) {
-				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(heap[slot]));
+				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(heap[slot]), nulls_last);
 			}
 		}
 

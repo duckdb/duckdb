@@ -152,4 +152,61 @@ TO ExactNumericCast(float val) {
 	return res;
 }
 
+template <class T>
+struct NextUnsigned {};
+
+template <>
+struct NextUnsigned<uint8_t> {
+	using type = uint16_t;
+};
+
+template <>
+struct NextUnsigned<uint16_t> {
+	using type = uint32_t;
+};
+
+template <>
+struct NextUnsigned<uint32_t> {
+	using type = uint64_t;
+};
+
+template <>
+struct NextUnsigned<uint64_t> {
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+	using type = __uint128_t;
+#else
+	using type = uhugeint_t;
+#endif
+};
+
+template <class TYPE>
+class FastMod {
+	using NEXT_TYPE = typename NextUnsigned<TYPE>::type;
+	static_assert(sizeof(NEXT_TYPE) != 0, "NextUnsigned not available for this type");
+
+public:
+	explicit FastMod(TYPE divisor_p) : divisor(divisor_p), multiplier((static_cast<TYPE>(-1) / divisor) + 1) {
+	}
+
+	TYPE Div(const TYPE &val) const {
+		return static_cast<TYPE>((static_cast<NEXT_TYPE>(val) * multiplier) >> (sizeof(TYPE) * 8)); // NOLINT
+	}
+
+	TYPE Mod(const TYPE &val, const TYPE &quotient) const {
+		return val - quotient * divisor;
+	}
+
+	TYPE Mod(const TYPE &val) const {
+		return Mod(val, Div(val));
+	}
+
+	const TYPE &GetDivisor() const {
+		return divisor;
+	}
+
+private:
+	const TYPE divisor;
+	const TYPE multiplier;
+};
+
 } // namespace duckdb

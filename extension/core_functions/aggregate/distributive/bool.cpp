@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct BoolState {
 	bool empty;
 	bool val;
@@ -91,19 +93,21 @@ struct BoolOrFunFunction {
 	}
 };
 
+} // namespace
+
 AggregateFunction BoolOrFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	fun.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	return fun;
 }
 
 AggregateFunction BoolAndFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolAndFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
-	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	fun.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
+	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	return fun;
 }
 

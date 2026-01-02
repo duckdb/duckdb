@@ -161,8 +161,8 @@ protected:
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
 	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager,
-	                     shared_ptr<TupleDataLayout> &layout_ptr);
-	PartitionedTupleData(const PartitionedTupleData &other);
+	                     shared_ptr<TupleDataLayout> &layout_ptr, MemoryTag tag);
+	PartitionedTupleData(PartitionedTupleData &other);
 
 	//! Whether to use fixed size map or regular map
 	bool UseFixedSizeMap() const;
@@ -172,23 +172,29 @@ protected:
 	                       const idx_t append_count) const;
 	template <bool fixed>
 	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
-	                              const idx_t append_count);
+	                              const idx_t append_count, const idx_t max_partition_idx);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	template <bool fixed>
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
-	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) {
-		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
+	unique_ptr<TupleDataCollection> CreatePartitionCollection() {
+		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag, stl_allocator);
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;
 
 protected:
 	PartitionedTupleDataType type;
+
 	BufferManager &buffer_manager;
+	shared_ptr<ArenaAllocator> stl_allocator;
+
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
+
+	const MemoryTag tag;
+
 	idx_t count;
 	idx_t data_size;
 

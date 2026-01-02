@@ -1,5 +1,6 @@
 add_subdirectory(column)
 add_subdirectory(row)
+add_subdirectory(variant)
 
 if(${EXIT_TIME_DESTRUCTORS_WARNING})
   set(CMAKE_CXX_FLAGS_DEBUG
@@ -32,11 +33,13 @@ add_library_unity(
   time.cpp
   validity_mask.cpp
   value.cpp
-  varint.cpp
+  bignum.cpp
   vector_buffer.cpp
   vector.cpp
   vector_cache.cpp
-  vector_constants.cpp)
+  vector_constants.cpp
+  geometry.cpp
+  geometry_crs.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>
     PARENT_SCOPE)

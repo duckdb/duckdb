@@ -1,2 +1,2 @@
-count
-202134
+sum(AdvEngineID)|count_star()|avg(ResolutionWidth)
+7280088|99997497|1513.4879349030107

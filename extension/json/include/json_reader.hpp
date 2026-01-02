@@ -46,7 +46,7 @@ public:
 
 struct JSONFileHandle {
 public:
-	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	JSONFileHandle(QueryContext context, unique_ptr<FileHandle> file_handle, Allocator &allocator);
 
 	bool IsOpen() const;
 	void Close();
@@ -74,6 +74,8 @@ private:
 	idx_t ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position);
 
 private:
+	QueryContext context;
+
 	//! The JSON file handle
 	unique_ptr<FileHandle> file_handle;
 	Allocator &allocator;
@@ -201,6 +203,19 @@ public:
 	JSONFileHandle &GetFileHandle() const;
 
 public:
+	string GetReaderType() const override {
+		return "JSON";
+	}
+
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
+	double GetProgressInFile(ClientContext &context) override;
+
+public:
 	//! Get a new buffer index (must hold the lock)
 	idx_t GetBufferIndex();
 	//! Set line count for a buffer that is done (grabs the lock)
@@ -226,10 +241,6 @@ public:
 	double GetProgress() const;
 
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
-
-	string GetReaderType() const override {
-		return "JSON";
-	}
 
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);

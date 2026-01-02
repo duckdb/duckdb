@@ -17,7 +17,6 @@
 namespace duckdb {
 
 class DuckDB;
-class HTTPLogger;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
@@ -94,7 +93,7 @@ struct ExtensionInstallOptions {
 class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
-
+	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 	//! Install an extension
@@ -123,9 +122,9 @@ public:
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
 
-	// Get the extension directory path
-	static string GetExtensionDirectoryPath(ClientContext &context);
-	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
+	// Get all extension directory paths
+	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
+	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
@@ -242,16 +241,17 @@ private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
 	                                                                 const string &local_path, const string &extension,
 	                                                                 ExtensionInstallOptions &options,
-	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
-	static string DefaultExtensionFolder(FileSystem &fs);
+	static vector<string> DefaultExtensionFolders(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
 	                           ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
+	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                                          ExtensionActiveLoad &info);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

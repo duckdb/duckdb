@@ -1,0 +1,39 @@
+# name: test/issues/general/test_18543.test
+# description: Issue 18543 - Incorrect handling with CTE and EXIST
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(c0 BOOLEAN)
+
+statement ok
+CREATE TABLE t2(c0 BOOLEAN)
+
+statement ok
+CREATE TABLE t3(c0 BOOLEAN)
+
+statement ok
+INSERT INTO t2(c0) VALUES (true)
+
+statement ok
+INSERT INTO t3(c0) VALUES (true)
+
+
+query I
+WITH c AS (
+  SELECT *
+  FROM t1
+  WHERE false
+)
+SELECT t2.c0
+FROM t2 CROSS JOIN t3 CROSS JOIN c
+UNION ALL
+SELECT t2.c0 FROM t2 CROSS JOIN t3
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM c
+)
+----
+true

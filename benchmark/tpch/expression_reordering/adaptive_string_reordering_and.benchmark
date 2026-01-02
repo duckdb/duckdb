@@ -2,15 +2,10 @@
 # description: Re-order string comparisons adaptively
 # group: [expression_reordering]
 
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
+include benchmark/tpch/tpch_load.benchmark.in
 
 run
 SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%_%' AND l_comment LIKE '%s%' AND l_comment LIKE '%str%';
 
-result I
+result I sf=1
 279725

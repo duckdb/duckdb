@@ -31,22 +31,23 @@ private:
 	Node children[CAPACITY];
 
 public:
-	//! Get a new BaseNode and initialize it.
-	static BaseNode &New(ART &art, Node &node) {
+	//! Get a new BaseNode handle and initialize the base node.
+	static NodeHandle<BaseNode> New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		auto &n = Node::Ref<BaseNode>(art, node, TYPE);
-		n.count = 0;
-		return n;
-	}
+		NodeHandle<BaseNode> handle(art, node);
+		auto &n = handle.Get();
 
-	//! Free the node and its children.
-	static void Free(ART &art, Node &node) {
-		auto &n = Node::Ref<BaseNode>(art, node, TYPE);
-		for (uint8_t i = 0; i < n.count; i++) {
-			Node::Free(art, n.children[i]);
+		// Reset the node (count).
+		n.count = 0;
+		// Zero-initialize the node.
+		for (uint8_t i = 0; i < CAPACITY; i++) {
+			n.key[i] = 0;
+			n.children[i].Clear();
 		}
+
+		return handle;
 	}
 
 	//! Replace the child at byte.
@@ -66,10 +67,12 @@ public:
 	}
 
 	//! Get the child at byte.
-	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte) {
+	static unsafe_optional_ptr<Node> GetChild(BaseNode &n, const uint8_t byte, const bool unsafe = false) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
-				D_ASSERT(n.children[i].HasMetadata());
+				if (!unsafe && !n.children[i].HasMetadata()) {
+					throw InternalException("empty child i = %d for byte %d in BaseNode::GetChild", i, byte);
+				}
 				return &n.children[i];
 			}
 		}
@@ -87,6 +90,23 @@ public:
 		return nullptr;
 	}
 
+	//! Extracts the bytes and their respective children.
+	//! The return value is valid as long as the arena is valid.
+	//! The node must be freed after calling into this function.
+	NodeChildren ExtractChildren(ArenaAllocator &arena) {
+		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
+		array_ptr<uint8_t> bytes(mem_bytes, count);
+		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
+		array_ptr<Node> children_ptr(reinterpret_cast<Node *>(mem_children), count);
+
+		for (uint8_t i = 0; i < count; i++) {
+			bytes[i] = key[i];
+			children_ptr[i] = children[i];
+		}
+
+		return NodeChildren(bytes, children_ptr);
+	}
+
 public:
 	template <class F>
 	static void Iterator(BaseNode<CAPACITY, TYPE> &n, F &&lambda) {
@@ -97,7 +117,7 @@ public:
 
 private:
 	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child);
-	static BaseNode &DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle<BaseNode> DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node4 holds up to four children sorted by their key byte.
@@ -134,6 +154,7 @@ public:
 
 private:
 	static void GrowNode4(ART &art, Node &node16, Node &node4);
+	//! We shrink at < Node48::SHRINK_THRESHOLD.
 	static void ShrinkNode48(ART &art, Node &node16, Node &node48);
 };
 

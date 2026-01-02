@@ -1,1 +1,1 @@
-// dummy file to make amalgamantion happy
+// dummy file to make amalgamation happy

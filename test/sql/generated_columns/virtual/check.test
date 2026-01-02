@@ -21,6 +21,7 @@ CREATE TABLE tbl (
 	amount_sold AS (price) CHECK (amount_sold > 5)
 );
 ----
+<REGEX>:.*Binder Error.*Constraints on generated columns.*
 
 # Also when used in this way
 statement error
@@ -30,6 +31,7 @@ CREATE TABLE tbl (
 	CHECK (amount_sold > price)
 );
 ----
+<REGEX>:.*Binder Error.*Constraints on generated columns.*
 
 statement ok
 CREATE TABLE chk (
@@ -45,3 +47,4 @@ INSERT INTO chk VALUES (6);
 statement error
 INSERT INTO chk VALUES (3);
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*

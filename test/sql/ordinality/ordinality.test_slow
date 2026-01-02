@@ -1,0 +1,34 @@
+# name: test/sql/ordinality/ordinality.test_slow
+# description: Tests with ordinality across chunk borders
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+SELECT bool_and(ordinality - r == 1)
+FROM  (SELECT a, ro.r, ro.ordinality
+       FROM
+           VALUES (3000), (4000) AS t(a),
+           LATERAL range(t.a) WITH ORDINALITY AS ro(r, ordinality)
+      ) AS sub(a, r, ordinality);
+----
+true
+
+
+query II nosort read_csv_result
+SELECT drug_exposure_id, ordinality FROM read_csv('{DATA_DIR}/csv/drug_exposure.csv') WITH ORDINALITY ORDER BY ordinality,drug_exposure_id;
+
+query II nosort read_csv_result
+SELECT drug_exposure_id, row_number() OVER () AS ordinality FROM read_csv('{DATA_DIR}/csv/drug_exposure.csv') ORDER BY ordinality,drug_exposure_id;
+
+
+require parquet
+
+
+query III nosort parquet_result
+SELECT name,id,ordinality FROM read_parquet('{DATA_DIR}/parquet-testing/candidate.parquet') WITH ORDINALITY ORDER BY ordinality,name,id;
+
+
+query III nosort parquet_result
+SELECT name,id, row_number() OVER () AS ordinality FROM read_parquet('{DATA_DIR}/parquet-testing/candidate.parquet') ORDER BY ordinality,name,id;

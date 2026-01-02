@@ -2,6 +2,7 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,10 @@ string SelectionVector::ToString(idx_t count) const {
 	return result;
 }
 
+void SelectionVector::Sort(idx_t count) {
+	std::sort(sel_vector, sel_vector + count);
+}
+
 void SelectionVector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
@@ -43,6 +48,14 @@ buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx
 		result_ptr[i] = UnsafeNumericCast<sel_t>(idx);
 	}
 	return data;
+}
+
+idx_t SelectionVector::SliceInPlace(const SelectionVector &source, idx_t count) {
+	for (idx_t i = 0; i < count; ++i) {
+		set_index(i, get_index(source.get_index(i)));
+	}
+
+	return count;
 }
 
 void SelectionVector::Verify(idx_t count, idx_t vector_size) const {

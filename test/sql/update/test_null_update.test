@@ -5,8 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-require skip_reload
-
 # create a table
 statement ok con1
 CREATE TABLE test (a INTEGER);

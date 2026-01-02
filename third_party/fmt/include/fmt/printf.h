@@ -12,6 +12,9 @@
 #include <limits>     // std::numeric_limits
 
 #include "fmt/ostream.h"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #ifdef min
 #undef min
@@ -40,14 +43,14 @@ template <> struct int_checker<true> {
 
 class printf_precision_handler {
  public:
-  template <typename T, FMT_ENABLE_IF(std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(is_integral<T>::value)>
   int operator()(T value) {
-    if (!int_checker<std::numeric_limits<T>::is_signed>::fits_in_int(value))
+    if (!int_checker<std::numeric_limits<T>::is_signed || std::is_same<T, int128_t>::value>::fits_in_int(value))
       FMT_THROW(duckdb::InvalidInputException("number is too big"));
     return (std::max)(static_cast<int>(value), 0);
   }
 
-  template <typename T, FMT_ENABLE_IF(!std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(!is_integral<T>::value)>
   int operator()(T) {
     FMT_THROW(duckdb::InvalidInputException("precision is not integer"));
     return 0;
@@ -57,12 +60,12 @@ class printf_precision_handler {
 // An argument visitor that returns true iff arg is a zero integer.
 class is_zero_int {
  public:
-  template <typename T, FMT_ENABLE_IF(std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(is_integral<T>::value)>
   bool operator()(T value) {
     return value == 0;
   }
 
-  template <typename T, FMT_ENABLE_IF(!std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(!is_integral<T>::value)>
   bool operator()(T) {
     return false;
   }
@@ -71,6 +74,8 @@ class is_zero_int {
 template <typename T> struct make_unsigned_or_bool : std::make_unsigned<T> {};
 
 template <> struct make_unsigned_or_bool<bool> { using type = bool; };
+template <> struct make_unsigned_or_bool<int128_t> { using type = uint128_t; };
+template <> struct make_unsigned_or_bool<uint128_t> { using type = uint128_t; };
 
 template <typename T, typename Context> class arg_converter {
  private:
@@ -79,42 +84,65 @@ template <typename T, typename Context> class arg_converter {
   basic_format_arg<Context>& arg_;
   char_type type_;
 
+  bool is_unsigned_type(internal::type t) {
+    return t == uint_type || t == ulong_long_type || t == uint128_type;
+  }
+
+  template <typename To, typename From>
+  To Cast(From x) {
+    return duckdb::Cast::Operation<From, To>(x);
+  }
+  template <typename To, typename From>
+  typename std::enable_if<std::is_constructible<To, From>::value, To>::type UnsafeCast(From x) {
+    return static_cast<To>(x);
+  }
+
+  template <typename To, typename From>
+  typename std::enable_if<!std::is_constructible<To, From>::value, To>::type UnsafeCast(From x) {
+    return static_cast<To>(x.lower);
+  }
+
  public:
   arg_converter(basic_format_arg<Context>& arg, char_type type)
-      : arg_(arg), type_(type) {}
+      : arg_(arg), type_(type) {
+        if ((type_ == 'd' || type_ == 'i') && is_unsigned_type(arg_.type())) {
+          type_ = 'u';
+        }
+      }
 
   void operator()(bool value) {
     if (type_ != 's') operator()<bool>(value);
   }
 
-  template <typename U, FMT_ENABLE_IF(std::is_integral<U>::value)>
+  template <typename U, FMT_ENABLE_IF(is_integral<U>::value)>
   void operator()(U value) {
     bool is_signed = type_ == 'd' || type_ == 'i';
     using target_type = conditional_t<std::is_same<T, void>::value, U, T>;
     if (const_check(sizeof(target_type) <= sizeof(int))) {
       // Extra casts are used to silence warnings.
       if (is_signed) {
-        arg_ = internal::make_arg<Context>(
-            static_cast<int>(static_cast<target_type>(value)));
+        arg_ = internal::make_arg<Context>(UnsafeCast<int32_t>(UnsafeCast<target_type>(value)));
       } else {
         using unsigned_type = typename make_unsigned_or_bool<target_type>::type;
-        arg_ = internal::make_arg<Context>(
-            static_cast<unsigned>(static_cast<unsigned_type>(value)));
+        arg_ = internal::make_arg<Context>(UnsafeCast<uint32_t>(UnsafeCast<unsigned_type>(value)));
       }
     } else {
       if (is_signed) {
         // glibc's printf doesn't sign extend arguments of smaller types:
         //   std::printf("%lld", -42);  // prints "4294967254"
         // but we don't have to do the same because it's a UB.
-        arg_ = internal::make_arg<Context>(static_cast<long long>(value));
+        if (sizeof(target_type) > sizeof(int64_t)) {
+          arg_ = internal::make_arg<Context>(Cast<int128_t>(value));
+        } else {
+          arg_ = internal::make_arg<Context>(UnsafeCast<int64_t>(value));
+        }
       } else {
-        arg_ = internal::make_arg<Context>(
-            static_cast<typename make_unsigned_or_bool<U>::type>(value));
+        arg_ = internal::make_arg<Context>(UnsafeCast<typename make_unsigned_or_bool<U>::type>(value));
       }
     }
   }
 
-  template <typename U, FMT_ENABLE_IF(!std::is_integral<U>::value)>
+  template <typename U, FMT_ENABLE_IF(!is_integral<U>::value)>
   void operator()(U) {}  // No conversion needed for non-integral types.
 };
 
@@ -135,13 +163,13 @@ template <typename Context> class char_converter {
  public:
   explicit char_converter(basic_format_arg<Context>& arg) : arg_(arg) {}
 
-  template <typename T, FMT_ENABLE_IF(std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(is_integral<T>::value)>
   void operator()(T value) {
     arg_ = internal::make_arg<Context>(
-        static_cast<typename Context::char_type>(value));
+        static_cast<typename Context::char_type>(static_cast<uint32_t>(value)));
   }
 
-  template <typename T, FMT_ENABLE_IF(!std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(!is_integral<T>::value)>
   void operator()(T) {}  // No conversion needed for non-integral types.
 };
 
@@ -156,19 +184,19 @@ template <typename Char> class printf_width_handler {
  public:
   explicit printf_width_handler(format_specs& specs) : specs_(specs) {}
 
-  template <typename T, FMT_ENABLE_IF(std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(is_integral<T>::value)>
   unsigned operator()(T value) {
     auto width = static_cast<uint32_or_64_or_128_t<T>>(value);
     if (internal::is_negative(value)) {
       specs_.align = align::left;
-      width = 0 - width;
+      width = -width;
     }
     unsigned int_max = max_value<int>();
     if (width > int_max) FMT_THROW(duckdb::InvalidInputException("number is too big"));
     return static_cast<unsigned>(width);
   }
 
-  template <typename T, FMT_ENABLE_IF(!std::is_integral<T>::value)>
+  template <typename T, FMT_ENABLE_IF(!is_integral<T>::value)>
   unsigned operator()(T) {
     FMT_THROW(duckdb::InvalidInputException("width is not integer"));
     return 0;

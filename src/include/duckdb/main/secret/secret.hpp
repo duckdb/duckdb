@@ -12,6 +12,7 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/main/setting_info.hpp"
 
 namespace duckdb {
 class BaseSecret;
@@ -295,7 +296,9 @@ public:
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
 		if (lookup_result) {
-			value_out = result.GetValue<TYPE>();
+			if (!result.IsNull()) {
+				value_out = result.GetValue<TYPE>();
+			}
 		}
 		return lookup_result;
 	}

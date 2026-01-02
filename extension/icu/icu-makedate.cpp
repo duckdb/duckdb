@@ -7,7 +7,7 @@
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 #include "duckdb/common/vector_operations/septenary_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-casts.hpp"
 #include "include/icu-datefunc.hpp"
@@ -63,11 +63,8 @@ BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalTyp
 	return BoundCastInfo(CastToDate, std::move(cast_data));
 }
 
-void ICUMakeDate::AddCasts(DatabaseInstance &db) {
-	auto &config = DBConfig::GetConfig(db);
-	auto &casts = config.GetCastFunctions();
-
-	casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
+void ICUMakeDate::AddCasts(ExtensionLoader &loader) {
+	loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
 }
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
@@ -148,7 +145,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
 		                        Execute<TA>, Bind);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		return function;
 	}
 
@@ -156,24 +153,24 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
 		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		return function;
 	}
 
-	static void AddFunction(const string &name, DatabaseInstance &db) {
+	static void AddFunction(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
 		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		set.AddFunction(function);
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 };
 
-void RegisterICUMakeDateFunctions(DatabaseInstance &db) {
-	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", db);
-	ICUMakeDate::AddCasts(db);
+void RegisterICUMakeDateFunctions(ExtensionLoader &loader) {
+	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", loader);
+	ICUMakeDate::AddCasts(loader);
 }
 
 } // namespace duckdb

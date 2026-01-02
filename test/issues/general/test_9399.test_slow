@@ -2,15 +2,12 @@
 # description: Issue 9399: Incorrect query output from group by query (regression in 0.9.0)
 # group: [general]
 
-require skip_reload
-
 # happened with > 8 threads
 statement ok
 SET threads=10
 
 # seed so it's deterministic
-statement ok
-SELECT SETSEED(0.8765309);
+set seed 0.8765309
 
 # create table that's has just one row group, and just a few duplicates
 statement ok

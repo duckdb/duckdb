@@ -1,0 +1,35 @@
+# name: test/sql/cte/cte_bc.test
+# description: Test BC of reading CTEs
+# group: [cte]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/cte_v1.db.gz __TEST_DIR__/cte_v1.db
+
+unzip data/storage/cte_v1_4.db.gz __TEST_DIR__/cte_v1_4.db
+
+statement ok
+ATTACH '__TEST_DIR__/cte_v1.db' (READ_ONLY)
+
+statement ok
+ATTACH '__TEST_DIR__/cte_v1_4.db' (READ_ONLY)
+
+foreach cte_db cte_v1 cte_v1_4
+
+query I
+FROM ${cte_db}.v1
+----
+42
+
+query I
+FROM ${cte_db}.v2
+----
+42
+
+query I
+FROM ${cte_db}.v3
+----
+42
+
+endloop

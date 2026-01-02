@@ -8,7 +8,7 @@ const vector<LogicalType> CMUtils::IntegralTypes() {
 
 const vector<LogicalType> CMUtils::StringTypes() {
 	return {LogicalType::UTINYINT, LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,
-	        LogicalType::HUGEINT};
+	        LogicalType::UHUGEINT};
 }
 
 // LCOV_EXCL_START

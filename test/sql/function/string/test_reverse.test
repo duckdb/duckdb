@@ -44,12 +44,14 @@ daeHrötoM
 statement error
 select REVERSE()
 ----
+<REGEX>:^Binder Error: No function matches.*
 
 statement error
 select REVERSE(1, 2)
 ----
+<REGEX>:^Binder Error: No function matches.*
 
 statement error
 select REVERSE('hello', 'world')
 ----
-
+<REGEX>:^Binder Error: No function matches.*

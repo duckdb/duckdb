@@ -3,7 +3,6 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/function/table_macro_function.hpp"
 
 #include "duckdb/function/scalar_macro_function.hpp"
 
@@ -87,6 +86,7 @@ static const DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_type_is_visible", {"type_oid", nullptr}, {{nullptr, nullptr}}, "true"},
 
 	{"pg_catalog", "pg_size_pretty", {"bytes", nullptr}, {{nullptr, nullptr}}, "format_bytes(bytes)"},
+	{"pg_catalog", "pg_sleep", {"seconds", nullptr}, {{nullptr, nullptr}}, "sleep_ms(CAST(seconds * 1000 AS BIGINT))"},
 
 	{DEFAULT_SCHEMA, "round_even", {"x", "n", nullptr}, {{nullptr, nullptr}}, "CASE ((abs(x) * power(10, n+1)) % 10) WHEN 5 THEN round(x/2, n) * 2 ELSE round(x, n) END"},
 	{DEFAULT_SCHEMA, "roundbankers", {"x", "n", nullptr}, {{nullptr, nullptr}}, "round_even(x, n)"},
@@ -99,9 +99,9 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, {{nullptr, nullptr}}, "arr[2:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, {{nullptr, nullptr}}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, {{nullptr, nullptr}}, "list_concat(list_value(e), arr)"},
-	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, {{nullptr, nullptr}}, "list_aggr(arr::varchar[], 'string_agg', sep)"},
+	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, {{nullptr, nullptr}}, "case len(arr::varchar[]) when 0 then '' else list_aggr(arr::varchar[], 'string_agg', sep) end"},
 	// Test default parameters
-	{DEFAULT_SCHEMA, "array_to_string_comma_default", {"arr", nullptr}, {{"sep", "','"}, {nullptr, nullptr}}, "list_aggr(arr::varchar[], 'string_agg', sep)"},
+	{DEFAULT_SCHEMA, "array_to_string_comma_default", {"arr", nullptr}, {{"sep", "','"}, {nullptr, nullptr}}, "case len(arr::varchar[]) when 0 then '' else list_aggr(arr::varchar[], 'string_agg', sep) end"},
 
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, {{nullptr, nullptr}}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, {{nullptr, nullptr}}, "floor(x/y)"},
@@ -115,10 +115,6 @@ static const DefaultMacro internal_macros[] = {
 
     {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, {{nullptr, nullptr}}, "l[:-:-1]"},
     {DEFAULT_SCHEMA, "array_reverse", {"l", nullptr}, {{nullptr, nullptr}}, "list_reverse(l)"},
-
-    // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
-    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, {{nullptr, nullptr}}, "list_filter(list_distinct(l1), (variable_intersect) -> list_contains(l2, variable_intersect))"},
-    {DEFAULT_SCHEMA, "array_intersect", {"l1", "l2", nullptr}, {{nullptr, nullptr}}, "list_intersect(l1, l2)"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, {{nullptr, nullptr}}, "list_aggr(l, 'avg')"},
@@ -164,6 +160,12 @@ static const DefaultMacro internal_macros[] = {
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, {{nullptr, nullptr}}, "date + interval"},
 
+	// date functions - convenience macro for getting days in month
+	{DEFAULT_SCHEMA, "days_in_month", {"date", nullptr}, {{nullptr, nullptr}}, "day(last_day(date))"},
+
+	// timestamptz functions
+	{DEFAULT_SCHEMA, "ago", {"i", nullptr}, {{nullptr, nullptr}}, "current_timestamp - i::interval"},
+
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, {{nullptr, nullptr}}, "unnest(string_split_regex(text, pattern))"},
 
@@ -196,12 +198,13 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(ar
 			    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 		}
 		for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
-			auto expr_list = Parser::ParseExpressionList(default_macro.named_parameters[named_idx].default_value);
+			const auto &named_param = default_macro.named_parameters[named_idx];
+			auto expr_list = Parser::ParseExpressionList(named_param.default_value);
 			if (expr_list.size() != 1) {
 				throw InternalException("Expected a single expression");
 			}
-			function->default_parameters.insert(
-				make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
+			function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
+			function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
 		}
 		D_ASSERT(function->type == MacroType::SCALAR_MACRO);
 		bind_info->macros.push_back(std::move(function));

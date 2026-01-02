@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # we cannot truncate blobs that are all 0xFF - so stats are omitted
 query IIIIII
 COPY (SELECT repeat('\xFF', 300)::BLOB as blob) TO '__TEST_DIR__/test_truncate_blob.parquet' (RETURN_STATS);

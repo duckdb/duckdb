@@ -37,22 +37,24 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
-	CSVReaderOptions csv_options;
+	CSVFileReaderOptions csv_file_options;
+	auto &csv_options = csv_file_options.options;
 	csv_options.file_path = file_name.path;
 	vector<string> empty;
 	csv_options.FromNamedParameters(options, *context, file_options);
 
 	// Run the auto-detect, populating the options with the detected settings
+	SimpleMultiFileList multi_file_list(files);
 
 	if (file_options.union_by_name) {
-		SimpleMultiFileList multi_file_list(files);
 		vector<LogicalType> types;
 		vector<string> names;
 		auto result = make_uniq<MultiFileBindData>();
 		auto csv_data = make_uniq<ReadCSVData>();
+		result->interface = make_uniq<CSVMultiFileInfo>();
 
-		multi_file_reader->BindUnionReader<CSVMultiFileInfo>(*context, types, names, multi_file_list, *result,
-		                                                     csv_options, file_options);
+		multi_file_reader->BindUnionReader(*context, types, names, multi_file_list, *result, csv_file_options,
+		                                   file_options);
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {
@@ -71,14 +73,13 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		}
 	} else {
 		if (csv_options.auto_detect) {
+			vector<LogicalType> return_types;
+			vector<string> names;
 			shared_ptr<CSVBufferManager> buffer_manager;
-			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0].path, 0);
-			CSVSniffer sniffer(csv_options, file_options, buffer_manager, CSVStateMachineCache::Get(*context));
-			auto sniffer_result = sniffer.SniffCSV();
-			auto &types = sniffer_result.return_types;
-			auto &names = sniffer_result.names;
-			for (idx_t i = 0; i < types.size(); i++) {
-				columns.emplace_back(names[i], types[i]);
+			CSVSchemaDiscovery::SchemaDiscovery(*context, buffer_manager, csv_options, file_options, return_types,
+			                                    names, multi_file_list);
+			for (idx_t i = 0; i < return_types.size(); i++) {
+				columns.emplace_back(names[i], return_types[i]);
 			}
 		} else {
 			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
@@ -91,6 +92,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		csv_options.dialect_options.state_machine_options.escape.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.delimiter.ChangeSetByUserTrue();
 		csv_options.dialect_options.state_machine_options.quote.ChangeSetByUserTrue();
+		csv_options.dialect_options.state_machine_options.comment.ChangeSetByUserTrue();
 		csv_options.dialect_options.header.ChangeSetByUserTrue();
 		csv_options.dialect_options.skip_rows.ChangeSetByUserTrue();
 	}

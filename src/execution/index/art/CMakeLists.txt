@@ -1,18 +1,22 @@
 add_library_unity(
   duckdb_execution_index_art
   OBJECT
+  art_builder.cpp
+  art.cpp
+  art_index.cpp
   art_key.cpp
-  node.cpp
+  art_merger.cpp
+  base_leaf.cpp
+  base_node.cpp
   iterator.cpp
   leaf.cpp
-  base_node.cpp
-  node48.cpp
+  node.cpp
   node256.cpp
-  prefix.cpp
-  base_leaf.cpp
   node256_leaf.cpp
-  art.cpp
-  plan_art.cpp)
+  node48.cpp
+  prefix.cpp
+  prefix_handle.cpp
+  const_prefix_handle.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution_index_art>

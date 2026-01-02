@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/function/table/read_duckdb.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
@@ -43,10 +44,7 @@ SerializedCSVReaderOptions::SerializedCSVReaderOptions(CSVOption<char> single_by
 
 unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const OpenFileInfo &file, const CSVReaderOptions &options,
                                            ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto &allocator = BufferAllocator::Get(context);
-	auto &db_config = DBConfig::GetConfig(context);
-	return CSVFileHandle::OpenFile(db_config, fs, allocator, file, options);
+	return CSVFileHandle::OpenFile(context, file, options);
 }
 
 ReadCSVData::ReadCSVData() {
@@ -95,6 +93,8 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
 	table_function.named_parameters["strict_mode"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["thousands"] = LogicalType::VARCHAR;
+	table_function.named_parameters["files_to_sniff"] = LogicalType::BIGINT;
 
 	MultiFileReader::AddParameters(table_function);
 }
@@ -193,8 +193,10 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
+	AddFunction(MultiFileReader::CreateFunctionSet(ReadDuckDBTableFunction::GetFunction()));
 	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
+	config.replacement_scans.emplace_back(ReadDuckDBTableFunction::ReplacementScan);
 }
 
 } // namespace duckdb

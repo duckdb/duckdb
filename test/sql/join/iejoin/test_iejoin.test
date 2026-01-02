@@ -182,3 +182,20 @@ WITH data_table AS (
 37	1607087520	1607878080	9
 38	1607878080	1608668640	9
 39	1608668640	1609459200	9
+
+# internal issue 5197
+statement ok
+create table test_big as select range i, range + 100_000 j, 'hello' k from range (20_000)
+
+statement ok
+create table test_small as select range i, range + 100_000 j, 'hello' k from range (0,20_000,10)
+
+statement ok
+select *
+from test_small t1
+join test_small t2
+on (t1.i = t2.j)
+join test_small t3
+on (true)
+join test_big t4
+on (t3.i < t4.i and t3.j > t4.j)

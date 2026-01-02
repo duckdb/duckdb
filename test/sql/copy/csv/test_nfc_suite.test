@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
 
 query I
-COPY nfcstrings FROM 'data/csv/real/nfc_normalization.csv' (DELIMITER '|', HEADER 0);
+COPY nfcstrings FROM '{DATA_DIR}/csv/real/nfc_normalization.csv' (DELIMITER '|', HEADER 0);
 ----
 18819
 
@@ -36,7 +36,7 @@ statement ok
 CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
 
 query I
-COPY nfcstrings FROM 'data/csv/real/nfc_normalization_rn.csv' (DELIMITER '|', HEADER 0);
+COPY nfcstrings FROM '{DATA_DIR}/csv/real/nfc_normalization_rn.csv' (DELIMITER '|', HEADER 0);
 ----
 18819
 

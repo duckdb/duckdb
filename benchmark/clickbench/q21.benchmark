@@ -2,6 +2,7 @@
 # description: Run query 21 from the ClickBench benchmark
 # group: [clickbench]
 
-template benchmark/clickbench/clickbench.benchmark.in
+template benchmark/clickbench/clickbench-noresult.benchmark.in
 QUERY_NUMBER=21
 QUERY_NUMBER_PADDED=21
+RESULT_QUERY=SELECT * FROM __answer ORDER BY c DESC, SearchPhrase LIMIT 8

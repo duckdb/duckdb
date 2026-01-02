@@ -1,0 +1,47 @@
+# name: test/sql/binder/test_duplicate_in_set_operation.test
+# description: Test whether duplicate can be performed correctly in set operation
+# group: [binder]
+
+statement ok
+create table t1(col1 varchar collate nocase);
+
+statement ok
+create table t2(col1 varchar collate nocase);
+
+statement ok
+insert into t1 values ('a');
+
+statement ok
+insert into t2 values ('A');
+
+statement ok
+pragma enable_verification;
+
+query I
+select upper(col1)
+from (
+	select *
+	from t1
+	union
+	select *
+	from t2
+) d;
+----
+A
+
+
+statement ok
+pragma explain_output='physical_only';
+
+# Ensure that duplicate is performed correctly in the HASH_GROUP_BY operator
+query II
+explain select upper(col1)
+from (
+	select *
+	from t1
+	union
+	select *
+	from t2
+) d;
+----
+physical_plan	<REGEX>:.* Aggregates: .*\"first\"\(\#1\).*

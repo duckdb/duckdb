@@ -31,7 +31,7 @@ IMPORT DATABASE '__TEST_DIR__/broken_empty_string';
 statement error
 EXPORT DATABASE '__TEST_DIR__/broken_empty_string_2' (FORCE_NOT_NULL ['A']);
 ----
-Unrecognized option
+"FORCE_NOT_NULL" is not supported for writing - only for reading
 
 statement ok
 abort;

@@ -2,7 +2,7 @@
 # description: Test lists with aggregations on a table with dictionary compression
 # group: [list]
 
-load __TEST_DIR__/store_dict.db
+load {TEMP_DIR}/store_dict.db
 
 statement ok
 pragma force_compression='dictionary';
@@ -11,7 +11,7 @@ statement ok
 CREATE TABLE Hosts (ips varchar[]);
 
 statement ok
-INSERT INTO Hosts SELECT * FROM 'data/csv/ips.csv.gz';
+INSERT INTO Hosts SELECT * FROM '{DATA_DIR}/csv/ips.csv.gz';
 
 query I
 SELECT min(list_string_agg(ips)) FROM Hosts

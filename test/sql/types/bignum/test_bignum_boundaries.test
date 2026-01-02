@@ -1,0 +1,76 @@
+# name: test/sql/types/bignum/test_bignum_boundaries.test
+# description: Boundary testing for bignum type
+# group: [bignum]
+
+statement ok
+PRAGMA enable_verification
+
+# Test All Integers
+query IIIIIIIIII
+select tinyint::varchar::bignum = tinyint::bignum,
+smallint::varchar::bignum = smallint::bignum,
+int::varchar::bignum = int::bignum,
+bigint::varchar::bignum = bigint::bignum,
+hugeint::varchar::bignum = hugeint::bignum,
+uhugeint::varchar::bignum = uhugeint::bignum,
+utinyint::varchar::bignum = utinyint::bignum,
+usmallint::varchar::bignum = usmallint::bignum,
+uint::varchar::bignum = uint::bignum,
+ubigint::varchar::bignum = ubigint::bignum
+FROM test_all_types()
+where tinyint is not null;
+----
+true	true	true	true	true	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
+
+
+query IIIIIIIIII
+select tinyint::varchar = tinyint::bignum::varchar ,
+smallint::varchar = smallint::bignum::varchar ,
+int::varchar = int::bignum::varchar ,
+bigint::varchar = bigint::bignum::varchar ,
+hugeint::varchar = hugeint::bignum::varchar ,
+uhugeint::varchar = uhugeint::bignum::varchar ,
+utinyint::varchar = utinyint::bignum::varchar ,
+usmallint::varchar = usmallint::bignum::varchar ,
+uint::varchar = uint::bignum::varchar ,
+ubigint::varchar::bignum = ubigint::bignum::varchar
+FROM test_all_types()
+where tinyint is not null;
+----
+true	true	true	true	true	true	true	true	true	true
+true	true	true	true	true	true	true	true	true	true
+
+# Floats and doubles have more complicated string coversions, hence the tests are separated
+
+# Boundary tests for double
+query I
+select 1.7976931348623157E+308::double::bignum = '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum
+----
+true
+
+query I
+select (-1.7976931348623157E+308)::double::bignum = '-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum
+----
+true
+
+query I
+select '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum::double = '1.7976931348623157E+308'::double
+----
+true
+
+query I
+select '-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum::double = '-1.7976931348623157E+308'::double
+----
+true
+
+# Boundary tests for float
+query I
+select 3.4028235E+38::float::bignum = '340282346638528859811704183484516925440'::bignum
+----
+true
+
+query I
+select (-3.4028235E+38)::float::bignum = '-340282346638528859811704183484516925440'::bignum
+----
+true

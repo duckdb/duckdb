@@ -1,0 +1,87 @@
+# name: test/optimizer/date_trunc_simplification_icu.test
+# description: test DATE_TRUNC() constant simplifications that require icu
+# group: [optimizer]
+
+require icu
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+set Calendar='gregorian';
+
+#
+# check operation with hour offsets that aren't complete hours
+#
+
+statement ok
+create table test(d TIMESTAMPTZ);
+
+statement ok
+insert into test values ('2025-01-01 01:01:00+02:10'), ('2025-01-10 19:00:00-06:45');
+
+statement ok
+set timezone='utc';
+
+query I
+select * from test where date_trunc('day', d) < '2025-01-01'::TIMESTAMPTZ;
+----
+2024-12-31 22:51:00+00
+
+query I
+select * from test where date_trunc('day', d) >= '2025-01-01'::TIMESTAMPTZ;
+----
+2025-01-11 01:45:00+00
+
+query I
+select * from test where date_trunc('day', d) <= '2025-01-10'::TIMESTAMPTZ;
+----
+2024-12-31 22:51:00+00
+
+query I
+select * from test where date_trunc('day', d) > '2025-01-10'::TIMESTAMPTZ;
+----
+2025-01-11 01:45:00+00
+
+#
+# check correctness on DST edge cases using the St. Johns timezone
+#
+
+statement ok
+set TimeZone='America/St_Johns';
+
+statement ok
+create table test2(d TIMESTAMPTZ);
+
+statement ok
+insert into test2 values ('2025-03-09T01:05:00'),
+                         ('2025-03-09T03:05:00'),
+                         ('2025-11-02T00:30:00'),
+                         ('2025-11-02T01:30:00');
+
+query I
+select * from test2 where date_trunc('hour', d) < '2025-03-09T05:00:00+00'::TIMESTAMPTZ;
+----
+2025-03-09 01:05:00-03:30
+
+query I
+select * from test2 where date_trunc('hour', d) <= '2025-03-09T05:30:00+00'::TIMESTAMPTZ;
+----
+2025-03-09 01:05:00-03:30
+2025-03-09 03:05:00-02:30
+
+query I
+select * from test2 where date_trunc('hour', d) > '2025-11-02T03:30:00+00'::TIMESTAMPTZ;
+----
+2025-11-02 01:30:00-03:30
+
+query I
+select * from test2 where date_trunc('hour', d) > '2025-11-02T02:30:00+00'::TIMESTAMPTZ;
+----
+2025-11-02 01:30:00-03:30
+
+query I
+select * from test2 where date_trunc('hour', d) >= '2025-11-02T02:30:00+00'::TIMESTAMPTZ;
+----
+2025-11-02 00:30:00-02:30
+2025-11-02 01:30:00-03:30

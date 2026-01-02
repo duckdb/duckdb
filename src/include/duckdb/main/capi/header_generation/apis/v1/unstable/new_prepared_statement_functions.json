@@ -1,0 +1,10 @@
+{
+  "version": "unstable_new_prepared_statement_functions",
+  "description": "API to get information about the results of a prepared statement",
+  "entries": [
+    "duckdb_prepared_statement_column_count",
+    "duckdb_prepared_statement_column_name",
+    "duckdb_prepared_statement_column_logical_type",
+    "duckdb_prepared_statement_column_type"
+  ]
+}

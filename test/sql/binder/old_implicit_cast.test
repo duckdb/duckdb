@@ -18,7 +18,7 @@ No function matches
 statement error
 SELECT [i, v] FROM integers
 ----
-an explicit cast is required
+Binder Error: Cannot deduce template type
 
 statement ok
 SET old_implicit_casting=true

@@ -18,6 +18,7 @@
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -139,8 +140,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 			auto &config = DBConfig::GetConfig(context);
 			const auto &order = aggr.order_bys->orders[0];
-			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
+			const auto sense = config.ResolveOrder(context, order.type);
 			negate_fractions = (sense == OrderType::DESCENDING);
 		}
 	}
@@ -160,8 +160,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.value.type().IsIntegral()) {
-					auto &config = ClientConfig::GetConfig(context);
-					if (!config.order_by_non_integer_literal) {
+					auto order_by_non_integer_literal = DBConfig::GetSetting<OrderByNonIntegerLiteralSetting>(context);
+					if (!order_by_non_integer_literal) {
 						throw BinderException(
 						    *order.expression,
 						    "ORDER BY non-integer literal has no effect.\n* SET order_by_non_integer_literal=true to "
@@ -264,6 +264,13 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
+	if (!bound_function.CanAggregate() && bound_function.CanWindow()) {
+		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.name);
+		error = BinderException(msg);
+		error.AddQueryLocation(aggr);
+		error.Throw();
+	}
+
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {
@@ -272,8 +279,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = BoundExpression::GetExpression(*order.expression);
 			PushCollation(context, order_expr, order_expr->return_type);
-			const auto sense = config.ResolveOrder(order.type);
-			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
+			const auto sense = config.ResolveOrder(context, order.type);
+			const auto null_order = config.ResolveNullOrder(context, sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
 		}
 	}

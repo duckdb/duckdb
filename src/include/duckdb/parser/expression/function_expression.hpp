@@ -11,6 +11,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 //! Represents a function call
@@ -61,8 +62,8 @@ public:
 
 	void Verify() const override;
 
-	//! Returns true, if the function has a lambda expression as a child.
-	bool IsLambdaFunction() const;
+	//! Returns a pointer to the lambda expression, if the function has a lambda expression as a child, else nullptr.
+	optional_ptr<ParsedExpression> IsLambdaFunction() const;
 
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>

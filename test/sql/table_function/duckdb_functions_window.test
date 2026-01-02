@@ -1,0 +1,26 @@
+# name: test/sql/table_function/duckdb_functions_window.test
+# group: [table_function]
+
+statement ok
+PRAGMA enable_verification
+
+# FIXME: fix this later when Window functions are actual catalog entries, with the function_type = 'window'
+
+query IIII
+select function_name, parameters, parameter_types, function_type from duckdb_functions() where function_oid = 0 and function_type = 'aggregate' order by all;
+----
+cume_dist	[]	[]	aggregate
+dense_rank	[]	[]	aggregate
+fill	[col0]	[T]	aggregate
+first	[col0]	[T]	aggregate
+first_value	[col0]	[T]	aggregate
+lag	[col0, col1, col2]	[T, BIGINT, T]	aggregate
+last	[col0]	[T]	aggregate
+last_value	[col0]	[T]	aggregate
+lead	[col0, col1, col2]	[T, BIGINT, T]	aggregate
+nth_value	[col0, col1]	[T, BIGINT]	aggregate
+ntile	[col0]	[BIGINT]	aggregate
+percent_rank	[]	[]	aggregate
+rank	[]	[]	aggregate
+rank_dense	[]	[]	aggregate
+row_number	[]	[]	aggregate

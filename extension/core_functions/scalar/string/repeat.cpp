@@ -31,21 +31,6 @@ static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	    });
 }
 
-unique_ptr<FunctionData> RepeatBindFunction(ClientContext &, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	switch (arguments[0]->return_type.id()) {
-	case LogicalTypeId::UNKNOWN:
-		throw ParameterNotResolvedException();
-	case LogicalTypeId::LIST:
-		break;
-	default:
-		throw NotImplementedException("repeat(list, count) requires a list as parameter");
-	}
-	bound_function.arguments[0] = arguments[0]->return_type;
-	bound_function.return_type = arguments[0]->return_type;
-	return nullptr;
-}
-
 static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto &list_vector = args.data[0];
 	auto &cnt_vector = args.data[1];
@@ -79,10 +64,10 @@ ScalarFunctionSet RepeatFun::GetFunctions() {
 	for (const auto &type : {LogicalType::VARCHAR, LogicalType::BLOB}) {
 		repeat.AddFunction(ScalarFunction({type, LogicalType::BIGINT}, type, RepeatFunction));
 	}
-	repeat.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
-	                                  LogicalType::LIST(LogicalType::ANY), RepeatListFunction, RepeatBindFunction));
+	repeat.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
+	                                  LogicalType::LIST(LogicalType::TEMPLATE("T")), RepeatListFunction));
 	for (auto &func : repeat.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return repeat;
 }
