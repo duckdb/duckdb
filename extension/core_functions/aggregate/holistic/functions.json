@@ -55,5 +55,12 @@
         "description": "Finds the k approximately most occurring values in the data set",
         "example": "approx_top_k(x, 5)",
         "type": "aggregate_function"
+    },
+    {
+        "name": "max_intersections",
+        "parameters": "left, right",
+        "description": "Returns the maximum number of overlapping intervals from pairs of (left, right) values.",
+        "example": "max_intersections(left, right)",
+        "type": "aggregate_function"
     }
 ]
