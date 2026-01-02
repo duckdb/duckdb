@@ -502,7 +502,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 			//! Check if our encryption module can write, if not, we should throw here
 			auto const &config = DBConfig::Get(db);
-			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only && !config.options.enable_mbedtls) {
+			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only &&
+			    !config.options.enable_mbedtls) {
 				throw InvalidConfigurationException(
 				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
 				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "

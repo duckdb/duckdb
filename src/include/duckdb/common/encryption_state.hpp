@@ -10,6 +10,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 
