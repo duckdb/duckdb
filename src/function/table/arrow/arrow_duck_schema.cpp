@@ -159,7 +159,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 	} else if (format == "ttu") {
 		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (format == "ttn") {
-		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
+		return make_uniq<ArrowType>(LogicalType::TIME_NS, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
 	} else if (format == "tDs") {
 		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
 	} else if (format == "tDm") {

@@ -1627,6 +1627,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:

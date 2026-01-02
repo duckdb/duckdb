@@ -318,6 +318,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	result.emplace_back(list_of_fixed_array_of_int_type, "list_of_fixed_int_array",
 	                    list_of_fixed_array_of_int_min_value, list_of_fixed_array_of_int_max_value);
 
+	result.emplace_back(LogicalType::TIME_NS, "time_ns");
+
 	return result;
 }
 

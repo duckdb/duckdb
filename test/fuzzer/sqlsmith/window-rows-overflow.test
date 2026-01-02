@@ -5,6 +5,7 @@
 statement ok
 create table all_types as
 	select * exclude(
+		time_ns,
 		small_enum,
 		medium_enum,
 		large_enum,
