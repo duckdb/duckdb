@@ -74,7 +74,7 @@ select round(memory_usage_bytes / 1048576) from duckdb_memory() where tag = 'EXT
 
 # set the memory so low that the ~3MB entry should be unloaded
 statement ok
-set memory_limit='100kb';
+set memory_limit='512KiB';
 
 # set it back to something reasonable so we can actually do the following queries
 statement ok
@@ -110,3 +110,69 @@ select i = ${i} from '__TEST_DIR__/test_efc_i.parquet';
 true
 
 endloop
+
+# internal issue #5732
+statement ok
+CREATE TABLE t1("time" BIGINT, "value" DOUBLE, "year" BIGINT, "month" BIGINT, "day" BIGINT);
+
+statement ok
+INSERT INTO t1 VALUES(1704067200000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t1 VALUES(1704067201000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t1 VALUES(1704067202000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t1 VALUES(1704067203000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t1 VALUES(1704067204000000000,42.0,2024,1,1);
+
+statement ok
+CREATE TABLE t2("time" BIGINT, "value" DOUBLE, "year" BIGINT, "month" BIGINT, "day" BIGINT);
+
+statement ok
+INSERT INTO t2 VALUES(1704067200000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704067201000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704067202000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704067203000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704067204000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704069000000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704069001000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704069002000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704069003000000000,42.0,2024,1,1);
+
+statement ok
+INSERT INTO t2 VALUES(1704069004000000000,42.0,2024,1,1);
+
+statement ok
+COPY t1 TO '__TEST_DIR__/violations.parquet' (FORMAT PARQUET, OVERWRITE_OR_IGNORE 1, USE_TMP_FILE 1);
+
+statement ok
+SELECT * FROM read_parquet('__TEST_DIR__/violations.*parquet', hive_partitioning = true, union_by_name = true);
+
+statement ok
+COPY t2 TO '__TEST_DIR__/violations.parquet' (FORMAT PARQUET, OVERWRITE_OR_IGNORE 1, USE_TMP_FILE 1);
+
+sleep 10 seconds
+
+statement ok
+SELECT * FROM read_parquet('__TEST_DIR__/violations.*parquet', hive_partitioning = true, union_by_name = true);

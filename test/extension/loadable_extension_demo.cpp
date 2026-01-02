@@ -250,13 +250,15 @@ public:
 				select_statement->node = std::move(select_node);
 				statements.push_back(std::move(select_statement));
 			}
-			if (StringUtil::CIEquals(query_input, "over")) {
-				auto exception = ParserException("Parser overridden, query equaled \"over\" but not \"override\"");
+			if (StringUtil::CIEquals(query_input, "overri")) {
+				auto exception = ParserException("Parser overridden, query equaled \"overri\" but not \"override\"");
 				return ParserOverrideResult(exception);
 			}
 		}
 		if (statements.empty()) {
-			return ParserOverrideResult();
+			auto not_implemented_exception =
+			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
+			return ParserOverrideResult(not_implemented_exception);
 		}
 		return ParserOverrideResult(std::move(statements));
 	}
@@ -360,7 +362,7 @@ static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFun
 		auto new_max_val = left_max_val + right_max_val;
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.arguments[1] = arguments[1]->return_type;
-		bound_function.return_type = BoundedType::Get(new_max_val);
+		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
 	}
@@ -386,12 +388,12 @@ static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.return_type = arguments[0]->return_type;
+		bound_function.SetReturnType(arguments[0]->return_type);
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
 	auto result = make_uniq<BoundedFunctionData>();
-	result->max_val = BoundedType::GetMaxValue(bound_function.return_type);
+	result->max_val = BoundedType::GetMaxValue(bound_function.GetReturnType());
 	return std::move(result);
 }
 

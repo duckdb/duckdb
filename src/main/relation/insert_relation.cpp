@@ -13,11 +13,18 @@ InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name,
 	TryBindRelation(columns);
 }
 
+InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string catalog_name, string schema_name, string table_name)
+    : Relation(child_p->context, RelationType::INSERT_RELATION), child(std::move(child_p)),
+      catalog_name(std::move(catalog_name)), schema_name(std::move(schema_name)), table_name(std::move(table_name)) {
+	TryBindRelation(columns);
+}
+
 BoundStatement InsertRelation::Bind(Binder &binder) {
 	InsertStatement stmt;
 	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
+	stmt.catalog = catalog_name;
 	stmt.schema = schema_name;
 	stmt.table = table_name;
 	stmt.select_statement = std::move(select);

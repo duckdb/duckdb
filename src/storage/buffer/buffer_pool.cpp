@@ -6,6 +6,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
@@ -229,13 +230,13 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
-BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps,
+BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
                        idx_t allocator_bulk_deallocation_flush_threshold)
     : eviction_queue_sizes({BLOCK_AND_EXTERNAL_FILE_QUEUE_SIZE, MANAGED_BUFFER_QUEUE_SIZE, TINY_BUFFER_QUEUE_SIZE}),
       maximum_memory(maximum_memory),
       allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
       track_eviction_timestamps(track_eviction_timestamps),
-      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), block_allocator(block_allocator) {
 	for (idx_t queue_type_idx = 0; queue_type_idx < EVICTION_QUEUE_TYPES; queue_type_idx++) {
 		const auto types = EvictionQueueTypeIdxToFileBufferTypes(queue_type_idx);
 		const auto &type_queue_size = eviction_queue_sizes[queue_type_idx];
@@ -333,8 +334,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	bool found = false;
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-		if (Allocator::SupportsFlush() && extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			Allocator::FlushAll();
+		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+			block_allocator.FlushAll(extra_memory);
 		}
 		return {true, std::move(r)};
 	}
@@ -362,8 +363,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	if (!found) {
 		r.Resize(0);
-	} else if (Allocator::SupportsFlush() && extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		Allocator::FlushAll();
+	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		block_allocator.FlushAll(extra_memory);
 	}
 
 	return {found, std::move(r)};
@@ -454,9 +455,7 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
 	}
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	block_allocator.FlushAll();
 }
 
 void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {

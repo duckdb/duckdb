@@ -9,27 +9,27 @@ mode skip
 
 # Multiple column in the root OR node, don't push down
 query II
-EXPLAIN  SELECT tbl.a, tbl.b FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a, b) WHERE a=1 OR b=false
+EXPLAIN  SELECT tbl.a, tbl.b FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a, b) WHERE a=1 OR b=false
 ----
 physical_plan	<!REGEX>:.*PARQUET_SCAN.*Filters:.*
 
 
 # Single column in the root OR node
 query II
-EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a=2
+EXPLAIN SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a=2
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a=2.*
 
 # Single column + root OR node with AND
 query II
-EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR (a>3 AND a<5)
+EXPLAIN SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR (a>3 AND a<5)
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 AND a<5|.*
 
 
 # Single column multiple ORs
 query II
-EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a>3 OR a<5
+EXPLAIN SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a=1 OR a>3 OR a<5
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 OR a<5|.*
 
@@ -37,14 +37,14 @@ physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a=1 OR a>3 OR a<5|.*
 
 # Testing not equal
 query II
-EXPLAIN SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a!=1 OR a>3 OR a<2
+EXPLAIN SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a!=1 OR a>3 OR a<2
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a!=1 OR a>3 OR a<2|.*
 
 
 # Multiple OR filters connected with ANDs
 query II
-EXPLAIN SELECT tbl.a, tbl.b, tbl.c FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a,b,c) WHERE (a<2 OR a>3) AND (a=1 OR a=4) AND (b=false OR c=1);
+EXPLAIN SELECT tbl.a, tbl.b, tbl.c FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a,b,c) WHERE (a<2 OR a>3) AND (a=1 OR a=4) AND (b=false OR c=1);
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<2 OR a>3 AND a=1.*OR a=4.*
 
@@ -55,12 +55,12 @@ PRAGMA enable_profiling
 
 # should return 2 rows: 0 and 7
 query II
-EXPLAIN ANALYZE SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a<1 OR a>6;
+EXPLAIN ANALYZE SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a<1 OR a>6;
 ----
 analyzed_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<1 OR a>6.*2[ \t].*
 
 # should return 1 row: 0
 query II
-EXPLAIN ANALYZE SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a<1 OR a>8;
+EXPLAIN ANALYZE SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a) WHERE a<1 OR a>8;
 ----
 analyzed_plan	<REGEX>:.*PARQUET_SCAN.*Filters: a<1 OR a>8.*1[ \t].*

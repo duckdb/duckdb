@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <algorithm>
 
@@ -155,6 +156,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		} else {
 			output.SetValue(col_idx++, count, Value());
 		}
+
 		count++;
 	}
 	output.SetCardinality(count);

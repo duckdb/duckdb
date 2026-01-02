@@ -8,10 +8,10 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0, AUTO_DETECT 0)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0, AUTO_DETECT 0)
 
 statement error
-COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0, AUTO_DETECT 0)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0, AUTO_DETECT 0)
 ----
 Expected Number of Columns: 2 Found: 1
 
@@ -36,10 +36,10 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
 
 statement error
-COPY integers FROM 'data/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
 ----
 It was not possible to automatically detect the CSV parsing dialect
 

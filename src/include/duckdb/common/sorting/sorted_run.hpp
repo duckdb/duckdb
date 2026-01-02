@@ -38,6 +38,7 @@ private:
 	DataChunk key;
 	DataChunk decoded_key;
 	TupleDataScanState payload_state;
+	vector<char> key_buffer;
 };
 
 class SortedRun {

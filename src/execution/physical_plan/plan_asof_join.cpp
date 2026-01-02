@@ -20,7 +20,6 @@ namespace duckdb {
 
 optional_ptr<PhysicalOperator>
 PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe, PhysicalOperator &build) {
-
 	// Plan a inverse nested loop join, then aggregate the values to choose the optimal match for each probe row.
 	// Use a row number primary key to handle duplicate probe values.
 	// aggregate the fields to produce at most one match per probe row,

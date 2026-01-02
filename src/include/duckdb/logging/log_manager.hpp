@@ -21,7 +21,7 @@ class LogType;
 // - Creates Loggers with cached configuration
 // - Main sink for logs (either by logging directly into this, or by syncing a pre-cached set of log entries)
 // - Holds the log storage
-class LogManager : public enable_shared_from_this<LogManager> {
+class LogManager {
 	friend class ThreadSafeLogger;
 	friend class ThreadLocalLogger;
 	friend class MutableLogger;

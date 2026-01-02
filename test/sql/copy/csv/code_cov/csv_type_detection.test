@@ -6,21 +6,21 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-from read_csv_auto('data/csv/invalid_utf8.csv', auto_detect = false, columns={'c01': 'VARCHAR'} )
+from read_csv_auto('{DATA_DIR}/csv/invalid_utf8.csv', auto_detect = false, columns={'c01': 'VARCHAR'} )
 ----
 Invalid unicode (byte sequence mismatch) detected
 
 query I
-select * from read_csv_auto('data/csv/empty.csv')
+select * from read_csv_auto('{DATA_DIR}/csv/empty.csv')
 ----
 
 query II
-select * from read_csv_auto('data/csv/small_file.csv', sample_size=1)
+select * from read_csv_auto('{DATA_DIR}/csv/small_file.csv', sample_size=1)
 ----
 1	2
 5	3
 
 query I
-select * from read_csv_auto('data/csv/date_format_percentage.csv')
+select * from read_csv_auto('{DATA_DIR}/csv/date_format_percentage.csv')
 ----
 336%584%3205

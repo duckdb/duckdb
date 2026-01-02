@@ -36,7 +36,6 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> 
       set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
       on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
       conflict_target(std::move(conflict_target_p)), update_is_del_and_insert(update_is_del_and_insert) {
-
 	if (action_type == OnConflictAction::THROW) {
 		return;
 	}
@@ -82,7 +81,6 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
                                    const vector<unique_ptr<BoundConstraint>> &bound_constraints)
     : collection_index(DConstants::INVALID_INDEX), bound_constraints(bound_constraints) {
-
 	auto &allocator = Allocator::Get(context);
 	update_chunk.Initialize(allocator, types);
 	append_chunk.Initialize(allocator, types);
@@ -189,7 +187,6 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 
 static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
                               DataChunk &update_chunk, const PhysicalInsert &op) {
-
 	auto &do_update_condition = op.do_update_condition;
 	auto &set_types = op.set_types;
 	auto &set_expressions = op.set_expressions;
@@ -748,8 +745,8 @@ unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext
 	return make_uniq<InsertSourceState>(*this);
 }
 
-SourceResultType PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<InsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
 	if (!return_chunk) {

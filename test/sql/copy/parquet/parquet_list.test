@@ -9,25 +9,25 @@ PRAGMA enable_verification
 
 # standard list syntax
 query I
-select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet']);
+select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet']);
 ----
 2
 
 # glob inside a list
 query I
-select count(*) from parquet_scan(['data/parquet-testing/glob/*.parquet', 'data/parquet-testing/glob/t2.parquet']);
+select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/*.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet']);
 ----
 3
 
 # read the same file multiple times
 query I
-select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet']);
+select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet']);
 ----
 5
 
 # file does not exist
 statement error
-select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet', 'this/file/doesnot/exist/hopefully.parquet']);
+select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', 'this/file/doesnot/exist/hopefully.parquet']);
 ----
 
 # empty list

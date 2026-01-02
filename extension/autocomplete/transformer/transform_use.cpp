@@ -11,9 +11,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 
 	string value_str;
 	if (IsInvalidSchema(qn.schema)) {
-		value_str = qn.name;
+		value_str = KeywordHelper::WriteOptionallyQuoted(qn.name);
 	} else {
-		value_str = qn.schema + "." + qn.name;
+		value_str =
+		    KeywordHelper::WriteOptionallyQuoted(qn.schema) + "." + KeywordHelper::WriteOptionallyQuoted(qn.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
@@ -29,7 +30,7 @@ QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transfor
 	if (choice_pr.result->type == ParseResultType::LIST) {
 		vector<string> entries;
 		auto use_target_children = choice_pr.result->Cast<ListParseResult>();
-		for (auto &child : use_target_children.children) {
+		for (auto &child : use_target_children.GetChildren()) {
 			if (child->type == ParseResultType::IDENTIFIER) {
 				entries.push_back(child->Cast<IdentifierParseResult>().identifier);
 			}

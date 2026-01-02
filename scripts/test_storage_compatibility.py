@@ -4,6 +4,7 @@ import subprocess
 import re
 import csv
 from pathlib import Path
+import sys
 
 parser = argparse.ArgumentParser(description='Run a full benchmark using the CLI and report the results.')
 group = parser.add_mutually_exclusive_group(required=True)
@@ -36,7 +37,8 @@ if args.versions is not None:
     for version in version_splits:
         cli_path = os.path.join(Path.home(), '.duckdb', 'cli', version, 'duckdb')
         if not os.path.isfile(cli_path):
-            os.system(f'curl https://install.duckdb.org | DUCKDB_VERSION={version} sh')
+            if os.system(f'curl https://install.duckdb.org | DUCKDB_VERSION={version} sh'):
+                raise Exception(f"CURL install for DuckDB version: {version} failed")
         programs_to_test.append(cli_path)
 else:
     programs_to_test.append(args.old_cli)
@@ -92,22 +94,22 @@ error_container = []
 
 
 def handle_failure(test, cmd, msg, stdout, stderr, returncode):
-    print(f"==============FAILURE============")
-    print(test)
-    print(f"==============MESSAGE============")
-    print(msg)
-    print(f"==============COMMAND============")
+    print(f"==============FAILURE============", file=sys.stderr)
+    print(test, file=sys.stderr)
+    print(f"==============MESSAGE============", file=sys.stderr)
+    print(msg, file=sys.stderr)
+    print(f"==============COMMAND============", file=sys.stderr)
     cmd_str = ''
     for entry in cmd:
         cmd_str += escape_cmd_arg(entry) + ' '
-    print(cmd_str.strip())
-    print(f"==============RETURNCODE=========")
-    print(str(returncode))
-    print(f"==============STDOUT=============")
-    print(stdout)
-    print(f"==============STDERR=============")
-    print(stderr)
-    print(f"=================================")
+    print(cmd_str.strip(), file=sys.stderr)
+    print(f"==============RETURNCODE=========", file=sys.stderr)
+    print(str(returncode), file=sys.stderr)
+    print(f"==============STDOUT=============", file=sys.stderr)
+    print(stdout, file=sys.stderr)
+    print(f"==============STDERR=============", file=sys.stderr)
+    print(stderr, file=sys.stderr)
+    print(f"=================================", file=sys.stderr)
     if args.abort_on_failure:
         exit(1)
     else:
@@ -160,10 +162,12 @@ for i in range(start, end):
         pass
     cmd = [unittest_program, '--test-config', args.test_config, test]
     if not try_run_program(cmd, 'Run Test'):
+        print("Failed to Run Test")
         continue
 
     if not os.path.isfile(db_name):
         # db not created
+        print(f"Failed to create a database file by the name of {db_name}")
         continue
 
     cmd = [
@@ -178,6 +182,7 @@ for i in range(start, end):
         'SHOW ALL TABLES',
     ]
     if not try_run_program(cmd, 'List Tables'):
+        print("Failed to List Tables")
         continue
 
     tables = []
@@ -187,6 +192,7 @@ for i in range(start, end):
             tables.append((row[1], row[2]))
     # no tables / views
     if len(tables) == 0:
+        print("No tables/views were created, skipping")
         continue
 
     # read all tables / views
@@ -220,10 +226,11 @@ if summarize_failures:
         '''\n\n====================================================
 ================  FAILURES SUMMARY  ================
 ====================================================\n
-'''
+''',
+        file=sys.stderr,
     )
     for i, error in enumerate(error_container, start=1):
-        print(f"\n{i}:", error["test"], "\n")
-        print(error["stderr"])
+        print(f"\n{i}:", error["test"], "\n", file=sys.stderr)
+        print(error["stderr"], file=sys.stderr)
 
 exit(1)

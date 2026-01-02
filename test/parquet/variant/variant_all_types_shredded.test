@@ -3,8 +3,6 @@
 
 require parquet
 
-require json
-
 statement ok
 create macro data() as table (
 	select COLUMNS([
@@ -33,7 +31,7 @@ create macro data() as table (
 )
 
 query I nosort expected_res
-select IF(VARIANT_TYPEOF(COLUMNS(*)) == 'VARIANT_NULL', NULL, COLUMNS(*)::JSON) from data();
+select * from data();
 ----
 
 foreach type bool tinyint smallint int bigint date time timestamp timestamp_ns timestamp_tz float double dec_9_4 dec_18_6 dec38_10 uuid varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs

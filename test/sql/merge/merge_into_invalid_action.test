@@ -1,0 +1,22 @@
+# name: test/sql/merge/merge_into_invalid_action.test
+# description: Test MERGE INTO with invalid actions
+# group: [merge]
+
+statement ok
+CREATE TABLE t AS SELECT range a FROM generate_series(0,9) t(range);
+
+statement error
+MERGE INTO t
+  USING (SELECT range a from generate_series (10,19) t(range)) AS s
+  USING(a)
+  WHEN NOT MATCHED BY TARGET THEN DELETE RETURNING merge_action, *;
+----
+cannot be combined with UPDATE or DELETE actions
+
+statement error
+MERGE INTO t
+  USING (SELECT range a from generate_series (10,19) t(range)) AS s
+  USING(a)
+  WHEN NOT MATCHED BY TARGET THEN UPDATE RETURNING merge_action, *;
+----
+cannot be combined with UPDATE or DELETE actions

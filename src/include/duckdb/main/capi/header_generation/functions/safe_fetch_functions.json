@@ -1,7 +1,8 @@
 {
     "group": "safe_fetch_functions",
     "deprecated": true,
-    "description": "// This function group is deprecated.\n// To access the values in a result, use `duckdb_fetch_chunk` repeatedly.\n// For each chunk, use the `duckdb_data_chunk` interface to access any columns and their values.\n\n",
+    "use_instead": "To access the values in a result, use `duckdb_fetch_chunk` repeatedly. For each chunk, use the `duckdb_data_chunk` interface to access any columns and their values.",
+    "description": "Deprecated functions to interact with a `duckdb_result`.",
     "entries": [
         {
             "name": "duckdb_value_boolean",

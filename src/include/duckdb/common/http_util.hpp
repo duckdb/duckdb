@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -138,10 +139,15 @@ struct BaseRequest {
 	const string &url;
 	string path;
 	string proto_host_port;
-	const HTTPHeaders &headers;
+	HTTPHeaders headers;
 	HTTPParams &params;
 	//! Whether or not to return failed requests (instead of throwing)
 	bool try_request = false;
+
+	// Requests will optionally contain their timings
+	bool have_request_timing = false;
+	timestamp_t request_start;
+	timestamp_t request_end;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -150,6 +156,14 @@ struct BaseRequest {
 	template <class TARGET>
 	const TARGET &Cast() const {
 		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	static HTTPHeaders MergeHeaders(const HTTPHeaders &headers, HTTPParams &params) {
+		HTTPHeaders result = headers;
+		for (const auto &header : params.extra_headers) {
+			result.Insert(header.first, header.second);
+		}
+		return result;
 	}
 };
 
@@ -210,6 +224,7 @@ struct PostRequestInfo : public BaseRequest {
 class HTTPClient {
 public:
 	virtual ~HTTPClient() = default;
+	virtual void Initialize(HTTPParams &http_params) = 0;
 
 	virtual unique_ptr<HTTPResponse> Get(GetRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Put(PutRequestInfo &info) = 0;

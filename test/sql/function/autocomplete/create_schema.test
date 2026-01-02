@@ -4,23 +4,23 @@
 
 require autocomplete
 
-query II
-FROM sql_auto_complete('CREATE SCH') LIMIT 1;
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('CREATE SCH') LIMIT 1;
 ----
-SCHEMA 	7
+SCHEMA 	7	keyword
 
 query II
-FROM sql_auto_complete('CREATE SCHEMA I') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SCHEMA I') LIMIT 1;
 ----
 IF 	14
 
 query II
-FROM sql_auto_complete('CREATE SCHEMA IF NO') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SCHEMA IF NO') LIMIT 1;
 ----
 NOT 	17
 
 query II
-FROM sql_auto_complete('CREATE SCHEMA IF NOT EX') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SCHEMA IF NOT EX') LIMIT 1;
 ----
 EXISTS 	21
 
@@ -30,6 +30,6 @@ statement ok
 ATTACH ':memory:' AS attached_in_memory;
 
 query II
-FROM sql_auto_complete('CREATE SCHEMA attac') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SCHEMA attac') LIMIT 1;
 ----
 attached_in_memory.	14

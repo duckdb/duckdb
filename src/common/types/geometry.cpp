@@ -1,6 +1,7 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
 
@@ -15,7 +16,8 @@ class BlobWriter {
 public:
 	template <class T>
 	void Write(const T &value) {
-		auto ptr = reinterpret_cast<const char *>(&value);
+		auto le_value = BSwapIfBE(value);
+		auto ptr = reinterpret_cast<const char *>(&le_value);
 		buffer.insert(buffer.end(), ptr, ptr + sizeof(T));
 	}
 
@@ -37,27 +39,61 @@ public:
 		if (reserved.offset + sizeof(T) > buffer.size()) {
 			throw InternalException("Write out of bounds in BinaryWriter");
 		}
-		auto ptr = reinterpret_cast<const char *>(&reserved.value);
+		auto le_value = BSwapIfBE(reserved.value);
+		auto ptr = reinterpret_cast<const char *>(&le_value);
 		// We've reserved 0 bytes, so we can safely memcpy
 		memcpy(buffer.data() + reserved.offset, ptr, sizeof(T));
-	}
-
-	void Write(const char *data, size_t size) {
-		D_ASSERT(data != nullptr);
-		buffer.insert(buffer.end(), data, data + size);
 	}
 
 	const vector<char> &GetBuffer() const {
 		return buffer;
 	}
 
+	void Clear() {
+		buffer.clear();
+	}
+
 private:
 	vector<char> buffer;
+};
+
+class FixedSizeBlobWriter {
+public:
+	FixedSizeBlobWriter(char *data, uint32_t size) : beg(data), pos(data), end(data + size) {
+	}
+
+	template <class T>
+	void Write(const T &value) {
+		if (pos + sizeof(T) > end) {
+			throw InvalidInputException("Writing beyond end of binary data at position %zu", pos - beg);
+		}
+		auto le_value = BSwapIfBE(value);
+		memcpy(pos, &le_value, sizeof(T));
+		pos += sizeof(T);
+	}
+
+	size_t GetPosition() const {
+		return static_cast<idx_t>(pos - beg);
+	}
+
+private:
+	const char *beg;
+	char *pos;
+	const char *end;
 };
 
 class BlobReader {
 public:
 	BlobReader(const char *data, uint32_t size) : beg(data), pos(data), end(data + size) {
+	}
+
+	template <class T>
+	T Read(const bool le) {
+		if (le) {
+			return Read<T, true>();
+		} else {
+			return Read<T, false>();
+		}
 	}
 
 	template <class T, bool LE = true>
@@ -66,17 +102,9 @@ public:
 			throw InvalidInputException("Unexpected end of binary data at position %zu", pos - beg);
 		}
 		T value;
-		if (LE) {
-			memcpy(&value, pos, sizeof(T));
-			pos += sizeof(T);
-		} else {
-			char temp[sizeof(T)];
-			for (size_t i = 0; i < sizeof(T); ++i) {
-				temp[i] = pos[sizeof(T) - 1 - i];
-			}
-			memcpy(&value, temp, sizeof(T));
-			pos += sizeof(T);
-		}
+		memcpy(&value, pos, sizeof(T));
+		value = LE ? BSwapIfBE(value) : BSwapIfLE(value);
+		pos += sizeof(T);
 		return value;
 	}
 
@@ -100,8 +128,16 @@ public:
 		return static_cast<idx_t>(pos - beg);
 	}
 
+	const char *GetDataPtr() const {
+		return pos;
+	}
+
 	bool IsAtEnd() const {
 		return pos >= end;
+	}
+
+	void Reset() {
+		pos = beg;
 	}
 
 private:
@@ -150,10 +186,9 @@ public:
 		if (*str == '\0') {
 			SkipWhitespace(); // remove trailing whitespace
 			return true;      // matched
-		} else {
-			pos = ptr;    // reset position
-			return false; // not matched
 		}
+		pos = ptr;    // reset position
+		return false; // not matched
 	}
 
 	bool TryMatch(char c) {
@@ -212,7 +247,6 @@ private:
 };
 
 void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth, bool parent_has_z, bool parent_has_m) {
-
 	if (depth == Geometry::MAX_RECURSION_DEPTH) {
 		throw InvalidInputException("Geometry string exceeds maximum recursion depth of %d",
 		                            Geometry::MAX_RECURSION_DEPTH);
@@ -354,7 +388,6 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 		auto part_count = writer.Reserve<uint32_t>();
 		reader.Match('(');
 		do {
-
 			const auto part_meta =
 			    static_cast<uint32_t>(GeometryType::LINESTRING) + (has_z ? 1000 : 0) + (has_m ? 2000 : 0);
 			writer.Write<uint8_t>(1);
@@ -384,7 +417,6 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 		auto part_count = writer.Reserve<uint32_t>();
 		reader.Match('(');
 		do {
-
 			const auto part_meta =
 			    static_cast<uint32_t>(GeometryType::POLYGON) + (has_z ? 1000 : 0) + (has_m ? 2000 : 0);
 			writer.Write<uint8_t>(1);
@@ -446,8 +478,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 	}
 
 	const auto meta = reader.Read<uint32_t>();
-	const auto type = static_cast<GeometryType>(meta % 1000);
-	const auto flag = meta / 1000;
+	const auto type = static_cast<GeometryType>((meta & 0x0000FFFF) % 1000);
+	const auto flag = (meta & 0x0000FFFF) / 1000;
 	const auto has_z = (flag & 0x01) != 0;
 	const auto has_m = (flag & 0x02) != 0;
 
@@ -557,8 +589,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 				throw InvalidInputException("Unsupported byte order %d in WKB", part_byte_order);
 			}
 			const auto part_meta = reader.Read<uint32_t>();
-			const auto part_type = static_cast<GeometryType>(part_meta % 1000);
-			const auto part_flag = part_meta / 1000;
+			const auto part_type = static_cast<GeometryType>((part_meta & 0x0000FFFF) % 1000);
+			const auto part_flag = (part_meta & 0x0000FFFF) / 1000;
 			const auto part_has_z = (part_flag & 0x01) != 0;
 			const auto part_has_m = (part_flag & 0x02) != 0;
 
@@ -611,8 +643,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 				throw InvalidInputException("Unsupported byte order %d in WKB", part_byte_order);
 			}
 			const auto part_meta = reader.Read<uint32_t>();
-			const auto part_type = static_cast<GeometryType>(part_meta % 1000);
-			const auto part_flag = part_meta / 1000;
+			const auto part_type = static_cast<GeometryType>((part_meta & 0x0000FFFF) % 1000);
+			const auto part_flag = (part_meta & 0x0000FFFF) / 1000;
 			const auto part_has_z = (part_flag & 0x01) != 0;
 			const auto part_has_m = (part_flag & 0x02) != 0;
 
@@ -669,8 +701,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 				throw InvalidInputException("Unsupported byte order %d in WKB", part_byte_order);
 			}
 			const auto part_meta = reader.Read<uint32_t>();
-			const auto part_type = static_cast<GeometryType>(part_meta % 1000);
-			const auto part_flag = part_meta / 1000;
+			const auto part_type = static_cast<GeometryType>((part_meta & 0x0000FFFF) % 1000);
+			const auto part_flag = (part_meta & 0x0000FFFF) / 1000;
 			const auto part_has_z = (part_flag & 0x01) != 0;
 			const auto part_has_m = (part_flag & 0x02) != 0;
 			if (part_type != GeometryType::POLYGON) {
@@ -739,6 +771,156 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 	}
 }
 
+struct WKBAnalysis {
+	uint32_t size = 0;
+	bool any_be = false;
+	bool any_z = false;
+	bool any_m = false;
+	bool any_unknown = false;
+	bool any_ewkb = false;
+};
+
+WKBAnalysis AnalyzeWKB(BlobReader &reader) {
+	WKBAnalysis result;
+
+	while (!reader.IsAtEnd()) {
+		const auto le = reader.Read<uint8_t>() == 1;
+
+		const auto meta = reader.Read<uint32_t>(le);
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
+
+		// Extended WKB detection
+		const auto has_extz = (meta & 0x80000000) != 0;
+		const auto has_extm = (meta & 0x40000000) != 0;
+		const auto has_srid = (meta & 0x20000000) != 0;
+
+		const auto has_z = ((flag_id & 0x01) != 0) || has_extz;
+		const auto has_m = ((flag_id & 0x02) != 0) || has_extm;
+
+		if (has_srid) {
+			result.any_ewkb = true;
+			reader.Skip(sizeof(uint32_t)); // Skip SRID
+			                               // Do not include SRID in the size
+		}
+
+		if (has_extz || has_extm || has_srid) {
+			// EWKB flags are set
+			result.any_ewkb = true;
+		}
+
+		const auto v_size = (2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)) * sizeof(double);
+
+		result.any_z |= has_z;
+		result.any_m |= has_m;
+		result.any_be |= !le;
+
+		result.size += sizeof(uint8_t) + sizeof(uint32_t); // Byte order + type/meta
+
+		switch (type_id) {
+		case 1: { // POINT
+			reader.Skip(v_size);
+			result.size += v_size;
+		} break;
+		case 2: { // LINESTRING
+			const auto vert_count = reader.Read<uint32_t>(le);
+			reader.Skip(vert_count * v_size);
+			result.size += sizeof(uint32_t) + vert_count * v_size;
+		} break;
+		case 3: { // POLYGON
+			const auto ring_count = reader.Read<uint32_t>(le);
+			result.size += sizeof(uint32_t);
+			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+				const auto vert_count = reader.Read<uint32_t>(le);
+				reader.Skip(vert_count * v_size);
+				result.size += sizeof(uint32_t) + vert_count * v_size;
+			}
+		} break;
+		case 4:   // MULTIPOINT
+		case 5:   // MULTILINESTRING
+		case 6:   // MULTIPOLYGON
+		case 7: { // GEOMETRYCOLLECTION
+			reader.Skip(sizeof(uint32_t));
+			result.size += sizeof(uint32_t); // part count
+		} break;
+		default: {
+			result.any_unknown = true;
+			return result;
+		}
+		}
+	}
+	return result;
+}
+
+void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
+	while (!reader.IsAtEnd()) {
+		const auto le = reader.Read<uint8_t>() == 1;
+		const auto meta = reader.Read<uint32_t>(le);
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
+
+		// Extended WKB detection
+		const auto has_extz = (meta & 0x80000000) != 0;
+		const auto has_extm = (meta & 0x40000000) != 0;
+		const auto has_srid = (meta & 0x20000000) != 0;
+
+		const auto has_z = ((flag_id & 0x01) != 0) || has_extz;
+		const auto has_m = ((flag_id & 0x02) != 0) || has_extm;
+
+		if (has_srid) {
+			reader.Skip(sizeof(uint32_t)); // Skip SRID
+		}
+
+		const auto v_width = static_cast<uint32_t>((2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)));
+
+		writer.Write<uint8_t>(1);                                          // Always write LE
+		writer.Write<uint32_t>(type_id + (1000 * has_z) + (2000 * has_m)); // Write meta
+
+		switch (type_id) {
+		case 1: { // POINT
+			for (uint32_t d_idx = 0; d_idx < v_width; d_idx++) {
+				auto value = reader.Read<double>(le);
+				writer.Write<double>(value);
+			}
+		} break;
+		case 2: { // LINESTRING
+			const auto vert_count = reader.Read<uint32_t>(le);
+			writer.Write<uint32_t>(vert_count);
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				for (uint32_t d_idx = 0; d_idx < v_width; d_idx++) {
+					auto value = reader.Read<double>(le);
+					writer.Write<double>(value);
+				}
+			}
+		} break;
+		case 3: { // POLYGON
+			const auto ring_count = reader.Read<uint32_t>(le);
+			writer.Write<uint32_t>(ring_count);
+			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+				const auto vert_count = reader.Read<uint32_t>(le);
+				writer.Write<uint32_t>(vert_count);
+				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+					for (uint32_t d_idx = 0; d_idx < v_width; d_idx++) {
+						auto value = reader.Read<double>(le);
+						writer.Write<double>(value);
+					}
+				}
+			}
+		} break;
+		case 4:   // MULTIPOINT
+		case 5:   // MULTILINESTRING
+		case 6:   // MULTIPOLYGON
+		case 7: { // GEOMETRYCOLLECTION
+			const auto part_count = reader.Read<uint32_t>(le);
+			writer.Write<uint32_t>(part_count);
+		} break;
+		default:
+			D_ASSERT(false);
+			break;
+		}
+	}
+}
+
 } // namespace
 
 } // namespace duckdb
@@ -749,6 +931,62 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 namespace duckdb {
 
 constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
+
+bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict) {
+	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
+
+	const auto analysis = AnalyzeWKB(reader);
+	if (analysis.any_unknown) {
+		if (strict) {
+			throw InvalidInputException("Unsupported geometry type in WKB");
+		}
+		return false;
+	}
+
+	if (analysis.any_be || analysis.any_ewkb) {
+		reader.Reset();
+		// Make a new WKB with all LE
+		auto blob = StringVector::EmptyString(result_vector, analysis.size);
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob.GetSize()));
+		ConvertWKB(reader, writer);
+		blob.Finalize();
+		result = blob;
+		return true;
+	}
+
+	// Copy the WKB as-is
+	result = StringVector::AddStringOrBlob(result_vector, wkb.GetData(), wkb.GetSize());
+	return true;
+}
+
+bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
+	if (strict) {
+		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
+			string_t geom;
+			FromBinary(wkb, geom, result, true);
+			return geom;
+		});
+		return true;
+	}
+
+	auto all_ok = true;
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
+	                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
+		                                                    string_t geom;
+		                                                    if (!FromBinary(wkb, geom, result, false)) {
+			                                                    all_ok = false;
+			                                                    mask.SetInvalid(idx);
+			                                                    return string_t();
+		                                                    }
+		                                                    return geom;
+	                                                    });
+	return all_ok;
+}
+
+void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
+	// We are currently using WKB internally, so just copy as-is!
+	result.Reinterpret(source);
+}
 
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
@@ -782,8 +1020,8 @@ pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {
 	}
 
 	const auto meta = reader.Read<uint32_t>();
-	const auto type_id = meta % 1000;
-	const auto flag_id = meta / 1000;
+	const auto type_id = (meta & 0x0000FFFF) % 1000;
+	const auto flag_id = (meta & 0x0000FFFF) / 1000;
 
 	if (type_id < 1 || type_id > 7) {
 		throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
@@ -804,9 +1042,20 @@ static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent
 
 	// Issue a single .Reserve() for all vertices, to minimize bounds checking overhead
 	const auto ptr = const_data_ptr_cast(reader.Reserve(vert_count * sizeof(VERTEX_TYPE)));
-
+#if DUCKDB_IS_BIG_ENDIAN
+	double be_buffer[sizeof(VERTEX_TYPE)];
+	auto be_ptr = reinterpret_cast<const_data_ptr_t>(be_buffer);
+#endif
 	for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+#if DUCKDB_IS_BIG_ENDIAN
+		auto vert_ofs = vert_idx * sizeof(VERTEX_TYPE);
+		for (idx_t i = 0; i < sizeof(VERTEX_TYPE) / sizeof(double); ++i) {
+			be_buffer[i] = LoadLE<double>(ptr + vert_ofs + i * sizeof(double));
+		}
+		VERTEX_TYPE vertex = Load<VERTEX_TYPE>(be_ptr);
+#else
 		VERTEX_TYPE vertex = Load<VERTEX_TYPE>(ptr + vert_idx * sizeof(VERTEX_TYPE));
+#endif
 		if (check_nan && vertex.AllNan()) {
 			continue;
 		}
@@ -844,8 +1093,8 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
 			throw InvalidInputException("Unsupported byte order %d in WKB", byte_order);
 		}
 		const auto meta = reader.Read<uint32_t>();
-		const auto type_id = meta % 1000;
-		const auto flag_id = meta / 1000;
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
 		if (type_id < 1 || type_id > 7) {
 			throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
 		}

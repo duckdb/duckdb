@@ -86,6 +86,8 @@ struct MergeSortTree {
 	using RunElements = array<RunElement, F>;
 	using Games = array<RunElement, F - 1>;
 
+	static constexpr ElementType INVALID = std::numeric_limits<ElementType>::max();
+
 	struct CompareElements {
 		explicit CompareElements(const CMP &cmp) : cmp(cmp) {
 		}
@@ -122,6 +124,9 @@ struct MergeSortTree {
 	pair<idx_t, idx_t> SelectNth(const SubFrames &frames, idx_t n) const;
 
 	inline ElementType NthElement(idx_t i) const {
+		if (tree.empty() || tree.front().first.empty()) {
+			return INVALID;
+		}
 		return tree.front().first[i];
 	}
 
@@ -574,7 +579,6 @@ template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 template <typename L>
 void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const E needle,
                                                          L aggregate) const {
-
 	if (lower >= upper) {
 		return;
 	}

@@ -15,7 +15,6 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       predicate(std::move(op.predicate)) {
-
 	filter_pushdown = std::move(pushdown_info_p);
 	children.push_back(left);
 	children.push_back(right);
@@ -513,8 +512,8 @@ unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(Executi
 	return make_uniq<NestedLoopJoinLocalScanState>(*this, gstate.Cast<NestedLoopJoinGlobalScanState>());
 }
 
-SourceResultType PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalNestedLoopJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();

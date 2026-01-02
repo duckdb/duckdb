@@ -37,7 +37,6 @@ unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
 unique_ptr<ParsedExpression>
 LambdaRefExpression::FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
                                          const string &column_name) {
-
 	// if this is a lambda parameter, then we temporarily add a BoundLambdaRef,
 	// which we capture and remove later
 

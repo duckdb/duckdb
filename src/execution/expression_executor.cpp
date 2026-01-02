@@ -230,7 +230,6 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	// The result vector must be used for the first time, or must be reset.
 	// Otherwise, the validity mask can contain previous (now incorrect) data.
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
-
 		// We do not initialize vector caches for these expressions.
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&

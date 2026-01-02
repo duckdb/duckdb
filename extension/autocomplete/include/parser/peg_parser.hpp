@@ -56,6 +56,7 @@ inline bool IsPEGOperator(char c) {
 	case '(':
 	case ')':
 	case '*':
+	case '+':
 	case '!':
 		return true;
 	default:

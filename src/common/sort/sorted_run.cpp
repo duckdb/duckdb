@@ -48,11 +48,12 @@ void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_ke
 }
 
 template <class SORT_KEY, class PHYSICAL_TYPE>
-void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, const idx_t &count, DataChunk &key,
-                               data_ptr_t *const payload_ptrs) {
+void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
+                               DataChunk &key, data_ptr_t *const payload_ptrs) {
 	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
 	for (idx_t i = 0; i < count; i++) {
-		auto &sort_key = *sort_keys[i];
+		auto &sort_key = temp_keys[i];
+		sort_key = *sort_keys[i];
 		sort_key.Deconstruct(key_data[i]);
 		if (SORT_KEY::HAS_PAYLOAD) {
 			payload_ptrs[i] = sort_key.GetPayload();
@@ -62,35 +63,16 @@ void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, const idx_t &co
 }
 
 template <class SORT_KEY>
-void GetKeyAndPayload(SORT_KEY *const *const sort_keys, const idx_t &count, DataChunk &key,
+void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count, DataChunk &key,
                       data_ptr_t *const payload_ptrs) {
 	const auto type_id = key.data[0].GetType().id();
 	switch (type_id) {
 	case LogicalTypeId::BLOB:
-		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(sort_keys, count, key, payload_ptrs);
+		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(sort_keys, temp_keys, count, key, payload_ptrs);
 	case LogicalTypeId::BIGINT:
-		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(sort_keys, count, key, payload_ptrs);
+		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(sort_keys, temp_keys, count, key, payload_ptrs);
 	default:
 		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
-	}
-}
-
-template <class SORT_KEY>
-void TemplatedReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count) {
-	for (idx_t i = 0; i < count; i++) {
-		sort_keys[i]->ByteSwap();
-	}
-}
-
-template <class SORT_KEY>
-void ReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count, const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::BLOB:
-		return TemplatedReconstructSortKey<SORT_KEY>(sort_keys, count);
-	case LogicalTypeId::BIGINT:
-		break; // NOP
-	default:
-		throw NotImplementedException("ReconstructSortKey for %s", EnumUtil::ToString(type.id()));
 	}
 }
 
@@ -109,11 +91,12 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 	// Decode from key
 	if (!output_projection_columns[0].is_payload) {
 		key.Reset();
-		GetKeyAndPayload(sort_keys, count, key, payload_ptrs);
+		key_buffer.resize(count * sizeof(SORT_KEY));
+		auto temp_keys = reinterpret_cast<SORT_KEY *>(key_buffer.data());
+		GetKeyAndPayload(sort_keys, temp_keys, count, key, payload_ptrs);
 
 		decoded_key.Reset();
 		key_executor.Execute(key, decoded_key);
-		ReconstructSortKey(sort_keys, count, key.data[0].GetType());
 
 		const auto &decoded_key_entries = StructVector::GetEntries(decoded_key.data[0]);
 		for (; opc_idx < output_projection_columns.size(); opc_idx++) {
@@ -161,9 +144,10 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 // SortedRun
 //===--------------------------------------------------------------------===//
 SortedRun::SortedRun(ClientContext &context_p, const Sort &sort_p, bool is_index_sort_p)
-    : context(context_p), sort(sort_p), key_data(make_uniq<TupleDataCollection>(context, sort.key_layout)),
+    : context(context_p), sort(sort_p),
+      key_data(make_uniq<TupleDataCollection>(context, sort.key_layout, MemoryTag::ORDER_BY)),
       payload_data(sort.payload_layout && sort.payload_layout->ColumnCount() != 0
-                       ? make_uniq<TupleDataCollection>(context, sort.payload_layout)
+                       ? make_uniq<TupleDataCollection>(context, sort.payload_layout, MemoryTag::ORDER_BY)
                        : nullptr),
       is_index_sort(is_index_sort_p), finalized(false) {
 	key_data->InitializeAppend(key_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
@@ -388,12 +372,18 @@ static void TemplatedReorder(ClientContext &context, unique_ptr<TupleDataCollect
 		for (idx_t i = 0; i < next; i++) {
 			key_ptrs[i] = &*it++;
 		}
-		if (!SORT_KEY::CONSTANT_SIZE) {
-			ReorderKeyData<SORT_KEY>(*new_key_data, new_key_data_append_state, new_key_data_input, next);
-		}
 		if (SORT_KEY::HAS_PAYLOAD) {
 			ReorderPayloadData<SORT_KEY>(*new_payload_data, new_payload_data_append_state, key_ptrs,
 			                             new_payload_data_input, next);
+			const auto new_payload_locations =
+			    FlatVector::GetData<const data_ptr_t>(new_payload_data_append_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < next; i++) {
+				auto &key = *key_ptrs[i];
+				key.SetPayload(new_payload_locations[i]);
+			}
+		}
+		if (!SORT_KEY::CONSTANT_SIZE) {
+			ReorderKeyData<SORT_KEY>(*new_key_data, new_key_data_append_state, new_key_data_input, next);
 		}
 		index += next;
 	}

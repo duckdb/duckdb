@@ -15,7 +15,7 @@ loop buffer_size 7 11
 
 query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
-    'data/csv/small_bad.csv',
+    '{DATA_DIR}/csv/small_bad.csv',
     buffer_size=${buffer_size},
     store_rejects = true,
     columns = {'column0':'INTEGER', 'column1':'VARCHAR'});
@@ -40,7 +40,7 @@ loop buffer_size 5 10
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
-    'data/csv/error/mismatch/big_bad*.csv',
+    '{DATA_DIR}/csv/error/mismatch/big_bad*.csv',
     sample_size=1,
     buffer_size=${buffer_size},
     store_rejects = true);
@@ -50,8 +50,8 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIII rowsort
 SELECT * EXCLUDE (file_id, scan_id, user_arguments) FROM reject_scans order by #1;
 ----
-data/csv/error/mismatch/big_bad.csv	,	(empty)	(empty)	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
-data/csv/error/mismatch/big_bad2.csv	,	(empty)	(empty)	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+{DATA_DIR}/csv/error/mismatch/big_bad.csv	,	(empty)	(empty)	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+{DATA_DIR}/csv/error/mismatch/big_bad2.csv	,	(empty)	(empty)	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
 
 query IIIIIIII rowsort
 SELECT * EXCLUDE (file_id, scan_id) FROM reject_errors order by all;

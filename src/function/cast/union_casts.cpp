@@ -56,7 +56,6 @@ static unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const Log
 
 	// check if the cast is ambiguous (2 or more casts have the same cost)
 	if (candidates.size() > 1 && candidates[1].cost == selected_cost) {
-
 		// collect all the ambiguous types
 		auto message = StringUtil::Format(
 		    "Type %s can't be cast as %s. The cast is ambiguous, multiple possible members in target: ", source,
@@ -107,7 +106,6 @@ static bool ToUnionCast(Vector &source, Vector &result, idx_t count, CastParamet
 
 BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const LogicalType &source,
                                                 const LogicalType &target) {
-
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 	if (StructToUnionCast::AllowImplicitCastFromStruct(source, target)) {
 		return StructToUnionCast::Bind(input, source, target);
@@ -130,7 +128,6 @@ BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const Logi
 // INVALID:	UNION(A, B, D) 	->	UNION(A, B, C)
 
 struct UnionUnionBoundCastData : public BoundCastData {
-
 	// mapping from source member index to target member index
 	// these are always the same size as the source member count
 	// (since all source members must be present in the target)
@@ -284,7 +281,6 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
 				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
-
 				// Issue: The members of the result is not always flatvectors
 				// In the case of TryNullCast, the result member is constant.
 				FlatVector::SetNull(result, row_idx, true);

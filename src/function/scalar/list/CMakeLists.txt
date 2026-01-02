@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   contains_or_position.cpp
   list_extract.cpp
+  list_intersect.cpp
   list_resize.cpp
   list_zip.cpp
   list_select.cpp)

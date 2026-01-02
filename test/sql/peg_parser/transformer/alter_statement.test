@@ -1,0 +1,139 @@
+# name: test/sql/peg_parser/transformer/alter_statement.test
+# description: Test alter statements in peg parser
+# group: [transformer]
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+statement ok
+CREATE TABLE test3(s integer);
+
+statement ok
+ALTER TABLE test3 ADD COLUMN l INTEGER DEFAULT 42;
+
+statement ok
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
+
+statement ok
+INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
+
+statement ok
+ALTER TABLE test ADD COLUMN s.element.k INTEGER
+
+query I
+SELECT * FROM test;
+----
+[{'i': 1, 'j': 1, 'k': NULL}]
+[{'i': 2, 'j': 2, 'k': NULL}]
+
+statement ok
+CREATE TYPE mood AS ENUM (
+	'sad',
+	'ok',
+	'happy'
+);
+
+statement ok
+CREATE TABLE person (
+	id INTEGER,
+	c STRUCT(
+		name text,
+		current_mood mood
+    )
+);
+
+statement ok
+INSERT INTO person VALUES (0, ('Bob', 'happy'))
+
+statement ok
+alter table person add column b integer default 5;
+
+query III
+select * from person;
+----
+0	{'name': Bob, 'current_mood': happy}	5
+
+statement error
+ALTER TABLE person ADD COLUMN c STRUCT(
+    name text,
+    current_mood mood
+);
+----
+Catalog Error: Column with name c already exists!
+
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+----
+Parser Error: Adding generated columns after table creation is not supported yet
+
+statement error
+ALTER TABLE test2 DROP s.s2.v1;
+----
+Catalog Error: Table with name test2 does not exist!
+
+statement error
+ALTER TABLE tbl SET PARTITIONED BY (i);
+----
+Catalog Error: Table with name tbl does not exist!
+
+statement error
+ALTER SEQUENCE seq OWNED BY tbl1;
+----
+Catalog Error: Sequence with name seq does not exist!
+
+statement error
+ALTER TABLE integers ALTER j TYPE BIGINT;
+----
+Catalog Error: Table with name integers does not exist!
+
+statement error
+ALTER TABLE data ALTER COLUMN value SET NOT NULL;
+----
+Catalog Error: Table with name data does not exist!
+
+statement error
+ALTER TABLE T_1 ADD COLUMN b INTEGER DEFAULT 2;
+----
+Catalog Error: Table with name T_1 does not exist!
+
+statement error
+ALTER TABLE alter_test ADD PRIMARY KEY(a);
+----
+Catalog Error: Table with name alter_test does not exist!
+
+statement error
+ALTER TABLE tbl_alter_column ALTER COLUMN drop_def DROP DEFAULT;
+----
+Catalog Error: Table with name tbl_alter_column does not exist!
+
+statement error
+ALTER VIEW new_database.s1.v1 RENAME TO v2;
+----
+Binder Error: Catalog "new_database" does not exist!
+
+statement error
+ALTER TABLE t0 DROP COLUMN rowid;
+----
+Catalog Error: Table with name t0 does not exist!
+
+
+statement error
+ALTER TABLE aliens ADD COLUMN iq_level intelligence;
+----
+Catalog Error: Table with name aliens does not exist!
+
+
+
+statement error
+ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;
+----
+

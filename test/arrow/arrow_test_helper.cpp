@@ -4,6 +4,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
+#include "duckdb/common/printer.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
@@ -172,7 +173,7 @@ bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> ar
 		for (idx_t i = 0; i < materialized_arrow.types.size(); i++) {
 			if (materialized_arrow.types[i] != duck->types[i] && duck->types[i].id() != LogicalTypeId::ENUM) {
 				mismatch_error = true;
-				error_msg << "Column " << i << "mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
+				error_msg << "Column " << i << " mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
 				          << materialized_arrow.types[i].ToString() << "'\n";
 			}
 		}

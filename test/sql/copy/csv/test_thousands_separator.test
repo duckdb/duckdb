@@ -7,39 +7,39 @@ PRAGMA enable_verification
 
 # Test NULL
 statement ok
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = NULL, delim = NULL)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = NULL, delim = NULL)
 
 # Test Empty
 statement ok
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = '', delim = NULL)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = '', delim = NULL)
 
 # Test more than one char
 statement error
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = 'bla', delim = NULL)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = 'bla', delim = NULL)
 ----
 Unsupported parameter for THOUSANDS: should be max one character
 
 # Must be different from decimal separator
 statement error
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', decimal_separator = ',')
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', decimal_separator = ',')
 ----
 THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
 
 statement error
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = '.')
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = '.')
 ----
 THOUSANDS must not appear in the DECIMAL_SEPARATOR specification and vice versa
 
 # Test sniffer prompt
 query I
 SELECT COUNT(*) > 0 AS has_match
-FROM sniff_csv('data/csv/thousands_separator/simple.csv', thousands = ',')
+FROM sniff_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',')
 WHERE prompt LIKE '%thousands='',''%';
 ----
 TRUE
 
 query I
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'double'}, header = False, auto_detect = false)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'double'}, header = False, auto_detect = false)
 ----
 100000.0
 300000.2
@@ -48,7 +48,7 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 9999999999.2
 
 query I
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'float'}, header = False, auto_detect = false)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'float'}, header = False, auto_detect = false)
 ----
 100000.0
 300000.2
@@ -57,7 +57,7 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 9999999999.2
 
 query I
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'decimal(32,3)'}, header = False, auto_detect = false)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'decimal(32,3)'}, header = False, auto_detect = false)
 ----
 100000.0
 300000.2
@@ -67,7 +67,7 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 
 # Now try with auto-detect
 query I
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False)
 ----
 100000.0
 300000.2
@@ -76,7 +76,7 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 9999999999.2
 
 query I
-FROM read_csv('data/csv/thousands_separator/simple_quoted.csv', thousands = ',', header = False)
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple_quoted.csv', thousands = ',', header = False)
 ----
 100000.0
 300000.2
@@ -86,7 +86,7 @@ FROM read_csv('data/csv/thousands_separator/simple_quoted.csv', thousands = ',',
 
 # Check auto-detect doesn't reject this is foat or decimal
 query I
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False, columns = {'a':'float'})
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False, columns = {'a':'float'})
 ----
 100000.0
 300000.2
@@ -95,7 +95,7 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 9999999999.2
 
 query I
-FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False, columns = {'a':'decimal(32,3)'})
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False, columns = {'a':'decimal(32,3)'})
 ----
 100000.0
 300000.2
@@ -104,7 +104,7 @@ FROM read_csv('data/csv/thousands_separator/simple.csv', thousands = ',', delim 
 9999999999.2
 
 query III
-FROM read_csv('data/csv/thousands_separator/multi_column.csv', thousands = ',')
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/multi_column.csv', thousands = ',')
 ----
 rick	100000.0	amsterdam
 lorenzo	300000.2	amsterdam
@@ -114,7 +114,7 @@ patrick	9999999999.2	amsterdam
 
 
 query III
-FROM read_csv('data/csv/thousands_separator/multi_column_quote.csv', thousands = ',')
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/multi_column_quote.csv', thousands = ',')
 ----
 rick	100000.0	amsterdam
 lorenzo	300000.2	amsterdam
@@ -127,7 +127,7 @@ statement ok
 CREATE TABLE T (name varchar, money double, city varchar);
 
 statement ok
-COPY T FROM 'data/csv/thousands_separator/multi_column_quote.csv' (THOUSANDS ',') ;
+COPY T FROM '{DATA_DIR}/csv/thousands_separator/multi_column_quote.csv' (THOUSANDS ',') ;
 
 query III
 FROM T;
@@ -140,7 +140,7 @@ patrick	9999999999.2	amsterdam
 
 # Test with non-sensical thousands separator - Pandas just removes them, so we do the same.
 query I
-FROM read_csv('data/csv/thousands_separator/thousands_broken.csv', thousands = ',')
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/thousands_broken.csv', thousands = ',')
 ----
 100000.0
 300000.2
@@ -149,7 +149,7 @@ FROM read_csv('data/csv/thousands_separator/thousands_broken.csv', thousands = '
 
 # Test an integer
 query I
-FROM read_csv('data/csv/thousands_separator/integers.csv', thousands = ',')
+FROM read_csv('{DATA_DIR}/csv/thousands_separator/integers.csv', thousands = ',')
 ----
 100000000000
 140000000000
@@ -157,6 +157,6 @@ FROM read_csv('data/csv/thousands_separator/integers.csv', thousands = ',')
 900
 
 query I
-select columns from sniff_csv('data/csv/thousands_separator/integers.csv', thousands = ',')
+select columns from sniff_csv('{DATA_DIR}/csv/thousands_separator/integers.csv', thousands = ',')
 ----
 [{'name': bigvalues, 'type': BIGINT}]

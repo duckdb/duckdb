@@ -12,7 +12,7 @@ statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'data/csv/test/test.csv';
+COPY test FROM '{DATA_DIR}/csv/test/test.csv';
 ----
 5000
 
@@ -30,7 +30,7 @@ SELECT * FROM test ORDER BY 1 LIMIT 3;
 
 # create CSV file from table
 query I
-COPY test TO '__TEST_DIR__/test2.csv';
+COPY test TO '{TEMP_DIR}/test2.csv';
 ----
 5000
 
@@ -39,7 +39,7 @@ statement ok
 CREATE TABLE test2 (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test2 FROM '__TEST_DIR__/test2.csv' ;
+COPY test2 FROM '{TEMP_DIR}/test2.csv' ;
 ----
 5000
 
@@ -55,13 +55,13 @@ statement ok
 CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 
 statement error
-COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
+COPY test_too_few_rows FROM '{TEMP_DIR}/test2.csv' (NULL_PADDING 0);
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 # create CSV file from query
 query I
-COPY (SELECT a,b FROM test WHERE a < 4000) TO '__TEST_DIR__/test3.csv';
+COPY (SELECT a,b FROM test WHERE a < 4000) TO '{TEMP_DIR}/test3.csv';
 ----
 4000
 
@@ -70,7 +70,7 @@ statement ok
 CREATE TABLE test3 (a INTEGER, b INTEGER);
 
 query I
-COPY test3 FROM '__TEST_DIR__/test3.csv';
+COPY test3 FROM '{TEMP_DIR}/test3.csv';
 ----
 4000
 
@@ -83,7 +83,7 @@ SELECT * FROM test3 ORDER BY 1 LIMIT 3;
 
 # export selected columns from a table to a CSV file
 query I
-COPY test (a,c) TO '__TEST_DIR__/test4.csv' (DELIMITER ',', HEADER false);
+COPY test (a,c) TO '{TEMP_DIR}/test4.csv' (DELIMITER ',', HEADER false);
 ----
 5000
 
@@ -92,7 +92,7 @@ statement ok
 CREATE TABLE test4 (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (DELIM ',');
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (DELIM ',');
 ----
 5000
 
@@ -105,144 +105,144 @@ SELECT * FROM test4 ORDER BY 1 LIMIT 3;
 
 # unsupported type for HEADER
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP ',', HEADER 0.2);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP ',', HEADER 0.2);
 ----
 "HEADER" expected an argument of type BOOLEAN
 
 # empty delimiter
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP);
 ----
 "SEP" requires an argument of type VARCHAR
 
 # number as delimiter
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP 1);
 ----
 "SEP" expected an argument of type VARCHAR
 
 # multiple format options
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'some_other_copy_function');
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (FORMAT 'csv', FORMAT 'some_other_copy_function');
 ----
 duplicate option
 
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'some_other_copy_function', FORMAT 'csv');
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (FORMAT 'some_other_copy_function', FORMAT 'csv');
 ----
 duplicate option
 
 # number as escape string
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE 1);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ESCAPE 1);
 ----
 "ESCAPE" expected an argument of type VARCHAR
 
 # no escape string
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ESCAPE);
 ----
 "ESCAPE" requires an argument of type VARCHAR
 
 # number as quote string
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE 1);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (QUOTE 1);
 ----
 "QUOTE" expected an argument of type VARCHAR
 
 # no quote string
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (QUOTE);
 ----
 "QUOTE" requires an argument of type VARCHAR
 
 # no format string
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (FORMAT);
 ----
 Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 
 # encoding must not be empty and must have the correct parameter type and value
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ENCODING);
 ----
 "ENCODING" requires an argument of type VARCHAR
 
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 42);
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ENCODING 42);
 ----
 "ENCODING" expected an argument of type VARCHAR
 
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ENCODING 'utf-42');
 ----
 The CSV Reader does not support the encoding: "utf-42"
 
 # don't allow for non-existant copy options
 statement error
-COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
+COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (MAGIC '42');
 ----
 Unrecognized option "MAGIC"
 
 # Try new_line option
 query I
-COPY test TO '__TEST_DIR__/test_crlf.csv' (new_line  '\r\n');
+COPY test TO '{TEMP_DIR}/test_crlf.csv' (new_line  '\r\n');
 ----
 5000
 
 query I
-select count(*) from '__TEST_DIR__/test_crlf.csv'
+select count(*) from '{TEMP_DIR}/test_crlf.csv'
 ----
 5000
 
 # Try CR LF lines
 query I
-COPY test TO '__TEST_DIR__/test_r.csv' (new_line  '\r');
+COPY test TO '{TEMP_DIR}/test_r.csv' (new_line  '\r');
 ----
 5000
 
 query I
-select count(*) from '__TEST_DIR__/test_r.csv'
+select count(*) from '{TEMP_DIR}/test_r.csv'
 ----
 5000
 
 query I
-COPY test TO '__TEST_DIR__/test_n.csv' (new_line  '\n');
+COPY test TO '{TEMP_DIR}/test_n.csv' (new_line  '\n');
 ----
 5000
 
 query I
-select count(*) from '__TEST_DIR__/test_n.csv'
+select count(*) from '{TEMP_DIR}/test_n.csv'
 ----
 5000
 
 query I
-COPY test TO '__TEST_DIR__/test_crlfe.csv' (new_line  e'\r\n');
+COPY test TO '{TEMP_DIR}/test_crlfe.csv' (new_line  e'\r\n');
 ----
 5000
 
 query I
-select count(*) from '__TEST_DIR__/test_crlfe.csv'
+select count(*) from '{TEMP_DIR}/test_crlfe.csv'
 ----
 5000
 
 query I
-COPY test TO '__TEST_DIR__/test_re.csv' (new_line  e'\r');
+COPY test TO '{TEMP_DIR}/test_re.csv' (new_line  e'\r');
 ----
 5000
 
 query I
-select count(*) from '__TEST_DIR__/test_re.csv'
+select count(*) from '{TEMP_DIR}/test_re.csv'
 ----
 5000
 
 query I
-COPY test TO '__TEST_DIR__/test_en.csv' (new_line  e'\n');
+COPY test TO '{TEMP_DIR}/test_en.csv' (new_line  e'\n');
 ----
 5000
 
 query I
-select count(*) from '__TEST_DIR__/test_en.csv'
+select count(*) from '{TEMP_DIR}/test_en.csv'
 ----
 5000
 
@@ -255,25 +255,25 @@ statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'data/csv/test/test_pipe.csv' (SEPARATOR '|');
+COPY test FROM '{DATA_DIR}/csv/test/test_pipe.csv' (SEPARATOR '|');
 ----
 10
 
 # throw exception if a line contains too many values
 statement error
-COPY test FROM 'data/csv/test/too_many_values.csv';
+COPY test FROM '{DATA_DIR}/csv/test/too_many_values.csv';
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 # test default null string
 query I
-COPY test FROM 'data/csv/test/test_null_csv.csv' DELIMITER '|';
+COPY test FROM '{DATA_DIR}/csv/test/test_null_csv.csv' DELIMITER '|';
 ----
 1
 
 # test invalid UTF-8
 statement error
-COPY test FROM 'data/csv/test/invalid_utf.csv' DELIMITER '|';
+COPY test FROM '{DATA_DIR}/csv/test/invalid_utf.csv' DELIMITER '|';
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
@@ -282,7 +282,7 @@ statement ok
 CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));
 
 statement error
-COPY empty_table FROM 'data/csv/test/empty.csv' (HEADER 0);
+COPY empty_table FROM '{DATA_DIR}/csv/test/empty.csv' (HEADER 0);
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
@@ -292,7 +292,7 @@ statement ok
 CREATE TABLE unterminated (a VARCHAR);
 
 statement error
-COPY unterminated FROM 'data/csv/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE, strict_mode TRUE);
+COPY unterminated FROM '{DATA_DIR}/csv/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE, strict_mode TRUE);
 ----
 Value with unterminated quote found.
 
@@ -302,7 +302,7 @@ statement ok
 CREATE TABLE vsize (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY vsize FROM 'data/csv/test/vsize.csv';
+COPY vsize FROM '{DATA_DIR}/csv/test/vsize.csv';
 ----
 1024
 

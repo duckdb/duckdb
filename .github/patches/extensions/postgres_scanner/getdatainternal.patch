@@ -1,0 +1,104 @@
+diff --git a/src/include/storage/postgres_delete.hpp b/src/include/storage/postgres_delete.hpp
+index e709cee..4e878de 100644
+--- a/src/include/storage/postgres_delete.hpp
++++ b/src/include/storage/postgres_delete.hpp
+@@ -22,7 +22,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/postgres_index.hpp b/src/include/storage/postgres_index.hpp
+index 47c46c0..76593a0 100644
+--- a/src/include/storage/postgres_index.hpp
++++ b/src/include/storage/postgres_index.hpp
+@@ -24,7 +24,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/postgres_insert.hpp b/src/include/storage/postgres_insert.hpp
+index d22b4f1..4bd0e29 100644
+--- a/src/include/storage/postgres_insert.hpp
++++ b/src/include/storage/postgres_insert.hpp
+@@ -35,7 +35,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/postgres_update.hpp b/src/include/storage/postgres_update.hpp
+index 12b5e5e..dd25e75 100644
+--- a/src/include/storage/postgres_update.hpp
++++ b/src/include/storage/postgres_update.hpp
+@@ -29,7 +29,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/postgres_delete.cpp b/src/storage/postgres_delete.cpp
+index 8e1c014..b50fbc1 100644
+--- a/src/storage/postgres_delete.cpp
++++ b/src/storage/postgres_delete.cpp
+@@ -96,7 +96,7 @@ SinkFinalizeType PostgresDelete::Finalize(Pipeline &pipeline, Event &event, Clie
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType PostgresDelete::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType PostgresDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                          OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<PostgresDeleteGlobalState>();
+ 	chunk.SetCardinality(1);
+diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
+index d2de80e..eae13de 100644
+--- a/src/storage/postgres_index.cpp
++++ b/src/storage/postgres_index.cpp
+@@ -20,7 +20,7 @@ PostgresCreateIndex::PostgresCreateIndex(PhysicalPlan &physical_plan, unique_ptr
+ //===--------------------------------------------------------------------===//
+ // Source
+ //===--------------------------------------------------------------------===//
+-SourceResultType PostgresCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType PostgresCreateIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+ 	auto &schema = table.schema;
+diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
+index e3961e4..385351d 100644
+--- a/src/storage/postgres_insert.cpp
++++ b/src/storage/postgres_insert.cpp
+@@ -148,7 +148,7 @@ SinkFinalizeType PostgresInsert::Finalize(Pipeline &pipeline, Event &event, Clie
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType PostgresInsert::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType PostgresInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                          OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<PostgresInsertGlobalState>();
+ 	chunk.SetCardinality(1);
+diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
+index 8c3b8a3..6a22b81 100644
+--- a/src/storage/postgres_update.cpp
++++ b/src/storage/postgres_update.cpp
+@@ -177,7 +177,7 @@ SinkFinalizeType PostgresUpdate::Finalize(Pipeline &pipeline, Event &event, Clie
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType PostgresUpdate::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType PostgresUpdate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                          OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<PostgresUpdateGlobalState>();
+ 	chunk.SetCardinality(1);

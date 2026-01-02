@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, info_type_id integer NOT NULL, info text NOT NULL, note text);
 
 query I
-COPY movie_info FROM 'data/csv/real/imdb_movie_info_escaped.csv' DELIMITER ',' ESCAPE '\';
+COPY movie_info FROM '{DATA_DIR}/csv/real/imdb_movie_info_escaped.csv' DELIMITER ',' ESCAPE '\';
 ----
 201
 

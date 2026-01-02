@@ -5,6 +5,6 @@
 require parquet
 
 query I
-from 'data/parquet-testing/concatenated_gzip_members.parquet' offset 512;
+from '{DATA_DIR}/parquet-testing/concatenated_gzip_members.parquet' offset 512;
 ----
 513

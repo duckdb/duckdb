@@ -7,32 +7,32 @@ PRAGMA enable_verification
 
 # These will work, because we will only fail if the quoted new value happens between buffers or thread boundaries
 query I
-select count(*) from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0)
+select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0)
 ----
 3
 
 query I
-select count(*) from read_csv('data/csv/evil_nullpadding_2.csv', delim = ';', quote = '"', null_padding = True, header = 0)
+select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding_2.csv', delim = ';', quote = '"', null_padding = True, header = 0)
 ----
 3
 
 # If we force the buffer to break in the middle of the quotes, we can't read this.
 statement error
-select * from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 30)
+select * from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 30)
 ----
 The parallel scanner does not support null_padding in conjunction with quoted new lines. Please disable the parallel csv reader with parallel=false
 
 statement error
-select count(*) from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 27)
+select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 27)
 ----
 The parallel scanner does not support null_padding in conjunction with quoted new lines. Please disable the parallel csv reader with parallel=false
 
 statement error
-select count(*) from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 30)
+select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 30)
 ----
 The parallel scanner does not support null_padding in conjunction with quoted new lines. Please disable the parallel csv reader with parallel=false
 
 statement error
-select * from read_csv('data/csv/evil_nullpadding_2.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 26)
+select * from read_csv('{DATA_DIR}/csv/evil_nullpadding_2.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 26)
 ----
 The parallel scanner does not support null_padding in conjunction with quoted new lines. Please disable the parallel csv reader with parallel=false

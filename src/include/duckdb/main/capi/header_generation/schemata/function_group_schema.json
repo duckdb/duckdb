@@ -2,7 +2,7 @@
   "type": "object",
   "title": "DuckDB C API function group definition",
   "description": "The schema of a C API function group definition. Function group definitions are the main component of the C API header generation.",
-  "required": ["group", "deprecated", "entries"],
+  "required": ["group", "deprecated", "description","entries"],
   "properties": {
     "group": {
       "type": "string",
@@ -15,6 +15,10 @@
     "use_instead": {
       "type": "string",
       "description": "Pointers on what functionality to use, if the entire function group is marked as deprecated."
+    },
+    "description": {
+      "type": "string",
+      "description": "A top-level usage description of the function group."
     },
     "entries": {
       "type": "array",

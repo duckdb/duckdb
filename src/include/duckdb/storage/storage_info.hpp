@@ -30,7 +30,7 @@ class QueryContext;
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The default block header size.
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
-//! The default block header size.
+//! The default block header size for encrypted blocks.
 #define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
 //! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
@@ -56,8 +56,6 @@ struct Storage {
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
-	//! Block header size for encrypted blocks (64 bytes)
-	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 64ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
@@ -180,20 +178,20 @@ private:
 //! DatabaseHeader.
 struct DatabaseHeader {
 	//! The iteration count, increases by 1 every time the storage is checkpointed.
-	uint64_t iteration;
+	uint64_t iteration = 0;
 	//! A pointer to the initial meta block
-	idx_t meta_block;
+	idx_t meta_block = 0;
 	//! A pointer to the block containing the free list
-	idx_t free_list;
+	idx_t free_list = 0;
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
-	uint64_t block_count;
+	uint64_t block_count = 0;
 	//! The allocation size of blocks in this database file. Defaults to default_block_alloc_size (DBConfig).
-	idx_t block_alloc_size;
+	idx_t block_alloc_size = 0;
 	//! The vector size of the database file
-	idx_t vector_size;
+	idx_t vector_size = 0;
 	//! The serialization compatibility version
-	idx_t serialization_compatibility;
+	idx_t serialization_compatibility = 0;
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);

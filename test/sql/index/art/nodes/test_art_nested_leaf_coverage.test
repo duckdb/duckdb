@@ -1,0 +1,64 @@
+# name: test/sql/index/art/nodes/test_art_nested_leaf_coverage.test
+# description: Test ART nested leaf coverage (hit debug asserts)
+# group: [nodes]
+
+statement ok
+CREATE TABLE integers(i integer);
+
+statement ok
+CREATE INDEX i_index ON integers(i);
+
+
+# Node7 Leaf Insertion and Deletion Coverage.
+loop i 0 7
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+endloop
+
+statement ok
+DELETE FROM integers where rowid = 1;
+
+query I
+SELECT COUNT(*) FROM integers;
+----
+6
+
+# Node15 Leaf Insertion and Deletion Coverage.
+loop i 0 7
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+endloop
+
+statement ok
+DELETE FROM integers where rowid = 2
+
+query I
+SELECT COUNT(*) FROM integers
+----
+12
+
+# Node256 Leaf Insertion and Deletion Coverage.
+loop i 0 10
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+endloop
+
+statement ok
+DELETE FROM integers where rowid = 3
+
+query I
+SELECT COUNT(*) FROM integers
+----
+21
+
+statement ok
+DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"

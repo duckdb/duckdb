@@ -14,7 +14,6 @@
 namespace duckdb {
 
 class EncryptionTypes {
-
 public:
 	enum CipherType : uint8_t { INVALID = 0, GCM = 1, CTR = 2, CBC = 3 };
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
@@ -27,7 +26,6 @@ public:
 };
 
 class EncryptionState {
-
 public:
 	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len);
 	DUCKDB_API virtual ~EncryptionState();
@@ -47,7 +45,6 @@ protected:
 };
 
 class EncryptionUtil {
-
 public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
@@ -58,6 +55,11 @@ public:
 	}
 
 	virtual ~EncryptionUtil() {
+	}
+
+	//! Whether the EncryptionUtil supports encryption (some may only support decryption)
+	DUCKDB_API virtual bool SupportsEncryption() {
+		return true;
 	}
 };
 

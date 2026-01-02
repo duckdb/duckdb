@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/common/unordered_map.hpp"

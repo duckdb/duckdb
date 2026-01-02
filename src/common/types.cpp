@@ -528,6 +528,14 @@ string LogicalType::ToString() const {
 		}
 		return TemplateType::GetName(*this);
 	}
+	case LogicalTypeId::GEOMETRY: {
+		if (!type_info_ || !GeoType::HasCRS(*this)) {
+			return "GEOMETRY";
+		}
+		auto &crs = GeoType::GetCRS(*this);
+		auto crs_name = KeywordHelper::WriteQuoted(crs.GetDisplayName(), '\'');
+		return StringUtil::Format("GEOMETRY(%s)", crs_name);
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -811,6 +819,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(*this);
@@ -2026,8 +2035,47 @@ LogicalType LogicalType::VARIANT() {
 //===--------------------------------------------------------------------===//
 
 LogicalType LogicalType::GEOMETRY() {
+	return LogicalType(LogicalTypeId::GEOMETRY);
+}
+
+LogicalType LogicalType::GEOMETRY(const string &crs) {
+	if (crs.empty()) {
+		return LogicalType::GEOMETRY();
+	}
 	auto info = make_shared_ptr<GeoTypeInfo>();
+	info->crs = CoordinateReferenceSystem(crs);
 	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+}
+
+LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	info->crs = crs;
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+}
+
+bool GeoType::HasCRS(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return false;
+	}
+	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
+	const auto &geo_info = info->Cast<GeoTypeInfo>();
+
+	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
+}
+
+const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		throw InternalException("Geometry type has no CRS information");
+	}
+	D_ASSERT(info);
+	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
+	auto &geo_info = info->Cast<GeoTypeInfo>();
+
+	return geo_info.crs;
 }
 
 //===--------------------------------------------------------------------===//

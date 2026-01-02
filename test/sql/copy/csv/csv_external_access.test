@@ -9,28 +9,28 @@ statement ok
 CREATE TABLE date_test(d date);
 
 statement ok
-COPY date_test FROM 'data/csv/test/date.csv';
+COPY date_test FROM '{DATA_DIR}/csv/test/date.csv';
 
 statement ok
 SET enable_external_access=false;
 
 statement error
-SELECT * FROM read_csv('data/csv/test/date.csv', columns = {'d': 'DATE'});
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/date.csv', columns = {'d': 'DATE'});
 ----
 Permission Error
 
 statement error
-SELECT * FROM read_csv_auto('data/csv/test/date.csv');
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/date.csv');
 ----
 Permission Error
 
 statement error
-COPY date_test FROM 'data/csv/test/date.csv';
+COPY date_test FROM '{DATA_DIR}/csv/test/date.csv';
 ----
 Permission Error
 
 statement error
-COPY date_test TO '__TEST_DIR__/date.csv'
+COPY date_test TO '{TEMP_DIR}/date.csv'
 ----
 Permission Error
 
@@ -42,6 +42,6 @@ Cannot change enable_external_access setting while database is running
 
 # sniffer also respects external access flag
 statement error
-FROM sniff_csv('data/csv/test/date.csv');
+FROM sniff_csv('{DATA_DIR}/csv/test/date.csv');
 ----
 Permission Error

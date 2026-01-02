@@ -1,0 +1,63 @@
+# name: test/issues/general/test_19327.test
+# description: Issue 19327 - Wrong result for DISTINCT and LEFT JOIN
+# group: [general]
+
+require icu
+
+statement ok
+create or replace table data_source as select *, (target_time AT TIME ZONE 'UTC')::timestamp::time as time_of_day from
+       (VALUES
+                  ('2025-09-22T15:00:00Z'::TIMESTAMPTZ, '2025-09-22T08:00:00Z'::TIMESTAMPTZ, 1),
+                  ('2025-09-23T15:00:00Z'::TIMESTAMPTZ, '2025-09-23T12:15:00Z'::TIMESTAMPTZ, 2),
+                 ('2025-09-23T15:00:00Z'::TIMESTAMPTZ, '2025-09-23T14:25:00Z'::TIMESTAMPTZ, 3))   t(target_time, update_time, current_value)
+                 ;
+
+query IIIII nosort q0
+WITH t_current_data AS (
+SELECT DISTINCT ON (target_time)
+       target_time AS today_target_time,
+       time_of_day,
+       current_value
+FROM data_source
+WHERE target_time BETWEEN '2025-09-23T12:15:00Z'::TIMESTAMPTZ::DATE AND ('2025-09-23T12:15:00Z'::TIMESTAMPTZ + INTERVAL '1 DAYS')::DATE AND
+      update_time <= '2025-09-23T12:15:00Z'::TIMESTAMPTZ
+ORDER BY target_time, update_time DESC),
+    t_past_data AS (
+SELECT
+       target_time,
+       time_of_day,
+       current_value AS past_value
+FROM data_source)
+SELECT today_target_time,
+       time_of_day,
+       current_value,
+       past_value,
+       abs(past_value - current_value)
+FROM t_current_data left outer join t_past_data USING (time_of_day)
+ORDER BY time_of_day
+----
+
+query IIIII nosort q0
+WITH t_current_data AS (
+SELECT DISTINCT ON (target_time)
+       target_time AS today_target_time,
+       time_of_day,
+       current_value
+FROM data_source
+WHERE target_time BETWEEN '2025-09-23T12:15:00Z'::TIMESTAMPTZ::DATE AND ('2025-09-23T12:15:00Z'::TIMESTAMPTZ + INTERVAL '1 DAYS')::DATE AND
+      update_time <= '2025-09-23T12:15:00Z'::TIMESTAMPTZ
+ORDER BY target_time, update_time DESC),
+    t_past_data AS (
+SELECT
+       target_time,
+       time_of_day,
+       current_value AS past_value
+FROM data_source)
+SELECT today_target_time,
+       time_of_day,
+       current_value,
+       past_value,
+       abs(past_value - current_value)
+FROM t_current_data full outer join t_past_data USING (time_of_day)
+ORDER BY time_of_day
+----

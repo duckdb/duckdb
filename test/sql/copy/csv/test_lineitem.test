@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);
 
 query I
-COPY lineitem FROM 'data/csv/real/lineitem_sample.csv' DELIMITER '|'
+COPY lineitem FROM '{DATA_DIR}/csv/real/lineitem_sample.csv' DELIMITER '|'
 ----
 10
 
@@ -25,7 +25,7 @@ SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumb
 
 # test COPY ... TO ... with HEADER
 query I
-COPY lineitem TO '__TEST_DIR__/lineitem.csv' (DELIMITER ' ', HEADER);
+COPY lineitem TO '{TEMP_DIR}/lineitem.csv' (DELIMITER ' ', HEADER);
 ----
 10
 
@@ -39,7 +39,7 @@ SELECT * FROM lineitem;
 
 # now copy back into the table
 query I
-COPY lineitem FROM '__TEST_DIR__/lineitem.csv' DELIMITER ' ' HEADER;
+COPY lineitem FROM '{TEMP_DIR}/lineitem.csv' DELIMITER ' ' HEADER;
 ----
 10
 

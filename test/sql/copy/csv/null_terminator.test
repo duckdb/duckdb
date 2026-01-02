@@ -6,21 +6,21 @@ statement ok
 PRAGMA enable_verification
 
 query I
-FROM 'data/csv/null_terminator.csv'
+FROM '{DATA_DIR}/csv/null_terminator.csv'
 ----
 
 query I
-FROM read_csv('data/csv/null_terminator.csv', header = 0)
-----
-a\0b
-
-query I
-FROM read_csv('data/csv/null_terminator.csv', header = 0, escape = '')
+FROM read_csv('{DATA_DIR}/csv/null_terminator.csv', header = 0)
 ----
 a\0b
 
 query I
-FROM read_csv('data/csv/null_terminator.csv', header = 0, delim = '\t', quote = '', escape = '')
+FROM read_csv('{DATA_DIR}/csv/null_terminator.csv', header = 0, escape = '')
+----
+a\0b
+
+query I
+FROM read_csv('{DATA_DIR}/csv/null_terminator.csv', header = 0, delim = '\t', quote = '', escape = '')
 ----
 a\0b
 
@@ -28,9 +28,9 @@ statement ok
 create or replace table t as (from values ('a' || chr(0) || 'b') t(i));
 
 statement ok
-copy t to '__TEST_DIR__/csv2tsv.tsv' (header false, delimiter '\t', escape '', quote '');
+copy t to '{TEMP_DIR}/csv2tsv.tsv' (header false, delimiter '\t', escape '', quote '');
 
 query I
-FROM read_csv('__TEST_DIR__/csv2tsv.tsv', header = 0)
+FROM read_csv('{TEMP_DIR}/csv2tsv.tsv', header = 0)
 ----
 a\0b

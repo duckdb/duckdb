@@ -15,7 +15,7 @@
 namespace duckdb {
 class SQLLogicTestRunner;
 
-enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN };
+enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN, RESULT_DONT_CARE };
 
 struct LoopDefinition {
 	string loop_iterator_name;

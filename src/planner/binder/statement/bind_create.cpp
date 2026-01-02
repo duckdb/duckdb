@@ -136,7 +136,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(schema_obj.catalog, context);
+		properties.RegisterDBModify(schema_obj.catalog, context, DatabaseModificationType::CREATE_CATALOG_ENTRY);
 	}
 	return schema_obj;
 }
@@ -220,13 +220,14 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// Figure out if we can store typed macro parameters
 	auto &attached = catalog.GetAttached();
-	auto store_types = info.temporary || attached.IsTemporary();
+	auto store_types = true;
 	if (attached.HasStorageManager()) {
+		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
 		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
-		store_types |= storage_manager.InMemory() || storage_manager.GetStorageVersion() >= since;
+		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
+		              storage_manager.GetStorageVersion() >= since;
 	}
-
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
@@ -504,7 +505,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
 		auto catalog = BindCatalog(base.catalog);
-		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context);
+		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
+		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	}
@@ -557,7 +559,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
-		properties.RegisterDBModify(table.catalog, context);
+		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::CREATE_INDEX);
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
@@ -711,7 +713,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		throw InternalException("Unrecognized type!");
 	}
 	properties.return_type = StatementReturnType::NOTHING;
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

@@ -5,6 +5,8 @@ foreach cipher GCM CTR
 
 require tpch
 
+require httpfs
+
 statement ok
 SET threads = 8;
 

@@ -1,0 +1,22 @@
+# name: test/sql/binder/old_implicit_cast_template.test
+# description: Test old_implicit_cast setting
+# group: [binder]
+
+# Old-style casting should not select an overload by casting to string
+# if there is a templated overload that fits better.
+
+statement ok
+create table t1 as select * from values ('1-2', '3-4', 'a-z', NULL) as r(v);
+
+query I
+SELECT list_extract(string_split(v, '-'), 1) FROM t1;
+----
+1
+
+statement ok
+SET old_implicit_casting = true;
+
+query I
+SELECT list_extract(string_split(v, '-'), 1) FROM t1;
+----
+1

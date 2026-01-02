@@ -118,7 +118,9 @@ public:
 				return i;
 			}
 			remaining_space -= sizeof(int32_t);
-			if (!data.validity.RowIsValid(source_idx)) {
+			const bool is_null = !data.validity.RowIsValid(source_idx);
+			if (is_null) {
+				stats.statistics.SetHasNullFast();
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
 				if (target_idx > 0) {
@@ -201,6 +203,7 @@ public:
 
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
+		stats.statistics.SetHasNoNullFast();
 		if (stats.statistics.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
 			GeometryStats::Update(stats.statistics, new_value);
 		} else {
@@ -243,6 +246,6 @@ public:
 
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnSegment &segment);
+	static void VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor);
 };
 } // namespace duckdb

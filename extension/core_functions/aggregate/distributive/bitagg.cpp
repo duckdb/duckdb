@@ -166,7 +166,6 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 };
 
 struct BitStringAndOperation : public BitStringBitwiseOperation {
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		Bit::BitwiseAnd(input, state.value, state.value);
@@ -174,7 +173,6 @@ struct BitStringAndOperation : public BitStringBitwiseOperation {
 };
 
 struct BitStringOrOperation : public BitStringBitwiseOperation {
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		Bit::BitwiseOr(input, state.value, state.value);

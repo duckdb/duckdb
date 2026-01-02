@@ -6,21 +6,21 @@ require json
 
 # issue 10751
 statement error
-create or replace table json_test as select * from read_json_auto('data/json/10751.json', format = 'newline_delimited');
+create or replace table json_test as select * from read_json_auto('{DATA_DIR}/json/10751.json', format = 'newline_delimited');
 ----
 Not implemented Error: Duplicate name
 
 statement ok
-create table json_test as select * from read_json_auto('data/json/10751.json', format = 'newline_delimited', ignore_errors=true);
+create table json_test as select * from read_json_auto('{DATA_DIR}/json/10751.json', format = 'newline_delimited', ignore_errors=true);
 
 statement ok
 select * from json_test;
 
 # issue 11152
 statement error
-FROM read_json_auto('data/json/11152.json');
+FROM read_json_auto('{DATA_DIR}/json/11152.json');
 ----
 Invalid Input Error: Malformed JSON
 
 statement ok
-FROM read_json_auto('data/json/11152.json', ignore_errors=true);
+FROM read_json_auto('{DATA_DIR}/json/11152.json', ignore_errors=true);

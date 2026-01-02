@@ -1,0 +1,38 @@
+# name: test/sql/storage/compression/rle/rle_select_list.test
+# description: Test selecting from RLE compression with a list comparison pushed down
+# group: [rle]
+
+load __TEST_DIR__/rle_select_bug.db
+
+statement ok
+pragma force_compression='rle';
+
+statement ok
+create table tbl as SELECT * FROM (
+    VALUES
+        (['first name', 'last name', 'username'], 60),
+        (['first name'], 0),
+        (['username'], 0),
+        (['first name', 'last name', 'username'], 0),
+        (['first name', 'last name', 'username'], 0),
+        (['username'], 0),
+        (['username'], 0)
+) AS t(attributes, minutes_duration);
+
+statement ok
+checkpoint
+
+query I
+SELECT
+   "minutes_duration"
+FROM
+   tbl
+WHERE NOT list_sort(['first name']) = tbl."attributes"
+ORDER BY ALL
+----
+0
+0
+0
+0
+0
+60

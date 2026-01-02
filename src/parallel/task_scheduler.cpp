@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
@@ -270,17 +271,19 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
 
-	auto &config = DBConfig::GetConfig(db);
+	const auto &block_allocator = BlockAllocator::Get(db);
+	const auto &config = DBConfig::GetConfig(db);
+
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		if (!Allocator::SupportsFlush()) {
+		if (!block_allocator.SupportsFlush()) {
 			// allocator can't flush, just start an untimed wait
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
 			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
-			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
-			                       NumericCast<idx_t>(requested_thread_count.load()));
+			block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                            NumericCast<idx_t>(requested_thread_count.load()));
 			auto decay_delay = Allocator::DecayDelay();
 			if (!decay_delay.IsValid()) {
 				// no decay delay specified - just wait
@@ -322,8 +325,8 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		}
 	}
 	// this thread will exit, flush all of its outstanding allocations
-	if (Allocator::SupportsFlush()) {
-		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
+	if (block_allocator.SupportsFlush()) {
+		block_allocator.ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
 		Allocator::ThreadIdle();
 	}
 #else
@@ -563,9 +566,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	BlockAllocator::Get(db).FlushAll();
 #endif
 }
 

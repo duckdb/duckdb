@@ -20,6 +20,11 @@ namespace regexp_util {
 bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string);
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
 void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
+void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
+                        const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
+                        vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
+
+idx_t AdvanceOneUTF8Basic(const duckdb_re2::StringPiece &input, idx_t base);
 
 inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
@@ -51,6 +56,33 @@ struct RegexpBaseBindData : public FunctionData {
 	bool constant_pattern;
 
 	bool Equals(const FunctionData &other_p) const override;
+};
+
+struct RegexpExtractAllStructBindData : public RegexpBaseBindData {
+	RegexpExtractAllStructBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
+	                               vector<string> group_names)
+	    : RegexpBaseBindData(options, std::move(constant_string), constant_pattern),
+	      group_names(std::move(group_names)) {
+	}
+
+	vector<string> group_names; // order preserved
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<RegexpExtractAllStructBindData>(options, constant_string, constant_pattern, group_names);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<RegexpExtractAllStructBindData>();
+		return RegexpBaseBindData::Equals(other) && group_names == other.group_names;
+	}
+};
+
+struct RegexpExtractAllStruct {
+	static void Execute(DataChunk &args, ExpressionState &state, Vector &result);
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionLocalState> InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+	                                                     FunctionData *bind_data);
 };
 
 struct RegexpMatchesBindData : public RegexpBaseBindData {

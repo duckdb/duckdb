@@ -6,16 +6,16 @@ statement ok
 SET storage_compatibility_version='latest';
 
 statement ok
-ATTACH '__TEST_DIR__/partial_manager.db' AS db (BLOCK_SIZE 16384);
+ATTACH '{TEMP_DIR}/partial_manager.db' AS db (BLOCK_SIZE 16384);
 
 statement ok
-CREATE TABLE db.t AS FROM read_csv('data/csv/rabo-anon.csv.gz', strict_mode=FALSE);
+CREATE TABLE db.t AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', strict_mode=FALSE);
 
 statement ok
 DETACH db;
 
 statement ok
-ATTACH '__TEST_DIR__/partial_manager.db' AS db;
+ATTACH '{TEMP_DIR}/partial_manager.db' AS db;
 
 query I
 SELECT COUNT("XXX XXX/XXX") FROM db.t WHERE "XXX XXX/XXX" IS NOT NULL;

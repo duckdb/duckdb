@@ -25,7 +25,6 @@ struct SortedAggregateBindData : public FunctionData {
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
 	      threshold(DBConfig::GetSetting<OrderedAggregateThresholdSetting>(context)) {
-
 		//	Describe the arguments.
 		for (const auto &child : children) {
 			buffered_cols.emplace_back(buffered_cols.size());
@@ -434,7 +433,6 @@ struct SortedAggregateFunction {
 
 	static void ProjectInputs(Vector inputs[], const SortedAggregateBindData &order_bind, idx_t input_count,
 	                          idx_t count, DataChunk &buffered) {
-
 		//	Only reference the buffered columns
 		buffered.InitializeEmpty(order_bind.buffered_types);
 		const auto &buffered_cols = order_bind.buffered_cols;
@@ -532,7 +530,7 @@ struct SortedAggregateFunction {
 
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
-		vector<data_t> agg_state(aggr.state_size(aggr));
+		vector<data_t> agg_state(aggr.GetStateSizeCallback()(aggr));
 		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
 
 		// State variables
@@ -540,11 +538,11 @@ struct SortedAggregateFunction {
 		AggregateInputData aggr_bind_info(bind_info, aggr_input_data.allocator);
 
 		// Inner aggregate APIs
-		auto initialize = aggr.initialize;
-		auto destructor = aggr.destructor;
-		auto simple_update = aggr.simple_update;
-		auto update = aggr.update;
-		auto finalize = aggr.finalize;
+		auto initialize = aggr.GetStateInitCallback();
+		auto destructor = aggr.GetStateDestructorCallback();
+		auto simple_update = aggr.GetStateSimpleUpdateCallback();
+		auto update = aggr.GetStateUpdateCallback();
+		auto finalize = aggr.GetStateFinalizeCallback();
 
 		auto sdata = FlatVector::GetData<SortedAggregateState *>(states);
 
@@ -678,14 +676,15 @@ struct SortedAggregateFunction {
 } // namespace
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
-                                         const vector<unique_ptr<Expression>> &groups) {
+                                         const vector<unique_ptr<Expression>> &groups,
+                                         optional_ptr<vector<GroupingSet>> grouping_sets) {
 	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
 		// not a sorted aggregate: return
 		return;
 	}
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (context.config.enable_optimizer) {
-		if (expr.order_bys->Simplify(groups)) {
+		if (expr.order_bys->Simplify(groups, grouping_sets)) {
 			expr.order_bys.reset();
 			return;
 		}
@@ -710,13 +709,14 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    bound_function.name, arguments, bound_function.return_type, AggregateFunction::StateSize<SortedAggregateState>,
+	    bound_function.name, arguments, bound_function.GetReturnType(),
+	    AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
-	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
+	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
 	expr.function = std::move(ordered_aggregate);
@@ -727,7 +727,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr) {
 	//	Make implicit orderings explicit
 	auto &aggregate = *expr.aggregate;
-	if (aggregate.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
+	if (aggregate.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
 		for (auto &order : expr.orders) {
 			const auto type = order.type;
 			const auto null_order = order.null_order;
@@ -742,7 +742,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	}
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (context.config.enable_optimizer) {
-		if (BoundOrderModifier::Simplify(expr.arg_orders, expr.partitions)) {
+		if (BoundOrderModifier::Simplify(expr.arg_orders, expr.partitions, nullptr)) {
 			expr.arg_orders.clear();
 			return;
 		}
@@ -766,12 +766,12 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    aggregate.name, arguments, aggregate.return_type, AggregateFunction::StateSize<SortedAggregateState>,
+	    aggregate.name, arguments, aggregate.GetReturnType(), AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, aggregate.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 

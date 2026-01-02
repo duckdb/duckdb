@@ -155,4 +155,4 @@ jobs:
       - name: Tidy Check Diff
         shell: bash
         if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/feature' }}
-        run: make tidy-check-diff
+        run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff

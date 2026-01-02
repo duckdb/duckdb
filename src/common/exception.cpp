@@ -4,6 +4,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception/list.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
 
 #ifdef DUCKDB_CRASH_ON_ASSERT
@@ -309,6 +310,10 @@ IOException::IOException(const unordered_map<string, string> &extra_info, const 
     : Exception(extra_info, ExceptionType::IO, msg) {
 }
 
+NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::NOT_IMPLEMENTED, msg) {
+}
+
 MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }
@@ -329,13 +334,19 @@ InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "
 }
 
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
+	// FIXME: Make any log context available to add error logging.
 }
 
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
+	// FIXME: Make any log context available to add error logging.
 #ifdef DUCKDB_CRASH_ON_ASSERT
 	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg + "\n" + StackTrace::GetStackTrace());
 	abort();
 #endif
+}
+
+InternalException::InternalException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::INTERNAL, msg) {
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {

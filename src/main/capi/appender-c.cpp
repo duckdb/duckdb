@@ -318,6 +318,10 @@ duckdb_state duckdb_appender_flush(duckdb_appender appender_p) {
 	return duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Flush(); });
 }
 
+duckdb_state duckdb_appender_clear(duckdb_appender appender_p) {
+	return duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Clear(); });
+}
+
 duckdb_state duckdb_appender_close(duckdb_appender appender_p) {
 	return duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Close(); });
 }

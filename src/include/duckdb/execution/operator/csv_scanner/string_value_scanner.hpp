@@ -181,7 +181,7 @@ public:
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
 	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
 	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
-	                  string path, idx_t scan_id);
+	                  const string &path, idx_t scan_id, bool &used_unstrictness);
 
 	~StringValueResult();
 
@@ -230,6 +230,7 @@ public:
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 	idx_t &lines_read;
+	bool &used_unstrictness;
 	//! Information regarding projected columns
 	unsafe_unique_array<bool> projected_columns;
 	bool projecting_columns = false;
@@ -253,7 +254,7 @@ public:
 	//! We store borked rows so we can generate multiple errors during flushing
 	unordered_set<idx_t> borked_rows;
 
-	const string path;
+	String path;
 
 	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
 	//! (i.e., non-comment) line.

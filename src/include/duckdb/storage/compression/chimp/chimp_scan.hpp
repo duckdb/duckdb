@@ -185,7 +185,6 @@ public:
 	}
 
 	void LoadGroup(CHIMP_TYPE *value_buffer) {
-
 		//! FIXME: If we change the order of this to flag -> leading_zero_blocks -> packed_data
 		//! We can leave out the leading zero block count as well, because it can be derived from
 		//! Extracting all the flags and counting the 3's

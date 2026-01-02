@@ -67,7 +67,6 @@ unique_ptr<OnConflictInfo> Transformer::DummyOnConflictClause(duckdb_libpgquery:
 
 unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgquery::PGOnConflictClause *node,
                                                                   const string &) {
-
 	auto stmt = PGPointerCast<duckdb_libpgquery::PGOnConflictClause>(node);
 	D_ASSERT(stmt);
 

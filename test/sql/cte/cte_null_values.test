@@ -1,0 +1,10 @@
+# name: test/sql/cte/cte_null_values.test
+# description: Test emitting of NULL values in CTEs
+# group: [cte]
+
+query I
+WITH
+  cte1 AS (SELECT NULL AS y),
+  cte1_filter AS (SELECT y FROM cte1 WHERE y < '2025-12-01'::TIMESTAMPTZ)
+SELECT * FROM cte1_filter;
+----

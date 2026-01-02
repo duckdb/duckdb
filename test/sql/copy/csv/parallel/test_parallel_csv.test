@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIIIIIIIIIIIIIIIIIIIIIII
-FROM read_csv('data/csv/14512_og.csv', buffer_size = 473, strict_mode = false, delim = ',', quote = '"', escape = '"')
+FROM read_csv('{DATA_DIR}/csv/14512_og.csv', buffer_size = 473, strict_mode = false, delim = ',', quote = '"', escape = '"')
 ----
 00000579000098	13.99	EA	PINE RIDGE CHENIN VOIGNIER	750.0	ML	1	13	NULL	1	NULL	NULL	NULL	NULL	NULL	NULL	DEFAULT BRAND	NULL	NULL	NULL	NULL	BEER & WINE	NULL	NULL	7.25	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.0725}}
 00000609082001	3.99	EA	MADELAINE MINI MILK CHOCOLATE TURKEY	1.0	OZ	1	13	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	MADELEINE	NULL	NULL	NULL	NULL	CANDY	NULL	NULL	7.25	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.0725}}
@@ -14,13 +14,13 @@ FROM read_csv('data/csv/14512_og.csv', buffer_size = 473, strict_mode = false, d
 
 
 query III
-select * from read_csv_auto('data/csv/dirty_line.csv',  skip = 1)
+select * from read_csv_auto('{DATA_DIR}/csv/dirty_line.csv',  skip = 1)
 ----
 1.5	a	3
 2.5	b	4
 
 query II
-select * from read_csv_auto('data/csv/null_string.csv',  nullstr="null")
+select * from read_csv_auto('{DATA_DIR}/csv/null_string.csv',  nullstr="null")
 ----
 1	NULL
 NULL	2
@@ -28,14 +28,14 @@ NULL	2
 # We need to add header = false here. Because with vector_size=2 the sniffer will think we have a header, since the
 # row 1	null has types INTEGER;VARCHAR at that point
 query II
-select * from read_csv_auto('data/csv/null_string.csv', header = false)
+select * from read_csv_auto('{DATA_DIR}/csv/null_string.csv', header = false)
 ----
 a	b
 1	null
 null	2
 
 query IIIIIIIIII
-select * from read_csv_auto('data/csv/aws_locations.csv')
+select * from read_csv_auto('{DATA_DIR}/csv/aws_locations.csv')
 ----
 IAD	Washington	District of Columbia	United States	US	20	38.94449997	-77.45580292	North America	United States, Mexico, & Canada
 ORD	Chicago	Illinois	United States	US	20	41.978611	-87.904722	North America	United States, Mexico, & Canada

@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-class Allocator;
+class BlockAllocator;
 class BlockManager;
 class QueryContext;
 
@@ -30,13 +30,13 @@ public:
 	//! (typically 8 bytes). On return, this->AllocSize() >= this->size >= user_size.
 	//! Our allocation size will always be page-aligned, which is necessary to support
 	//! DIRECT_IO
-	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size);
-	FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager);
+	FileBuffer(BlockAllocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size);
+	FileBuffer(BlockAllocator &allocator, FileBufferType type, BlockManager &block_manager);
 	FileBuffer(FileBuffer &source, FileBufferType type, idx_t block_header_size);
 
 	virtual ~FileBuffer();
 
-	Allocator &allocator;
+	BlockAllocator &allocator;
 	//! The buffer that users can write to
 	data_ptr_t buffer;
 	//! The user-facing size of the buffer.

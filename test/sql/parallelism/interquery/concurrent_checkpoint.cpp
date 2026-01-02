@@ -124,7 +124,7 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -191,7 +191,7 @@ TEST_CASE("Concurrent checkpoint with multiple updaters", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -232,7 +232,7 @@ TEST_CASE("Force concurrent checkpoint with single updater", "[interquery][.]") 
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
@@ -274,7 +274,7 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output.txt");
 	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 

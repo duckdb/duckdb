@@ -31,7 +31,7 @@ void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, co
 	}
 }
 
-void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
+void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) const {
 	switch (string_column_type) {
 	case StringColumnType::VARCHAR:
 		VerifyString(str_data, str_len, true);

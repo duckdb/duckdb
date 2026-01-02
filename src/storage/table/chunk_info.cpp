@@ -34,11 +34,11 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-bool ChunkInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+bool ChunkInfo::Cleanup(transaction_t lowest_transaction) const {
 	return false;
 }
 
-void ChunkInfo::Write(WriteStream &writer) const {
+void ChunkInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
 	writer.Write<ChunkInfoType>(type);
 }
 
@@ -83,6 +83,13 @@ idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, trans
 	return TemplatedGetSelVector<CommittedVersionOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
 }
 
+idx_t ChunkConstantInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
+	if (TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, insert_id)) {
+		return max_count;
+	}
+	return 0;
+}
+
 bool ChunkConstantInfo::Fetch(TransactionData transaction, row_t row) {
 	return UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id);
 }
@@ -92,8 +99,11 @@ void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t
 	insert_id = commit_id;
 }
 
-bool ChunkConstantInfo::HasDeletes() const {
-	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
+bool ChunkConstantInfo::HasDeletes(transaction_t transaction_id) const {
+	if (transaction_id == MAX_TRANSACTION_ID) {
+		transaction_id = TRANSACTION_ID_START - 1;
+	}
+	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id <= transaction_id;
 	return is_deleted;
 }
 
@@ -101,7 +111,7 @@ idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
 }
 
-bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
 	if (delete_id != NOT_DELETED_ID) {
 		// the chunk info is labeled as deleted - we need to keep it around
 		return false;
@@ -113,9 +123,9 @@ bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<Chu
 	return true;
 }
 
-void ChunkConstantInfo::Write(WriteStream &writer) const {
-	D_ASSERT(HasDeletes());
-	ChunkInfo::Write(writer);
+void ChunkConstantInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
+	D_ASSERT(HasDeletes(checkpoint_id));
+	ChunkInfo::Write(writer, checkpoint_id);
 	writer.Write<idx_t>(start);
 }
 
@@ -125,6 +135,18 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
 	info->insert_id = 0;
 	info->delete_id = 0;
 	return std::move(info);
+}
+
+string ChunkConstantInfo::ToString(idx_t max_count) const {
+	string result;
+	result += "Constant [Count: " + to_string(max_count);
+	result += ", ";
+	result += "Insert Id: " + to_string(insert_id);
+	if (delete_id != NOT_DELETED_ID) {
+		result += ", Delete Id: " + to_string(delete_id);
+	}
+	result += "]";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -211,6 +233,31 @@ idx_t ChunkVectorInfo::GetCommittedSelVector(transaction_t min_start_id, transac
 
 idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const {
 	return GetSelVector(transaction.start_time, transaction.transaction_id, sel_vector, max_count);
+}
+
+idx_t ChunkVectorInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
+	if (HasConstantInsertionId()) {
+		if (!TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
+		                                                    ConstantInsertId())) {
+			return 0;
+		}
+		return max_count;
+	}
+	auto insert_segment = allocator.GetHandle(GetInsertedPointer());
+	auto inserted = insert_segment.GetPtr<transaction_t>();
+
+	idx_t count = 0;
+	for (idx_t i = 0; i < max_count; i++) {
+		if (!TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
+		                                                    inserted[i])) {
+			continue;
+		}
+		if (i != count) {
+			throw InternalException("Error in ChunkVectorInfo::GetCheckpointRowCount - insertions are not sequential");
+		}
+		count++;
+	}
+	return count;
 }
 
 bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
@@ -349,7 +396,7 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	}
 }
 
-bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const {
+bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction) const {
 	if (AnyDeleted()) {
 		// if any rows are deleted we can't clean-up
 		return false;
@@ -374,8 +421,22 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction, unique_ptr<Chunk
 	return true;
 }
 
-bool ChunkVectorInfo::HasDeletes() const {
-	return AnyDeleted();
+bool ChunkVectorInfo::HasDeletes(transaction_t transaction_id) const {
+	if (!AnyDeleted()) {
+		return false;
+	}
+	if (transaction_id == MAX_TRANSACTION_ID) {
+		return true;
+	}
+	auto segment = allocator.GetHandle(deleted_data);
+	auto deleted = segment.GetPtr<transaction_t>();
+
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		if (deleted[i] <= transaction_id) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool ChunkVectorInfo::AnyDeleted() const {
@@ -384,6 +445,29 @@ bool ChunkVectorInfo::AnyDeleted() const {
 
 bool ChunkVectorInfo::HasConstantInsertionId() const {
 	return !inserted_data.HasMetadata();
+}
+
+string ChunkVectorInfo::ToString(idx_t max_count) const {
+	string result;
+	result += "Vector [Count: " + to_string(max_count);
+	result += ", ";
+	if (HasConstantInsertionId()) {
+		result += "Insert Id: " + to_string(constant_insert_id);
+	} else {
+		result += "Insert Ids: [";
+		auto segment = allocator.GetHandle(GetInsertedPointer());
+		auto inserted = segment.GetPtr<transaction_t>();
+
+		for (idx_t idx = 0; idx < max_count; idx++) {
+			if (idx > 0) {
+				result += ", ";
+			}
+			result += to_string(inserted[idx]);
+		}
+		result += "]";
+	}
+	result += "]";
+	return result;
 }
 
 transaction_t ChunkVectorInfo::ConstantInsertId() const {
@@ -409,9 +493,9 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	return delete_count;
 }
 
-void ChunkVectorInfo::Write(WriteStream &writer) const {
+void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	transaction_t start_time = TRANSACTION_ID_START - 1;
+	transaction_t start_time = checkpoint_id == MAX_TRANSACTION_ID ? TRANSACTION_ID_START - 1 : checkpoint_id + 1;
 	transaction_t transaction_id = DConstants::INVALID_INDEX;
 	idx_t count = GetSelVector(start_time, transaction_id, sel, STANDARD_VECTOR_SIZE);
 	if (count == STANDARD_VECTOR_SIZE) {
@@ -426,7 +510,7 @@ void ChunkVectorInfo::Write(WriteStream &writer) const {
 		return;
 	}
 	// write a boolean vector
-	ChunkInfo::Write(writer);
+	ChunkInfo::Write(writer, checkpoint_id);
 	writer.Write<idx_t>(start);
 	ValidityMask mask(STANDARD_VECTOR_SIZE);
 	mask.Initialize(STANDARD_VECTOR_SIZE);

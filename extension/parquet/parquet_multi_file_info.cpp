@@ -299,7 +299,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		}
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
-		auto is_valid = metadata_entry->IsValid(file);
+		const auto is_valid = metadata_entry->IsValid(file, context);
 		if (is_valid != ParquetCacheValidity::VALID) {
 			return result;
 		}
@@ -395,10 +395,6 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "binary_as_string") {
 		options.binary_as_string = BooleanValue::Get(val);
-		return true;
-	}
-	if (key == "variant_legacy_encoding") {
-		options.variant_legacy_encoding = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "file_row_number") {
@@ -529,17 +525,18 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 
 shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	auto result = make_uniq<ParquetUnionData>(file);
+	result->names.reserve(columns.size());
+	result->types.reserve(columns.size());
 	for (auto &column : columns) {
 		result->names.push_back(column.name);
 		result->types.push_back(column.type);
 	}
+
+	result->options = parquet_options;
+	result->metadata = metadata;
 	if (file_idx == 0) {
-		result->options = parquet_options;
-		result->metadata = metadata;
 		result->reader = shared_from_this();
 	} else {
-		result->options = std::move(parquet_options);
-		result->metadata = std::move(metadata);
 		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);
@@ -575,12 +572,21 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 	gstate.row_group_index = 0;
 }
 
-void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                         LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+	}
+#endif
+
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
-	Scan(context, local_state.scan_state, chunk);
+	return Scan(context, local_state.scan_state, chunk);
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {

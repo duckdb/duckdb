@@ -73,7 +73,6 @@ TemporaryFileIdentifier::TemporaryFileIdentifier(TemporaryBufferSize size_p, idx
 TemporaryFileIdentifier::TemporaryFileIdentifier(DatabaseInstance &db, TemporaryBufferSize size_p, idx_t file_index_p,
                                                  bool encrypted_p)
     : size(size_p), file_index(file_index_p), encrypted(encrypted_p) {
-
 	if (encrypted) {
 		// generate a random encryption key ID and corresponding key
 		EncryptionEngine::AddTempKeyToCache(db);

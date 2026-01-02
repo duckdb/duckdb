@@ -9,7 +9,6 @@
 namespace duckdb {
 
 BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
-
 	// first recursively visit the recursive CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.left);

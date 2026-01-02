@@ -12,13 +12,13 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
     : context(context), table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0),
       optimistic_writer(context, table), merged_storage(false) {
-
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
 	row_groups = optimistic_writer.CreateCollection(table, types, OptimisticWritePartialManagers::GLOBAL);
@@ -30,31 +30,19 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		if (constraint == IndexConstraintType::NONE) {
 			return false;
 		}
-		if (index.GetIndexType() != ART::TYPE_NAME) {
-			return false;
-		}
 		if (!index.IsBound()) {
 			return false;
 		}
-		auto &art = index.Cast<ART>();
-
-		// UNIQUE constraint.
-		vector<unique_ptr<Expression>> expressions;
-		vector<unique_ptr<Expression>> delete_expressions;
-		for (auto &expr : art.unbound_expressions) {
-			expressions.push_back(expr->Copy());
-			delete_expressions.push_back(expr->Copy());
+		auto &bound_index = index.Cast<BoundIndex>();
+		if (!bound_index.SupportsDeltaIndexes()) {
+			return false;
 		}
 
 		// Create a delete index and a local index.
-		auto &name = art.GetIndexName();
-		auto &io_manager = art.table_io_manager;
-		auto delete_index =
-		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(delete_expressions), art.db);
+		auto delete_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_DELETE);
 		delete_indexes.AddIndex(std::move(delete_index));
 
-		auto append_index =
-		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(expressions), art.db);
+		auto append_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
 		append_indexes.AddIndex(std::move(append_index));
 		return false;
 	});
@@ -66,7 +54,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
     : context(context), table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)),
       deleted_rows(parent.deleted_rows), optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
-
 	// Alter the column type.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection =
@@ -83,7 +70,6 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
     : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
-
 	// Remove the column from the previous table storage.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection = parent_collection.RemoveColumn(drop_column_index);
@@ -99,7 +85,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_dt, parent.optimistic_writer), merged_storage(parent.merged_storage) {
-
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection = parent_collection.AddColumn(context, new_column, default_executor);
 	row_groups = std::move(parent.row_groups);
@@ -164,12 +149,28 @@ void LocalTableStorage::FlushBlocks() {
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                              TableIndexList &index_list, const vector<LogicalType> &table_types,
                                              row_t &start_row) {
-	// In this function, we only care about scanning the indexed columns of a table.
+	// mapped_column_ids contains the physical column indices of each Indexed column in the table.
+	// This mapping is used to retrieve the physical column index for the corresponding vector of an index chunk scan.
+	// For example, if we are processing data for index_chunk.data[i], we can retrieve the physical column index
+	// by getting the value at mapped_column_ids[i].
+	// An important note is that the index_chunk orderings are created in accordance with this mapping, not the other
+	// way around. (Check the scan code below, where the mapped_column_ids is passed as a parameter to the scan.
+	// The index_chunk inside of that lambda is ordered according to the mapping that is a parameter to the scan).
+
+	// mapped_column_ids is used in two places:
+	// 1) To create the physical table chunk in this function.
+	// 2) If we are in an unbound state (i.e., WAL replay is happening right now), this mapping and the index_chunk
+	//	  are buffered in unbound_index. However, there can also be buffered deletes happening, so it is important
+	//    to maintain a canonical representation of the mapping, which is just sorting.
+	D_ASSERT(!index_list.Empty());
 	auto indexed_columns = index_list.GetRequiredColumns();
 	vector<StorageIndex> mapped_column_ids;
 	for (auto &col : indexed_columns) {
 		mapped_column_ids.emplace_back(col);
 	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
 
 	// However, because the bound expressions of the indexes (and their bound
 	// column references) are in relation to ALL table columns, we create an
@@ -178,6 +179,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	DataChunk table_chunk;
 	table_chunk.InitializeEmpty(table_types);
 
+	// index_chunk scans are created here in the mapped_column_ids ordering (see note above).
 	ErrorData error;
 	source.Scan(transaction, mapped_column_ids, [&](DataChunk &index_chunk) -> bool {
 		D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
@@ -191,7 +193,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		// We need the table chunk for the bound indexes,
 		// and the index chunk for the unbound indexes (to buffer it).
 		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, index_chunk, mapped_column_ids,
-		                                   start_row, index_append_mode);
+		                                   start_row, index_append_mode, checkpoint_id);
 		if (error.HasError()) {
 			return false;
 		}
@@ -201,57 +203,30 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	return error;
 }
 
-void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
-                                        bool append_to_table) {
+void LocalTableStorage::AppendToTable(DuckTransaction &transaction, TableAppendState &append_state) {
+	auto &table = table_ref.get();
+	table.InitializeAppend(transaction, append_state);
+	auto &collection = *row_groups->collection;
+	collection.Scan(transaction, [&](DataChunk &table_chunk) -> bool {
+		// Append to the base table.
+		table.Append(table_chunk, append_state);
+		return true;
+	});
+	table.FinalizeAppend(transaction, append_state);
+}
+
+void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state) {
 	// In this function, we might scan all table columns,
 	// as we might also append to the table itself (append_to_table).
-
 	auto &table = table_ref.get();
-	if (append_to_table) {
-		table.InitializeAppend(transaction, append_state);
+	if (!table.HasIndexes()) {
+		// no indexes to append to
+		return;
 	}
-
 	auto data_table_info = table.GetDataTableInfo();
 	auto &index_list = data_table_info->GetIndexes();
-	ErrorData error;
-
 	auto &collection = *row_groups->collection;
-	if (append_to_table) {
-		// Appending to the table: we need to scan the entire chunk.
-		DataChunk index_chunk;
-		vector<StorageIndex> mapped_column_ids;
-		if (table.HasIndexes() && index_list.HasUnbound()) {
-			TableIndexList::InitializeIndexChunk(index_chunk, collection.GetTypes(), mapped_column_ids,
-			                                     *data_table_info);
-		}
-
-		collection.Scan(transaction, [&](DataChunk &table_chunk) -> bool {
-			if (table.HasIndexes()) {
-				if (index_list.HasUnbound()) {
-					// The index chunk references all indexed columns.
-					TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
-				}
-
-				// Pass both the table and the index chunk.
-				// We need the table chunk for the bound indexes,
-				// and the index chunk for the unbound indexes (to buffer it).
-				error = table.AppendToIndexes(delete_indexes, table_chunk, index_chunk, mapped_column_ids,
-				                              append_state.current_row, index_append_mode);
-				if (error.HasError()) {
-					return false;
-				}
-			}
-
-			// Append to the base table.
-			table.Append(table_chunk, append_state);
-			return true;
-		});
-
-	} else {
-		// We only append to the indexes.
-		error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
-	}
-
+	auto error = AppendToIndexes(transaction, collection, index_list, table.GetTypes(), append_state.current_row);
 	if (error.HasError()) {
 		// Revert all appended row IDs.
 		row_t current_row = append_state.row_start;
@@ -259,7 +234,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		collection.Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// Remove the chunk.
 			try {
-				table.RemoveFromIndexes(append_state, chunk, current_row);
+				table.RevertIndexAppend(append_state, chunk, current_row);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
 				return false;
@@ -273,19 +248,11 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 
-		if (append_to_table) {
-			table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
-		}
-
 #ifdef DEBUG
 		// Verify that our index memory is stable.
 		table.VerifyIndexBuffers();
 #endif
 		error.Throw();
-	}
-
-	if (append_to_table) {
-		table.FinalizeAppend(transaction, append_state);
 	}
 }
 
@@ -488,9 +455,9 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &table_chunk, DataT
 			TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
 		}
 
-		auto error =
-		    DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk, index_chunk,
-		                               mapped_column_ids, NumericCast<row_t>(base_id), storage->index_append_mode);
+		auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
+		                                        index_chunk, mapped_column_ids, NumericCast<row_t>(base_id),
+		                                        storage->index_append_mode, optional_idx());
 		if (error.HasError()) {
 			error.Throw();
 		}
@@ -564,7 +531,8 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 
 	// delete from unique indices (if any)
 	if (!storage->append_indexes.Empty()) {
-		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count);
+		storage->GetCollection().RemoveFromIndexes(context, storage->append_indexes, row_ids, count,
+		                                           IndexRemovalType::MAIN_INDEX_ONLY);
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -598,7 +566,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	const auto row_group_size = storage.GetCollection().GetRowGroupSize();
 
 	TableAppendState append_state;
-	table.AppendLock(append_state);
+	table.AppendLock(transaction, append_state);
 	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 	if ((append_state.row_start == 0 || storage.GetCollection().GetTotalRows() >= row_group_size) &&
 	    storage.deleted_rows == 0) {
@@ -606,9 +574,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
 		// Append to the indexes.
-		if (table.HasIndexes()) {
-			storage.AppendToIndexes(transaction, append_state, false);
-		}
+		storage.AppendToIndexes(transaction, append_state);
 		// finally move over the row groups
 		table.MergeStorage(storage.GetCollection(), storage.append_indexes, commit_state);
 	} else {
@@ -616,8 +582,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// if we have, we cannot merge to disk after all
 		// so we need to revert the data we have already written
 		storage.Rollback();
-		// append to the indexes and append to the base table
-		storage.AppendToIndexes(transaction, append_state, true);
+		// append to the indexes
+		storage.AppendToIndexes(transaction, append_state);
+		// after that is successful - append to the table
+		storage.AppendToTable(transaction, append_state);
 	}
 
 #ifdef DEBUG

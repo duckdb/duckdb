@@ -41,7 +41,8 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
+	BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
+	           idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -160,6 +161,8 @@ protected:
 	//! and only updates the global counter when the cache value exceeds a threshold.
 	//! Therefore, the statistics may have slight differences from the actual memory usage.
 	mutable MemoryUsage memory_usage;
+	//! The block allocator
+	BlockAllocator &block_allocator;
 };
 
 } // namespace duckdb

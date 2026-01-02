@@ -4,6 +4,9 @@
 # workaround - alternative verify always forces the latest storage
 require no_alternative_verify
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
 ----

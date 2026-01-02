@@ -24,3 +24,8 @@ statement ok
 CREATE OR REPLACE TABLE t(
 	x VARCHAR USING COMPRESSION Dictionary
 );
+
+statement error
+create table foo (str VARCHAR USING COMPRESSION 'dict_fsst');
+----
+Binder Error: Can't compress using user-provided compression type 'DICT_FSST', that type is not available yet

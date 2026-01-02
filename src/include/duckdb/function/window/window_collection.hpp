@@ -86,6 +86,10 @@ public:
 	WindowCursor(const WindowCollection &paged, column_t col_idx);
 	WindowCursor(const WindowCollection &paged, vector<column_t> column_ids);
 
+	//! The row count of the paged collection
+	idx_t Count() const {
+		return paged.size();
+	}
 	//! Is the scan in range?
 	inline bool RowIsVisible(idx_t row_idx) const {
 		return (row_idx < state.next_row_index && state.current_row_index <= row_idx);
@@ -190,7 +194,6 @@ public:
 template <typename OP>
 static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_begin, idx_t block_end,
                                const vector<column_t> &scan_cols, const idx_t key_count, OP operation) {
-
 	//	Stop if there is no work to do
 	if (!collection.Count()) {
 		return;

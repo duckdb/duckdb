@@ -47,6 +47,8 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}
+	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
+	void VerifyIndexBuffers();
 
 	string GetSchemaName();
 	string GetTableName();
@@ -69,6 +71,10 @@ private:
 	vector<IndexStorageInfo> index_storage_infos;
 	//! Lock held while checkpointing
 	StorageLock checkpoint_lock;
+	//! The last seen checkpoint while doing a concurrent operation, if any
+	optional_idx last_seen_checkpoint;
+	//! The amount of row groups the checkpoint is processing
+	optional_idx checkpoint_row_group_count;
 };
 
 } // namespace duckdb

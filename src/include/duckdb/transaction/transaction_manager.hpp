@@ -53,6 +53,18 @@ public:
 protected:
 	//! The attached database
 	AttachedDatabase &db;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb

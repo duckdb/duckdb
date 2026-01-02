@@ -1407,7 +1407,6 @@ string_t CastFromBlobToBit::Operation(string_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 string_t CastFromBitToString::Operation(string_t input, Vector &vector) {
-
 	idx_t result_size = Bit::BitLength(input);
 	string_t result = StringVector::EmptyString(vector, result_size);
 	Bit::ToString(input, result.GetDataWriteable());

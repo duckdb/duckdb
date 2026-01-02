@@ -1,0 +1,56 @@
+# name: test/sql/binder/alias_qualification_group_by.test
+# description: Test alias.name resolution in GROUP BY clause
+# group: [binder]
+
+# grouping by a projection alias
+query II
+SELECT a % 2 AS x, COUNT(*) AS cnt
+FROM (VALUES (1),(2),(3),(4)) t(a)
+GROUP BY alias.x
+ORDER BY x;
+----
+0	2
+1	2
+
+# quoted alias in GROUP BY
+query II
+SELECT (a/2)::INT AS "Half", COUNT(*) AS c
+FROM (VALUES (1),(2),(3),(4)) t(a)
+GROUP BY alias."Half"
+ORDER BY "Half";
+----
+0	1
+1	1
+2	2
+
+# Table actually named `alias` should keep working and be prioritized over alias references
+statement ok
+CREATE TABLE alias (g INT);
+
+statement ok
+INSERT INTO alias VALUES (1), (1), (2);
+
+query II
+SELECT g AS x, COUNT(*) c FROM alias
+GROUP BY alias.g
+ORDER BY x;
+----
+1	2
+2	1
+
+# GROUP BY on values that are a part of an expression 
+statement error
+SELECT a + 1 AS x, alias.x % 2 AS y, SUM(a) AS s
+FROM (VALUES (1),(2),(3)) t(a)
+GROUP BY alias.y
+ORDER BY y;
+----
+Binder Error
+
+# GROUP BY for inside-expression alias calling from the GROUP BY clause
+statement error
+SELECT a as x FROM (VALUES (1),(2),(3)) t(a)
+GROUP BY alias.x + 1
+ORDER BY alias.x;
+----
+Binder Error

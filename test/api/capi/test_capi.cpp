@@ -626,7 +626,6 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 }
 
 TEST_CASE("Decimal -> Double casting issue", "[capi]") {
-
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -645,7 +644,6 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 }
 
 TEST_CASE("Test custom_user_agent config", "[capi]") {
-
 	{
 		duckdb_database db;
 		duckdb_connection con;

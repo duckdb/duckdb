@@ -92,7 +92,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
                                                   Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
@@ -123,7 +123,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
                                        Vector &result, const SelectionVector &sel, idx_t sel_count) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
@@ -258,10 +258,11 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 	return std::move(result);
 }
 
-void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
+void UncompressedStringStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManager();
-	state.Cleanup(block_manager);
+	for (auto &block_id : state.on_disk_blocks) {
+		visitor.Visit(block_id);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -279,7 +280,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	    UncompressedStringStorage::StringInitSegment, UncompressedStringStorage::StringInitAppend,
 	    UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend, nullptr,
 	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
-	    UncompressedStringStorage::CleanupState, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
+	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
 }
 
 //===--------------------------------------------------------------------===//

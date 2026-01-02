@@ -48,6 +48,7 @@ fi
 
 # append signature to extension binary
 cat $ext.sign >> $ext.append
+rm $ext.sign
 
 # compress extension binary
 if [[ $4 == wasm_* ]]; then
@@ -55,12 +56,14 @@ if [[ $4 == wasm_* ]]; then
 else
   gzip < $ext.append > "$ext.compressed"
 fi
+rm $ext.append
 
 set -e
 
 # Abort if AWS key is not set
 if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     echo "No AWS key found, skipping.."
+    rm "$ext.compressed"
     exit 0
 fi
 
@@ -74,6 +77,7 @@ fi
 if [[ $7 = 'true' ]]; then
   if [ -z "$3" ]; then
     echo "extension-upload-single.sh called with upload_versioned=true but no extension version was passed"
+    rm "$ext.compressed"
     exit 1
   fi
 
@@ -92,3 +96,6 @@ if [[ $6 = 'true' ]]; then
     aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
   fi
 fi
+
+# clean up
+rm "$ext.compressed"

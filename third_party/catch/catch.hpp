@@ -13402,10 +13402,40 @@ namespace Catch {
 #include <set>
 #include <iterator>
 
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#else
+#include <sys/ioctl.h>
+#include <unistd.h>
+#endif
+
 namespace Catch {
 
     namespace {
         const int MaxExitCode = 255;
+
+        // Helper function to check if stdout is a terminal
+        bool IsTerminal() {
+#ifdef _WIN32
+            return GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_CHAR;
+#else
+            return isatty(1);
+#endif
+        }
+
+        // Helper function to get terminal width
+        int TerminalWidth() {
+#ifdef _WIN32
+            CONSOLE_SCREEN_BUFFER_INFO csbi;
+            GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+            return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+#else
+            struct winsize w;
+            ioctl(0, TIOCGWINSZ, &w);
+            return w.ws_col;
+#endif
+        }
 
         IStreamingReporterPtr createReporter(std::string const& reporterName, IConfigPtr const& config) {
             auto reporter = Catch::getRegistryHub().getReporterRegistry().create(reporterName, config);
@@ -13416,14 +13446,37 @@ namespace Catch {
 
         void renderTestProgress(int current_test, int total_tests, std::string next_test) {
             double progress = (double) current_test / (double) total_tests;
-            int render_width = 80;
-            std::string result = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): " + next_test;
-            if (result.size() < render_width) {
-                result += std::string(render_width - result.size(), ' ');
-            } else if (result.size() > render_width) {
-                result = result.substr(0, render_width - 3) + "...";
+            std::string prefix = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): ";
+            std::string result = prefix + next_test;
+
+            if (IsTerminal()) {
+                // For terminals, we want to overwrite the previous line to not flood the window with successful tests.
+                // We overwrite by writing \r at the end of the block, but to make sure we fully overwrite the previous
+                // line we should make sure the line fits fully in the terminal width.
+                int render_width = TerminalWidth();
+                if (render_width <= 0) {
+                    render_width = 80; // fallback to 80 if we can't determine width
+                }
+
+                if (result.size() < static_cast<size_t>(render_width)) {
+                    result += std::string(render_width - result.size(), ' ');
+                } else if (result.size() > static_cast<size_t>(render_width)) {
+                    int available_for_test = render_width - prefix.size() - 3; // 3 for "..."
+                    if (available_for_test > 0 && next_test.size() > static_cast<size_t>(available_for_test)) {
+                        // Replace the start of the test name with "..." to indicate truncation
+                        result = prefix + "..." + next_test.substr(next_test.size() - available_for_test);
+                    } else {
+                        // If prefix is too long for terminal width, fall back to simple truncation
+                        result = result.substr(0, render_width - 3) + "...";
+                    }
+                }
+
+                std::cout << "\r" << result;
+            } else {
+                // For non-terminals, we just print each line
+                std::cout << "\n" << result;
             }
-            std::cout << "\r" << result;
+
             std::cout.flush();
         }
 
@@ -16428,18 +16481,21 @@ private:
     bool printInfoMessages;
 };
 
-std::size_t makeRatio(std::size_t number, std::size_t total) {
-    std::size_t ratio = total > 0 ? CATCH_CONFIG_CONSOLE_WIDTH * number / total : 0;
-    return (ratio == 0 && number > 0) ? 1 : ratio;
+std::size_t makeRatio(std::uint64_t number, std::uint64_t total) {
+    const auto ratio = total > 0 ? CATCH_CONFIG_CONSOLE_WIDTH * number / total : 0;
+    return (ratio == 0 && number > 0) ? 1 : static_cast<std::size_t>(ratio);
 }
 
-std::size_t& findMax(std::size_t& i, std::size_t& j, std::size_t& k) {
-    if (i > j && i > k)
+std::size_t&
+findMax( std::size_t& i, std::size_t& j, std::size_t& k, std::size_t& l ) {
+    if (i > j && i > k && i > l)
         return i;
-    else if (j > k)
+    else if (j > k && j > l)
         return j;
-    else
+    else if (k > l)
         return k;
+    else
+        return l;
 }
 
 struct ColumnInfo {
@@ -16924,13 +16980,15 @@ void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<Summ
 
 void ConsoleReporter::printTotalsDivider(Totals const& totals) {
     if (totals.testCases.total() > 0) {
-        std::size_t failedRatio = makeRatio(totals.testCases.failed, totals.testCases.total());
-        std::size_t failedButOkRatio = makeRatio(totals.testCases.failedButOk + totals.skippedTests, totals.testCases.total());
-        std::size_t passedRatio = makeRatio(totals.testCases.passed - totals.skippedTests, totals.testCases.total());
-        while (failedRatio + failedButOkRatio + passedRatio < CATCH_CONFIG_CONSOLE_WIDTH - 1)
-            findMax(failedRatio, failedButOkRatio, passedRatio)++;
-        while (failedRatio + failedButOkRatio + passedRatio > CATCH_CONFIG_CONSOLE_WIDTH - 1)
-            findMax(failedRatio, failedButOkRatio, passedRatio)--;
+		const std::size_t total = totals.testCases.total() + totals.skippedTests;
+        std::size_t failedRatio = makeRatio(totals.testCases.failed, total);
+        std::size_t failedButOkRatio = makeRatio(totals.testCases.failedButOk, total);
+        std::size_t passedRatio = makeRatio(totals.testCases.passed, total);
+		std::size_t skippedRatio = makeRatio(totals.skippedTests, total);
+        while (failedRatio + failedButOkRatio + passedRatio + skippedRatio < CATCH_CONFIG_CONSOLE_WIDTH - 1)
+            findMax(failedRatio, failedButOkRatio, passedRatio, skippedRatio)++;
+        while (failedRatio + failedButOkRatio + passedRatio + skippedRatio > CATCH_CONFIG_CONSOLE_WIDTH - 1)
+            findMax(failedRatio, failedButOkRatio, passedRatio, skippedRatio)--;
 
         stream << Colour(Colour::Error) << std::string(failedRatio, '=');
         stream << Colour(Colour::ResultExpectedFailure) << std::string(failedButOkRatio, '=');

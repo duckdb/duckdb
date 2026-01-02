@@ -14,11 +14,6 @@ create table integers (i int, j int)
 statement ok
 insert into integers values (2, 2), (2, 1), (1, 2), (1, NULL)
 
-query TT
-explain select first_value(i IGNORE NULLS) over () from integers
-----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
-
 # Unsupported aggregates
 query TT
 EXPLAIN
@@ -301,32 +296,124 @@ select row_number() over (), row_number() over () from integers
 3	3
 4	4
 
-# Ignore nulls is not supported for streaming windows
+# Ignore nulls is not supported for streaming windows except for running totals
 query TT
 explain select first_value(i IGNORE NULLS) over () from integers
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
+query TT
+explain select first_value(i IGNORE NULLS) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+explain select last_value(i IGNORE NULLS) over () from integers
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+explain select last_value(i IGNORE NULLS) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+
+# First value NULL
+query II
+SELECT s,
+	first(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES (NULL), ('A'), (NULL), ('B')) t(s)
+----
+NULL	NULL
+A	A
+NULL	A
+B	A
+
+query II
+SELECT s,
+	last(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES (NULL), ('A'), (NULL), ('B')) t(s)
+----
+NULL	NULL
+A	A
+NULL	A
+B	B
+
+# First value defined
+query II
+SELECT s,
+	last(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES ('A'), (NULL), ('B'), (NULL)) t(s)
+----
+A	A
+NULL	A
+B	B
+NULL	B
+
+query II
+SELECT s,
+	first(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES ('A'), (NULL), ('B'), (NULL)) t(s)
+----
+A	A
+NULL	A
+B	A
+NULL	A
+
+# Multiple blocks
+query III
+WITH alternate AS (
+	SELECT 
+		range r,
+		IF(range % 2, range, NULL) s
+	FROM range(3000)
+)
+SELECT 
+	r,
+	s,
+	last(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) l
+FROM alternate
+QUALIFY l <> r - ((r + 1) % 2)
+----
+
+query III
+WITH alternate AS (
+	SELECT 
+		range r,
+		IF(range < 2100, NULL, range) s
+	FROM range(3000)
+)
+SELECT 
+	r,
+	s,
+	first(s IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) f
+FROM alternate
+QUALIFY (f IS NOT NULL AND r < 2100)
+     OR (f IS NULL AND r >= 2100)
+----
+
 #
 query TT
 explain select first_value(i) over (), last_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 query TT
 explain select last_value(i) over (), first_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 query TT
 explain select first_value(i) over (), last_value(i) over (order by j) from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 query TT
 explain select last_value(i) over (order by j), first_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
+physical_plan	<REGEX>:.* WINDOW .*STREAMING_WINDOW.*
 
 #
 # Global state tests from #3275
@@ -446,3 +533,16 @@ SELECT
 	STDDEV_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf 
 FROM issue17621 
 GROUP BY ROLLUP(k)
+
+# UNION multiple local states
+query II
+WITH start_and_inputs AS (
+    SELECT 50 AS moves
+    UNION ALL
+    SELECT 50 AS moves
+)
+SELECT moves, sum(moves) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS sum
+FROM start_and_inputs;
+----
+50	50
+50	100
