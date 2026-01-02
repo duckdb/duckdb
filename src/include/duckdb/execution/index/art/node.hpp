@@ -80,19 +80,19 @@ struct ToStringOptions {
 	// Optional key argument to only print the path along to a specific key.
 	// This prints nodes along the path, as well as the child bytes, but doesn't traverse into children not on the path
 	// to the optional key_path.
-	// This works in conjunction with the depth_remaining and structure_only arguments.
+	// This works in conjunction with the expand_after_n_levels and structure_only arguments.
 	// Note that nested ARTs are printed in their entirety regardless.
 	optional_ptr<const ARTKey> key_path = nullptr;
 	idx_t key_depth = 0;
-	// If we have a key_path argument, we only print along a certain path to a specified key. depth_remaining allows us
-	// to short circuit that, and print the entire tree starting at a certain depth. So if we are traversing towards
-	// the leaf for a key, we can start printing the entire tree again. This is useful to be able to see a region of the
-	// ART around a specific leaf.
-	idx_t depth_remaining = 0;
+	// When using key_path or structure_only, this controls when to override those options and print the full tree.
+	// Set to 0 to print full tree immediately. Set to N to traverse N levels (following key_path/structure_only
+	// behavior) before expanding to print the full tree at that depth. This is useful to see a region of the ART
+	// around a specific key - e.g., set to (key_depth - 1) to see siblings of the target key.
+	idx_t expand_after_n_levels = 0;
 	bool print_deprecated_leaves = true;
 	// Similar to key path, but don't print the other child bytes at each node along the path to the key, i.e. skip
 	// printing node contents. This gives a very barebones skeleton of the node structure leading to a key, and this
-	// can also be short circuited by depth_remaining.
+	// can also be short circuited by expand_after_n_levels.
 	bool structure_only = false;
 	// Accumulated prefix for tree-style rendering (contains "│   " and "    " segments)
 	string tree_prefix = "";
@@ -100,9 +100,9 @@ struct ToStringOptions {
 	ToStringOptions() = default;
 
 	ToStringOptions(bool inside_gate, bool display_ascii, optional_ptr<const ARTKey> key_path, idx_t key_depth,
-	                idx_t depth_remaining, bool print_deprecated_leaves, bool structure_only)
+	                idx_t expand_after_n_levels, bool print_deprecated_leaves, bool structure_only)
 	    : inside_gate(inside_gate), display_ascii(display_ascii), key_path(key_path), key_depth(key_depth),
-	      depth_remaining(depth_remaining), print_deprecated_leaves(print_deprecated_leaves),
+	      expand_after_n_levels(expand_after_n_levels), print_deprecated_leaves(print_deprecated_leaves),
 	      structure_only(structure_only) {
 	}
 };

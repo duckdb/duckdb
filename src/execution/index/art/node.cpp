@@ -490,7 +490,7 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 
 	auto is_gate = GetGateStatus() == GateStatus::GATE_SET;
 	auto propagate_gate = options.inside_gate || is_gate;
-	auto print_full_tree = propagate_gate || !options.key_path || options.depth_remaining == 0;
+	auto print_full_tree = propagate_gate || !options.key_path || options.expand_after_n_levels == 0;
 
 	string str;
 
@@ -547,7 +547,8 @@ string Node::ToStringChildren(ART &art, const ToStringOptions &options) const {
 				auto child_options = options;
 				child_options.inside_gate = propagate_gate;
 				child_options.key_depth = has_expected_byte ? options.key_depth + 1 : options.key_depth;
-				child_options.depth_remaining = (options.depth_remaining > 0) ? options.depth_remaining - 1 : 0;
+				child_options.expand_after_n_levels =
+				    (options.expand_after_n_levels > 0) ? options.expand_after_n_levels - 1 : 0;
 
 				auto child_type = child_ptr->GetType();
 				auto is_internal = (child_type == NType::NODE_4 || child_type == NType::NODE_16 ||
