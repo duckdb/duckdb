@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 
@@ -61,6 +62,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 		break;
 	case ExtraTypeInfoType::TEMPLATE_TYPE_INFO:
 		result = TemplateTypeInfo::Deserialize(deserializer);
+		break;
+	case ExtraTypeInfoType::UNBOUND_TYPE_INFO:
+		result = UnboundTypeInfo::Deserialize(deserializer);
 		break;
 	case ExtraTypeInfoType::USER_TYPE_INFO:
 		result = UserTypeInfo::Deserialize(deserializer);
@@ -214,6 +218,25 @@ void TemplateTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<TemplateTypeInfo>(new TemplateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	return std::move(result);
+}
+
+void UnboundTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(203, "collation", collation);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<TypeParameter>>>(204, "parameters", parameters);
+}
+
+shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<UnboundTypeInfo>(new UnboundTypeInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<string>(202, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<string>(203, "collation", result->collation);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TypeParameter>>>(204, "parameters", result->parameters);
 	return std::move(result);
 }
 

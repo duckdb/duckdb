@@ -35,7 +35,7 @@ struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static Value GetSetting(const ClientContext &context);
@@ -46,7 +46,7 @@ struct AllocatorBackgroundThreadsSetting {
 	static constexpr const char *Name = "allocator_background_threads";
 	static constexpr const char *Description = "Whether to enable the allocator background thread.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -59,7 +59,7 @@ struct AllocatorBulkDeallocationFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "If a bulk deallocation larger than this occurs, flush outstanding allocations.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -70,7 +70,7 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -80,7 +80,7 @@ struct AllowCommunityExtensionsSetting {
 	static constexpr const char *Name = "allow_community_extensions";
 	static constexpr const char *Description = "Allow to load community built extensions";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -101,7 +101,7 @@ struct AllowParserOverrideExtensionSetting {
 	static constexpr const char *Name = "allow_parser_override_extension";
 	static constexpr const char *Description = "Allow extensions to override the current parser";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -114,7 +114,7 @@ struct AllowPersistentSecretsSetting {
 	static constexpr const char *Description =
 	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -124,7 +124,7 @@ struct AllowUnredactedSecretsSetting {
 	static constexpr const char *Name = "allow_unredacted_secrets";
 	static constexpr const char *Description = "Allow printing unredacted secrets";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -136,7 +136,7 @@ struct AllowUnsignedExtensionsSetting {
 	static constexpr const char *Name = "allow_unsigned_extensions";
 	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -149,7 +149,7 @@ struct AllowedDirectoriesSetting {
 	static constexpr const char *Description = "List of directories/prefixes that are ALWAYS allowed to be queried - "
 	                                           "even when enable_external_access is false";
 	static constexpr const char *InputType = "VARCHAR[]";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -160,7 +160,7 @@ struct AllowedPathsSetting {
 	static constexpr const char *Description =
 	    "List of files that are ALWAYS allowed to be queried - even when enable_external_access is false";
 	static constexpr const char *InputType = "VARCHAR[]";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -223,7 +223,7 @@ struct AutoinstallExtensionRepositorySetting {
 	static constexpr const char *Description =
 	    "Overrides the custom endpoint for extension installation on autoloading";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -234,7 +234,7 @@ struct AutoinstallKnownExtensionsSetting {
 	static constexpr const char *Description =
 	    "Whether known extensions are allowed to be automatically installed when a query depends on them";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -245,7 +245,7 @@ struct AutoloadKnownExtensionsSetting {
 	static constexpr const char *Description =
 	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -256,7 +256,7 @@ struct BlockAllocatorMemorySetting {
 	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use (this "
 	                                           "memory is never freed and cannot be reduced).";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -277,7 +277,7 @@ struct CheckpointThresholdSetting {
 	static constexpr const char *Description =
 	    "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -287,7 +287,7 @@ struct CustomExtensionRepositorySetting {
 	static constexpr const char *Name = "custom_extension_repository";
 	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -307,7 +307,7 @@ struct CustomUserAgentSetting {
 	static constexpr const char *Name = "custom_user_agent";
 	static constexpr const char *Description = "Metadata from DuckDB callers";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -417,7 +417,7 @@ struct DefaultBlockSizeSetting {
 	static constexpr const char *Description =
 	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -457,7 +457,7 @@ struct DefaultSecretStorageSetting {
 	static constexpr const char *Name = "default_secret_storage";
 	static constexpr const char *Description = "Allows switching the default storage for secrets";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -469,7 +469,7 @@ struct DisableDatabaseInvalidationSetting {
 	    "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, "
 	    "as DuckDB cannot guarantee correct behavior after a fatal error.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -490,7 +490,7 @@ struct DisabledCompressionMethodsSetting {
 	static constexpr const char *Name = "disabled_compression_methods";
 	static constexpr const char *Description = "Disable a specific set of compression methods (comma separated)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -500,7 +500,7 @@ struct DisabledFilesystemsSetting {
 	static constexpr const char *Name = "disabled_filesystems";
 	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -510,7 +510,7 @@ struct DisabledLogTypes {
 	static constexpr const char *Name = "disabled_log_types";
 	static constexpr const char *Description = "Sets the list of disabled loggers";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -520,7 +520,7 @@ struct DisabledOptimizersSetting {
 	static constexpr const char *Name = "disabled_optimizers";
 	static constexpr const char *Description = "DEBUG SETTING: disable a specific set of optimizers (comma separated)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -530,7 +530,7 @@ struct DuckDBAPISetting {
 	static constexpr const char *Name = "duckdb_api";
 	static constexpr const char *Description = "DuckDB API surface";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -552,7 +552,7 @@ struct EnableExternalAccessSetting {
 	    "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV "
 	    "readers, pandas replacement scans, etc)";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -564,7 +564,7 @@ struct EnableExternalFileCacheSetting {
 	static constexpr const char *Name = "enable_external_file_cache";
 	static constexpr const char *Description = "Allow the database to cache external files (e.g., Parquet) in memory.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -594,7 +594,7 @@ struct EnableHTTPMetadataCacheSetting {
 	static constexpr const char *Name = "enable_http_metadata_cache";
 	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -604,7 +604,7 @@ struct EnableLogging {
 	static constexpr const char *Name = "enable_logging";
 	static constexpr const char *Description = "Enables the logger";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -678,7 +678,7 @@ struct EnabledLogTypes {
 	static constexpr const char *Name = "enabled_log_types";
 	static constexpr const char *Description = "Sets the list of enabled loggers";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -717,7 +717,7 @@ struct ExtensionDirectoriesSetting {
 	static constexpr const char *Name = "extension_directories";
 	static constexpr const char *Description = "Set the directories to store extensions in";
 	static constexpr const char *InputType = "VARCHAR[]";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -727,7 +727,7 @@ struct ExtensionDirectorySetting {
 	static constexpr const char *Name = "extension_directory";
 	static constexpr const char *Description = "Set the directory to store extensions in";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -737,7 +737,7 @@ struct ExternalThreadsSetting {
 	static constexpr const char *Name = "external_threads";
 	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
 	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
@@ -759,7 +759,7 @@ struct ForceBitpackingModeSetting {
 	static constexpr const char *Name = "force_bitpacking_mode";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific bitpacking mode";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -769,7 +769,7 @@ struct ForceCompressionSetting {
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -780,7 +780,7 @@ struct ForceVariantShredding {
 	static constexpr const char *Description =
 	    "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -811,7 +811,7 @@ struct HTTPProxySetting {
 	static constexpr const char *Name = "http_proxy";
 	static constexpr const char *Description = "HTTP proxy host";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -821,7 +821,7 @@ struct HTTPProxyPasswordSetting {
 	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -831,7 +831,7 @@ struct HTTPProxyUsernameSetting {
 	static constexpr const char *Name = "http_proxy_username";
 	static constexpr const char *Description = "Username for HTTP proxy";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -915,7 +915,7 @@ struct LockConfigurationSetting {
 	static constexpr const char *Name = "lock_configuration";
 	static constexpr const char *Description = "Whether or not the configuration can be altered";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -936,7 +936,7 @@ struct LoggingLevel {
 	static constexpr const char *Name = "logging_level";
 	static constexpr const char *Description = "The log level which will be recorded in the log";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -946,7 +946,7 @@ struct LoggingMode {
 	static constexpr const char *Name = "logging_mode";
 	static constexpr const char *Description = "Determines which types of log messages are logged";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -956,7 +956,7 @@ struct LoggingStorage {
 	static constexpr const char *Name = "logging_storage";
 	static constexpr const char *Description = "Set the logging storage (memory/stdout/file/<custom>)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -978,7 +978,7 @@ struct MaxMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -989,7 +989,7 @@ struct MaxTempDirectorySizeSetting {
 	static constexpr const char *Description =
 	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1076,7 +1076,7 @@ struct PasswordSetting {
 	static constexpr const char *Name = "password";
 	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1097,7 +1097,7 @@ struct PinThreadsSetting {
 	static constexpr const char *Description =
 	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1219,7 +1219,7 @@ struct SchedulerProcessPartialSetting {
 	static constexpr const char *Description =
 	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1251,7 +1251,7 @@ struct SecretDirectorySetting {
 	static constexpr const char *Name = "secret_directory";
 	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1271,7 +1271,7 @@ struct StorageCompatibilityVersionSetting {
 	static constexpr const char *Name = "storage_compatibility_version";
 	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1292,7 +1292,7 @@ struct TempDirectorySetting {
 	static constexpr const char *Name = "temp_directory";
 	static constexpr const char *Description = "Set the directory to which to write temp files";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1302,7 +1302,7 @@ struct TempFileEncryptionSetting {
 	static constexpr const char *Name = "temp_file_encryption";
 	static constexpr const char *Description = "Encrypt all temporary files if database is encrypted";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1312,7 +1312,7 @@ struct ThreadsSetting {
 	static constexpr const char *Name = "threads";
 	static constexpr const char *Description = "The number of total threads used by the system.";
 	static constexpr const char *InputType = "BIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1322,7 +1322,7 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1345,7 +1345,7 @@ struct VariantMinimumShreddingSize {
 	static constexpr const char *Description = "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 "
 	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
 	static constexpr const char *InputType = "BIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };
@@ -1366,7 +1366,7 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *Description =
 	    "The (average) length at which to enable ZSTD compression, defaults to 4096";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
 };

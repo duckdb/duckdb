@@ -1095,4 +1095,16 @@ struct CastFromPointer {
 template <>
 duckdb::string_t CastFromPointer::Operation(uintptr_t input, Vector &vector);
 
+//===--------------------------------------------------------------------===//
+// Types
+//===--------------------------------------------------------------------===//
+struct CastFromType {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from pointer could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromType::Operation(string_t input, Vector &vector);
+
 } // namespace duckdb

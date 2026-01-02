@@ -17,7 +17,7 @@ namespace duckdb {
 //===----------------------------------------------------------------------===//
 // Access Mode
 //===----------------------------------------------------------------------===//
-void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AccessModeSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -37,7 +37,8 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
-void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllocatorBackgroundThreadsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                  const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -59,7 +60,8 @@ Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context
 //===----------------------------------------------------------------------===//
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
-void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowCommunityExtensionsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -81,7 +83,8 @@ Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) 
 //===----------------------------------------------------------------------===//
 // Allow Parser Override Extension
 //===----------------------------------------------------------------------===//
-void AllowParserOverrideExtensionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowParserOverrideExtensionSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                    const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -103,7 +106,8 @@ Value AllowParserOverrideExtensionSetting::GetSetting(const ClientContext &conte
 //===----------------------------------------------------------------------===//
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
-void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowUnredactedSecretsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                              const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -125,7 +129,8 @@ Value AllowUnredactedSecretsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
-void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AllowUnsignedExtensionsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                               const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -154,7 +159,8 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 //===----------------------------------------------------------------------===//
 // Autoinstall Extension Repository
 //===----------------------------------------------------------------------===//
-void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AutoinstallExtensionRepositorySetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                      const Value &input) {
 	config.options.autoinstall_extension_repo = input.GetValue<string>();
 }
 
@@ -170,7 +176,8 @@ Value AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &con
 //===----------------------------------------------------------------------===//
 // Autoinstall Known Extensions
 //===----------------------------------------------------------------------===//
-void AutoinstallKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AutoinstallKnownExtensionsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                  const Value &input) {
 	config.options.autoinstall_known_extensions = input.GetValue<bool>();
 }
 
@@ -186,7 +193,8 @@ Value AutoinstallKnownExtensionsSetting::GetSetting(const ClientContext &context
 //===----------------------------------------------------------------------===//
 // Autoload Known Extensions
 //===----------------------------------------------------------------------===//
-void AutoloadKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void AutoloadKnownExtensionsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                               const Value &input) {
 	config.options.autoload_known_extensions = input.GetValue<bool>();
 }
 
@@ -209,7 +217,8 @@ void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &con
 //===----------------------------------------------------------------------===//
 // Custom Extension Repository
 //===----------------------------------------------------------------------===//
-void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void CustomExtensionRepositorySetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                 const Value &input) {
 	config.options.custom_extension_repo = input.GetValue<string>();
 }
 
@@ -278,7 +287,8 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 //===----------------------------------------------------------------------===//
 // Disable Database Invalidation
 //===----------------------------------------------------------------------===//
-void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DisableDatabaseInvalidationSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                                   const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -300,7 +310,8 @@ Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &contex
 //===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
-void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void EnableExternalAccessSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                            const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -322,7 +333,8 @@ Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Enable H T T P Metadata Cache
 //===----------------------------------------------------------------------===//
-void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void EnableHTTPMetadataCacheSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                               const Value &input) {
 	config.options.http_metadata_cache_enable = input.GetValue<bool>();
 }
 
@@ -396,7 +408,8 @@ Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Extension Directory
 //===----------------------------------------------------------------------===//
-void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ExtensionDirectorySetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                          const Value &input) {
 	config.options.extension_directory = input.GetValue<string>();
 }
 
@@ -412,7 +425,8 @@ Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
-void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ExternalThreadsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                       const Value &input) {
 	if (!OnGlobalSet(db, config, input)) {
 		return;
 	}
@@ -446,7 +460,7 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // H T T P Proxy
 //===----------------------------------------------------------------------===//
-void HTTPProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void HTTPProxySetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.http_proxy = input.GetValue<string>();
 }
 
@@ -462,7 +476,8 @@ Value HTTPProxySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // H T T P Proxy Password
 //===----------------------------------------------------------------------===//
-void HTTPProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void HTTPProxyPasswordSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                         const Value &input) {
 	config.options.http_proxy_password = input.GetValue<string>();
 }
 
@@ -478,7 +493,8 @@ Value HTTPProxyPasswordSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // H T T P Proxy Username
 //===----------------------------------------------------------------------===//
-void HTTPProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void HTTPProxyUsernameSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                         const Value &input) {
 	config.options.http_proxy_username = input.GetValue<string>();
 }
 
@@ -494,7 +510,8 @@ Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Lock Configuration
 //===----------------------------------------------------------------------===//
-void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void LockConfigurationSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                         const Value &input) {
 	config.options.lock_configuration = input.GetValue<bool>();
 }
 
@@ -527,7 +544,7 @@ Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
-void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void PinThreadsSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto str_input = StringUtil::Upper(input.GetValue<string>());
 	config.options.pin_threads = EnumUtil::FromString<ThreadPinMode>(str_input);
 }
@@ -544,7 +561,8 @@ Value PinThreadsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Scheduler Process Partial
 //===----------------------------------------------------------------------===//
-void SchedulerProcessPartialSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void SchedulerProcessPartialSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                               const Value &input) {
 	config.options.scheduler_process_partial = input.GetValue<bool>();
 }
 
@@ -574,7 +592,8 @@ void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &p
 //===----------------------------------------------------------------------===//
 // Variant Minimum Shredding Size
 //===----------------------------------------------------------------------===//
-void VariantMinimumShreddingSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void VariantMinimumShreddingSize::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                            const Value &input) {
 	config.options.variant_minimum_shredding_size = input.GetValue<int64_t>();
 }
 
@@ -590,7 +609,8 @@ Value VariantMinimumShreddingSize::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Zstd Min String Length
 //===----------------------------------------------------------------------===//
-void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ZstdMinStringLengthSetting::SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config,
+                                           const Value &input) {
 	config.options.zstd_min_string_length = input.GetValue<idx_t>();
 }
 

@@ -67,6 +67,7 @@ add_library_unity(
   thread_util.cpp
   tree_renderer.cpp
   types.cpp
+  type_parameter.cpp
   bignum.cpp
   virtual_file_system.cpp
   windows_util.cpp)

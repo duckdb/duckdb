@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 
@@ -61,16 +62,32 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		target_type = LogicalType::UNKNOWN;
 	} else {
 		target_type = TransformTypeName(*cdef.typeName);
+		D_ASSERT(target_type.id() == LogicalTypeId::UNBOUND);
 	}
 
 	if (cdef.collClause) {
 		if (cdef.category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");
 		}
-		if (target_type.id() != LogicalTypeId::VARCHAR) {
+		if (target_type.id() != LogicalTypeId::UNBOUND) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
-		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef.collClause));
+
+		// Copy the unbound type and its parameters, and add the collation
+		auto &name = UnboundType::GetName(target_type);
+		auto &catalog = UnboundType::GetCatalog(target_type);
+		auto &schema = UnboundType::GetSchema(target_type);
+		auto &args = UnboundType::GetParameters(target_type);
+
+		vector<unique_ptr<TypeParameter>> args_copy;
+		args_copy.reserve(args.size());
+		for (auto &arg : args) {
+			args_copy.push_back(arg->Copy());
+		}
+
+		auto collation = TransformCollation(cdef.collClause);
+
+		target_type = LogicalType::UNBOUND(catalog, schema, name, std::move(args_copy), collation);
 	}
 
 	return ColumnDefinition(name, target_type);

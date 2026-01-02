@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 
@@ -521,6 +522,51 @@ bool GeoTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 shared_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {
 	return make_shared_ptr<GeoTypeInfo>(*this);
+}
+
+//===--------------------------------------------------------------------===//
+// Unbound Type Info
+//===--------------------------------------------------------------------===//
+UnboundTypeInfo::UnboundTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
+}
+
+UnboundTypeInfo::UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
+                                 vector<unique_ptr<TypeParameter>> parameters_p, string collation_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      name(std::move(name_p)), collation(std::move(collation_p)), parameters(std::move(parameters_p)) {
+}
+
+bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<UnboundTypeInfo>();
+	if (name != other.name) {
+		return false;
+	}
+	if (catalog != other.catalog) {
+		return false;
+	}
+	if (schema != other.schema) {
+		return false;
+	}
+	if (collation != other.collation) {
+		return false;
+	}
+	if (parameters.size() != other.parameters.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		if (!parameters[i]->Equals(*other.parameters[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
+	vector<unique_ptr<TypeParameter>> parameters_copy;
+	for (const auto &param : parameters) {
+		parameters_copy.push_back(param->Copy());
+	}
+	return make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters_copy), collation);
 }
 
 } // namespace duckdb
