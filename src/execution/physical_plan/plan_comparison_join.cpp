@@ -50,14 +50,20 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	default:
 		break;
 	}
+
+	// for now, only Hash join supports residual predicates (e.g., predicate=l.val+r.val>100)
+	if (op.predicate) {
+		D_ASSERT(has_equality);
+	}
+
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
 	bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
-	prefer_range_joins = prefer_range_joins && can_iejoin;
+	prefer_range_joins = prefer_range_joins && can_iejoin && !op.predicate;
 	if (has_equality && !prefer_range_joins) {
-		// Equality join with small number of keys : possible perfect join optimization
-		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
-		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
-		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
+		// pass separately to PhysicalHashJoin
+		auto &join = Make<PhysicalHashJoin>(
+		    op, left, right, std::move(op.conditions), op.join_type, op.left_projection_map, op.right_projection_map,
+		    std::move(op.mark_types), op.estimated_cardinality, std::move(op.filter_pushdown), std::move(op.predicate));
 		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
 		return join;
 	}

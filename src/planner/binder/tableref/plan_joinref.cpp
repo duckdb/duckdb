@@ -300,41 +300,47 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		return std::move(any_join);
 	}
 
-	// Case 3: Has join conditions and arbitrary expressions - decide based on join type
+	// Case 3: Has join conditions and arbitrary expressions - check equality
 	if (!arbitrary_expressions.empty()) {
-		// for inner join create comparison join + filter on top
-		if (type == JoinType::INNER) {
+		bool has_equality = false;
+		for (auto &cond : conditions) {
+			if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
+			    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				has_equality = true;
+				break;
+			}
+		}
+
+		if (has_equality) {
+			// Has equality - use comparison join (will be converted to Hash Join later)
 			auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 			comp_join->conditions = std::move(conditions);
+			comp_join->predicate = std::move(arbitrary_expressions[0]);
+			for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+				comp_join->predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                             std::move(comp_join->predicate),
+				                                                             std::move(arbitrary_expressions[i]));
+			}
 			comp_join->children.push_back(std::move(left_child));
 			comp_join->children.push_back(std::move(right_child));
-
-			auto filter = make_uniq<LogicalFilter>();
-			for (auto &expr : arbitrary_expressions) {
-				filter->expressions.push_back(std::move(expr));
-			}
-			filter->children.push_back(std::move(comp_join));
-
-			return std::move(filter);
-		} else {
-			auto any_join = make_uniq<LogicalAnyJoin>(type);
-			any_join->children.push_back(std::move(left_child));
-			any_join->children.push_back(std::move(right_child));
-
-			any_join->condition = JoinCondition::CreateExpression(std::move(conditions[0]));
-			for (idx_t i = 1; i < conditions.size(); i++) {
-				any_join->condition = make_uniq<BoundConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition),
-				    JoinCondition::CreateExpression(std::move(conditions[i])));
-			}
-
-			for (auto &expr : arbitrary_expressions) {
-				any_join->condition = make_uniq<BoundConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(expr));
-			}
-
-			return std::move(any_join);
+			return std::move(comp_join);
 		}
+
+		// No equality - use any join
+		auto any_join = make_uniq<LogicalAnyJoin>(type);
+		any_join->condition = JoinCondition::CreateExpression(std::move(conditions[0]));
+		for (idx_t i = 1; i < conditions.size(); i++) {
+			any_join->condition =
+			    make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(any_join->condition),
+			                                          JoinCondition::CreateExpression(std::move(conditions[i])));
+		}
+		for (auto &expr : arbitrary_expressions) {
+			any_join->condition = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(expr));
+		}
+		any_join->children.push_back(std::move(left_child));
+		any_join->children.push_back(std::move(right_child));
+		return std::move(any_join);
 	}
 
 	// Case 4: Has join conditions but not arbitrary expressions - use comparison join
