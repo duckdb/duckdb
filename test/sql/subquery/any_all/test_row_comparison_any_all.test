@@ -1,0 +1,248 @@
+# name: test/sql/subquery/any_all/test_row_comparison_any_all.test
+# description: Test row/tuple comparisons with ordered operators in ANY/ALL subqueries
+# group: [any_all]
+
+# Row comparisons with ordered operators should use lexicographic ordering,
+# not element-wise comparison. For example:
+# (0, 0) < (1, 0) should be TRUE because the first element determines the result
+# This should NOT be evaluated as (0 < 1 AND 0 < 0) which would be FALSE
+
+statement ok
+CREATE TABLE test_data(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test_data VALUES (1, 0), (0, 2), (2, 1), (NULL, 1);
+
+# Test < ANY with row comparisons
+query I
+SELECT (0, 0) < ANY(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (0, 0) < ANY(SELECT a, b FROM test_data);
+----
+true
+
+query I
+SELECT (0, 1) < ANY(SELECT a, b FROM test_data);
+----
+true
+
+# Test with NULL in row - lexicographic comparison should still work
+query I
+SELECT (0, NULL) < ANY(SELECT 1, NULL);
+----
+true
+
+query I
+SELECT (0, NULL) < ANY(SELECT a, b FROM test_data WHERE a IS NOT NULL);
+----
+true
+
+# Test > ANY with row comparisons
+query I
+SELECT (2, 0) > ANY(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (2, 0) > ANY(SELECT a, b FROM test_data WHERE a IS NOT NULL);
+----
+true
+
+query I
+SELECT (1, 1) > ANY(SELECT 0, 2);
+----
+true
+
+# Test <= ANY with row comparisons
+query I
+SELECT (1, 0) <= ANY(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (0, 5) <= ANY(SELECT 1, 0);
+----
+true
+
+# Test >= ANY with row comparisons
+query I
+SELECT (1, 0) >= ANY(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (2, 0) >= ANY(SELECT 1, 5);
+----
+true
+
+# Test < ALL with row comparisons
+query I
+SELECT (0, 0) < ALL(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (0, 0) < ALL(SELECT * FROM (VALUES (1, 0), (2, 0), (3, 0)));
+----
+true
+
+query I
+SELECT (1, 0) < ALL(SELECT * FROM (VALUES (0, 0), (2, 0)));
+----
+false
+
+# Test > ALL with row comparisons
+query I
+SELECT (2, 0) > ALL(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (3, 0) > ALL(SELECT * FROM (VALUES (1, 0), (2, 0)));
+----
+true
+
+query I
+SELECT (2, 0) > ALL(SELECT * FROM (VALUES (1, 0), (3, 0)));
+----
+false
+
+# Test <= ALL with row comparisons
+query I
+SELECT (1, 1) <= ALL(SELECT 1, 2);
+----
+true
+
+query I
+SELECT (1, 1) <= ALL(SELECT * FROM (VALUES (1, 2), (2, 0)));
+----
+true
+
+query I
+SELECT (2, 0) <= ALL(SELECT * FROM (VALUES (1, 0), (3, 0)));
+----
+false
+
+# Test >= ALL with row comparisons
+query I
+SELECT (1, 1) >= ALL(SELECT 1, 0);
+----
+true
+
+query I
+SELECT (2, 0) >= ALL(SELECT * FROM (VALUES (1, 0), (1, 5)));
+----
+true
+
+query I
+SELECT (1, 0) >= ALL(SELECT * FROM (VALUES (0, 0), (2, 0)));
+----
+false
+
+# Verify that equality comparisons still work element-wise
+# (a,b) = (c,d) is equivalent to (a=c AND b=d)
+query I
+SELECT (1, 2) = ANY(SELECT 1, 2);
+----
+true
+
+query I
+SELECT (1, 2) = ANY(SELECT 1, 3);
+----
+false
+
+query I
+SELECT (1, 2) != ANY(SELECT 1, 3);
+----
+true
+
+query I
+SELECT (1, 2) = ALL(SELECT 1, 2);
+----
+true
+
+query I
+SELECT (1, 2) = ALL(SELECT * FROM (VALUES (1, 2), (1, 3)));
+----
+false
+
+# Test with explicit ROW constructor
+query I
+SELECT ROW(0, 0) < ANY(SELECT 1, 0);
+----
+true
+
+query I
+SELECT ROW(2, 0) > ANY(SELECT 1, 0);
+----
+true
+
+# Test with three columns
+query I
+SELECT (0, 0, 0) < ANY(SELECT 1, 0, 0);
+----
+true
+
+query I
+SELECT (0, 0, 1) < ANY(SELECT 0, 1, 0);
+----
+true
+
+query I
+SELECT (1, 0, 0) < ANY(SELECT 1, 0, 1);
+----
+true
+
+# Edge case: first element equal, second determines result
+query I
+SELECT (1, 0) < ANY(SELECT 1, 1);
+----
+true
+
+query I
+SELECT (1, 2) > ANY(SELECT 1, 1);
+----
+true
+
+# Edge case: comparing with same values should handle correctly
+query I
+SELECT (1, 1) < ANY(SELECT 1, 1);
+----
+false
+
+query I
+SELECT (1, 1) <= ANY(SELECT 1, 1);
+----
+true
+
+query I
+SELECT (1, 1) > ANY(SELECT 1, 1);
+----
+false
+
+query I
+SELECT (1, 1) >= ANY(SELECT 1, 1);
+----
+true
+
+# Test with subquery returning multiple rows
+query I
+SELECT (1, 1) < ANY(SELECT * FROM (VALUES (0, 0), (2, 0), (1, 2)));
+----
+true
+
+query I
+SELECT (1, 1) > ANY(SELECT * FROM (VALUES (0, 0), (2, 0), (1, 0)));
+----
+true
+
+# Verify the fix: this was the original bug case
+# (0, 0) < (1, 0) should be TRUE (first element 0 < 1 determines result)
+# Before the fix, this would incorrectly evaluate as (0 < 1 AND 0 < 0) = FALSE
+query I
+SELECT (0, 0) < ANY(SELECT 1, 0);
+----
+true
