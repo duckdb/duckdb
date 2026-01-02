@@ -1,0 +1,14 @@
+# name: test/fuzzer/public/window_subquery_with_functions_error.test
+# description: Test window function with a subquery that generates an error message
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE v0 ( v1 INTEGER ) ;
+
+statement error
+SELECT ( SELECT to_centuries ( v1 ) FROM v0 WHERE fmod ( fmod ( v1 , 3.100000 ) , 3.100000 ) OVER( ORDER BY v1 ) = 70000 ) AS century_result;
+----
+window expression is not supported here
