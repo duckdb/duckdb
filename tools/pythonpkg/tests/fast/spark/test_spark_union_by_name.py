@@ -64,7 +64,7 @@ class TestDataFrameUnion(object):
         ]
         assert res == expected
 
-    def test_union_by_name_allow_missing_cols(self, df1, df2):
+    def test_union_by_name_allow_missing_cols_reversed(self, df1, df2):
         rel = df2.drop("id").unionByName(df1, allowMissingColumns=True)
         res = rel.collect()
         expected = [
