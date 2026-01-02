@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-enum class ShowType : uint8_t { SUMMARY, DESCRIBE, SHOW_FROM };
+enum class ShowType : uint8_t { SUMMARY, DESCRIBE, SHOW_FROM, SHOW_UNQUALIFIED };
 
 //! Represents a SHOW/DESCRIBE/SUMMARIZE statement
 class ShowRef : public TableRef {
