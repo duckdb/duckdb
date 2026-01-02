@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
@@ -51,6 +52,9 @@ public:
 	mutable std::mutex read_calls_mutex;
 	vector<ReadCall> read_calls;
 
+	string GetName() const override {
+		return "TrackingFileSystem";
+	}
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		const lock_guard<mutex> lock(read_calls_mutex);
 		read_calls.push_back({handle.GetPath(), location, UnsafeNumericCast<idx_t>(nr_bytes)});
@@ -401,6 +405,29 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	REQUIRE(results[1]);
 
 	shared_handle.reset();
+}
+
+// Testing scenario: check `CachingFileSystemWrapper::CanSeek` returns the same value as internal filesystem.
+TEST_CASE("CachingFileSystemWrapper CanSeek", "[file_system][caching]") {
+	TestFileGuard test_file("test_can_seek.out", "Test CanSeek content");
+
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<TrackingFileSystem>();
+
+	// Wrap raw filesystem instance and validate.
+	{
+		CachingFileSystemWrapper caching_wrapper(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
+		auto file_handle = caching_wrapper.OpenFile(test_file.GetPath(), FileOpenFlags::FILE_FLAGS_READ);
+		REQUIRE(file_handle->CanSeek());
+	}
+	// Wrap wrapper filesystem instance and validate.
+	{
+		auto vfs = make_uniq<VirtualFileSystem>();
+		CachingFileSystemWrapper caching_wrapper(*vfs, db_instance, CachingMode::ALWAYS_CACHE);
+		auto file_handle = caching_wrapper.OpenFile(test_file.GetPath(), FileOpenFlags::FILE_FLAGS_READ);
+		REQUIRE(file_handle->CanSeek());
+	}
 }
 
 } // namespace duckdb

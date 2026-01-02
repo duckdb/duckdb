@@ -340,6 +340,13 @@ bool CachingFileSystemWrapper::CanSeek() {
 	return underlying_file_system.CanSeek();
 }
 
+bool CachingFileSystemWrapper::CanSeek(const string &filepath) {
+	if (underlying_file_system.IsWrapperFileSystem()) {
+		return underlying_file_system.CanSeek(filepath);
+	}
+	return underlying_file_system.CanSeek();
+}
+
 bool CachingFileSystemWrapper::OnDiskFile(FileHandle &handle) {
 	auto *caching_handle = GetCachingHandleIfPossible(handle);
 	if (!caching_handle) {

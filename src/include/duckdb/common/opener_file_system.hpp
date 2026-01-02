@@ -100,6 +100,14 @@ public:
 		return GetFileSystem().FileExists(filename, GetOpener());
 	}
 
+	bool CanSeek(const string &filename) override {
+		auto &fs = GetFileSystem();
+		if (fs.IsWrapperFileSystem()) {
+			return fs.CanSeek(filename);
+		}
+		return fs.CanSeek();
+	}
+
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		return GetFileSystem().IsPipe(filename, GetOpener());
@@ -156,6 +164,10 @@ public:
 
 	vector<string> ListSubSystems() override {
 		return GetFileSystem().ListSubSystems();
+	}
+
+	bool IsWrapperFileSystem() const override {
+		return true;
 	}
 
 protected:

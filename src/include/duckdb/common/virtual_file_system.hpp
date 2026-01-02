@@ -46,6 +46,7 @@ public:
 
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 
+	bool CanSeek(const string &filename) override;
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
@@ -69,6 +70,10 @@ public:
 	bool IsDisabledForPath(const string &path) override;
 
 	string PathSeparator(const string &path) override;
+
+	bool IsWrapperFileSystem() const override {
+		return true;
+	}
 
 protected:
 	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
