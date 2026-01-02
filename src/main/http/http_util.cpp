@@ -151,6 +151,7 @@ public:
 			}
 		}
 	}
+	//TODO: Support body
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		auto headers = TransformHeaders(info.headers, info.params);
 		if (!info.response_handler && !info.content_handler) {
