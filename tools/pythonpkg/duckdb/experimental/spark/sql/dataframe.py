@@ -1073,9 +1073,7 @@ class DataFrame:
 
     unionAll = union
 
-    def unionByName(
-        self, other: "DataFrame", allowMissingColumns: bool = False
-    ) -> "DataFrame":
+    def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing union of rows in this and another
         :class:`DataFrame`.
 
@@ -1132,17 +1130,26 @@ class DataFrame:
         +----+----+----+----+
         """
         if allowMissingColumns:
-            cols = []
-            for col in self.relation.columns:
-                if col in other.relation.columns:
-                    cols.append(col)
-                else:
-                    cols.append(lit(None))
-            other = other.select(*cols)
+            df1 = self.select(
+                *list(self.relation.columns),
+                *[lit(None).alias(c) for c in other.relation.columns if c not in self.relation.columns]
+            )
+
+            df2 = other.select(
+                *[
+                    c if c in df1.relation.columns else
+                    lit(None).alias(c)
+
+                    for c in df1.relation.columns
+                ]
+            )
+
+            return df1.unionByName(df2, allowMissingColumns=False)
         else:
             other = other.select(*self.relation.columns)
 
         return DataFrame(self.relation.union(other.relation), self.session)
+
 
     def intersect(self, other: "DataFrame") -> "DataFrame":
         """Return a new :class:`DataFrame` containing rows only in
