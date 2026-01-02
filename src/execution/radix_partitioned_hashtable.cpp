@@ -560,6 +560,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 
 void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                         LocalSinkState &lstate_p) const {
+	// There is some defensive programming in here to try to avoid spurious issues
+	// See duckdblabs/duckdb-internal#6818 for more information
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<RadixHTLocalSinkState>();
 	if (!lstate.ht) {
@@ -583,6 +585,10 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	}
 
 	auto guard = gstate.Lock();
+	if (gstate.finalized) {
+		throw InternalException("RadixPartitionedHashTable: Combine called after Finalize!");
+	}
+
 	if (gstate.uncombined_data) {
 		gstate.uncombined_data->Combine(*lstate.abandoned_data);
 	} else {
@@ -590,10 +596,17 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	}
 	gstate.stored_allocators.emplace_back(ht.GetAggregateAllocator());
 	gstate.stored_allocators_size += gstate.stored_allocators.back()->AllocationSize();
+
+	// Eagerly destroy the HT
+	lstate.ht.reset();
 }
 
 void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
+	auto guard = gstate.Lock();
+	if (gstate.finalized) {
+		throw InternalException("RadixPartitionedHashTable: Finalize called again!");
+	}
 
 	if (gstate.uncombined_data) {
 		auto &uncombined_data = *gstate.uncombined_data;

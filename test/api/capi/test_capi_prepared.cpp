@@ -496,6 +496,73 @@ TEST_CASE("Maintain prepared statement types", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
+TEST_CASE("Test duckdb_parameter_name", "[capi]") {
+	CAPITester tester;
+	duckdb_prepared_statement stmt;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	SECTION("Contiguous positional parameters") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT $1, $2, $3", &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_nparams(stmt) == 3);
+
+		const char *name;
+		name = duckdb_parameter_name(stmt, 1);
+		REQUIRE(string(name) == "1");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 2);
+		REQUIRE(string(name) == "2");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 3);
+		REQUIRE(string(name) == "3");
+		duckdb_free((void *)name);
+
+		REQUIRE(duckdb_parameter_name(stmt, 4) == nullptr);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("Uncontiguous parameters") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT $1, $10", &stmt) == DuckDBSuccess);
+
+		REQUIRE(duckdb_nparams(stmt) == 2);
+
+		const char *name;
+		name = duckdb_parameter_name(stmt, 1);
+		REQUIRE(string(name) == "1");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 10);
+		REQUIRE(string(name) == "10");
+		duckdb_free((void *)name);
+
+		// Non-existing indexes
+		REQUIRE(duckdb_parameter_name(stmt, 2) == nullptr);
+		REQUIRE(duckdb_parameter_name(stmt, 11) == nullptr);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("Named parameters") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT $foo, $bar", &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_nparams(stmt) == 2);
+
+		const char *name;
+		// Named parameters are starting from 1
+		name = duckdb_parameter_name(stmt, 1);
+		REQUIRE(string(name) == "foo");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 2);
+		REQUIRE(string(name) == "bar");
+		duckdb_free((void *)name);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+}
+
 TEST_CASE("Prepared streaming result", "[capi]") {
 	CAPITester tester;
 

@@ -1052,3 +1052,14 @@ from pg_timezone_names()
 where name = 'America/Coyhaique'
 ----
 -03:00:00	false
+
+# 2025c
+# Baja California agreed with California’s DST rules in 1953 and in
+# 1961 through 1975, instead of observing standard time all year.
+statement ok
+set timezone='Mexico/BajaNorte';
+
+query I
+select '1962-07-31'::timestamptz;
+----
+1962-07-31 00:00:00-07
