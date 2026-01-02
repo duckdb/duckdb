@@ -3,7 +3,7 @@
 # group: [duckfuzz]
 
 statement ok
-create table all_types as select * exclude(time_ns, small_enum, medium_enum, large_enum) from test_all_types();
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
 
 query I
 SELECT max(c33) FILTER (WHERE c25) OVER (PARTITION BY c22 ROWS BETWEEN c5 PRECEDING AND CURRENT ROW)

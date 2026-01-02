@@ -61,7 +61,6 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	// Time-types.
 	result.emplace_back(LogicalType::DATE, "date");
 	result.emplace_back(LogicalType::TIME, "time");
-	result.emplace_back(LogicalType::TIME_NS, "time_ns");
 	result.emplace_back(LogicalType::TIMESTAMP, "timestamp");
 	result.emplace_back(LogicalType::TIMESTAMP_S, "timestamp_s");
 	result.emplace_back(LogicalType::TIMESTAMP_MS, "timestamp_ms");
@@ -318,6 +317,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	    fixed_int_array_type, {fixed_int_max_array_value, fixed_int_min_array_value, fixed_int_max_array_value});
 	result.emplace_back(list_of_fixed_array_of_int_type, "list_of_fixed_int_array",
 	                    list_of_fixed_array_of_int_min_value, list_of_fixed_array_of_int_max_value);
+
+	result.emplace_back(LogicalType::TIME_NS, "time_ns");
 
 	return result;
 }
