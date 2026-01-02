@@ -761,9 +761,12 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 			// we want to remove all files in the directory
 			fs.RemoveDirectory(temp_directory);
 		} else {
+			vector<string> full_path_files_to_delete;
+			full_path_files_to_delete.reserve(files_to_delete.size());
 			for (auto &file : files_to_delete) {
-				fs.RemoveFile(fs.JoinPath(temp_directory, file));
+				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
 			}
+			fs.RemoveFiles(full_path_files_to_delete);
 		}
 	}
 }

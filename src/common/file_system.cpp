@@ -575,6 +575,12 @@ bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> 
 	return false;
 }
 
+void FileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	for (const auto &filename : filenames) {
+		TryRemoveFile(filename, opener);
+	}
+}
+
 void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }

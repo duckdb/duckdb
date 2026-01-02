@@ -205,6 +205,8 @@ public:
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remvoe a file from disk if it exists - if it does not exist, return false
 	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove multiple files from disk - does not error if any file does not exist
+	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory

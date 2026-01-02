@@ -116,6 +116,14 @@ public:
 		return GetFileSystem().TryRemoveFile(filename, GetOpener());
 	}
 
+	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		for (const auto &filename : filenames) {
+			VerifyCanAccessFile(filename);
+		}
+		GetFileSystem().RemoveFiles(filenames, GetOpener());
+	}
+
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
 	}
