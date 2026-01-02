@@ -106,13 +106,21 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 idx_t LocalTableStorage::EstimatedSize() {
 	// count the appended rows
 	auto &collection = *row_groups->collection;
-	idx_t appended_rows = collection.GetTotalRows() - deleted_rows;
+	idx_t data_size = 0;
 
-	// get the (estimated) size of a row (no compressions, etc.)
-	idx_t row_size = 0;
-	auto &types = collection.GetTypes();
-	for (auto &type : types) {
-		row_size += GetTypeIdSize(type.InternalType());
+	// Optimistic insertion does not generate many WAL logs; to simplify the estimation, we can consider it to be 0,
+	// thus avoiding frequent checkpoint during data import.
+	if (!(collection.GetTotalRows() >= collection.GetRowGroupSize() && deleted_rows == 0)) {
+		idx_t appended_rows = collection.GetTotalRows() - deleted_rows;
+
+		// get the (estimated) size of a row (no compressions, etc.)
+		idx_t row_size = 0;
+		auto &types = collection.GetTypes();
+		for (auto &type : types) {
+			row_size += GetTypeIdSize(type.InternalType());
+		}
+
+		data_size = appended_rows * row_size;
 	}
 
 	// get the index size
@@ -126,7 +134,7 @@ idx_t LocalTableStorage::EstimatedSize() {
 	});
 
 	// return the size of the appended rows and the index size
-	return appended_rows * row_size + index_sizes;
+	return data_size + index_sizes;
 }
 
 void LocalTableStorage::WriteNewRowGroup() {

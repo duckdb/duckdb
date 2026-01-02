@@ -137,6 +137,12 @@
       ]
     },
     {
+      "reason": "Parser exception because of 'autocomplete' caused the CALL command to fail",
+      "paths": [
+        "test/sql/storage/memory/in_memory_compress.test"
+      ]
+    },
+    {
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",

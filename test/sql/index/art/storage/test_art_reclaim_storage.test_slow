@@ -118,6 +118,9 @@ CHECKPOINT;
 statement ok
 INSERT INTO integers SELECT i FROM range(1000000) tbl(i);
 
+statement ok
+CHECKPOINT;
+
 # and make sure that we do not exceed/hit twice the original size
 
 query I
