@@ -42,9 +42,11 @@ add_library_unity(
   prepared_statement.cpp
   prepared_statement_data.cpp
   profiling_info.cpp
+  profiling_utils.cpp
   relation.cpp
   query_profiler.cpp
   query_result.cpp
+  result_set_manager.cpp
   stream_query_result.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES

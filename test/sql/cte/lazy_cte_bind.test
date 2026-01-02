@@ -1,0 +1,12 @@
+# name: test/sql/cte/lazy_cte_bind.test
+# description: Test that CTE binding is lazy
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+with cte as (select * from read_parquet('does/not/exist/file.parquet'))
+select 42
+----
+42

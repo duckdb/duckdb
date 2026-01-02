@@ -515,7 +515,8 @@ GeoTypeInfo::GeoTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::GEO_TYPE_INFO) {
 
 bool GeoTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	// No additional info to compare
-	return true;
+	const auto &other = other_p->Cast<GeoTypeInfo>();
+	return other.crs.Equals(crs);
 }
 
 shared_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {

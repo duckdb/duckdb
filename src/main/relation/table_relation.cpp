@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/main/relation/delete_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/update_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -85,6 +86,19 @@ void TableRelation::Delete(const string &condition) {
 	auto del = make_shared_ptr<DeleteRelation>(context, std::move(cond), description->database, description->schema,
 	                                           description->table);
 	del->Execute();
+}
+
+void TableRelation::Insert(const vector<vector<Value>> &values) {
+	vector<string> column_names;
+	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), values, std::move(column_names), "values");
+	rel->Insert(description->database, description->schema, description->table);
+}
+
+void TableRelation::Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
+	vector<string> column_names;
+	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), std::move(expressions), std::move(column_names),
+	                                          "values");
+	rel->Insert(description->database, description->schema, description->table);
 }
 
 } // namespace duckdb

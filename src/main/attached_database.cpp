@@ -11,11 +11,13 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
-StoredDatabasePath::StoredDatabasePath(DatabaseFilePathManager &manager, string path_p, const string &name)
-    : manager(manager), path(std::move(path_p)) {
+StoredDatabasePath::StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path_p,
+                                       const string &name)
+    : db_manager(db_manager), manager(manager), path(std::move(path_p)) {
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
@@ -23,7 +25,7 @@ StoredDatabasePath::~StoredDatabasePath() {
 }
 
 void StoredDatabasePath::OnDetach() {
-	manager.DetachDatabase(path);
+	manager.DetachDatabase(db_manager, path);
 }
 
 //===--------------------------------------------------------------------===//
@@ -35,17 +37,22 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
-
 	for (auto &entry : attach_options) {
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			// Extract the read access mode.
-
 			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
 				access_mode = AccessMode::READ_ONLY;
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
+			continue;
+		}
+
+		if (entry.first == "recovery_mode") {
+			// Extract the recovery mode.
+			auto mode_str = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			recovery_mode = EnumUtil::FromString<RecoveryMode>(mode_str);
 			continue;
 		}
 
@@ -81,7 +88,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
-
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
@@ -97,13 +103,16 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AttachOptions &options)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
+      attach_options(options.options) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	stored_database_path = std::move(options.stored_database_path);
@@ -115,12 +124,13 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
                                    ClientContext &context, string name_p, AttachInfo &info, AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      storage_extension(&storage_extension_p) {
+      storage_extension(&storage_extension_p), attach_options(options.options) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
@@ -142,7 +152,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	Close();
+	// FIXME: Theoretically, we should catch all places higher up the call stack where the
+	// FIXME: shared pointer goes out of scope and we need to invoke a checkpoint.
+	// FIXME: However, for now, we keep this to avoid unintentional behavior / oversights.
+	Close(DatabaseCloseAction::TRY_CHECKPOINT);
 }
 
 bool AttachedDatabase::IsSystem() const {
@@ -183,6 +196,16 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 		name += "_db";
 	}
 	return name;
+}
+
+void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
+	{
+		lock_guard<mutex> guard(attached_db->close_lock);
+		if (attached_db.use_count() == 1) {
+			attached_db->Close(DatabaseCloseAction::CHECKPOINT);
+		}
+	}
+	attached_db.reset();
 }
 
 void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
@@ -248,42 +271,51 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 	}
 }
 
-void AttachedDatabase::Close() {
+void AttachedDatabase::Close(const DatabaseCloseAction action) {
 	if (is_closed) {
 		return;
 	}
 	D_ASSERT(catalog);
 	is_closed = true;
 
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	if (!Exception::UncaughtException() && storage && !ValidChecker::IsInvalidated(db)) {
-		if (!storage->InMemory()) {
-			try {
-				auto &config = DBConfig::GetConfig(db);
-				if (config.options.checkpoint_on_shutdown) {
-					CheckpointOptions options;
-					options.wal_action = CheckpointWALAction::DELETE_WAL;
-					storage->CreateCheckpoint(QueryContext(), options);
-				}
-			} catch (...) { // NOLINT
+	try {
+		auto create_checkpoint = true;
+		if (action == DatabaseCloseAction::TRY_CHECKPOINT && Exception::UncaughtException()) {
+			create_checkpoint = false;
+		} else if (!storage || storage->InMemory() || ValidChecker::IsInvalidated(db)) {
+			create_checkpoint = false;
+		}
+
+		if (create_checkpoint) {
+			auto &config = DBConfig::GetConfig(db);
+			if (config.options.checkpoint_on_shutdown) {
+				CheckpointOptions options;
+				options.wal_action = CheckpointWALAction::DELETE_WAL;
+				storage->CreateCheckpoint(QueryContext(), options);
 			}
 		}
-		try {
-			// destroy the storage
-			storage->Destroy();
-		} catch (...) { // NOLINT
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		if (action == DatabaseCloseAction::TRY_CHECKPOINT) {
+			try {
+				DUCKDB_LOG_ERROR(db, "Silent exception in AttachedDatabase::Close():\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
+		} else {
+			Cleanup();
+			data.Throw("Detached database '" + name + "', but CHECKPOINT during DETACH failed. \n");
 		}
+	} catch (...) { // NOLINT
 	}
 
+	Cleanup();
+}
+
+void AttachedDatabase::Cleanup() {
 	transaction_manager.reset();
 	catalog.reset();
 	storage.reset();
 	stored_database_path.reset();
-
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
 }
 
 } // namespace duckdb

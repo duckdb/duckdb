@@ -6,27 +6,27 @@ statement ok
 PRAGMA enable_verification
 
 query I
-from read_csv('data/csv/headers/undetected_type.csv', delim = ';')
+from read_csv('{DATA_DIR}/csv/headers/undetected_type.csv', delim = ';')
 ----
 68,527.00
 
 query I
-from 'data/csv/headers/all_varchar.csv'
+from '{DATA_DIR}/csv/headers/all_varchar.csv'
 ----
 Pedro
 
 query II
-from 'data/csv/headers/single_line.csv'
+from '{DATA_DIR}/csv/headers/single_line.csv'
 ----
 
 query I
-from 'data/csv/headers/borked_type.csv'
+from '{DATA_DIR}/csv/headers/borked_type.csv'
 ----
 02/01/2019
 08//01/2019
 
 # This should work even with only one line
 query I
-from 'data/csv/headers/integer.csv'
+from '{DATA_DIR}/csv/headers/integer.csv'
 ----
 32

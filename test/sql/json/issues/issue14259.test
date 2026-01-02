@@ -5,4 +5,4 @@
 require json
 
 statement ok
-from 'data/json/issue14259.json'
+from '{DATA_DIR}/json/issue14259.json'

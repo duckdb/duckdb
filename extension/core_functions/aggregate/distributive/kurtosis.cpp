@@ -106,7 +106,7 @@ AggregateFunction KurtosisFun::GetFunction() {
 	auto result =
 	    AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
 	        LogicalType::DOUBLE, LogicalType::DOUBLE);
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	result.SetFallible();
 	return result;
 }
 
@@ -114,7 +114,7 @@ AggregateFunction KurtosisPopFun::GetFunction() {
 	auto result = AggregateFunction::UnaryAggregate<KurtosisState, double, double,
 	                                                KurtosisOperation<KurtosisFlagNoBiasCorrection>>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	result.SetFallible();
 	return result;
 }
 

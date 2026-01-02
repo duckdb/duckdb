@@ -21,14 +21,14 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
 		if (func.children.empty()) {
-			ret.found_expression = true;
+			ret.expression = expr;
 			ret.expression_is_constant = true;
 			return ret;
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF: {
-		ret.found_expression = true;
+		ret.expression = expr;
 		auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
 		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
 		return ret;
@@ -38,27 +38,40 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	case ExpressionClass::BOUND_DEFAULT:
 	case ExpressionClass::BOUND_PARAMETER:
 	case ExpressionClass::BOUND_REF:
-		ret.found_expression = true;
+		ret.expression = expr;
 		ret.expression_is_constant = true;
 		return ret;
 	default:
 		break;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
+		if (ret.FoundColumnRef()) {
+			//! Already found a column ref expression
+			return;
+		}
 		auto recursive_result = GetChildColumnBinding(*child);
-		if (recursive_result.found_expression) {
+		if (recursive_result.FoundExpression()) {
 			ret = recursive_result;
+			return;
 		}
 	});
 	// we didn't find a Bound Column Ref
 	return ret;
 }
 
-idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context, idx_t column_id) {
-	if (!get.function.statistics) {
+idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
+                                                 const ColumnIndex &column_id) {
+	if (!get.function.statistics && !get.function.statistics_extended) {
 		return 0;
 	}
-	auto column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
+	unique_ptr<BaseStatistics> column_statistics;
+	if (get.function.statistics_extended) {
+		TableFunctionGetStatisticsInput input(get.bind_data.get(), column_id);
+		column_statistics = get.function.statistics_extended(context, input);
+	} else {
+		D_ASSERT(get.function.statistics);
+		column_statistics = get.function.statistics(context, get.bind_data.get(), column_id.GetPrimaryIndex());
+	}
 	if (!column_statistics) {
 		return 0;
 	}
@@ -84,7 +97,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i].GetPrimaryIndex();
-		auto distinct_count = GetDistinctCount(get, context, column_id);
+		auto distinct_count = GetDistinctCount(get, context, column_ids[i]);
 		if (distinct_count > 0) {
 			auto column_distinct_count = DistinctCount({distinct_count, true});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
@@ -107,8 +120,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		column_statistics = nullptr;
 		bool has_non_optional_filters = false;
 		for (auto &it : get.table_filters.filters) {
-			if (get.bind_data && get.function.statistics) {
-				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
+				if (get.function.statistics_extended) {
+					auto column_index = ColumnIndex(it.first);
+					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
+					column_statistics = get.function.statistics_extended(context, input);
+				} else {
+					D_ASSERT(get.function.statistics);
+					column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+				}
 			}
 
 			if (column_statistics) {
@@ -163,7 +183,7 @@ RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection
 	for (auto &expr : proj.expressions) {
 		proj_stats.column_names.push_back(expr->GetName());
 		auto res = GetChildColumnBinding(*expr);
-		D_ASSERT(res.found_expression);
+		D_ASSERT(res.FoundExpression());
 		if (res.expression_is_constant) {
 			proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
 		} else {

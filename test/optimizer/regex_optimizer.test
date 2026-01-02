@@ -228,3 +228,28 @@ statement error
 select count(s) from test where regexp_matches('aaa');
 ----
 Binder Error
+
+# Test regexp_matches with flags (like 'm') is properly optimized to contains
+statement ok
+DELETE FROM test;
+
+statement ok
+INSERT INTO test VALUES ('hello world'), ('test'), ('hello again');
+
+query II
+explain analyze SELECT s FROM test WHERE regexp_matches(s, 'hello', 'm');
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'hello'\).*
+
+query I nosort
+SELECT s FROM test WHERE regexp_matches(s, 'hello', 'm');
+----
+hello world
+hello again
+
+# This used to trigger a debug assertion
+query I
+WITH fetch_schema AS (
+  SELECT s FROM test WHERE regexp_matches(s, 'hello', 'm')
+) SELECT * FROM fetch_schema LIMIT 0;
+----

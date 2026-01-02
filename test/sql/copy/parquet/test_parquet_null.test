@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select count(col1) from parquet_scan('data/parquet-testing/bug687_nulls.parquet')
+select count(col1) from parquet_scan('{DATA_DIR}/parquet-testing/bug687_nulls.parquet')
 ----
 99000
 

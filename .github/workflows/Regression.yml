@@ -23,6 +23,10 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
       - '.github/config/out_of_tree_extensions.cmake'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
+      - '!.github/patches/extensions/httpfs/*.patch' # httpfs used in some jobs
+      - '!.github/config/extensions/httpfs.cmake'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft]
@@ -33,7 +37,10 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
+      - '!.github/patches/extensions/httpfs/*.patch' # httpfs used in some jobs
+      - '!.github/config/extensions/httpfs.cmake'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -130,55 +137,55 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test Micro
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test Ingestion Perf
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCH
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCH-PARQUET
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCDS
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test H2OAI
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test IMDB
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test CSV
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test RealNest 
         if: always()
@@ -253,7 +260,7 @@ jobs:
           # Regenerate test/sql/storage_version.db with older version -> read with newer version (already performed as part of test.slow)
           cd duckdb
           python3 ../scripts/generate_storage_version.py
-          ../build/release/duckdb duckdb/test/sql/storage_version/storage_version.db
+          ../build/release/duckdb test/sql/storage_version/storage_version.db
           cd ..
 
       - name: Regression Compatibility Test (testing storage version has been bumped)

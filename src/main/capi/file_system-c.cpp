@@ -3,7 +3,6 @@
 namespace duckdb {
 namespace {
 struct CFileSystem {
-
 	FileSystem &fs;
 	ErrorData error_data;
 
@@ -100,11 +99,17 @@ void duckdb_destroy_file_open_options(duckdb_file_open_options *options) {
 duckdb_state duckdb_file_system_open(duckdb_file_system fs, const char *path, duckdb_file_open_options options,
                                      duckdb_file_handle *out_file) {
 	if (!fs) {
-		*out_file = nullptr;
+		if (out_file) {
+			*out_file = nullptr;
+		}
 		return DuckDBError;
 	}
 	auto cfs = reinterpret_cast<duckdb::CFileSystem *>(fs);
-	if (!path || !options || !out_file) {
+	if (!out_file) {
+		cfs->SetError("Invalid out file to duckdb_file_system_open");
+		return DuckDBError;
+	}
+	if (!path || !options) {
 		cfs->SetError("Invalid input to duckdb_file_system_open");
 		*out_file = nullptr;
 		return DuckDBError;

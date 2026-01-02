@@ -1,0 +1,38 @@
+# name: test/optimizer/joins/issues/internal_6248.test
+# description: Extract all child bindings of logical gets if they have children. Usually the case with table functions
+# group: [issues]
+
+require json
+
+statement ok
+CREATE OR REPLACE TABLE foo("field1" VARCHAR, "field2" INTEGER, "company-id" VARCHAR, "field3" VARCHAR);
+
+statement ok
+CREATE OR REPLACE TABLE bar("company-id" VARCHAR, field4 VARCHAR);
+
+statement ok
+select
+  (
+    select
+      json_group_array(x.value) as some_field
+    from
+      json_each (c.field4) as x,
+      json_each (some_field_json) as y
+    where
+      x.value is not null
+      and json_contains(x.value, y.value)
+  ) as field4,
+from
+  (
+    select
+      cc."company-id" as "company-id",
+      array_agg(distinct {"field1": cc."field1", "field2": cc."field2"}) as some_field_json
+    from
+      "foo" as "cc"
+    where
+      cc."field3" = 'three'
+    group by
+      cc."field3",
+      cc."company-id"
+  ) as n
+  join "bar" c on c."company-id" = n."company-id";

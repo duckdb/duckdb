@@ -8,7 +8,7 @@ require skip_reload
 require notwindows
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/cast_and_more_col.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/cast_and_more_col.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, strict_mode=True);
 ----
@@ -31,7 +31,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/multiple_cast_implicit.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/multiple_cast_implicit.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, strict_mode=True);
 ----
@@ -51,7 +51,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/multiple_casts_flush.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/multiple_casts_flush.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'tomorrow': 'DATE'},
     store_rejects = true, auto_detect=false, header = 1);
 ----
@@ -71,7 +71,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/multiple_casts_mixed.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/multiple_casts_mixed.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1);
 ----
@@ -92,7 +92,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/cast_and_less_col.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/cast_and_less_col.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1);
 ----
@@ -115,7 +115,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/cast_and_maxline.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/cast_and_maxline.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
 ----
@@ -135,7 +135,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/less_col_and_max_line.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/less_col_and_max_line.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
 ----
@@ -156,7 +156,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/more_col_and_max_line.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/more_col_and_max_line.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=True);
 ----
@@ -177,7 +177,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/unquoted_cast.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/unquoted_cast.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=true);
 ----
@@ -198,7 +198,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/unquoted_less.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/unquoted_less.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=true);
 ----
@@ -218,7 +218,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/unquoted_maxline.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/unquoted_maxline.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=true);
 ----
@@ -239,7 +239,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/unquoted_more.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/unquoted_more.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=true);
 ----
@@ -259,7 +259,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_cast.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/invalid_utf_cast.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
 ----
@@ -278,7 +278,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_less.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/invalid_utf_less.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
 ----
@@ -298,7 +298,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_max_line.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/invalid_utf_max_line.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=True);
 ----
@@ -319,7 +319,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_more.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/invalid_utf_more.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=True);
 ----
@@ -339,7 +339,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIIII
-FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_unquoted.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/invalid_utf_unquoted.csv',
     columns = {'name': 'VARCHAR', 'last_name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=true);
 ----
@@ -359,7 +359,7 @@ statement ok
 DROP TABLE reject_scans;
 
 query IIII
-FROM read_csv('data/csv/rejects/multiple_errors/multiple_errors.csv',
+FROM read_csv('{DATA_DIR}/csv/rejects/multiple_errors/multiple_errors.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
     store_rejects = true, auto_detect=false, header = 1, max_line_size=40, strict_mode=true);
 ----

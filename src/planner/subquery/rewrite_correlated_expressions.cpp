@@ -9,7 +9,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -71,14 +70,14 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 }
 
 //! Helper class used to recursively rewrite correlated expressions within nested subqueries.
-class RewriteCorrelatedRecursive : public BoundNodeVisitor {
+class RewriteCorrelatedRecursive : public LogicalOperatorVisitor {
 public:
 	RewriteCorrelatedRecursive(ColumnBinding base_binding, column_binding_map_t<idx_t> &correlated_map);
 
-	void VisitBoundTableRef(BoundTableRef &ref) override;
-	void VisitExpression(unique_ptr<Expression> &expression) override;
+	void VisitOperator(LogicalOperator &op) override;
+	void VisitExpression(unique_ptr<Expression> *expression) override;
 
-	void RewriteCorrelatedSubquery(Binder &binder, BoundQueryNode &subquery);
+	void RewriteCorrelatedSubquery(Binder &binder, LogicalOperator &subquery);
 
 	ColumnBinding base_binding;
 	column_binding_map_t<idx_t> &correlated_map;
@@ -92,7 +91,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryE
 	// subquery detected within this subquery
 	// recursively rewrite it using the RewriteCorrelatedRecursive class
 	RewriteCorrelatedRecursive rewrite(base_binding, correlated_map);
-	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery);
+	rewrite.RewriteCorrelatedSubquery(*expr.binder, *expr.subquery.plan);
 	return nullptr;
 }
 
@@ -101,40 +100,30 @@ RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(ColumnBinding base_bindin
     : base_binding(base_binding), correlated_map(correlated_map) {
 }
 
-void RewriteCorrelatedRecursive::VisitBoundTableRef(BoundTableRef &ref) {
-	if (ref.type == TableReferenceType::JOIN) {
+void RewriteCorrelatedRecursive::VisitOperator(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		// rewrite correlated columns in child joins
-		auto &bound_join = ref.Cast<BoundJoinRef>();
-		for (auto &corr : bound_join.correlated_columns) {
+		auto &dep_join = op.Cast<LogicalDependentJoin>();
+		for (auto &corr : dep_join.correlated_columns) {
 			auto entry = correlated_map.find(corr.binding);
 			if (entry != correlated_map.end()) {
 				corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			}
 		}
-	} else if (ref.type == TableReferenceType::SUBQUERY) {
-		auto &subquery = ref.Cast<BoundSubqueryRef>();
-		RewriteCorrelatedSubquery(*subquery.binder, *subquery.subquery);
-		return;
 	}
 	// visit the children of the table ref
-	BoundNodeVisitor::VisitBoundTableRef(ref);
+	LogicalOperatorVisitor::VisitOperator(op);
 }
 
-void RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(Binder &binder, BoundQueryNode &subquery) {
-	// rewrite the binding in the correlated list of the subquery)
-	for (auto &corr : binder.correlated_columns) {
-		auto entry = correlated_map.find(corr.binding);
-		if (entry != correlated_map.end()) {
-			corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
-		}
-	}
-	VisitBoundQueryNode(subquery);
+void RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(Binder &binder, LogicalOperator &op) {
+	VisitOperator(op);
 }
 
-void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> &expression) {
-	if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> *expression) {
+	auto &expr = **expression;
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// bound column reference
-		auto &bound_colref = expression->Cast<BoundColumnRefExpression>();
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth == 0) {
 			// not a correlated column, ignore
 			return;
@@ -148,13 +137,13 @@ void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> &express
 			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
-	} else if (expression->GetExpressionType() == ExpressionType::SUBQUERY) {
+	} else if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
-		auto &bound_subquery = expression->Cast<BoundSubqueryExpression>();
-		RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery);
+		auto &bound_subquery = expr.Cast<BoundSubqueryExpression>();
+		RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery.plan);
 	}
 	// recurse into the children of this subquery
-	BoundNodeVisitor::VisitExpression(expression);
+	LogicalOperatorVisitor::VisitExpression(expression);
 }
 
 RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)

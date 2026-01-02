@@ -75,7 +75,7 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -100,12 +100,7 @@ jobs:
         quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
         bash -c "
           set -e
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
-        
-          source /opt/rh/gcc-toolset-12/enable
-          export CC=gcc
-          export CXX=g++
-
+          yum install -y perl-IPC-Cmd
           git config --global --add safe.directory $PWD
           make -C $PWD
         "
@@ -117,6 +112,7 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
@@ -140,15 +136,18 @@ jobs:
       run: |
         python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
 
+    - name: Release specific tests
+      shell: bash
+      run: |
+        ./build/release/test/unittest --select-tag release
+
     - name: Tools Tests
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
@@ -159,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -167,6 +166,7 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
@@ -183,7 +183,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}

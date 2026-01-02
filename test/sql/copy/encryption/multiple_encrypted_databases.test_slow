@@ -5,6 +5,9 @@ require skip_reload
 
 require tpch
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement ok
 PRAGMA enable_verification
 

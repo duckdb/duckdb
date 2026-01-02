@@ -11,7 +11,7 @@ CREATE TABLE no_quote(a VARCHAR, b VARCHAR);
 
 # empty quote
 query I
-COPY no_quote FROM 'data/csv/no_quote.csv' ( QUOTE '', ESCAPE '', DELIM '|');
+COPY no_quote FROM '{DATA_DIR}/csv/no_quote.csv' ( QUOTE '', ESCAPE '', DELIM '|');
 ----
 3
 
@@ -24,7 +24,7 @@ h'ow do you	do"
 
 # empty quote in read_csv function
 query TT
-SELECT * FROM read_csv('data/csv/no_quote.csv', auto_detect=1, quote='');
+SELECT * FROM read_csv('{DATA_DIR}/csv/no_quote.csv', auto_detect=1, quote='');
 ----
 "hello	world
 h'ow do you	do"

@@ -7,12 +7,12 @@ require notwindows
 require autocomplete
 
 # test file auto complete
-query II
-FROM sql_auto_complete('COPY tbl FROM ''data/parq') LIMIT 1;
+query I
+SELECT suggestion FROM sql_auto_complete('COPY tbl FROM ''{DATA_DIR}/parq') LIMIT 1;
 ----
-parquet-testing/	20
+parquet-testing/
 
-query II
-FROM sql_auto_complete('COPY tbl FROM ''data/csv/all_quote') LIMIT 1;
+query I
+SELECT suggestion FROM sql_auto_complete('COPY tbl FROM ''{DATA_DIR}/csv/all_quote') LIMIT 1;
 ----
-all_quotes.csv'	24
+all_quotes.csv'

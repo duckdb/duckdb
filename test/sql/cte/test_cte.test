@@ -97,6 +97,14 @@ SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte);
 1
 42
 
+# cte in nested set operation node
+query I
+SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte UNION ALL SELECT * FROM cte);
+----
+1
+42
+42
+
 # cte in recursive cte
 query I
 WITH RECURSIVE cte(d) AS (

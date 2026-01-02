@@ -36,8 +36,48 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_COUNT // This has to stay the last entry of the type!
 };
 
-bool CompressionTypeIsDeprecated(CompressionType compression_type,
-                                 optional_ptr<StorageManager> storage_manager = nullptr);
+struct CompressionAvailabilityResult {
+private:
+	enum class UnavailableReason : uint8_t {
+		AVAILABLE,
+		//! Introduced later, not available to this version
+		NOT_AVAILABLE_YET,
+		//! Used to be available, but isnt anymore
+		DEPRECATED
+	};
+
+public:
+	CompressionAvailabilityResult() = default;
+	static CompressionAvailabilityResult Deprecated() {
+		return CompressionAvailabilityResult(UnavailableReason::DEPRECATED);
+	}
+	static CompressionAvailabilityResult NotAvailableYet() {
+		return CompressionAvailabilityResult(UnavailableReason::NOT_AVAILABLE_YET);
+	}
+
+public:
+	bool IsAvailable() const {
+		return reason == UnavailableReason::AVAILABLE;
+	}
+	bool IsDeprecated() {
+		D_ASSERT(!IsAvailable());
+		return reason == UnavailableReason::DEPRECATED;
+	}
+	bool IsNotAvailableYet() {
+		D_ASSERT(!IsAvailable());
+		return reason == UnavailableReason::NOT_AVAILABLE_YET;
+	}
+
+private:
+	explicit CompressionAvailabilityResult(UnavailableReason reason) : reason(reason) {
+	}
+
+public:
+	UnavailableReason reason = UnavailableReason::AVAILABLE;
+};
+
+CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compression_type,
+                                                         optional_ptr<StorageManager> storage_manager = nullptr);
 vector<string> ListCompressionTypes(void);
 CompressionType CompressionTypeFromString(const string &str);
 string CompressionTypeToString(CompressionType type);

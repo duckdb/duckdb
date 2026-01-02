@@ -28,6 +28,7 @@ public:
 public:
 	static unique_ptr<SelectStatement> ParseStatement(ClientContext &context, const string &query, const string &error);
 	unique_ptr<QueryNode> GetQueryNode() override;
+	string GetQuery() override;
 	unique_ptr<TableRef> GetTableRef() override;
 	BoundStatement Bind(Binder &binder) override;
 

@@ -8,7 +8,7 @@ require skip_reload
 require notwindows
 
 statement ok
-from read_csv('data/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'},
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'},
  auto_detect=false, header = 0, delim = ',', store_rejects=true)
 
 query IIIIIIIII rowsort

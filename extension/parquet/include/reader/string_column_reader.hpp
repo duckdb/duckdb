@@ -14,6 +14,7 @@
 namespace duckdb {
 
 class StringColumnReader : public ColumnReader {
+public:
 	enum class StringColumnType : uint8_t { VARCHAR, JSON, OTHER };
 
 	static StringColumnType GetStringColumnType(const LogicalType &type) {
@@ -36,7 +37,7 @@ public:
 
 public:
 	static void VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
-	void VerifyString(const char *str_data, uint32_t str_len);
+	void VerifyString(const char *str_data, uint32_t str_len) const;
 
 	static void ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block);
 

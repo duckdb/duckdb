@@ -1,5 +1,6 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 

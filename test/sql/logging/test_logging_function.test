@@ -8,6 +8,11 @@ query IIIIIIIIII
 from duckdb_logs
 ----
 
+statement error
+PRAGMA enable_logging;
+----
+Pragma Function with name enable_logging does not exist, but a table function with the same name exists, try
+
 statement ok
  CALL enable_logging();
 

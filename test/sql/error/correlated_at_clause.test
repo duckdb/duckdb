@@ -1,0 +1,13 @@
+# name: test/sql/error/correlated_at_clause.test
+# description: Reference a column from an outer subquery within an at clause
+# group: [error]
+
+statement ok
+CREATE TABLE t (i VARCHAR)
+
+# See https://github.com/duckdb/duckdb/issues/16826
+statement error
+FROM t, t AT (VERSION => i)
+----
+<REGEX>:Binder Error.*AT clause cannot contain column names.*
+

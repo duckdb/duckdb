@@ -45,16 +45,33 @@ MacroBindResult MacroFunction::BindMacroFunction(
     Binder &binder, const vector<unique_ptr<MacroFunction>> &functions, const string &name,
     FunctionExpression &function_expr, vector<unique_ptr<ParsedExpression>> &positional_arguments,
     InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> &named_arguments, idx_t depth) {
-
 	ExpressionBinder expr_binder(binder, binder.context);
+	expr_binder.lambda_bindings = binder.lambda_bindings;
+
+	// Figure out whether we even need to bind arguments
+	bool requires_bind = false;
+	for (auto &function : functions) {
+		for (const auto &type : function->types) {
+			if (type.id() != LogicalTypeId::UNKNOWN) {
+				requires_bind = true;
+				break;
+			}
+		}
+		if (requires_bind) {
+			break;
+		}
+	}
 
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
 	InsertionOrderPreservingMap<LogicalType> named_arg_types;
 	for (auto &arg : function_expr.children) {
 		auto arg_copy = arg->Copy();
-		const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
-		auto arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
+		LogicalType arg_type = LogicalType::UNKNOWN;
+		if (requires_bind) {
+			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
+			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
+		}
 		if (!arg->GetAlias().empty()) {
 			// Default argument
 			if (named_arguments.find(arg->GetAlias()) != named_arguments.end()) {

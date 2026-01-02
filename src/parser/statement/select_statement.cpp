@@ -1,8 +1,5 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 SelectStatement::SelectStatement(const SelectStatement &other) : SQLStatement(other), node(other.node->Copy()) {

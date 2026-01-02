@@ -10,50 +10,50 @@ create table test as SELECT i as i, to_json([i%4]) as j FROM range(0,20) as tbl(
 # FIXME: we can't do partitioned JSON writes yet because the column we partition by is packed into a to_json
 # because we just push an expression and then use the csv writer, this uses the csv writer for now
 statement ok
-COPY test TO '__TEST_DIR__/json_part' (FORMAT csv, quote '', PARTITION_BY (j), HEADER 0);
+COPY test TO '{TEMP_DIR}/json_part' (FORMAT csv, quote '', PARTITION_BY (j), HEADER 0);
 
 # some tests for read_json first
 query III
-select * exclude (filename), replace(filename, '\', '/') as filename from read_json_auto('data/json/example_*.ndjson', filename=true) order by all
+select * exclude (filename), parse_filename(filename) as filename from read_json_auto('{DATA_DIR}/json/example_*.ndjson', filename=true) order by all
 ----
-1	O Brother, Where Art Thou?	data/json/example_n.ndjson
-1	O Brother, Where Art Thou?	data/json/example_r.ndjson
-1	O Brother, Where Art Thou?	data/json/example_rn.ndjson
-2	Home for the Holidays	data/json/example_n.ndjson
-2	Home for the Holidays	data/json/example_r.ndjson
-2	Home for the Holidays	data/json/example_rn.ndjson
-3	The Firm	data/json/example_n.ndjson
-3	The Firm	data/json/example_r.ndjson
-3	The Firm	data/json/example_rn.ndjson
-4	Broadcast News	data/json/example_n.ndjson
-4	Broadcast News	data/json/example_r.ndjson
-4	Broadcast News	data/json/example_rn.ndjson
-5	Raising Arizona	data/json/example_n.ndjson
-5	Raising Arizona	data/json/example_r.ndjson
-5	Raising Arizona	data/json/example_rn.ndjson
+1	O Brother, Where Art Thou?	example_n.ndjson
+1	O Brother, Where Art Thou?	example_r.ndjson
+1	O Brother, Where Art Thou?	example_rn.ndjson
+2	Home for the Holidays	example_n.ndjson
+2	Home for the Holidays	example_r.ndjson
+2	Home for the Holidays	example_rn.ndjson
+3	The Firm	example_n.ndjson
+3	The Firm	example_r.ndjson
+3	The Firm	example_rn.ndjson
+4	Broadcast News	example_n.ndjson
+4	Broadcast News	example_r.ndjson
+4	Broadcast News	example_rn.ndjson
+5	Raising Arizona	example_n.ndjson
+5	Raising Arizona	example_r.ndjson
+5	Raising Arizona	example_rn.ndjson
 
 # virtual column
 query III
-select *, replace(filename, '\', '/') from read_json_auto('data/json/example_*.ndjson') order by all
+select *, parse_filename(filename) from read_json_auto('{DATA_DIR}/json/example_*.ndjson') order by all
 ----
-1	O Brother, Where Art Thou?	data/json/example_n.ndjson
-1	O Brother, Where Art Thou?	data/json/example_r.ndjson
-1	O Brother, Where Art Thou?	data/json/example_rn.ndjson
-2	Home for the Holidays	data/json/example_n.ndjson
-2	Home for the Holidays	data/json/example_r.ndjson
-2	Home for the Holidays	data/json/example_rn.ndjson
-3	The Firm	data/json/example_n.ndjson
-3	The Firm	data/json/example_r.ndjson
-3	The Firm	data/json/example_rn.ndjson
-4	Broadcast News	data/json/example_n.ndjson
-4	Broadcast News	data/json/example_r.ndjson
-4	Broadcast News	data/json/example_rn.ndjson
-5	Raising Arizona	data/json/example_n.ndjson
-5	Raising Arizona	data/json/example_r.ndjson
-5	Raising Arizona	data/json/example_rn.ndjson
+1	O Brother, Where Art Thou?	example_n.ndjson
+1	O Brother, Where Art Thou?	example_r.ndjson
+1	O Brother, Where Art Thou?	example_rn.ndjson
+2	Home for the Holidays	example_n.ndjson
+2	Home for the Holidays	example_r.ndjson
+2	Home for the Holidays	example_rn.ndjson
+3	The Firm	example_n.ndjson
+3	The Firm	example_r.ndjson
+3	The Firm	example_rn.ndjson
+4	Broadcast News	example_n.ndjson
+4	Broadcast News	example_r.ndjson
+4	Broadcast News	example_rn.ndjson
+5	Raising Arizona	example_n.ndjson
+5	Raising Arizona	example_r.ndjson
+5	Raising Arizona	example_rn.ndjson
 
 query III
-select * from read_json_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
+select * from read_json_auto(['{DATA_DIR}/json/example_n.ndjson', '{DATA_DIR}/json/top_level_array.json'], union_by_name=true) order by all
 ----
 1	O Brother, Where Art Thou?	NULL
 2	Home for the Holidays	NULL
@@ -65,7 +65,7 @@ NULL	NULL	cancelled
 
 # despite not being able to do partitioned writes, we can do partitioned json reads already!
 query II
-SELECT j, count(*) FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j;
+SELECT j, count(*) FROM read_json_auto('{TEMP_DIR}/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j;
 ----
 [0]	5
 [1]	5
@@ -74,26 +74,26 @@ SELECT j, count(*) FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_
 
 # also test read_json_objects
 query II
-select * exclude (filename), replace(filename, '\', '/') as filename from read_json_objects_auto('data/json/example_*.ndjson', filename=true) order by all
+select * exclude (filename), parse_filename(filename) as filename from read_json_objects_auto('{DATA_DIR}/json/example_*.ndjson', filename=true) order by all
 ----
-{"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_n.ndjson
-{"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_r.ndjson
-{"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_rn.ndjson
-{"id":2,"name":"Home for the Holidays"}	data/json/example_n.ndjson
-{"id":2,"name":"Home for the Holidays"}	data/json/example_r.ndjson
-{"id":2,"name":"Home for the Holidays"}	data/json/example_rn.ndjson
-{"id":3,"name":"The Firm"}	data/json/example_n.ndjson
-{"id":3,"name":"The Firm"}	data/json/example_r.ndjson
-{"id":3,"name":"The Firm"}	data/json/example_rn.ndjson
-{"id":4,"name":"Broadcast News"}	data/json/example_n.ndjson
-{"id":4,"name":"Broadcast News"}	data/json/example_r.ndjson
-{"id":4,"name":"Broadcast News"}	data/json/example_rn.ndjson
-{"id":5,"name":"Raising Arizona"}	data/json/example_n.ndjson
-{"id":5,"name":"Raising Arizona"}	data/json/example_r.ndjson
-{"id":5,"name":"Raising Arizona"}	data/json/example_rn.ndjson
+{"id":1,"name":"O Brother, Where Art Thou?"}	example_n.ndjson
+{"id":1,"name":"O Brother, Where Art Thou?"}	example_r.ndjson
+{"id":1,"name":"O Brother, Where Art Thou?"}	example_rn.ndjson
+{"id":2,"name":"Home for the Holidays"}	example_n.ndjson
+{"id":2,"name":"Home for the Holidays"}	example_r.ndjson
+{"id":2,"name":"Home for the Holidays"}	example_rn.ndjson
+{"id":3,"name":"The Firm"}	example_n.ndjson
+{"id":3,"name":"The Firm"}	example_r.ndjson
+{"id":3,"name":"The Firm"}	example_rn.ndjson
+{"id":4,"name":"Broadcast News"}	example_n.ndjson
+{"id":4,"name":"Broadcast News"}	example_r.ndjson
+{"id":4,"name":"Broadcast News"}	example_rn.ndjson
+{"id":5,"name":"Raising Arizona"}	example_n.ndjson
+{"id":5,"name":"Raising Arizona"}	example_r.ndjson
+{"id":5,"name":"Raising Arizona"}	example_rn.ndjson
 
 query I
-select * from read_json_objects_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
+select * from read_json_objects_auto(['{DATA_DIR}/json/example_n.ndjson', '{DATA_DIR}/json/top_level_array.json'], union_by_name=true) order by all
 ----
 {"conclusion":"cancelled"}
 {"conclusion":"cancelled"}
@@ -104,7 +104,7 @@ select * from read_json_objects_auto(['data/json/example_n.ndjson', 'data/json/t
 {"id":5,"name":"Raising Arizona"}
 
 query II
-select j, count(*) from read_json_objects_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j
+select j, count(*) from read_json_objects_auto('{TEMP_DIR}/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j
 ----
 [0]	5
 [1]	5
@@ -114,7 +114,7 @@ select j, count(*) from read_json_objects_auto('__TEST_DIR__/json_part/j=*/*.csv
 # also test the filter pushdown
 query II
 SELECT j, count(*)
-FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
+FROM read_json_auto('{TEMP_DIR}/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
 where j='[2]'
 group by j
 order by j;
@@ -123,7 +123,7 @@ order by j;
 
 query II
 SELECT j, count(*)
-FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
+FROM read_json_auto('{TEMP_DIR}/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
 where j>'[2]'
 group by j
 order by j;
@@ -132,7 +132,7 @@ order by j;
 
 query II
 SELECT j, count(*)
-FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
+FROM read_json_auto('{TEMP_DIR}/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
 where sqrt(j[2]::int) > 1.5
 group by j
 order by j;
@@ -143,22 +143,22 @@ order by j;
 # even across multiple files when union_by_name=false
 # there two files have a different schema, but we can read them together nonetheless
 statement ok
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'])
+SELECT * FROM read_json_auto(['{DATA_DIR}/json/with_uuid.json', '{DATA_DIR}/json/example_n.ndjson'])
 
 # both have 5 rows, so if we set sample_size=1, and maximum_sample_files=1, we cannot read them together anymore
 statement error
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, maximum_sample_files=1)
+SELECT * FROM read_json_auto(['{DATA_DIR}/json/with_uuid.json', '{DATA_DIR}/json/example_n.ndjson'], sample_size=1, maximum_sample_files=1)
 ----
 Invalid Input Error
 
 # if we increase maximum_sample_files, or set union_by_name=true, then we can read them again
 statement ok
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, maximum_sample_files=99)
+SELECT * FROM read_json_auto(['{DATA_DIR}/json/with_uuid.json', '{DATA_DIR}/json/example_n.ndjson'], sample_size=1, maximum_sample_files=99)
 
 # if we set union_by_name=true, then we sample sample_size rows per file, so then we can read them again
 statement ok
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=1, union_by_name=true)
+SELECT * FROM read_json_auto(['{DATA_DIR}/json/with_uuid.json', '{DATA_DIR}/json/example_n.ndjson'], sample_size=1, union_by_name=true)
 
 # with sample size 6 we sample 1 line from the second file, and of course we can read it again
 statement ok
-SELECT * FROM read_json_auto(['data/json/with_uuid.json', 'data/json/example_n.ndjson'], sample_size=6)
+SELECT * FROM read_json_auto(['{DATA_DIR}/json/with_uuid.json', '{DATA_DIR}/json/example_n.ndjson'], sample_size=6)

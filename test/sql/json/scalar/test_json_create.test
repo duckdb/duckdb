@@ -27,7 +27,7 @@ select to_json({n: 42})
 statement error
 select to_json({n: 42}, {extra: 'argument'})
 ----
-Invalid Input Error: to_json() takes exactly one argument
+to_json() takes exactly one argument
 
 query T
 select to_json(union_value(n := 42))
@@ -141,7 +141,7 @@ select json_array(a, b, c, d, e) from test
 [-777,4.2,"goose",[4,2],null]
 
 query T
-select json_object(a, a, b, b, c, c, d, d, e, e) from test
+select json_object(a::varchar, a, b::varchar, b, c, c, d::varchar, d, e::varchar, e) from test
 ----
 {"0":0,"0.5":0.5,"short":"short","[0, 1, 2, 3, 4, 5, 6, 7, 9]":[0,1,2,3,4,5,6,7,9],"33":33}
 {"42":42,"1.0":1.0,"looooooooooooooong":"looooooooooooooong","[]":[],"42":42}

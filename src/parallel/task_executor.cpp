@@ -69,8 +69,10 @@ TaskExecutionResult BaseExecutorTask::Execute(TaskExecutionMode mode) {
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 	try {
-		TaskNotifier task_notifier {executor.context};
-		ExecuteTask();
+		{
+			TaskNotifier task_notifier {executor.context};
+			ExecuteTask();
+		}
 		executor.FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	} catch (std::exception &ex) {

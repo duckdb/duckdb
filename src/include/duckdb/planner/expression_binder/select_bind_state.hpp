@@ -11,7 +11,6 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 

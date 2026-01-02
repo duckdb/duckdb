@@ -10,16 +10,16 @@ set prefetch_all_parquet_files=true;
 
 # With default settings, this query will fail: the incorrectly set index page offsets mess with duckdb's prefetching mechanism
 statement error
-FROM 'data/parquet-testing/incorrect_index_page_offsets.parquet'
+FROM '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet'
 ----
-IO Error: The parquet file 'data/parquet-testing/incorrect_index_page_offsets.parquet' seems to have incorrectly set page offsets. This interferes with DuckDB's prefetching optimization. DuckDB may still be able to scan this file by manually disabling the prefetching mechanism using: 'SET disable_parquet_prefetching=true'.
+IO Error: The parquet file '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet' seems to have incorrectly set page offsets. This interferes with DuckDB's prefetching optimization. DuckDB may still be able to scan this file by manually disabling the prefetching mechanism using: 'SET disable_parquet_prefetching=true'.
 
 # Now we disable prefetching
 statement ok
 set disable_parquet_prefetching=true;
 
 query IIIIIIIIIII
-FROM 'data/parquet-testing/incorrect_index_page_offsets.parquet'
+FROM '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet'
 ----
 0.23	Ideal	E	SI2	61.5	55.0	326	3.95	3.98	2.43	0
 0.21	Premium	E	SI1	59.8	61.0	326	3.89	3.84	2.31	1

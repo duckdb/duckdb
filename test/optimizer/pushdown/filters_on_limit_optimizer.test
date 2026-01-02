@@ -1,0 +1,15 @@
+# name: test/optimizer/pushdown/filters_on_limit_optimizer.test
+# description: Test disabling large limit optimizations when filters are applied
+# group: [pushdown]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+create table t as select range a from range(2_000_000);
+
+# Checks if the limit is applied after the filter is pushed down
+query II
+explain select * from T where a < 50 limit 100;
+----
+logical_opt	<REGEX>:.*LIMIT.*SEQ_SCAN.*

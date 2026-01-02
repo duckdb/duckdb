@@ -18,7 +18,7 @@ public:
 	    : buffer_(buffer, buffer_len),
 	      //<block size in values> <number of miniblocks in a block> <total value count> <first value>
 	      block_size_in_values(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_)),
-	      number_of_miniblocks_per_block(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_)),
+	      number_of_miniblocks_per_block(DecodeNumberOfMiniblocksPerBlock(buffer_)),
 	      number_of_values_in_a_miniblock(block_size_in_values / number_of_miniblocks_per_block),
 	      total_value_count(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_)),
 	      previous_value(ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_))),
@@ -31,7 +31,7 @@ public:
 		      number_of_values_in_a_miniblock % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0)) {
 			throw InvalidInputException("Parquet file has invalid block sizes for DELTA_BINARY_PACKED");
 		}
-	};
+	}
 
 	ByteBuffer BufferPtr() const {
 		return buffer_;
@@ -68,6 +68,15 @@ public:
 	}
 
 private:
+	static idx_t DecodeNumberOfMiniblocksPerBlock(ByteBuffer &buffer) {
+		auto res = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer);
+		if (res == 0) {
+			throw InvalidInputException(
+			    "Parquet file has invalid number of miniblocks per block for DELTA_BINARY_PACKED");
+		}
+		return res;
+	}
+
 	template <typename T, bool SKIP_READ = false>
 	void GetBatchInternal(const data_ptr_t target_values_ptr, const idx_t batch_size) {
 		if (batch_size == 0) {

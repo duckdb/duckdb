@@ -352,6 +352,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	map.UpdateEntry(std::move(value));
 
 	// push the old entry in the undo buffer for this transaction
+	unique_ptr<CatalogEntry> entry_to_destroy;
 	if (transaction.transaction) {
 		// serialize the AlterInfo into a temporary buffer
 		MemoryStream stream(Allocator::Get(*transaction.db));
@@ -363,6 +364,10 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 		DuckTransactionManager::Get(GetCatalog().GetAttached())
 		    .PushCatalogEntry(*transaction.transaction, new_entry->Child(), stream.GetData(), stream.GetPosition());
+	} else {
+		// if we don't have a transaction this alter is non-transactional
+		// in that case we are able to just directly destroy the child (if there is any)
+		entry_to_destroy = new_entry->TakeChild();
 	}
 
 	read_lock.unlock();
@@ -370,7 +375,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	catalog.GetDependencyManager()->AlterObject(transaction, *entry, *new_entry, alter_info);
-
 	return true;
 }
 
@@ -400,8 +404,6 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 	if (entry->internal && !allow_drop_internal) {
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
-
-	entry->OnDrop();
 
 	// create a new tombstone entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -454,6 +456,7 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
 	auto &duck_catalog = GetCatalog();
 
+	entry.OnDrop();
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
 	// This will allow us to see all committed changes made before this COMMIT happened

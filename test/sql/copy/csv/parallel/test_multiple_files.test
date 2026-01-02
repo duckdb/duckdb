@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIII rowsort
-select * from read_csv_auto('data/csv/auto/glob/[0-9].csv');
+select * from read_csv_auto('{DATA_DIR}/csv/auto/glob/[0-9].csv');
 ----
 0	0	1.0	zero
 1	1	1.1	one
@@ -69,7 +69,7 @@ select * from read_csv_auto('data/csv/auto/glob/[0-9].csv');
 9	9	1.9	nine
 
 query IIII rowsort
-select * from read_csv_auto('data/csv/auto/glob/[0-9].csv', buffer_size=100)
+select * from read_csv_auto('{DATA_DIR}/csv/auto/glob/[0-9].csv', buffer_size=100)
 ----
 0	0	1.0	zero
 1	1	1.1	one
@@ -129,7 +129,7 @@ select * from read_csv_auto('data/csv/auto/glob/[0-9].csv', buffer_size=100)
 
 
 query IIII rowsort
-select * from read_csv('data/csv/auto/glob/[0-9].csv', AUTO_DETECT=true)
+select * from read_csv('{DATA_DIR}/csv/auto/glob/[0-9].csv', AUTO_DETECT=true)
 ----
 0	0	1.0	zero
 1	1	1.1	one
@@ -188,7 +188,7 @@ select * from read_csv('data/csv/auto/glob/[0-9].csv', AUTO_DETECT=true)
 9	9	1.9	nine
 
 query IIII rowsort
-select * from read_csv('data/csv/auto/glob/[0-9].csv', sample_size=-1,  new_line = '\r\n', columns={'row_id':'BIGINT','integer':'INTEGER','float':'DOUBLE', 'text':'VARCHAR'})
+select * from read_csv('{DATA_DIR}/csv/auto/glob/[0-9].csv', sample_size=-1,  new_line = '\r\n', columns={'row_id':'BIGINT','integer':'INTEGER','float':'DOUBLE', 'text':'VARCHAR'})
 ----
 0	0	1.0	zero
 1	1	1.1	one

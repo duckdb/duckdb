@@ -37,9 +37,6 @@ public:
 	// Projection mappings
 	vector<column_t> right_projection_map;
 
-	// Predicate (join conditions that don't reference both sides)
-	unique_ptr<Expression> predicate;
-
 protected:
 	// CachingOperator Interface
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -50,7 +47,8 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;

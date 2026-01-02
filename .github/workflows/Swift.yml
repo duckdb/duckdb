@@ -16,7 +16,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft]
@@ -29,7 +30,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}

@@ -11,11 +11,11 @@ PRAGMA enable_verification
 foreach parameter sep delim quote new_line escape nullstr columns auto_type_candidates header auto_detect sample_size all_varchar dateformat timestampformat normalize_names compression skip max_line_size maximum_line_size ignore_errors store_rejects rejects_table rejects_scan rejects_limit force_not_null buffer_size decimal_separator parallel null_padding allow_quoted_nulls column_types dtypes types names column_names comment encoding strict_mode
 
 statement maybe
-SELECT NULL FROM sniff_csv('data/csv/14512.csv', ${parameter} := NULL)
+SELECT NULL FROM sniff_csv('{DATA_DIR}/csv/14512.csv', ${parameter} := NULL)
 ----
 
 statement maybe
-SELECT NULL FROM read_csv('data/csv/14512.csv', ${parameter} := NULL)
+SELECT NULL FROM read_csv('{DATA_DIR}/csv/14512.csv', ${parameter} := NULL)
 ----
 
 endloop

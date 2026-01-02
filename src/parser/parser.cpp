@@ -1,10 +1,8 @@
 #include "duckdb/parser/parser.hpp"
 
-#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
@@ -44,8 +42,8 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 }
 
 static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
-	// the first character can be between A-Z, a-z, or \200 - \377
-	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0x80;
+	// the first character can be between A-Z, a-z, underscore, or \200 - \377
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c >= 0x80;
 }
 
 static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
@@ -190,10 +188,49 @@ vector<string> SplitQueries(const string &input_query) {
 	return queries;
 }
 
+unique_ptr<SQLStatement> Parser::GetStatement(const string &query) {
+	Transformer transformer(options);
+	vector<unique_ptr<SQLStatement>> statements;
+	PostgresParser parser;
+	parser.Parse(query);
+	if (parser.success) {
+		if (!parser.parse_tree) {
+			// empty statement
+			return {};
+		}
+		transformer.TransformParseTree(parser.parse_tree, statements);
+		return std::move(statements[0]);
+	}
+	return {};
+}
+
+void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
+	if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+		throw ParserException("Parser override failed to return a valid statement: %s\n\nConsider restarting the "
+		                      "database and "
+		                      "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
+		                      "default parser.",
+		                      result.error.RawMessage());
+	}
+	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+			throw NotImplementedException("Parser override has not yet implemented this "
+			                              "transformer rule.\nOriginal error: %s",
+			                              result.error.RawMessage());
+		}
+		if (result.error.Type() == ExceptionType::PARSER) {
+			throw ParserException("Parser override could not parse this query.\nOriginal error: %s",
+			                      result.error.RawMessage());
+		}
+		result.error.Throw();
+	}
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -209,12 +246,62 @@ void Parser::ParseQuery(const string &query) {
 				if (!ext.parser_override) {
 					continue;
 				}
+				if (StringUtil::CIEquals(parser_override_option, "default")) {
+					continue;
+				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
 					return;
-				} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-					throw ParserException(result.error);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+					ThrowParserOverrideError(result);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
+					auto statement = GetStatement(query);
+					if (!statement) {
+						break;
+					}
+					bool is_supported = false;
+					switch (statement->type) {
+					case StatementType::CALL_STATEMENT:
+					case StatementType::TRANSACTION_STATEMENT:
+					case StatementType::VARIABLE_SET_STATEMENT:
+					case StatementType::LOAD_STATEMENT:
+					case StatementType::ATTACH_STATEMENT:
+					case StatementType::DETACH_STATEMENT:
+					case StatementType::DELETE_STATEMENT:
+					case StatementType::DROP_STATEMENT:
+					case StatementType::ALTER_STATEMENT:
+					case StatementType::PRAGMA_STATEMENT:
+					case StatementType::COPY_DATABASE_STATEMENT:
+						is_supported = true;
+						break;
+					case StatementType::CREATE_STATEMENT: {
+						auto &create_statement = statement->Cast<CreateStatement>();
+						switch (create_statement.info->type) {
+						case CatalogType::INDEX_ENTRY:
+						case CatalogType::MACRO_ENTRY:
+						case CatalogType::SCHEMA_ENTRY:
+						case CatalogType::SECRET_ENTRY:
+						case CatalogType::SEQUENCE_ENTRY:
+						case CatalogType::TYPE_ENTRY:
+							is_supported = true;
+							break;
+						default:
+							is_supported = false;
+						}
+						break;
+					}
+					default:
+						is_supported = false;
+						break;
+					}
+					if (is_supported) {
+						ThrowParserOverrideError(result);
+					}
+				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+					continue;
 				}
 			}
 		}
@@ -286,7 +373,9 @@ void Parser::ParseQuery(const string &query) {
 				bool parsed_single_statement = false;
 				for (auto &ext : *options.extensions) {
 					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
+					if (!ext.parse_function) {
+						continue;
+					}
 					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
@@ -364,18 +453,23 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 
 	vector<SimplifiedToken> tokens;
 	// find "XXX Error:" - this marks the start of the error message
-	auto error = StringUtil::Find(error_msg, "Error: ");
+	auto error = StringUtil::Find(error_msg, "Error:");
 	if (error.IsValid()) {
+		SimplifiedToken token;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS;
+		token.start = 0;
+		tokens.push_back(token);
+
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+		token.start = error.GetIndex() + 6;
+		tokens.push_back(token);
+
+		error_start = error.GetIndex() + 6;
+	} else {
 		SimplifiedToken token;
 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
 		token.start = 0;
 		tokens.push_back(token);
-
-		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-		token.start = error.GetIndex() + 6;
-		tokens.push_back(token);
-
-		error_start = error.GetIndex() + 7;
 	}
 
 	// find "LINE (number)" - this marks the end of the message
@@ -394,7 +488,7 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 			if (error_msg[i] == quote_char) {
 				SimplifiedToken token;
 				token.start = i;
-				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
 				tokens.push_back(token);
 				in_quotes = false;
 			}
@@ -407,7 +501,7 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 			// not quoted and found a quote - enter the quoted state
 			SimplifiedToken token;
 			token.start = i;
-			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION;
 			token.start++;
 			tokens.push_back(token);
 			quote_char = error_msg[i];
@@ -421,7 +515,7 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 	if (line_pos.IsValid()) {
 		SimplifiedToken token;
 		token.start = line_pos.GetIndex() + 1;
-		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS;
 		tokens.push_back(token);
 
 		// tokenize the LINE part
@@ -433,7 +527,7 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 		}
 		if (query_start < error_msg.size()) {
 			token.start = query_start;
-			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
 			tokens.push_back(token);
 
 			idx_t query_end;
@@ -457,25 +551,34 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 					}
 				}
 			}
+
 			// tokenize the actual query
 			string query = error_msg.substr(query_start, query_end - query_start);
 			auto query_tokens = Tokenize(query);
 			for (auto &query_token : query_tokens) {
 				if (place_caret) {
+					// find the caret position and highlight the identifier it points to
 					if (query_token.start >= caret_position) {
 						// we need to place the caret here
 						query_token.start = query_start + caret_position;
-						query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+						query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS;
 						tokens.push_back(query_token);
 
 						place_caret = false;
 						continue;
 					}
 				}
+				switch (query_token.type) {
+				case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+					query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS;
+					break;
+				default:
+					query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+					break;
+				}
 				query_token.start += query_start;
 				tokens.push_back(query_token);
 			}
-			// FIXME: find the caret position and highlight/bold the identifier it points to
 			if (query_end < error_msg.size()) {
 				token.start = query_end;
 				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;

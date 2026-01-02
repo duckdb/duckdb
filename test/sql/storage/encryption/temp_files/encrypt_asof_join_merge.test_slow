@@ -2,6 +2,9 @@
 # description: Test merge queue and repartitioning with encrypted temporary files
 # group: [temp_files]
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 foreach cipher GCM CTR
 
 statement ok

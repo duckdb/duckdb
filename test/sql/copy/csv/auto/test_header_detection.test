@@ -8,7 +8,7 @@ PRAGMA enable_verification
 
 # CSV file with two lines, none header
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/no_header.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/no_header.csv');
 
 query RTT
 SELECT column0, column1, column2 FROM test ORDER BY column0;
@@ -21,7 +21,7 @@ DROP TABLE test;
 
 # CSV file with two lines, one header
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_header.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/single_header.csv');
 
 query RTT
 SELECT number, text, date FROM test ORDER BY number;
@@ -33,7 +33,7 @@ DROP TABLE test;
 
 # CSV file with three lines, one header, one skip row
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/skip_row.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/skip_row.csv');
 
 query RTT
 SELECT number, text, date FROM test ORDER BY number;
@@ -45,7 +45,7 @@ DROP TABLE test;
 
 # CSV file with three lines, one header, two skip rows
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/multiple_skip_row.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/multiple_skip_row.csv');
 
 query RTT
 SELECT number, text, date FROM test ORDER BY number;
@@ -57,7 +57,7 @@ DROP TABLE test;
 
 # CSV file with two lines both only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/varchar_multi_line.csv', header = 0);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/varchar_multi_line.csv', header = 0);
 
 query TTT
 SELECT * FROM test ORDER BY column0;
@@ -70,7 +70,7 @@ DROP TABLE test;
 
 # CSV file with one line, two columns, only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/varchar_single_line.csv', header = 0);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/varchar_single_line.csv', header = 0);
 
 query TT
 SELECT column0, column1 FROM test ORDER BY column0;
@@ -82,7 +82,7 @@ DROP TABLE test;
 
 # CSV file with one line, two columns - one numeric, one string
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/mixed_single_line.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/mixed_single_line.csv');
 
 query IT
 SELECT column0, column1 FROM test ORDER BY column0;
@@ -94,7 +94,7 @@ DROP TABLE test;
 
 # CSV file with one line, one string column
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_value.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/single_value.csv');
 
 query T
 SELECT * FROM test;
@@ -105,7 +105,7 @@ DROP TABLE test;
 
 # CSV file with one line, one numeric column
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/single_numeric.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/single_numeric.csv');
 
 query I
 SELECT * FROM test;
@@ -117,7 +117,7 @@ DROP TABLE test;
 
 # CSV with UTF-8 BOM marker that could mess up the header line parsing
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto('data/csv/auto/utf8bom.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/utf8bom.csv');
 
 query II
 SELECT * FROM test;
@@ -141,16 +141,16 @@ statement ok
 INSERT INTO my_varchars VALUES ('Hello', 'Beautiful', 'World');
 
 statement ok
-COPY my_varchars TO '__TEST_DIR__/varchar_header.csv' (HEADER 1);
+COPY my_varchars TO '{TEMP_DIR}/varchar_header.csv' (HEADER 1);
 
 statement ok
-COPY my_varchars TO '__TEST_DIR__/varchar_no_header.csv' (HEADER 0);
+COPY my_varchars TO '{TEMP_DIR}/varchar_no_header.csv' (HEADER 0);
 
 statement ok
-COPY my_varchars FROM '__TEST_DIR__/varchar_header.csv' ;
+COPY my_varchars FROM '{TEMP_DIR}/varchar_header.csv' ;
 
 statement ok
-COPY my_varchars FROM '__TEST_DIR__/varchar_no_header.csv' (HEADER 0);
+COPY my_varchars FROM '{TEMP_DIR}/varchar_no_header.csv' (HEADER 0);
 
 query III
 FROM my_varchars ;
@@ -160,10 +160,10 @@ Hello	Beautiful	World
 Hello	Beautiful	World
 
 statement ok
-COPY my_varchars TO '__TEST_DIR__/big_varchar.csv';
+COPY my_varchars TO '{TEMP_DIR}/big_varchar.csv';
 
 statement ok
-COPY my_varchars FROM '__TEST_DIR__/big_varchar.csv';
+COPY my_varchars FROM '{TEMP_DIR}/big_varchar.csv';
 
 query III
 FROM my_varchars;

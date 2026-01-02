@@ -111,7 +111,7 @@ Nested UNNEST calls are not supported
 statement error
 SELECT UNNEST();
 ----
-requires a single argument
+requires at lease one argument
 
 statement error
 SELECT UNNEST([1, 2, 3], 'hello');
@@ -129,15 +129,19 @@ SELECT UNNEST([1, 2, 3], rec := true);
 Unsupported parameter "rec"
 
 # cannot mix parameters
-statement error
+query I
 SELECT UNNEST([1, 2, 3], recursive := true, recursive := true);
 ----
-only supports a single additional argument
+1
+2
+3
 
-statement error
+query I
 SELECT UNNEST([1, 2, 3], max_depth := 9999, recursive := true);
 ----
-only supports a single additional argument
+1
+2
+3
 
 # max-depth of 0 is not supported
 statement error

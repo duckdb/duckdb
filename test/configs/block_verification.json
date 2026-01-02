@@ -1,0 +1,7 @@
+{
+  "description": "Run with block verification on persistent databases as storage.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__block_verification.db",
+  "on_init": "SET debug_verify_blocks = true;",
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/force_storage.json"
+}

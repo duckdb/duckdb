@@ -104,8 +104,9 @@ private:
 	void ExtractFilterBindings(const Expression &expr, vector<ColumnBinding> &bindings);
 	//! Generate filters from the current set of filters stored in the FilterCombiner
 	void GenerateFilters();
-	//! if there are filters in this FilterPushdown node, push them into the combiner
-	void PushFilters();
+	//! if there are filters in this FilterPushdown node, push them into the combiner. Returns
+	//! FilterResult::UNSATISFIABLE if the subtree should be stripped, or FilterResult::SUCCESS otherwise
+	FilterResult PushFilters();
 };
 
 } // namespace duckdb

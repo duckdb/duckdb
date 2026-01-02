@@ -28,14 +28,19 @@ add_library_unity(
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
   late_materialization.cpp
+  late_materialization_helper.cpp
   optimizer.cpp
+  join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
+  row_group_pruner.cpp
   statistics_propagator.cpp
   limit_pushdown.cpp
   topn_optimizer.cpp
+  topn_window_elimination.cpp
   unnest_rewriter.cpp
+  window_self_join.cpp
   sampling_pushdown.cpp
   sum_rewriter.cpp)
 set(ALL_OBJECT_FILES

@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE test (foo INTEGER, bar VARCHAR(10), baz VARCHAR(10), bam VARCHAR(10));
 
 query I
-COPY test FROM 'data/csv/test/big_header.csv' (DELIMITER '	', HEADER false, SKIP 3);
+COPY test FROM '{DATA_DIR}/csv/test/big_header.csv' (DELIMITER '	', HEADER false, SKIP 3);
 ----
 3
 
@@ -19,7 +19,7 @@ SELECT COUNT(bam) FROM test WHERE bam = '!';
 3
 
 query I
-INSERT INTO test SELECT * FROM read_csv('data/csv/test/big_header.csv', HEADER=FALSE, SKIP=3, DELIM='	', columns=STRUCT_PACK(foo := 'INTEGER', bar := 'VARCHAR', baz := 'VARCHAR', bam := 'VARCHAR'));
+INSERT INTO test SELECT * FROM read_csv('{DATA_DIR}/csv/test/big_header.csv', HEADER=FALSE, SKIP=3, DELIM='	', columns=STRUCT_PACK(foo := 'INTEGER', bar := 'VARCHAR', baz := 'VARCHAR', bam := 'VARCHAR'));
 ----
 3
 
@@ -29,7 +29,7 @@ SELECT COUNT(bam) FROM test WHERE bam = '!';
 6
 
 query I
-INSERT INTO test SELECT * FROM read_csv_auto('data/csv/test/big_header.csv', HEADER=FALSE, SKIP=3, DELIM='	');
+INSERT INTO test SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/big_header.csv', HEADER=FALSE, SKIP=3, DELIM='	');
 ----
 3
 

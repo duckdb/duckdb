@@ -93,7 +93,7 @@ logging_storage	memory
 ###
 
 statement ok
-CALL enable_logging(['QueryLog', 'FileSystem']);
+CALL enable_logging(['QueryLog', 'filesystem']);
 
 # Use sorted list to avoid indeterministic result
 query II

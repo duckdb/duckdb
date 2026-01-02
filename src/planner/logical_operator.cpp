@@ -31,6 +31,19 @@ vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }
 
+idx_t LogicalOperator::GetRootIndex() {
+	auto bindings = GetColumnBindings();
+	if (bindings.empty()) {
+		throw InternalException("Empty bindings in GetRootIndex");
+	}
+	auto root_index = bindings[0].table_index;
+	for (idx_t i = 1; i < bindings.size(); i++) {
+		if (bindings[i].table_index != root_index) {
+			throw InternalException("GetRootIndex - multiple column bindings found");
+		}
+	}
+	return root_index;
+}
 void LogicalOperator::SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const {
 	if (has_estimated_cardinality) {
 		result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);

@@ -349,6 +349,14 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
+	SelectionVector row_sel(0, count);
+	if (row.IsValid()) {
+		auto row_index = row.GetIndex();
+		for (idx_t i = 0; i < count; i++) {
+			row_sel[i] = static_cast<uint32_t>(row_index);
+		}
+	}
+
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &child_name = child_types[child_idx].first;
 
@@ -357,14 +365,21 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		VariantPathComponent component;
 		component.key = child_name;
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
-		auto collection_result =
-		    VariantUtils::FindChildValues(conversion_data.variant, component, row, child_values_sel, child_data, count);
-		if (!collection_result.Success()) {
-			D_ASSERT(collection_result.type == VariantChildDataCollectionResult::Type::COMPONENT_NOT_FOUND);
-			auto nested_index = collection_result.nested_data_index;
-			auto row_index = row.IsValid() ? row.GetIndex() : nested_index;
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
+		                              child_data, count);
+		if (!lookup_validity.AllValid()) {
+			optional_idx nested_index;
+			for (idx_t i = 0; i < count; i++) {
+				if (!lookup_validity.RowIsValid(i)) {
+					nested_index = i;
+					break;
+				}
+			}
+			D_ASSERT(nested_index.IsValid());
+			auto row_index = row.IsValid() ? row.GetIndex() : nested_index.GetIndex();
 			auto object_keys =
-			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index]);
+			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index.GetIndex()]);
 			conversion_data.error = StringUtil::Format("VARIANT(OBJECT(%s)) is missing key '%s'",
 			                                           StringUtil::Join(object_keys, ","), component.key);
 			return false;
@@ -459,6 +474,9 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		}
 		};
 
+		// Fallback: try to convert to Value and then cast
+		// This may throw bind-time exceptions for incompatible type combinations
+		// In those cases, we should fail gracefully
 		bool all_valid = true;
 		for (idx_t i = 0; i < count; i++) {
 			auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -466,11 +484,18 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			//! Get the index into 'values'
 			uint32_t value_index = sel[i];
 			auto value = VariantUtils::ConvertVariantToValue(conversion_data.variant, row_index, value_index);
-			if (!value.DefaultTryCastAs(target_type, true)) {
-				value = Value(target_type);
+			try {
+				if (!value.DefaultTryCastAs(target_type, true)) {
+					value = Value(target_type);
+					all_valid = false;
+				}
+				result.SetValue(i + offset, value);
+			} catch (const BinderException &) {
+				// Bind-time exceptions (e.g., incompatible struct layouts) should be treated as conversion failures
+				// Set the value to NULL and mark as failed
+				FlatVector::SetNull(result, offset + i, true);
 				all_valid = false;
 			}
-			result.SetValue(i + offset, value);
 		}
 		return all_valid;
 	} else {

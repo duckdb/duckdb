@@ -48,10 +48,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		return;
 	}
 
-	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
 	dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
-	FlatVector::SetNull(*dictionary, 0, true);
+	auto dict_child_data = FlatVector::GetData<string_t>(dictionary->data);
+	FlatVector::SetNull(dictionary->data, 0, true);
 	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(i);
@@ -114,8 +114,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 		}
 	}
 
-	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
-	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+	result.Dictionary(dictionary, *sel_vec);
 }
 
 } // namespace duckdb

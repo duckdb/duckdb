@@ -53,7 +53,6 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 
 SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &context,
                                                             OperatorSinkNextBatchInput &input) const {
-
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
 
@@ -94,11 +93,11 @@ unique_ptr<LocalSinkState> PhysicalBufferedBatchCollector::GetLocalSinkState(Exe
 unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedBatchCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_shared_ptr<BatchedBufferedData>(state->context);
+	state->buffered_data = make_shared_ptr<BatchedBufferedData>(context);
 	return std::move(state);
 }
 
-unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) {
+unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BufferedBatchCollectorGlobalState>();
 	auto cc = gstate.context.lock();
 	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),

@@ -76,12 +76,13 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 	}
 	case ExpressionClass::COLUMN_REF: {
 		auto &colref = expr.Cast<ColumnRefExpression>();
-		// if there is an explicit table name we can't bind to an alias
-		if (colref.IsQualified()) {
+		if (!ExpressionBinder::IsPotentialAlias(colref)) {
 			break;
 		}
+
+		string alias_name = colref.column_names.back();
 		// check the alias list
-		auto entry = bind_state.alias_map.find(colref.column_names[0]);
+		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry == bind_state.alias_map.end()) {
 			break;
 		}

@@ -4,13 +4,13 @@
 
 require parquet
 
-load __TEST_DIR__/candidate.db
+load {TEMP_DIR}/candidate.db
 
 statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE candidate AS SELECT * FROM 'data/parquet-testing/candidate.parquet'
+CREATE TABLE candidate AS SELECT * FROM '{DATA_DIR}/parquet-testing/candidate.parquet'
 
 statement ok
 select * from candidate order by name;

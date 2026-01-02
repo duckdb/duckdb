@@ -706,7 +706,6 @@ test/sql/update/test_update_issue_3170.test
 test/sql/update/test_update_many_updaters.test
 test/sql/update/test_update_many_updaters_nulls.test
 test/sql/upsert/postgres/planner_preprocessing.test
-test/sql/upsert/upsert_conflict_in_different_chunk.test
 test/sql/upsert/upsert_distinct_bug.test
 test/sql/upsert/upsert_lambda.test
 test/sql/upsert/upsert_local_no_tuples.test

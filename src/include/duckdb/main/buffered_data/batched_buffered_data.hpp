@@ -32,7 +32,7 @@ public:
 	static constexpr const BufferedData::Type TYPE = BufferedData::Type::BATCHED;
 
 public:
-	explicit BatchedBufferedData(weak_ptr<ClientContext> context);
+	explicit BatchedBufferedData(ClientContext &context);
 
 public:
 	void Append(const DataChunk &chunk, idx_t batch);

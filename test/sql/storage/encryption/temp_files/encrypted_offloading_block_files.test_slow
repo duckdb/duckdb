@@ -1,8 +1,10 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
 # group: [temp_files]
 
-foreach cipher GCM CTR
+# We need httpfs to do encrypted writes
+require httpfs
 
+foreach cipher GCM CTR
 
 require block_size 262144
 

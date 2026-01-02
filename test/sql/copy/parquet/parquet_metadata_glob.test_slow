@@ -5,10 +5,17 @@
 require parquet
 
 statement ok
-SELECT * FROM parquet_metadata('data/parquet-testing/**.parquet');
+set variable parquet_files = (
+	select list(file)
+	from glob('data/parquet-testing/**.parquet')
+	where 'broken' not in file
+)
+
+statement ok
+SELECT * FROM parquet_metadata(getvariable('parquet_files'));
 
 query II
-select row_group_bytes, row_group_compressed_bytes from parquet_metadata('data/parquet-testing/**.parquet')
+select row_group_bytes, row_group_compressed_bytes from parquet_metadata(getvariable('parquet_files'))
 where file_name = 'data/parquet-testing/varchar_stats.parquet'
 ----
 200	208

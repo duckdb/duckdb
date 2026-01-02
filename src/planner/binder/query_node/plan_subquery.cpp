@@ -163,7 +163,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->mark_index = mark_index;
 		join->AddChild(std::move(root));
 		join->AddChild(std::move(plan));
-		
+
 		// create the JOIN condition
 		// Special case: if we have a single struct child and multiple types,
 		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
@@ -179,20 +179,20 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[i]), compare_type);
 				struct_children.push_back(std::move(colref));
 			}
-			
+
 			// Create a struct expression from the subquery columns using the "row" function
 			FunctionBinder function_binder(binder);
 			auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
-			
+
 			JoinCondition cond;
 			cond.left = std::move(expr.children[0]);
 			cond.right = std::move(struct_expr);
 			cond.comparison = expr.comparison_type;
-			
+
 			// push collations
 			ExpressionBinder::PushCollation(binder.context, cond.left, cond.left->return_type);
 			ExpressionBinder::PushCollation(binder.context, cond.right, cond.right->return_type);
-			
+
 			join->conditions.push_back(std::move(cond));
 		} else {
 			// Standard case: compare each child separately
@@ -401,7 +401,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	// first we translate the QueryNode of the subquery into a logical plan
 	auto sub_binder = Binder::CreateBinder(context, this);
 	sub_binder->is_outside_flattened = false;
-	auto subquery_root = sub_binder->CreatePlan(*expr.subquery);
+	auto subquery_root = std::move(expr.subquery.plan);
 	D_ASSERT(subquery_root);
 
 	// now we actually flatten the subquery

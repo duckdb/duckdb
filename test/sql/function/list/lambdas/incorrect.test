@@ -32,7 +32,7 @@ SELECT ${func_name}(NULL, NULL);
 statement error
 SELECT ${func_name}(NULL, x);
 ----
-<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
@@ -47,7 +47,7 @@ SELECT ${func_name}(NULL, i) FROM incorrect_test;
 statement error
 SELECT ${func_name}(NULL, x -> y);
 ----
-<REGEX>:Binder Error.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 SELECT ${func_name}([1]);
@@ -107,7 +107,7 @@ SELECT list_reduce([True], x -> x, x -> x);
 statement error
 SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
@@ -154,12 +154,12 @@ SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
 statement error
 SELECT cos(x -> x + 1);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
 
 statement error
 SELECT cos([1], x -> x + 1);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
 
 # FIXME: support lambdas in CHECK constraints
 

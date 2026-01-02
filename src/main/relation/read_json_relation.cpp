@@ -15,7 +15,6 @@ ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, vec
     : TableFunctionRelation(context, auto_detect ? "read_json_auto" : "read_json",
                             {MultiFileReader::CreateValueFromFileList(input)}, std::move(options)),
       alias(std::move(alias_p)) {
-
 	InitializeAlias(input);
 }
 
@@ -24,7 +23,6 @@ ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, str
     : TableFunctionRelation(context, auto_detect ? "read_json_auto" : "read_json", {Value(json_file_p)},
                             std::move(options)),
       json_file(std::move(json_file_p)), alias(std::move(alias_p)) {
-
 	if (alias.empty()) {
 		alias = StringUtil::Split(json_file, ".")[0];
 	}

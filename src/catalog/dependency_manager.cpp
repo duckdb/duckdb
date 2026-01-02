@@ -16,6 +16,8 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
 
+#include "duckdb/common/printer.hpp"
+
 namespace duckdb {
 
 static void AssertMangledName(const string &mangled_name, idx_t expected_null_bytes) {

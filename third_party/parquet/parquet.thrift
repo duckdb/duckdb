@@ -175,6 +175,14 @@ enum ConvertedType {
    * particular timezone or date.
    */
   INTERVAL = 21;
+
+  /**
+   * Non-standard NULL value
+   *
+   * This was written by old writers - it is kept here for compatibility purposes.
+   * See https://github.com/duckdb/duckdb/pull/11774
+   */
+  PARQUET_NULL = 24;
 }
 
 /**

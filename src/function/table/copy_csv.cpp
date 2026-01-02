@@ -280,7 +280,31 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 		return writer.FileSize();
 	}
 
+	unique_ptr<CSVWriterState> GetLocalState(ClientContext &context, const idx_t flush_size) {
+		{
+			lock_guard<mutex> guard(local_state_lock);
+			if (!local_states.empty()) {
+				auto result = std::move(local_states.back());
+				local_states.pop_back();
+				return result;
+			}
+		}
+		auto result = make_uniq<CSVWriterState>(context, flush_size);
+		result->require_manual_flush = true;
+		return result;
+	}
+
+	void StoreLocalState(unique_ptr<CSVWriterState> lstate) {
+		lock_guard<mutex> guard(local_state_lock);
+		lstate->Reset();
+		local_states.push_back(std::move(lstate));
+	}
+
 	CSVWriter writer;
+
+private:
+	mutex local_state_lock;
+	vector<unique_ptr<CSVWriterState>> local_states;
 };
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
@@ -371,9 +395,7 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
-	explicit WriteCSVBatchData(ClientContext &context, const idx_t flush_size)
-	    : writer_local_state(make_uniq<CSVWriterState>(context, flush_size)) {
-		writer_local_state->require_manual_flush = true;
+	explicit WriteCSVBatchData(unique_ptr<CSVWriterState> writer_state) : writer_local_state(std::move(writer_state)) {
 	}
 
 	//! The thread-local buffer to write data into
@@ -397,7 +419,8 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	// write CSV chunks to the batch data
-	auto batch = make_uniq<WriteCSVBatchData>(context, NextPowerOfTwo(collection->SizeInBytes()));
+	auto local_writer_state = global_state.GetLocalState(context, NextPowerOfTwo(collection->SizeInBytes()));
+	auto batch = make_uniq<WriteCSVBatchData>(std::move(local_writer_state));
 	for (auto &chunk : collection->Chunks()) {
 		WriteCSVChunkInternal(global_state.writer, *batch->writer_local_state, cast_chunk, chunk, executor);
 	}
@@ -412,6 +435,7 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
 	auto &csv_batch = batch.Cast<WriteCSVBatchData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 	global_state.writer.Flush(*csv_batch.writer_local_state);
+	global_state.StoreLocalState(std::move(csv_batch.writer_local_state));
 }
 
 //===--------------------------------------------------------------------===//

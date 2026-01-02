@@ -98,7 +98,7 @@ struct ZSTDStorage {
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnSegment &segment);
+	static void VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor);
 };
 
 //===--------------------------------------------------------------------===//
@@ -142,6 +142,11 @@ public:
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports sztd
 	auto &storage = col_data.GetStorageManager();
+	auto &block_manager = col_data.GetBlockManager();
+	if (block_manager.InMemory()) {
+		//! Can't use ZSTD in in-memory environment
+		return nullptr;
+	}
 	if (storage.GetStorageVersion() < 4) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
@@ -231,7 +236,6 @@ public:
 	      checkpoint_data(checkpoint_data),
 	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
-
 		total_vector_count = GetVectorCount(analyze_state->count);
 		total_segment_count = analyze_state->segment_count;
 		vectors_per_segment = analyze_state->vectors_per_segment;
@@ -249,6 +253,7 @@ public:
 
 public:
 	void ResetOutBuffer() {
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 		out_buffer.dst = current_buffer_ptr;
 		out_buffer.pos = 0;
 
@@ -307,14 +312,8 @@ public:
 			throw InternalException("We are asking for a new segment, but somehow we're still writing vector data onto "
 			                        "the initial (segment) page");
 		}
-		idx_t row_start;
-		if (segment) {
-			row_start = segment->start + segment->count;
-			FlushSegment();
-		} else {
-			row_start = checkpoint_data.GetRowGroup().start;
-		}
-		CreateEmptySegment(row_start);
+		FlushSegment();
+		CreateEmptySegment();
 
 		// Figure out how many vectors we are storing in this segment
 		idx_t vectors_in_segment;
@@ -347,6 +346,7 @@ public:
 	void InitializeVector() {
 		D_ASSERT(!in_vector);
 		if (vector_count + 1 >= total_vector_count) {
+			//! Last vector
 			vector_size = analyze_state->count - (ZSTD_VECTOR_SIZE * vector_count);
 		} else {
 			vector_size = ZSTD_VECTOR_SIZE;
@@ -355,6 +355,7 @@ public:
 		current_offset = UnsafeNumericCast<page_offset_t>(
 		    AlignValue<idx_t, sizeof(string_length_t)>(UnsafeNumericCast<idx_t>(current_offset)));
 		current_buffer_ptr = current_buffer->Ptr() + current_offset;
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 		compressed_size = 0;
 		uncompressed_size = 0;
 
@@ -413,20 +414,16 @@ public:
 				throw InvalidInputException("ZSTD Compression failed: %s",
 				                            duckdb_zstd::ZSTD_getErrorName(compress_result));
 			}
+			D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 			if (compress_result == 0) {
 				// Finished
 				break;
-			}
-			if (out_buffer.pos != out_buffer.size) {
-				throw InternalException("Expected ZSTD_compressStream2 to fully utilize the current buffer, but pos is "
-				                        "%d, while size is %d",
-				                        out_buffer.pos, out_buffer.size);
 			}
 			NewPage();
 		}
 	}
 
-	void AddString(const string_t &string) {
+	void AddStringInternal(const string_t &string) {
 		if (!tuple_count) {
 			InitializeVector();
 		}
@@ -440,7 +437,10 @@ public:
 			// Reached the end of this vector
 			FlushVector();
 		}
+	}
 
+	void AddString(const string_t &string) {
+		AddStringInternal(string);
 		UncompressedStringStorage::UpdateStringStats(segment->stats, string);
 	}
 
@@ -455,7 +455,8 @@ public:
 
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = block_manager.GetFreeBlockId();
+		auto new_id = partial_block_manager.GetFreeBlockId();
+
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
@@ -521,11 +522,11 @@ public:
 		return res;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
@@ -533,6 +534,9 @@ public:
 	}
 
 	void FlushSegment() {
+		if (!segment) {
+			return;
+		}
 		auto &state = checkpoint_data.GetCheckpointState();
 		idx_t segment_block_size;
 
@@ -555,7 +559,8 @@ public:
 	}
 
 	void AddNull() {
-		AddString("");
+		segment->stats.statistics.SetHasNullFast();
+		AddStringInternal("");
 	}
 
 public:
@@ -691,7 +696,7 @@ public:
 	explicit ZSTDScanState(ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
 	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
-	      segment_block_offset(segment.GetBlockOffset()) {
+	      segment_block_offset(segment.GetBlockOffset()), segment(segment) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
 
@@ -791,14 +796,23 @@ public:
 
 		auto vector_size = metadata.count;
 
+		auto string_lengths_size = (sizeof(string_length_t) * vector_size);
 		scan_state.string_lengths = reinterpret_cast<string_length_t *>(scan_state.current_buffer_ptr);
-		scan_state.current_buffer_ptr += (sizeof(string_length_t) * vector_size);
+		scan_state.current_buffer_ptr += string_lengths_size;
 
 		// Update the in_buffer to point to the start of the compressed data frame
 		idx_t current_offset = UnsafeNumericCast<idx_t>(scan_state.current_buffer_ptr - handle_start);
 		scan_state.in_buffer.src = scan_state.current_buffer_ptr;
 		scan_state.in_buffer.pos = 0;
-		scan_state.in_buffer.size = block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset;
+		if (scan_state.metadata.block_offset + string_lengths_size + scan_state.metadata.compressed_size >
+		    (segment.SegmentSize() - sizeof(block_id_t))) {
+			//! We know that the compressed size is too big to fit on the current page
+			scan_state.in_buffer.size =
+			    MinValue(metadata.compressed_size, block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset);
+		} else {
+			scan_state.in_buffer.size =
+			    MinValue(metadata.compressed_size, block_manager.GetBlockSize() - current_offset);
+		}
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
@@ -832,7 +846,7 @@ public:
 		scan_state.in_buffer.src = ptr;
 		scan_state.in_buffer.pos = 0;
 
-		idx_t page_size = block_manager.GetBlockSize() - sizeof(block_id_t);
+		idx_t page_size = segment.SegmentSize() - sizeof(block_id_t);
 		idx_t remaining_compressed_data = scan_state.metadata.compressed_size - scan_state.compressed_scan_count;
 		scan_state.in_buffer.size = MinValue<idx_t>(page_size, remaining_compressed_data);
 	}
@@ -842,6 +856,7 @@ public:
 			return;
 		}
 
+		auto &in_buffer = scan_state.in_buffer;
 		duckdb_zstd::ZSTD_outBuffer out_buffer;
 
 		out_buffer.dst = destination;
@@ -849,18 +864,25 @@ public:
 		out_buffer.size = uncompressed_length;
 
 		while (true) {
-			idx_t old_pos = scan_state.in_buffer.pos;
+			idx_t old_pos = in_buffer.pos;
 			size_t res = duckdb_zstd::ZSTD_decompressStream(
 			    /* zds = */ decompression_context,
 			    /* output =*/&out_buffer,
-			    /* input =*/&scan_state.in_buffer);
-			scan_state.compressed_scan_count += scan_state.in_buffer.pos - old_pos;
+			    /* input =*/&in_buffer);
+			scan_state.compressed_scan_count += in_buffer.pos - old_pos;
 			if (duckdb_zstd::ZSTD_isError(res)) {
 				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
 			}
 			if (out_buffer.pos == out_buffer.size) {
+				//! Done decompressing the relevant portion
 				break;
 			}
+			if (!res) {
+				D_ASSERT(out_buffer.pos == out_buffer.size);
+				D_ASSERT(in_buffer.pos == in_buffer.size);
+				break;
+			}
+			D_ASSERT(in_buffer.pos == in_buffer.size);
 			// Did not fully decompress, it needs a new page to read from
 			LoadNextPageForVector(scan_state);
 		}
@@ -956,6 +978,7 @@ public:
 	idx_t segment_count;
 	//! The amount of tuples consumed
 	idx_t scanned_count = 0;
+	ColumnSegment &segment;
 
 	//! Buffer for skipping data
 	AllocatedData skip_buffer;
@@ -972,7 +995,7 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &con
 void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
 	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
@@ -1019,11 +1042,10 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 	return std::move(result);
 }
 
-void ZSTDStorage::CleanupState(ColumnSegment &segment) {
+void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManager();
 	for (auto &block_id : state.on_disk_blocks) {
-		block_manager.MarkBlockAsModified(block_id);
+		visitor.Visit(block_id);
 	}
 }
 
@@ -1040,7 +1062,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
 	zstd.deserialize_state = ZSTDStorage::DeserializeState;
-	zstd.cleanup_state = ZSTDStorage::CleanupState;
+	zstd.visit_block_ids = ZSTDStorage::VisitBlockIds;
 	return zstd;
 }
 

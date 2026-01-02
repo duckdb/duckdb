@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query III
-FROM read_csv('data/csv/extra_delimiters.csv', strict_mode = false, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}, auto_detect = false, delim = ',', header = true)
+FROM read_csv('{DATA_DIR}/csv/extra_delimiters.csv', strict_mode = false, columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}, auto_detect = false, delim = ',', header = true)
 ----
 1	2	3
 1	2	3

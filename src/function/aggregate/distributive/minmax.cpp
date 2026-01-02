@@ -296,7 +296,7 @@ struct VectorMinMaxBase {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
 };
@@ -367,8 +367,8 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 			// Bind function like arg_min/arg_max.
 			function.arguments[0] = arguments[0]->return_type;
-			function.return_type = arguments[0]->return_type;
-			return nullptr;
+			function.SetReturnType(arguments[0]->return_type);
+			return make_uniq<ArgMinMaxFunctionData>();
 		}
 	}
 
@@ -379,10 +379,10 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	auto name = std::move(function.name);
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.name = std::move(name);
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
-	if (function.bind) {
-		return function.bind(context, function, arguments);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	if (function.HasBindCallback()) {
+		return function.GetBindCallback()(context, function, arguments);
 	} else {
 		return nullptr;
 	}
@@ -431,7 +431,6 @@ public:
 template <class STATE>
 void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
                    idx_t count) {
-
 	auto &val_vector = inputs[0];
 	auto &n_vector = inputs[1];
 
@@ -441,7 +440,7 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 
 	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
 
-	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
+	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, true);
 
 	n_vector.ToUnifiedFormat(count, n_format);
 	state_vector.ToUnifiedFormat(count, state_format);
@@ -484,13 +483,13 @@ void SpecializeMinMaxNFunction(AggregateFunction &function) {
 	using STATE = MinMaxNState<VAL_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
-	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
-	function.combine = AggregateFunction::StateCombine<STATE, OP>;
-	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 
-	function.finalize = MinMaxNOperation::Finalize<STATE>;
-	function.update = MinMaxNUpdate<STATE>;
+	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
+	function.SetStateUpdateCallback(MinMaxNUpdate<STATE>);
 }
 
 template <class COMPARATOR>
@@ -520,7 +519,6 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &functio
 template <class COMPARATOR>
 unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &function,
                                      vector<unique_ptr<Expression>> &arguments) {
-
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
@@ -532,7 +530,7 @@ unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
 
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 	return nullptr;
 }
 

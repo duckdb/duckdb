@@ -6,72 +6,72 @@ require parquet
 
 # alltypes_dictionary: scan as parquet
 query I nosort alltypes_dictionary
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet');
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_dictionary.parquet');
 ----
 
 # rewrite the file
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet')) TO '__TEST_DIR__/alltypes_dictionary.parquet' (FORMAT 'PARQUET')
+COPY (SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_dictionary.parquet')) TO '{TEMP_DIR}/alltypes_dictionary.parquet' (FORMAT 'PARQUET')
 
 # verify that the rewritten file has the same values again
 query I nosort alltypes_dictionary
-SELECT * FROM parquet_scan('__TEST_DIR__/alltypes_dictionary.parquet');
+SELECT * FROM parquet_scan('{TEMP_DIR}/alltypes_dictionary.parquet');
 ----
 
 # bug687_nulls.parquet
 query I nosort bug687_nulls
-SELECT * FROM parquet_scan('data/parquet-testing/bug687_nulls.parquet') LIMIT 10;
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/bug687_nulls.parquet') LIMIT 10;
 ----
 
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/bug687_nulls.parquet')) TO '__TEST_DIR__/bug687_nulls.parquet' (FORMAT 'PARQUET')
+COPY (SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/bug687_nulls.parquet')) TO '{TEMP_DIR}/bug687_nulls.parquet' (FORMAT 'PARQUET')
 
 query I nosort bug687_nulls
-SELECT * FROM parquet_scan('__TEST_DIR__/bug687_nulls.parquet') LIMIT 10;
+SELECT * FROM parquet_scan('{TEMP_DIR}/bug687_nulls.parquet') LIMIT 10;
 ----
 
 # Issue #1637: booleans encoded incorrectly
 statement ok
-COPY (SELECT true as x UNION ALL SELECT true) TO '__TEST_DIR__/bug1637_booleans.parquet' (FORMAT 'PARQUET');
+COPY (SELECT true as x UNION ALL SELECT true) TO '{TEMP_DIR}/bug1637_booleans.parquet' (FORMAT 'PARQUET');
 
 # Prior to the #1637 fix, duckdb wrote a parquet file containing true, false
 query I
-SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/bug1637_booleans.parquet') WHERE x;
+SELECT COUNT(*) FROM parquet_scan('{TEMP_DIR}/bug1637_booleans.parquet') WHERE x;
 ----
 2
 
 # userdata1.parquet
 query I nosort userdata1.parquet
-SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet') ORDER BY 1 LIMIT 10;
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') ORDER BY 1 LIMIT 10;
 ----
 
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet')) TO '__TEST_DIR__/userdata1.parquet' (FORMAT 'PARQUET')
+COPY (SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet')) TO '{TEMP_DIR}/userdata1.parquet' (FORMAT 'PARQUET')
 
 query I nosort userdata1.parquet
-SELECT * FROM parquet_scan('__TEST_DIR__/userdata1.parquet') ORDER BY 1 LIMIT 10;
+SELECT * FROM parquet_scan('{TEMP_DIR}/userdata1.parquet') ORDER BY 1 LIMIT 10;
 ----
 
 # gzip codec
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet')) TO '__TEST_DIR__/userdata1-gzip.parquet' (FORMAT 'PARQUET', CODEC 'GZIP')
+COPY (SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet')) TO '{TEMP_DIR}/userdata1-gzip.parquet' (FORMAT 'PARQUET', CODEC 'GZIP')
 
 query I nosort userdata1.parquet
-SELECT * FROM parquet_scan('__TEST_DIR__/userdata1-gzip.parquet') ORDER BY 1 LIMIT 10;
+SELECT * FROM parquet_scan('{TEMP_DIR}/userdata1-gzip.parquet') ORDER BY 1 LIMIT 10;
 ----
 
 # uncompressed codec
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet')) TO '__TEST_DIR__/userdata1-uncompressed.parquet' (FORMAT 'PARQUET', CODEC 'UNCOMPRESSED')
+COPY (SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet')) TO '{TEMP_DIR}/userdata1-uncompressed.parquet' (FORMAT 'PARQUET', CODEC 'UNCOMPRESSED')
 
 query I nosort userdata1.parquet
-SELECT * FROM parquet_scan('__TEST_DIR__/userdata1-uncompressed.parquet') ORDER BY 1 LIMIT 10;
+SELECT * FROM parquet_scan('{TEMP_DIR}/userdata1-uncompressed.parquet') ORDER BY 1 LIMIT 10;
 ----
 
 # zstd codec
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet')) TO '__TEST_DIR__/userdata1-zstd.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD')
+COPY (SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet')) TO '{TEMP_DIR}/userdata1-zstd.parquet' (FORMAT 'PARQUET', CODEC 'ZSTD')
 
 query I nosort userdata1.parquet
-SELECT * FROM parquet_scan('__TEST_DIR__/userdata1-zstd.parquet') ORDER BY 1 LIMIT 10;
+SELECT * FROM parquet_scan('{TEMP_DIR}/userdata1-zstd.parquet') ORDER BY 1 LIMIT 10;
 ----

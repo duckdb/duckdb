@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select timestamp from 'data/parquet-testing/issue_5533_timestamp_ms_stats.parquet' order by 1;
+select timestamp from '{DATA_DIR}/parquet-testing/issue_5533_timestamp_ms_stats.parquet' order by 1;
 ----
 2022-11-27 17:42:43.514
 2022-11-27 17:42:43.514
@@ -16,7 +16,7 @@ select timestamp from 'data/parquet-testing/issue_5533_timestamp_ms_stats.parque
 2022-11-27 17:42:44.28
 
 query I
-select timestamp from 'data/parquet-testing/issue_5533_timestamp_ms_stats.parquet' where timestamp >= '2022-11-27 00:00:00'
+select timestamp from '{DATA_DIR}/parquet-testing/issue_5533_timestamp_ms_stats.parquet' where timestamp >= '2022-11-27 00:00:00'
 ----
 2022-11-27 17:42:43.514
 2022-11-27 17:42:43.514

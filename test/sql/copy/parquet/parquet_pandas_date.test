@@ -5,7 +5,7 @@
 require parquet
 
 query T
-select * from parquet_scan('data/parquet-testing/pandas-date.parquet') order by 1
+select * from parquet_scan('{DATA_DIR}/parquet-testing/pandas-date.parquet') order by 1
 ----
 1921-12-24
 2021-01-12

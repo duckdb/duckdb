@@ -1,8 +1,6 @@
 # name: test/geoparquet/mixed.test
 # group: [geoparquet]
 
-require spatial
-
 require parquet
 
 #------------------------------------------------------------------------------
@@ -49,7 +47,7 @@ query I
 SELECT (decode(value)) as col
 FROM parquet_kv_metadata('__TEST_DIR__/t1.parquet');
 ----
-{"version":"1.1.0","primary_column":"geom","columns":{"geom":{"encoding":"WKB","geometry_types":["Point","LineString","Polygon","MultiPoint","MultiLineString","MultiPolygon","GeometryCollection","Point Z"],"bbox":[0.0,0.0,1.0,3.0,3.0,1.0]}}}
+{"version":"1.0.0","primary_column":"geom","columns":{"geom":{"encoding":"WKB","geometry_types":["Point","LineString","Polygon","MultiPoint","MultiLineString","MultiPolygon","GeometryCollection","Point Z"],"bbox":[0.0,0.0,1.0,3.0,3.0,1.0]}}}
 
 
 #------------------------------------------------------------------------------

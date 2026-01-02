@@ -43,7 +43,7 @@ public:
 
 public:
 	//! Constructor for a new in-memory buffer
-	explicit FixedSizeBuffer(BlockManager &block_manager);
+	explicit FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_tag);
 	//! Constructor for deserializing buffer metadata from disk
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
 	                const BlockPointer &block_pointer);
@@ -152,6 +152,10 @@ public:
 	}
 	SegmentHandle &operator=(SegmentHandle &&other) noexcept {
 		if (this != &other) {
+			// Decrement reader count for existing handle if it exists
+			if (buffer_ptr) {
+				buffer_ptr->readers--;
+			}
 			buffer_ptr = other.buffer_ptr;
 			ptr = other.ptr;
 			other.buffer_ptr = nullptr;

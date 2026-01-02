@@ -78,7 +78,8 @@ public:
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
-	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode();
+	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode() = 0;
+	DUCKDB_API virtual string GetQuery();
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
 	DUCKDB_API virtual string GetAlias();
 
@@ -161,19 +162,27 @@ public:
 
 	//! Insert the data from this relation into a table
 	DUCKDB_API shared_ptr<Relation> InsertRel(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> InsertRel(const string &catalog_name, const string &schema_name,
+	                                          const string &table_name);
 	DUCKDB_API void Insert(const string &table_name);
 	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
+	DUCKDB_API void Insert(const string &catalog_name, const string &schema_name, const string &table_name);
 	//! Insert a row (i.e.,list of values) into a table
-	DUCKDB_API void Insert(const vector<vector<Value>> &values);
-	DUCKDB_API void Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions);
+	DUCKDB_API virtual void Insert(const vector<vector<Value>> &values);
+	DUCKDB_API virtual void Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions);
 	//! Create a table and insert the data from this relation into that table
 	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name,
 	                                          bool temporary = false,
+	                                          OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
+	DUCKDB_API shared_ptr<Relation> CreateRel(const string &catalog_name, const string &schema_name,
+	                                          const string &table_name, bool temporary = false,
 	                                          OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
 	DUCKDB_API void Create(const string &table_name, bool temporary = false,
 	                       OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
 	DUCKDB_API void Create(const string &schema_name, const string &table_name, bool temporary = false,
 	                       OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
+	DUCKDB_API void Create(const string &catalog_name, const string &schema_name, const string &table_name,
+	                       bool temporary = false, OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT);
 
 	//! Write a relation to a CSV file
 	DUCKDB_API shared_ptr<Relation>

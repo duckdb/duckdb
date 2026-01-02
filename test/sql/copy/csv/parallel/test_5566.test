@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select * from read_csv_auto('data/csv/auto/test_single_column.csv')
+select * from read_csv_auto('{DATA_DIR}/csv/auto/test_single_column.csv')
 ----
 1
 2
@@ -19,7 +19,7 @@ select * from read_csv_auto('data/csv/auto/test_single_column.csv')
 5
 
 query I
-select * from read_csv_auto('data/csv/auto/test_single_column_rn.csv')
+select * from read_csv_auto('{DATA_DIR}/csv/auto/test_single_column_rn.csv')
 ----
 1
 2
@@ -28,14 +28,14 @@ select * from read_csv_auto('data/csv/auto/test_single_column_rn.csv')
 5
 
 query II
-select foo, count(1) cnt from read_csv_auto('data/csv/auto/test_multiple_columns.csv') group by foo order by cnt desc
+select foo, count(1) cnt from read_csv_auto('{DATA_DIR}/csv/auto/test_multiple_columns.csv') group by foo order by cnt desc
 ----
 1	102
 2	100
 3	98
 
 query II
-select foo, count(1) cnt from read_csv_auto('data/csv/auto/test_multiple_columns_rn.csv') group by foo order by cnt desc
+select foo, count(1) cnt from read_csv_auto('{DATA_DIR}/csv/auto/test_multiple_columns_rn.csv') group by foo order by cnt desc
 ----
 1	102
 2	100

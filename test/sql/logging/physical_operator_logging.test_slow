@@ -43,6 +43,11 @@ select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'JoinH
 ----
 16
 
+query I
+select info.total_probe_matches from duckdb_logs_parsed('PhysicalOperator') where class = 'PhysicalHashJoin' and event = 'GetData'
+----
+3000000
+
 # all flushed row groups should be logged, these should be equal
 query I
 select count(*) = (

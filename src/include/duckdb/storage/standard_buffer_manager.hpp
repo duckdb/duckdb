@@ -84,6 +84,8 @@ public:
 	//! Returns information about memory usage
 	vector<MemoryInformation> GetMemoryUsageInfo() const override;
 
+	BlockManager &GetTemporaryBlockManager() final;
+
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final;
 

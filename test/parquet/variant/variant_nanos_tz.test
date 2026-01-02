@@ -3,29 +3,26 @@
 
 require parquet
 
-statement ok
-set variant_legacy_encoding=true;
-
 # Timestamp NS - negative (with timezone) (shredded)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_nanos_tz_negative_no_logical_type.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_tz_negative.parquet';
 ----
-1	"1957-11-07 12:33:54.123457+00"
+1	1957-11-07 12:33:54.123457+00
 
 # Timestamp NS - positive (with timezone) (shredded)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_nanos_tz_positive_no_logical_type.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_tz_positive.parquet';
 ----
-1	"2024-11-07 12:33:54.123456+00"
+1	2024-11-07 12:33:54.123456+00
 
 # Timestamp NS - positive (with timezone) (unshredded)
 query II
-from 'data/parquet-testing/variant_timestamp_nanos_tz_positive_no_logical_type.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos_tz_positive.parquet';
 ----
-1	"2024-11-07 12:33:54.123456+00"
+1	2024-11-07 12:33:54.123456+00
 
 # Timestamp NS - negative (with timezone) (unshredded)
 query II
-from 'data/parquet-testing/variant_timestamp_nanos_tz_negative_no_logical_type.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos_tz_negative.parquet';
 ----
-1	"1957-11-07 12:33:54.123457+00"
+1	1957-11-07 12:33:54.123457+00

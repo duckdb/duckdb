@@ -40,7 +40,7 @@ struct ClientConfig {
 	string profiler_save_location;
 	//! The custom settings for the profiler
 	//! (empty = use the default settings)
-	profiler_settings_t profiler_settings = ProfilingInfo::DefaultSettings();
+	profiler_settings_t profiler_settings = MetricsUtils::GetDefaultMetrics();
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
@@ -121,7 +121,7 @@ public:
 
 	bool AnyVerification() const;
 
-	void SetUserVariable(const string &name, Value value);
+	void SetUserVariable(const String &name, Value value);
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);
 

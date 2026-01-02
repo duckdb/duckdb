@@ -112,8 +112,8 @@ private:
 	//! Partition info that is used by this executor
 	OperatorPartitionInfo required_partition_info;
 
-	//! Source has indicated it is exhausted
-	bool exhausted_source = false;
+	//! Source or intermediate operator indicated that there is no more output possible
+	bool exhausted_pipeline = false;
 	//! Flushing of intermediate operators has started
 	bool started_flushing = false;
 	//! Flushing of caching operators is done
@@ -152,7 +152,7 @@ private:
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
 	//! Notifies the sink that a new batch has started
-	SinkNextBatchType NextBatch(DataChunk &source_chunk);
+	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.

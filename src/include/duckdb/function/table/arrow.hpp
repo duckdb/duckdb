@@ -212,7 +212,7 @@ public:
 	                                                  vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
-	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true,
+	                          DataChunk &output, bool arrow_scan_is_projected = true,
 	                          idx_t rowid_column_index = COLUMN_IDENTIFIER_ROW_ID);
 
 	//! Get next scan state

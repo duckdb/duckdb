@@ -6,13 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 query I
-FROM 'data/csv/date_specificity.csv'
+FROM '{DATA_DIR}/csv/date_specificity.csv'
 ----
 0.00
 12/17/2019
 
 query I
-select d FROM 'data/csv/special_date.csv'
+select d FROM '{DATA_DIR}/csv/special_date.csv'
 ----
 2000-01-01
 2002-02-02

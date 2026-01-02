@@ -5,206 +5,192 @@ require parquet
 
 # Timestamp NS - positive (no timezone)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_nanos_ntz_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_ntz_positive.parquet';
 ----
-1	"2024-11-07 12:33:54.123456789"
+1	2024-11-07 12:33:54.123456789
 
 # Float - negative
 query II
-from 'data/parquet-testing/variant_shredded_float_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_float_negative.parquet';
 ----
-1	-10.109999656677246
+1	-10.11
 
 # Int64 - negative
 query II
-from 'data/parquet-testing/variant_shredded_int64_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int64_negative.parquet';
 ----
 1	-9876543210
 
 # Decimal16 - negative
 query II
-from 'data/parquet-testing/variant_shredded_decimal16_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_decimal16_negative.parquet';
 ----
-1	"-9876543210.123456789"
+1	-9876543210.123456789
 
 # UUID
 query II
-from 'data/parquet-testing/variant_shredded_uuid.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_uuid.parquet';
 ----
-1	"f24f9b64-81fa-49d1-b74e-8c09a6e31c56"
+1	f24f9b64-81fa-49d1-b74e-8c09a6e31c56
 
 # Decimal4 - negative
 query II
-from 'data/parquet-testing/variant_shredded_decimal4_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_decimal4_negative.parquet';
 ----
-1	"-123456.789"
+1	-123456.789
 
 # Decimal4 - positive
 query II
-from 'data/parquet-testing/variant_shredded_decimal4_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_decimal4_positive.parquet';
 ----
-1	"123456.789"
+1	123456.789
 
 # Timestamp Micros - negative (no timezone)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_micros_ntz_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_micros_ntz_negative.parquet';
 ----
-1	"1957-11-07 12:33:54.123456"
+1	1957-11-07 12:33:54.123456
 
 # Date - negative
 query II
-from 'data/parquet-testing/variant_shredded_date_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_date_negative.parquet';
 ----
-1	"1957-11-07"
+1	1957-11-07
 
 # int8 - positive
 query II
-from 'data/parquet-testing/variant_shredded_int8_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int8_positive.parquet';
 ----
 1	34
 
 # int16 - positive
 query II
-from 'data/parquet-testing/variant_shredded_int16_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int16_positive.parquet';
 ----
 1	1234
 
 # decimal8 - negative
 query II
-from 'data/parquet-testing/variant_shredded_decimal8_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_decimal8_negative.parquet';
 ----
-1	"-123456789.987654321"
+1	-123456789.987654321
 
 # string
 query II
-from 'data/parquet-testing/variant_shredded_string.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_string.parquet';
 ----
-1	"iceberg"
-
-# FIXME: this is actually a Timestamp Nanos - positive (with timezone)
-# Timestamp Micros - positive (with timezone)
-query II
-from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_positive.parquet';
-----
-1	"2024-11-07 12:33:54.123456+00"
+1	iceberg
 
 # binary
 query II
-from 'data/parquet-testing/variant_shredded_binary.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_binary.parquet';
 ----
-1	"CgsMDQ=="
+1	CgsMDQ==
 
 # float - positive
 query II
-from 'data/parquet-testing/variant_shredded_float_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_float_positive.parquet';
 ----
-1	10.109999656677246
+1	10.11
 
 # double - positive
 query II
-from 'data/parquet-testing/variant_shredded_double_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_double_positive.parquet';
 ----
 1	14.3
 
 # decimal16 - positive
 query II
-from 'data/parquet-testing/variant_shredded_decimal16_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_decimal16_positive.parquet';
 ----
-1	"9876543210.123456789"
+1	9876543210.123456789
 
 # Timestamp Micros - positive (no timezone)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_micros_ntz_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_micros_ntz_positive.parquet';
 ----
-1	"2024-11-07 12:33:54.123456"
+1	2024-11-07 12:33:54.123456
 
 # int16 - negative
 query II
-from 'data/parquet-testing/variant_shredded_int16_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int16_negative.parquet';
 ----
 1	-1234
 
 # Timestamp Micros - positive (with timezone)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_positive2.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_micros_tz_positive.parquet';
 ----
-1	"2024-11-07 12:33:54.123456+00"
+1	2024-11-07 12:33:54.123456+00
 
 # Timestamp Micros - negative (with timezone)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_micros_tz_negative.parquet';
 ----
-1	"1957-11-07 12:33:54.123456+00"
+1	1957-11-07 12:33:54.123456+00
 
 # decimal8 - positive
 query II
-from 'data/parquet-testing/variant_shredded_decimal8_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_decimal8_positive.parquet';
 ----
-1	"123456789.987654321"
+1	123456789.987654321
 
 # Timestamp Nanos - negative (no timezone)
 query II
-from 'data/parquet-testing/variant_shredded_timestamp_nanos_ntz_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_ntz_negative.parquet';
 ----
-1	"1957-11-07 12:33:54.123456789"
+1	1957-11-07 12:33:54.123456789
 
 # int32 - positive
 query II
-from 'data/parquet-testing/variant_shredded_int32_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int32_positive.parquet';
 ----
 1	12345
 
 # int32 - negative
 query II
-from 'data/parquet-testing/variant_shredded_int32_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int32_negative.parquet';
 ----
 1	-12345
 
-# FIXME: this is actually a Timestamp Nanos - negative (with timezone)
-# Timestamp Micros - negative (with timezone)
-query II
-from 'data/parquet-testing/variant_shredded_timestamp_micros_tz_negative2.parquet';
-----
-1	"1957-11-07 12:33:54.123457+00"
-
 # int8 - negative
 query II
-from 'data/parquet-testing/variant_shredded_int8_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int8_negative.parquet';
 ----
 1	-34
 
 # Time Micros (no timezone)
 query II
-from 'data/parquet-testing/variant_shredded_time_micros_ntz.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_time_micros_ntz.parquet';
 ----
-1	"12:33:54.123456"
+1	12:33:54.123456
 
 # Date - positive
 query II
-from 'data/parquet-testing/variant_shredded_date_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_date_positive.parquet';
 ----
-1	"2024-11-07"
+1	2024-11-07
 
 # bool - true
 query II
-from 'data/parquet-testing/variant_shredded_bool_true.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_bool_true.parquet';
 ----
 1	true
 
 # int64 - positive
 query II
-from 'data/parquet-testing/variant_shredded_int64_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_int64_positive.parquet';
 ----
 1	9876543210
 
 # double - negative
 query II
-from 'data/parquet-testing/variant_shredded_double_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_double_negative.parquet';
 ----
 1	-14.3
 
 # bool - false
 query II
-from 'data/parquet-testing/variant_shredded_bool_false.parquet';
+from '{DATA_DIR}/parquet-testing/variant_shredded_bool_false.parquet';
 ----
 1	false

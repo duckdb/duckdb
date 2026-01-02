@@ -17,7 +17,6 @@
 namespace duckdb {
 
 class EncryptionKey {
-
 public:
 	explicit EncryptionKey(data_ptr_t encryption_key);
 	~EncryptionKey();
@@ -42,7 +41,6 @@ private:
 };
 
 class EncryptionKeyManager : public ObjectCacheEntry {
-
 public:
 	static EncryptionKeyManager &GetInternal(ObjectCache &cache);
 	static EncryptionKeyManager &Get(ClientContext &context);
@@ -57,6 +55,9 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
 
 public:
 public:
@@ -66,6 +67,8 @@ public:
 	static void KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
 	                                        data_ptr_t derived_key);
 	static string Base64Decode(const string &key);
+
+	//! Generate a (non-cryptographically secure) random key ID
 	static string GenerateRandomKeyID();
 
 public:
@@ -74,6 +77,7 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
+	mutable mutex lock;
 	std::unordered_map<std::string, EncryptionKey> derived_keys;
 };
 

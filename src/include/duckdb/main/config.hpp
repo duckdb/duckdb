@@ -16,6 +16,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -40,6 +41,7 @@
 
 namespace duckdb {
 
+class BlockAllocator;
 class BufferManager;
 class BufferPool;
 class CastFunctionSet;
@@ -110,6 +112,8 @@ struct DBConfigOptions {
 #else
 	bool autoinstall_known_extensions = false;
 #endif
+	//! Setting for the parser override registered by extensions. Allowed options: "default, "fallback", "strict"
+	string allow_parser_override_extension = "default";
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
 	//! Override for the default autoload extension repository
@@ -163,12 +167,18 @@ struct DBConfigOptions {
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
+	//! Force a specific schema for VARIANT shredding
+	LogicalType force_variant_shredding = LogicalType::INVALID;
+	//! Minimum size of a rowgroup to enable VARIANT shredding, -1 to disable
+	int64_t variant_minimum_shredding_size = 30000;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
 	//! Directory to store extension binaries in
 	string extension_directory;
+	//! Additional directories to store extension binaries in
+	vector<string> extension_directories;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 	//! Whether community extensions should be loaded
@@ -209,6 +219,8 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Whether to enable external file caching using CachingFileSystem
 	bool enable_external_file_cache = true;
+	//! Cache validation mode, by default all cache entries are validated.
+	CacheValidationMode validate_external_file_cache = CacheValidationMode::VALIDATE_ALL;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;
@@ -217,6 +229,8 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
+	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
+	idx_t block_allocator_size = 0;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -244,6 +258,8 @@ public:
 	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
+	//! The block allocator used by the system
+	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
 	//! Extensions made to the parser
@@ -289,6 +305,7 @@ public:
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
+	DUCKDB_API bool HasExtensionOption(const string &name);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
@@ -300,7 +317,7 @@ public:
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
-	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void SetOption(const String &name, Value value);
 	DUCKDB_API void ResetOption(const String &name);
 	DUCKDB_API void ResetGenericOption(const String &name);
 	static LogicalType ParseLogicalType(const string &type);

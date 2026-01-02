@@ -74,7 +74,7 @@ void TupleDataChunkIterator::Reset() {
 }
 
 idx_t TupleDataChunkIterator::GetCurrentChunkCount() const {
-	return collection.segments[current_segment_idx]->chunks[current_chunk_idx].count;
+	return collection.segments[current_segment_idx]->chunks[current_chunk_idx]->count;
 }
 
 TupleDataChunkState &TupleDataChunkIterator::GetChunkState() {

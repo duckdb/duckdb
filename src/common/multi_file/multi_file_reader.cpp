@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/union_by_name.hpp"
@@ -299,7 +300,6 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
                                    const vector<MultiFileColumnDefinition> &global_columns,
                                    const vector<ColumnIndex> &global_column_ids, ClientContext &context,
                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
-
 	// create a map of name -> column index
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &filename = reader_data.reader->GetFileName();

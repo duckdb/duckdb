@@ -5,17 +5,17 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('COP') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('COP') LIMIT 1;
 ----
 COPY 	0
 
 query II
-FROM sql_auto_complete('COPY tbl FRO') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('COPY tbl FRO') LIMIT 1;
 ----
 FROM 	9
 
 query II
-FROM sql_auto_complete('COPY tbl FROM ''file.csv'' HEAD') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('COPY tbl FROM ''file.csv'' HEAD') LIMIT 1;
 ----
 HEADER 	25
 
@@ -23,6 +23,6 @@ statement ok
 CREATE TABLE my_table(my_column INTEGER);
 
 query II
-FROM sql_auto_complete('COPY my_') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('COPY my_') LIMIT 1;
 ----
 my_table	5

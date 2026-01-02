@@ -470,7 +470,6 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = GetNonTmpFile(context, tmp_file_path);
-	fs.TryRemoveFile(file_path);
 	fs.MoveFile(tmp_file_path, file_path);
 }
 
@@ -704,8 +703,8 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyT
 	chunk.SetValue(5, row_idx, info.partition_keys);
 }
 
-SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
-                                             OperatorSourceInput &input) const {
+SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                     OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		auto &source_state = input.global_state.Cast<CopyToFileGlobalSourceState>();

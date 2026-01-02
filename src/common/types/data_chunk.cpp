@@ -254,7 +254,6 @@ string DataChunk::ToString() const {
 }
 
 void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization) const {
-
 	// write the count
 	auto row_count = size();
 	serializer.WriteProperty<sel_t>(100, "rows", NumericCast<sel_t>(row_count));
@@ -279,7 +278,6 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 }
 
 void DataChunk::Deserialize(Deserializer &deserializer) {
-
 	// read and set the row count
 	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
 

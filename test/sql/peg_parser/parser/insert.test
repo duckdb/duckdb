@@ -1,0 +1,16 @@
+# name: test/sql/peg_parser/parser/insert.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT TRUE OFFSET 1 ROWS;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO v0 BY POSITION ( SELECT TRUE ) OFFSET 1 ROWS RETURNING v0;$TEST_PEG_PARSER$);
+
+statement error
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO table2 WITH cte AS (INSERT INTO table1 SELECT 1) SELECT id FROM cte;$TEST_PEG_PARSER$);
+----
+<REGEX>:.*Binder Error.*

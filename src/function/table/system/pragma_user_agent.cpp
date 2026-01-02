@@ -13,7 +13,6 @@ struct PragmaUserAgentData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> PragmaUserAgentBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-
 	names.emplace_back("user_agent");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

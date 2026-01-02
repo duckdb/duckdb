@@ -38,7 +38,6 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef &window_spec
 
 static inline WindowBoundary TransformFrameOption(const int frameOptions, const WindowBoundary rows,
                                                   const WindowBoundary range, const WindowBoundary groups) {
-
 	if (frameOptions & FRAMEOPTION_RANGE) {
 		return range;
 	} else if (frameOptions & FRAMEOPTION_GROUPS) {

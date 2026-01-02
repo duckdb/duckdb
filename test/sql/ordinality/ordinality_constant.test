@@ -19,7 +19,7 @@ SELECT o,range FROM range(1) WITH ORDINALITY AS _(range,o);
 
 
 query II
-SELECT col = 'data/csv/customer.csv' OR col = 'data\csv\customer.csv', o FROM glob('data/csv/customer.csv') with ordinality AS _(col,o);
+SELECT col = '{DATA_DIR}/csv/customer.csv' OR col = '{DATA_DIR}\csv\customer.csv', o FROM glob('{DATA_DIR}/csv/customer.csv') with ordinality AS _(col,o);
 ----
 true	1
 
@@ -125,19 +125,19 @@ SELECT * FROM unnest([41,42,43]) WITH ORDINALITY;
 
 
 query II nosort read_csv_result
-SELECT column00, ordinality FROM read_csv('data/csv/customer.csv') WITH ORDINALITY ORDER BY ordinality,column00;
+SELECT column00, ordinality FROM read_csv('{DATA_DIR}/csv/customer.csv') WITH ORDINALITY ORDER BY ordinality,column00;
 
 
 query II nosort read_csv_result
-SELECT column00, row_number() OVER () AS ordinality FROM read_csv('data/csv/customer.csv') ORDER BY ordinality,column00;
+SELECT column00, row_number() OVER () AS ordinality FROM read_csv('{DATA_DIR}/csv/customer.csv') ORDER BY ordinality,column00;
 
 
 require parquet
 
 
 query II nosort parquet_result
-SELECT d,ordinality FROM read_parquet('data/parquet-testing/date.parquet') WITH ORDINALITY ORDER BY ordinality,d;
+SELECT d,ordinality FROM read_parquet('{DATA_DIR}/parquet-testing/date.parquet') WITH ORDINALITY ORDER BY ordinality,d;
 
 
 query III nosort parquet_result
-SELECT d, row_number() OVER () AS ordinality FROM read_parquet('data/parquet-testing/date.parquet') ORDER BY ordinality,d;
+SELECT d, row_number() OVER () AS ordinality FROM read_parquet('{DATA_DIR}/parquet-testing/date.parquet') ORDER BY ordinality,d;

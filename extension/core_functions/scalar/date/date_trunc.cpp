@@ -676,47 +676,16 @@ unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &b
 	}
 	const auto part_name = part_value.ToString();
 	const auto part_code = GetDatePartSpecifier(part_name);
-	switch (part_code) {
-	case DatePartSpecifier::MILLENNIUM:
-	case DatePartSpecifier::CENTURY:
-	case DatePartSpecifier::DECADE:
-	case DatePartSpecifier::YEAR:
-	case DatePartSpecifier::QUARTER:
-	case DatePartSpecifier::MONTH:
-	case DatePartSpecifier::WEEK:
-	case DatePartSpecifier::YEARWEEK:
-	case DatePartSpecifier::ISOYEAR:
-	case DatePartSpecifier::DAY:
-	case DatePartSpecifier::DOW:
-	case DatePartSpecifier::ISODOW:
-	case DatePartSpecifier::DOY:
-	case DatePartSpecifier::JULIAN_DAY:
-		switch (bound_function.arguments[1].id()) {
-		case LogicalType::TIMESTAMP:
-			bound_function.function = DateTruncFunction<timestamp_t, date_t>;
-			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
-			break;
-		case LogicalType::DATE:
-			bound_function.function = DateTruncFunction<date_t, date_t>;
-			bound_function.statistics = DateTruncStats<date_t, date_t>(part_code);
-			break;
-		default:
-			throw NotImplementedException("Temporal argument type for DATETRUNC");
-		}
-		bound_function.return_type = LogicalType::DATE;
+
+	switch (bound_function.arguments[1].id()) {
+	case LogicalType::TIMESTAMP:
+		bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, timestamp_t>(part_code));
+		break;
+	case LogicalType::DATE:
+		bound_function.SetStatisticsCallback(DateTruncStats<date_t, timestamp_t>(part_code));
 		break;
 	default:
-		switch (bound_function.arguments[1].id()) {
-		case LogicalType::TIMESTAMP:
-			bound_function.statistics = DateTruncStats<timestamp_t, timestamp_t>(part_code);
-			break;
-		case LogicalType::DATE:
-			bound_function.statistics = DateTruncStats<date_t, timestamp_t>(part_code);
-			break;
-		default:
-			throw NotImplementedException("Temporal argument type for DATETRUNC");
-		}
-		break;
+		throw NotImplementedException("Temporal argument type for DATETRUNC");
 	}
 
 	return nullptr;
@@ -733,7 +702,7 @@ ScalarFunctionSet DateTruncFun::GetFunctions() {
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
 	for (auto &func : date_trunc.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return date_trunc;
 }
