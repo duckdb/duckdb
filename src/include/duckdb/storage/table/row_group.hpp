@@ -197,7 +197,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats(idx_t row_group_start);
+	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
