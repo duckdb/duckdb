@@ -134,11 +134,11 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		}
 		// If we have an unexpanded struct (kept intact for ordered comparison),
 		// the subquery might return multiple columns that need to be combined into a struct
-		if (has_unexpanded_struct && expected_columns == 1 && bound_subquery.bound_node->types.size() > 1 &&
+		if (has_unexpanded_struct && expected_columns == 1 && bound_subquery.bound_node.types.size() > 1 &&
 		    TypeIsUnnamedStruct(child_expressions[0]->return_type)) {
 			// The child is a struct with N elements, and the subquery returns N columns
 			// This is allowed - the subquery columns will be matched against the struct during execution
-			expected_columns = bound_subquery.bound_node->types.size();
+			expected_columns = bound_subquery.bound_node.types.size();
 		}
 		if (bound_subquery.bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
