@@ -27,7 +27,7 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
-	if (showref.show_type == duckdb::ShowType::SUMMARY) {
+	if (showref.show_type == duckdb::ShowType::SUMMARY || showref.show_type == duckdb::ShowType::SHOW_FROM) {
 		return false;
 	}
 	if (showref.table_name == "\"databases\"" || showref.table_name == "\"tables\"" ||
