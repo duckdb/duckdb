@@ -588,8 +588,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
-	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(index_storage_info);
+	auto index_storage_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<IndexStorageInfo>>(
+	    102, "index_storage_info", unique_ptr<IndexStorageInfo>());
+	ReplayIndexData(*index_storage_info);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -632,8 +633,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &storage = table.GetStorage();
 	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
-	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
-	                       index_storage_info.options);
+	                       index_storage_info->name, column_ids, unbound_expressions, *index_storage_info,
+	                       index_storage_info->options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
@@ -804,9 +805,10 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
-	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	auto index_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<IndexStorageInfo>>(
+	    102, "index_storage_info", unique_ptr<IndexStorageInfo>());
 
-	ReplayIndexData(index_info);
+	ReplayIndexData(*index_info);
 	if (DeserializeOnly()) {
 		return;
 	}
