@@ -361,7 +361,7 @@ void PartitionedTupleData::Verify() const {
 	for (auto &partition : partitions) {
 		partition->Verify();
 		total_count += partition->Count();
-		total_size += partition->SizeInBytes();
+		total_size += partition->data_size;
 	}
 	D_ASSERT(total_count == this->count);
 	D_ASSERT(total_size == this->data_size);
