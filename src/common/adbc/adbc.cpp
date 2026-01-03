@@ -111,6 +111,7 @@ struct DuckDBAdbcStatementWrapper {
 	duckdb_connection connection;
 	duckdb_prepared_statement statement;
 	char *ingestion_table_name;
+	char *target_catalog;
 	char *db_schema;
 	ArrowArrayStream ingestion_stream;
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
@@ -723,13 +724,25 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 }
 
 // Helper function to build CREATE TABLE SQL statement
-static std::string BuildCreateTableSQL(const char *schema, const char *table_name,
+static std::string BuildCreateTableSQL(const char *catalog, const char *schema, const char *table_name,
                                        const duckdb::vector<duckdb::LogicalType> &types,
-                                       const duckdb::vector<std::string> &names, bool if_not_exists = false) {
+                                       const duckdb::vector<std::string> &names, bool if_not_exists = false,
+                                       bool temporary = false) {
 	std::ostringstream create_table;
-	create_table << "CREATE TABLE ";
+	create_table << "CREATE ";
+	if (temporary) {
+		create_table << "TEMP ";
+	}
+	create_table << "TABLE ";
 	if (if_not_exists) {
 		create_table << "IF NOT EXISTS ";
+	}
+	// Note: DuckDB resolves two-part names as either catalog.table (default schema)
+	// or schema.table depending on context. This can become ambiguous if a schema and
+	// an attached catalog share a name. Callers should prefer passing an explicit
+	// schema (or defaulting to "main") to produce an unambiguous three-part name.
+	if (catalog) {
+		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
 	}
 	if (schema) {
 		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
@@ -747,9 +760,12 @@ static std::string BuildCreateTableSQL(const char *schema, const char *table_nam
 }
 
 // Helper function to build DROP TABLE IF EXISTS SQL statement
-static std::string BuildDropTableSQL(const char *schema, const char *table_name) {
+static std::string BuildDropTableSQL(const char *catalog, const char *schema, const char *table_name) {
 	std::ostringstream drop_table;
 	drop_table << "DROP TABLE IF EXISTS ";
+	if (catalog) {
+		drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
+	}
 	if (schema) {
 		drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
 	}
@@ -757,7 +773,7 @@ static std::string BuildDropTableSQL(const char *schema, const char *table_name)
 	return drop_table.str();
 }
 
-AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, const char *schema,
+AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const char *table_name, const char *schema,
                       struct ArrowArrayStream *input, struct AdbcError *error, IngestionMode ingestion_mode,
                       bool temporary, int64_t *rows_affected) {
 	if (!connection) {
@@ -773,10 +789,28 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	if (schema && temporary) {
-		// Temporary option is not supported with ADBC_INGEST_OPTION_TARGET_DB_SCHEMA or
-		// ADBC_INGEST_OPTION_TARGET_CATALOG
+		// Temporary option is not supported with ADBC_INGEST_OPTION_TARGET_DB_SCHEMA
 		SetError(error, "Temporary option is not supported with schema");
-		return ADBC_STATUS_INVALID_ARGUMENT;
+		return ADBC_STATUS_INVALID_STATE;
+	}
+	if (catalog && temporary) {
+		// Temporary option is not supported with ADBC_INGEST_OPTION_TARGET_CATALOG
+		SetError(error, "Temporary option is not supported with catalog");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+
+	// Resolve target name parts.
+	// Used for both SQL generation (CREATE/DROP) and appender lookup.
+	// Prefer explicit three-part names; two-part names can be ambiguous.
+	const char *effective_catalog = catalog;
+	const char *effective_schema = schema;
+	if (temporary) {
+		effective_catalog = nullptr;
+		effective_schema = "temp";
+	} else if (catalog && !schema) {
+		// Default schema for attached catalogs (DEFAULT_SCHEMA).
+		// Use catalog.main.table to avoid catalog/schema name ambiguity.
+		effective_schema = "main";
 	}
 
 	duckdb::ArrowSchemaWrapper arrow_schema_wrapper;
@@ -798,7 +832,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	switch (ingestion_mode) {
 	case IngestionMode::CREATE: {
 		// CREATE mode: Create table, error if already exists
-		auto sql = BuildCreateTableSQL(schema, table_name, types, names);
+		auto sql = BuildCreateTableSQL(effective_catalog, effective_schema, table_name, types, names, false, temporary);
 		duckdb_result result;
 		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
 			const char *error_msg = duckdb_result_error(&result);
@@ -819,8 +853,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		break;
 	case IngestionMode::REPLACE: {
 		// REPLACE mode: Drop table if exists, then create
-		auto drop_sql = BuildDropTableSQL(schema, table_name);
-		auto create_sql = BuildCreateTableSQL(schema, table_name, types, names);
+		auto drop_sql = BuildDropTableSQL(effective_catalog, effective_schema, table_name);
+		auto create_sql =
+		    BuildCreateTableSQL(effective_catalog, effective_schema, table_name, types, names, false, temporary);
 		duckdb_result result;
 		if (duckdb_query(connection, drop_sql.c_str(), &result) == DuckDBError) {
 			SetError(error, duckdb_result_error(&result));
@@ -838,7 +873,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	}
 	case IngestionMode::CREATE_APPEND: {
 		// CREATE_APPEND mode: Create if not exists, append if exists
-		auto sql = BuildCreateTableSQL(schema, table_name, types, names, true);
+		auto sql = BuildCreateTableSQL(effective_catalog, effective_schema, table_name, types, names, true, temporary);
 		duckdb_result result;
 		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
 			SetError(error, duckdb_result_error(&result));
@@ -849,7 +884,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		break;
 	}
 	}
-	AppenderWrapper appender(connection, schema, table_name);
+	AppenderWrapper appender(connection, effective_catalog, effective_schema, table_name);
 	if (!appender.Valid()) {
 		return ADBC_STATUS_INTERNAL;
 	}
@@ -917,6 +952,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->statement = nullptr;
 	statement_wrapper->ingestion_stream.release = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
+	statement_wrapper->target_catalog = nullptr;
 	statement_wrapper->db_schema = nullptr;
 	statement_wrapper->temporary_table = false;
 
@@ -940,6 +976,10 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 	if (wrapper->ingestion_table_name) {
 		free(wrapper->ingestion_table_name);
 		wrapper->ingestion_table_name = nullptr;
+	}
+	if (wrapper->target_catalog) {
+		free(wrapper->target_catalog);
+		wrapper->target_catalog = nullptr;
 	}
 	if (wrapper->db_schema) {
 		free(wrapper->db_schema);
@@ -1017,8 +1057,9 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 	auto stream = statement->ingestion_stream;
 
 	// Ingest into a table from the bound stream
-	return Ingest(statement->connection, statement->ingestion_table_name, statement->db_schema, &stream, error,
-	              statement->ingestion_mode, statement->temporary_table, rows_affected);
+	return Ingest(statement->connection, statement->target_catalog, statement->ingestion_table_name,
+	              statement->db_schema, &stream, error, statement->ingestion_mode, statement->temporary_table,
+	              rows_affected);
 }
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
@@ -1323,15 +1364,25 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
 
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_TABLE) == 0) {
+		if (wrapper->ingestion_table_name) {
+			free(wrapper->ingestion_table_name);
+		}
 		wrapper->ingestion_table_name = strdup(value);
-		wrapper->temporary_table = false;
 		return ADBC_STATUS_OK;
 	}
 	if (strcmp(key, ADBC_INGEST_OPTION_TEMPORARY) == 0) {
 		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
+			// Align with arrow-adbc PostgreSQL driver behavior: if a schema was set
+			// before enabling temporary ingestion, clear it so temporary can proceed.
+			// (Some clients set schema by default.)
 			if (wrapper->db_schema) {
-				SetError(error, "Temporary option is not supported with schema");
-				return ADBC_STATUS_INVALID_ARGUMENT;
+				free(wrapper->db_schema);
+				wrapper->db_schema = nullptr;
+			}
+			// Some clients may also set a catalog by default; clear it so temporary can proceed.
+			if (wrapper->target_catalog) {
+				free(wrapper->target_catalog);
+				wrapper->target_catalog = nullptr;
 			}
 			wrapper->temporary_table = true;
 			return ADBC_STATUS_OK;
@@ -1347,11 +1398,18 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 	}
 
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA) == 0) {
-		if (wrapper->temporary_table) {
-			SetError(error, "Temporary option is not supported with schema");
-			return ADBC_STATUS_INVALID_ARGUMENT;
+		if (wrapper->db_schema) {
+			free(wrapper->db_schema);
 		}
 		wrapper->db_schema = strdup(value);
+		return ADBC_STATUS_OK;
+	}
+
+	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_CATALOG) == 0) {
+		if (wrapper->target_catalog) {
+			free(wrapper->target_catalog);
+		}
+		wrapper->target_catalog = strdup(value);
 		return ADBC_STATUS_OK;
 	}
 
