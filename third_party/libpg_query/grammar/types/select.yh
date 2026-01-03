@@ -134,4 +134,4 @@
 %type <boolean> opt_include_nulls
 
 %type <node> typemod
-%type <list> opt_type_modifiers opt_typemod_list_opt_comma typemod_list_opt_comma typemod_list opt_named_typemod named_typemod
+%type <list> opt_type_modifiers opt_typemod_list_opt_comma typemod_list_opt_comma typemod_list opt_named_typemod

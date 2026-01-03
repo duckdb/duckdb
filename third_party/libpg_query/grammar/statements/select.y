@@ -1682,14 +1682,9 @@ typemod
 	| '(' a_expr ')' 	{ $$ = (PGNode *) $2; }
 	;
 
-named_typemod
-	: IDENT Typename 		{ $$ = list_make2(makeString($1), $2); }
-	| IDENT COLON_EQUALS Typename { $$ = list_make2(makeString($1), $3); }
-	;
-
 opt_named_typemod
-	: typemod		{ $$ = list_make2(NULL, $1); }
-	| named_typemod	{ $$ = $1; }
+	: typemod							{ $$ = list_make2(NULL, $1); }
+	| param_name COLON_EQUALS typemod 	{ $$ = list_make2(makeString($1), $3); }
 	;
 
 typemod_list
@@ -1713,12 +1708,19 @@ opt_type_modifiers:
 	;
 
 colid_type_list:
-            ColId Typename   {
+            ColId typemod   {
              $$ = list_make1(list_make2(makeString($1), $2));
             }
-            | colid_type_list ',' ColId Typename {
+            | ColId COLON_EQUALS typemod {
+			 $$ = list_make1(list_make2(makeString($1), $3));
+			}
+            | colid_type_list ',' ColId typemod {
              $$ = lappend($1, list_make2(makeString($3), $4));
             }
+            | colid_type_list ',' ColId COLON_EQUALS typemod {
+			 $$ = lappend($1, list_make2(makeString($3), $5));
+			}
+		;
 
 RowOrStruct: ROW | STRUCT
 
