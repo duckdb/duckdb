@@ -2685,6 +2685,7 @@ a_expr:		c_expr									{ $$ = $1; }
 					star->location = @1;
 					$$ = (PGNode *) star;
 				}
+			| let_expr { $$ = $1; }
 			| ColId '.' '*' opt_except_list opt_replace_list opt_rename_list
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -2943,6 +2944,68 @@ map_expr:  MAP '{' opt_map_arguments_opt_comma '}'
                     $$ = (PGNode *) f;
                 }
 
+
+let_var: ColId COLON_EQUALS b_expr
+			{
+				$$ = list_make2(makeString($1), $3);
+			}
+		;
+
+let_list:	let_var
+				{
+					$$ = list_make1($1);
+				}
+			| let_list ',' let_var
+				{
+					$$ = lappend($1, $3);
+				}
+		;
+
+let_list_opt_comma:
+			let_list
+				{
+					$$ = $1;
+				}
+			|
+			let_list ','
+				{
+					$$ = $1;
+				}
+		;
+
+let_expr: LET let_list_opt_comma IN_P a_expr
+			{
+
+				// Collect all the variables and their corresponding expressions
+			 	PGList *var_list = NULL;
+				PGList *arg_list = NULL;
+				PGListCell *lc;
+				PGList *entry_list = $2;
+				foreach(lc, entry_list)
+				{
+					PGList *l = (PGList *) lc->data.ptr_value;
+					var_list = lappend(var_list, (PGNode *) l->head->data.ptr_value);
+					arg_list = lappend(arg_list, (PGNode *) l->tail->data.ptr_value);
+				}
+
+				// Create the lambda function
+				PGLambdaFunction *l = makeNode(PGLambdaFunction);
+				l->lhs = var_list;
+				l->rhs = $4;
+				l->location = @2;
+
+				// Prepend the lambda
+				lcons(l, arg_list);
+
+				// Make func call to lambda_invoke
+				PGFuncCall *n = makeFuncCall(
+					SystemFuncName("lambda_invoke"),
+					arg_list,
+				   	@1);
+
+				$$ = (PGNode *) n;
+			}
+		;
 
 
 func_application:       func_name '(' ')'

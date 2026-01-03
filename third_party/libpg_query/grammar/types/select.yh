@@ -132,3 +132,6 @@
 %type <node> pivot_value pivot_column_entry single_pivot_value unpivot_value
 %type <list> pivot_value_list pivot_column_list_internal pivot_column_list pivot_header opt_pivot_group_by unpivot_value_list
 %type <boolean> opt_include_nulls
+
+%type <node> let_expr
+%type <list> let_list_opt_comma let_list let_var

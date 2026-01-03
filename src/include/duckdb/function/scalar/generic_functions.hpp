@@ -55,4 +55,14 @@ struct CreateSortKeyFun {
 	static ScalarFunction GetFunction();
 };
 
+struct LambdaInvokeFun {
+	static constexpr const char *Name = "lambda_invoke";
+	static constexpr const char *Parameters = "lambda,arg1,arg2,...";
+	static constexpr const char *Description = "Invokes a lambda function with the given arguments";
+	static constexpr const char *Example = "lambda_invoke(x -> x + 1, 5)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb
