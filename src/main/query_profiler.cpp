@@ -25,7 +25,8 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
-    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false) {
+    : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
+      metrics_finalized(false) {
 }
 
 bool QueryProfiler::IsEnabled() const {
@@ -107,6 +108,7 @@ void QueryProfiler::Reset() {
 	phase_stack.clear();
 	running = false;
 	query_metrics.Reset();
+	metrics_finalized = false;
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
@@ -199,37 +201,14 @@ void QueryProfiler::EndQuery() {
 		return;
 	}
 
-	query_metrics.latency_timer->EndTimer();
-	if (root) {
-		auto &info = root->GetProfilingInfo();
-		if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_CARDINALITY)) {
-			Finalize(*root->GetChild(0));
-		}
-	}
+	FinalizeMetricsInternal();
 	running = false;
 	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
 	// EXPLAIN ANALYZE output is not written by the profiler.
-	if (IsEnabled() && !is_explain_analyze) {
-		if (root) {
-			auto &info = root->GetProfilingInfo();
-			auto &child_info = root->children[0]->GetProfilingInfo();
-
-			const auto &settings = info.expanded_settings;
-			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
-				info.metrics[global_info_entry.first] = global_info_entry.second;
-			}
-
-			MoveOptimizerPhasesToRoot();
-			for (auto &metric : info.metrics) {
-				if (info.Enabled(settings, metric.first)) {
-					ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, *root, child_info);
-				}
-			}
-		}
-
-		if (ClientConfig::GetConfig(context).emit_profiler_output) {
+	if (IsEnabled()) {
+		if (!is_explain_analyze && ClientConfig::GetConfig(context).emit_profiler_output) {
 			emit_output = true;
 		}
 	}
@@ -252,6 +231,11 @@ void QueryProfiler::EndQuery() {
 			WriteToFile(save_location.c_str(), tree);
 		}
 	}
+}
+
+void QueryProfiler::FinalizeMetrics() {
+	lock_guard<std::mutex> guard(lock);
+	FinalizeMetricsInternal();
 }
 
 void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
@@ -943,6 +927,35 @@ void QueryProfiler::MoveOptimizerPhasesToRoot() {
 			root_metrics[phase] = Value::CreateValue(timing);
 		}
 	}
+}
+
+void QueryProfiler::FinalizeMetricsInternal() {
+	if (metrics_finalized || !IsEnabled() || !root) {
+		return;
+	}
+
+	if (query_metrics.latency_timer) {
+		query_metrics.latency_timer->EndTimer();
+	}
+
+	auto &info = root->GetProfilingInfo();
+	if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_CARDINALITY)) {
+		Finalize(*root->GetChild(0));
+	}
+
+	auto &child_info = root->children[0]->GetProfilingInfo();
+	const auto &settings = info.expanded_settings;
+	for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
+		info.metrics[global_info_entry.first] = global_info_entry.second;
+	}
+
+	MoveOptimizerPhasesToRoot();
+	for (auto &metric : info.metrics) {
+		if (info.Enabled(settings, metric.first)) {
+			ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, *root, child_info);
+		}
+	}
+	metrics_finalized = true;
 }
 
 } // namespace duckdb
