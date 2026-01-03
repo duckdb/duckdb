@@ -84,31 +84,20 @@ public:
 		return arrow_stream;
 	}
 
-	void CreateTable(const string &table_name, ArrowArrayStream &input_data, string schema = "",
-	                 bool temporary = false) {
+	void CreateTable(const string &table_name, ArrowArrayStream &input_data, string schema = "", bool temporary = false,
+	                 string catalog = "") {
 		REQUIRE(input_data.release);
 		AdbcStatement adbc_statement;
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		if (!catalog.empty()) {
+			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_CATALOG, catalog.c_str(),
+			                                       &adbc_error)));
+		}
 		if (!schema.empty()) {
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, schema.c_str(),
 			                                       &adbc_error)));
 		}
 		if (temporary) {
-			if (!schema.empty()) {
-				REQUIRE(!SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
-				                                        ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
-				REQUIRE((std::strcmp(adbc_error.message, "Temporary option is not supported with schema") == 0));
-				// We must Release the error (Malloc-ed string)
-				adbc_error.release(&adbc_error);
-				InitializeADBCError(&adbc_error);
-				REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
-				// Release the input_data stream since we didn't transfer ownership
-				if (input_data.release) {
-					input_data.release(&input_data);
-				}
-				input_data.release = nullptr;
-				return;
-			}
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY,
 			                                       ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
 		}
@@ -198,13 +187,22 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	// Create Arrow Result
-	auto &input_data = db.QueryArrow("SELECT 42 as value");
+	// Temporary and persistent tables with the same name should be distinct.
+	auto &input_temp = db.QueryArrow("SELECT 42 as value");
+	db.CreateTable("my_table", input_temp, "", true);
+	auto &input_persistent = db.QueryArrow("SELECT 84 as value");
+	db.CreateTable("my_table", input_persistent, "", false);
 
-	// Create Table 'my_table' from the Arrow Result
-	db.CreateTable("my_table", input_data, "", true);
-
-	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+	{
+		auto res_temp = db.Query("SELECT * FROM temp.my_table");
+		REQUIRE(!res_temp->HasError());
+		REQUIRE(res_temp->GetValue(0, 0).ToString() == "42");
+	}
+	{
+		auto res_persistent = db.Query("SELECT * FROM main.my_table");
+		REQUIRE(!res_persistent->HasError());
+		REQUIRE(res_persistent->GetValue(0, 0).ToString() == "84");
+	}
 }
 
 TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
@@ -216,16 +214,109 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	// Create Arrow Result
 	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
-	// Since this is temporary and has a schema, it will fail in an internal code path
+	// Temporary ingestion ignores schema.
 	db.CreateTable("my_table", input_data, "my_schema", true);
 
-	// We released it in the error, hence we create it again
-	auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+	{
+		auto res = db.Query("SELECT * FROM my_schema.my_table");
+		REQUIRE(res->HasError());
+	}
+}
 
-	db.CreateTable("my_table", input_data_2, "my_schema");
+TEST_CASE("ADBC - Test ingestion - Target Catalog", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
 
-	// we can check it works
-	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
+	// Attach a separate database to act as the target catalog.
+	auto attached_path = TestCreatePath("adbc_ingest_target_catalog.db");
+	db.Query("ATTACH '" + attached_path + "' AS my_catalog;");
+
+	// Create Arrow Result
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	// Ingest into catalog-qualified name.
+	db.CreateTable("my_table", input_data, "", false, "my_catalog");
+
+	// Catalog-only defaults schema to main; use 3-part name to avoid catalog/schema ambiguity.
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_catalog.main.my_table"));
+}
+
+TEST_CASE("ADBC - Test ingestion - Target Catalog and Schema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto attached_path = TestCreatePath("adbc_ingest_target_catalog_schema.db");
+	db.Query("ATTACH '" + attached_path + "' AS my_catalog;");
+	db.Query("CREATE SCHEMA my_catalog.my_schema;");
+
+	// Create Arrow Result
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	// Ingest into catalog.schema.table
+	db.CreateTable("my_table", input_data, "my_schema", false, "my_catalog");
+
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_catalog.my_schema.my_table"));
+}
+
+TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create Arrow Result
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Case 1: set catalog then temporary
+	{
+		AdbcStatement stmt;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_CATALOG, "my_catalog", &adbc_error)));
+		// Enabling temporary ingestion clears the catalog.
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TEMPORARY, ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
+	}
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+	// Release input stream (BindStream may transfer ownership on success).
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+
+	// Case 2: set temporary then catalog
+	{
+		auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
+		AdbcStatement stmt;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TEMPORARY, ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table_2", &adbc_error)));
+		// Setting a catalog while temporary is enabled is invalid; error is expected at execution time.
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_CATALOG, "my_catalog", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data_2, &adbc_error)));
+		REQUIRE(!SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &adbc_error)));
+		REQUIRE((std::strcmp(adbc_error.message, "Temporary option is not supported with catalog") == 0));
+		adbc_error.release(&adbc_error);
+		InitializeADBCError(&adbc_error);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
+		// Execution failed, so the driver should not have consumed the input stream.
+		if (input_data_2.release) {
+			input_data_2.release(&input_data_2);
+		}
+		input_data_2.release = nullptr;
+	}
 }
 
 TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {

@@ -18,8 +18,9 @@ namespace duckdb_adbc {
 
 class AppenderWrapper {
 public:
-	AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
-		if (duckdb_appender_create(conn, schema, table, &appender) != DuckDBSuccess) {
+	AppenderWrapper(duckdb_connection conn, const char *catalog, const char *schema, const char *table)
+	    : appender(nullptr) {
+		if (duckdb_appender_create_ext(conn, catalog, schema, table, &appender) != DuckDBSuccess) {
 			appender = nullptr;
 		}
 	}
