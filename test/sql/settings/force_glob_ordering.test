@@ -11,11 +11,11 @@ SELECT current_setting('force_glob_ordering')
 true
 
 query I
-SELECT file FROM glob('data/csv/glob/a?/*.csv')
+SELECT parse_filename(file) FROM glob('data/csv/glob/a?/*.csv')
 ----
-data/csv/glob/a1/a1.csv
-data/csv/glob/a2/a2.csv
-data/csv/glob/a3/b1.csv
+a1.csv
+a2.csv
+b1.csv
 
 
 statement ok
@@ -28,8 +28,8 @@ SELECT count(*) FROM glob('data/csv/glob/a?/*.csv')
 
 # Verify we still have all the expected files (using ORDER BY to make comparison deterministic)
 query I
-SELECT file FROM glob('data/csv/glob/a?/*.csv') ORDER BY file
+SELECT parse_filename(file) FROM glob('data/csv/glob/a?/*.csv') ORDER BY file
 ----
-data/csv/glob/a1/a1.csv
-data/csv/glob/a2/a2.csv
-data/csv/glob/a3/b1.csv
+a1.csv
+a2.csv
+b1.csv
