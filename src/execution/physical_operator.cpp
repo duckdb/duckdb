@@ -332,15 +332,9 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 	if (state.can_cache_chunk == OperatorCachingMode::NONE) {
 		return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 	}
-	bool needs_continuation_chunk = false;
-	if (state.can_cache_chunk == OperatorCachingMode::PARTITIONED) {
-		if (child_result != OperatorResultType::HAVE_MORE_OUTPUT) {
-			needs_continuation_chunk = true;
-		}
-	}
-	if (child_result == OperatorResultType::FINISHED) {
-		needs_continuation_chunk = true;
-	}
+	const bool needs_continuation_chunk = (state.can_cache_chunk == OperatorCachingMode::PARTITIONED &&
+	                                       child_result != OperatorResultType::HAVE_MORE_OUTPUT) ||
+	                                      (child_result == OperatorResultType::FINISHED);
 	const bool has_non_empty_cached_chunk = state.cached_chunk && state.cached_chunk->size() > 0;
 	const bool has_space_for_chunk_in_cache =
 	    !state.cached_chunk || (state.cached_chunk->size() + chunk.size() <= STANDARD_VECTOR_SIZE);
