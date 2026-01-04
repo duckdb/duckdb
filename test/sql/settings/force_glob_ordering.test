@@ -1,0 +1,35 @@
+# name: test/sql/settings/force_glob_ordering.test
+# description: Test force_glob_ordering setting affects glob result ordering
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT current_setting('force_glob_ordering')
+----
+true
+
+query I
+SELECT file FROM glob('data/csv/glob/a?/*.csv')
+----
+data/csv/glob/a1/a1.csv
+data/csv/glob/a2/a2.csv
+data/csv/glob/a3/b1.csv
+
+
+statement ok
+SET force_glob_ordering = false
+
+query I
+SELECT count(*) FROM glob('data/csv/glob/a?/*.csv')
+----
+3
+
+# Verify we still have all the expected files (using ORDER BY to make comparison deterministic)
+query I
+SELECT file FROM glob('data/csv/glob/a?/*.csv') ORDER BY file
+----
+data/csv/glob/a1/a1.csv
+data/csv/glob/a2/a2.csv
+data/csv/glob/a3/b1.csv
