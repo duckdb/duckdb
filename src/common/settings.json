@@ -518,7 +518,7 @@
         "name": "force_glob_ordering",
         "description": "Whether glob results should be sorted alphabetically. When disabled, allows paginated globbing for faster file discovery.",
         "type": "BOOLEAN",
-        "default_scope": "global",
+        "default_scope": "local",
         "default_value": "true"
     },
     {

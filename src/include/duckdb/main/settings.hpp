@@ -726,7 +726,7 @@ struct ForceGlobOrderingSetting {
 	                                           "allows paginated globbing for faster file discovery.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
-	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct HomeDirectorySetting {
