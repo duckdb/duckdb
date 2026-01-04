@@ -73,11 +73,6 @@ public:
 	CreateFileList(ClientContext &context, const Value &input,
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
-	//!  Create a MultiFileList from a vector of paths, without guaranteeing any ordering
-	DUCKDB_API shared_ptr<MultiFileList>
-	CreateUnorderedFileList(ClientContext &context, const Value &input,
-	                        const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
-
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);

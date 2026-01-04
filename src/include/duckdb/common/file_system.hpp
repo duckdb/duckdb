@@ -67,7 +67,7 @@ protected:
 	virtual vector<T> GetNextPageInternal() = 0;
 
 private:
-	std::vector<T> page_buffer;
+	vector<T> page_buffer;
 };
 
 enum class FileType {

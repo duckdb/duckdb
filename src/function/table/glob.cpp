@@ -15,8 +15,7 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFu
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
-	result->file_list =
-	    multi_file_reader->CreateUnorderedFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);
+	result->file_list = multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
 	return std::move(result);
