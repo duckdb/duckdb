@@ -304,18 +304,22 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
 	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
 	// correctly binding lambdas one level 'out'. Therefore, the current parameter count does not matter here.
-	idx_t offset = 0;
 	if (lambda_bindings) {
+		idx_t offset = 0;
+
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 			auto &binding = (*lambda_bindings)[i - 1];
 			auto &column_names = binding.GetColumnNames();
 			auto &column_types = binding.GetColumnTypes();
 			D_ASSERT(column_names.size() == column_types.size());
 
-			for (idx_t column_idx = column_names.size(); column_idx > 0; column_idx--) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
-				                                                              column_types[column_idx - 1], offset);
-				offset++;
+			// However, the parameters are ordered within the level
+			for (idx_t col_idx = 0; col_idx < column_names.size(); col_idx++) {
+				auto &param_name = column_names[col_idx];
+				auto &param_type = column_types[col_idx];
+
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(param_name, param_type, offset++);
+
 				bound_function_expr.children.push_back(std::move(bound_lambda_param));
 			}
 		}
