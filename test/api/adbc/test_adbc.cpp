@@ -188,10 +188,12 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Temporary and persistent tables with the same name should be distinct.
+	// The temp table goes to 'temp' catalog, persistent table goes to 'memory' catalog.
 	auto &input_temp = db.QueryArrow("SELECT 42 as value");
 	db.CreateTable("my_table", input_temp, "", true);
 	auto &input_persistent = db.QueryArrow("SELECT 84 as value");
-	db.CreateTable("my_table", input_persistent, "", false);
+	// Explicitly specify 'memory' catalog to create persistent table
+	db.CreateTable("my_table", input_persistent, "main", false, "memory");
 
 	{
 		auto res_temp = db.Query("SELECT * FROM temp.my_table");
@@ -199,7 +201,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 		REQUIRE(res_temp->GetValue(0, 0).ToString() == "42");
 	}
 	{
-		auto res_persistent = db.Query("SELECT * FROM main.my_table");
+		auto res_persistent = db.Query("SELECT * FROM memory.main.my_table");
 		REQUIRE(!res_persistent->HasError());
 		REQUIRE(res_persistent->GetValue(0, 0).ToString() == "84");
 	}

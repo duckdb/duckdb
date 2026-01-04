@@ -741,11 +741,15 @@ static std::string BuildCreateTableSQL(const char *catalog, const char *schema, 
 	// or schema.table depending on context. This can become ambiguous if a schema and
 	// an attached catalog share a name. Callers should prefer passing an explicit
 	// schema (or defaulting to "main") to produce an unambiguous three-part name.
-	if (catalog) {
-		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
-	}
-	if (schema) {
-		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+	// For TEMP tables, specifying catalog/schema in the CREATE statement is not allowed;
+	// the table is automatically placed in the temp catalog.
+	if (!temporary) {
+		if (catalog) {
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
+		}
+		if (schema) {
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+		}
 	}
 	create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -805,8 +809,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	const char *effective_catalog = catalog;
 	const char *effective_schema = schema;
 	if (temporary) {
-		effective_catalog = nullptr;
-		effective_schema = "temp";
+		// Temporary tables live in the special "temp" catalog.
+		// "CREATE TEMP TABLE" automatically places tables in temp.main.
+		// For the appender, we need to explicitly target the temp catalog.
+		effective_catalog = "temp";
+		effective_schema = nullptr;
 	} else if (catalog && !schema) {
 		// Default schema for attached catalogs (DEFAULT_SCHEMA).
 		// Use catalog.main.table to avoid catalog/schema name ambiguity.
