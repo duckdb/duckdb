@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE globbed_files AS FROM glob('{DATA_DIR}/csv/glob/a?/*.csv') ORDER BY file;
+CREATE TABLE globbed_files AS FROM glob('{DATA_DIR}/csv/glob/a?/*.csv');
 
 statement ok
 SET VARIABLE csv_files=(SELECT LIST(file ORDER BY file) FROM globbed_files)

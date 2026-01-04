@@ -102,7 +102,7 @@ Permission Error
 
 # we can also glob allowed directories
 query I
-SELECT parse_filename(fname) as fname FROM glob('{DATA_DIR}/csv/glob/*.csv') t(fname) ORDER BY fname
+SELECT parse_filename(fname) as fname FROM glob('{DATA_DIR}/csv/glob/*.csv') t(fname)
 ----
 f_1.csv
 f_2.csv
