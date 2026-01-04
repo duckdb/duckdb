@@ -344,17 +344,18 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 			if (child_result == OperatorResultType::BLOCKED) {
 				// First return cached, then empty chunk via continuation that will BLOCK
 				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
-			} else {
-				// Return cached, and the current result
-				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED;
 			}
-		} else if (chunk.size() <= CachingPhysicalOperator::CACHE_THRESHOLD && has_space_for_chunk_in_cache) {
+
+			// Return cached, and the current result
+			return CachingPhysicalOperatorExecuteMode::RETURN_CACHED;
+		}
+		if (chunk.size() <= CachingPhysicalOperator::CACHE_THRESHOLD && has_space_for_chunk_in_cache) {
 			// chunk is small, both fit
 			return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
-		} else {
-			// First return cached, then chunk via continuation
-			return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
 		}
+
+		// First return cached, then chunk via continuation
+		return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
 	} else if (chunk.size() == 0) {
 		// Nothing required to be done, this also means that BLOCKED is properly passed through
 		// Note that this case works also for unordered cases, given no rows are there
@@ -372,10 +373,10 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 		if (has_space_for_chunk_in_cache) {
 			// We can just append, do and return empty chunk
 			return CachingPhysicalOperatorExecuteMode::APPEND_CHUNK;
-		} else {
-			// Return what is now cached, and append chunk (via tmp)
-			return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 		}
+
+		// Return what is now cached, and append chunk (via tmp)
+		return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 	} else if (state.can_cache_chunk == OperatorCachingMode::UNORDERED) {
 		// Chunk is too big to considering caching, order is not required, just return it
 		return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
@@ -390,17 +391,18 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 			if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
 				// Both fit toghether, append then return
 				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
-			} else if (needs_continuation_chunk) {
+			}
+			if (needs_continuation_chunk) {
 				// Both needs to be returned in this step, but cached before current chunk
 				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
-			} else {
-				// Return now cached, and append chunk (via tmp)
-				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 			}
-		} else {
-			// Both needs to be returned in this step, but cached before current chunk
-			return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
+
+			// Return now cached, and append chunk (via tmp)
+			return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK;
 		}
+
+		// Both needs to be returned in this step, but cached before current chunk
+		return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION;
 	}
 	return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 }
