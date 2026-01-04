@@ -28,7 +28,13 @@ select let x := 2 in let y := 3 in y + x + 5 as result
 query II
 SELECT unnest(let x := 2, y := 3 in row(x,y));
 ----
-3	2
+2	3
+
+# Let with different types
+query I
+SELECT let name := 'Alice, ', age := 30 in name || age;
+----
+Alice, 30
 
 # Let with lambda
 query I

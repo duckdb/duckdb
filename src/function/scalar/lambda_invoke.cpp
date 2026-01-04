@@ -1,8 +1,9 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 
 namespace duckdb {
 
-struct LambdaInvokeData final : public FunctionData {
+struct LambdaInvokeData final : public LambdaFunctionData {
 	unique_ptr<Expression> lambda_expr;
 
 	explicit LambdaInvokeData(unique_ptr<Expression> lambda_expr_p) : lambda_expr(std::move(lambda_expr_p)) {
@@ -31,6 +32,10 @@ struct LambdaInvokeData final : public FunctionData {
 		    101, "lambda_expr", unique_ptr<Expression>());
 		return make_uniq<LambdaInvokeData>(std::move(lambda_expr));
 	}
+
+	const unique_ptr<Expression> &GetLambdaExpression() const override {
+		return lambda_expr->Cast<BoundLambdaExpression>().lambda_expr;
+	}
 };
 
 struct LambdaInvokeState final : public FunctionLocalState {
@@ -50,9 +55,6 @@ struct LambdaInvokeState final : public FunctionLocalState {
 
 static void LambdaInvokeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LambdaInvokeState>();
-
-	// Execute the lambda expression
-	lstate.executor->SetChunk(&args);
 	lstate.executor->ExecuteExpression(args, result);
 }
 
@@ -76,8 +78,8 @@ static unique_ptr<FunctionData> LambdaInvokeBind(ClientContext &context, ScalarF
 
 static LogicalType LambdaInvokeBindParameters(ClientContext &context, const vector<LogicalType> &function_child_types,
                                               const idx_t parameter_idx) {
-	// Always pass on the first child type
-	return function_child_types[1];
+	// The first parameter is always the lambda
+	return function_child_types[1 + parameter_idx];
 }
 
 ScalarFunction LambdaInvokeFun::GetFunction() {
