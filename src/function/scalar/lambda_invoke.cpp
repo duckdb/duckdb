@@ -1,5 +1,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
