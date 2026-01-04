@@ -22,6 +22,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class CoordinateReferenceSystem;
 
 struct string_t; // NOLINT: mimic std casing
 
@@ -433,6 +434,8 @@ public:
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType GEOMETRY(); // NOLINT
+	DUCKDB_API static LogicalType GEOMETRY(const string &crs);
+	DUCKDB_API static LogicalType GEOMETRY(const CoordinateReferenceSystem &crs);
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
 	DUCKDB_API static LogicalType TEMPLATE(const string &name);							// NOLINT
@@ -542,6 +545,11 @@ struct IntegerLiteral {
 struct TemplateType {
 	// Get the name of the template type
 	DUCKDB_API static const string &GetName(const LogicalType &type);
+};
+
+struct GeoType {
+	DUCKDB_API static bool HasCRS(const LogicalType &type);
+	DUCKDB_API static const CoordinateReferenceSystem &GetCRS(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.
