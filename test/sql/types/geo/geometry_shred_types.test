@@ -12,6 +12,7 @@ statement ok
 CREATE TABLE t1(type VARCHAR, has_z BOOLEAN, has_m BOOLEAN, g GEOMETRY);
 
 # Insert, for each geometry type, a geometry with and without Z/M, as well as an empty geometry
+# Empty points are intentionally left out here as they can't be shredded. We have a separate test for them.
 
 statement ok
 INSERT INTO t1 VALUES

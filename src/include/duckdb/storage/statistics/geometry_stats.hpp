@@ -17,6 +17,69 @@ namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 
+enum class GeometryStatsFlag : uint8_t {
+	NONE = 0,
+	ALL = 1,
+	SOME = 2,
+};
+
+class GeometryStatsFlags {
+public:
+	static GeometryStatsFlags Empty() {
+		GeometryStatsFlags result;
+		result.has_empty_root = GeometryStatsFlag::NONE;
+		result.has_empty_part = GeometryStatsFlag::NONE;
+		return result;
+	}
+
+	static GeometryStatsFlags Unknown() {
+		GeometryStatsFlags result;
+		result.has_empty_root = GeometryStatsFlag::SOME;
+		result.has_empty_part = GeometryStatsFlag::SOME;
+		return result;
+	}
+
+	void Merge(const GeometryStatsFlags &other) {
+		has_empty_root = has_empty_root != other.has_empty_root ? GeometryStatsFlag::SOME : has_empty_root;
+		has_empty_part = has_empty_part != other.has_empty_part ? GeometryStatsFlag::SOME : has_empty_part;
+	}
+
+	void AddEmptyRoot() {
+		if (has_empty_root == GeometryStatsFlag::NONE) {
+			has_empty_root = GeometryStatsFlag::SOME;
+			;
+		}
+		if (has_empty_part == GeometryStatsFlag::NONE) {
+			has_empty_part = GeometryStatsFlag::SOME;
+		}
+	}
+
+	void AddEmptyPart() {
+		if (has_empty_part == GeometryStatsFlag::NONE) {
+			has_empty_part = GeometryStatsFlag::SOME;
+			;
+		}
+	}
+
+	bool HasAnyEmptyPart() const {
+		return has_empty_part != GeometryStatsFlag::NONE;
+	}
+
+	bool HasAnyEmptyRoot() const {
+		return has_empty_root != GeometryStatsFlag::NONE;
+	}
+
+	//! If the top-level geometry is completely empty. E.g.
+	//! - a POINT with no coordinates,
+	//! - a POLYGON without any rings
+	GeometryStatsFlag has_empty_root;
+
+	//! If any geometry has an empty part. E.g.
+	//! - a MULTIPOLYGON with one empty polygon and one non-empty polygon
+	//! - a MULTIPOINT with one empty point and one non-empty point
+	GeometryStatsFlag has_empty_part;
+};
+
 class GeometryTypeSet {
 public:
 	static constexpr auto VERT_TYPES = 4;
@@ -166,20 +229,24 @@ public:
 struct GeometryStatsData {
 	GeometryTypeSet types;
 	GeometryExtent extent;
+	GeometryStatsFlags flags;
 
 	void SetEmpty() {
 		types = GeometryTypeSet::Empty();
 		extent = GeometryExtent::Empty();
+		flags = GeometryStatsFlags::Empty();
 	}
 
 	void SetUnknown() {
 		types = GeometryTypeSet::Unknown();
 		extent = GeometryExtent::Unknown();
+		flags = GeometryStatsFlags::Unknown();
 	}
 
 	void Merge(const GeometryStatsData &other) {
 		types.Merge(other.types);
 		extent.Merge(other.extent);
+		flags.Merge(other.flags);
 	}
 
 	void Update(const string_t &geom_blob) {
@@ -187,8 +254,16 @@ struct GeometryStatsData {
 		const auto type_info = Geometry::GetType(geom_blob);
 		types.Add(type_info.first, type_info.second);
 
-		// Update extent
-		Geometry::GetExtent(geom_blob, extent);
+		// Update extent and flags
+		bool has_any_empty = false;
+		const auto vert_count = Geometry::GetExtent(geom_blob, extent, has_any_empty);
+
+		if (vert_count == 0) {
+			flags.AddEmptyRoot();
+		}
+		if (has_any_empty) {
+			flags.AddEmptyPart();
+		}
 	}
 };
 
@@ -215,6 +290,8 @@ struct GeometryStats {
 	DUCKDB_API static const GeometryExtent &GetExtent(const BaseStatistics &stats);
 	DUCKDB_API static GeometryTypeSet &GetTypes(BaseStatistics &stats);
 	DUCKDB_API static const GeometryTypeSet &GetTypes(const BaseStatistics &stats);
+	DUCKDB_API static GeometryStatsFlags &GetFlags(BaseStatistics &stats);
+	DUCKDB_API static const GeometryStatsFlags &GetFlags(const BaseStatistics &stats);
 
 private:
 	static GeometryStatsData &GetDataUnsafe(BaseStatistics &stats);

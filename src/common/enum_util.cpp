@@ -177,6 +177,7 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
@@ -2249,6 +2250,25 @@ const char* EnumUtil::ToChars<GateStatus>(GateStatus value) {
 template<>
 GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
 	return static_cast<GateStatus>(StringUtil::StringToEnum(GetGateStatusValues(), 2, "GateStatus", value));
+}
+
+const StringUtil::EnumStringLiteral *GetGeometryStatsFlagValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GeometryStatsFlag::NONE), "NONE" },
+		{ static_cast<uint32_t>(GeometryStatsFlag::ALL), "ALL" },
+		{ static_cast<uint32_t>(GeometryStatsFlag::SOME), "SOME" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<GeometryStatsFlag>(GeometryStatsFlag value) {
+	return StringUtil::EnumToString(GetGeometryStatsFlagValues(), 3, "GeometryStatsFlag", static_cast<uint32_t>(value));
+}
+
+template<>
+GeometryStatsFlag EnumUtil::FromString<GeometryStatsFlag>(const char *value) {
+	return static_cast<GeometryStatsFlag>(StringUtil::StringToEnum(GetGeometryStatsFlagValues(), 3, "GeometryStatsFlag", value));
 }
 
 const StringUtil::EnumStringLiteral *GetGeometryTypeValues() {

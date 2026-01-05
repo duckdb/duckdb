@@ -1082,6 +1082,11 @@ static uint32_t ParseVertices(BlobReader &reader, GeometryExtent &extent, uint32
 }
 
 uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
+	bool has_any_empty = false;
+	return GetExtent(wkb, extent, has_any_empty);
+}
+
+uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty) {
 	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
 
 	uint32_t vertex_count = 0;
@@ -1105,16 +1110,33 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
 
 		switch (geom_type) {
 		case GeometryType::POINT: {
-			vertex_count += ParseVertices(reader, extent, 1, vert_type, true);
+			const auto parsed_count = ParseVertices(reader, extent, 1, vert_type, true);
+			if (parsed_count == 0) {
+				has_any_empty = true;
+				continue;
+			}
+			vertex_count += parsed_count;
 		} break;
 		case GeometryType::LINESTRING: {
 			const auto vert_count = reader.Read<uint32_t>();
+			if (vert_count == 0) {
+				has_any_empty = true;
+				continue;
+			}
 			vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
 		} break;
 		case GeometryType::POLYGON: {
 			const auto ring_count = reader.Read<uint32_t>();
+			if (ring_count == 0) {
+				has_any_empty = true;
+				continue;
+			}
 			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
 				const auto vert_count = reader.Read<uint32_t>();
+				if (vert_count == 0) {
+					has_any_empty = true;
+					continue;
+				}
 				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
 			}
 		} break;
@@ -1122,8 +1144,10 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
 		case GeometryType::MULTILINESTRING:
 		case GeometryType::MULTIPOLYGON:
 		case GeometryType::GEOMETRYCOLLECTION: {
-			// Skip count. We don't need it for extent calculation.
-			reader.Skip(sizeof(uint32_t));
+			const auto part_count = reader.Read<uint32_t>();
+			if (part_count == 0) {
+				has_any_empty = true;
+			}
 		} break;
 		default:
 			throw InvalidInputException("Unsupported geometry type %d in WKB", static_cast<int>(geom_type));
