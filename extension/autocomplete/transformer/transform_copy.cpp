@@ -17,7 +17,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyStatement(PEGTransf
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("Copy SELECT has not yet been implemented");
 	auto select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 	auto result = make_uniq<CopyStatement>();
@@ -100,7 +99,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	auto &copy_options_pr = list_pr.Child<OptionalParseResult>(4);
 	if (copy_options_pr.HasResult()) {
 		auto generic_options = transformer.Transform<vector<GenericCopyOption>>(copy_options_pr.optional_result);
+		case_insensitive_string_set_t option_names;
 		for (auto &option : generic_options) {
+			if (option_names.find(option.name) != option_names.end()) {
+				throw ParserException("Unexpected duplicate option \"%s\"", option.name);
+			}
+			option_names.insert(option.name);
 			auto option_upper = StringUtil::Upper(option.name);
 			if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE") {
 				if (option.expression) {
@@ -123,6 +127,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 		}
 		auto format_option = info->options.find("format");
 		if (format_option != info->options.end()) {
+			if (format_option->second.empty()) {
+				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+			}
 			info->format = format_option->second[0].GetValue<string>();
 			info->is_format_auto_detected = false;
 			info->options.erase(format_option);
