@@ -158,7 +158,7 @@ enum class SerializationVersionDeprecated : uint64_t {
     V1_4_3 = 6,
     V1_5_0 = 68,
     LATEST = 68,
-    INVALID = 0
+    INVALID = UINT64_MAX
 };
 // END OF SER_ENUM VERSION INFO
 // clang-format on
@@ -202,6 +202,10 @@ struct SerializationVersionInfo {
 	static constexpr uint64_t GetSerializationVersionValue(SerializationVersionDeprecated version) {
 		return static_cast<uint64_t>(version);
 	}
+
+	static constexpr uint64_t Invalid() {
+		return GetSerializationVersionValue(SerializationVersionDeprecated::INVALID);
+	};
 };
 
 //! The version number default, lower and upper bounds of the database storage format

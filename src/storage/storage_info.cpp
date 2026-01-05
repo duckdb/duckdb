@@ -171,7 +171,7 @@ idx_t GetSerializationVersionDeprecated(const char *version_string) {
 			    serialization_version_info[i].storage_version);
 		}
 	}
-	return StorageVersionInfo::Invalid();
+	return SerializationVersionInfo::Invalid();
 }
 
 idx_t GetStorageVersionValue(const char *version_string) {

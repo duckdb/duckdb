@@ -210,8 +210,9 @@ void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_versio
 	// Note that there is one exception on this
 	if (main_version < GetStorageVersionValue("v1.5.0")) {
 		switch (read_version) {
-		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::INVALID):
 		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V0_10_2):
+			// If read version is 0
+		case StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID):
 			// In some old duckdb versions, storage version (64) is serialized instead of ser version
 		case StorageVersionInfo::GetStorageVersionValue(StorageVersion::V0_10_2):
 			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
@@ -1275,7 +1276,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	handle->Sync();
 	header_buffer.Clear();
 
-	// if we are upgrading the database from version 64 -> version 65 (or higher), we need to re-write the main header
+	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
 	auto deprecated_serialization_version =
 	    GetSerializationVersionDeprecated(options.storage_version.version_string.GetString().c_str());
 	if (options.version_number.GetIndex() == GetStorageVersionValue("v0.10.2") &&
