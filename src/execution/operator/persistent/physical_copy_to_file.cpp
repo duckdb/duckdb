@@ -412,9 +412,7 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 		return;
 	}
 	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-		for (auto &file : file_list) {
-			fs.RemoveFile(file);
-		}
+		fs.RemoveFiles(file_list);
 	} else {
 		throw IOException("Directory \"%s\" is not empty! Enable OVERWRITE option to overwrite files", file_path);
 	}
