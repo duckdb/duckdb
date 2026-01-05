@@ -132,6 +132,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 	// duckdb_time_ns (nanoseconds)
 	DUCKDB_TYPE_TIME_NS = 39,
+	// VARIANT type, only useful as logical type
+	DUCKDB_TYPE_VARIANT = 40,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
