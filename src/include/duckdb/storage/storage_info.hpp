@@ -337,8 +337,7 @@ struct DatabaseHeader {
 
 	void Write(WriteStream &ser) const;
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
-	static void SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version,
-	                              string_t version_string = nullptr);
+	static void SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version);
 };
 
 //! Detect mismatching constant values when compiling

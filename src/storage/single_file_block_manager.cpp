@@ -195,22 +195,9 @@ void DatabaseHeader::Write(WriteStream &ser) const {
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
 	ser.Write<idx_t>(storage_compatibility.version.GetIndex());
-
-	if (storage_compatibility.version.GetIndex() >= GetStorageVersionValue("v1.5.0")) {
-		// only serialize version string in newer storage versions (v1.5.0+)
-		ser.Write<string_t>(storage_compatibility.version_string);
-	}
 }
 
-string_t GetVersionString(string version_string_p, string_t explicit_version_string = nullptr) {
-	if (!explicit_version_string.Empty()) {
-		return explicit_version_string;
-	}
-	return version_string_p;
-}
-
-void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version,
-                                       string_t explicit_version_string) {
+void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version) {
 	// Note that the main_header version number will never be changed after the database is created
 	// even if the db file gets bumped to a higher version
 	// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
@@ -223,28 +210,28 @@ void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_versio
 			// sometimes 64 is serialized instead of a ser version, then default to v0.10.2
 		case StorageVersionInfo::GetStorageVersionValue(StorageVersion::V0_10_2):
 			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
-			header.storage_compatibility.version_string = GetVersionString("v0.10.2", explicit_version_string);
+			header.storage_compatibility.version_string = "v0.10.2";
 			break;
 		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_0_0):
 			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
-			header.storage_compatibility.version_string = GetVersionString("v1.0.0", explicit_version_string);
+			header.storage_compatibility.version_string = "v1.0.0";
 			break;
 		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_1_0):
 			// In some old duckdb versions, storage version (64) is serialized instead of ser version
 			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
-			header.storage_compatibility.version_string = GetVersionString("v1.1.0", explicit_version_string);
+			header.storage_compatibility.version_string = "v1.1.0";
 			break;
 		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_2_0):
 			header.storage_compatibility.version = GetStorageVersionValue("v1.2.0");
-			header.storage_compatibility.version_string = GetVersionString("v1.2.0", explicit_version_string);
+			header.storage_compatibility.version_string = "v1.2.0";
 			break;
 		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_3_0):
 			header.storage_compatibility.version = GetStorageVersionValue("v1.3.0");
-			header.storage_compatibility.version_string = GetVersionString("v1.3.0", explicit_version_string);
+			header.storage_compatibility.version_string = "v1.3.0";
 			break;
 		case SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_4_0):
 			header.storage_compatibility.version = GetStorageVersionValue("v1.4.0");
-			header.storage_compatibility.version_string = GetVersionString("v1.4.0", explicit_version_string);
+			header.storage_compatibility.version_string = "v1.4.0";
 			break;
 		default:
 			throw InvalidInputException("Deprecated Serialization Version is not found!");
@@ -252,7 +239,7 @@ void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_versio
 	} else {
 		// From v1.5.0 onwards, we use and store only the storage version number
 		header.storage_compatibility.version = main_version;
-		header.storage_compatibility.version_string = GetVersionString("v1.5.0", explicit_version_string);
+		header.storage_compatibility.version_string = "v1.5.0";
 	}
 }
 
@@ -281,15 +268,7 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	}
 
 	auto storage_header_version = source.Read<idx_t>();
-	StorageVersionMapping storage_version_map = GetStorageVersion("v1.5.0");
-
-	string_t storage_version_string = string_t();
-
-	if (storage_header_version >= storage_version_map.version.GetIndex()) {
-		// for newer versions, we also serialize the version string in the database headers
-		storage_version_string = source.Read<string_t>();
-	}
-	SetStorageVersion(header, main_header.version_number, storage_header_version, storage_version_string);
+	SetStorageVersion(header, main_header.version_number, storage_header_version);
 
 	return header;
 }
