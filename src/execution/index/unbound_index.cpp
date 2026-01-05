@@ -83,15 +83,4 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	buffer->Append(combined_chunk);
 }
 
-unique_ptr<IndexStorageInfo> UnboundIndex::TakeStorageInfo(const case_insensitive_map_t<Value> &options) {
-	// Move the entire storage_info out for serialization
-	storage_info->options = options;
-	return std::move(storage_info);
-}
-
-void UnboundIndex::SetStorageInfo(unique_ptr<IndexStorageInfo> info) {
-	// Restore the entire storage_info, including buffered_replays and mapped_column_ids
-	storage_info = std::move(info);
-}
-
 } // namespace duckdb

@@ -44,6 +44,17 @@ struct IndexSerializationInfo {
 	transaction_t checkpoint_id;
 };
 
+//! Result of serializing indexes to disk. SerializeToDisk will directly serialize bound indexes to disk, at which
+//! point an IndexStorageInfo is newly created that also needs to be serialized. This is owned here in the result type.
+//! When an UnboundIndex exists, however, IndexStorageInfo is owned by it. Serialization of an UnboundIndex is really
+//! just a serialization of its IndexStorageInfo (which contains buffered index replays and mapped column IDs), so
+//! SerializeToDisk just returns a reference to this IndexStorageInfo, which is then serialized along with all the
+//! IndexStorageInfo's.
+struct IndexSerializationResult {
+	vector<reference<const IndexStorageInfo>> unbound_infos;
+	vector<unique_ptr<IndexStorageInfo>> bound_infos;
+};
+
 class TableIndexList {
 public:
 	//! Scan the index entries, invoking the callback method for every entry.
@@ -109,8 +120,7 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of the table.
-
-	vector<unique_ptr<IndexStorageInfo>> SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
+	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
 public:
 	//! Initialize an index_chunk from a table.

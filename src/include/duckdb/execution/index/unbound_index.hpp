@@ -22,7 +22,8 @@ private:
 	//! The CreateInfo of the index.
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
-	//! This contains buffered_replays and mapped_column_ids when they exist.
+	//! Holds all information necessary to initialize the storage of an index upon binding, most importantly the
+	//! buffered replays and the mapped column IDs.
 	unique_ptr<IndexStorageInfo> storage_info;
 
 public:
@@ -63,7 +64,7 @@ public:
 	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
 	                 BufferedIndexReplay replay_type);
 	bool HasBufferedReplays() const {
-		return storage_info->buffered_replays && storage_info->buffered_replays->HasBufferedReplays();
+		return storage_info->buffered_replays != nullptr;
 	}
 
 	BufferedIndexReplays &GetBufferedReplays() {
@@ -74,13 +75,6 @@ public:
 	const vector<StorageIndex> &GetMappedColumnIds() const {
 		return storage_info->mapped_column_ids;
 	}
-
-	//! Move storage_info out for serialization, updating options for the current checkpoint.
-	//! The storage_info should be set back on this UnboundIndex after serialization.
-	unique_ptr<IndexStorageInfo> TakeStorageInfo(const case_insensitive_map_t<Value> &options);
-
-	//! Set IndexStorageInfo after serialization/deserialization. Takes ownership of the entire storage_info.
-	void SetStorageInfo(unique_ptr<IndexStorageInfo> info);
 };
 
 } // namespace duckdb
