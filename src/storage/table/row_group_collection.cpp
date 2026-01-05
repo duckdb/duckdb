@@ -3,7 +3,6 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -1726,8 +1725,7 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 	vector<PartitionStatistics> result;
 	auto row_groups = GetRowGroups();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		auto &row_group = entry.GetNode();
-		result.push_back(row_group.GetPartitionStats(entry.GetRowStart()));
+		result.push_back(RowGroup::GetPartitionStats(entry));
 	}
 	return result;
 }
