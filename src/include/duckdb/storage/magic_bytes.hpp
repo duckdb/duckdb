@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-
 namespace duckdb {
 class FileSystem;
 class QueryContext;
