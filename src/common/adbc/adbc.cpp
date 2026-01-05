@@ -727,9 +727,13 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 static std::string BuildCreateTableSQL(const char *catalog, const char *schema, const char *table_name,
                                        const duckdb::vector<duckdb::LogicalType> &types,
                                        const duckdb::vector<std::string> &names, bool if_not_exists = false,
-                                       bool temporary = false) {
+                                       bool temporary = false, bool replace = false) {
 	std::ostringstream create_table;
-	create_table << "CREATE ";
+	if (replace) {
+		create_table << "CREATE OR REPLACE ";
+	} else {
+		create_table << "CREATE ";
+	}
 	if (temporary) {
 		create_table << "TEMP ";
 	}
@@ -761,20 +765,6 @@ static std::string BuildCreateTableSQL(const char *catalog, const char *schema, 
 	}
 	create_table << ");";
 	return create_table.str();
-}
-
-// Helper function to build DROP TABLE IF EXISTS SQL statement
-static std::string BuildDropTableSQL(const char *catalog, const char *schema, const char *table_name) {
-	std::ostringstream drop_table;
-	drop_table << "DROP TABLE IF EXISTS ";
-	if (catalog) {
-		drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
-	}
-	if (schema) {
-		drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
-	}
-	drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name);
-	return drop_table.str();
 }
 
 AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const char *table_name, const char *schema,
@@ -859,17 +849,10 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		// The appender will naturally fail if the table doesn't exist
 		break;
 	case IngestionMode::REPLACE: {
-		// REPLACE mode: Drop table if exists, then create
-		auto drop_sql = BuildDropTableSQL(effective_catalog, effective_schema, table_name);
+		// REPLACE mode: CREATE OR REPLACE TABLE
 		auto create_sql =
-		    BuildCreateTableSQL(effective_catalog, effective_schema, table_name, types, names, false, temporary);
+		    BuildCreateTableSQL(effective_catalog, effective_schema, table_name, types, names, false, temporary, true);
 		duckdb_result result;
-		if (duckdb_query(connection, drop_sql.c_str(), &result) == DuckDBError) {
-			SetError(error, duckdb_result_error(&result));
-			duckdb_destroy_result(&result);
-			return ADBC_STATUS_INTERNAL;
-		}
-		duckdb_destroy_result(&result);
 		if (duckdb_query(connection, create_sql.c_str(), &result) == DuckDBError) {
 			SetError(error, duckdb_result_error(&result));
 			duckdb_destroy_result(&result);
