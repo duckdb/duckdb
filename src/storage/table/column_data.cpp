@@ -436,11 +436,16 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableFilter &filter) {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
 	lock_guard<mutex> l(stats_lock);
+	if (index.IsPushdownExtract()) {
+		auto child_stats = stats->statistics.PushdownExtract(index.GetChildIndex(0));
+		D_ASSERT(child_stats);
+		return filter.CheckStatistics(*child_stats);
+	}
 	return filter.CheckStatistics(stats->statistics);
 }
 
@@ -568,8 +573,8 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
-void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                          idx_t result_idx) {
+void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                          row_t row_id, Vector &result, idx_t result_idx) {
 	if (UnsafeNumericCast<idx_t>(row_id) > count) {
 		throw InternalException("ColumnData::FetchRow - row_id out of range");
 	}

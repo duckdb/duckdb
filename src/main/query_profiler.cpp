@@ -214,7 +214,6 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		if (root) {
 			auto &info = root->GetProfilingInfo();
-			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
 
 			const auto &settings = info.expanded_settings;
@@ -262,11 +261,11 @@ void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
 }
 
 idx_t QueryProfiler::GetBytesRead() const {
-	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_READ);
+	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ);
 }
 
 idx_t QueryProfiler::GetBytesWritten() const {
-	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_WRITTEN);
+	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN);
 }
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {

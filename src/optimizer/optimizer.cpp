@@ -38,6 +38,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
+#include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -184,6 +185,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::EMPTY_RESULT_PULLUP, [&]() {
 		EmptyResultPullup empty_result_pullup;
 		plan = empty_result_pullup.Optimize(std::move(plan));
+	});
+
+	// Replaces some window computations with self-joins
+	RunOptimizer(OptimizerType::WINDOW_SELF_JOIN, [&]() {
+		WindowSelfJoinOptimizer window_self_join_optimizer(*this);
+		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});
 
 	// then we perform the join ordering optimization

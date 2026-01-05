@@ -8,6 +8,9 @@ statement ok
 CREATE TABLE integers AS SELECT range i FROM range(200000);
 
 statement ok
+CREATE TABLE bools AS SELECT i::bool i FROM range(2) i(i);
+
+statement ok
 CREATE TABLE multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(2500);
 
 statement ok
@@ -42,11 +45,13 @@ statement ok
 CREATE TABLE decimal_test AS
 SELECT 25.3::DECIMAL(4,1) AS dec_i16,
        123456.789::DECIMAL(9,3) AS dec_i32,
-       123456789123.456::DECIMAL(18,3) AS dec_i64
+       123456789123.456::DECIMAL(18,3) AS dec_i64,
+       12345678912345678912345678912345678.912::DECIMAL(38,3) AS dec_i128
 UNION ALL
 SELECT 1.1::DECIMAL(4,1),
        2.123::DECIMAL(9,3),
-       3.456::DECIMAL(18,3)
+       3.456::DECIMAL(18,3),
+       4.567::DECIMAL(38,3)
 
 statement ok
 CREATE TABLE struct_test AS SELECT case when i%10=0 then null else {'x': i, 'y': case when i%2=0 then 100 + i else null end} end struct_val FROM range(2500) t(i)
@@ -93,6 +98,13 @@ COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=199999, min=0, null_count=0}}	NULL
 
+# bools
+query IIIIII
+COPY bools TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_copy_to_file.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=1, min=0, null_count=0}}	NULL
+
+
 # multi-column
 query IIIIII
 COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
@@ -127,7 +139,7 @@ COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
 query IIIIII
 COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i16"'={column_size_bytes=\d+, max=25.3, min=1.1, null_count=0}, '"dec_i32"'={column_size_bytes=\d+, max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={column_size_bytes=\d+, max=123456789123.456, min=3.456, null_count=0}}	NULL
+<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i128"'={column_size_bytes=57, max=12345678912345678912345678912345678.912, min=4.567, null_count=0}, '"dec_i16"'={column_size_bytes=33, max=25.3, min=1.1, null_count=0}, '"dec_i32"'={column_size_bytes=33, max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={column_size_bytes=41, max=123456789123.456, min=3.456, null_count=0}}	NULL
 
 # floating point numbers
 query IIIIII
