@@ -8,7 +8,6 @@
 
 #pragma once
 
-
 namespace duckdb {
 
 template <class T>
