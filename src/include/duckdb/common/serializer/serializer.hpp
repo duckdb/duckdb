@@ -45,11 +45,11 @@ public:
 	virtual ~Serializer() {
 	}
 
-	bool ShouldSerialize(idx_t version_added) {
+	bool ShouldSerializeInternal(idx_t version_added) const {
 		return options.storage_compatibility.Compare(version_added);
 	}
 
-	bool ShouldSerialize(string string_version_added) {
+	bool ShouldSerialize(const string &string_version_added) const {
 		auto property_version = GetStorageVersionValue(string_version_added.c_str());
 
 		if (property_version < GetStorageVersionValue("v1.5.0")) {
@@ -57,7 +57,7 @@ public:
 			return options.storage_compatibility.CompareVersionString(string_version_added);
 		}
 
-		return ShouldSerialize(property_version);
+		return ShouldSerializeInternal(property_version);
 	}
 
 	class List {
