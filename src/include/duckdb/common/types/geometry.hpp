@@ -223,6 +223,7 @@ public:
 
 	//! Update the bounding box, return number of vertices processed
 	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent);
+	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
 
 	//! Convert to vectorized format
 	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,

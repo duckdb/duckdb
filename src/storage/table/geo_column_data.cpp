@@ -242,12 +242,22 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto new_geom_type = GeometryType::POINT;
 	auto new_vert_type = VertexType::XY;
 	auto &types = GeometryStats::GetTypes(this->stats->statistics);
+	auto &flags = GeometryStats::GetFlags(this->stats->statistics);
 
 	auto has_mixed_type = !types.TryGetSingleType(new_geom_type, new_vert_type);
 	auto has_only_geometry_collection = new_geom_type == GeometryType::GEOMETRYCOLLECTION;
 	auto has_only_invalid = new_geom_type == GeometryType::INVALID;
 
-	if (has_mixed_type || has_only_geometry_collection || has_only_invalid) {
+	auto has_any_empty_geom = flags.HasAnyEmptyRoot();
+	auto has_any_empty_part = flags.HasAnyEmptyPart();
+
+	// We cant specialize empty points, or multipoints containing empty points
+	// Because we cant represent zero-vertex geometries in those layouts
+	auto has_any_empty_point = new_geom_type == GeometryType::POINT && has_any_empty_geom;
+	auto has_any_empty_multipoint_part = new_geom_type == GeometryType::MULTIPOINT && has_any_empty_part;
+
+	if (has_mixed_type || has_only_geometry_collection || has_only_invalid || has_any_empty_point ||
+	    has_any_empty_multipoint_part) {
 		// Cant specialize, keep column
 		checkpoint_state->inner_column_state = base_column->Checkpoint(row_group, info);
 		checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
