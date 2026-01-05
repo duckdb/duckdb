@@ -10,6 +10,7 @@
 
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -18,6 +19,7 @@
 namespace duckdb {
 
 class TemporaryMemoryManager;
+class ObjectCache;
 struct EvictionQueue;
 
 struct BufferEvictionNode {
@@ -62,6 +64,15 @@ public:
 	virtual idx_t GetQueryMaxMemory() const;
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
+
+	//! Take per-database ObjectCache under buffer pool's memory management.
+	//! Notice, object cache should be registered for at most once, otherwise InvalidInput exception is thrown.
+	void SetObjectCache(ObjectCache *object_cache_p) {
+		if (object_cache != nullptr) {
+			throw InvalidInputException("Object cache has already been registered in buffer pool, cannot re-register!");
+		}
+		object_cache = object_cache_p;
+	}
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
@@ -163,6 +174,8 @@ protected:
 	mutable MemoryUsage memory_usage;
 	//! The block allocator
 	BlockAllocator &block_allocator;
+	//! Per-database singleton object cache managed by buffer pool.
+	ObjectCache *object_cache = nullptr;
 };
 
 } // namespace duckdb

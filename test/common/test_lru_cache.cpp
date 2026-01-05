@@ -1,6 +1,9 @@
 #include "catch.hpp"
 #include "duckdb/common/lru_cache.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/main/database.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb; // NOLINT
 
@@ -18,11 +21,17 @@ struct TestValue {
 } // namespace
 
 TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+
 	SharedLruCache<string, TestValue> cache(1000);
 
 	SECTION("Put and Get") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		cache.Put("key1", val1, /*memory_size=*/100);
+		auto reservation = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key1", val1, std::move(reservation));
 
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
@@ -40,8 +49,11 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		auto val1 = make_shared_ptr<TestValue>(1, 100);
 		auto val2 = make_shared_ptr<TestValue>(2, 150);
 
-		cache.Put("key1", val1, /*memory_size=*/100);
-		cache.Put("key1", val2, /*memory_size=*/150);
+		auto reservation1 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key1", val1, std::move(reservation1));
+
+		auto reservation2 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/150);
+		cache.Put("key1", val2, std::move(reservation2));
 
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
@@ -51,7 +63,8 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 
 	SECTION("Delete") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
-		cache.Put("key1", val1, /*memory_size=*/100);
+		auto reservation = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key1", val1, std::move(reservation));
 
 		bool deleted = cache.Delete("key1");
 		REQUIRE(deleted == true);
@@ -65,6 +78,11 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 }
 
 TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+
 	SECTION("Evict LRU when exceeding max weight") {
 		SharedLruCache<string, TestValue> cache(500);
 
@@ -72,11 +90,15 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		auto val2 = make_shared_ptr<TestValue>(2, 200);
 		auto val3 = make_shared_ptr<TestValue>(3, 200);
 
-		cache.Put("key1", val1, /*memory_size=*/200);
-		cache.Put("key2", val2, /*memory_size=*/200);
-		cache.Put("key3", val3, /*memory_size=*/200);
+		auto reservation1 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/200);
+		cache.Put("key1", val1, std::move(reservation1));
 
-		// Should evict key1 (LRU) to make room
+		auto reservation2 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/200);
+		cache.Put("key2", val2, std::move(reservation2));
+
+		auto reservation3 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/200);
+		cache.Put("key3", val3, std::move(reservation3));
+
 		REQUIRE(cache.Get("key1") == nullptr);
 		REQUIRE(cache.Get("key2") != nullptr);
 		REQUIRE(cache.Get("key3") != nullptr);
@@ -92,15 +114,19 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		auto val3 = make_shared_ptr<TestValue>(3, 100);
 		auto val4 = make_shared_ptr<TestValue>(4, 100);
 
-		cache.Put("key1", val1, /*memory_size=*/100);
-		cache.Put("key2", val2, /*memory_size=*/100);
-		cache.Put("key3", val3, /*memory_size=*/100);
+		auto reservation1 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key1", val1, std::move(reservation1));
 
-		// Access key1 to make it MRU
+		auto reservation2 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key2", val2, std::move(reservation2));
+
+		auto reservation3 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key3", val3, std::move(reservation3));
+
 		cache.Get("key1");
 
-		// Add key4 - should evict key2 (LRU, not key1)
-		cache.Put("key4", val4, /*memory_size=*/100);
+		auto reservation4 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key4", val4, std::move(reservation4));
 
 		REQUIRE(cache.Get("key1") != nullptr);
 		REQUIRE(cache.Get("key2") == nullptr);
@@ -110,24 +136,38 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 }
 
 TEST_CASE("LRU Cache Unlimited Memory", "[lru_cache]") {
-	SharedLruCache<string, TestValue> cache(0); // 0 = unlimited
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 
-	// Should not evict anything
+	SharedLruCache<string, TestValue> cache(0);
+
 	for (int idx = 0; idx < 100; ++idx) {
 		auto val = make_shared_ptr<TestValue>(idx, 100);
-		cache.Put("key" + std::to_string(idx), val, /*memory_size=*/100);
+		auto reservation = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+		cache.Put("key" + std::to_string(idx), val, std::move(reservation));
 	}
 
 	REQUIRE(cache.Size() == 100);
 }
 
 TEST_CASE("LRU Cache Clear", "[lru_cache]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+
 	SharedLruCache<string, TestValue> cache(1000);
 
 	auto val1 = make_shared_ptr<TestValue>(1, 100);
 	auto val2 = make_shared_ptr<TestValue>(2, 100);
-	cache.Put("key1", val1, /*memory_size=*/100);
-	cache.Put("key2", val2, /*memory_size=*/100);
+
+	auto reservation1 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+	cache.Put("key1", val1, std::move(reservation1));
+
+	auto reservation2 = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, /*size=*/100);
+	cache.Put("key2", val2, std::move(reservation2));
 
 	cache.Clear();
 
@@ -135,4 +175,40 @@ TEST_CASE("LRU Cache Clear", "[lru_cache]") {
 	REQUIRE(cache.CurrentMemory() == 0);
 	REQUIRE(cache.Get("key1") == nullptr);
 	REQUIRE(cache.Get("key2") == nullptr);
+}
+
+TEST_CASE("LRU Cache Evict To Reduce Memory", "[lru_cache]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+
+	// Set max memory to a large value, which exceeds all entries emplaced.
+	SharedLruCache<string, TestValue> cache(20000);
+
+	// Put a few entries, and check memory consumption.
+	constexpr idx_t obj_size = 1000;
+	for (int i = 0; i < 10; i++) {
+		auto val = make_shared_ptr<TestValue>(i, obj_size);
+		auto reservation = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, obj_size);
+		cache.Put(StringUtil::Format("key%d", i), val, std::move(reservation));
+	}
+	REQUIRE(cache.Size() == 10);
+	REQUIRE(cache.CurrentMemory() == 10 * obj_size);
+
+	// Perform cache entries eviction, and check memory consumption.
+	idx_t target_memory = 6 * obj_size;
+	const idx_t freed = cache.EvictToReduceMemory(target_memory);
+	REQUIRE(cache.CurrentMemory() == target_memory);
+	REQUIRE(freed == 4 * obj_size);
+	REQUIRE(cache.Size() == 6);
+
+	// The first 4 items should be evicted.
+	for (int i = 0; i < 4; i++) {
+		REQUIRE(cache.Get(StringUtil::Format("key%d", i)) == nullptr);
+	}
+	// The later 6 items should be kept in cache.
+	for (int i = 6; i < 10; i++) {
+		REQUIRE(cache.Get(StringUtil::Format("key%d", i)) != nullptr);
+	}
 }
