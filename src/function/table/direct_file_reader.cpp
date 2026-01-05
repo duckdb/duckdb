@@ -56,7 +56,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 	auto files = state.file_list;
 
-	auto& fs = FileSystem::GetFileSystem(context);
+	auto &fs = FileSystem::GetFileSystem(context);
 	const idx_t out_idx = 0;
 
 	// We utilize projection pushdown here to only read the file content if the 'data' column is requested

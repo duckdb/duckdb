@@ -47,7 +47,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	if (flags.GetCachingMode() != CachingMode::NO_CACHING) {
 		auto caching_filesystem =
 		    make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
-		// caching filesystem's lifecycle is extended inside of caching file handle. 
+		// caching filesystem's lifecycle is extended inside of caching file handle.
 		file_handle = caching_filesystem->OpenFile(file, flags, opener);
 	} else {
 		file_handle = internal_filesystem.OpenFile(file, flags, opener);

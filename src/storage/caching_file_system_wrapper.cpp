@@ -26,8 +26,9 @@ DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
 CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
-	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
-    : FileHandle(*file_system, handle->GetPath(), flags), caching_file_system(std::move(file_system)), caching_handle(std::move(handle)) {
+                                                   unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
+    : FileHandle(*file_system, handle->GetPath(), flags), caching_file_system(std::move(file_system)),
+      caching_handle(std::move(handle)) {
 	D_ASSERT(!flags.OpenForWriting());
 	D_ASSERT(!flags.OpenForAppending());
 }
