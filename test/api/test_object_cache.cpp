@@ -61,7 +61,7 @@ struct EvictableTestObject : public ObjectCacheEntry {
 
 } // namespace
 
-TEST_CASE("Test ObjectCache", "[api]") {
+TEST_CASE("Test ObjectCache", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
@@ -84,7 +84,7 @@ TEST_CASE("Test ObjectCache", "[api]") {
 	REQUIRE(cache.GetOrCreate<AnotherTestObject>("test", 13) == nullptr);
 }
 
-TEST_CASE("Test ObjectCache memory accounting", "[api]") {
+TEST_CASE("Test ObjectCache memory accounting", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
@@ -104,7 +104,7 @@ TEST_CASE("Test ObjectCache memory accounting", "[api]") {
 	REQUIRE(after_delete_memory == initial_memory);
 }
 
-TEST_CASE("Test ObjectCache Manual Eviction", "[api]") {
+TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
@@ -127,6 +127,7 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api]") {
 	idx_t freed = cache.EvictToReduceMemory(target_memory);
 	REQUIRE(cache.GetCurrentMemory() == target_memory);
 	REQUIRE(cache.GetEntryCount() == 5);
+	REQUIRE(freed == obj_size * obj_count - target_memory);
 
 	// First five items should be evicted.
 	for (idx_t i = 0; i < 5; i++) {

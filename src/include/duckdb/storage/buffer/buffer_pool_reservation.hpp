@@ -31,7 +31,7 @@ struct BufferPoolReservation {
 	BufferPoolReservation(BufferPoolReservation &&) noexcept;
 	BufferPoolReservation &operator=(BufferPoolReservation &&) noexcept;
 
-	~BufferPoolReservation();
+	virtual ~BufferPoolReservation();
 
 	void Resize(idx_t new_size);
 	void Merge(BufferPoolReservation src);
@@ -42,7 +42,7 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 		Resize(size);
 	}
 	TempBufferPoolReservation(TempBufferPoolReservation &&) = default;
-	~TempBufferPoolReservation() {
+	~TempBufferPoolReservation() override {
 		Resize(0);
 	}
 };
