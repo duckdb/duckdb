@@ -36,6 +36,9 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
 
 private:
 	unordered_map<string, string> keys;

@@ -59,20 +59,6 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	idx_t rows_scanned = 0;
 };
 
-static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
-	if (column_id.IsRowIdColumn()) {
-		return StorageIndex();
-	}
-
-	// The index of the base ColumnIndex is equal to the physical column index in the table
-	// for any child indices because the indices are already the physical indices.
-	// Only the top-level can have generated columns.
-	auto &col = table.GetColumn(column_id.ToLogical());
-	auto result = StorageIndex::FromColumnIndex(column_id);
-	result.SetIndex(col.StorageOid());
-	return result;
-}
-
 class TableScanGlobalState : public GlobalTableFunctionState {
 public:
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
@@ -146,7 +132,7 @@ public:
 		auto &local_storage = LocalStorage::Get(context.client, duck_table.catalog);
 
 		for (const auto &col_idx : input.column_indexes) {
-			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
+			l_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
 		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
@@ -289,7 +275,7 @@ public:
 
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
-			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
+			storage_ids.push_back(bind_data.table.GetStorageIndex(col));
 		}
 
 		if (bind_data.order_options) {
@@ -401,7 +387,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 	}
 
-	storage.InitializeParallelScan(context, g_state->state);
+	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
 	}
@@ -412,6 +398,8 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	for (const auto &col_idx : input.column_indexes) {
 		if (col_idx.IsRowIdColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+		} else if (col_idx.HasType()) {
+			g_state->scanned_types.push_back(col_idx.GetScanType());
 		} else {
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 		}
@@ -443,12 +431,14 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 
 	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
-		g_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
+		g_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		if (col_idx.IsRowIdColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
-			continue;
+		} else if (col_idx.HasType()) {
+			g_state->scanned_types.emplace_back(col_idx.GetScanType());
+		} else {
+			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 		}
-		g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 	}
 
 	// Const-cast to indicate an index scan.
@@ -716,9 +706,9 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	return DuckIndexScanInitGlobal(context, input, bind_data, row_ids);
 }
 
-static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
-                                                      column_t column_id) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, TableFunctionGetStatisticsInput &input) {
+	auto &column_id = input.column_index;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
 
@@ -726,7 +716,17 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 	if (local_storage.Find(duck_table.GetStorage())) {
 		return nullptr;
 	}
-	return duck_table.GetStatistics(context, column_id);
+
+	if (column_id.IsRowIdColumn()) {
+		return nullptr;
+	}
+	auto &column = duck_table.GetColumn(LogicalIndex(column_id.GetPrimaryIndex()));
+	if (column.Generated()) {
+		return nullptr;
+	}
+
+	auto storage_index = duck_table.GetStorageIndex(column_id);
+	return duck_table.GetStatistics(context, storage_index);
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -817,6 +817,19 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
+static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, const LogicalIndex &column_idx) {
+	auto &bind_data = bind_data_ref.Cast<TableScanBindData>();
+	auto &column = bind_data.table.GetColumn(column_idx);
+	if (column.Generated()) {
+		return false;
+	}
+	auto column_type = column.GetType();
+	if (column_type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	return true;
+}
+
 bool TableScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
 	return true;
 }
@@ -841,7 +854,7 @@ TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
 	scan_function.init_global = TableScanInitGlobal;
-	scan_function.statistics = TableScanStatistics;
+	scan_function.statistics_extended = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
 	scan_function.rows_scanned = TableScanRowsScanned;
@@ -862,6 +875,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
 	scan_function.set_scan_order = SetScanOrder;
+	scan_function.supports_pushdown_extract = TableSupportsPushdownExtract;
 	return scan_function;
 }
 

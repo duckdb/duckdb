@@ -30,16 +30,13 @@ public:
 public:
 	Prefix() = delete;
 	Prefix(const ART &art, const Node ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
-	Prefix(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node ptr_p, const idx_t count);
+	Prefix(FixedSizeAllocator &allocator, const Node ptr_p, const idx_t count);
 
 	data_ptr_t data;
 	Node *ptr;
 	bool in_memory;
 
 public:
-	static inline uint8_t Count(const ART &art) {
-		return art.prefix_count;
-	}
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
@@ -61,14 +58,6 @@ public:
 	//! after its creation.
 	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
 
-	//! Traverses and verifies the node and its subtree
-	static void Verify(ART &art, const Node &node);
-	//! Transform the child of the node.
-	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
-
-	//! Returns the string representation of the node using ToStringOptions.
-	static string ToString(ART &art, const Node &node, const ToStringOptions &options);
-
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
 
@@ -82,7 +71,7 @@ private:
 
 	Prefix Append(ART &art, const uint8_t byte);
 	void Append(ART &art, Node other);
-	Prefix TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator, uint8_t byte);
+	Prefix TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, uint8_t byte);
 
 private:
 	template <class F, class NODE>

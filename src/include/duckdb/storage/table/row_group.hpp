@@ -197,7 +197,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats(idx_t row_group_start);
+	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
@@ -219,7 +219,7 @@ public:
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 	idx_t GetColumnCount() const;
 
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
+	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();

@@ -1,0 +1,34 @@
+# name: test/optimizer/eager_aggregate_execution_parquet.test
+# description: Test eager count_star, min, and max execution on parquet
+# group: [optimizer]
+
+require parquet
+
+statement ok
+COPY (FROM range (8192) t(i)) TO '__TEST_DIR__/eager_agg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM '__TEST_DIR__/eager_agg.parquet'
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM '__TEST_DIR__/eager_agg.parquet' GROUP BY i
+----
+physical_plan	<REGEX>:.*GROUP_BY.*
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM '__TEST_DIR__/eager_agg.parquet' WHERE i > 100
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+query III
+SELECT count(*), min(i), max(i) FROM '__TEST_DIR__/eager_agg.parquet'
+----
+8192	0	8191
+
+query III
+SELECT max(i), count(i), min(i) FROM '__TEST_DIR__/eager_agg.parquet'
+----
+8191	8192	0
+

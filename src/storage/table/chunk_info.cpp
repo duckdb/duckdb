@@ -38,7 +38,7 @@ bool ChunkInfo::Cleanup(transaction_t lowest_transaction) const {
 	return false;
 }
 
-void ChunkInfo::Write(WriteStream &writer) const {
+void ChunkInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
 	writer.Write<ChunkInfoType>(type);
 }
 
@@ -99,8 +99,11 @@ void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t
 	insert_id = commit_id;
 }
 
-bool ChunkConstantInfo::HasDeletes() const {
-	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
+bool ChunkConstantInfo::HasDeletes(transaction_t transaction_id) const {
+	if (transaction_id == MAX_TRANSACTION_ID) {
+		transaction_id = TRANSACTION_ID_START - 1;
+	}
+	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id <= transaction_id;
 	return is_deleted;
 }
 
@@ -120,9 +123,9 @@ bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
 	return true;
 }
 
-void ChunkConstantInfo::Write(WriteStream &writer) const {
-	D_ASSERT(HasDeletes());
-	ChunkInfo::Write(writer);
+void ChunkConstantInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
+	D_ASSERT(HasDeletes(checkpoint_id));
+	ChunkInfo::Write(writer, checkpoint_id);
 	writer.Write<idx_t>(start);
 }
 
@@ -418,8 +421,22 @@ bool ChunkVectorInfo::Cleanup(transaction_t lowest_transaction) const {
 	return true;
 }
 
-bool ChunkVectorInfo::HasDeletes() const {
-	return AnyDeleted();
+bool ChunkVectorInfo::HasDeletes(transaction_t transaction_id) const {
+	if (!AnyDeleted()) {
+		return false;
+	}
+	if (transaction_id == MAX_TRANSACTION_ID) {
+		return true;
+	}
+	auto segment = allocator.GetHandle(deleted_data);
+	auto deleted = segment.GetPtr<transaction_t>();
+
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		if (deleted[i] <= transaction_id) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool ChunkVectorInfo::AnyDeleted() const {
@@ -476,9 +493,9 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	return delete_count;
 }
 
-void ChunkVectorInfo::Write(WriteStream &writer) const {
+void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	transaction_t start_time = TRANSACTION_ID_START - 1;
+	transaction_t start_time = checkpoint_id == MAX_TRANSACTION_ID ? TRANSACTION_ID_START - 1 : checkpoint_id + 1;
 	transaction_t transaction_id = DConstants::INVALID_INDEX;
 	idx_t count = GetSelVector(start_time, transaction_id, sel, STANDARD_VECTOR_SIZE);
 	if (count == STANDARD_VECTOR_SIZE) {
@@ -493,7 +510,7 @@ void ChunkVectorInfo::Write(WriteStream &writer) const {
 		return;
 	}
 	// write a boolean vector
-	ChunkInfo::Write(writer);
+	ChunkInfo::Write(writer, checkpoint_id);
 	writer.Write<idx_t>(start);
 	ValidityMask mask(STANDARD_VECTOR_SIZE);
 	mask.Initialize(STANDARD_VECTOR_SIZE);

@@ -30,9 +30,9 @@ public:
 
 private:
 	ColumnReader &reader;
-	unique_ptr<Vector> byte_array_data;
-	idx_t byte_array_count = 0;
-	idx_t delta_offset = 0;
+
+	//! Decoded data in plain Parquet page format
+	shared_ptr<ResizeableBuffer> plain_data;
 };
 
 } // namespace duckdb

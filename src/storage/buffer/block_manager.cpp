@@ -120,6 +120,9 @@ void BlockManager::UnregisterBlock(block_id_t id) {
 }
 
 void BlockManager::UnregisterBlock(BlockHandle &block) {
+	if (in_destruction) {
+		return;
+	}
 	auto id = block.BlockId();
 	if (id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: buffer could have been offloaded to disk: remove the file
