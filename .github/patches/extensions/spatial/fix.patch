@@ -1,7 +1,59 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index cc81600..7ea5de9 100644
+index cc81600..abaa5ff 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -233,9 +233,9 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+ 
+ IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+ 
+-	IndexStorageInfo info;
+-	info.name = name;
+-	info.root = tree->GetRoot().pointer.Get();
++	auto info = make_uniq<IndexStorageInfo>();
++	info->name = name;
++	info->root = tree->GetRoot().pointer.Get();
+ 
+ 	auto &leaf_allocator = tree->GetLeafAllocator();
+ 	auto &node_allocator = tree->GetNodeAllocator();
+@@ -250,17 +250,17 @@ IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_in
+ 	node_allocator.SerializeBuffers(partial_block_manager);
+ 	partial_block_manager.FlushPartialBlocks();
+ 
+-	info.allocator_infos.push_back(leaf_allocator.GetInfo());
+-	info.allocator_infos.push_back(node_allocator.GetInfo());
++	info->allocator_infos.push_back(leaf_allocator.GetInfo());
++	info->allocator_infos.push_back(node_allocator.GetInfo());
+ 
+ 	return info;
+ }
+ 
+ IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+ 
+-	IndexStorageInfo info;
+-	info.name = name;
+-	info.root = tree->GetRoot().pointer.Get();
++	auto info = make_uniq<IndexStorageInfo>();
++	info->name = name;
++	info->root = tree->GetRoot().pointer.Get();
+ 
+ 	auto &leaf_allocator = tree->GetLeafAllocator();
+ 	auto &node_allocator = tree->GetNodeAllocator();
+@@ -268,11 +268,11 @@ IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value>
+ 	leaf_allocator.RemoveEmptyBuffers();
+ 	node_allocator.RemoveEmptyBuffers();
+ 
+-	info.buffers.push_back(leaf_allocator.InitSerializationToWAL());
+-	info.buffers.push_back(node_allocator.InitSerializationToWAL());
++	info->buffers.push_back(leaf_allocator.InitSerializationToWAL());
++	info->buffers.push_back(node_allocator.InitSerializationToWAL());
+ 
+-	info.allocator_infos.push_back(leaf_allocator.GetInfo());
+-	info.allocator_infos.push_back(node_allocator.GetInfo());
++	info->allocator_infos.push_back(leaf_allocator.GetInfo());
++	info->allocator_infos.push_back(node_allocator.GetInfo());
+ 
+ 	return info;
+ }
 @@ -290,8 +290,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
  void RTreeIndex::Vacuum(IndexLock &state) {
  }
@@ -18,9 +70,21 @@ index cc81600..7ea5de9 100644
  
  void RTreeIndex::VerifyAllocations(IndexLock &state) {
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 202a6c7..243a476 100644
+index 202a6c7..c10a84c 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -48,9 +48,9 @@ public:
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+ 	//! Serializes RTree memory to disk and returns the index storage information.
+-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
++	unique_ptr<IndexStorageInfo> SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
+ 	//! Serializes RTree memory to the WAL and returns the index storage information.
+-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++	unique_ptr<IndexStorageInfo> SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+ 
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
 @@ -61,8 +61,13 @@ public:
  	//! Traverses an RTreeIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
  	void Vacuum(IndexLock &state) override;
@@ -37,51 +101,6 @@ index 202a6c7..243a476 100644
  
  	//! Ensures that the node allocation counts match the node counts.
  	void VerifyAllocations(IndexLock &state) override;
-diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index f24f049..fefd285 100644
---- a/src/spatial/modules/gdal/gdal_module.cpp
-+++ b/src/spatial/modules/gdal/gdal_module.cpp
-@@ -9,6 +9,7 @@
- 
- // DuckDB
- #include "duckdb/main/database.hpp"
-+#include "duckdb/main/settings.hpp"
- #include "duckdb/common/enums/file_glob_options.hpp"
- #include "duckdb/common/multi_file/multi_file_reader.hpp"
- #include "duckdb/function/table/arrow.hpp"
-@@ -237,7 +238,7 @@ public:
- 			}
- 
- 			// Fall back to GDAL instead (if external access is enabled)
--			if (!context.db->config.options.enable_external_access) {
-+			if (!Settings::Get<EnableExternalAccessSetting>(context)) {
- 				if (bSetError) {
- 					VSIError(VSIE_FileError, "Failed to open file %s with GDAL: External access is disabled",
- 					         file_name);
-@@ -444,7 +445,7 @@ void GDALClientContextState::QueryEnd() {
- string GDALClientContextState::GetPrefix(const string &value) const {
- 	// If the user explicitly asked for a VSI prefix, we don't add our own
- 	if (StringUtil::StartsWith(value, "/vsi")) {
--		if (!context.db->config.options.enable_external_access) {
-+		if (!Settings::Get<EnableExternalAccessSetting>(context)) {
- 			throw PermissionException("Cannot open file '%s' with VSI prefix: External access is disabled", value);
- 		}
- 		return value;
-@@ -963,12 +964,12 @@ struct ST_Read : ArrowTableFunction {
- 			state.all_columns.Reset();
- 			state.all_columns.SetCardinality(output_size);
- 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), state.all_columns,
--			                                  gstate.lines_read - output_size, false);
-+			                                   false);
- 			output.ReferenceColumns(state.all_columns, gstate.projection_ids);
- 		} else {
- 			output.SetCardinality(output_size);
- 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), output,
--			                                  gstate.lines_read - output_size, false);
-+			                                   false);
- 		}
- 
- 		if (!data.keep_wkb) {
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
 index 96d04f1..468dcaf 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp

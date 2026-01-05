@@ -1,7 +1,52 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 218aa0e..89e909d 100644
+index 218aa0e..f0b0e90 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
+@@ -523,33 +523,33 @@ void HNSWIndex::PersistToDisk() {
+ 	is_dirty = false;
+ }
+ 
+-IndexStorageInfo HNSWIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
++unique_ptr<IndexStorageInfo> HNSWIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+ 
+ 	PersistToDisk();
+ 
+-	IndexStorageInfo info;
+-	info.name = name;
+-	info.root = root_block_ptr.Get();
++	auto info = make_uniq<IndexStorageInfo>();
++	info->name = name;
++	info->root = root_block_ptr.Get();
+ 
+ 	// Use the partial block manager to serialize allocator data.
+ 	auto &block_manager = table_io_manager.GetIndexBlockManager();
+ 	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
+ 	linked_block_allocator->SerializeBuffers(partial_block_manager);
+ 	partial_block_manager.FlushPartialBlocks();
+-	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
++	info->allocator_infos.push_back(linked_block_allocator->GetInfo());
+ 
+ 	return info;
+ }
+ 
+-IndexStorageInfo HNSWIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
++unique_ptr<IndexStorageInfo> HNSWIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+ 
+ 	PersistToDisk();
+ 
+-	IndexStorageInfo info;
+-	info.name = name;
+-	info.root = root_block_ptr.Get();
+-	info.buffers.push_back(linked_block_allocator->InitSerializationToWAL());
+-	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
++	auto info = make_uniq<IndexStorageInfo>();
++	info->name = name;
++	info->root = root_block_ptr.Get();
++	info->buffers.push_back(linked_block_allocator->InitSerializationToWAL());
++	info->allocator_infos.push_back(linked_block_allocator->GetInfo());
+ 
+ 	return info;
+ }
 @@ -566,8 +566,12 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
  void HNSWIndex::Vacuum(IndexLock &state) {
  }
@@ -18,9 +63,21 @@ index 218aa0e..89e909d 100644
  
  void HNSWIndex::VerifyAllocations(IndexLock &state) {
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index 83fb9e7..a22a0b8 100644
+index 83fb9e7..1370627 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
+@@ -78,9 +78,9 @@ public:
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+ 	//! Serializes HNSW memory to disk and returns the index storage information.
+-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
++	unique_ptr<IndexStorageInfo> SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
+ 	//! Serializes HNSW memory to the WAL and returns the index storage information.
+-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++	unique_ptr<IndexStorageInfo> SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+ 
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
 @@ -91,8 +91,14 @@ public:
  	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
  	void Vacuum(IndexLock &state) override;
