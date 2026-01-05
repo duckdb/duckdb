@@ -24,7 +24,8 @@ try:
     ver = subprocess.check_output(('black', '--version'), text=True)
     if int(ver.split(' ')[1].split('.')[0]) < 24:
         print('you need to run `pip install "black>=24"`', ver)
-        exit(-1)
+        if 'DUCKDB_FORMAT_SKIP_VERSION_CHECKS' not in os.environ:
+            exit(-1)
 except Exception as e:
     print('you need to run `pip install "black>=24"`', e)
     exit(-1)
@@ -33,7 +34,8 @@ try:
     ver = subprocess.check_output(('clang-format', '--version'), text=True)
     if '11.' not in ver:
         print('you need to run `pip install clang_format==11.0.1 - `', ver)
-        exit(-1)
+        if 'DUCKDB_FORMAT_SKIP_VERSION_CHECKS' not in os.environ:
+            exit(-1)
 except Exception as e:
     print('you need to run `pip install clang_format==11.0.1 - `', e)
     exit(-1)
