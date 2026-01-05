@@ -257,15 +257,8 @@ endfunction()
 function(build_static_extension NAME PARAMETERS)
     # all parameters after name
     set(FILES "${ARGV}")
-    list(REMOVE_AT FILES 0 1)
-
+    list(REMOVE_AT FILES 0)
     add_library(${NAME}_extension STATIC ${FILES})
-
-    string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
-    if(${IGNORE_WARNINGS} GREATER -1)
-        disable_target_warnings(${NAME}_extension)
-    endif()
-
     target_link_libraries(${NAME}_extension duckdb_static)
 endfunction()
 

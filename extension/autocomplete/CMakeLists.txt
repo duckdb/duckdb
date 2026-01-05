@@ -11,9 +11,8 @@ set(AUTOCOMPLETE_EXTENSION_FILES
 add_subdirectory(transformer)
 add_subdirectory(parser)
 
+build_static_extension(autocomplete ${AUTOCOMPLETE_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
-build_static_extension(autocomplete ${PARAMETERS}
-                       ${AUTOCOMPLETE_EXTENSION_FILES})
 build_loadable_extension(autocomplete ${PARAMETERS}
                          ${AUTOCOMPLETE_EXTENSION_FILES})
 

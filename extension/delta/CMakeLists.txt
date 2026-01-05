@@ -88,9 +88,8 @@ ExternalProject_Add(
   INSTALL_COMMAND ""
   LOG_BUILD ON)
 
-set(PARAMETERS " ")
-build_static_extension(${TARGET_NAME} ${PARAMETERS} ${EXTENSION_SOURCES})
-build_loadable_extension(${TARGET_NAME} ${PARAMETERS} ${EXTENSION_SOURCES})
+build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
+build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
 include_directories(
   ${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers)

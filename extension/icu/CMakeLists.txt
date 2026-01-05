@@ -27,8 +27,7 @@ set(ICU_EXTENSION_FILES
     icu-timebucket.cpp
     icu-timezone.cpp)
 
-set(PARAMETERS "-no-warnings")
-build_static_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
+build_static_extension(icu ${ICU_EXTENSION_FILES})
 link_threads(icu_extension "")
 if(NOT WITH_INTERNAL_ICU)
   find_package(
@@ -37,6 +36,8 @@ if(NOT WITH_INTERNAL_ICU)
     REQUIRED)
   target_link_libraries(icu_extension ICU::i18n ICU::uc ICU::data)
 endif()
+disable_target_warnings(icu_extension)
+set(PARAMETERS "-no-warnings")
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
 if(NOT WITH_INTERNAL_ICU)
   target_link_libraries(icu_loadable_extension ICU::i18n ICU::uc ICU::data)

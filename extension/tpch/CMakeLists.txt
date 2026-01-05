@@ -6,9 +6,8 @@ include_directories(dbgen/include)
 include_directories(include)
 add_subdirectory(dbgen)
 
+build_static_extension(tpch tpch_extension.cpp ${DBGEN_OBJECT_FILES})
 set(PARAMETERS "-warnings")
-build_static_extension(tpch ${PARAMETERS} tpch_extension.cpp
-                       ${DBGEN_OBJECT_FILES})
 build_loadable_extension(tpch ${PARAMETERS} tpch_extension.cpp
                          ${DBGEN_OBJECT_FILES})
 
