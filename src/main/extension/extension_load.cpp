@@ -378,7 +378,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		return false;
 	}
 
-	auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ | FileLockType::READ_LOCK);
 
 	// Parse the extension metadata from the extension binary
 	auto parsed_metadata = ParseExtensionMetaData(*handle);
