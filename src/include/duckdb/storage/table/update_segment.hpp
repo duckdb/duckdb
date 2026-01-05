@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/string_heap.hpp"

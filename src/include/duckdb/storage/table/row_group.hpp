@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -17,7 +16,6 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
