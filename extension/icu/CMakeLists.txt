@@ -41,6 +41,7 @@ set(PARAMETERS "-no-warnings")
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
 if(NOT WITH_INTERNAL_ICU)
   target_link_libraries(icu_loadable_extension ICU::i18n ICU::uc ICU::data)
+  disable_target_warnings(icu_loadable_extension)
 endif()
 install(
   TARGETS icu_extension

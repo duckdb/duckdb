@@ -120,7 +120,7 @@ private:
 	void lookup(AttachTask &task);
 	void append_internal(AttachTask &task, const bool is_upsert);
 	void append(AttachTask &task);
-	void delete_internal(AttachTask &task);
+	// void delete_internal(AttachTask &task); no longer used, commented out to avoid compiler warnings
 	void apply_changes(AttachTask &task);
 	void describe_tbl(AttachTask &task);
 	void checkpoint_db(AttachTask &task);
@@ -323,25 +323,26 @@ void AttachWorker::append(AttachTask &task) {
 	db_infos[db_id].tables[tbl_id].size += append_count;
 }
 
-void AttachWorker::delete_internal(AttachTask &task) {
-	auto db_id = task.db_id.GetIndex();
-	auto tbl_id = task.tbl_id.GetIndex();
-	auto &ids = task.ids;
-	auto tbl_str = "tbl_" + to_string(tbl_id);
-
-	string delete_list;
-	for (auto delete_idx : ids) {
-		if (!delete_list.empty()) {
-			delete_list += ", ";
-		}
-		delete_list += "(" + to_string(delete_idx) + ")";
-	}
-	string delete_sql =
-	    StringUtil::Format("WITH ids (id) AS (VALUES %s) DELETE FROM %s.%s.%s AS t USING ids WHERE t.i = ids.id",
-	                       delete_list, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
-	addLog("q: " + delete_sql);
-	execQuery(delete_sql);
-}
+// no longer used, commented out to avoid compiler warnings
+// void AttachWorker::delete_internal(AttachTask &task) {
+// 	auto db_id = task.db_id.GetIndex();
+// 	auto tbl_id = task.tbl_id.GetIndex();
+// 	auto &ids = task.ids;
+// 	auto tbl_str = "tbl_" + to_string(tbl_id);
+//
+// 	string delete_list;
+// 	for (auto delete_idx : ids) {
+// 		if (!delete_list.empty()) {
+// 			delete_list += ", ";
+// 		}
+// 		delete_list += "(" + to_string(delete_idx) + ")";
+// 	}
+// 	string delete_sql =
+// 	    StringUtil::Format("WITH ids (id) AS (VALUES %s) DELETE FROM %s.%s.%s AS t USING ids WHERE t.i = ids.id",
+// 	                       delete_list, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
+// 	addLog("q: " + delete_sql);
+// 	execQuery(delete_sql);
+// }
 
 void AttachWorker::apply_changes(AttachTask &task) {
 	if (!task.tbl_id.IsValid()) {
