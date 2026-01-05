@@ -265,5 +265,6 @@ TEST_CASE("Test WaitEventLogType", "[logging]") {
 	REQUIRE(res->RowCount() == 1);
 
 	string message = res->GetValue(0, 0).ToString();
-	REQUIRE(message == "{'event': test_event, 'state': started, 'connection_id': 1, 'query_id': 2, 'thread_id': 3, 'metadata': {key1=value1, key2=value2}}");
+	REQUIRE(message == "{'event': test_event, 'state': started, 'connection_id': 1, 'query_id': 2, 'thread_id': 3, "
+	                   "'metadata': {key1=value1, key2=value2}}");
 }
