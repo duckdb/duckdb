@@ -76,6 +76,7 @@ public:
 
 public:
 	bool Compare(idx_t property_version) const;
+	bool CompareVersionString(string &property_version_string) const;
 	StorageVersionMapping GetStorageVersionMapping() const;
 
 public:

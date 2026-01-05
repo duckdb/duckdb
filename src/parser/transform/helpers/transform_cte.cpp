@@ -25,7 +25,7 @@ CommonTableExpressionInfo::~CommonTableExpressionInfo() {
 }
 
 CTEMaterialize CommonTableExpressionInfo::GetMaterializedForSerialization(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_5_0))) {
+	if (serializer.ShouldSerialize("v1.5.0")) {
 		return materialized;
 	}
 	return CTEMaterialize::CTE_MATERIALIZE_DEFAULT;

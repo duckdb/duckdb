@@ -359,7 +359,14 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
                     const string &name) {
 	case_insensitive_map_t<Value> options;
 	auto storage_version = db.GetStorageManager().GetStorageVersionValueIdx();
-	auto v1_0_0_storage = storage_version < StorageVersionInfo::GetStorageVersionValue((StorageVersion::V1_1_0));
+	bool v1_0_0_storage = false;
+	if (storage_version < GetStorageVersionValue("v1.2.0")) {
+		auto deprecated_serialization_version = db.GetStorageManager().GetDuckDBVersionString();
+		auto ser_version = GetSerializationVersionDeprecated(deprecated_serialization_version.GetString().c_str());
+		if (ser_version < GetSerializationVersionDeprecated("v1.1.0")) {
+			v1_0_0_storage = true;
+		}
+	}
 	if (!v1_0_0_storage) {
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}

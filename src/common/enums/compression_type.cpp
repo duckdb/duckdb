@@ -30,16 +30,11 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
                                                          optional_ptr<StorageManager> storage_manager) {
 	//! Max storage compatibility
 	vector<CompressionMethodRequirements> candidates(
-	    {{CompressionType::COMPRESSION_PATAS, optional_idx(),
-	      StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID)},
-	     {CompressionType::COMPRESSION_CHIMP, optional_idx(),
-	      StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID)},
-	     {CompressionType::COMPRESSION_DICTIONARY, StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID),
-	      StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)},
-	     {CompressionType::COMPRESSION_FSST, StorageVersionInfo::GetStorageVersionValue(StorageVersion::INVALID),
-	      StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)},
-	     {CompressionType::COMPRESSION_DICT_FSST, StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0),
-	      optional_idx()}});
+	    {{CompressionType::COMPRESSION_PATAS, optional_idx(), GetStorageVersionValue("invalid")},
+	     {CompressionType::COMPRESSION_CHIMP, optional_idx(), GetStorageVersionValue("invalid")},
+	     {CompressionType::COMPRESSION_DICTIONARY, GetStorageVersionValue("invalid"), GetStorageVersionValue("v1.2.0")},
+	     {CompressionType::COMPRESSION_FSST, GetStorageVersionValue("invalid"), GetStorageVersionValue("v1.2.0")},
+	     {CompressionType::COMPRESSION_DICT_FSST, GetStorageVersionValue("v1.3.0"), optional_idx()}});
 
 	optional_idx current_storage_version;
 	if (storage_manager && storage_manager->HasStorageVersion()) {

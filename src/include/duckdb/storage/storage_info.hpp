@@ -177,6 +177,10 @@ struct StorageVersionInfo {
 	static constexpr uint64_t GetStorageVersionDefault() {
 		return GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO);
 	};
+
+	static constexpr uint64_t Invalid() {
+		return GetStorageVersionValue(StorageVersion::INVALID);
+	};
 };
 
 struct StorageVersionMapping {
@@ -207,9 +211,9 @@ extern const uint64_t VERSION_NUMBER_UPPER;
 string GetDuckDBVersions(const idx_t version_number);
 string GetStorageVersionNameInternal(const idx_t storage_version);
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix);
-optional_idx GetSerializationVersionDeprecated(const char *version_string);
+idx_t GetSerializationVersionDeprecated(const char *version_string);
+idx_t GetStorageVersionValue(const char *version_string);
 StorageVersionMapping GetStorageVersion(const char *version_string);
-optional_idx GetStorageVersionInternal(const char *version_string);
 vector<string> GetStorageCandidates();
 
 //! The MainHeader is the first header in the storage file.

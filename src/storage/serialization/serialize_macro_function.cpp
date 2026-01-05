@@ -15,7 +15,7 @@ void MacroFunction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MacroType>(100, "type", type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", GetPositionalParametersForSerialization(serializer));
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
-	if (serializer.ShouldSerialize(6)) {
+	if (serializer.ShouldSerialize("v1.4.0")) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "types", types, vector<LogicalType>());
 	}
 }

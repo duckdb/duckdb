@@ -166,8 +166,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto version_string = serializer.GetOptions().storage_compatibility.duckdb_version;
 	auto v1_0_0_storage = false;
 	auto deprecated_serialization_version = GetSerializationVersionDeprecated(version_string.c_str());
-	D_ASSERT(deprecated_serialization_version.IsValid());
-	if (deprecated_serialization_version.GetIndex() < GetSerializationVersionDeprecated("v1.1.0").GetIndex()) {
+	if (deprecated_serialization_version < GetSerializationVersionDeprecated("v1.1.0")) {
 		v1_0_0_storage = true;
 	}
 	IndexSerializationInfo serialization_info;

@@ -49,9 +49,10 @@ public:
 		return options.storage_compatibility.Compare(version_added);
 	}
 
-	bool ShouldSerialize(string_t string_version_added) {
-		// implement
-		return options.storage_compatibility.Compare(version_added);
+	bool ShouldSerialize(string string_version_added) {
+		// should serialize with deprecated serialization values
+		// note that from now on, we should use only the direct idx_t value
+		return options.storage_compatibility.CompareVersionString(string_version_added);
 	}
 
 	class List {

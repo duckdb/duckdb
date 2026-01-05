@@ -886,6 +886,12 @@ bool StorageCompatibility::Compare(idx_t property_version) const {
 	return property_version <= storage_version;
 }
 
+bool StorageCompatibility::CompareVersionString(string &property_version_string) const {
+	auto deprecated_serialization_version = GetSerializationVersionDeprecated(duckdb_version.c_str());
+	auto property_version = GetSerializationVersionDeprecated(property_version_string.c_str());
+	return property_version <= deprecated_serialization_version;
+}
+
 StorageVersionMapping StorageCompatibility::GetStorageVersionMapping() const {
 	StorageVersionMapping result;
 	result.version = storage_version;

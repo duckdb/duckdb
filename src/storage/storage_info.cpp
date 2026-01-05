@@ -147,7 +147,7 @@ string GetStorageVersionNameInternal(const idx_t storage_version) {
 }
 
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
-	if (storage_version < StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_2_0)) {
+	if (storage_version < GetStorageVersionValue("v1.2.0")) {
 		// special handling for lower storage versions
 		return "v1.0.0+";
 	}
@@ -164,30 +164,30 @@ string GetStorageVersionName(const idx_t storage_version, const bool add_suffix)
 	return name;
 }
 
-optional_idx GetSerializationVersionDeprecated(const char *version_string) {
+idx_t GetSerializationVersionDeprecated(const char *version_string) {
 	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
 		if (!strcmp(serialization_version_info[i].version_name, version_string)) {
 			return SerializationVersionInfo::GetSerializationVersionValue(
 			    serialization_version_info[i].storage_version);
 		}
 	}
-	return optional_idx();
+	return StorageVersionInfo::Invalid();
 }
 
-optional_idx GetStorageVersionInternal(const char *version_string) {
+idx_t GetStorageVersionValue(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
 			return StorageVersionInfo::GetStorageVersionValue(storage_version_info[i].storage_version);
 		}
 	}
-	return optional_idx();
+	return StorageVersionInfo::Invalid();
 }
 
 StorageVersionMapping GetStorageVersion(const char *version_string) {
 	StorageVersionMapping result;
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
-			result.version = GetStorageVersionInternal(version_string);
+			result.version = GetStorageVersionValue(version_string);
 			if (result.version.IsValid()) {
 				result.version_string = string_t(version_string);
 			}

@@ -69,8 +69,7 @@ struct DictionaryCompressionStorage {
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &storage_manager = col_data.GetStorageManager();
-	if (storage_manager.GetStorageVersionValueIdx() >=
-	    StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_3_0)) {
+	if (storage_manager.GetStorageVersionValueIdx() >= GetStorageVersionValue("v1.3.0")) {
 		// dict_fsst introduced - disable dictionary
 		return nullptr;
 	}
