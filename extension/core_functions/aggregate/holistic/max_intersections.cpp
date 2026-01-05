@@ -45,11 +45,10 @@ struct MaxIntersectionsState {
 	}
 };
 
-// flag: 0 = start, 1 = end
 template <typename EVENT_T, typename INPUT_T>
 inline EVENT_T EncodeEvent(INPUT_T t, bool is_end) {
 	const EVENT_T tt = static_cast<EVENT_T>(t);
-	return (tt << 1) | static_cast<EVENT_T>(is_end ? 1 : 0);
+	return (tt << 1) | static_cast<EVENT_T>(is_end ? 0 : 1);
 }
 
 template <typename EVENT_T>
@@ -125,8 +124,7 @@ struct MaxIntersectionsFunction {
 		int64_t current_count = 0;
 		int64_t max_count = 0;
 		for (const auto ev : state.events) {
-			// flag = ev & 1; 0 -> start, 1 -> end
-			if ((ev & static_cast<EVENT_T>(1)) == static_cast<EVENT_T>(0)) {
+			if ((ev & static_cast<EVENT_T>(1)) == static_cast<EVENT_T>(1)) {
 				current_count++;
 				max_count = MaxValue(current_count, max_count);
 			} else {

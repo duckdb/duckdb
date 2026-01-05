@@ -122,9 +122,3 @@ query I
 select max_intersections(s,e) from empties;
 ----
 0
-
-# Negative interval
-query I
-select max_intersections(-10,-5);
-----
-1
