@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/array_ptr.hpp"

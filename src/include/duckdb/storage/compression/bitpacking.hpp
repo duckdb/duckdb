@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/string_util.hpp"
+
 namespace duckdb {
 
 enum class BitpackingMode : uint8_t { INVALID, AUTO, CONSTANT, CONSTANT_DELTA, DELTA_FOR, FOR };

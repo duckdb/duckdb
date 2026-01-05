@@ -6,6 +6,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 
 #include "zstd.h"
 

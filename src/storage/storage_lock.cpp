@@ -1,4 +1,5 @@
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {

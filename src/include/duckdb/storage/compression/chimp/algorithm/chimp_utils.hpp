@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace duckdb {
 
 template <class T>

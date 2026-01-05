@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/file_system.hpp"

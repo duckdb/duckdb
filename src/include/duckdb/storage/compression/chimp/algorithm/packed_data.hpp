@@ -10,6 +10,9 @@
 
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/typedefs.hpp"
+
+#include <cstdint>
 
 namespace duckdb {
 
