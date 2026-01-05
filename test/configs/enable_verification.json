@@ -205,11 +205,9 @@
       "reason": "FIXME: Misc. unexpected failures (including internal exception).",
       "paths": [
         "test/fuzzer/duckfuzz/null_arguments.test",
-        "test/issues/internal/test_5457.test",
         "test/sql/aggregate/aggregates/test_state_export.test",
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/corrupt_stats.test",
-        "test/sql/copy/parquet/parquet_1618_struct_strings.test",
         "test/sql/create/create_table_compression.test",
         "test/sql/logging/logging_file_bind_replace.test",
         "test/sql/optimizer/test_rowid_pushdown_plan.test",
@@ -234,6 +232,12 @@
       "reason": "Verification query results are not buffer managed",
       "paths": [
         "test/sql/outofcore/buffer_managed_query_result.test_slow"
+      ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+      "paths": [
+        "test/geoparquet/with_crs.test"
       ]
     }
   ]

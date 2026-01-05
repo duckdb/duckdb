@@ -231,7 +231,7 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 
 string FileSystem::NormalizeAbsolutePath(const string &path) {
 	D_ASSERT(IsPathAbsolute(path));
-	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
+	auto result = FileSystem::ConvertSeparators(path);
 	if (StartsWithSingleBackslash(result)) {
 		// Path starts with a single backslash or forward slash
 		// prepend drive letter
@@ -872,6 +872,12 @@ bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> 
 		return true;
 	}
 	return false;
+}
+
+void FileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	for (const auto &filename : filenames) {
+		TryRemoveFile(filename, opener);
+	}
 }
 
 void FileSystem::FileSync(FileHandle &handle) {

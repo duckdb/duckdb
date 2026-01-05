@@ -338,10 +338,41 @@ TEST_CASE("absolute paths", "[file_system]") {
 	REQUIRE(fs.IsPathAbsolute(network));
 	REQUIRE(fs.IsPathAbsolute("C:\\folder\\filename.csv"));
 	REQUIRE(fs.IsPathAbsolute("C:/folder\\filename.csv"));
-	REQUIRE(fs.NormalizeAbsolutePath("C:/folder\\filename.csv") == "c:\\folder\\filename.csv");
+	REQUIRE(fs.NormalizeAbsolutePath("C:/folder\\filename.csv") == "C:\\folder\\filename.csv");
 	REQUIRE(fs.NormalizeAbsolutePath(network) == network);
-	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\d:\\very long network\\");
+	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\D:\\very long network\\");
 #endif
+}
+
+TEST_CASE("Test RemoveFiles", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto dname = TestCreatePath("test_remove_files");
+
+	if (fs->DirectoryExists(dname)) {
+		fs->RemoveDirectory(dname);
+	}
+	fs->CreateDirectory(dname);
+
+	auto file1 = fs->JoinPath(dname, "file1.txt");
+	auto file2 = fs->JoinPath(dname, "file2.txt");
+	auto file3 = fs->JoinPath(dname, "file3.txt");
+	auto file4 = fs->JoinPath(dname, "file4.txt");
+	create_dummy_file(file1);
+	create_dummy_file(file2);
+	create_dummy_file(file3);
+
+	REQUIRE(fs->FileExists(file1));
+	REQUIRE(fs->FileExists(file2));
+	REQUIRE(fs->FileExists(file3));
+	REQUIRE(!fs->FileExists(file4));
+
+	fs->RemoveFiles({file1, file2});
+	REQUIRE(!fs->FileExists(file1));
+	REQUIRE(!fs->FileExists(file2));
+	REQUIRE(fs->FileExists(file3));
+	REQUIRE(!fs->FileExists(file4));
+
+	fs->RemoveDirectory(dname);
 }
 
 TEST_CASE("extract subsystem", "[file_system]") {

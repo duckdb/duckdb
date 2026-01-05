@@ -18,14 +18,15 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // IndexDataRemover
 //===--------------------------------------------------------------------===//
-IndexDataRemover::IndexDataRemover(QueryContext context, IndexRemovalType removal_type)
-    : context(context), removal_type(removal_type) {
+IndexDataRemover::IndexDataRemover(DuckTransaction &transaction_p, QueryContext context, IndexRemovalType removal_type)
+    : transaction(transaction_p), context(context), removal_type(removal_type) {
 }
 
 void IndexDataRemover::PushDelete(DeleteInfo &info) {
@@ -74,11 +75,13 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 	// set up the row identifiers vector
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
 
+	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
 	// delete the tuples from all the indexes.
 	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
 	// data, hence the transaction cannot be guaranteed.
 	try {
-		table.RemoveFromIndexes(context, row_identifiers, count, removal_type);
+		table.RemoveFromIndexes(context, row_identifiers, count, removal_type, checkpoint_id);
 	} catch (std::exception &ex) {
 		throw FatalException(ErrorData(ex).Message());
 	} catch (...) {
@@ -94,7 +97,8 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
                          ActiveTransactionState transaction_state, CommitMode commit_mode)
     : transaction(transaction_p), commit_id(commit_id),
-      index_data_remover(*transaction.context.lock(), GetIndexRemovalType(transaction_state, commit_mode)) {
+      index_data_remover(transaction, *transaction.context.lock(),
+                         GetIndexRemovalType(transaction_state, commit_mode)) {
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
