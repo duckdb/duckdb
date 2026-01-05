@@ -827,13 +827,13 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 }
 
 StorageCompatibility StorageCompatibility::FromDatabase(AttachedDatabase &db) {
-	return FromIndex(db.GetStorageManager().GetStorageVersionValueIdx());
+	return FromIndex(db.GetStorageManager().GetStorageVersionMap());
 }
 
-StorageCompatibility StorageCompatibility::FromIndex(const idx_t version) {
+StorageCompatibility StorageCompatibility::FromIndex(StorageVersionMapping storage_version_p) {
 	StorageCompatibility result;
-	result.duckdb_version = "";
-	result.storage_version = version;
+	result.duckdb_version = storage_version_p.version_string.GetString();
+	result.storage_version = storage_version_p.version.GetIndex();
 	result.manually_set = false;
 	return result;
 }
@@ -844,7 +844,7 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 	}
 
 	auto storage_version = GetStorageVersion(input.c_str());
-	if (!storage_version.IsValid()) {
+	if (!storage_version.version.IsValid()) {
 		auto candidates = GetStorageCandidates();
 		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
@@ -852,7 +852,7 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 
 	StorageCompatibility result;
 	result.duckdb_version = input;
-	result.storage_version = storage_version.GetIndex();
+	result.storage_version = storage_version.version.GetIndex();
 	result.manually_set = true;
 	return result;
 }
@@ -869,6 +869,7 @@ StorageCompatibility StorageCompatibility::Default() {
 	return res;
 #else
 	auto res = FromString("v0.10.2");
+	res.duckdb_version = "v0.10.2";
 	res.manually_set = false;
 	return res;
 #endif
@@ -885,4 +886,10 @@ bool StorageCompatibility::Compare(idx_t property_version) const {
 	return property_version <= storage_version;
 }
 
+StorageVersionMapping StorageCompatibility::GetStorageVersionMapping() const {
+	StorageVersionMapping result;
+	result.version = storage_version;
+	result.version_string = duckdb_version;
+	return result;
+}
 } // namespace duckdb

@@ -1,5 +1,4 @@
 #include "duckdb/storage/storage_info.hpp"
-
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
@@ -175,13 +174,27 @@ optional_idx GetSerializationVersionDeprecated(const char *version_string) {
 	return optional_idx();
 }
 
-optional_idx GetStorageVersion(const char *version_string) {
+optional_idx GetStorageVersionInternal(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
 			return StorageVersionInfo::GetStorageVersionValue(storage_version_info[i].storage_version);
 		}
 	}
 	return optional_idx();
+}
+
+StorageVersionMapping GetStorageVersion(const char *version_string) {
+	StorageVersionMapping result;
+	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
+		if (!strcmp(storage_version_info[i].version_name, version_string)) {
+			result.version = GetStorageVersionInternal(version_string);
+			if (result.version.IsValid()) {
+				result.version_string = string_t(version_string);
+			}
+			return result;
+		}
+	}
+	return result;
 }
 
 vector<string> GetStorageCandidates() {

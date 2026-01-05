@@ -13,6 +13,8 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -162,6 +164,7 @@ enum class SerializationVersionDeprecated : uint64_t {
 // clang-format on
 
 struct StorageVersionInfo {
+	// If the default storage version has to be updated, do it here
 	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
 
 	const char *version_name;
@@ -174,6 +177,18 @@ struct StorageVersionInfo {
 	static constexpr uint64_t GetStorageVersionDefault() {
 		return GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO);
 	};
+};
+
+struct StorageVersionMapping {
+	optional_idx version = optional_idx();
+	string_t version_string = "";
+
+	static StorageVersionMapping Default() {
+		StorageVersionMapping result;
+		result.version = StorageVersionInfo::GetStorageVersionDefault();
+		result.version_string = "v0.10.2";
+		return result;
+	}
 };
 
 struct SerializationVersionInfo {
@@ -193,7 +208,8 @@ string GetDuckDBVersions(const idx_t version_number);
 string GetStorageVersionNameInternal(const idx_t storage_version);
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix);
 optional_idx GetSerializationVersionDeprecated(const char *version_string);
-optional_idx GetStorageVersion(const char *version_string);
+StorageVersionMapping GetStorageVersion(const char *version_string);
+optional_idx GetStorageVersionInternal(const char *version_string);
 vector<string> GetStorageCandidates();
 
 //! The MainHeader is the first header in the storage file.
@@ -313,11 +329,12 @@ struct DatabaseHeader {
 	//! The vector size of the database file
 	idx_t vector_size = 0;
 	//! The storage compatibility version
-	idx_t storage_compatibility = 0;
+	StorageVersionMapping storage_compatibility = StorageVersionMapping::Default();
 
-	void Write(WriteStream &ser);
+	void Write(WriteStream &ser) const;
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
-	static void SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version);
+	static void SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version,
+	                              string_t version_string = nullptr);
 };
 
 //! Detect mismatching constant values when compiling

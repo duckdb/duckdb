@@ -39,6 +39,8 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
+#include <duckdb/storage/storage_options.hpp>
+
 namespace duckdb {
 
 class BlockAllocator;
@@ -67,13 +69,14 @@ struct SettingLookupResult;
 class StorageCompatibility {
 public:
 	static StorageCompatibility FromDatabase(AttachedDatabase &db);
-	static StorageCompatibility FromIndex(idx_t storage_version);
+	static StorageCompatibility FromIndex(StorageVersionMapping storage_version_p);
 	static StorageCompatibility FromString(const string &input);
 	static StorageCompatibility Default();
 	static StorageCompatibility Latest();
 
 public:
 	bool Compare(idx_t property_version) const;
+	StorageVersionMapping GetStorageVersionMapping() const;
 
 public:
 	//! The user provided version
@@ -83,7 +86,6 @@ public:
 	//! Whether this was set by a manual SET/PRAGMA or default
 	bool manually_set;
 	//! serialization version (2 or 3, which are both storage version 64)
-	idx_t serialization_version_deprecated;
 
 protected:
 	StorageCompatibility() = default;

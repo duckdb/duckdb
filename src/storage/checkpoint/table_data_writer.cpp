@@ -162,9 +162,14 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	// serialization version 3 = storage version
-	auto v1_0_0_storage = serializer.GetOptions().storage_compatibility.serialization_version_deprecated <
-	                      SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_1_0);
+	// serialization version 3 = v1.1.0 = storage version 64
+	auto version_string = serializer.GetOptions().storage_compatibility.duckdb_version;
+	auto v1_0_0_storage = false;
+	auto deprecated_serialization_version = GetSerializationVersionDeprecated(version_string.c_str());
+	D_ASSERT(deprecated_serialization_version.IsValid());
+	if (deprecated_serialization_version.GetIndex() < GetSerializationVersionDeprecated("v1.1.0").GetIndex()) {
+		v1_0_0_storage = true;
+	}
 	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);

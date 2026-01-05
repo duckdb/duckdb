@@ -52,8 +52,9 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
-			storage_version_user_provided = entry.second.ToString();
-			storage_version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
+			storage_version.version_string = entry.second.ToString();
+			storage_version.version =
+			    StorageCompatibility::FromString(storage_version.version_string.GetString()).storage_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -64,15 +65,17 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
-	if (encryption && (!storage_version.IsValid() ||
-	                   storage_version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version)) {
+	if (encryption &&
+	    (!storage_version.version.IsValid() ||
+	     storage_version.version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException(
 			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
 			    storage_version_user_provided);
 		}
 		// set storage version to v1.4.0
-		storage_version = StorageCompatibility::FromString("v1.4.0").storage_version;
+		storage_version.version_string = "v1.4.0";
+		storage_version.version = StorageCompatibility::FromString("v1.4.0").storage_version;
 	}
 }
 
@@ -370,9 +373,9 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			// No encryption; use the default option.
 			options.block_header_size = config.options.default_block_header_size;
 		}
-		if (!options.storage_version.IsValid()) {
+		if (!options.storage_version.version.IsValid()) {
 			// when creating a new database we default to the default storage version specified in the config
-			options.storage_version = config.options.storage_compatibility.storage_version;
+			options.storage_version = config.options.storage_compatibility.GetStorageVersionMapping();
 		}
 
 		// Initialize the block manager before creating a new database.
