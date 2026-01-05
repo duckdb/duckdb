@@ -1,0 +1,22 @@
+# name: test/sql/copy/parquet/parquet_copy_failure_cleans_up.test
+# group: [parquet]
+
+require parquet
+
+statement error
+copy (select 'hello'::INT) to '__TEST_DIR__/borked.parquet';
+----
+Conversion Error: Could not convert string 'hello' to INT32
+
+statement error
+from read_parquet('__TEST_DIR__/borked.parquet');
+----
+IO Error: No files found that match the pattern "__TEST_DIR__/borked.parquet"
+
+statement ok
+copy (select 123::INT) to '__TEST_DIR__/myfile.parquet';
+
+query I
+from read_parquet('__TEST_DIR__/myfile.parquet');
+----
+123
