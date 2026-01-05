@@ -1,10 +1,13 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index cc81600..abaa5ff 100644
+index cc81600..4f11b96 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -233,9 +233,9 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+@@ -231,11 +231,11 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+ 	}
+ }
  
- IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+-IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
++unique_ptr<IndexStorageInfo> RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
  
 -	IndexStorageInfo info;
 -	info.name = name;
@@ -27,7 +30,8 @@ index cc81600..abaa5ff 100644
  	return info;
  }
  
- IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+-IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
++unique_ptr<IndexStorageInfo> RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
  
 -	IndexStorageInfo info;
 -	info.name = name;
