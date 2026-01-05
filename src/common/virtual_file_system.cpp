@@ -38,17 +38,18 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 
-	auto& internal_filesystem = FindFileSystem(file.path, opener);
+	auto &internal_filesystem = FindFileSystem(file.path, opener);
 
 	// File handle gets created.
 	unique_ptr<FileHandle> file_handle = nullptr;
 
 	// Handle caching logic.
 	if (flags.GetCachingMode() != CachingMode::NO_CACHING) {
-		auto caching_filesystem = make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
+		auto caching_filesystem =
+		    make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
 		file_handle = caching_filesystem->OpenFile(file, flags, opener);
 		// CachingFileSystemWrapper is not stored within VFS, so pin its lifecycle inside of file handle.
-		auto& caching_file_handle = file_handle->Cast<CachingFileHandleWrapper>();
+		auto &caching_file_handle = file_handle->Cast<CachingFileHandleWrapper>();
 		caching_file_handle.PinCachingFileSystem(std::move(caching_filesystem));
 	} else {
 		file_handle = internal_filesystem.OpenFile(file, flags, opener);

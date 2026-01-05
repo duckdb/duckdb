@@ -80,7 +80,7 @@ public:
 	}
 
 	// Tracking filesystem can only deal files in the testing directory.
-	bool CanHandleFile(const string& path) override {
+	bool CanHandleFile(const string &path) override {
 		return StringUtil::StartsWith(path, TestDirectoryPath());
 	}
 
@@ -417,48 +417,49 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	shared_handle.reset();
 }
 
-// Testing scenario: mimic open file with duckdb instance, which open a file goes through opener filesystem, meanwhile with caching enabled.
+// Testing scenario: mimic open file with duckdb instance, which open a file goes through opener filesystem, meanwhile
+// with caching enabled.
 //
 // Example usage in production:
 // auto &fs = FileSystem::GetFileSystem(context);
 // auto file_handle = fs.OpenFile(path, flag);
 TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]") {
-    const string test_content = "File used for caching enabled testing";
-    TestFileGuard test_file("test_caching_parallel.txt", test_content);
+	const string test_content = "File used for caching enabled testing";
+	TestFileGuard test_file("test_caching_parallel.txt", test_content);
 
-    DuckDB db(":memory:");
-    auto &db_instance = *db.instance;
-    auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
-    auto &vfs = opener_filesystem.GetFileSystem();
-    vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
+	auto &vfs = opener_filesystem.GetFileSystem();
+	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
 	// Shared variable both all caching modes.
 	string buffer(TEST_BUFFER_SIZE, '\0');
 	const auto &external_file_cache = db_instance.GetExternalFileCache();
 
-    auto run_case = [&](CachingMode mode) {
-        FileOpenFlags flags{FileFlags::FILE_FLAGS_READ};
-        flags.SetCachingMode(mode);
+	auto run_case = [&](CachingMode mode) {
+		FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
+		flags.SetCachingMode(mode);
 
 		// Perform read operation and check correctness.
-        auto handle = opener_filesystem.OpenFile(test_file.GetPath(), flags);
-        handle->Read(QueryContext(), &buffer[0], test_content.length(), /*location=*/0);
-        REQUIRE(buffer.substr(0, test_content.length()) == test_content);
+		auto handle = opener_filesystem.OpenFile(test_file.GetPath(), flags);
+		handle->Read(QueryContext(), &buffer[0], test_content.length(), /*location=*/0);
+		REQUIRE(buffer.substr(0, test_content.length()) == test_content);
 
 		// Check seeability.
 		REQUIRE(handle->CanSeek());
-    };
+	};
 
-    SECTION("cache enabled")   { 
-		run_case(CachingMode::ALWAYS_CACHE); 
+	SECTION("cache enabled") {
+		run_case(CachingMode::ALWAYS_CACHE);
 		// Check external cache file has something cached.
-        REQUIRE(!external_file_cache.GetCachedFileInformation().empty());
+		REQUIRE(!external_file_cache.GetCachedFileInformation().empty());
 	}
 
-    SECTION("cache disabled")  { 
-		run_case(CachingMode::NO_CACHING); 
+	SECTION("cache disabled") {
+		run_case(CachingMode::NO_CACHING);
 		// Check external cache file has nothing cached.
-        REQUIRE(external_file_cache.GetCachedFileInformation().empty());
+		REQUIRE(external_file_cache.GetCachedFileInformation().empty());
 	}
 }
 

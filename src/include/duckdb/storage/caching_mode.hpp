@@ -23,4 +23,4 @@ enum class CachingMode : uint8_t {
 	NO_CACHING = 2,
 };
 
-}  // namespace duckdb
+} // namespace duckdb

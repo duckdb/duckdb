@@ -10,7 +10,7 @@ namespace duckdb {
 
 namespace {
 // Get database instance from file opener, throw InvalidInput exception.
-DatabaseInstance& GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
+DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
 	if (file_opener == nullptr) {
 		throw InvalidInputException("Cannot get database instance out of file opener, because file opener is nullptr.");
 	}
@@ -54,8 +54,10 @@ CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, Data
     : caching_file_system(file_system, db), underlying_file_system(file_system), caching_mode(mode) {
 }
 
-CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener, CachingMode mode) 
-	: caching_file_system(file_system, GetDatabaseInstance(file_opener)), underlying_file_system(file_system), caching_mode(mode) {
+CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener,
+                                                   CachingMode mode)
+    : caching_file_system(file_system, GetDatabaseInstance(file_opener)), underlying_file_system(file_system),
+      caching_mode(mode) {
 }
 
 CachingFileSystemWrapper CachingFileSystemWrapper::Get(ClientContext &context, CachingMode mode) {

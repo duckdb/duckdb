@@ -30,7 +30,8 @@ class CachingFileHandleWrapper : public FileHandle {
 public:
 	DUCKDB_API CachingFileHandleWrapper(CachingFileSystemWrapper &file_system, unique_ptr<CachingFileHandle> handle,
 	                                    FileOpenFlags flags);
-	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileHandleWrapper> file_system, unique_ptr<CachingFileHandle> handle, FileOpenFlags flags);
+	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileHandleWrapper> file_system,
+	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags);
 
 	// API used to pin caching filesystem's lifecycle inside of the file handle.
 	DUCKDB_API void PinCachingFileSystem(shared_ptr<CachingFileSystemWrapper> caching_filesystem_p);
@@ -42,7 +43,8 @@ public:
 private:
 	// Optional caching filesystem.
 	//
-	// CachingFileSystem is not kept within VFS as other filesystems, so sometimes it's necessary to pin it inside of file handle and ensure it's valid.
+	// CachingFileSystem is not kept within VFS as other filesystems, so sometimes it's necessary to pin it inside of
+	// file handle and ensure it's valid.
 	shared_ptr<CachingFileSystemWrapper> caching_file_system;
 
 	unique_ptr<CachingFileHandle> caching_handle;
@@ -57,7 +59,8 @@ class CachingFileSystemWrapper : public FileSystem {
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
 	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
-	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener, CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
+	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener,
+	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
 
 	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context,
