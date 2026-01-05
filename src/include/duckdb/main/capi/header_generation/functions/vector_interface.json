@@ -125,7 +125,7 @@
                 }
             ],
             "comment": {
-                "description": "Assigns a string element in the vector at the specified location. Should only be used for VARCHAR vectors and expects valid UTF-8. Otherwise, the function does nothing.\n\n",
+                "description": "Assigns a string element in the vector at the specified location. The vector type must be VARCHAR and the input must be valid UTF-8. Otherwise, undefined behavior is expected at later stages.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter",
                     "index": "The row position in the vector to assign the string to",
@@ -155,7 +155,7 @@
                 }
             ],
             "comment": {
-                "description": "Assigns a string element in the vector at the specified location. The vector type can be VARCHAR or BLOB. In the case of VARCHAR, you need to pass valid UTF-8. Otherwise, the function does nothing.\n\n",
+                "description": "Assigns a string element in the vector at the specified location. The vector type can be VARCHAR or BLOB. In the case of VARCHAR, you must pass valid UTF-8. Otherwise, undefined behavior is expected at later stages.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter",
                     "index": "The row position in the vector to assign the string to",
