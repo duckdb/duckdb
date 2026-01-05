@@ -25,17 +25,11 @@ DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
 //===----------------------------------------------------------------------===//
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
-CachingFileHandleWrapper::CachingFileHandleWrapper(CachingFileSystemWrapper &file_system,
-                                                   unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
-    : FileHandle(file_system, handle->GetPath(), flags), caching_handle(std::move(handle)) {
-	// Flags should already be validated to be read-only in OpenFileExtended
-}
-
-void CachingFileHandleWrapper::PinCachingFileSystem(shared_ptr<CachingFileSystemWrapper> caching_filesystem_p) {
-	if (caching_file_system != nullptr) {
-		throw InvalidInputException("Caching filesystem already set for caching file handle!");
-	}
-	caching_file_system = std::move(caching_filesystem_p);
+CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
+	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
+    : FileHandle(*file_system, handle->GetPath(), flags), caching_file_system(std::move(file_system)), caching_handle(std::move(handle)) {
+	D_ASSERT(!flags.OpenForWriting());
+	D_ASSERT(!flags.OpenForAppending());
 }
 
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {
@@ -148,7 +142,7 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFile
 
 	if (ShouldUseCache(path.path)) {
 		auto caching_handle = caching_file_system.OpenFile(path, flags);
-		return make_uniq<CachingFileHandleWrapper>(*this, std::move(caching_handle), flags);
+		return make_uniq<CachingFileHandleWrapper>(shared_from_this(), std::move(caching_handle), flags);
 	}
 	// Bypass cache, use underlying file system directly.
 	return underlying_file_system.OpenFile(path, flags, opener);

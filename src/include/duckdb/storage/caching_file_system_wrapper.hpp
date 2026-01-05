@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/winapi.hpp"
+#include "duckdb/common/enable_shared_from_this_ipp.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 
@@ -28,21 +29,14 @@ class CachingFileHandleWrapper : public FileHandle {
 	friend class CachingFileSystemWrapper;
 
 public:
-	DUCKDB_API CachingFileHandleWrapper(CachingFileSystemWrapper &file_system, unique_ptr<CachingFileHandle> handle,
-	                                    FileOpenFlags flags);
-	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileHandleWrapper> file_system,
+	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
 	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags);
-
-	// API used to pin caching filesystem's lifecycle inside of the file handle.
-	DUCKDB_API void PinCachingFileSystem(shared_ptr<CachingFileSystemWrapper> caching_filesystem_p);
 
 	DUCKDB_API ~CachingFileHandleWrapper() override;
 
 	DUCKDB_API void Close() override;
 
 private:
-	// Optional caching filesystem.
-	//
 	// CachingFileSystem is not kept within VFS as other filesystems, so sometimes it's necessary to pin it inside of
 	// file handle and ensure it's valid.
 	shared_ptr<CachingFileSystemWrapper> caching_file_system;
@@ -55,7 +49,7 @@ private:
 //! read, the wrapper class always copies requested byted into the provided address.
 //!
 //! NOTICE: Currently only read and seek operations are supported, write operations are disabled.
-class CachingFileSystemWrapper : public FileSystem {
+class CachingFileSystemWrapper : public FileSystem, public enable_shared_from_this<CachingFileSystemWrapper> {
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
 	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
