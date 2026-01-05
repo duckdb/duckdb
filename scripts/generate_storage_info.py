@@ -43,7 +43,7 @@ def generate_serialization_enum(serialization_versions):
 
     latest = "LATEST"
     result.append(f"    {to_enum_name(latest)} = {current},")
-    result.append("    INVALID = 0")
+    result.append("    INVALID = UINT64_MAX")
     result.append("};")
     return "\n".join(result)
 
