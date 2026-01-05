@@ -20,7 +20,7 @@ TEST_CASE("Extension parser adds semicolon", "[parser-extension]") {
 
 	parser_extension.parser_info = info;
 	parser_extension.parse_function = [](duckdb::ParserExtensionInfo *info,
-										 const std::string &query) -> duckdb::ParserExtensionParseResult {
+	                                     const std::string &query) -> duckdb::ParserExtensionParseResult {
 		auto *test_info = static_cast<TestParserInfo *>(info);
 		test_info->received_query = query;
 		duckdb::unique_ptr<duckdb::ParserExtensionParseData> empty_data {};
