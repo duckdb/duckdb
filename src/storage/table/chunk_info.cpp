@@ -2,7 +2,6 @@
 
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/transaction/delete_info.hpp"

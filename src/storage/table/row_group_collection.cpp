@@ -10,14 +10,12 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {

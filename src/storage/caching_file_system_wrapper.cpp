@@ -4,7 +4,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 

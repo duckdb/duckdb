@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/row_id_column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
