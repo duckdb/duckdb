@@ -484,6 +484,9 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (filter_value.value.type() != LogicalType::BIGINT) {
 		return false;
 	}
+	if (filter_value.value.IsNull()) {
+		return false;
+	}
 
 	const auto bigint_value = filter_value.value.GetValue<int64_t>();
 	switch (comparison) {
