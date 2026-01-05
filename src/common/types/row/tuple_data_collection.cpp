@@ -93,7 +93,7 @@ idx_t TupleDataCollection::ChunkCount() const {
 }
 
 idx_t TupleDataCollection::SizeInBytes() const {
-	return data_size;
+	return data_size + stl_allocator->AllocationSize();
 }
 
 void TupleDataCollection::Unpin() {

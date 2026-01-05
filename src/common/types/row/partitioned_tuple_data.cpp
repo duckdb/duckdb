@@ -67,9 +67,9 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_pin_state = state.partition_pin_states[partition_index.GetIndex()];
 
-		const auto size_before = partition.SizeInBytes();
+		const auto size_before = partition.data_size;
 		partition.AppendUnified(partition_pin_state, state.chunk_state, input, append_sel, actual_append_count);
-		data_size += partition.SizeInBytes() - size_before;
+		data_size += partition.data_size - size_before;
 	} else {
 		// Compute the heap sizes for the whole chunk
 		if (!layout.AllConstant()) {
@@ -103,9 +103,9 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 
 		state.chunk_state.heap_sizes.Reference(input.heap_sizes);
 
-		const auto size_before = partition.SizeInBytes();
+		const auto size_before = partition.data_size;
 		partition.Build(partition_pin_state, state.chunk_state, 0, append_count);
-		data_size += partition.SizeInBytes() - size_before;
+		data_size += partition.data_size - size_before;
 
 		partition.CopyRows(state.chunk_state, input, *FlatVector::IncrementalSelectionVector(), append_count);
 	} else {
@@ -224,9 +224,9 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 		const auto partition_offset = partition_entry.offset - partition_length;
 
 		// Build out the buffer space for this partition
-		const auto size_before = partition.SizeInBytes();
+		const auto size_before = partition.data_size;
 		partition.Build(partition_pin_state, state.chunk_state, partition_offset, partition_length);
-		data_size += partition.SizeInBytes() - size_before;
+		data_size += partition.data_size - size_before;
 	}
 }
 
@@ -337,7 +337,7 @@ idx_t PartitionedTupleData::Count() const {
 }
 
 idx_t PartitionedTupleData::SizeInBytes() const {
-	return data_size;
+	return data_size + stl_allocator->AllocationSize();
 }
 
 idx_t PartitionedTupleData::PartitionCount() const {
@@ -361,7 +361,7 @@ void PartitionedTupleData::Verify() const {
 	for (auto &partition : partitions) {
 		partition->Verify();
 		total_count += partition->Count();
-		total_size += partition->SizeInBytes();
+		total_size += partition->data_size;
 	}
 	D_ASSERT(total_count == this->count);
 	D_ASSERT(total_size == this->data_size);
