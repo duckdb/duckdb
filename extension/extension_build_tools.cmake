@@ -257,7 +257,8 @@ endfunction()
 function(build_static_extension NAME PARAMETERS)
     # all parameters after name
     set(FILES "${ARGV}")
-    list(REMOVE_AT FILES 0)
+    list(REMOVE_AT FILES 0 1)
+
     add_library(${NAME}_extension STATIC ${FILES})
 
     string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)

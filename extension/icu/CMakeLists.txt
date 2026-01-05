@@ -28,7 +28,7 @@ set(ICU_EXTENSION_FILES
     icu-timezone.cpp)
 
 set(PARAMETERS "-no-warnings")
-build_static_extension(icu ${ICU_EXTENSION_FILES} ${PARAMETERS})
+build_static_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
 link_threads(icu_extension "")
 if(NOT WITH_INTERNAL_ICU)
   find_package(
