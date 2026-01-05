@@ -358,6 +358,13 @@ LogicalType PEGTransformerFactory::TransformUnionType(PEGTransformer &transforme
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto colid_list = transformer.Transform<child_list_t<LogicalType>>(list_pr.Child<ListParseResult>(1));
+	case_insensitive_string_set_t union_names;
+	for (auto &colid : colid_list) {
+		if (union_names.find(colid.first) != union_names.end()) {
+			throw ParserException("Duplicate union type tag name \"%s\"", colid.first);
+		}
+		union_names.insert(colid.first);
+	}
 	return LogicalType::UNION(colid_list);
 }
 
