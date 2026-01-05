@@ -89,9 +89,6 @@ public:
 	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
-	bool HasWriteLock() const {
-		return write_lock.get();
-	}
 
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
@@ -105,8 +102,10 @@ private:
 	UndoBuffer undo_buffer;
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
-	//! Write lock
-	unique_ptr<StorageLockKey> write_lock;
+	//! Lock that prevents checkpoints from starting
+	unique_ptr<StorageLockKey> checkpoint_lock;
+	//! Lock that prevents vacuums from starting
+	unique_ptr<StorageLockKey> vacuum_lock;
 	//! Lock for accessing sequence_usage
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction

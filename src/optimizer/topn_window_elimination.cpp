@@ -466,7 +466,13 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	if (filter.expressions[0]->type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+	const auto comparison = filter.expressions[0]->type;
+	switch (comparison) {
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_EQUAL:
+		break;
+	default:
 		return false;
 	}
 
@@ -478,7 +484,26 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (filter_value.value.type() != LogicalType::BIGINT) {
 		return false;
 	}
-	if (filter_value.value.GetValue<int64_t>() < 1) {
+
+	const auto bigint_value = filter_value.value.GetValue<int64_t>();
+	switch (comparison) {
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		if (bigint_value < 1) {
+			return false;
+		}
+		break;
+	case ExpressionType::COMPARE_LESSTHAN:
+		if (bigint_value < 2) {
+			return false;
+		}
+		break;
+	case ExpressionType::COMPARE_EQUAL:
+		//	TODO: Handle other values
+		if (bigint_value != 1) {
+			return false;
+		}
+		break;
+	default:
 		return false;
 	}
 
@@ -688,8 +713,12 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
                                                   vector<unique_ptr<Expression>> &aggregate_payload) {
 	TopNWindowEliminationParameters params;
 
-	auto &limit_expr = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
+	auto &filter_expr = filter.expressions[0]->Cast<BoundComparisonExpression>();
+	auto &limit_expr = filter_expr.right;
 	params.limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
+		--params.limit;
+	}
 	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
 	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();

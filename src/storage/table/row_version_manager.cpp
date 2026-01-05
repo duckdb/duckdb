@@ -3,14 +3,13 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
 
 RowVersionManager::RowVersionManager(BufferManager &buffer_manager_p) noexcept
     : allocator(STANDARD_VECTOR_SIZE * sizeof(transaction_t), buffer_manager_p.GetTemporaryBlockManager(),
-                MemoryTag::BASE_TABLE),
-      has_unserialized_changes(false) {
+                MemoryTag::BASE_TABLE) {
 }
 
 idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
@@ -126,7 +125,6 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
                                           idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
-	has_unserialized_changes = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 
@@ -179,7 +177,6 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		auto &info = *vector_info[vector_idx];
-		D_ASSERT(has_unserialized_changes);
 		info.CommitAppend(commit_id, vstart, vend);
 	}
 }
@@ -208,9 +205,6 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		// if we wrote the entire chunk info try to compress it
 		auto cleanup = info.Cleanup(lowest_active_transaction);
 		if (cleanup) {
-			if (info.HasDeletes()) {
-				has_unserialized_changes = true;
-			}
 			vector_info[vector_idx].reset();
 		}
 	}
@@ -220,7 +214,6 @@ void RowVersionManager::RevertAppend(idx_t new_count) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (new_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
-		D_ASSERT(has_unserialized_changes);
 		vector_info[vector_idx].reset();
 	}
 }
@@ -243,19 +236,22 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
-	has_unserialized_changes = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
-	has_unserialized_changes = true;
+	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
+		uncheckpointed_delete_commit = commit_id;
+	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
-vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
+vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 	lock_guard<mutex> lock(version_lock);
-	if (!has_unserialized_changes) {
+	auto &manager = *writer.GetMetadataManager();
+	auto options = writer.GetCheckpointOptions();
+	if (!uncheckpointed_delete_commit.IsValid()) {
 		// we can write the current pointer as-is
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
@@ -269,7 +265,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 		if (!chunk_info) {
 			continue;
 		}
-		if (!chunk_info->HasDeletes()) {
+		if (!chunk_info->HasDeletes(options.transaction_id)) {
 			continue;
 		}
 		to_serialize.emplace_back(vector_idx, *chunk_info);
@@ -278,19 +274,23 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 	storage_pointers.clear();
 
 	if (!to_serialize.empty()) {
-		MetadataWriter writer(manager, &storage_pointers);
+		MetadataWriter metadata_writer(manager, &storage_pointers);
 		// now serialize the actual version information
-		writer.Write<idx_t>(to_serialize.size());
+		metadata_writer.Write<idx_t>(to_serialize.size());
 		for (auto &entry : to_serialize) {
 			auto &vector_idx = entry.first;
 			auto &chunk_info = entry.second.get();
-			writer.Write<idx_t>(vector_idx);
-			chunk_info.Write(writer);
+			metadata_writer.Write<idx_t>(vector_idx);
+			chunk_info.Write(metadata_writer, options.transaction_id);
 		}
-		writer.Flush();
+		metadata_writer.Flush();
 	}
 
-	has_unserialized_changes = false;
+	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() <= options.transaction_id) {
+		// the last checkpointed id was either before or on the transaction we are checkpointing
+		// nothing to checkpoint in future commits until more deletes appear
+		uncheckpointed_delete_commit = optional_idx();
+	}
 	return storage_pointers;
 }
 
@@ -314,18 +314,18 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		version_info->FillVectorInfo(vector_index);
 		version_info->vector_info[vector_index] = ChunkInfo::Read(version_info->GetAllocator(), source);
 	}
-	version_info->has_unserialized_changes = false;
+	version_info->uncheckpointed_delete_commit = optional_idx();
 	return version_info;
 }
 
 bool RowVersionManager::HasUnserializedChanges() {
 	lock_guard<mutex> lock(version_lock);
-	return has_unserialized_changes;
+	return uncheckpointed_delete_commit.IsValid();
 }
 
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
-	D_ASSERT(!has_unserialized_changes);
+	D_ASSERT(!uncheckpointed_delete_commit.IsValid());
 	return storage_pointers;
 }
 
