@@ -50,9 +50,14 @@ public:
 	}
 
 	bool ShouldSerialize(string string_version_added) {
-		// should serialize with deprecated serialization values
-		// note that from now on, we should use only the direct idx_t value
-		return options.storage_compatibility.CompareVersionString(string_version_added);
+		auto property_version = GetStorageVersionValue(string_version_added.c_str());
+
+		if (property_version < GetStorageVersionValue("v1.5.0")) {
+			// serialization version is used (older)
+			return options.storage_compatibility.CompareVersionString(string_version_added);
+		}
+
+		return ShouldSerialize(property_version);
 	}
 
 	class List {

@@ -68,6 +68,23 @@ def verify_serialization_versions(version_map):
 verify_serialization_versions(version_map)
 
 
+def get_version_string(storage_version: int):
+    versions = version_map['serialization']['values']
+
+    reverse_versions = {}
+    for k, v in versions.items():
+        if v not in reverse_versions and k != "latest":
+            reverse_versions[v] = k
+
+    try:
+        search_key = int(storage_version)
+    except (ValueError, TypeError):
+        search_key = storage_version
+
+    result_string = reverse_versions.get(search_key, storage_version)
+    return result_string
+
+
 def lookup_serialization_version(version: str):
     if version.lower() == "latest":
         print(
@@ -509,10 +526,17 @@ class SerializableClass:
             code = []
             if entry.status != MemberVariableStatus.EXISTING:
                 # conditional delete
-                code.append(f'\tif (!serializer.ShouldSerialize({storage_version})) {{')
+                if not entry.version.isdigit():
+                    code.append(f'\tif (!serializer.ShouldSerialize("{entry.version}")) {{')
+                else:
+                    code.append(f'\tif (!serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{')
             else:
                 # conditional serialization
-                code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+                if not entry.version.isdigit():
+                    code.append(f'\tif (serializer.ShouldSerialize("{entry.version}")) {{')
+                else:
+                    code.append(f'\tif (serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{')
+
             code.append('\t' + serialization_code)
 
             result = '\n'.join(code) + '\t}\n'
