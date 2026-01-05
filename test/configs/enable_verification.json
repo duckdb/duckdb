@@ -117,6 +117,8 @@
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_shred.test",
+        "test/sql/types/geo/geometry_shred_types.test",
+        "test/sql/types/geo/geometry_shred_empty.test",
         "test/sql/window/test_window_constant_allocator.test"
       ]
     },
