@@ -99,6 +99,8 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 	input.data[0].ToUnifiedFormat(input.size(), vdata);
 	const auto blobs = UnifiedVectorFormat::GetData<string_t>(vdata);
 
+	QueryContext query_context(context.client);
+
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		const auto out_idx = vdata.sel->get_index(row_idx);
 		if (vdata.validity.RowIsValid(out_idx)) {
@@ -109,7 +111,7 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 			auto blob_end = blob_ptr + blob_len;
 
 			while (blob_ptr < blob_end) {
-				auto written = handle->Write(blob_ptr, blob_len);
+				auto written = handle->Write(query_context, blob_ptr, blob_len);
 				if (written <= 0) {
 					throw IOException("Failed to write to file!");
 				}
