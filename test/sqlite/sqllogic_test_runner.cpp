@@ -1075,9 +1075,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto env_actual = test_config.GetTestEnv(env_var, token.parameters[1]);
 
 			// Check if we have something defining from our test
-			if (environment_variables.count(env_var)) {
-				parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
-			}
+			// if (environment_variables.count(env_var)) {
+			// 	parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
+			// }
 
 			environment_variables[env_var] = env_actual;
 			add_env_tag(file_tags, env_var, &env_actual);
