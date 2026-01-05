@@ -715,10 +715,6 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	// TODO(Dtenwolde)
-	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
-		throw NotImplementedException("LATERAL has not yet been implemented");
-	};
 	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(1));
 	auto table_alias_opt = list_pr.Child<OptionalParseResult>(2);
 	if (table_alias_opt.HasResult()) {

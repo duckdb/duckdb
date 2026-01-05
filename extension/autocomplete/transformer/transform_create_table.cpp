@@ -67,7 +67,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 	auto &table_as_or_column_list = list_pr.Child<ListParseResult>(3).Child<ChoiceParseResult>(0);
 	if (table_as_or_column_list.name == "CreateTableAs") {
 		auto create_table_as = transformer.Transform<CreateTableAs>(table_as_or_column_list.result);
-		// TODO(Dtenwolde) Figure out what to do with WithData?
 		info->query = std::move(create_table_as.select_statement);
 		info->columns = std::move(create_table_as.column_names);
 	} else {
@@ -75,6 +74,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 		info->columns = std::move(column_list.columns);
 		info->constraints = std::move(column_list.constraints);
 	}
+	// On COMMIT is unused apart from checking whether it is ON COMMIT DELETE, which is unsupported
+	bool on_commit = false;
+	transformer.TransformOptional<bool>(list_pr, 4, on_commit);
 
 	result->info = std::move(info);
 	return result;
@@ -87,6 +89,11 @@ CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &tran
 	transformer.TransformOptional<ColumnList>(list_pr, 0, result.column_names);
 	result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(2));
 	transformer.TransformOptional<bool>(list_pr, 3, result.with_data);
+	if (result.with_data) {
+		auto limit_modifier = make_uniq<LimitModifier>();
+		limit_modifier->limit = make_uniq<ConstantExpression>(0);
+		result.select_statement->node->modifiers.push_back(std::move(limit_modifier));
+	}
 	return result;
 }
 
@@ -435,5 +442,31 @@ LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &tran
 	string collation = StringUtil::Join(dotted_identifier, ".");
 	return LogicalType::VARCHAR_COLLATION(collation);
 }
+
+bool PEGTransformerFactory::TransformWithData(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	// 'WITH' 'NO'? 'DATA'
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto no_data = list_pr.Child<OptionalParseResult>(1).HasResult();
+	return no_data;
+}
+
+bool PEGTransformerFactory::TransformCommitAction(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<bool>(list_pr.Child<ListParseResult>(2));
+}
+
+bool PEGTransformerFactory::TransformPreserveOrDelete(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	auto preserve_or_delete = choice_pr->Cast<KeywordParseResult>().keyword;
+	if (StringUtil::CIEquals(preserve_or_delete, "delete")) {
+		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
+	}
+	return true;
+}
+
 
 } // namespace duckdb

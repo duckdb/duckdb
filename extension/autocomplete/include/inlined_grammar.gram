@@ -102,7 +102,7 @@ Interval <- YearKeyword /
     (MinuteKeyword 'TO' SecondKeyword)
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
-GeometryType <- 'GEOMETRY'
+GeometryType <- 'GEOMETRY' Parens(Expression)?
 VariantType <- 'VARIANT'
 
 NumericType <- SimpleNumericType / DecimalNumericType
@@ -1070,8 +1070,8 @@ Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
 GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 
-CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
-PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'
+CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
+PreserveOrDelete <- 'PRESERVE' / 'DELETE'
 
 CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
 

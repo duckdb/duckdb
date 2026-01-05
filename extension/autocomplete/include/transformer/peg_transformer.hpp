@@ -512,6 +512,10 @@ private:
 	static string TransformUpdateAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformDeleteAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformColumnCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformCommitAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformPreserveOrDelete(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 	// create_type.gram
 	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,

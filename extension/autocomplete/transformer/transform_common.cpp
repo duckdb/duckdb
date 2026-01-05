@@ -86,7 +86,14 @@ int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &tran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto opt_array_size = list_pr.Child<OptionalParseResult>(1);
 	if (opt_array_size.HasResult()) {
-		return std::stoi(opt_array_size.optional_result->Cast<NumberParseResult>().number);
+		auto number = transformer.Transform<unique_ptr<ParsedExpression>>(opt_array_size.optional_result);
+		if (number->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			auto &const_number = number->Cast<ConstantExpression>();
+			if (!const_number.value.type().IsIntegral()) {
+				throw BinderException("Expected an integer as array bound instead of %s", const_number.value.ToString());
+			}
+			return const_number.value.GetValue<int64_t>();
+		}
 	}
 	return -1;
 }
@@ -328,6 +335,17 @@ LogicalType PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
 
 LogicalType PEGTransformerFactory::TransformGeometryType(PEGTransformer &transformer,
                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto crs_opt = list_pr.Child<OptionalParseResult>(1);
+	if (crs_opt.HasResult()) {
+		auto extract_parens = ExtractResultFromParens(crs_opt.optional_result);
+		auto crs = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+		if (!(crs->GetExpressionClass() == ExpressionClass::CONSTANT)) {
+			throw ParserException("Geometry CRS expected a constant expression");
+		}
+		auto &const_crs = crs->Cast<ConstantExpression>();
+		return LogicalType::GEOMETRY(const_crs.value.GetValue<string>());
+	}
 	return LogicalType::GEOMETRY();
 }
 
