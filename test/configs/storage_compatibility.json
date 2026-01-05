@@ -27,7 +27,9 @@
         "test/sql/attach/attach_issue_7660.test",
         "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_views.test",
-        "test/sql/copy_database/copy_table_with_sequence.test"
+        "test/sql/copy_database/copy_table_with_sequence.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
       ]
     },
     {
@@ -53,6 +55,9 @@
         "test/sql/types/geo/geometry.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_wkb.test",
+        "test/sql/types/geo/geometry_crs.test",
+        "test/sql/types/geo/geometry_crs_projjson.test",
+        "test/sql/types/geo/geometry_crs_wkt2.test",
         "test/geoparquet/disabled.test",
         "test/geoparquet/geoarrow.test",
         "test/geoparquet/mixed.test",

@@ -267,6 +267,14 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryGetCheckpointLock() {
 	return checkpoint_lock.TryGetExclusiveLock();
 }
 
+unique_ptr<StorageLockKey> DuckTransactionManager::SharedVacuumLock() {
+	return vacuum_lock.GetSharedLock();
+}
+
+unique_ptr<StorageLockKey> DuckTransactionManager::TryGetVacuumLock() {
+	return vacuum_lock.TryGetExclusiveLock();
+}
+
 transaction_t DuckTransactionManager::GetCommitTimestamp() {
 	return current_start_timestamp++;
 }

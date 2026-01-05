@@ -132,7 +132,7 @@ struct WindowColumnIterator {
 		return coll->GetCell<T>(0, pos + m);
 	}
 
-	friend inline iterator &operator+(const iterator &a, difference_type n) {
+	friend inline iterator operator+(const iterator &a, difference_type n) {
 		return iterator(a.coll, a.pos + n);
 	}
 

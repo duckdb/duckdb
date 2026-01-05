@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -285,6 +286,9 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+
+	// The Coordinate Reference System associated with this geometry type
+	CoordinateReferenceSystem crs;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
