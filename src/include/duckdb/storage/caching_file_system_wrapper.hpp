@@ -57,9 +57,6 @@ public:
 	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
 
-	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context,
-	                                               CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
-
 	DUCKDB_API std::string GetName() const override;
 
 	DUCKDB_API unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,

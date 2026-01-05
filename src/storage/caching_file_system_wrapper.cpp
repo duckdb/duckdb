@@ -54,10 +54,6 @@ CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, opti
       caching_mode(mode) {
 }
 
-CachingFileSystemWrapper CachingFileSystemWrapper::Get(ClientContext &context, CachingMode mode) {
-	return CachingFileSystemWrapper(FileSystem::GetFileSystem(context), *context.db, mode);
-}
-
 bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {
 	if (caching_mode == CachingMode::ALWAYS_CACHE) {
 		return true;
