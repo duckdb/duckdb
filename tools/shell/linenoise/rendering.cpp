@@ -1041,7 +1041,7 @@ void Linenoise::RefreshMultiLine() {
 				}
 				// oversized values might need multiple lines - check if there is space
 				idx_t total_lines = completion_length / ws.ws_row;
-				if (rendered_rows + total_lines + rows > ws.ws_row) {
+				if (rendered_rows + total_lines + NumericCast<idx_t>(rows) > NumericCast<idx_t>(ws.ws_row)) {
 					// no space - truncate to a single line
 					idx_t max_render_pos =
 					    ColAndRowToPosition(0, rendered_text.c_str(), rendered_text.size(), 0, ws.ws_col);
