@@ -26,6 +26,8 @@ ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
 statement ok
 ATTACH '{DATA_DIR}/storage/empty67_init.db' (READ_ONLY);
 
+# TODO add 1.5.0
+
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty67_init%' ORDER BY database_name;
 ----

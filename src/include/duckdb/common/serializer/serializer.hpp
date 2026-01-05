@@ -49,6 +49,11 @@ public:
 		return options.storage_compatibility.Compare(version_added);
 	}
 
+	bool ShouldSerialize(string_t string_version_added) {
+		// implement
+		return options.storage_compatibility.Compare(version_added);
+	}
+
 	class List {
 		friend Serializer;
 

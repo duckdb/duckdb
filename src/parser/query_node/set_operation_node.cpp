@@ -127,7 +127,8 @@ unique_ptr<QueryNode> SetOperationNode::SerializeChildNode(Serializer &serialize
 }
 
 bool SetOperationNode::SerializeChildList(Serializer &serializer) const {
-	return serializer.ShouldSerialize(6);
+	// old value: 6
+	return serializer.ShouldSerialize(StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_4_0));
 }
 
 } // namespace duckdb

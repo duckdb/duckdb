@@ -236,7 +236,7 @@ private:
 };
 
 void HyperLogLog::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(3)) {
+	if (serializer.ShouldSerialize(StorageVersionInfo::GetStorageVersionValue(StorageVersion::V1_1_0))) {
 		serializer.WriteProperty(100, "type", HLLStorageType::HLL_V2);
 		serializer.WriteProperty(101, "data", k, sizeof(k));
 	} else {

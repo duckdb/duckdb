@@ -344,8 +344,10 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 }
 
 void SingleFileBlockManager::AddStorageVersionTag() {
-	D_ASSERT(!options.storage_version.version_string.Empty());
-	db.tags["storage_version"] = options.storage_version.version_string.GetString();
+	D_ASSERT(options.storage_version.version.IsValid());
+	// Note that this version differs from
+	// options.storage_version.version_string
+	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.version.GetIndex(), true);
 }
 
 uint64_t SingleFileBlockManager::GetVersionNumber() const {
