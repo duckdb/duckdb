@@ -107,11 +107,11 @@ public:
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
 	idx_t GetMaximumSinkRadixBits() const;
-	idx_t GetExternalRadixBits() const;
 
 private:
 	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
 	idx_t InitialSinkRadixBits() const;
+	idx_t ExternalRadixBits() const;
 	idx_t MaximumSinkRadixBits() const;
 	idx_t SinkCapacity() const;
 
@@ -120,8 +120,6 @@ private:
 	RadixHTGlobalSinkState &sink;
 
 public:
-	//! Number of threads (from TaskScheduler)
-	const idx_t number_of_threads;
 	//! Width of tuples
 	const idx_t row_width;
 	//! Capacity of HTs during the Sink
@@ -135,7 +133,9 @@ private:
 
 	//! Current thread-global sink radix bits
 	atomic<idx_t> sink_radix_bits;
-	//! Maximum Sink radix bits (set based on number of threads)
+	//! Maximum bits (if external)
+	const idx_t external_radix_bits;
+	//! Maximum Sink radix bits (set based on number of threads, if not external)
 	const idx_t maximum_sink_radix_bits;
 
 	//! Thresholds at which we reduce the sink radix bits
@@ -174,6 +174,10 @@ public:
 	atomic<idx_t> active_threads;
 	//! Number of threads (from TaskScheduler)
 	const idx_t number_of_threads;
+	//! Memory limit (from BufferManager)
+	const idx_t memory_limit;
+	//! Block size (from BufferManager)
+	const idx_t block_alloc_size;
 	//! If any thread has called combine
 	atomic<bool> any_combined;
 
@@ -205,11 +209,12 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
       finalized(false), external(false), active_threads(0),
       number_of_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-      any_combined(false), radix_ht(radix_ht_p), config(*this), stored_allocators_size(0), finalize_done(0),
+      memory_limit(BufferManager::GetBufferManager(context).GetQueryMaxMemory()),
+      block_alloc_size(BufferManager::GetBufferManager(context).GetBlockAllocSize()), any_combined(false),
+      radix_ht(radix_ht_p), config(*this), stored_allocators_size(0), finalize_done(0),
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
       max_partition_size(0) {
 	// Compute minimum reservation
-	auto block_alloc_size = BufferManager::GetBufferManager(context).GetBlockAllocSize();
 	auto tuples_per_block = block_alloc_size / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    LossyNumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
@@ -265,8 +270,8 @@ void RadixHTGlobalSinkState::Destroy() {
 // LCOV_EXCL_STOP
 
 RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
-    : sink(sink_p), number_of_threads(sink.number_of_threads), row_width(sink.radix_ht.GetLayout().GetRowWidth()),
-      sink_capacity(SinkCapacity()), sink_radix_bits(InitialSinkRadixBits()),
+    : sink(sink_p), row_width(sink.radix_ht.GetLayout().GetRowWidth()), sink_capacity(SinkCapacity()),
+      sink_radix_bits(InitialSinkRadixBits()), external_radix_bits(ExternalRadixBits()),
       maximum_sink_radix_bits(MaximumSinkRadixBits()) {
 }
 
@@ -275,7 +280,7 @@ void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
 }
 
 bool RadixHTConfig::SetRadixBitsToExternal() {
-	SetRadixBitsInternal(MAXIMUM_FINAL_SINK_RADIX_BITS, true);
+	SetRadixBitsInternal(external_radix_bits, true);
 	return sink.external;
 }
 
@@ -285,10 +290,6 @@ idx_t RadixHTConfig::GetRadixBits() const {
 
 idx_t RadixHTConfig::GetMaximumSinkRadixBits() const {
 	return maximum_sink_radix_bits;
-}
-
-idx_t RadixHTConfig::GetExternalRadixBits() const {
-	return MAXIMUM_FINAL_SINK_RADIX_BITS;
 }
 
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
@@ -312,26 +313,49 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 }
 
 idx_t RadixHTConfig::InitialSinkRadixBits() const {
-	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(number_of_threads)),
+	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(sink.number_of_threads)),
 	                MAXIMUM_INITIAL_SINK_RADIX_BITS);
 }
 
+idx_t RadixHTConfig::ExternalRadixBits() const {
+	// Going to many partitions is great for reducing memory usage during the GetData phase
+	// However, we can't go to, e.g., 256 partitions when we have 8 threads and 200 MiB of memory
+	// Because we'll have too many pages in memory to do the partitioning in the first place
+
+	// Assume we can fill half of RAM with pages, and pessimistically assume 4 pages per partition
+	const auto max_partitions = sink.memory_limit / 2 / sink.number_of_threads / sink.block_alloc_size / 4;
+
+	// Compute number of bits, rounded down, at least as much as initial bits
+	const auto bits = MaxValue(RadixPartitioning::RadixBits(max_partitions) - 1, InitialSinkRadixBits());
+
+	// Avoid returning 0 or underflowed bits
+	if (max_partitions == 0 || bits == 0) {
+		return 1;
+	}
+
+	// Capped by global maximum
+	return MinValue(bits, MAXIMUM_FINAL_SINK_RADIX_BITS);
+}
+
 idx_t RadixHTConfig::MaximumSinkRadixBits() const {
-	if (number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
+	if (sink.number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
 		return InitialSinkRadixBits(); // Don't repartition unless we go external
 	}
 	// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
+	idx_t bits = DConstants::INVALID_INDEX;
 	if (row_width >= ROW_WIDTH_THRESHOLD_TWO) {
-		return MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
+		bits = MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
+	} else if (row_width >= ROW_WIDTH_THRESHOLD_ONE) {
+		bits = MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
+	} else {
+		bits = MAXIMUM_FINAL_SINK_RADIX_BITS;
 	}
-	if (row_width >= ROW_WIDTH_THRESHOLD_ONE) {
-		return MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
-	}
-	return MAXIMUM_FINAL_SINK_RADIX_BITS;
+	// Capped by external radix bits
+	return MinValue(bits, external_radix_bits);
 }
 
 idx_t RadixHTConfig::SinkCapacity() const {
-	if (number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
+	if (sink.number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
 		// Grow strategy, start off a bit bigger
 		return 262144;
 	}
@@ -483,10 +507,10 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto current_radix_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());
 
-	const auto block_size = BufferManager::GetBufferManager(context).GetBlockSize();
 	const auto row_size_per_partition =
 	    ht.GetMaterializedCount() * ht.GetPartitionedData().GetLayout().GetRowWidth() / partition_count;
-	if (row_size_per_partition > LossyNumericCast<idx_t>(config.BLOCK_FILL_FACTOR * static_cast<double>(block_size))) {
+	if (row_size_per_partition >
+	    LossyNumericCast<idx_t>(config.BLOCK_FILL_FACTOR * static_cast<double>(gstate.block_alloc_size))) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);
 	}
