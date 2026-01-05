@@ -7,6 +7,42 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Extension parser adds semicolon", "[parser-extension]") {
+	duckdb::DuckDB db;
+	duckdb::Connection conn(*db.instance);
+	duckdb::ParserExtension parser_extension;
+
+	struct TestParserInfo : public duckdb::ParserExtensionInfo {
+		std::string received_query;
+	};
+
+	auto info = duckdb::make_shared_ptr<TestParserInfo>();
+
+	parser_extension.parser_info = info;
+	parser_extension.parse_function = [](duckdb::ParserExtensionInfo *info,
+										 const std::string &query) -> duckdb::ParserExtensionParseResult {
+		auto *test_info = static_cast<TestParserInfo *>(info);
+		test_info->received_query = query;
+		duckdb::unique_ptr<duckdb::ParserExtensionParseData> empty_data {};
+		return duckdb::ParserExtensionParseResult {std::move(empty_data)};
+	};
+
+	duckdb::ParserOptions options;
+	duckdb::vector<duckdb::ParserExtension> parser_extensions {parser_extension};
+	options.extensions = &parser_extensions;
+
+	auto query = "CREATE DATABASE FROM";
+
+	duckdb::Parser parser {options};
+	REQUIRE_NOTHROW(parser.ParseQuery(query));
+	REQUIRE(info->received_query == query);
+
+	auto query_with_semicolon = "CREATE DATABASE FROM;";
+
+	REQUIRE_NOTHROW(parser.ParseQuery(query_with_semicolon));
+	REQUIRE(info->received_query == query_with_semicolon);
+}
+
 TEST_CASE("Parser Extension query splitting", "[parser-extension]") {
 	DuckDB db;
 	Connection conn(*db.instance);
