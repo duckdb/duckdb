@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 #include <cstring>
 

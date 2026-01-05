@@ -254,6 +254,11 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const str
       iteration_count(0), options(options) {
 }
 
+SingleFileBlockManager::~SingleFileBlockManager() {
+	// flip the flag to not perform UnregisterBlock on the block manager that is being destructed
+	this->in_destruction = true;
+}
+
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	FileOpenFlags result;
 	if (options.read_only) {

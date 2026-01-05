@@ -14,6 +14,8 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include <stdlib.h>
+static void ReleaseError(struct AdbcError *error);
+
 #include <string.h>
 
 #include "duckdb/main/prepared_statement_data.hpp"
@@ -151,23 +153,26 @@ struct DuckDBAdbcDatabaseWrapper {
 	duckdb_config config = nullptr;
 	//! The DuckDB Database
 	duckdb_database database = nullptr;
-	//! Path of Disk-Based Database or :memory: database
+	//! Path of Disk-Based Database or :memory: database (ADBC "path" option)
 	std::string path;
+	//! Derived path from ADBC "uri" option (after minimal normalization)
+	std::string uri_path;
+	bool uri_set = false;
 };
-
-static void EmptyErrorRelease(AdbcError *error) {
-	// The object is valid but doesn't contain any data that needs to be cleaned up
-	// Just set the release to nullptr to indicate that it's no longer valid.
-	error->release = nullptr;
-}
 
 void InitializeADBCError(AdbcError *error) {
 	if (!error) {
 		return;
 	}
+	// Avoid leaking any DuckDB-owned error message.
+	// Only call DuckDB's own release callback.
+	if (error->message && error->release == ::ReleaseError) {
+		error->release(error);
+	}
 	error->message = nullptr;
 	// Don't set to nullptr, as that indicates that it's invalid
-	error->release = EmptyErrorRelease;
+	// Use DuckDB's release callback even for an "empty" error.
+	error->release = ::ReleaseError;
 	std::memset(error->sqlstate, '\0', sizeof(error->sqlstate));
 	error->vendor_code = -1;
 }
@@ -219,6 +224,37 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 		wrapper->path = value;
 		return ADBC_STATUS_OK;
 	}
+	if (strcmp(key, "uri") == 0) {
+		if (strncmp(value, "file:", 5) != 0) {
+			wrapper->uri_path = value;
+			wrapper->uri_set = true;
+			return ADBC_STATUS_OK;
+		}
+		std::string file_path(value + 5);
+		auto suffix_pos = file_path.find_first_of("?#");
+		if (suffix_pos != std::string::npos) {
+			file_path.erase(suffix_pos);
+		}
+		if (duckdb::StringUtil::StartsWith(file_path, "//")) {
+			auto path_start = file_path.find('/', 2);
+			std::string authority =
+			    (path_start == std::string::npos) ? file_path.substr(2) : file_path.substr(2, path_start - 2);
+			auto authority_lc = duckdb::StringUtil::Lower(authority);
+			if (path_start == std::string::npos) {
+				// Accept file://foo as a relative path for compatibility (e.g., arrow-adbc recipe driver example).
+				file_path = (authority_lc.empty() || authority_lc == "localhost") ? std::string() : authority;
+			} else {
+				if (!authority_lc.empty() && authority_lc != "localhost") {
+					SetError(error, "file: URI with a non-empty authority is not supported");
+					return ADBC_STATUS_INVALID_ARGUMENT;
+				}
+				file_path = file_path.substr(path_start);
+			}
+		}
+		wrapper->uri_path = std::move(file_path);
+		wrapper->uri_set = true;
+		return ADBC_STATUS_OK;
+	}
 	auto res = duckdb_set_config(wrapper->config, key, value);
 
 	return CheckResult(res, error, "Failed to set configuration option");
@@ -235,7 +271,8 @@ AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *err
 	char *errormsg = nullptr;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
-	auto res = duckdb_open_ext(wrapper->path.c_str(), &wrapper->database, wrapper->config, &errormsg);
+	const auto &db_path = wrapper->uri_set ? wrapper->uri_path : wrapper->path;
+	auto res = duckdb_open_ext(db_path.c_str(), &wrapper->database, wrapper->config, &errormsg);
 	auto adbc_result = CheckResult(res, error, errormsg);
 	if (errormsg) {
 		free(errormsg);
@@ -431,21 +468,24 @@ enum class AdbcInfoCode : uint32_t {
 	DRIVER_NAME,
 	DRIVER_VERSION,
 	DRIVER_ARROW_VERSION,
+	DRIVER_ADBC_VERSION,
 	UNRECOGNIZED // always the last entry of the enum
 };
 
 static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 	switch (info_code) {
-	case 0:
+	case ADBC_INFO_VENDOR_NAME:
 		return AdbcInfoCode::VENDOR_NAME;
-	case 1:
+	case ADBC_INFO_VENDOR_VERSION:
 		return AdbcInfoCode::VENDOR_VERSION;
-	case 2:
+	case ADBC_INFO_DRIVER_NAME:
 		return AdbcInfoCode::DRIVER_NAME;
-	case 3:
+	case ADBC_INFO_DRIVER_VERSION:
 		return AdbcInfoCode::DRIVER_VERSION;
-	case 4:
+	case ADBC_INFO_DRIVER_ARROW_VERSION:
 		return AdbcInfoCode::DRIVER_ARROW_VERSION;
+	case ADBC_INFO_DRIVER_ADBC_VERSION:
+		return AdbcInfoCode::DRIVER_ADBC_VERSION;
 	default:
 		return AdbcInfoCode::UNRECOGNIZED;
 	}
@@ -467,7 +507,11 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	}
 
 	// If 'info_codes' is NULL, we should output all the info codes we recognize
-	size_t length = info_codes ? info_codes_length : static_cast<size_t>(AdbcInfoCode::UNRECOGNIZED);
+	static constexpr uint32_t DEFAULT_INFO_CODES[] = {ADBC_INFO_VENDOR_NAME,          ADBC_INFO_VENDOR_VERSION,
+	                                                  ADBC_INFO_DRIVER_NAME,          ADBC_INFO_DRIVER_VERSION,
+	                                                  ADBC_INFO_DRIVER_ARROW_VERSION, ADBC_INFO_DRIVER_ADBC_VERSION};
+	const uint32_t *requested_codes = info_codes ? info_codes : DEFAULT_INFO_CODES;
+	size_t length = info_codes ? info_codes_length : (sizeof(DEFAULT_INFO_CODES) / sizeof(DEFAULT_INFO_CODES[0]));
 
 	duckdb::string q = R"EOF(
 		select
@@ -483,31 +527,46 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	)EOF";
 
 	duckdb::string results = "";
+	static constexpr const char *INFO_UNION_TYPE = "UNION(string_value VARCHAR, bool_value BOOL, int64_value BIGINT, "
+	                                               "int32_bitmask INTEGER, string_list VARCHAR[], "
+	                                               "int32_to_int32_list_map MAP(INTEGER, INTEGER[]))";
 
 	for (size_t i = 0; i < length; i++) {
-		auto code = duckdb::NumericCast<uint32_t>(info_codes ? info_codes[i] : i);
+		auto code = duckdb::NumericCast<uint32_t>(requested_codes[i]);
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
 		case AdbcInfoCode::VENDOR_NAME: {
-			results += "(0, 'duckdb'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := 'duckdb')::%s),",
+			                                      (uint32_t)ADBC_INFO_VENDOR_NAME, INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::VENDOR_VERSION: {
-			results += duckdb::StringUtil::Format("(1, '%s'),", duckdb_library_version());
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '%s')::%s),",
+			                                      (uint32_t)ADBC_INFO_VENDOR_VERSION, duckdb_library_version(),
+			                                      INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::DRIVER_NAME: {
-			results += "(2, 'ADBC DuckDB Driver'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := 'ADBC DuckDB Driver')::%s),",
+			                                      (uint32_t)ADBC_INFO_DRIVER_NAME, INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::DRIVER_VERSION: {
-			// TODO: fill in driver version
-			results += "(3, '(unknown)'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '%s')::%s),",
+			                                      (uint32_t)ADBC_INFO_DRIVER_VERSION, duckdb_library_version(),
+			                                      INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::DRIVER_ARROW_VERSION: {
 			// TODO: fill in arrow version
-			results += "(4, '(unknown)'),";
+			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '(unknown)')::%s),",
+			                                      (uint32_t)ADBC_INFO_DRIVER_ARROW_VERSION, INFO_UNION_TYPE);
+			break;
+		}
+		case AdbcInfoCode::DRIVER_ADBC_VERSION: {
+			results += duckdb::StringUtil::Format("(%u, union_value(int64_value := %lld::BIGINT)::%s),",
+			                                      ADBC_INFO_DRIVER_ADBC_VERSION, (long long)ADBC_VERSION_1_1_0,
+			                                      INFO_UNION_TYPE);
 			break;
 		}
 		case AdbcInfoCode::UNRECOGNIZED: {
@@ -1320,12 +1379,21 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 	return ADBC_STATUS_INVALID_ARGUMENT;
 }
 
+std::string createFilter(const char *input) {
+	if (input) {
+		auto quoted = duckdb::KeywordHelper::WriteQuoted(input, '\'');
+		return quoted;
+	}
+	return "'%'";
+}
+
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
-	std::string catalog_filter = catalog ? catalog : "%";
-	std::string db_schema_filter = db_schema ? db_schema : "%";
-	std::string table_name_filter = table_name ? table_name : "%";
+	std::string catalog_filter = createFilter(catalog);
+	std::string db_schema_filter = createFilter(db_schema);
+	std::string table_name_filter = createFilter(table_name);
+	std::string column_name_filter = createFilter(column_name);
 	std::string table_type_condition = "";
 	if (table_type && table_type[0]) {
 		table_type_condition = " AND table_type IN (";
@@ -1341,13 +1409,10 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 			if (i > 0) {
 				table_type_condition += ", ";
 			}
-			table_type_condition += "'";
-			table_type_condition += table_type[i];
-			table_type_condition += "'";
+			table_type_condition += createFilter(table_type[i]);
 		}
 		table_type_condition += ")";
 	}
-	std::string column_name_filter = column_name ? column_name : "%";
 
 	std::string query;
 	switch (depth) {
@@ -1392,7 +1457,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					)[] catalog_db_schemas
 				FROM
 					information_schema.schemata
-				WHERE catalog_name LIKE '%s'
+				WHERE catalog_name LIKE %s
 				GROUP BY catalog_name
 				)",
 		                                   catalog_filter);
@@ -1405,7 +1470,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						catalog_name,
 						schema_name,
 					FROM information_schema.schemata
-					WHERE schema_name LIKE '%s'
+					WHERE schema_name LIKE %s
 				)
 
 				SELECT
@@ -1448,7 +1513,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
 				USING (catalog_name, schema_name)
-				WHERE catalog_name LIKE '%s'
+				WHERE catalog_name LIKE %s
 				GROUP BY catalog_name
 				)",
 		                                   db_schema_filter, catalog_filter);
@@ -1492,7 +1557,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 							)[],
 						}) db_schema_tables
 					FROM information_schema.tables
-					WHERE table_name LIKE '%s'%s
+					WHERE table_name LIKE %s%s
 					GROUP BY table_catalog, table_schema
 				),
 				db_schemas AS (
@@ -1503,7 +1568,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					FROM information_schema.schemata
 					LEFT JOIN tables
 					USING (catalog_name, schema_name)
-					WHERE schema_name LIKE '%s'
+					WHERE schema_name LIKE %s
 				)
 
 				SELECT
@@ -1516,7 +1581,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
 				USING (catalog_name, schema_name)
-				WHERE catalog_name LIKE '%s'
+				WHERE catalog_name LIKE %s
 				GROUP BY catalog_name
 				)",
 		                                   table_name_filter, table_type_condition, db_schema_filter, catalog_filter);
@@ -1551,7 +1616,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 							xdbc_is_generatedcolumn: NULL::BOOLEAN,
 						}) table_columns
 					FROM information_schema.columns
-					WHERE column_name LIKE '%s'
+					WHERE column_name LIKE %s
 					GROUP BY table_catalog, table_schema, table_name
 				),
 				constraints AS (
@@ -1580,7 +1645,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 							constraint_column_names,
 							list_filter(
 								constraint_column_names,
-								lambda name: name LIKE '%s'
+								lambda name: name LIKE %s
 							)
 						)
 					GROUP BY database_name, schema_name, table_name
@@ -1600,7 +1665,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					USING (table_catalog, table_schema, table_name)
 					LEFT JOIN constraints
 					USING (table_catalog, table_schema, table_name)
-					WHERE table_name LIKE '%s'%s
+					WHERE table_name LIKE %s%s
 					GROUP BY table_catalog, table_schema
 				),
 				db_schemas AS (
@@ -1611,7 +1676,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					FROM information_schema.schemata
 					LEFT JOIN tables
 					USING (catalog_name, schema_name)
-					WHERE schema_name LIKE '%s'
+					WHERE schema_name LIKE %s
 				)
 
 				SELECT
@@ -1624,7 +1689,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
 				USING (catalog_name, schema_name)
-				WHERE catalog_name LIKE '%s'
+				WHERE catalog_name LIKE %s
 				GROUP BY catalog_name
 				)",
 		                                   column_name_filter, column_name_filter, table_name_filter,

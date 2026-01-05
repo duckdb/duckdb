@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -205,7 +206,9 @@ public:
 	void AddVirtualColumn(column_t virtual_column_id) override;
 
 	void GetPartitionStats(vector<PartitionStatistics> &result);
-	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result);
+	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
+	                              optional_ptr<ParquetColumnSchema> root_schema = nullptr,
+	                              optional_ptr<ParquetOptions> parquet_options = nullptr);
 	static bool MetadataCacheEnabled(ClientContext &context);
 	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
 

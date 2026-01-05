@@ -160,6 +160,12 @@ static const DefaultMacro internal_macros[] = {
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, {{nullptr, nullptr}}, "date + interval"},
 
+	// date functions - convenience macro for getting days in month
+	{DEFAULT_SCHEMA, "days_in_month", {"date", nullptr}, {{nullptr, nullptr}}, "day(last_day(date))"},
+
+	// timestamptz functions
+	{DEFAULT_SCHEMA, "ago", {"i", nullptr}, {{nullptr, nullptr}}, "current_timestamp - i::interval"},
+
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, {{nullptr, nullptr}}, "unnest(string_split_regex(text, pattern))"},
 
