@@ -321,6 +321,64 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 	}
 }
 
+TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	db.Query("CREATE SCHEMA my_schema;");
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Case 1: set schema then temporary
+	{
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
+		AdbcStatement stmt;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "my_schema", &adbc_error)));
+		// Enabling temporary ingestion clears the schema.
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TEMPORARY, ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
+		REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+		{
+			auto res = db.Query("SELECT * FROM my_schema.my_table");
+			REQUIRE(res->HasError());
+		}
+		// Release input stream (BindStream may transfer ownership on success).
+		if (input_data.release) {
+			input_data.release(&input_data);
+		}
+		input_data.release = nullptr;
+	}
+
+	// Case 2: set temporary then schema
+	{
+		auto &input_data = db.QueryArrow("SELECT 42 as value");
+		AdbcStatement stmt;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TEMPORARY, ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &adbc_error)));
+		// Setting a schema while temporary is enabled should fail at execution time.
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "my_schema", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &adbc_error)));
+		REQUIRE(!SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &adbc_error)));
+		REQUIRE((std::strcmp(adbc_error.message, "Temporary option is not supported with schema") == 0));
+		adbc_error.release(&adbc_error);
+		InitializeADBCError(&adbc_error);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
+		// Execution failed, so the driver should not have consumed the input stream.
+		if (input_data.release) {
+			input_data.release(&input_data);
+		}
+		input_data.release = nullptr;
+	}
+}
+
 TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
