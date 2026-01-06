@@ -359,7 +359,7 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
-        with open_utf8(tmpfile, 'w+') as f:
+        with open_utf8(tmpfile, 'w+', newline='\n') as f:
             f.write(new_text)
         shutil.move(tmpfile, full_path)
 
