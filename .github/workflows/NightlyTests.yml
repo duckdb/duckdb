@@ -73,6 +73,9 @@ jobs:
        run: |
          python3 test/memoryleak/test_memory_leaks.py
 
+     - uses: ./.github/actions/diagnostics
+       if: ${{ always() }}
+
   release-assert:
     name: Release Assertions
     runs-on: ubuntu-latest
@@ -110,6 +113,9 @@ jobs:
       shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+
+    - uses: ./.github/actions/diagnostics
+      if: ${{ always() }}
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -151,6 +157,9 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200 --force-storage
 
+    - uses: ./.github/actions/diagnostics
+      if: ${{ always() }}
+
   smaller-binary:
     name: Smaller Binary
     runs-on: ubuntu-24.04
@@ -188,6 +197,9 @@ jobs:
       shell: bash
       run: |
           build/release/test/unittest "*"
+
+    - uses: ./.github/actions/diagnostics
+      if: ${{ always() }}
 
   release-assert-clang:
     name: Release Assertions with Clang
@@ -229,6 +241,9 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
+    - uses: ./.github/actions/diagnostics
+      if: ${{ always() }}
+
   sqllogic:
      name: Sqllogic tests
      runs-on: ubuntu-latest # Secondary task of this CI job is to test building duckdb on latest ubuntu
@@ -255,6 +270,9 @@ jobs:
      - name: Test
        shell: bash
        run: make sqlite
+
+     - uses: ./.github/actions/diagnostics
+       if: ${{ always() }}
 
   storage-initialization:
      name: Storage Initialization Verification
@@ -289,6 +307,9 @@ jobs:
      - name: Test
        shell: bash
        run: python3 scripts/test_zero_initialize.py
+
+     - uses: ./.github/actions/diagnostics
+       if: ${{ always() }}
 
   extension-updating:
     name: Extension updating test
@@ -350,6 +371,9 @@ jobs:
         shell: bash
         run: |
           ./scripts/run_extension_medata_tests.sh
+
+      - uses: ./.github/actions/diagnostics
+        if: ${{ always() }}
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
@@ -435,6 +459,9 @@ jobs:
        run: |
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
+     - uses: ./.github/actions/diagnostics
+       if: ${{ always() }}
+
   vector-and-block-sizes:
     name: Tests different vector and block sizes
     runs-on: ubuntu-24.04
@@ -476,6 +503,9 @@ jobs:
           ./build/relassert/test/unittest --test-config test/configs/block_size_16kB.json
           ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/block_size_16kB.json
 
+      - uses: ./.github/actions/diagnostics
+        if: ${{ always() }}
+
   linux-debug-configs:
     name: Tests different configurations with a debug build
     runs-on: ubuntu-24.04
@@ -514,6 +544,9 @@ jobs:
         run: |
           ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
+      - uses: ./.github/actions/diagnostics
+        if: ${{ always() }}
+
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04
@@ -547,6 +580,9 @@ jobs:
       - name: Test
         shell: bash
         run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
+
+      - uses: ./.github/actions/diagnostics
+        if: ${{ always() }}
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -626,6 +662,9 @@ jobs:
         path: |
           duckdb-wasm32.zip
 
+    - uses: ./.github/actions/diagnostics
+      if: ${{ always() }}
+
   hash-zero:
    name: Hash Zero
    runs-on: ubuntu-24.04
@@ -661,3 +700,6 @@ jobs:
      - name: Test
        shell: bash
        run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+
+     - uses: ./.github/actions/diagnostics
+       if: ${{ always() }}
