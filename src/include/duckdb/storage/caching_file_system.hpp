@@ -122,9 +122,10 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags, optional_ptr<FileOpener> opener);
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                                  optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
-	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener);
+	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener = nullptr);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)

@@ -62,7 +62,8 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+                                                          optional_ptr<FileOpener> opener) {
 	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener,
 	                                    external_file_cache.GetOrCreateCachedFile(path.path));
 }
@@ -74,7 +75,8 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, 
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
-                                     const OpenFileInfo &path_p, FileOpenFlags flags_p, optional_ptr<FileOpener> opener_p, CachedFile &cached_file_p)
+                                     const OpenFileInfo &path_p, FileOpenFlags flags_p,
+                                     optional_ptr<FileOpener> opener_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), opener(opener_p),
       validate(
