@@ -245,6 +245,14 @@ alter_table_cmd:
 					n->location = $3;
 					$$ = (PGNode *)n;
 				}
+			/* ALTER TABLE <name> SET TBLPROPERTIES ( ... ) */
+			| SET TBLPROPERTIES reltblproperties
+				{
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetTblProperties;
+					n->tbl_properties = $3;
+					$$ = (PGNode *)n;
+				}
 			/* ALTER TABLE <name> ALTER [COLUMN] <colname> {SET DEFAULT <expr>|DROP DEFAULT} */
 			| ALTER opt_column ColId alter_column_default
 				{
