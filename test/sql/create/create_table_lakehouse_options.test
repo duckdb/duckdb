@@ -18,7 +18,7 @@ CREATE TABLE integers(i INTEGER) SORTED BY (i);
 statement error
 CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
 ----
-<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*
+<REGEX>:.*PARTITIONED BY, SORTED BY are not supported for DuckDB tables.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -54,7 +54,7 @@ TBLPROPERTIES (
   'format'='parquet'
 );
 ----
-<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*
+<REGEX>:.*PARTITIONED BY, SORTED BY, LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -68,7 +68,7 @@ TBLPROPERTIES (
   'format'='parquet'
 );
 ----
-<REGEX>:.*SORTED BY is not supported for DuckDB tables.*
+<REGEX>:.*SORTED BY, LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -81,7 +81,7 @@ TBLPROPERTIES (
   'format'='parquet'
 );
 ----
-<REGEX>:.*LOCATION is not supported for DuckDB tables.*
+<REGEX>:.*LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -96,6 +96,7 @@ TBLPROPERTIES (
 <REGEX>:.*TBLPROPERTIES is not supported for DuckDB tables.*
 
 
+# different orders
 statement error
 CREATE TABLE iceberg_table (
   id int,
@@ -109,7 +110,7 @@ TBLPROPERTIES (
   'format'='parquet'
 );
 ----
-<REGEX>:.*Parser Error.*
+<REGEX>:.*PARTITIONED BY, SORTED BY, LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*
 
 statement error
 CREATE TABLE iceberg_table (
@@ -124,4 +125,34 @@ TBLPROPERTIES (
   'format'='parquet'
 );
 ----
-<REGEX>:.*Parser Error.*
+<REGEX>:.*PARTITIONED BY, SORTED BY, LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+SORTED BY (date)
+PARTITIONED BY (id);
+----
+<REGEX>:.*PARTITIONED BY, SORTED BY, LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+)
+SORTED BY (date)
+PARTITIONED BY (id);
+----
+<REGEX>:.*PARTITIONED BY, SORTED BY, LOCATION, TBLPROPERTIES are not supported for DuckDB tables.*

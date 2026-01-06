@@ -38,7 +38,8 @@
 %type <typnam> func_type
 %type <constr> GeneratedColumnType opt_GeneratedColumnType
 %type <node> ConstraintElem GeneratedConstraintElem
-%type <list> TableElementList OptPartitionedBy OptSortedBy OptTblProperties
+%type <defelt> LakehouseOption
+%type <list> TableElementList OptPartitionedBy OptSortedBy OptTblProperties LakehouseOptions
 %type <str> OptLocation
 %type <ival> key_match
 %type <node> TableLikeClause

@@ -51,18 +51,25 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 
 	if (info.base->type == CatalogType::TABLE_ENTRY) {
+		vector<string> unsupported_keywords;
 		auto &base = info.Base();
 		if (!base.partition_keys.empty()) {
-			throw CatalogException("PARTITIONED BY is not supported for DuckDB tables");
+			unsupported_keywords.push_back("PARTITIONED BY");
 		}
 		if (!base.order_keys.empty()) {
-			throw CatalogException("SORTED BY is not supported for DuckDB tables");
+			unsupported_keywords.push_back("SORTED BY");
 		}
 		if (!base.location.empty()) {
-			throw CatalogException("LOCATION is not supported for DuckDB tables");
+			unsupported_keywords.push_back("LOCATION");
 		}
 		if (!base.tbl_properties.empty()) {
-			throw CatalogException("TBLPROPERTIES is not supported for DuckDB tables");
+			unsupported_keywords.push_back("TBLPROPERTIES");
+		}
+		if (!unsupported_keywords.empty()) {
+			auto error_message = StringUtil::Join(unsupported_keywords, ", ") +
+			                     (unsupported_keywords.size() > 1 ? " are" : " is") +
+			                     " not supported for DuckDB tables";
+			throw CatalogException(error_message);
 		}
 	}
 
