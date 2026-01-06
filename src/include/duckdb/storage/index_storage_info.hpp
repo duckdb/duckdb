@@ -51,11 +51,11 @@ struct IndexStorageInfo {
 	IndexStorageInfo() = default;
 	explicit IndexStorageInfo(const string &name) : name(name) {};
 
-	IndexStorageInfo(IndexStorageInfo &&other) noexcept = default;
-	IndexStorageInfo &operator=(IndexStorageInfo &&other) noexcept = default;
+	IndexStorageInfo(IndexStorageInfo &&other) noexcept;
+	IndexStorageInfo &operator=(IndexStorageInfo &&other) noexcept;
 	IndexStorageInfo(const IndexStorageInfo &) = delete;
 	IndexStorageInfo &operator=(const IndexStorageInfo &) = delete;
-	~IndexStorageInfo() = default;
+	~IndexStorageInfo();
 
 	//! The name.
 	string name;

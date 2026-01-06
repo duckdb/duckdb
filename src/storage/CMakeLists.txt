@@ -22,6 +22,7 @@ add_library_unity(
   external_file_cache.cpp
   external_file_cache_util.cpp
   index.cpp
+  index_storage_info.cpp
   local_storage.cpp
   magic_bytes.cpp
   storage_manager.cpp
