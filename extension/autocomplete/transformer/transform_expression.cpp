@@ -477,6 +477,8 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 	}
 	auto between_in_like_expr =
 	    transformer.Transform<unique_ptr<ParsedExpression>>(between_in_like_opt.optional_result);
+	auto &op_list = between_in_like_opt.optional_result->Cast<ListParseResult>();
+	bool has_not = op_list.Child<OptionalParseResult>(0).HasResult();
 	if (between_in_like_expr->GetExpressionClass() == ExpressionClass::BETWEEN) {
 		auto between_expr = unique_ptr_cast<ParsedExpression, BetweenExpression>(std::move(between_in_like_expr));
 		between_expr->input = std::move(expr);
@@ -488,7 +490,11 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 		} else {
 			func_expr->children.insert(func_expr->children.begin(), std::move(expr));
 		}
-		expr = std::move(func_expr);
+		if (has_not) {
+			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
+		} else {
+			expr = std::move(func_expr);
+		}
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
 		auto &operator_expr = between_in_like_expr->Cast<OperatorExpression>();
 		operator_expr.children.insert(operator_expr.children.begin(), std::move(expr));
@@ -510,16 +516,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeOp(PEG
 	if (!not_expr.HasResult()) {
 		return expr;
 	}
+	// Don't handle the OPERATOR_NOT here for functions such as contains and like since those are special cases
 	if (expr->GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		expr->type = ExpressionType::COMPARE_NOT_BETWEEN;
 	} else if (expr->GetExpressionType() == ExpressionType::COMPARE_IN) {
-		if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-			expr = make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(expr));
-		} else {
-			expr->type = ExpressionType::COMPARE_NOT_IN;
-		}
-	} else {
-		throw NotImplementedException("Not in combination with like is not yet implemented.");
+		expr->type = ExpressionType::COMPARE_NOT_IN;
 	}
 	return expr;
 }
