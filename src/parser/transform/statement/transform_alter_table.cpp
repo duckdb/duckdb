@@ -223,6 +223,10 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			result->info = make_uniq<SetSortedByInfo>(std::move(data), std::move(orders));
 			break;
 		}
+		case duckdb_libpgquery::PG_AT_SetLocation: {
+			result->info = make_uniq<SetLocationInfo>(std::move(data), command->location);
+			break;
+		}
 		default:
 			throw NotImplementedException("No support for that ALTER TABLE option yet!");
 		}

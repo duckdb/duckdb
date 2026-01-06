@@ -1489,7 +1489,8 @@ typedef enum PGAlterTableType {
 	PG_AT_SetIdentity,               /* SET identity column options */
 	AT_DropIdentity,                 /* DROP IDENTITY */
 	PG_AT_SetPartitionedBy,          /* SET PARTITIONED BY */
-	PG_AT_SetSortedBy                /* SET SORTED BY */
+	PG_AT_SetSortedBy,               /* SET SORTED BY */
+	PG_AT_SetLocation                /* SET LOCATION */
 } PGAlterTableType;
 
 typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
@@ -1500,6 +1501,7 @@ typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
 								 * or tablespace */
 	PGNode *def;              /* definition of new column, index, * constraint, or parent table */
 	PGList *def_list;         /* e.g. expression list for partitioned by */
+	char *location;           /* e.g. LOCATION 's3://bucket/path' */
 	PGDropBehavior behavior;  /* RESTRICT or CASCADE for DROP cases */
 	bool missing_ok;          /* skip error if missing? */
 } PGAlterTableCmd;
