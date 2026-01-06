@@ -13,6 +13,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
@@ -175,7 +176,7 @@ protected:
 	//! The block allocator
 	BlockAllocator &block_allocator;
 	//! Per-database singleton object cache managed by buffer pool.
-	ObjectCache *object_cache = nullptr;
+	optional_ptr<ObjectCache> object_cache = nullptr;
 };
 
 } // namespace duckdb

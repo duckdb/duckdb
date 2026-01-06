@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "duckdb/common/enums/memory_tag.hpp"
 
 namespace duckdb {
