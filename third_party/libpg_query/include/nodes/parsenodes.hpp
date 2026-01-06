@@ -1616,6 +1616,7 @@ typedef struct PGCreateStmt {
 	PGTypeName *ofTypename;               /* OF typename */
 	PGList *constraints;                  /* constraints (list of PGConstraint nodes) */
 	PGList *options;                      /* options from WITH clause */
+	PGList *partition_list;               /* e.g. expression list for partitioned by */
 	PGOnCommitAction oncommit;            /* what do we do at COMMIT? */
 	char *tablespacename;                 /* table space to use, or NULL */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */

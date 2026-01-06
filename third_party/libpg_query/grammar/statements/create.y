@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			OptWith OnCommitOption
+			OptPartitionedBy OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
 					$4->relpersistence = $2;
@@ -13,13 +13,14 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tableElts = $6;
 					n->ofTypename = NULL;
 					n->constraints = NIL;
-					n->options = $8;
-					n->oncommit = $9;
+					n->partition_list = $8;
+					n->options = $9;
+					n->oncommit = $10;
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
-			OptTableElementList ')' OptWith
+			OptTableElementList ')' OptPartitionedBy OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -28,13 +29,14 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tableElts = $9;
 					n->ofTypename = NULL;
 					n->constraints = NIL;
-					n->options = $11;
-					n->oncommit = $12;
+					n->partition_list = $11;
+					n->options = $12;
+					n->oncommit = $13;
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
-			OptTableElementList ')' OptWith
+			OptTableElementList ')' OptPartitionedBy OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -43,8 +45,9 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tableElts = $8;
 					n->ofTypename = NULL;
 					n->constraints = NIL;
-					n->options = $10;
-					n->oncommit = $11;
+					n->partition_list = $10;
+					n->options = $11;
+					n->oncommit = $12;
 					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
@@ -93,7 +96,6 @@ def_arg:	func_type						{ $$ = (PGNode *)$1; }
 OptParenthesizedSeqOptList: '(' SeqOptList ')'		{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
-
 
 generic_option_arg:
 				Sconst				{ $$ = (PGNode *) makeString($1); }
@@ -380,7 +382,10 @@ ConstraintAttr:
 				}
 		;
 
-
+OptPartitionedBy:
+			PARTITIONED BY '(' expr_list_opt_comma ')'	{ $$ = $4; }
+			| /*EMPTY*/									{ $$ = NIL; }
+		;
 
 OptWith:
 			WITH reloptions				{ $$ = $2; }
@@ -388,7 +393,6 @@ OptWith:
 			| WITHOUT OIDS				{ $$ = list_make1(makeDefElem("oids", (PGNode *) makeInteger(false), @1)); }
 			| /*EMPTY*/					{ $$ = NIL; }
 		;
-
 
 definition: '(' def_list ')'						{ $$ = $2; }
 		;

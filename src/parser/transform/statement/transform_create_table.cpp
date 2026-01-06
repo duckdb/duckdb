@@ -134,6 +134,12 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		}
 	}
 
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+	if (stmt.partition_list) {
+		TransformExpressionList(*stmt.partition_list, partition_keys);
+	}
+	info->partition_keys = std::move(partition_keys);
+
 	if (!column_count) {
 		throw ParserException("Table must have at least one column!");
 	}

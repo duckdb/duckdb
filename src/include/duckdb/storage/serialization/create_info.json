@@ -155,6 +155,11 @@
         "id": 203,
         "name": "query",
         "type": "SelectStatement*"
+      },
+      {
+        "id": 204,
+        "name": "partition_keys",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },

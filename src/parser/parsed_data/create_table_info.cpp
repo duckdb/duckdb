@@ -23,6 +23,9 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &constraint : constraints) {
 		result->constraints.push_back(constraint->Copy());
 	}
+	for (auto &partition : partition_keys) {
+		result->partition_keys.push_back(partition->Copy());
+	}
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
@@ -37,8 +40,20 @@ string CreateTableInfo::ToString() const {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);
 		ret += " AS " + query->ToString();
 	} else {
-		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints) + ";";
+		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);
+		if (!partition_keys.empty()) {
+			ret += " PARTITIONED BY (";
+			for (auto &partition : partition_keys) {
+				ret += partition->ToString() + ",";
+			}
+			ret.pop_back();
+			ret += ");";
+		} else {
+			ret += ";";
+		}
 	}
+
+
 	return ret;
 }
 

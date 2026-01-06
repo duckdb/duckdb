@@ -50,6 +50,13 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		return;
 	}
 
+	if (info.base->type == CatalogType::TABLE_ENTRY) {
+		auto &base = info.Base();
+		if (!base.partition_keys.empty()) {
+			throw CatalogException("PARTITIONED BY is not supported for DuckDB tables");
+		}
+	}
+
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {

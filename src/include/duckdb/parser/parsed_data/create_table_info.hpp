@@ -29,6 +29,8 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE as QUERY
 	unique_ptr<SelectStatement> query;
+	//! Table Partition definitions
+	vector<unique_ptr<ParsedExpression>> partition_keys;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

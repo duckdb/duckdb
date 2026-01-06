@@ -44,6 +44,8 @@ struct BoundCreateTableInfo {
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table
 	vector<IndexStorageInfo> indexes;
+	//! partition info
+	vector<unique_ptr<ParsedExpression>> partition_keys;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);
