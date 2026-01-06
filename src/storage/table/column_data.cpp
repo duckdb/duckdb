@@ -264,20 +264,16 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
-                              bool allow_updates, bool scan_committed) {
+                              UpdateScanType update_type) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		return;
 	}
-	if (!allow_updates && updates->HasUncommittedUpdates(vector_index)) {
+	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
 	result.Flatten(scan_count);
-	if (scan_committed) {
-		updates->FetchCommitted(vector_index, result);
-	} else {
-		updates->FetchUpdates(transaction, vector_index, result);
-	}
+	updates->FetchUpdates(transaction, vector_index, result);
 }
 
 void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx) {
@@ -300,21 +296,19 @@ void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_tab
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode) {
+                             idx_t target_scan, ScanVectorType scan_type, UpdateScanType update_type) {
 	auto scan_count = ScanVector(state, result, target_scan, scan_type);
 	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// if we are scanning an entire vector we cannot have updates
-		bool allow_updates = mode != ScanVectorMode::SCAN_COMMITTED_NO_UPDATES;
-		bool scan_committed = mode != ScanVectorMode::REGULAR_SCAN;
-		FetchUpdates(transaction, vector_index, result, scan_count, allow_updates, scan_committed);
+		FetchUpdates(transaction, vector_index, result, scan_count, update_type);
 	}
 	return scan_count;
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan, ScanVectorMode mode) {
+                             idx_t target_scan, UpdateScanType update_type) {
 	auto scan_type = GetVectorScanType(state, target_scan, result);
-	return ScanVector(transaction, vector_index, state, result, target_scan, scan_type, mode);
+	return ScanVector(transaction, vector_index, state, result, target_scan, scan_type, update_type);
 }
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
@@ -322,21 +316,9 @@ idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnSc
 	return Scan(transaction, vector_index, state, result, target_count);
 }
 
-idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	auto target_count = GetVectorCount(vector_index);
-	return ScanCommitted(vector_index, state, result, allow_updates, target_count);
-}
-
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                        idx_t scan_count) {
-	return ScanVector(transaction, vector_index, state, result, scan_count, ScanVectorMode::REGULAR_SCAN);
-}
-
-idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                idx_t scan_count) {
-	auto mode = allow_updates ? ScanVectorMode::SCAN_COMMITTED : ScanVectorMode::SCAN_COMMITTED_NO_UPDATES;
-	TransactionData commit_transaction(0, 0);
-	return ScanVector(commit_transaction, vector_index, state, result, scan_count, mode);
+	return ScanVector(transaction, vector_index, state, result, scan_count, state.update_scan_type);
 }
 
 idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
@@ -378,12 +360,6 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t s_count) {
 	Scan(transaction, vector_index, state, result);
-	result.Slice(sel, s_count);
-}
-
-void ColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                                 idx_t s_count, bool allow_updates) {
-	ScanCommitted(vector_index, state, result, allow_updates);
 	result.Slice(sel, s_count);
 }
 

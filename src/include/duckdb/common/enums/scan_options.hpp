@@ -12,6 +12,13 @@
 
 namespace duckdb {
 
+enum class UpdateScanType {
+	//! allow updates
+	STANDARD,
+	// disallow updates - throw on updates
+	DISALLOW_UPDATES
+};
+
 enum class TableScanType : uint8_t {
 	//! Regular table scan: scan all tuples that are relevant for the current transaction
 	TABLE_SCAN_REGULAR = 0,

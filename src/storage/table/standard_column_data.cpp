@@ -62,17 +62,10 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
                                idx_t target_count) {
 	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_type = GetVectorScanType(state, target_count, result);
-	auto mode = ScanVectorMode::REGULAR_SCAN;
-	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
-	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
-	return scan_count;
-}
-
-idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                        idx_t target_count) {
-	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
-	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
-	validity->ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
+	auto scan_count =
+	    ScanVector(transaction, vector_index, state, result, target_count, scan_type, state.update_scan_type);
+	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type,
+	                     state.update_scan_type);
 	return scan_count;
 }
 

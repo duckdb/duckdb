@@ -651,7 +651,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
 				if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
-					col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i], ALLOW_UPDATES);
+					if (!ALLOW_UPDATES) {
+						state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
+					}
+					col_data.Scan(TransactionData::Committed(), state.vector_index, state.column_scans[i],
+					              result.data[i]);
 				} else {
 					col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 				}
@@ -729,8 +733,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
 					                approved_tuple_count);
 				} else {
-					col_data.SelectCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,
-					                         approved_tuple_count, ALLOW_UPDATES);
+					if (!ALLOW_UPDATES) {
+						state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
+					}
+					col_data.Select(TransactionData::Committed(), state.vector_index, state.column_scans[i],
+					                result.data[i], sel, approved_tuple_count);
 				}
 			}
 			filter_info.EndFilter(filter_state);

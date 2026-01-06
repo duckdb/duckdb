@@ -131,6 +131,8 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 	//! (optionally) the expression state for any pushed down expression(s)
 	unique_ptr<PushedDownExpressionState> expression_state;
+	//! Whether or not updates should be allowed
+	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
 
 public:
 	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,

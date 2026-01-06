@@ -115,27 +115,6 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 	return scan_count;
 }
 
-idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                       idx_t target_count) {
-	if (IsShredded()) {
-		auto intermediate = CreateUnshreddingIntermediate(target_count);
-
-		auto &child_vectors = StructVector::GetEntries(intermediate);
-		sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], *child_vectors[0], allow_updates,
-		                              target_count);
-		sub_columns[1]->ScanCommitted(vector_index, state.child_states[2], *child_vectors[1], allow_updates,
-		                              target_count);
-		auto scan_count =
-		    validity->ScanCommitted(vector_index, state.child_states[0], intermediate, allow_updates, target_count);
-
-		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
-		return scan_count;
-	}
-	auto scan_count =
-	    sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], result, allow_updates, target_count);
-	return scan_count;
-}
-
 idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto scan_count = sub_columns[0]->ScanCount(state.child_states[1], result, count, result_offset);
 	return scan_count;
@@ -438,7 +417,7 @@ vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGro
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		ScanCommitted(vector_index++, scan_state, scan_vector, false, to_scan);
+		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_vector, to_scan);
 		append_chunk.Reset();
 
 		AppendShredded(scan_vector, append_vector, to_scan, append_data);
@@ -462,7 +441,7 @@ LogicalType VariantColumnData::GetShreddedType() {
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		ScanCommitted(vector_index++, scan_state, scan_vector, false, to_scan);
+		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_vector, to_scan);
 		variant_stats.Update(scan_vector, to_scan);
 	}
 
