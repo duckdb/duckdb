@@ -33,6 +33,10 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<ParsedExpression>> partition_keys;
 	//! Table Sort definitions
 	vector<unique_ptr<ParsedExpression>> order_keys;
+	//! Table location (if any)
+	string location;
+	//! TBLPROPERTIES (if any)
+	case_insensitive_map_t<Value> tbl_properties;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

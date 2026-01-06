@@ -48,6 +48,10 @@ struct BoundCreateTableInfo {
 	vector<unique_ptr<ParsedExpression>> partition_keys;
 	//! sort info
 	vector<unique_ptr<ParsedExpression>> order_keys;
+	//! location info
+	string location;
+	//! tbl_properties info
+	case_insensitive_map_t<Value> tbl_properties;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

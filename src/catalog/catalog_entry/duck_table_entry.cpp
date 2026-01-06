@@ -58,6 +58,12 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		if (!base.order_keys.empty()) {
 			throw CatalogException("SORTED BY is not supported for DuckDB tables");
 		}
+		if (!base.location.empty()) {
+			throw CatalogException("LOCATION is not supported for DuckDB tables");
+		}
+		if (!base.tbl_properties.empty()) {
+			throw CatalogException("TBLPROPERTIES is not supported for DuckDB tables");
+		}
 	}
 
 	// create the physical storage

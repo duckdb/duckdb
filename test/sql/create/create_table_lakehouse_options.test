@@ -16,11 +16,112 @@ CREATE TABLE integers(i INTEGER) SORTED BY (i);
 <REGEX>:.*SORTED BY is not supported for DuckDB tables.*
 
 statement error
-CREATE TABLE integers(i INTEGER) SORTED BY (i);
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
+----
+<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder';
+----
+<REGEX>:.*LOCATION is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
+----
+<REGEX>:.*TBLPROPERTIES is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+PARTITIONED BY (id)
+SORTED BY (date)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
+----
+<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+SORTED BY (date)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
 ----
 <REGEX>:.*SORTED BY is not supported for DuckDB tables.*
 
 statement error
-CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
 ----
-<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*
+<REGEX>:.*LOCATION is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
+----
+<REGEX>:.*TBLPROPERTIES is not supported for DuckDB tables.*
+
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+SORTED BY (date)
+PARTITIONED BY (id)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
+----
+<REGEX>:.*Parser Error.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+LOCATION 's3://amzn-s3-demo-bucket/iceberg-folder'
+SORTED BY (date)
+PARTITIONED BY (id)
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='parquet'
+);
+----
+<REGEX>:.*Parser Error.*

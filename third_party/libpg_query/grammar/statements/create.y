@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			OptPartitionedBy OptSortedBy OptWith OnCommitOption
+			OptPartitionedBy OptSortedBy OptLocation OptTblProperties OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
 					$4->relpersistence = $2;
@@ -15,13 +15,15 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->constraints = NIL;
 					n->partition_list = $8;
 					n->sort_list = $9;
-					n->options = $10;
-					n->oncommit = $11;
+					n->location = $10;
+					n->tbl_properties = $11;
+					n->options = $12;
+					n->oncommit = $13;
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
-			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
+			OptTableElementList ')' OptPartitionedBy OptSortedBy OptLocation OptTblProperties OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -32,13 +34,15 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->constraints = NIL;
 					n->partition_list = $11;
 					n->sort_list = $12;
-					n->options = $13;
-					n->oncommit = $14;
+					n->location = $13;
+					n->tbl_properties = $14;
+					n->options = $15;
+					n->oncommit = $16;
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
-			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
+			OptTableElementList ')' OptPartitionedBy OptSortedBy OptLocation OptTblProperties OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -49,8 +53,10 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->constraints = NIL;
 					n->partition_list = $10;
 					n->sort_list = $11;
-					n->options = $12;
-					n->oncommit = $13;
+					n->location = $12;
+					n->tbl_properties = $13;
+					n->options = $14;
+					n->oncommit = $15;
 					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
@@ -313,6 +319,9 @@ reloptions:
 			'(' reloption_list ')'					{ $$ = $2; }
 		;
 
+reltblproperties:
+			'(' reltblproperty_list ')'				{ $$ = $2; }
+		;
 
 opt_no_inherit:	NO INHERIT							{  $$ = true; }
 			| /* EMPTY */							{  $$ = false; }
@@ -349,6 +358,10 @@ reloption_list:
 			| reloption_list ',' reloption_elem		{ $$ = lappend($1, $3); }
 		;
 
+reltblproperty_list:
+			reltblproperty_elem									{ $$ = list_make1($1); }
+			| reltblproperty_list ',' reltblproperty_elem		{ $$ = lappend($1, $3); }
+		;
 
 ExistingIndex:   USING INDEX index_name				{ $$ = $3; }
 		;
@@ -393,6 +406,16 @@ OptPartitionedBy:
 OptSortedBy:
 			SORTED BY '(' expr_list_opt_comma ')'		{ $$ = $4; }
 			| /*EMPTY*/								{ $$ = NIL; }
+		;
+
+OptLocation:
+			LOCATION Sconst								{ $$ = $2; }
+			| /*EMPTY*/									{ $$ = NULL; }
+		;
+
+OptTblProperties:
+			TBLPROPERTIES reltblproperties				{ $$ = $2; }
+			| /*EMPTY*/									{ $$ = NIL; }
 		;
 
 OptWith:
@@ -575,6 +598,12 @@ reloption_elem:
 				}
 		;
 
+reltblproperty_elem:
+		  Sconst '=' def_arg
+				{
+					$$ = makeDefElem($1, (PGNode *) $3, @1);
+				}
+		;
 
 columnList:
 			columnElem								{ $$ = list_make1($1); }

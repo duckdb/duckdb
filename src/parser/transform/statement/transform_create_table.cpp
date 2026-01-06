@@ -146,6 +146,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 	}
 	info->order_keys = std::move(order_keys);
 
+	if (stmt.location) {
+		info->location = stmt.location;
+	}
+	if (stmt.tbl_properties) {
+		TransformOptions(info->tbl_properties, stmt.tbl_properties);
+	}
+
 	if (!column_count) {
 		throw ParserException("Table must have at least one column!");
 	}

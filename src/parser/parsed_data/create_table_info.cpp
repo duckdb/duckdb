@@ -29,6 +29,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &order : order_keys) {
 		result->order_keys.push_back(order->Copy());
 	}
+	result->location = location;
+	result->tbl_properties = tbl_properties;
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
@@ -56,6 +58,17 @@ string CreateTableInfo::ToString() const {
 			ret += " SORTED BY (";
 			for (auto &order : order_keys) {
 				ret += order->ToString() + ",";
+			}
+			ret.pop_back();
+			ret += ")";
+		}
+		if (!location.empty()) {
+			ret += " LOCATION '" + location + "'";
+		}
+		if (!tbl_properties.empty()) {
+			ret += " TBLPROPERTIES (";
+			for (auto &entry : tbl_properties) {
+				ret += "'" + entry.first + "'='" + entry.second.ToString() + "',";
 			}
 			ret.pop_back();
 			ret += ")";
