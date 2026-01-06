@@ -308,7 +308,7 @@ int Utf8Proc::CodepointLength(int cp) {
 		return 2;
 	}
 	 if (0xd800 <= cp && cp <= 0xdfff) {
-	 	return -1;
+	 	throw InternalException("invalid code point detected in Utf8Proc::CodepointLength (0xd800 to 0xdfff), likely due to invalid UTF-8");
 	}
 	 if (cp <= 0xFFFF) {
 		return 3;
@@ -333,7 +333,7 @@ int32_t Utf8Proc::UTF8ToCodepoint(const char *u_input, int &sz) {
 		return (u0 - 192) * 64 + (u1 - 128);
 	}
 	if (u[0] == 0xed && (u[1] & 0xa0) == 0xa0) {
-		return -1; // code points, 0xd800 to 0xdfff
+		throw InternalException("invalid code point detected in Utf8Proc::UTF8ToCodepoint (0xd800 to 0xdfff), likely due to invalid UTF-8");
 	}
 	unsigned char u2 = u[2];
 	if (u0 >= 224 && u0 <= 239) {
