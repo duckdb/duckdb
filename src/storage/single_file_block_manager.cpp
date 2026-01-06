@@ -197,8 +197,7 @@ void DatabaseHeader::Write(WriteStream &ser) const {
 
 	auto storage_header_version = storage_compatibility.version.GetIndex();
 	if (storage_compatibility.version.GetIndex() < GetStorageVersionValue("v1.5.0")) {
-		storage_header_version =
-		    GetSerializationVersionDeprecated(storage_compatibility.version_string.GetString().c_str());
+		storage_header_version = GetSerializationVersionDeprecated(storage_compatibility.version_string.c_str());
 	}
 	ser.Write<idx_t>(storage_header_version);
 }
@@ -373,10 +372,10 @@ uint64_t SingleFileBlockManager::SetSerializeOrStorageVersion(uint64_t version_n
 	}
 
 	// For older db files, we fall back to the serialization version
-	auto serialization_version =
-	    GetSerializationVersionDeprecated(options.storage_version.version_string.GetString().c_str());
-	D_ASSERT(serialization_version && serialization_version <= SerializationVersionInfo::GetSerializationVersionValue(
-	                                                               SerializationVersionDeprecated::V1_4_0));
+	auto serialization_version = GetSerializationVersionDeprecated(options.storage_version.version_string.c_str());
+	D_ASSERT(serialization_version <= GetSerializationVersionDeprecated("v1.4.0") ||
+	         serialization_version == UINT64_MAX);
+
 	return serialization_version;
 }
 
@@ -744,7 +743,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 			throw InvalidInputException(
 			    "Error opening \"%s\": cannot initialize database with storage version %d (%s) - which is lower than "
 			    "what the database itself uses (%d). The storage version of an existing database cannot be lowered.",
-			    path, requested_compat_version, header.storage_compatibility.version_string.GetString(),
+			    path, requested_compat_version, header.storage_compatibility.version_string,
 			    header.storage_compatibility.version.GetIndex());
 		}
 	} else {
@@ -1278,7 +1277,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
 	auto deprecated_serialization_version =
-	    GetSerializationVersionDeprecated(options.storage_version.version_string.GetString().c_str());
+	    GetSerializationVersionDeprecated(options.storage_version.version_string.c_str());
 	if (options.version_number.GetIndex() == GetStorageVersionValue("v0.10.2") &&
 	    deprecated_serialization_version >= GetSerializationVersionDeprecated("v1.2.0")) {
 		// rewrite the main header with storage version v1.2.0+

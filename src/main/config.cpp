@@ -830,9 +830,9 @@ StorageCompatibility StorageCompatibility::FromDatabase(AttachedDatabase &db) {
 	return FromIndex(db.GetStorageManager().GetStorageVersionMap());
 }
 
-StorageCompatibility StorageCompatibility::FromIndex(StorageVersionMapping storage_version_p) {
+StorageCompatibility StorageCompatibility::FromIndex(const StorageVersionMapping &storage_version_p) {
 	StorageCompatibility result;
-	result.duckdb_version = storage_version_p.version_string.GetString();
+	result.duckdb_version = storage_version_p.version_string;
 	result.storage_version = storage_version_p.version.GetIndex();
 	result.manually_set = false;
 	return result;
@@ -860,11 +860,13 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 StorageCompatibility StorageCompatibility::Default() {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto res = FromString("latest");
+	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
 #else
 #ifdef DUCKDB_LATEST_STORAGE
 	auto res = FromString("latest");
+	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
 #else

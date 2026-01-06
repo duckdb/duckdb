@@ -185,7 +185,7 @@ struct StorageVersionInfo {
 
 struct StorageVersionMapping {
 	optional_idx version = optional_idx();
-	string_t version_string = "";
+	string version_string = "";
 
 	static StorageVersionMapping Default() {
 		StorageVersionMapping result;

@@ -52,9 +52,9 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 		} else if (entry.first == "row_group_size") {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
-			storage_version.version_string = entry.second.ToString();
-			storage_version.version =
-			    StorageCompatibility::FromString(storage_version.version_string.GetString()).storage_version;
+			storage_version_user_provided = entry.second.ToString();
+			storage_version.version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
+			storage_version.version_string = storage_version_user_provided;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -65,6 +65,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
+
 	if (encryption &&
 	    (!storage_version.version.IsValid() ||
 	     storage_version.version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version)) {

@@ -105,7 +105,7 @@ public:
 	virtual BlockManager &GetBlockManager() = 0;
 	virtual void Destroy();
 
-	void SetStorageVersion(StorageVersionMapping version) {
+	void SetStorageVersion(const StorageVersionMapping &version) {
 		storage_version = version;
 	}
 	StorageVersionMapping GetStorageVersionMap() const {

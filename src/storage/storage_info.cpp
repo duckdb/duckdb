@@ -189,7 +189,7 @@ StorageVersionMapping GetStorageVersion(const char *version_string) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
 			result.version = GetStorageVersionValue(version_string);
 			if (result.version.IsValid()) {
-				result.version_string = string_t(version_string);
+				result.version_string = version_string;
 			}
 			return result;
 		}

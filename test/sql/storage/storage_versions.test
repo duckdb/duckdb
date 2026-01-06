@@ -2,14 +2,17 @@
 # description: Test attach storage various versions
 # group: [storage]
 
+# Alternative verify outputs latest storage version for the default storage versions
+require no_alternative_verify
+
 # These files were created with vector-size 2048
 require vector_size 2048
 
 # File created via "ATTACH 'empty64.db' (STORAGE_VERSION 'v1.1.0')"
 statement ok
 ATTACH '{DATA_DIR}/storage/empty64.db' (READ_ONLY);
-
-# File created via "ATTACH 'empty65.db' (STORAGE_VERSION 'v1.2.0')"
+#
+# # File created via "ATTACH 'empty65.db' (STORAGE_VERSION 'v1.2.0')"
 statement ok
 ATTACH '{DATA_DIR}/storage/empty65.db' (READ_ONLY);
 
@@ -26,8 +29,6 @@ ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
 statement ok
 ATTACH '{DATA_DIR}/storage/empty67_init.db' (READ_ONLY);
 
-# TODO add 1.5.0
-
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty67_init%' ORDER BY database_name;
 ----
@@ -42,7 +43,7 @@ SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY d
 {storage_version=v1.4.0+}
 {storage_version=v1.0.0+}
 
-# We create a new database in most recent duckdb version
+# We create a new database in most recent duckdb version (v1.4.3)
 statement ok
 ATTACH '{DATA_DIR}/storage/recent_storage.db' as db;
 
