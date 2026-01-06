@@ -230,9 +230,8 @@ void VariantStats::Serialize(const BaseStatistics &stats, Serializer &serializer
 }
 
 void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
-	auto &type = base.GetType();
-	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(base.GetType().InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(base.GetType().id() == LogicalTypeId::VARIANT);
 	auto &data = GetDataUnsafe(base);
 
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
@@ -497,6 +496,7 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &other_data = VariantStats::GetDataUnsafe(other);
 	auto &data = VariantStats::GetDataUnsafe(stats);
+	(void)other_data;
 	(void)data;
 
 	//! This is ensured by the CopyBase method of BaseStatistics
