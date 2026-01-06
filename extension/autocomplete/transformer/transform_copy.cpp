@@ -223,7 +223,25 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool force_quote = list_pr.Child<OptionalParseResult>(0).HasResult();
 	string func_name = force_quote ? "force_quote" : "quote";
-	return GenericCopyOption(func_name, Value());
+	auto star_or_column_list_pr = list_pr.Child<ListParseResult>(2);
+	auto star_or_column_list = star_or_column_list_pr.Child<ChoiceParseResult>(0).result;
+	auto result = GenericCopyOption();
+	result.name = func_name;
+	if (StringUtil::CIEquals(star_or_column_list->name, "StarSymbol")) {
+		result.expression = make_uniq<StarExpression>();
+	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
+		result.column_list = transformer.Transform<vector<string>>(star_or_column_list);
+	}
+
+	return result;
 }
+
+GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("quote", string_literal);
+}
+
 
 } // namespace duckdb

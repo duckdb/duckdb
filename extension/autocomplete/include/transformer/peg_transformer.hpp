@@ -395,6 +395,7 @@ private:
 	                                                 optional_ptr<ParseResult> parse_result);
 	static GenericCopyOption TransformForceQuoteOption(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
+	static GenericCopyOption TransformQuoteAsOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_index.gram
 	static unique_ptr<CreateStatement> TransformCreateIndexStmt(PEGTransformer &transformer,

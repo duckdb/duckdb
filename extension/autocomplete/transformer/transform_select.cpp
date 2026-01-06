@@ -1060,11 +1060,6 @@ static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
 	}
 }
 
-static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
-	CheckGroupingSetMax(result.size() + other.size());
-	result.insert(other.begin(), other.end());
-}
-
 static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 	GroupingSet result;
 	for (idx_t i = 0; i < indexes.size(); i++) {

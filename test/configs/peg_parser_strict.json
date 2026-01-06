@@ -160,7 +160,8 @@
         "test/sql/keywords/keywords_in_expressions.test",
         "test/sql/export/export_database.test",
         "test/sql/export/parquet/export_parquet_enum.test",
-        "test/sql/copy/return_stats.test"
+        "test/sql/copy/return_stats.test",
+        "test/sql/copy/csv/multidelimiter/test_abac.test"
       ]
     },
     {

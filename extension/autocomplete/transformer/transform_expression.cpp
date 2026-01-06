@@ -114,6 +114,19 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		function_children.clear();
 	}
 
+	if (StringUtil::CIEquals(qualified_function.name, "if")) {
+		if (function_children.size() != 3) {
+			throw ParserException("Wrong number of arguments to IF.");
+		}
+		auto expr = make_uniq<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = std::move(function_children[0]);
+		check.then_expr = std::move(function_children[1]);
+		expr->case_checks.push_back(std::move(check));
+		expr->else_expr = std::move(function_children[2]);
+		return std::move(expr);
+	}
+
 	vector<OrderByNode> order_by;
 	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
 	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
@@ -150,6 +163,8 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	if (filter_expr) {
 		result->filter = std::move(filter_expr);
 	}
+
+
 	return std::move(result);
 }
 
@@ -1392,6 +1407,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTryExpression(PEGTr
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool unpack = list_pr.Child<OptionalParseResult>(0).HasResult();
 
 	auto result = make_uniq<StarExpression>();
 	auto expr =
@@ -1402,6 +1418,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 		result->expr = std::move(expr);
 	}
 	result->columns = true;
+	if (unpack) {
+		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(result));
+	}
 	return std::move(result);
 }
 

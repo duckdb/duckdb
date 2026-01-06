@@ -6,19 +6,24 @@ FromOrTo <- 'FROM' / 'TO'
 CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
 
 CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
-CopyOptions <- 'WITH'? (GenericCopyOptionList / SpecializedOptionsList)
-SpecializedOptionsList <- SpecializedOptions*
-SpecializedOptions <-
-	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /
-	SpecializedStringOption /
-	('ENCODING' StringLiteral) /
-	('FORCE' 'QUOTE' StarOrColumnList) /
-	('PARTITION' 'BY' StarOrColumnList) /
-	('FORCE' 'NOT'? 'NULL' ColumnList)
+CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
+SpecializedOptionList <- SpecializedOption*
+SpecializedOption <- SingleOption / SpecializedStringOption /
+	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
+
+SingleOption <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
+BinaryOption <- 'BINARY'
+FreezeOption <- 'FREEZE'
+OidsOption <- 'OIDS'
+CsvOption <- 'CSV'
+HeaderOption <- 'HEADER'
+EncodingOption <- 'ENCODING' StringLiteral
+ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
+QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
+PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
+ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
 
 SpecializedStringOption <- ('DELIMITER' / 'NULL' / 'QUOTE' / 'ESCAPE') 'AS'? StringLiteral
-
-StarOrColumnList <- '*' / ColumnList
 
 GenericCopyOptionList <- Parens(List(GenericCopyOption))
 GenericCopyOption <- CopyOptionName Expression?

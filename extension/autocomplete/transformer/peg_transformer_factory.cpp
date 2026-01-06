@@ -182,6 +182,7 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformSingleOption);
 	REGISTER_TRANSFORM(TransformEncodingOption);
 	REGISTER_TRANSFORM(TransformForceQuoteOption);
+	REGISTER_TRANSFORM(TransformQuoteAsOption);
 }
 
 void PEGTransformerFactory::RegisterCreateIndex() {
@@ -854,6 +855,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
 	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
+
+	RegisterEnum<GenericCopyOption>("BinaryOption", GenericCopyOption("format", Value("binary")));
+	RegisterEnum<GenericCopyOption>("FreezeOption", GenericCopyOption("freeze", Value()));
+	RegisterEnum<GenericCopyOption>("OidsOption", GenericCopyOption("oids", Value()));
+	RegisterEnum<GenericCopyOption>("CsvOption", GenericCopyOption("format", Value("csv")));
+	RegisterEnum<GenericCopyOption>("HeaderOption", GenericCopyOption("header", Value()));
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
