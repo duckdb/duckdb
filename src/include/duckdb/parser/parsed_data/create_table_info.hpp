@@ -31,6 +31,8 @@ struct CreateTableInfo : public CreateInfo {
 	unique_ptr<SelectStatement> query;
 	//! Table Partition definitions
 	vector<unique_ptr<ParsedExpression>> partition_keys;
+	//! Table Sort definitions
+	vector<unique_ptr<ParsedExpression>> order_keys;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

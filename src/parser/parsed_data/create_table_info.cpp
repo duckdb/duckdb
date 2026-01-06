@@ -26,6 +26,9 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &partition : partition_keys) {
 		result->partition_keys.push_back(partition->Copy());
 	}
+	for (auto &order : order_keys) {
+		result->order_keys.push_back(order->Copy());
+	}
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
@@ -47,12 +50,18 @@ string CreateTableInfo::ToString() const {
 				ret += partition->ToString() + ",";
 			}
 			ret.pop_back();
-			ret += ");";
-		} else {
-			ret += ";";
+			ret += ")";
 		}
+		if (!order_keys.empty()) {
+			ret += " SORTED BY (";
+			for (auto &order : order_keys) {
+				ret += order->ToString() + ",";
+			}
+			ret.pop_back();
+			ret += ")";
+		}
+		ret += ";";
 	}
-
 
 	return ret;
 }

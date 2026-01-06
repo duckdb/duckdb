@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			OptPartitionedBy OptWith OnCommitOption
+			OptPartitionedBy OptSortedBy OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
 					$4->relpersistence = $2;
@@ -14,13 +14,14 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 					n->partition_list = $8;
-					n->options = $9;
-					n->oncommit = $10;
+					n->sort_list = $9;
+					n->options = $10;
+					n->oncommit = $11;
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
-			OptTableElementList ')' OptPartitionedBy OptWith
+			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -30,13 +31,14 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 					n->partition_list = $11;
-					n->options = $12;
-					n->oncommit = $13;
+					n->sort_list = $12;
+					n->options = $13;
+					n->oncommit = $14;
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
-			OptTableElementList ')' OptPartitionedBy OptWith
+			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -46,8 +48,9 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 					n->partition_list = $10;
-					n->options = $11;
-					n->oncommit = $12;
+					n->sort_list = $11;
+					n->options = $12;
+					n->oncommit = $13;
 					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
@@ -385,6 +388,11 @@ ConstraintAttr:
 OptPartitionedBy:
 			PARTITIONED BY '(' expr_list_opt_comma ')'	{ $$ = $4; }
 			| /*EMPTY*/									{ $$ = NIL; }
+		;
+
+OptSortedBy:
+			SORTED BY '(' expr_list_opt_comma ')'		{ $$ = $4; }
+			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
 OptWith:

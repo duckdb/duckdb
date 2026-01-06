@@ -160,6 +160,11 @@
         "id": 204,
         "name": "partition_keys",
         "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 205,
+        "name": "order_keys",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },

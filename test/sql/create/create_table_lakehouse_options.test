@@ -1,0 +1,26 @@
+# name: test/sql/create/create_table_lakehouse_options.test
+# description: Test CREATE OR REPLACE TABLE
+# group: [create]
+
+statement ok
+pragma enable_verification
+
+statement error
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i);
+----
+<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (i);
+----
+<REGEX>:.*SORTED BY is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (i);
+----
+<REGEX>:.*SORTED BY is not supported for DuckDB tables.*
+
+statement error
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
+----
+<REGEX>:.*PARTITIONED BY is not supported for DuckDB tables.*

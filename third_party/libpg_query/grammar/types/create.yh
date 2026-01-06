@@ -37,7 +37,7 @@
 %type <typnam> func_type
 %type <constr> GeneratedColumnType opt_GeneratedColumnType
 %type <node> ConstraintElem GeneratedConstraintElem
-%type <list> TableElementList OptPartitionedBy
+%type <list> TableElementList OptPartitionedBy OptSortedBy
 %type <ival> key_match
 %type <node> TableLikeClause
 %type <ival> OptTemp

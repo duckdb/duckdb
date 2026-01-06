@@ -55,6 +55,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		if (!base.partition_keys.empty()) {
 			throw CatalogException("PARTITIONED BY is not supported for DuckDB tables");
 		}
+		if (!base.order_keys.empty()) {
+			throw CatalogException("SORTED BY is not supported for DuckDB tables");
+		}
 	}
 
 	// create the physical storage
