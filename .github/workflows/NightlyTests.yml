@@ -72,7 +72,6 @@ jobs:
          python3 test/memoryleak/test_memory_leaks.py
 
   release-assert:
-    # trigger nightly
     name: Release Assertions
     runs-on: ubuntu-latest
     needs: linux-memory-leaks
