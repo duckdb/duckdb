@@ -378,7 +378,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 
 	if (encryption_config) {
-		// get the encryption util
+		// Get the encryption util
 		encryption_util = context.db->GetEncryptionUtil(false);
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);

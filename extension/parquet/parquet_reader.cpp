@@ -823,8 +823,8 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	}
 
 	// Get the encryption util
-	// TODO: fix read-only case for parquet
-	encryption_util = context_p.db->GetEncryptionUtil(false);
+	// The parquet reader only reads data, so we set util to true
+	encryption_util = context_p.db->GetEncryptionUtil(true);
 
 	// If metadata cached is disabled
 	// or if this file has cached metadata
