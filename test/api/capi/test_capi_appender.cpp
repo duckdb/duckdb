@@ -1321,7 +1321,7 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 			}
 			duckdb_destroy_result(&t_ret);
 
-			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE + 10; j++) {
+			for (unsigned j = 0; j < STANDARD_VECTOR_SIZE + 10; j++) {
 				if (!success) {
 					return;
 				}

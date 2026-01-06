@@ -14,9 +14,11 @@
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
 
-#include <list>
-#include <thread>
+#include <algorithm>
 #include <chrono>
+#include <list>
+#include <random>
+#include <thread>
 
 namespace duckdb {
 
@@ -407,7 +409,9 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				break;
 			}
 		}
-		std::random_shuffle(loop_indexes.begin(), loop_indexes.end());
+		std::random_device rd;
+		std::mt19937 g(rd());
+		std::shuffle(loop_indexes.begin(), loop_indexes.end(), g);
 
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
