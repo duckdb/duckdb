@@ -1,0 +1,30 @@
+name: "CI Diagnostics"
+description: "Print runner diagnostics (disk/mem/docker/processes)"
+runs:
+  using: "composite"
+  steps:
+    - name: Print diagnostics
+      shell: bash
+      run: |
+        set +e
+        echo "=== Date / uname ==="
+        date
+        uname -a
+
+        echo "=== Disk free ==="
+        df -h
+
+        echo "=== Disk inodes ==="
+        df -i
+
+        echo "=== Memory usage ==="
+        free -h || true
+
+        echo "=== Largest dirs in workspace ==="
+        du -xhd1 /github/workspace 2>/dev/null | sort -h | tail -n 30 || true
+
+        echo "=== Docker usage (if available) ==="
+        docker system df 2>/dev/null || true
+
+        echo "=== Top processes by RSS ==="
+        ps aux --sort=-rss | head -n 20 || true
