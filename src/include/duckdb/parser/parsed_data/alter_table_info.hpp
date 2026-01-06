@@ -85,7 +85,8 @@ enum class AlterTableType : uint8_t {
 	ADD_FIELD = 14,
 	REMOVE_FIELD = 15,
 	RENAME_FIELD = 16,
-	SET_LOCATION = 17
+	SET_LOCATION = 17,
+	SET_TBLPROPERTIES = 18
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -512,6 +513,26 @@ public:
 
 private:
 	SetLocationInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// SetTblPropertiesInfo
+//===--------------------------------------------------------------------===//
+struct SetTblPropertiesInfo : public AlterTableInfo {
+	SetTblPropertiesInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties);
+	~SetTblPropertiesInfo() override;
+
+	case_insensitive_map_t<string> tbl_properties;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	SetTblPropertiesInfo();
 };
 
 } // namespace duckdb
