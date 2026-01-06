@@ -32,7 +32,7 @@ int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
 	return child_handle->Read(context, buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
 int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
-	return child_handle->Write(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
+	return child_handle->Write(context, buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
 
 void PipeFileSystem::Reset(FileHandle &handle) {

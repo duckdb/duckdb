@@ -708,6 +708,14 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
+int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+	}
+
+	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+}
+
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }

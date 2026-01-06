@@ -66,6 +66,7 @@ public:
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
