@@ -103,6 +103,8 @@ public:
 	bool TaskFinished() const;
 	//! Do the work this thread has been assigned
 	SourceResultType ExecuteTask(SortedRunMergerGlobalState &gstate, optional_ptr<DataChunk> chunk);
+	//! Clear outstanding allocations
+	void Clear();
 
 private:
 	//! Computes upper partition boundaries using K-way Merge Path
@@ -313,6 +315,13 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 			                              EnumUtil::ToString(iterator_state_type));
 		}
 	}
+}
+
+void SortedRunMergerLocalState::Clear() {
+	in_memory_states.clear();
+	external_states.clear();
+	merged_partition.Reset();
+	sorted_run_scan_state.Clear();
 }
 
 bool SortedRunMergerLocalState::TaskFinished() const {
@@ -856,7 +865,13 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 		}
 	}
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (chunk.size() != 0) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+
+	// Done
+	lstate.Clear();
+	return SourceResultType::FINISHED;
 }
 
 OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, DataChunk &, GlobalSourceState &,
@@ -890,6 +905,7 @@ SourceResultType SortedRunMerger::MaterializeSortedRun(ExecutionContext &, Opera
 			break;
 		}
 	}
+	lstate.Clear(); // Done
 
 	// The thread that completes the materialization returns FINISHED, all other threads return HAVE_MORE_OUTPUT
 	return res;
@@ -904,11 +920,12 @@ unique_ptr<SortedRun> SortedRunMerger::GetSortedRun(GlobalSourceState &global_st
 	}
 	auto &target = *gstate.materialized_partitions[0];
 	for (idx_t i = 1; i < gstate.materialized_partitions.size(); i++) {
-		auto &source = *gstate.materialized_partitions[i];
-		target.key_data->Combine(*source.key_data);
+		auto &source = gstate.materialized_partitions[i];
+		target.key_data->Combine(*source->key_data);
 		if (target.payload_data) {
-			target.payload_data->Combine(*source.payload_data);
+			target.payload_data->Combine(*source->payload_data);
 		}
+		source.reset();
 	}
 	auto res = std::move(gstate.materialized_partitions[0]);
 	gstate.materialized_partitions.clear();
