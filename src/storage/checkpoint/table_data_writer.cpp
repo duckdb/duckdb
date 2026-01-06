@@ -172,12 +172,14 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto index_serialization_result = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
 	// Collect all index storage infos into a single vector of pointers
+	// Currently, we have to make sure that the bound IndexStorageInfo's are serialized first. See comments in
+	// DuckTableEntry constructor, where constraint indexes are eagerly bound/created for the first time.
 	vector<const IndexStorageInfo *> all_infos;
-	for (auto &info_ref : index_serialization_result.unbound_infos) {
-		all_infos.push_back(&info_ref.get());
-	}
 	for (auto &info_ptr : index_serialization_result.bound_infos) {
 		all_infos.push_back(info_ptr.get());
+	}
+	for (auto &info_ref : index_serialization_result.unbound_infos) {
+		all_infos.push_back(&info_ref.get());
 	}
 
 	if (debug_verify_blocks) {

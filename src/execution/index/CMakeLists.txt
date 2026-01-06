@@ -2,7 +2,6 @@ add_subdirectory(art)
 add_library_unity(
   duckdb_execution_index
   OBJECT
-  buffered_index_replays.cpp
   fixed_size_allocator.cpp
   fixed_size_buffer.cpp
   unbound_index.cpp

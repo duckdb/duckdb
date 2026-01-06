@@ -61,6 +61,14 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	                                     schema.name, name, std::move(column_defs), std::move(info.data));
 
 	// Create the unique indexes for the UNIQUE, PRIMARY KEY, and FOREIGN KEY constraints.
+	// There is an implicit assumption here that constraint indexes come before other indexes in
+	// BoundCreateTableInfo info. If this is the first time they are being created, then they come first in the
+	// TableIndexList, in the order they were created here, and later on this will determine the serialization order
+	// of IndexStorageInfos.
+	// FIXME: This assumption may no longer hold when 1) we no longer eagerly bind constraint indexes, in which case
+	// we can't just rely on serializing bound indexes first to preserve this ordering, and 2) is a somewhat fragile
+	// assumption currently, since the assumption made here requires us to be careful to serialize bound
+	// IndexStorageInfo's before unbound IndexStorageInfos.
 	idx_t indexes_idx = 0;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &constraint = constraints[i];
@@ -115,14 +123,13 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					index_storage_info->name = name_info->name;
 				}
 
-				// Transfer ownership to the index.
 				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info));
 			}
 		}
 	}
 
 	// Move any remaining unused IndexStorageInfos to storage
-	// (filter out any that were moved out during index creation)
+	// This should be any non-constraint indexes that are still unbound at this point.
 	vector<unique_ptr<IndexStorageInfo>> remaining_indexes;
 	for (auto &index : info.indexes) {
 		if (index) {

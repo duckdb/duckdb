@@ -39,12 +39,12 @@ struct ReplayRange {
 // So even though the buffered_inserts has all the insert data from [0,12), ranges gives us the intervals for
 // replaying the index operations in the right order.
 struct BufferedIndexReplays {
+	BufferedIndexReplays() = default;
+	~BufferedIndexReplays() = default;
+
 	vector<ReplayRange> ranges;
 	unique_ptr<ColumnDataCollection> buffered_inserts;
 	unique_ptr<ColumnDataCollection> buffered_deletes;
-
-	BufferedIndexReplays();
-	~BufferedIndexReplays();
 
 	unique_ptr<ColumnDataCollection> &GetBuffer(const BufferedIndexReplay replay_type) {
 		if (replay_type == BufferedIndexReplay::INSERT_ENTRY) {
