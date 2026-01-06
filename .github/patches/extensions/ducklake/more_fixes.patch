@@ -1,0 +1,32 @@
+diff --git a/test/sql/autoloading/autoload_data_path.test b/test/sql/autoloading/autoload_data_path.test
+index 1030fc4e23..61650941be 100644
+--- a/test/sql/autoloading/autoload_data_path.test
++++ b/test/sql/autoloading/autoload_data_path.test
+@@ -9,6 +9,13 @@ require ducklake
+ statement ok
+ set allow_persistent_secrets=false;
+ 
++# Next two statement ensure ducklake is loadable also
++statement ok
++ATTACH 'ducklake:random_file.ducklake' AS db;
++
++statement ok
++DETACH db;
++
+ # Ensure we have a clean extension directory without any preinstalled extensions
+ statement ok
+ set extension_directory='__TEST_DIR__/autoloading_filesystems'
+diff --git a/test/sql/remove_orphans/remove_orphaned_files.test b/test/sql/remove_orphans/remove_orphaned_files.test
+index 84feb40516..d2cf84a70d 100644
+--- a/test/sql/remove_orphans/remove_orphaned_files.test
++++ b/test/sql/remove_orphans/remove_orphaned_files.test
+@@ -73,6 +73,9 @@ SELECT ends_with(path,'bla.parquet') FROM ducklake_delete_orphaned_files('duckla
+ ----
+ True
+ 
++statement ok
++LOAD icu
++
+ # Check older_than filter
+ query I
+ SELECT count(*) FROM ducklake_delete_orphaned_files('ducklake', older_than => NOW() - INTERVAL '1 week', dry_run => true);
