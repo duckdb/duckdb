@@ -42,13 +42,8 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
 		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 		auto new_sz = Utf8Proc::CodepointLength(converted);
-		D_ASSERT(new_sz >= 0);
 		output_length += UnsafeNumericCast<idx_t>(new_sz);
-
-		// If "sz" did not change, then this will loop indefinitely.
-		if (sz == 0) {
-			throw InternalException("infinite loop length detected, likely due to invalid UTF-8");
-		}
+		D_ASSERT(sz != 0);
 		i += UnsafeNumericCast<idx_t>(sz);
 	}
 	return output_length;
