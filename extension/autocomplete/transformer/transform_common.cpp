@@ -2,7 +2,9 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "transformer/peg_transformer.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/negate.hpp"
 
 namespace duckdb {
 
@@ -255,9 +257,9 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 		throw InternalException("Unexpected rule %s encountered in SimpleType", type_or_character_pr->name);
 	}
 	auto opt_modifiers = list_pr.Child<OptionalParseResult>(1);
-	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (opt_modifiers.HasResult()) {
-		modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
+		vector<unique_ptr<ParsedExpression>> modifiers =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
 		for (const auto &modifier : modifiers) {
 			if (modifier->GetExpressionClass() == ExpressionClass::CONSTANT) {
 				continue;
@@ -399,42 +401,47 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
 
 bool PEGTransformerFactory::TryNegateValue(Value &val) {
 	switch (val.type().id()) {
-	case LogicalTypeId::INTEGER:
-		if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
-			val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
-			return true;
+	case LogicalTypeId::INTEGER: {
+		auto raw = val.GetValue<int32_t>();
+		if (!NegateOperator::CanNegate<int32_t>(raw)) {
+			val = Value::BIGINT(-static_cast<int64_t>(raw));
+		} else {
+			val = Value::INTEGER(-raw);
 		}
-		val = Value::INTEGER(-val.GetValue<int32_t>());
 		return true;
-
-	case LogicalTypeId::BIGINT:
-		if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
-			val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
-			return true;
+	}
+	case LogicalTypeId::BIGINT: {
+		auto raw = val.GetValue<int64_t>();
+		if (!NegateOperator::CanNegate<int64_t>(raw)) {
+			val = Value::HUGEINT(-static_cast<hugeint_t>(raw));
+		} else {
+			val = Value::BIGINT(-raw);
 		}
-		val = Value::BIGINT(-val.GetValue<int64_t>());
 		return true;
-
-	case LogicalTypeId::HUGEINT:
-		val = Value::HUGEINT(-val.GetValue<hugeint_t>());
+	}
+	case LogicalTypeId::HUGEINT: {
+		auto raw = val.GetValue<hugeint_t>();
+		if (!NegateOperator::CanNegate<hugeint_t>(raw)) {
+			return false;
+		}
+		val = Value::HUGEINT(-raw);
 		return true;
-
+	}
 	case LogicalTypeId::UHUGEINT: {
 		auto uval = val.GetValue<uhugeint_t>();
-		uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
+		uhugeint_t abs_min_hugeint = static_cast<uhugeint_t>(NumericLimits<hugeint_t>::Maximum()) + 1;
 
 		if (uval == abs_min_hugeint) {
 			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 			return true;
 		}
 		if (uval < abs_min_hugeint) {
-			val = Value::HUGEINT(-((hugeint_t)uval));
+			val = Value::HUGEINT(-static_cast<hugeint_t>(uval));
 			return true;
 		}
 
 		return false;
 	}
-
 	case LogicalTypeId::DOUBLE:
 		val = Value::DOUBLE(-val.GetValue<double>());
 		return true;
