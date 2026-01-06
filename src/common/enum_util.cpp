@@ -174,7 +174,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
+#include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -913,19 +913,20 @@ CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value)
 const StringUtil::EnumStringLiteral *GetCachingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CachingMode::ALWAYS_CACHE), "ALWAYS_CACHE" },
-		{ static_cast<uint32_t>(CachingMode::CACHE_REMOTE_ONLY), "CACHE_REMOTE_ONLY" }
+		{ static_cast<uint32_t>(CachingMode::CACHE_REMOTE_ONLY), "CACHE_REMOTE_ONLY" },
+		{ static_cast<uint32_t>(CachingMode::NO_CACHING), "NO_CACHING" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
-	return StringUtil::EnumToString(GetCachingModeValues(), 2, "CachingMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCachingModeValues(), 3, "CachingMode", static_cast<uint32_t>(value));
 }
 
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
-	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 2, "CachingMode", value));
+	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 3, "CachingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {

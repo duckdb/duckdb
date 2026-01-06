@@ -3,6 +3,7 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/string_util.hpp"
