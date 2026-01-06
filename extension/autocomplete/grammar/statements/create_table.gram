@@ -40,7 +40,12 @@ ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
 KeyActions <- UpdateAction? DeleteAction?
 UpdateAction <- 'ON' 'UPDATE' KeyAction
 DeleteAction <- 'ON' 'DELETE' KeyAction
-KeyAction <- ('NO' 'ACTION') / 'RESTRICT' / 'CASCADE' / ('SET' 'NULL') / ('SET' 'DEFAULT')
+KeyAction <- NoKeyAction / RestrictKeyAction / CascadeKeyAction / SetNullKeyAction / SetDefaultKeyAction
+NoKeyAction <- 'NO' 'ACTION'
+RestrictKeyAction <- 'RESTRICT'
+CascadeKeyAction <- 'CASCADE'
+SetNullKeyAction <- 'SET' 'NULL'
+SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint

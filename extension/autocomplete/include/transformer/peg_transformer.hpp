@@ -512,12 +512,18 @@ private:
 	static KeyActions TransformKeyActions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformUpdateAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformDeleteAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformNoKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformRestrictKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformCascadeKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformSetNullKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformSetDefaultKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 	static LogicalType TransformColumnCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformCommitAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformPreserveOrDelete(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformGeneratedColumnType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
 
 	// create_type.gram
 	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,
@@ -1128,6 +1134,7 @@ private:
 	                                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformGroupingSetsClause(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
+	static string TransformCubeOrRollup(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	static CommonTableExpressionMap TransformWithClause(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);

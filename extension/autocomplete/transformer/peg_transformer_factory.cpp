@@ -264,6 +264,14 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformUniqueConstraint);
 	REGISTER_TRANSFORM(TransformNotNullConstraint);
 	REGISTER_TRANSFORM(TransformKeyActions);
+	REGISTER_TRANSFORM(TransformKeyAction);
+	REGISTER_TRANSFORM(TransformNoKeyAction);
+	REGISTER_TRANSFORM(TransformRestrictKeyAction);
+	REGISTER_TRANSFORM(TransformCascadeKeyAction);
+	REGISTER_TRANSFORM(TransformSetNullKeyAction);
+	REGISTER_TRANSFORM(TransformSetDefaultKeyAction);
+	REGISTER_TRANSFORM(TransformCubeOrRollup);
+
 	REGISTER_TRANSFORM(TransformUpdateAction);
 	REGISTER_TRANSFORM(TransformDeleteAction);
 	REGISTER_TRANSFORM(TransformColumnCollation);

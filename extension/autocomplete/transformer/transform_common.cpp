@@ -90,7 +90,8 @@ int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &tran
 		if (number->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			auto &const_number = number->Cast<ConstantExpression>();
 			if (!const_number.value.type().IsIntegral()) {
-				throw BinderException("Expected an integer as array bound instead of %s", const_number.value.ToString());
+				throw BinderException("Expected an integer as array bound instead of %s",
+				                      const_number.value.ToString());
 			}
 			return const_number.value.GetValue<int64_t>();
 		}

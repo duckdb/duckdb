@@ -417,12 +417,44 @@ KeyActions PEGTransformerFactory::TransformKeyActions(PEGTransformer &transforme
 
 string PEGTransformerFactory::TransformUpdateAction(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("TransformUpdateAction has not yet been implemented");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
 }
 
 string PEGTransformerFactory::TransformDeleteAction(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("TransformDeleteAction has not yet been implemented");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+}
+
+string PEGTransformerFactory::TransformKeyAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+string PEGTransformerFactory::TransformNoKeyAction(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
+	return "NoKeyAction";
+}
+
+string PEGTransformerFactory::TransformRestrictKeyAction(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
+	return "Restrict";
+}
+
+string PEGTransformerFactory::TransformCascadeKeyAction(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	throw ParserException("FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT");
+}
+
+string PEGTransformerFactory::TransformSetNullKeyAction(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	throw ParserException("FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT");
+}
+
+string PEGTransformerFactory::TransformSetDefaultKeyAction(PEGTransformer &transformer,
+                                                           optional_ptr<ParseResult> parse_result) {
+	throw ParserException("FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT");
 }
 
 pair<bool, ConstraintType>
@@ -449,22 +481,20 @@ LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &tran
 	return LogicalType::VARCHAR_COLLATION(collation);
 }
 
-bool PEGTransformerFactory::TransformWithData(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+bool PEGTransformerFactory::TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	// 'WITH' 'NO'? 'DATA'
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto no_data = list_pr.Child<OptionalParseResult>(1).HasResult();
 	return no_data;
 }
 
-bool PEGTransformerFactory::TransformCommitAction(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+bool PEGTransformerFactory::TransformCommitAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<bool>(list_pr.Child<ListParseResult>(2));
 }
 
 bool PEGTransformerFactory::TransformPreserveOrDelete(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	auto preserve_or_delete = choice_pr->Cast<KeywordParseResult>().keyword;
@@ -475,7 +505,7 @@ bool PEGTransformerFactory::TransformPreserveOrDelete(PEGTransformer &transforme
 }
 
 bool PEGTransformerFactory::TransformGeneratedColumnType(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	auto keyword = choice_pr->Cast<KeywordParseResult>().keyword;
@@ -489,7 +519,7 @@ void PEGTransformerFactory::VerifyColumnRefs(const ParsedExpression &expr) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(expr, [&](const ColumnRefExpression &column_ref) {
 		if (column_ref.IsQualified()) {
 			throw ParserException(
-				"Qualified (tbl.name) column references are not allowed inside of generated column expressions");
+			    "Qualified (tbl.name) column references are not allowed inside of generated column expressions");
 		}
 	});
 }

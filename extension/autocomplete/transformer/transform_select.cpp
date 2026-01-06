@@ -1072,6 +1072,7 @@ static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 	}
 	return result;
 }
+
 void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
                                                  GroupByNode &result, vector<idx_t> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
@@ -1093,6 +1094,17 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
 		result_idx = entry->second;
 	}
 	result_set.push_back(result_idx);
+}
+
+static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &cube_sets,
+                        vector<GroupingSet> &result_sets, idx_t start_idx = 0) {
+	CheckGroupingSetMax(result_sets.size());
+	result_sets.push_back(current_set);
+	for (idx_t k = start_idx; k < cube_sets.size(); k++) {
+		auto child_set = current_set;
+		child_set.insert(cube_sets[k].begin(), cube_sets[k].end());
+		AddCubeSets(child_set, cube_sets, result_sets, k + 1);
+	}
 }
 
 vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransformer &transformer,
@@ -1118,12 +1130,46 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 			auto child_sets = GroupByExpressionUnfolding(transformer, std::move(child_expr), map, result);
 			result_sets.insert(result_sets.end(), child_sets.begin(), child_sets.end());
 		}
+	} else if (StringUtil::CIEquals(group_by_expr->name, "CubeOrRollupClause")) {
+		auto group_by_list = group_by_expr->Cast<ListParseResult>();
+		auto type_str = transformer.Transform<string>(group_by_list.Child<ListParseResult>(0));
+		auto extract_parens = ExtractResultFromParens(group_by_list.Child<ListParseResult>(1));
+		auto expr_list = ExtractParseResultsFromList(extract_parens);
 
-	} else {
-		throw NotImplementedException("Unsupported GroupBy Expression: " + group_by_expr->name);
+		vector<GroupingSet> unfolding_sets;
+		for (auto &expr_node : expr_list) {
+			vector<idx_t> indexes;
+			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(expr_node);
+			AddGroupByExpression(std::move(expr), map, result, indexes);
+
+			GroupingSet s;
+			for (auto idx : indexes) {
+				s.insert(idx);
+			}
+			unfolding_sets.push_back(std::move(s));
+		}
+
+		if (StringUtil::CIEquals(type_str, "CUBE")) {
+			CheckGroupingSetCubes(result_sets.size(), unfolding_sets.size());
+			GroupingSet current_set;
+			AddCubeSets(current_set, unfolding_sets, result_sets, 0);
+		} else if (StringUtil::CIEquals(type_str, "ROLLUP")) {
+			GroupingSet current_set;
+			result_sets.push_back(current_set);
+			for (idx_t i = 0; i < unfolding_sets.size(); i++) {
+				current_set.insert(unfolding_sets[i].begin(), unfolding_sets[i].end());
+				result_sets.push_back(current_set);
+			}
+		}
 	}
-
 	return result_sets;
+}
+
+string PEGTransformerFactory::TransformCubeOrRollup(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer,
