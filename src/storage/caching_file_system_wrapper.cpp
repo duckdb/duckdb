@@ -138,7 +138,7 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFile
 	}
 
 	if (ShouldUseCache(path.path)) {
-		auto caching_handle = caching_file_system.OpenFile(path, flags);
+		auto caching_handle = caching_file_system.OpenFile(path, flags, opener);
 		return make_uniq<CachingFileHandleWrapper>(shared_from_this(), std::move(caching_handle), flags);
 	}
 	// Bypass cache, use underlying file system directly.
