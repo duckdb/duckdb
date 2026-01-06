@@ -303,8 +303,10 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id) {
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
-	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state =
+	    db.GetDatabase()
+	        .GetEncryptionUtil(db.IsReadOnly())
+	        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -345,8 +347,10 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
-	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state =
+	    db.GetDatabase()
+	        .GetEncryptionUtil(db.IsReadOnly())
+	        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
@@ -369,15 +373,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
-		auto const &config = DBConfig::Get(db);
-		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only &&
-		    !config.options.enable_mbedtls) {
-			throw InvalidConfigurationException(
-			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
-			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`. "
-			    " To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = "
-			    "'true'.");
-		}
+		// Check if we can read/write the encrypted database
+		db.GetDatabase().GetEncryptionUtil(options.read_only);
 	}
 
 	// open the RDBMS handle
@@ -505,16 +502,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 
-			//! Check if our encryption module can write, if not, we should throw here
-			auto const &config = DBConfig::Get(db);
-			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only &&
-			    !config.options.enable_mbedtls) {
-				throw InvalidConfigurationException(
-				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
-				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
-				    "httpfs`. To write an encrypted database that is NOT securely encrypted, one can use SET "
-				    "enable_mbedtls = 'true'");
-			}
+			//! Check if our encryption module can write, if not, we throw
+			db.GetDatabase().GetEncryptionUtil(options.read_only);
 
 			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache

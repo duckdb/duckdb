@@ -1327,10 +1327,7 @@ Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
 void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.enable_mbedtls = input.GetValue<bool>();
 
-	if (config.options.enable_mbedtls) {
-		// this overrides OpenSSL, even when httpfs is loaded
-		config.encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	} else {
+	if (!config.options.enable_mbedtls) {
 		// check if there are attached databases encrypted that are not read only
 		bool encrypted_db_attached = false;
 		for (auto &database : db->GetDatabaseManager().GetDatabases()) {
@@ -1353,7 +1350,6 @@ void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 
 void EnableMbedtlsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	// If encryption is initialized, httpfs will be attempted to autoload again
-	config.encryption_util = nullptr;
 	SetGlobal(db, config, false);
 }
 

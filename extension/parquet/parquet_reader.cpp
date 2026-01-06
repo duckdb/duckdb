@@ -821,13 +821,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			footer_size = UBigIntValue::Get(footer_entry->second);
 		}
 	}
-	// set pointer to factory method for AES state
-	auto &config = DBConfig::GetConfig(context_p);
-	if (config.encryption_util && !config.options.enable_mbedtls) {
-		encryption_util = config.encryption_util;
-	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	}
+
+	// Get the encryption util
+	// TODO: fix read-only case for parquet
+	encryption_util = context_p.db->GetEncryptionUtil(false);
+
 	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired

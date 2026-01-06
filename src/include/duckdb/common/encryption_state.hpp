@@ -61,12 +61,6 @@ public:
 	virtual ~EncryptionUtil() {
 	}
 
-	//! Whether the EncryptionUtil supports encryption (some may only support decryption)
-	DUCKDB_API virtual bool SupportsEncryption() {
-		return true;
-	}
-
-	//! Whether the EncryptionUtil supports encryption (some may only support decryption)
 	DUCKDB_API virtual void OverrideEncryptionUtil() {
 		throw InvalidInputException("Abstract Method");
 	}

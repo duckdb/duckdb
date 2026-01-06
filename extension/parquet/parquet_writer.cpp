@@ -378,23 +378,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 
 	if (encryption_config) {
-		auto &config = DBConfig::GetConfig(context);
-
-		// To ensure we can write, we need to autoload httpfs
-		if ((!config.encryption_util || !config.encryption_util->SupportsEncryption()) &&
-		    !config.options.enable_mbedtls) {
-			ExtensionHelper::TryAutoLoadExtension(context, "httpfs");
-		} else if (!config.encryption_util && context.db->ExtensionIsLoaded("httpfs")) {
-			// use openssl
-		}
-
-		if (config.encryption_util && !config.options.enable_mbedtls) {
-			// Use OpenSSL
-			encryption_util = config.encryption_util;
-		} else {
-			// Force mbedtls
-			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-		}
+		// get the encryption util
+		encryption_util = context.db->GetEncryptionUtil(false);
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 		// we only support this one for now, not "AES_GCM_CTR_V1"

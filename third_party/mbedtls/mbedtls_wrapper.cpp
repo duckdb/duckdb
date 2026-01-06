@@ -300,10 +300,6 @@ MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 	}
 }
 
-static void ThrowInsecureRNG() {
-	throw duckdb::InvalidConfigurationException("DuckDB requires a secure random engine to be loaded to enable secure crypto. Normally, this will be handled automatically by DuckDB by autoloading the `httpfs` Extension, but that seems to have failed. Please ensure the httpfs extension is loaded manually using `LOAD httpfs`.");
-}
-
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
 	GenerateRandomDataInsecure(data, len);
 }
