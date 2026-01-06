@@ -299,7 +299,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      sorted_run_scan_state(gstate.context, gstate.merger.sort), sort_key_pointers(LogicalType::POINTER) {
+      sort_key_pointers(LogicalType::POINTER), sorted_run_scan_state(gstate.context, gstate.merger.sort) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
