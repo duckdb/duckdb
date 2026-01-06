@@ -133,6 +133,22 @@ public:
 	shared_ptr<Logger> logger;
 };
 
+struct ParsedPath {
+	string scheme;
+	string authority;
+	string path;
+	bool has_scheme = false;
+	bool has_authority = false;
+	bool has_drive = false; // win only: implies path ~= "c:/path/to/file.txt"
+	bool is_absolute = false;
+
+	ParsedPath() {
+	}
+	ParsedPath(const string &raw);
+
+	vector<string> GetSegments() const;
+};
+
 class FileSystem {
 public:
 	DUCKDB_API virtual ~FileSystem();

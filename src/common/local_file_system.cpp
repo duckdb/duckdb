@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
+#include <type_traits>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -1490,44 +1491,19 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		return vector<OpenFileInfo>();
 	}
 	// split up the path into separate chunks
-	vector<string> splits;
-
-	bool is_file_url = StringUtil::StartsWith(path, "file:/");
-	idx_t file_url_path_offset = GetFileUrlOffset(path);
-#ifdef _WIN32
-	idx_t drive_root_offset = file_url_path_offset;
-	bool drive_root_path = path.size() >= drive_root_offset + 3 &&
-	                       StringUtil::CharacterIsAlpha(path[drive_root_offset]) &&
-	                       path[drive_root_offset + 1] == ':' &&
-	                       (path[drive_root_offset + 2] == '\\' || path[drive_root_offset + 2] == '/');
-#else
-	bool drive_root_path = false;
-	idx_t drive_root_offset = 0;
-#endif
-
-	idx_t last_pos = 0;
-	for (idx_t i = file_url_path_offset; i < path.size(); i++) {
-		if (path[i] == '\\' || path[i] == '/') {
-			if (i == last_pos) {
-				// empty: skip this position
-				last_pos = i + 1;
-				continue;
-			}
-			if (splits.empty()) {
-				if (drive_root_path && i == drive_root_offset + 2) {
-					splits.push_back(path.substr(0, i + 1));
-				} else {
-					splits.push_back(path.substr(0, i));
-				}
-			} else {
-				splits.push_back(path.substr(last_pos, i - last_pos));
-			}
-			last_pos = i + 1;
+	const auto parsed_path = ParsedPath(path);
+	const auto local_path = parsed_path.path;
+	vector<string> splits = parsed_path.GetSegments();
+	if (parsed_path.is_absolute) {
+		if (parsed_path.has_drive) {
+			splits.insert(splits.begin(), local_path.substr(0, 3));
+		} else {
+			splits.insert(splits.begin(), "/");
 		}
 	}
-	splits.push_back(path.substr(last_pos, path.size() - last_pos));
+
 	// handle absolute paths
-	bool absolute_path = false;
+	bool absolute_path = parsed_path.is_absolute;
 	if (IsPathAbsolute(path)) {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
@@ -1572,7 +1548,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 	}
 
 	idx_t start_index;
-	if (is_file_url) {
+	if (parsed_path.has_scheme) {
 		start_index = 1;
 	} else if (absolute_path) {
 		start_index = 1;

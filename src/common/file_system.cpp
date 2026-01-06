@@ -297,19 +297,6 @@ string FileSystem::GetWorkingDirectory() {
 
 #endif
 
-namespace {
-
-struct ParsedPath {
-	string scheme;
-	string authority;
-	string drive;
-	string path;
-	bool has_scheme = false;
-	bool has_authority = false;
-	bool has_drive = false;
-	bool is_absolute = false;
-};
-
 // Parse path (only) proto://authority/path/to/file.txt
 // All URI paths are absoluate, and URIs of the form proto://authority will be assigned path="/"
 // NOTE: not full URI parsing, only for URI paths (e.g., no query, fragment, etc.)
@@ -372,7 +359,47 @@ static void ParseFileSchemes(const string &input, struct ParsedPath &parsed) {
 	} else /* file:/ -- input_len >= 6 -- already required to get here */ {
 		parsed.path = input.substr(5);
 	}
+
+	// XXX: drive check
+	// bool drive_root_path = path.size() >= drive_root_offset + 3 &&
+	//                        StringUtil::CharacterIsAlpha(path[drive_root_offset]) &&
+	//                        path[drive_root_offset + 1] == ':' &&
+	//                        (path[drive_root_offset + 2] == '\\' || path[drive_root_offset + 2] == '/');
 	D_ASSERT(!parsed.path.empty() && parsed.path[0] == '/');
+}
+
+ParsedPath::ParsedPath(const string &raw) {
+	if (raw.empty()) {
+		return;
+	}
+	if (StringUtil::StartsWith(raw, "file:/")) {
+		ParseFileSchemes(raw, *this);
+		return;
+	}
+	path = raw;
+}
+
+static void AppendPathSegments(vector<string> &segments, const string &path) {
+	idx_t last_pos = 0;
+	for (idx_t pos = 0; pos < path.size(); pos++) {
+		if (path[pos] == '/') {
+			// FIXME: remove this, already normalized
+			if (pos == last_pos) {
+				// empty: skip this position
+				last_pos = pos + 1;
+				continue;
+			}
+			segments.push_back(path.substr(last_pos, pos - last_pos));
+			last_pos = pos + 1;
+		}
+	}
+	segments.push_back(path.substr(last_pos, path.size() - last_pos));
+}
+
+vector<string> ParsedPath::GetSegments() const {
+	vector<string> rv;
+	AppendPathSegments(rv, path);
+	return rv;
 }
 
 ParsedPath ParsePathWithScheme(const string &input) {
@@ -528,8 +555,6 @@ string NormalizeSegments(const string &path, const string &separator, bool is_ab
 	}
 	return result;
 }
-
-} // namespace
 
 string FileSystem::JoinPath(const string &a, const string &b) {
 	auto lhs_parsed = ParsePathWithScheme(a);
