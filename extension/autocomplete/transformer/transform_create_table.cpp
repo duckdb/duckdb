@@ -6,6 +6,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/constraints/check_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -292,6 +293,11 @@ GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTra
 	GeneratedColumnDefinition generated;
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
 	generated.expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+	VerifyColumnRefs(*generated.expr);
+	auto generated_column_type = list_pr.Child<OptionalParseResult>(3);
+	if (generated_column_type.HasResult()) {
+		transformer.Transform<bool>(generated_column_type.optional_result);
+	}
 	return generated;
 }
 
@@ -468,5 +474,24 @@ bool PEGTransformerFactory::TransformPreserveOrDelete(PEGTransformer &transforme
 	return true;
 }
 
+bool PEGTransformerFactory::TransformGeneratedColumnType(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	auto keyword = choice_pr->Cast<KeywordParseResult>().keyword;
+	if (StringUtil::CIEquals(keyword, "stored")) {
+		throw InvalidInputException("Can not create a STORED generated column!");
+	}
+	return true;
+}
+
+void PEGTransformerFactory::VerifyColumnRefs(const ParsedExpression &expr) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(expr, [&](const ColumnRefExpression &column_ref) {
+		if (column_ref.IsQualified()) {
+			throw ParserException(
+				"Qualified (tbl.name) column references are not allowed inside of generated column expressions");
+		}
+	});
+}
 
 } // namespace duckdb

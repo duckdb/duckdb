@@ -171,6 +171,7 @@ public:
 	                                            vector<string> &aliases);
 	static void WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node);
 	static void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node);
+	static void VerifyColumnRefs(const ParsedExpression &expr);
 
 	// Registration methods
 	void RegisterAlter();
@@ -515,6 +516,7 @@ private:
 	static bool TransformWithData(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformCommitAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformPreserveOrDelete(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformGeneratedColumnType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 
 	// create_type.gram
