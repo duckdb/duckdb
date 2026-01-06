@@ -118,11 +118,18 @@ public:
 	inline idx_t GetFlagsInternal() const {
 		return flags;
 	}
+	void SetDatabaseFile(bool _is_database = true) {
+		is_database = _is_database;
+	}
+	inline bool IsDatabaseFile() const {
+		return is_database;
+	}
 
 private:
 	idx_t flags = 0;
 	FileLockType lock = FileLockType::NO_LOCK;
 	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
+	bool is_database = false;
 };
 
 class FileFlags {

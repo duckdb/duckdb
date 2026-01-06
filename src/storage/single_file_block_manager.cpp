@@ -271,6 +271,9 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	// database files can be read from in parallel
 	result |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 	result |= FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
+
+	result.SetDatabaseFile();
+
 	return result;
 }
 

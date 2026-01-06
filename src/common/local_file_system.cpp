@@ -420,7 +420,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 					} else {
 						extended_error = AdditionalProcessInfo(*this, fl.l_pid);
 					}
-					if (flags.Lock() == FileLockType::WRITE_LOCK) {
+					if (flags.Lock() == FileLockType::WRITE_LOCK && flags.IsDatabaseFile()) {
 						// maybe we can get a read lock instead and tell this to the user.
 						fl.l_type = F_RDLCK;
 						rc = fcntl(fd, F_SETLK, &fl);
