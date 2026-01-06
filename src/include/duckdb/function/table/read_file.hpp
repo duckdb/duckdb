@@ -10,9 +10,12 @@
 
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/client_context_file_opener.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
+
+class ClientContextFileOpener;
 
 struct ReadFileBindData : public TableFunctionData {
 	unique_ptr<BaseFileReaderOptions> options;
@@ -32,6 +35,7 @@ struct ReadFileGlobalState : public GlobalTableFunctionState {
 	bool requires_file_open = false;
 
 	unique_ptr<MemoryStream> stream;
+	unique_ptr<ClientContextFileOpener> opener;
 };
 
 } // namespace duckdb

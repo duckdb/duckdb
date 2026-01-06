@@ -25,6 +25,7 @@ unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &contex
 bool DirectFileReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
                                          LocalTableFunctionState &lstate) {
 	auto &state = gstate.Cast<ReadFileGlobalState>();
+	state.opener = make_uniq<ClientContextFileOpener>(context);
 	return file_list_idx.GetIndex() < state.file_list->GetTotalFileCount() && !done;
 };
 
@@ -69,7 +70,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
 		flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
-		file_handle = fs.OpenFile(file, flags);
+		file_handle = fs.OpenFile(file, flags, state.opener.get());
 	} else {
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
