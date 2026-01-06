@@ -301,10 +301,79 @@ namespace {
 
 struct ParsedPath {
 	string scheme;
-	string path;
 	string authority;
+	string drive;
+	string path;
 	bool has_scheme = false;
+	bool has_authority = false;
+	bool has_drive = false;
+	bool is_absolute = false;
 };
+
+// Parse path (only) proto://authority/path/to/file.txt
+// All URI paths are absoluate, and URIs of the form proto://authority will be assigned path="/"
+// NOTE: not full URI parsing, only for URI paths (e.g., no query, fragment, etc.)
+static void ParseUriScheme(const string &input, struct ParsedPath &parsed) {
+	// these are constant for URI paths
+	parsed.has_scheme = true;
+	parsed.has_authority = true;
+	parsed.is_absolute = true;
+
+	const size_t auth_offset = input.find("://") + 3;
+	D_ASSERT(auth_offset >= 4); // non-empty protocol
+	// D_ASSERT(input.find("/") == auth_offset + 1); // no early slashes
+	parsed.scheme = input.substr(0, auth_offset);
+
+	const size_t path_offset = input.find("/", auth_offset);
+	D_ASSERT(path_offset > auth_offset); // non-empty path
+	parsed.authority = input.substr(auth_offset, (path_offset - auth_offset));
+	parsed.path = path_offset == input.size() ? "/" : input.substr(path_offset);
+}
+
+//
+// Parse and normalize file:/{1,3} schemes. See https://en.wikipedia.org/wiki/File_URI_scheme and our docs below:
+// Output is normalized to the file:///path/file form.
+//
+// DuckDB supports using the file: protocol. It currently supports the following formats:
+//
+//  file:/some/path (host omitted completely)
+//  file:///some/path (empty host)
+//  file://localhost/some/path (localhost as host)
+//
+// Note that the following formats are not supported because they are non-standard:
+//
+//   file:some/relative/path (relative path)
+//   file://some/path (double-slash path)
+//
+// Additionally, the file: protocol currently does not support remote (non-localhost) hosts.
+//
+static void ParseFileSchemes(const string &input, struct ParsedPath &parsed) {
+	// these are constant for file schemes
+	parsed.scheme = "file://";
+	parsed.has_scheme = true;
+	parsed.has_authority = false;
+	parsed.is_absolute = true;
+
+	// must have min `file:/` to get here
+	size_t input_len = input.size();
+	D_ASSERT(input_len >= 6 && StringUtil::StartsWith(input, "file:/"));
+
+	if (/* file:/// */ input_len >= 8 && input[6] == '/' && input[7] == '/') {
+		parsed.path = input.substr(7);
+	} else if (/* file:// */ input_len >= 7 && input[6] == '/') {
+		// parse as normal URI, check authority after
+		ParseUriScheme(input, parsed);
+		if (StringUtil::Lower(parsed.authority) != "localhost") {
+			throw InvalidInputException(
+			    "FileSystem: file://authority/path scheme only supported with authority=localhost");
+		}
+		parsed.authority = "";
+		parsed.has_authority = false;
+	} else /* file:/ -- input_len >= 6 -- already required to get here */ {
+		parsed.path = input.substr(5);
+	}
+	D_ASSERT(!parsed.path.empty() && parsed.path[0] == '/');
+}
 
 ParsedPath ParsePathWithScheme(const string &input) {
 	ParsedPath result;
@@ -312,29 +381,19 @@ ParsedPath ParsePathWithScheme(const string &input) {
 	if (input.empty()) {
 		return result;
 	}
-	if (StringUtil::StartsWith(input, "file://")) {
-		result.scheme = "file://";
-		result.path = input.substr(7);
-		result.has_scheme = true;
-		// capture optional authority (e.g., file://localhost/path)
-		if (!result.path.empty() && result.path[0] != '/' && result.path[0] != '\\') {
-			auto sep_pos = result.path.find_first_of("/\\");
-			if (sep_pos == string::npos) {
-				result.authority = result.path;
-				result.path.clear();
-			} else {
-				result.authority = result.path.substr(0, sep_pos);
-				result.path = result.path.substr(sep_pos);
-			}
-		}
+	if (StringUtil::StartsWith(input, "file:/")) {
+		ParseFileSchemes(input, result);
 		return result;
 	}
+#if 0
+	// XXX: killme after finding DuckDB docs
 	if (StringUtil::StartsWith(input, "file:")) {
 		result.scheme = "file:";
 		result.path = input.substr(5);
 		result.has_scheme = true;
 		return result;
 	}
+#endif
 	auto scheme_pos = input.find("://");
 	if (scheme_pos == string::npos) {
 		return result;

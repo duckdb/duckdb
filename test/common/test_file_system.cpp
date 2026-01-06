@@ -46,10 +46,10 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	}
 
 	// Path of format file:///bla/bla on 'nix and file:///X:/bla/bla on Windows
-	auto dname_triple_slash = fs->JoinPath("file://", dname_converted_slashes);
+	auto dname_triple_slash = string("file:///") + dname_converted_slashes;
 	// Path of format file://localhost/bla/bla on 'nix and file://localhost/X:/bla/bla on Windows
-	auto dname_localhost = fs->JoinPath("file://localhost", dname_converted_slashes);
-	auto dname_no_host = fs->JoinPath("file:", dname_converted_slashes);
+	auto dname_localhost = string("file://localhost/") + dname_converted_slashes;
+	auto dname_no_host = string("file:/") + dname_converted_slashes;
 
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
@@ -151,18 +151,18 @@ TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
 	};
 
 	auto normalized = fs->JoinPath("dir//subdir/", "./file");
-	REQUIRE(normalized == collapse("dir/subdir/file"));
+	CHECK(normalized == collapse("dir/subdir/file"));
 
 	auto parent = fs->JoinPath("dir/subdir", "../sibling");
-	REQUIRE(parent == collapse("dir/sibling"));
+	CHECK(parent == collapse("dir/sibling"));
 
-	REQUIRE_THROWS(fs->JoinPath("dir", "/abs/path"));
+	CHECK_THROWS(fs->JoinPath("dir", "/abs/path"));
 
 	auto dedup = fs->JoinPath("dir///", "nested///child");
-	REQUIRE(dedup == collapse("dir/nested/child"));
+	CHECK(dedup == collapse("dir/nested/child"));
 
 	auto zero_rel = fs->JoinPath("foo/bar", "../..");
-	REQUIRE(zero_rel == fs->ConvertSeparators("."));
+	CHECK(zero_rel == fs->ConvertSeparators("."));
 }
 
 TEST_CASE("JoinPath handles edge cases", "[file_system]") {
@@ -173,78 +173,84 @@ TEST_CASE("JoinPath handles edge cases", "[file_system]") {
 	};
 
 	auto lhs_parent = fs->JoinPath("dir/subdir/..", "sibling");
-	REQUIRE(lhs_parent == collapse("dir/sibling"));
+	CHECK(lhs_parent == collapse("dir/sibling"));
 
 	auto mixed_dots = fs->JoinPath("./dir/./subdir/./..", "./sibling/.");
-	REQUIRE(mixed_dots == collapse("dir/sibling"));
+	CHECK(mixed_dots == collapse("dir/sibling"));
 
 	auto overflowing_rel = fs->JoinPath("dir/..", "../..");
-	REQUIRE(overflowing_rel == fs->ConvertSeparators("../.."));
+	CHECK(overflowing_rel == fs->ConvertSeparators("../.."));
 
 	auto walk_up_absolute = fs->JoinPath("/usr/local", "../..");
-	REQUIRE(walk_up_absolute == fs->ConvertSeparators("/"));
+	CHECK(walk_up_absolute == fs->ConvertSeparators("/"));
 
 	auto root_child = fs->JoinPath("/", "usr/local");
-	REQUIRE(root_child == fs->ConvertSeparators("/usr/local"));
+	CHECK(root_child == fs->ConvertSeparators("/usr/local"));
 
 	auto past_root = fs->JoinPath("/usr/local", "../../..");
-	REQUIRE(past_root == fs->ConvertSeparators("/"));
+	CHECK(past_root == fs->ConvertSeparators("/"));
 
-	auto uri_join = fs->JoinPath("file:/usr/local", "../bin");
-	REQUIRE(uri_join == "file:/usr/bin");
+	auto file1_join = fs->JoinPath("file:/usr/local", "../bin");
+	CHECK(file1_join == "file:///usr/bin");
+
+	auto file2_join = fs->JoinPath("file://localhost/usr/local", "../bin");
+	CHECK(file2_join == "file:///usr/bin");
+
+	auto file3_join = fs->JoinPath("file:///usr/local", "../bin");
+	CHECK(file3_join == "file:///usr/bin");
 
 	auto s3_join = fs->JoinPath("s3://foo", "bar/baz");
-	REQUIRE(s3_join == "s3://foo/bar/baz");
+	CHECK(s3_join == "s3://foo/bar/baz");
 
 	auto s3_parent = fs->JoinPath("s3://foo", "..");
-	REQUIRE(s3_parent == "s3://");
+	CHECK(s3_parent == "s3://");
 
 	auto s3_parent_twice = fs->JoinPath("s3://foo", "../..");
-	REQUIRE(s3_parent_twice == "s3://");
+	CHECK(s3_parent_twice == "s3://");
 
-	REQUIRE_THROWS(fs->JoinPath("s3://foo", "az://foo"));
-	REQUIRE_THROWS(fs->JoinPath("s3://foo", "/foo/bar/baz"));
+	CHECK_THROWS(fs->JoinPath("s3://foo", "az://foo"));
+	CHECK_THROWS(fs->JoinPath("s3://foo", "/foo/bar/baz"));
 
 	auto absolute_child = fs->JoinPath("/usr/local", "/usr/local/bin");
-	REQUIRE(absolute_child == fs->ConvertSeparators("/usr/local/bin"));
+	CHECK(absolute_child == fs->ConvertSeparators("/usr/local/bin"));
 
-	REQUIRE_THROWS(fs->JoinPath("/usr/local", "/var/log"));
+	CHECK_THROWS(fs->JoinPath("/usr/local", "/var/log"));
 
 	auto scheme_like_embed = fs->JoinPath("/foo/proto://bar", "a");
-	REQUIRE(scheme_like_embed == fs->ConvertSeparators("/foo/proto:/bar/a"));
+	CHECK(scheme_like_embed == fs->ConvertSeparators("/foo/proto:/bar/a"));
 
 #ifdef _WIN32
 	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
-	REQUIRE(clamp_drive_root == fs->ConvertSeparators("C:/"));
+	CHECK(clamp_drive_root == fs->ConvertSeparators("C:/"));
 
 	auto clamp_drive_root_twice = fs->JoinPath(R"(C:\)", R"(..\..)");
-	REQUIRE(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
+	CHECK(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
 
 	auto drive_absolute_child = fs->JoinPath(R"(C:\)", "system32");
-	REQUIRE(drive_absolute_child == fs->ConvertSeparators("C:/system32"));
+	CHECK(drive_absolute_child == fs->ConvertSeparators("C:/system32"));
 
 	auto drive_relative = fs->JoinPath("C:", "system32");
-	REQUIRE(drive_relative == fs->ConvertSeparators("C:system32"));
+	CHECK(drive_relative == fs->ConvertSeparators("C:system32"));
 
 	auto drive_relative_child = fs->JoinPath("C:drive_relative_path", "path");
-	REQUIRE(drive_relative_child == fs->ConvertSeparators("C:drive_relative_path/path"));
+	CHECK(drive_relative_child == fs->ConvertSeparators("C:drive_relative_path/path"));
 
 	auto drive_relative_parent = fs->JoinPath("C:drive_relative_path", R"(..\path)");
-	REQUIRE(drive_relative_parent == "C:path");
+	CHECK(drive_relative_parent == "C:path");
 
 	auto unc_path = fs->JoinPath(R"(\\server\share)", R"(child)");
-	REQUIRE(unc_path == fs->ConvertSeparators(R"(\\server\share\child)"));
+	CHECK(unc_path == fs->ConvertSeparators(R"(\\server\share\child)"));
 
 	auto unc_long_path = fs->JoinPath(R"(\\?\UNC\server\share)", R"(nested\dir)");
-	REQUIRE(unc_long_path == fs->ConvertSeparators(R"(\\?\UNC\server\share\nested\dir)"));
+	CHECK(unc_long_path == fs->ConvertSeparators(R"(\\?\UNC\server\share\nested\dir)"));
 
 	auto long_drive_path = fs->JoinPath(R"(\\?\C:\base)", R"(folder)");
-	REQUIRE(long_drive_path == fs->ConvertSeparators(R"(\\?\C:\base\folder)"));
+	CHECK(long_drive_path == fs->ConvertSeparators(R"(\\?\C:\base\folder)"));
 
 	auto ci_prefix = fs->JoinPath(R"(C:\Data)", R"(C:\data\file)");
-	REQUIRE(ci_prefix == fs->ConvertSeparators(R"(C:\data\file)"));
+	CHECK(ci_prefix == fs->ConvertSeparators(R"(C:\data\file)"));
 
-	REQUIRE_THROWS(fs->JoinPath(R"(C:\\foo)", R"(D:\\bar)"));
+	CHECK_THROWS(fs->JoinPath(R"(C:\\foo)", R"(D:\\bar)"));
 #endif
 }
 
