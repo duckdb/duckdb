@@ -671,4 +671,28 @@ string SetSortedByInfo::ToString() const {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// SetLocationInfo
+//===--------------------------------------------------------------------===//
+SetLocationInfo::SetLocationInfo() : AlterTableInfo(AlterTableType::SET_LOCATION) {
+}
+
+SetLocationInfo::SetLocationInfo(AlterEntryData data, string location_p)
+    : AlterTableInfo(AlterTableType::SET_LOCATION, std::move(data)), location(std::move(location_p)) {
+}
+
+SetLocationInfo::~SetLocationInfo() {
+}
+
+unique_ptr<AlterInfo> SetLocationInfo::Copy() const {
+	return make_uniq<SetLocationInfo>(GetAlterEntryData(), location);
+}
+
+string SetLocationInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " SET LOCATION " + KeywordHelper::WriteQuoted(location, '\'');
+	return result;
+}
+
 } // namespace duckdb

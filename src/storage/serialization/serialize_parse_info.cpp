@@ -176,6 +176,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::SET_SORTED_BY:
 		result = SetSortedByInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::SET_LOCATION:
+		result = SetLocationInfo::Deserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterTableInfo!");
 	}
@@ -621,6 +624,17 @@ void SetSortedByInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetSortedByInfo>(new SetSortedByInfo());
 	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(400, "orders", result->orders);
+	return std::move(result);
+}
+
+void SetLocationInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WriteProperty(400, "location", location);
+}
+
+unique_ptr<AlterTableInfo> SetLocationInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetLocationInfo>(new SetLocationInfo());
+	deserializer.ReadProperty(400, "location", result->location);
 	return std::move(result);
 }
 

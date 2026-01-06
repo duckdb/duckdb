@@ -84,7 +84,8 @@ enum class AlterTableType : uint8_t {
 	SET_SORTED_BY = 13,
 	ADD_FIELD = 14,
 	REMOVE_FIELD = 15,
-	RENAME_FIELD = 16
+	RENAME_FIELD = 16,
+	SET_LOCATION = 17
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -491,6 +492,26 @@ public:
 
 private:
 	SetSortedByInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// SetLocationInfo
+//===--------------------------------------------------------------------===//
+struct SetLocationInfo : public AlterTableInfo {
+	SetLocationInfo(AlterEntryData data, string location);
+	~SetLocationInfo() override;
+
+	string location;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	SetLocationInfo();
 };
 
 } // namespace duckdb
