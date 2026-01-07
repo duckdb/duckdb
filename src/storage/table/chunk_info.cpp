@@ -91,8 +91,25 @@ idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transac
 
 idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
                                       idx_t max_count, TScanType type) const {
-	return TemplatedGetSelVector<StandardInsertOperator, StandardDeleteOperator>(transaction.start_time,
-	                                                                             transaction.transaction_id, max_count);
+	if (type.insert_type == InsertedScanType::STANDARD) {
+		if (!StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, insert_id)) {
+			return 0;
+		}
+	}
+	if (type.delete_type == DeletedScanType::STANDARD) {
+		if (!StandardDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id, delete_id)) {
+			return 0;
+		}
+	} else if (type.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
+		if (!ActualCommittedDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id, delete_id)) {
+			return 0;
+		}
+	} else if (type.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+		if (!CommittedDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id, delete_id)) {
+			return 0;
+		}
+	}
+	return max_count;
 }
 
 idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
@@ -102,8 +119,10 @@ idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, trans
 }
 
 idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) const {
-	idx_t not_deleted_count =
-	    TemplatedGetSelVector<IncludeAllInsertedOperator, ActualCommittedDeleteOperator>(0, 0, max_count);
+	TScanType type;
+	type.insert_type = InsertedScanType::ALL_ROWS;
+	type.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+	idx_t not_deleted_count = GetSelVector(TransactionData(0, 0), nullptr, max_count, type);
 	return max_count - not_deleted_count;
 }
 

@@ -23,8 +23,10 @@ enum class DeletedScanType {
 	STANDARD,
 	//! include all rows, including all deleted rows
 	INCLUDE_ALL_DELETED,
-	//! only omit permanently committed deleted rows (i.e. rows that no transaction still depends on)
-	OMIT_PERMANENTLY_COMMITTED
+	//! omit committed deleted rows
+	OMIT_COMMITTED_DELETES,
+	//! omit deleted rows that have been fully deleted - i.e. no active transaction still depends on them
+	OMIT_FULLY_COMMITTED_DELETES
 };
 
 enum class UpdateScanType {
@@ -38,13 +40,6 @@ struct TScanType {
 	InsertedScanType insert_type = InsertedScanType::STANDARD;
 	DeletedScanType delete_type = DeletedScanType::STANDARD;
 	UpdateScanType update_type = UpdateScanType::STANDARD;
-	static TScanType IndexScan() {
-		TScanType type;
-		type.insert_type = InsertedScanType::ALL_ROWS;
-		type.delete_type = DeletedScanType::OMIT_PERMANENTLY_COMMITTED;
-		type.update_type = UpdateScanType::DISALLOW_UPDATES;
-		return type;
-	}
 };
 
 enum class TableScanType : uint8_t {
