@@ -42,7 +42,7 @@ struct TScanType {
 	UpdateScanType update_type = UpdateScanType::STANDARD;
 };
 
-enum class TableScanType : uint8_t {
+enum class TableScanType {
 	//! Regular table scan: scan all tuples that are relevant for the current transaction
 	TABLE_SCAN_REGULAR = 0,
 	//! Scan all rows, including any deleted rows. Committed updates are merged in.
