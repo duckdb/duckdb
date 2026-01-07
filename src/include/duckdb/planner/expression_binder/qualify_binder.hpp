@@ -23,7 +23,6 @@ public:
 
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
-	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
 
 private:
 	ColumnAliasBinder column_alias_binder;

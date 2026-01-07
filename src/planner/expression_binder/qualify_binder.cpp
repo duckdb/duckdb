@@ -38,8 +38,4 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 	    *expr_ptr, "Referenced column %s not found in FROM clause and can't find in alias map.", expr_string));
 }
 
-bool QualifyBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
-	return column_alias_binder.QualifyColumnAlias(colref);
-}
-
 } // namespace duckdb
