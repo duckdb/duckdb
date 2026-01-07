@@ -16,33 +16,34 @@ struct StandardInsertOperator {
 	}
 };
 
-struct StandardDeleteOperator {
-	static bool UseDeletedVersion(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
-		return !StandardInsertOperator::UseInsertedVersion(start_time, transaction_id, id);
-	}
-};
-
 struct IncludeAllInsertedOperator {
 	static bool UseInsertedVersion(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
 		return true;
 	}
 };
 
+struct StandardDeleteOperator {
+	static bool IsDeleted(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
+		return StandardInsertOperator::UseInsertedVersion(start_time, transaction_id, id);
+	}
+};
+
 struct CommittedDeleteOperator {
-	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
-		return (id >= min_start_time && id < TRANSACTION_ID_START) || id == NOT_DELETED_ID;
+	static bool IsDeleted(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
+		// check if this row was deleted before the given start time
+		return id < min_start_time;
 	}
 };
 
 struct ActualCommittedDeleteOperator {
-	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
-		return id >= TRANSACTION_ID_START;
+	static bool IsDeleted(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
+		return id < TRANSACTION_ID_START;
 	}
 };
 
 struct IncludeAllDeletedOperator {
-	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
-		return true;
+	static bool IsDeleted(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
+		return false;
 	}
 };
 
@@ -97,7 +98,7 @@ template <class INSERT_OP, class DELETE_OP>
 idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
                                                idx_t max_count) const {
 	if (INSERT_OP::UseInsertedVersion(start_time, transaction_id, insert_id) &&
-	    DELETE_OP::UseDeletedVersion(start_time, transaction_id, delete_id)) {
+	    !DELETE_OP::IsDeleted(start_time, transaction_id, delete_id)) {
 		return max_count;
 	}
 	return 0;
@@ -113,17 +114,15 @@ idx_t ChunkConstantInfo::GetSelVector(ScanOptions options, optional_ptr<Selectio
 		}
 	}
 	if (options.delete_type == DeletedScanType::STANDARD) {
-		if (!StandardDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id, delete_id)) {
+		if (StandardDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
 			return 0;
 		}
 	} else if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
-		if (!ActualCommittedDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id,
-		                                                      delete_id)) {
+		if (ActualCommittedDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
 			return 0;
 		}
 	} else if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
-		if (!CommittedDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id,
-		                                                delete_id)) {
+		if (CommittedDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
 			return 0;
 		}
 	}
@@ -221,7 +220,7 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 		auto segment = allocator.GetHandle(GetDeletedPointer());
 		auto deleted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < max_count; i++) {
-			if (!DELETE_OP::UseDeletedVersion(start_time, transaction_id, deleted[i])) {
+			if (DELETE_OP::IsDeleted(start_time, transaction_id, deleted[i])) {
 				continue;
 			}
 			if (sel_vector) {
@@ -260,7 +259,7 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 		if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
 			continue;
 		}
-		if (!DELETE_OP::UseDeletedVersion(start_time, transaction_id, deleted[i])) {
+		if (DELETE_OP::IsDeleted(start_time, transaction_id, deleted[i])) {
 			continue;
 		}
 		if (sel_vector) {
