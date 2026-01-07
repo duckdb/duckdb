@@ -1404,14 +1404,13 @@ OidsOption <- 'OIDS'
 CsvOption <- 'CSV'
 HeaderOption <- 'HEADER'
 EncodingOption <- 'ENCODING' StringLiteral
+ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
 QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
-ForceQuoteOption <- 'FORCE'? 'QUOTE' StarOrColumnList
-PartitionByOption <- 'PARTITION' 'BY' StarOrColumnList
+PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
 ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
+StarSymbol <- '*'
 
 SpecializedStringOption <- ('DELIMITER' / 'NULL' / 'QUOTE' / 'ESCAPE') 'AS'? StringLiteral
-
-StarOrColumnList <- '*' / ColumnList
 
 GenericCopyOptionList <- Parens(List(GenericCopyOption))
 GenericCopyOption <- CopyOptionName Expression?

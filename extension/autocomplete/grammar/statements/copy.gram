@@ -22,6 +22,7 @@ ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
 QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
 PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
 ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
+StarSymbol <- '*'
 
 SpecializedStringOption <- ('DELIMITER' / 'NULL' / 'QUOTE' / 'ESCAPE') 'AS'? StringLiteral
 

@@ -183,6 +183,9 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformEncodingOption);
 	REGISTER_TRANSFORM(TransformForceQuoteOption);
 	REGISTER_TRANSFORM(TransformQuoteAsOption);
+	REGISTER_TRANSFORM(TransformForceNullOption);
+	REGISTER_TRANSFORM(TransformPartitionByOption);
+
 }
 
 void PEGTransformerFactory::RegisterCreateIndex() {
@@ -860,7 +863,7 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<GenericCopyOption>("FreezeOption", GenericCopyOption("freeze", Value()));
 	RegisterEnum<GenericCopyOption>("OidsOption", GenericCopyOption("oids", Value()));
 	RegisterEnum<GenericCopyOption>("CsvOption", GenericCopyOption("format", Value("csv")));
-	RegisterEnum<GenericCopyOption>("HeaderOption", GenericCopyOption("header", Value()));
+	RegisterEnum<GenericCopyOption>("HeaderOption", GenericCopyOption("header", Value(true)));
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

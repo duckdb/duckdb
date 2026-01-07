@@ -106,7 +106,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 			}
 			option_names.insert(option.name);
 			auto option_upper = StringUtil::Upper(option.name);
-			if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE") {
+			if (option_upper == "PARTITION_BY" ||
+				option_upper == "FORCE_QUOTE" ||
+				option_upper == "FORCE_NOT_NULL" ||
+				option_upper == "FORCE_NULL") {
 				if (option.expression) {
 					info->parsed_options[option_upper] = std::move(option.expression);
 				} else {
@@ -180,8 +183,7 @@ vector<GenericCopyOption> PEGTransformerFactory::TransformCopyOptions(PEGTransfo
                                                                       optional_ptr<ParseResult> parse_result) {
 	// CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptions
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto &choice_list = list_pr.Child<ListParseResult>(1);
-	return transformer.Transform<vector<GenericCopyOption>>(choice_list.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ChoiceParseResult>(1).result);
 }
 
 vector<GenericCopyOption>
@@ -199,6 +201,7 @@ PEGTransformerFactory::TransformSpecializedOptionList(PEGTransformer &transforme
 	}
 	return result;
 }
+
 GenericCopyOption PEGTransformerFactory::TransformSpecializedOption(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -230,7 +233,10 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 	if (StringUtil::CIEquals(star_or_column_list->name, "StarSymbol")) {
 		result.expression = make_uniq<StarExpression>();
 	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
-		result.column_list = transformer.Transform<vector<string>>(star_or_column_list);
+		auto column_list = transformer.Transform<vector<string>>(star_or_column_list);
+		for (auto col : column_list) {
+			result.children.push_back(Value(col));
+		}
 	}
 
 	return result;
@@ -243,5 +249,35 @@ GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &
 	return GenericCopyOption("quote", string_literal);
 }
 
+GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool is_not = list_pr.Child<OptionalParseResult>(1).HasResult();
+	auto result = GenericCopyOption();
+	result.name = is_not ? "force_not_null" : "force_null";
+	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
+	for (auto col : column_list) {
+		result.children.push_back(Value(col));
+	}
+	return result;
+}
+
+GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = GenericCopyOption();
+	auto star_or_column_list_pr = list_pr.Child<ListParseResult>(2);
+	auto star_or_column_list = star_or_column_list_pr.Child<ChoiceParseResult>(0).result;
+	result.name = "partition_by";
+	if (StringUtil::CIEquals(star_or_column_list->name, "StarSymbol")) {
+		result.expression = make_uniq<StarExpression>();
+	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
+		auto column_list = transformer.Transform<vector<string>>(star_or_column_list);
+		for (auto col : column_list) {
+			result.children.push_back(Value(col));
+		}
+	}
+	return result;
+}
 
 } // namespace duckdb

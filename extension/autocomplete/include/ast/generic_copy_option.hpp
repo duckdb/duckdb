@@ -11,7 +11,6 @@ struct GenericCopyOption {
 	string name;
 	vector<Value> children; // Default value
 	unique_ptr<ParsedExpression> expression = nullptr;
-	vector<string> column_list;
 
 	GenericCopyOption() {
 
