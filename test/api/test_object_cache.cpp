@@ -111,33 +111,35 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+	REQUIRE(cache.IsEmpty());
 
 	// Put and check accountable memory for buffer pool.
 	constexpr idx_t obj_size = 1024 * 1024;
 	constexpr idx_t obj_count = 10;
-	for (idx_t i = 0; i < obj_count; i++) {
-		cache.Put(StringUtil::Format("evictable%llu", i), make_shared_ptr<EvictableTestObject>(i, obj_size));
+	for (idx_t idx = 0; idx < obj_count; ++idx) {
+		cache.Put(StringUtil::Format("evictable%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
 	REQUIRE(cache.GetEntryCount() == 10);
 	const idx_t after_put_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_put_memory == initial_memory + obj_size * obj_count);
 
-	// Evict until requested memory.
-	idx_t target_memory = 5 * 1024 * 1024;
-	idx_t freed = cache.EvictToReduceMemory(target_memory);
-	REQUIRE(cache.GetCurrentMemory() == target_memory);
+	// Evict 5 objects, leaving 5 objects in cache
+	const idx_t bytes_to_free = 5 * obj_size;
+	idx_t freed = cache.EvictToReduceMemory(bytes_to_free);
+	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
+	REQUIRE(cache.GetCurrentMemory() == 5 * obj_size);
 	REQUIRE(cache.GetEntryCount() == 5);
-	REQUIRE(freed == obj_size * obj_count - target_memory);
 
 	// First five items should be evicted.
-	for (idx_t i = 0; i < 5; i++) {
-		auto value = cache.GetObject(StringUtil::Format("evictable%llu", i));
+	for (idx_t idx = 0; idx < 5; ++idx) {
+		auto value = cache.GetObject(StringUtil::Format("evictable%llu", idx));
 		REQUIRE(value == nullptr);
 	}
 
 	// Later five items should be kept.
-	for (idx_t i = 5; i < 10; i++) {
-		auto value = cache.GetObject(StringUtil::Format("evictable%llu", i));
+	for (idx_t idx = 5; idx < 10; ++idx) {
+		auto value = cache.GetObject(StringUtil::Format("evictable%llu", idx));
 		REQUIRE(value != nullptr);
 	}
+	REQUIRE(!cache.IsEmpty());
 }

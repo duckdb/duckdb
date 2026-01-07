@@ -144,6 +144,10 @@ public:
 		const lock_guard<mutex> lock(lock_mutex);
 		return lru_cache.Size() + non_evictable_entries.size();
 	}
+	bool IsEmpty() const {
+		const lock_guard<mutex> lock(lock_mutex);
+		return lru_cache.IsEmpty() && non_evictable_entries.empty();
+	}
 
 	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		const lock_guard<mutex> lock(lock_mutex);

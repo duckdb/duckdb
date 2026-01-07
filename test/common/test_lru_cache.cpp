@@ -188,27 +188,28 @@ TEST_CASE("LRU Cache Evict To Reduce Memory", "[lru_cache]") {
 
 	// Put a few entries, and check memory consumption.
 	constexpr idx_t obj_size = 1000;
-	for (int i = 0; i < 10; i++) {
-		auto val = make_shared_ptr<TestValue>(i, obj_size);
+	for (int idx = 0; idx < 10; ++idx) {
+		auto val = make_shared_ptr<TestValue>(idx, obj_size);
 		auto reservation = make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, obj_size);
-		cache.Put(StringUtil::Format("key%d", i), val, std::move(reservation));
+		cache.Put(StringUtil::Format("key%d", idx), val, std::move(reservation));
 	}
 	REQUIRE(cache.Size() == 10);
 	REQUIRE(cache.CurrentMemory() == 10 * obj_size);
 
 	// Perform cache entries eviction, and check memory consumption.
-	idx_t target_memory = 6 * obj_size;
-	const idx_t freed = cache.EvictToReduceMemory(target_memory);
-	REQUIRE(cache.CurrentMemory() == target_memory);
-	REQUIRE(freed == 4 * obj_size);
+	// Evict 4 * objects, leaving 6 objects in cache
+	const idx_t bytes_to_free = 4 * obj_size;
+	const idx_t freed = cache.EvictToReduceMemory(bytes_to_free);
+	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
+	REQUIRE(cache.CurrentMemory() == 6 * obj_size);
 	REQUIRE(cache.Size() == 6);
 
 	// The first 4 items should be evicted.
-	for (int i = 0; i < 4; i++) {
-		REQUIRE(cache.Get(StringUtil::Format("key%d", i)) == nullptr);
+	for (int idx = 0; idx < 4; ++idx) {
+		REQUIRE(cache.Get(StringUtil::Format("key%d", idx)) == nullptr);
 	}
 	// The later 6 items should be kept in cache.
-	for (int i = 6; i < 10; i++) {
-		REQUIRE(cache.Get(StringUtil::Format("key%d", i)) != nullptr);
+	for (int idx = 6; idx < 10; ++idx) {
+		REQUIRE(cache.Get(StringUtil::Format("key%d", idx)) != nullptr);
 	}
 }

@@ -315,64 +315,52 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 	return *temporary_memory_manager;
 }
 
-BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
-                                                   unique_ptr<FileBuffer> *buffer) {
-	for (auto &queue : queues) {
-		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, buffer);
-		if (block_result.success || RefersToSameObject(*queue, *queues.back())) {
-			if (block_result.success) {
-				return block_result; // Return upon success or upon last queue
-			}
+BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit) {
+	TempBufferPoolReservation r(tag, *this, extra_memory);
+
+	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
+		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+			block_allocator.FlushAll(extra_memory);
+		}
+		return {true, std::move(r)};
+	}
+
+	bool success = false;
+	while (!object_cache->IsEmpty()) {
+		object_cache->EvictToReduceMemory(extra_memory);
+		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
+			success = true;
 			break;
 		}
 	}
-
-	// Evict from per-database object cache after file buffers.
-	// Object cache is used to store metadata and configs, which are usually smaller than file buffers.
-	const idx_t mem_before_cache = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
-	// Check if memory + extra_memory would exceed limit (accounting for the reservation we're about to create)
-	if (object_cache && mem_before_cache + extra_memory > memory_limit) {
-		// Calculate target object cache memory to ensure: total_memory + extra_memory <= memory_limit
-		// After eviction: new_object_cache_memory + other_memory + extra_memory <= memory_limit
-		// Where other_memory = current_total_memory - current_object_cache_memory
-		// After allocation, other_memory will include extra_memory, so:
-		// new_object_cache_memory <= memory_limit - (other_memory + extra_memory)
-		// However, memory_limit may include headroom for the reservation mechanism itself.
-		// To be conservative and avoid over-evicting, we target the minimum needed:
-		// We want: new_object_cache_memory + (other_memory + extra_memory) <= memory_limit
-		// So: new_object_cache_memory <= memory_limit - (other_memory + extra_memory)
-		const idx_t current_total_memory = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
-		const idx_t current_object_cache_memory = object_cache->GetCurrentMemory();
-		const idx_t other_memory = current_total_memory - current_object_cache_memory;
-		// After allocation, other_memory will be other_memory + extra_memory
-		// Target is: memory_limit - (other_memory + extra_memory)
-		// But if memory_limit includes headroom (e.g., for reservation), we should account for it.
-		// The headroom is typically equal to extra_memory (one allocation size), so we subtract it:
-		const idx_t effective_limit = memory_limit > extra_memory ? memory_limit - extra_memory : memory_limit;
-		const idx_t target_object_cache_memory =
-		    effective_limit > (other_memory + extra_memory) ? effective_limit - (other_memory + extra_memory) : 0;
-
-		object_cache->EvictToReduceMemory(target_object_cache_memory);
-	}
-
-	TempBufferPoolReservation r(tag, *this, extra_memory);
-	const idx_t mem_after_reservation = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
-	bool success = mem_after_reservation <= memory_limit;
 	if (!success) {
 		r.Resize(0);
 	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
 		block_allocator.FlushAll(extra_memory);
 	}
+
 	return {success, std::move(r)};
+}
+
+BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
+                                                   unique_ptr<FileBuffer> *buffer) {
+	for (auto &queue : queues) {
+		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, buffer);
+		if (block_result.success) {
+			return block_result;
+		}
+	}
+
+	// Evict object cache, which is usually used to cache metadata and configs, when flushing buffer blocks alone is not enough to limit overall memory consumption.
+	return EvictObjectCacheEntries(tag, extra_memory, memory_limit);
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
                                                            idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
 	TempBufferPoolReservation r(tag, *this, extra_memory);
-	const idx_t mem_after_reservation = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
 	bool found = false;
 
-	if (mem_after_reservation <= memory_limit) {
+	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
 			block_allocator.FlushAll(extra_memory);
 		}

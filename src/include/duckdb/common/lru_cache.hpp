@@ -47,6 +47,7 @@ public:
 			throw InvalidInputException("Reservation cannot be null when emplace into LRU!");
 		}
 
+		// Remove existing entry if present
 		const idx_t memory_size = reservation->size;
 		auto existing_it = entry_map.find(key);
 		if (existing_it != entry_map.end()) {
@@ -103,11 +104,11 @@ public:
 		current_memory = 0;
 	}
 
-	// Evict entries based on their access, until current overall memory consumption is less than or equal to the
-	// provided target memory. Return number of bytes freed.
-	idx_t EvictToReduceMemory(idx_t target_memory) {
+	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries in the cache.
+	// Return number of bytes freed.
+	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		idx_t freed = 0;
-		while (!lru_list.empty() && current_memory > target_memory) {
+		while (!lru_list.empty() && freed < target_bytes) {
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			D_ASSERT(stale_it != entry_map.end());
@@ -125,6 +126,9 @@ public:
 	}
 	size_t Size() const {
 		return entry_map.size();
+	}
+	bool IsEmpty() const {
+		return entry_map.empty();
 	}
 
 private:
