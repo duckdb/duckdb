@@ -616,22 +616,22 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-			count = current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count);
-			if (count == 0) {
-				// nothing to scan for this vector, skip the entire vector
-				NextVector(state);
-				continue;
-			}
+			TScanType scan_type;
+			count =
+			    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
-			count = current_row_group.GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
-			                                                state.vector_index, state.valid_sel, max_count);
-			if (count == 0) {
-				// nothing to scan for this vector, skip the entire vector
-				NextVector(state);
-				continue;
-			}
+			TScanType scan_type;
+			scan_type.insert_type = InsertedScanType::ALL_ROWS;
+			scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
+			count =
+			    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
 		} else {
 			count = max_count;
+		}
+		if (count == 0) {
+			// nothing to scan for this vector, skip the entire vector
+			NextVector(state);
+			continue;
 		}
 		auto &block_manager = GetBlockManager();
 		if (block_manager.Prefetch()) {
@@ -858,21 +858,12 @@ bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
-                             idx_t max_count) {
+                             idx_t max_count, TScanType type) {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
 	}
-	return vinfo->GetSelVector(transaction, vector_idx, sel_vector, max_count);
-}
-
-idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-                                      SelectionVector &sel_vector, idx_t max_count) {
-	auto vinfo = GetVersionInfo();
-	if (!vinfo) {
-		return max_count;
-	}
-	return vinfo->GetCommittedSelVector(start_time, transaction_id, vector_idx, sel_vector, max_count);
+	return vinfo->GetSelVector(transaction, vector_idx, sel_vector, max_count, type);
 }
 
 bool RowGroup::Fetch(TransactionData transaction, idx_t row) {

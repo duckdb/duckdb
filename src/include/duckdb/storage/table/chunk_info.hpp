@@ -43,8 +43,6 @@ public:
 	//! with the tuples
 	virtual idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
 	                           TScanType type = TScanType()) const = 0;
-	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                            SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;

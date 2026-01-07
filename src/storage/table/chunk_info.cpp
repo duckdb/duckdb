@@ -72,14 +72,6 @@ unique_ptr<ChunkInfo> ChunkInfo::Read(FixedSizeAllocator &allocator, ReadStream 
 	}
 }
 
-idx_t ChunkInfo::GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-                                       SelectionVector &sel_vector, idx_t max_count) {
-	TScanType type;
-	type.insert_type = InsertedScanType::ALL_ROWS;
-	type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
-	return GetSelVector(TransactionData(min_transaction_id, min_start_id), sel_vector, max_count, type);
-}
-
 idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	TScanType type;
 	type.insert_type = InsertedScanType::ALL_ROWS;

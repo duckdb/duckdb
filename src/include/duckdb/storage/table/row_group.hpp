@@ -145,9 +145,8 @@ public:
 
 	//! Whether or not this RowGroup should be
 	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
-	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
-	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-	                            SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count,
+	                   TScanType type);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(TransactionData transaction, idx_t row);
