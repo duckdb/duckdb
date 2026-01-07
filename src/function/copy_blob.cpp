@@ -66,7 +66,8 @@ unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context,
 	auto &bdata = bind_data.Cast<WriteBlobBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | bdata.compression_type;
+	auto flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW | bdata.compression_type |
+	             FileLockType::WRITE_LOCK;
 	auto handle = fs.OpenFile(file_path, flags);
 
 	auto result = make_uniq<WriteBlobGlobalState>();
