@@ -738,21 +738,16 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 		start_ts = transaction_manager.LowestActiveStart();
 		transaction_id = transaction_manager.LowestActiveId();
 	}
-	TScanType scan_type;
 	TransactionData transaction(transaction_id, start_ts);
+
+	TScanType scan_type;
+	scan_type.insert_type = InsertedScanType::ALL_ROWS;
 	switch (type) {
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
-		scan_type.insert_type = InsertedScanType::ALL_ROWS;
 		scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
-		break;
-	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES:
-		scan_type.insert_type = InsertedScanType::ALL_ROWS;
-		scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
-		scan_type.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
-		scan_type.insert_type = InsertedScanType::ALL_ROWS;
 		scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
 		scan_type.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;
