@@ -614,20 +614,18 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 		auto &current_row_group = state.row_group->GetNode();
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count;
+		TScanType scan_type;
 		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-			TScanType scan_type;
-			count =
-			    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
+			// standard scan type
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
-			TScanType scan_type;
 			scan_type.insert_type = InsertedScanType::ALL_ROWS;
 			scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
-			count =
-			    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
 		} else {
-			count = max_count;
+			scan_type.insert_type = InsertedScanType::ALL_ROWS;
+			scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 		}
+		idx_t count =
+		    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -849,6 +847,9 @@ bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                              idx_t max_count, TScanType type) {
+	if (type.insert_type == InsertedScanType::ALL_ROWS && type.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
+		return max_count;
+	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
