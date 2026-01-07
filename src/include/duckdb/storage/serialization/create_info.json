@@ -163,7 +163,7 @@
       },
       {
         "id": 205,
-        "name": "order_keys",
+        "name": "sort_keys",
         "type": "vector<ParsedExpression*>"
       },
       {
