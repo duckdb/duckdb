@@ -43,13 +43,13 @@ public:
 	//! with the tuples
 	virtual idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
 	                           TScanType type = TScanType()) const = 0;
-	virtual idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                                    SelectionVector &sel_vector, idx_t max_count) = 0;
-	virtual idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count) = 0;
+	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
+	                            SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
-	virtual idx_t GetCommittedDeletedCount(idx_t max_count) const = 0;
+	idx_t GetCommittedDeletedCount(idx_t max_count) const;
 	virtual bool Cleanup(transaction_t lowest_transaction) const;
 	virtual string ToString(idx_t max_count) const = 0;
 
@@ -89,12 +89,8 @@ public:
 public:
 	idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
 	                   TScanType type = TScanType()) const override;
-	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                            SelectionVector &sel_vector, idx_t max_count) override;
-	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
-	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
 	bool Cleanup(transaction_t lowest_transaction) const override;
 	string ToString(idx_t max_count) const override;
 
@@ -119,13 +115,9 @@ public:
 public:
 	idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
 	                   TScanType type = TScanType()) const override;
-	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                            SelectionVector &sel_vector, idx_t max_count) override;
-	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	bool Cleanup(transaction_t lowest_transaction) const override;
-	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
 	string ToString(idx_t max_count) const override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
