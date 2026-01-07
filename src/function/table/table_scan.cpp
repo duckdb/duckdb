@@ -300,8 +300,7 @@ public:
 
 		do {
 			if (bind_data.is_create_index) {
-				storage.CreateIndexScan(l_state.scan_state, output,
-				                        TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED);
+				storage.CreateIndexScan(l_state.scan_state, output);
 			} else if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
 				storage.Scan(tx, l_state.all_columns, l_state.scan_state);

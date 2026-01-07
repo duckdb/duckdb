@@ -258,8 +258,7 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
-	bool ScanCommitted(DataChunk &result, TableScanType type);
-	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
+	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
 
 private:
 	TableScanState &parent;
