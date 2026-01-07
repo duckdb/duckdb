@@ -746,7 +746,7 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 		break;
 	case TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED:
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
-		options.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
+		options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 		options.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;
 	default:

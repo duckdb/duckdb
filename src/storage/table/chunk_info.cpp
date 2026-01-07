@@ -70,7 +70,7 @@ unique_ptr<ChunkInfo> ChunkInfo::Read(FixedSizeAllocator &allocator, ReadStream 
 idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
 	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
 	options.insert_type = InsertedScanType::ALL_ROWS;
-	options.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
+	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
 	idx_t not_deleted_count = GetSelVector(options, nullptr, max_count);
 	return max_count - not_deleted_count;
 }
@@ -111,7 +111,7 @@ idx_t ChunkConstantInfo::GetSelVector(ScanOptions options, optional_ptr<Selectio
 		if (StandardDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
 			return 0;
 		}
-	} else if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+	} else if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 		if (CommittedDeleteOperator::IsDeleted(transaction.start_time, transaction.transaction_id, delete_id)) {
 			return 0;
 		}
@@ -272,7 +272,7 @@ idx_t ChunkVectorInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionV
 			return TemplatedGetSelVector<StandardInsertOperator, IncludeAllDeletedOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+		if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<StandardInsertOperator, CommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
@@ -282,7 +282,7 @@ idx_t ChunkVectorInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionV
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, StandardDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+		if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, CommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}

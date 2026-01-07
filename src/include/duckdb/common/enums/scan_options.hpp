@@ -18,13 +18,14 @@ enum class InsertedScanType {
 	// scan all rows including transaction local rows
 	ALL_ROWS
 };
+
 enum class DeletedScanType {
 	//! omit any rows that are deleted
 	STANDARD,
 	//! include all rows, including all deleted rows
 	INCLUDE_ALL_DELETED,
-	//! omit deleted rows that have been fully deleted - i.e. no active transaction still depends on them
-	OMIT_FULLY_COMMITTED_DELETES
+	//! omit only deleted rows that have been committed and have a commit ts lower than the transaction start
+	OMIT_COMMITTED_DELETES
 };
 
 enum class UpdateScanType {
