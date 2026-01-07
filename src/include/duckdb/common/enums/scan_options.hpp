@@ -23,8 +23,6 @@ enum class DeletedScanType {
 	STANDARD,
 	//! include all rows, including all deleted rows
 	INCLUDE_ALL_DELETED,
-	//! omit committed deleted rows
-	OMIT_COMMITTED_DELETES,
 	//! omit deleted rows that have been fully deleted - i.e. no active transaction still depends on them
 	OMIT_FULLY_COMMITTED_DELETES
 };
