@@ -26,7 +26,6 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowSelect(PEGTransformer 
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<ShowRef>();
 	// Legacy reasons, see bind_showref.cpp
 	result->table_name = "__show_tables_expanded";

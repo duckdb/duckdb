@@ -133,6 +133,16 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 				} else {
 					info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
 				}
+			} else if (option_upper == "NULLSTR") {
+				if (option.children.empty()) {
+					info->parsed_options[option_upper] = std::move(option.expression);
+				} else {
+					if (option.children[0].IsNull()) {
+						info->parsed_options[option_upper] = make_uniq<ConstantExpression>(Value());
+					} else {
+						throw InvalidInputException("Unexpected argument %s for nullstr", option.children[0].ToString());
+					}
+				}
 			} else {
 				info->options[option_upper] = option.children;
 			}
