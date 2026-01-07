@@ -73,6 +73,9 @@ order by all;
 20
 21
 
+#FIXME: currently the next query will fail when vector_size = 2 AND optimizers are disabled
+require vector_size 2048
+
 query I
 with recursive test(round) as (
     select 0

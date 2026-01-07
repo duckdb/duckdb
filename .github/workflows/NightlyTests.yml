@@ -62,6 +62,8 @@ jobs:
          key: ${{ github.job }}
          save: ${{ env.CCACHE_SAVE }}
 
+     - uses: ./.github/actions/cleanup_runner
+
      - name: Build
        shell: bash
        run: make
@@ -88,8 +90,6 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
@@ -99,6 +99,8 @@ jobs:
       with:
         key: ${{ github.job }}
         save: ${{ env.CCACHE_SAVE }}
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -125,8 +127,6 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
@@ -139,6 +139,8 @@ jobs:
       with:
         key: ${{ github.job }}
         save: ${{ env.CCACHE_SAVE }}
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -171,6 +173,8 @@ jobs:
       with:
         key: ${{ github.job }}
         save: ${{ env.CCACHE_SAVE }}
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -214,6 +218,8 @@ jobs:
         key: ${{ github.job }}
         save: ${{ env.CCACHE_SAVE }}
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -238,6 +244,8 @@ jobs:
        with:
          key: ${{ github.job }}
          save: ${{ env.CCACHE_SAVE }}
+
+     - uses: ./.github/actions/cleanup_runner
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -272,6 +280,8 @@ jobs:
          key: ${{ github.job }}
          save: ${{ env.CCACHE_SAVE }}
 
+     - uses: ./.github/actions/cleanup_runner
+
      - name: Build
        shell: bash
        run: make debug
@@ -294,7 +304,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/cleanup_runner
+      - name: Checkout duckdb-httpfs
+        uses: actions/checkout@v4
+        with:
+          repository: duckdb/duckdb-httpfs
+          submodules: 'true'
+          path: duckdb-httpfs
 
       - name: Install
         shell: bash
@@ -314,20 +329,24 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
+      - uses: ./.github/actions/cleanup_runner
+
       - name: Build
         shell: bash
         run: CORE_EXTENSIONS="tpch" make
 
       - name: Start Minio
+        working-directory: ${{ github.workspace }}/duckdb-httpfs
         shell: bash
         run: |
+          export PATH="${{ github.workspace }}/build/release:$PATH"
           sudo ./scripts/install_s3_test_server.sh
           ./scripts/generate_presigned_url.sh
           source ./scripts/run_s3_test_server.sh
           source ./scripts/set_s3_test_server_variables.sh
           sleep 60
 
-      - name: Build
+      - name: Run Extension Medata Tests
         shell: bash
         run: |
           ./scripts/run_extension_medata_tests.sh
@@ -370,6 +389,8 @@ jobs:
        with:
          key: ${{ github.job }}
          save: ${{ env.CCACHE_SAVE }}
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Build
        shell: bash
@@ -426,8 +447,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/cleanup_runner
-
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -437,6 +456,8 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Build
         id: build
@@ -477,6 +498,8 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
+      - uses: ./.github/actions/cleanup_runner
+
       - name: Build
         id: build
         shell: bash
@@ -505,8 +528,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/cleanup_runner
-
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -516,6 +537,8 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Build
         shell: bash
@@ -567,6 +590,8 @@ jobs:
         key: ${{ github.job }}
         save: ${{ env.CCACHE_SAVE }}
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Print version
       shell: bash
       run: |
@@ -617,8 +642,6 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/cleanup_runner
-
      - name: Install
        shell: bash
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -628,6 +651,8 @@ jobs:
        with:
          key: ${{ github.job }}
          save: ${{ env.CCACHE_SAVE }}
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Build
        shell: bash

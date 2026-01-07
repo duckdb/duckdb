@@ -3,9 +3,7 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
@@ -202,15 +200,15 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                                  idx_t result_idx) {
+void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
+                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
 		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
-	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	ColumnData::FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 }
 
 void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {

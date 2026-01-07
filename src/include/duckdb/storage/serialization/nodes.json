@@ -1089,6 +1089,18 @@
         "id": 2,
         "name": "child_indexes",
         "type": "vector<ColumnIndex>"
+      },
+      {
+        "id": 3,
+        "name": "index_type",
+        "type": "ColumnIndexType",
+        "default": "ColumnIndexType::FULL_READ"
+      },
+      {
+        "id": 4,
+        "name": "type",
+        "type": "LogicalType",
+        "default": "LogicalType::INVALID"
       }
     ],
     "pointer_type": "none"

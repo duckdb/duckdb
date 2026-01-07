@@ -9,11 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -80,6 +78,21 @@ struct IndexScanState {
 
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
+struct PushedDownExpressionState {
+public:
+	explicit PushedDownExpressionState(ClientContext &context) : executor(context) {
+	}
+
+public:
+	//! The executor to execute the expression
+	ExpressionExecutor executor;
+	//! The pushed down expression to execute
+	unique_ptr<Expression> expression;
+	//! The target chunk to store the result of the execution
+	DataChunk target;
+	DataChunk input;
+};
+
 struct ColumnScanState {
 	explicit ColumnScanState(optional_ptr<CollectionScanState> parent_p) : parent(parent_p) {
 	}
@@ -95,6 +108,8 @@ struct ColumnScanState {
 	idx_t offset_in_column = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
 	idx_t internal_index = 0;
+	//! Storage index of the current column that's being scanned
+	StorageIndex storage_index;
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
@@ -112,9 +127,11 @@ struct ColumnScanState {
 	vector<bool> scan_child_column;
 	//! Contains TableScan level config for scanning
 	optional_ptr<TableScanOptions> scan_options;
+	//! (optionally) the expression state for any pushed down expression(s)
+	unique_ptr<PushedDownExpressionState> expression_state;
 
 public:
-	void Initialize(const QueryContext &context_p, const LogicalType &type, const vector<StorageIndex> &children,
+	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
 	                optional_ptr<TableScanOptions> options);
 	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
@@ -125,7 +142,15 @@ public:
 	idx_t GetPositionInSegment() const;
 };
 
+enum class FetchType {
+	//! Verify if each row is valid for the transaction prior to fetching
+	TRANSACTIONAL_FETCH,
+	// Force fetch the row, regardless of it if is valid for the transaction or not
+	FORCE_FETCH
+};
+
 struct ColumnFetchState {
+	FetchType fetch_type = FetchType::TRANSACTIONAL_FETCH;
 	//! The query context for this fetch
 	QueryContext context;
 	//! The set of pinned block handles for this set of fetches
@@ -142,7 +167,7 @@ struct ScanFilter {
 	ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
 
 	idx_t scan_column_index;
-	idx_t table_column_index;
+	StorageIndex table_column_index;
 	TableFilter &filter;
 	bool always_true;
 	unique_ptr<TableFilterState> filter_state;

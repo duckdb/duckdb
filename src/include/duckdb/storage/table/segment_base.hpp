@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {

@@ -2447,7 +2447,7 @@ int ShellState::DoMetaCommand(const string &zLine) {
 				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
 				       command.command);
 				result = MetadataResult::FAIL;
-			} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
+			} else if (command.argument_count == 0 || command.argument_count == args.size()) {
 				result = command.callback(*this, args);
 			}
 			if (result == MetadataResult::PRINT_USAGE) {

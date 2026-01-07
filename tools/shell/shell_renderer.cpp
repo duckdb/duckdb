@@ -671,7 +671,7 @@ private:
 	*/
 	void PrintBoxRowSeparator(PrintStream &out, idx_t nArg, const char *zSep1, const char *zSep2, const char *zSep3,
 	                          const vector<idx_t> &actualWidth) {
-		int i;
+		idx_t i;
 		if (nArg > 0) {
 			out.Print(zSep1);
 			PrintBoxLine(out, actualWidth[0] + 2);

@@ -5,6 +5,8 @@
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include <iostream>
+#include <cstdio>
+#include <fstream>
 
 namespace duckdb {
 
@@ -627,22 +629,28 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 
 	AdbcStatusCode status = ADBC_STATUS_OK;
 	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
 
 	// ==== UNHAPPY PATH ====
 
-	static uint32_t test_info_codes[] = {100, 4, 3};
+	static uint32_t test_info_codes[] = {ADBC_INFO_DRIVER_NAME, ADBC_INFO_DRIVER_ARROW_VERSION,
+	                                     ADBC_INFO_DRIVER_VERSION};
 	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
 
 	// No error
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
 	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(out_stream.release == nullptr);
 
 	// Invalid connection
 	AdbcConnection bogus_connection;
 	bogus_connection.private_data = nullptr;
 	bogus_connection.private_driver = nullptr;
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
 	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(out_stream.release == nullptr);
 
 	// No stream
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
@@ -651,11 +659,50 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	// ==== HAPPY PATH ====
 
 	// This returns all known info codes
+	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
 	REQUIRE((status == ADBC_STATUS_OK));
 	REQUIRE((out_stream.release != nullptr));
+	{
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 
-	out_stream.release(&out_stream);
+		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
+		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto res = rel->Project("info_name")->Execute();
+		REQUIRE(!res->HasError());
+		auto &mat = res->Cast<MaterializedQueryResult>();
+
+		bool found_adbc_version = false;
+		for (idx_t row = 0; row < mat.RowCount(); row++) {
+			found_adbc_version |= (mat.GetValue(0, row).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		}
+		REQUIRE(found_adbc_version);
+	}
+	out_stream.release = nullptr;
+
+	{
+		// Validate ADBC_INFO_DRIVER_ADBC_VERSION is returned as int64
+		static uint32_t version_code[] = {ADBC_INFO_DRIVER_ADBC_VERSION};
+		ArrowArrayStream version_stream;
+		version_stream.release = nullptr;
+		status = AdbcConnectionGetInfo(&adbc_connection, version_code, 1, &version_stream, &adbc_error);
+		REQUIRE((status == ADBC_STATUS_OK));
+		REQUIRE((version_stream.release != nullptr));
+
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+
+		auto params = ArrowTestHelper::ConstructArrowScan(version_stream);
+		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto res = rel->Project("info_name, info_value.int64_value AS adbc_version")->Execute();
+		REQUIRE(!res->HasError());
+		auto &mat = res->Cast<MaterializedQueryResult>();
+		REQUIRE(mat.RowCount() == 1);
+		REQUIRE(mat.GetValue(0, 0).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		REQUIRE(mat.GetValue(1, 0).ToString() == std::to_string(ADBC_VERSION_1_1_0));
+		version_stream.release = nullptr;
+	}
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
@@ -2481,6 +2528,45 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                "Table type must be \"LOCAL TABLE\", \"BASE TABLE\" or \"VIEW\": \"INVALID\"") == 0));
 		adbc_error.release(&adbc_error);
 	}
+
+	// Test input quoting protection
+	{
+		ADBCTestDatabase db("test_input_quoting");
+		db.CreateTable("test_table", db.QueryArrow("SELECT 42 as value"));
+
+		AdbcError adbc_error;
+		InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+
+		// Test catalog filter with special characters
+		auto status =
+		    AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "'; DROP TABLE test_table; --",
+		                             nullptr, nullptr, nullptr, nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists after special characters in filter
+		auto res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+
+		// Test schema filter with special characters
+		status = AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
+		                                  "'; DROP TABLE test_table; --", nullptr, nullptr, nullptr, &arrow_stream,
+		                                  &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists
+		res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+
+		// Test table name filter with special characters
+		status = AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
+		                                  "'; DROP TABLE test_table; --", nullptr, nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_OK);
+		// Verify table still exists
+		res = db.Query("SELECT * FROM test_table");
+		REQUIRE(res->RowCount() == 1);
+		arrow_stream.release(&arrow_stream);
+	}
 }
 
 TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
@@ -2673,6 +2759,199 @@ TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
 		REQUIRE(rows_affected == 3);
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	}
+}
+
+TEST_CASE("Test ADBC URI option", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	auto file_exists = [](const char *path) {
+		std::ifstream f(path);
+		return f.good();
+	};
+
+	// Test URI with :memory:
+	{
+		AdbcDatabase adbc_database;
+		AdbcConnection adbc_connection;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", ":memory:", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+		// Execute a simple query
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 42 as value", &adbc_error)));
+		ArrowArrayStream stream;
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	// Test URI with plain path
+	{
+		AdbcDatabase adbc_database;
+		AdbcConnection adbc_connection;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "test_uri_plain.db", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+		// Execute a simple query
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 43 as value", &adbc_error)));
+		ArrowArrayStream stream;
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	// Test file://<relative> is accepted
+	{
+		const char *expected_path = "test_uri_file.db";
+		std::remove(expected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file://test_uri_file.db", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		std::remove(expected_path);
+	}
+
+	// Test URI overrides path (uri takes precedence)
+	{
+		AdbcDatabase adbc_database;
+		AdbcConnection adbc_connection;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", "/invalid/path/db.duckdb", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", ":memory:", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+		// Should succeed because uri overrides the invalid path
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 45 as value", &adbc_error)));
+		ArrowArrayStream stream;
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &adbc_error)));
+		stream.release(&stream);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	// Test file: URI query is stripped
+	{
+		const char *expected_path = "test_uri_query.db";
+		const char *unexpected_path = "test_uri_query.db?mode=ro";
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file:test_uri_query.db?mode=ro", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		REQUIRE(!file_exists(unexpected_path));
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+	}
+
+	// Test file: URI fragment is stripped
+	{
+		const char *expected_path = "test_uri_fragment.db";
+		const char *unexpected_path = "test_uri_fragment.db#fragment";
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(
+		    SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "file:test_uri_fragment.db#fragment", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		REQUIRE(!file_exists(unexpected_path));
+		std::remove(expected_path);
+		std::remove(unexpected_path);
+	}
+
+	// Test file://localhost/<abs path> is accepted
+	{
+		auto abs_path = TestCreatePath("test_uri_localhost.db");
+		if (!abs_path.empty() && abs_path[0] != '/') {
+			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+		}
+		std::remove(abs_path.c_str());
+		string uri = string("file://localhost") + abs_path;
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(abs_path.c_str()));
+		std::remove(abs_path.c_str());
+	}
+
+	// Test file://<non-localhost>/<abs path> is rejected
+	{
+		auto abs_path = TestCreatePath("test_uri_non_localhost.db");
+		if (!abs_path.empty() && abs_path[0] != '/') {
+			abs_path = duckdb::FileSystem::GetWorkingDirectory() + "/" + abs_path;
+		}
+		string uri = string("file://example.com") + abs_path;
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
+		REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(adbc_error.message);
+		REQUIRE((std::strcmp(adbc_error.message, "file: URI with a non-empty authority is not supported") == 0));
+		adbc_error.release(&adbc_error);
+		InitializeADBCError(&adbc_error);
+		auto release_status = AdbcDatabaseRelease(&adbc_database, &adbc_error);
+		REQUIRE((release_status == ADBC_STATUS_OK || release_status == ADBC_STATUS_INVALID_STATE));
+	}
+
+	adbc_error.release(&adbc_error);
 }
 
 } // namespace duckdb

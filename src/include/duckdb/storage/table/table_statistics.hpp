@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"

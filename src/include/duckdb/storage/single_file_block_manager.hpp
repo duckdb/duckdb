@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -61,6 +60,7 @@ class SingleFileBlockManager : public BlockManager {
 
 public:
 	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
+	~SingleFileBlockManager() override;
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.

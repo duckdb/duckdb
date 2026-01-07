@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 
 namespace duckdb {
@@ -51,9 +48,9 @@ public:
 	virtual bool Cleanup(transaction_t lowest_transaction) const;
 	virtual string ToString(idx_t max_count) const = 0;
 
-	virtual bool HasDeletes() const = 0;
+	virtual bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const = 0;
 
-	virtual void Write(WriteStream &writer) const;
+	virtual void Write(WriteStream &writer, transaction_t transaction_id) const;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 public:
@@ -95,9 +92,9 @@ public:
 	bool Cleanup(transaction_t lowest_transaction) const override;
 	string ToString(idx_t max_count) const override;
 
-	bool HasDeletes() const override;
+	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const override;
 
-	void Write(WriteStream &writer) const override;
+	void Write(WriteStream &writer, transaction_t transaction_id) const override;
 	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 private:
@@ -137,12 +134,12 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
-	bool HasDeletes() const override;
+	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const override;
 	bool AnyDeleted() const;
 	bool HasConstantInsertionId() const;
 	transaction_t ConstantInsertId() const;
 
-	void Write(WriteStream &writer) const override;
+	void Write(WriteStream &writer, transaction_t transaction_id) const override;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:

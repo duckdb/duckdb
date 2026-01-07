@@ -9,12 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/array_ptr.hpp"
 #include "duckdb/common/types/geometry.hpp"
 
 namespace duckdb {

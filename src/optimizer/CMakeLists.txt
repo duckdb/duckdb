@@ -40,6 +40,7 @@ add_library_unity(
   topn_optimizer.cpp
   topn_window_elimination.cpp
   unnest_rewriter.cpp
+  window_self_join.cpp
   sampling_pushdown.cpp
   sum_rewriter.cpp)
 set(ALL_OBJECT_FILES
