@@ -1,0 +1,11 @@
+# name: test/sql/alter/alter_table_set_tblproperties.test
+# description: Test ALTER TABLE SET TBLPROPERTIES
+# group: [alter]
+
+statement ok
+CREATE TABLE tbl1(i INTEGER);
+
+statement error
+ALTER TABLE tbl1 SET TBLPROPERTIES ('foo'='baz', 'buzz'='wizz');
+----
+Not implemented Error: SET TBLPROPERTIES is not supported for DuckDB tables

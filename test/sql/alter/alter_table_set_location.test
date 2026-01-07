@@ -1,0 +1,11 @@
+# name: test/sql/alter/alter_table_set_location.test
+# description: Test ALTER TABLE SET LOCATION
+# group: [alter]
+
+statement ok
+CREATE TABLE tbl1(i INTEGER);
+
+statement error
+ALTER TABLE tbl1 SET LOCATION 's3://bucket/path';
+----
+Not implemented Error: SET LOCATION is not supported for DuckDB tables
