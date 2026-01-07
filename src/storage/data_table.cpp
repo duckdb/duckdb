@@ -1338,7 +1338,7 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 	D_ASSERT(IsMainTable());
 	info->indexes.Scan([&](Index &index) {
 		auto &main_index = index.Cast<BoundIndex>();
-		main_index.Delete(chunk, row_identifiers);
+		main_index.TryDelete(chunk, row_identifiers);
 		return false;
 	});
 }
