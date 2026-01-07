@@ -101,7 +101,7 @@ public:
 	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 private:
-	template <class OP>
+	template <class INSERT_OP, class DELETE_OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
 	                            idx_t max_count) const;
 };
@@ -146,7 +146,7 @@ public:
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:
-	template <class OP>
+	template <class INSERT_OP, class DELETE_OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
 	                            idx_t max_count) const;
 
