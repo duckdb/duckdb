@@ -54,26 +54,28 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabase(PEGTra
 CopyDatabaseType PEGTransformerFactory::TransformCopyDatabaseFlag(PEGTransformer &transformer,
                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<ListParseResult>();
-	auto schema_or_data = extract_parens.Child<ChoiceParseResult>(0);
-	return transformer.TransformEnum<CopyDatabaseType>(schema_or_data.result);
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	return transformer.Transform<CopyDatabaseType>(extract_parens);
+}
+
+CopyDatabaseType PEGTransformerFactory::TransformSchemaOrData(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<CopyDatabaseType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 string PEGTransformerFactory::ExtractFormat(const string &file_path) {
 	auto format = StringUtil::Lower(file_path);
-	// We first remove extension suffixes
 	if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 		format = format.substr(0, format.size() - 3);
 	} else if (StringUtil::EndsWith(format, CompressionExtensionFromType(FileCompressionType::ZSTD))) {
 		format = format.substr(0, format.size() - 4);
 	}
-	// Now lets check for the last .
 	size_t dot_pos = format.rfind('.');
 	if (dot_pos == std::string::npos || dot_pos == format.length() - 1) {
 		// No format found
 		return "";
 	}
-	// We found something
 	return format.substr(dot_pos + 1);
 }
 
@@ -123,6 +125,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 					auto row_func =
 					    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
 					info->parsed_options[option_upper] = std::move(row_func);
+				}
+			} else if (option_upper == "NULL") {
+				// (Dtenwolde) Unclear why NULL should be in parsed options rather than options.
+				if (option.children.empty()) {
+					info->parsed_options[option_upper] = nullptr;
+				} else {
+					info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
 				}
 			} else {
 				info->options[option_upper] = option.children;

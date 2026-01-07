@@ -37,6 +37,7 @@ EXCLUDED_RULES = {
     "DefaultValues",
     "RowOrRows",
     "Recursive",
+    "StarSymbol",
     "IfNotExists",
     "PlainIdentifier",
     "QuotedIdentifier",

@@ -9,7 +9,7 @@ CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
 CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption*
 SpecializedOption <- SingleOption / SpecializedStringOption /
-	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
+	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption / NullOption
 
 SingleOption <- BinaryOption / FreezeOption / OidsOption / CsvOption / HeaderOption
 BinaryOption <- 'BINARY'
@@ -17,6 +17,7 @@ FreezeOption <- 'FREEZE'
 OidsOption <- 'OIDS'
 CsvOption <- 'CSV'
 HeaderOption <- 'HEADER'
+NullOption <- 'NULL' 'AS'? StringLiteral
 EncodingOption <- 'ENCODING' StringLiteral
 ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
 QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
