@@ -182,6 +182,9 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 }
 
 ClientData::~ClientData() {
+	// This needs to be destroyed first because PreparedStatementData holds a PhysicalPlan,
+	// and the PhysicalPlan holds objects that might rely on the client file opener/file system/buffer manager
+	prepared_statements.clear();
 }
 
 ClientData &ClientData::Get(ClientContext &context) {
