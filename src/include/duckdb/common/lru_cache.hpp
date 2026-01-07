@@ -104,8 +104,8 @@ public:
 		current_memory = 0;
 	}
 
-	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries in the cache.
-	// Return number of bytes freed.
+	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries
+	// in the cache. Return number of bytes freed.
 	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		idx_t freed = 0;
 		while (!lru_list.empty() && freed < target_bytes) {

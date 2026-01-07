@@ -13,7 +13,7 @@ using namespace duckdb; // NOLINT
 
 namespace {
 // Constants used in buffer pool memory limit setting.
-constexpr const char* EXCEPTION_POSTSCRIPT = "exception postscript";
+constexpr const char *EXCEPTION_POSTSCRIPT = "exception postscript";
 
 struct EvictableTestObject : public ObjectCacheEntry {
 	int value;
@@ -130,7 +130,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 		}
 	}
 	// Check some of the cache entries have been evicted, and eviction is performed in the order of insertion.
-	REQUIRE(evicted_entries == vector<idx_t>{0, 1});
+	REQUIRE(evicted_entries == vector<idx_t> {0, 1});
 
 	// Check overall memory usage is equal to memory limit.
 	const auto final_memory_usage = buffer_manager.GetUsedMemory();

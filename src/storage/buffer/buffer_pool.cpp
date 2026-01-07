@@ -351,7 +351,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		}
 	}
 
-	// Evict object cache, which is usually used to cache metadata and configs, when flushing buffer blocks alone is not enough to limit overall memory consumption.
+	// Evict object cache, which is usually used to cache metadata and configs, when flushing buffer blocks alone is not
+	// enough to limit overall memory consumption.
 	return EvictObjectCacheEntries(tag, extra_memory, memory_limit);
 }
 
