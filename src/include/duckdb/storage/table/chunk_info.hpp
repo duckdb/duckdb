@@ -102,7 +102,7 @@ public:
 
 private:
 	template <class INSERT_OP, class DELETE_OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
 	                            idx_t max_count) const;
 };
 
@@ -147,7 +147,7 @@ public:
 
 private:
 	template <class INSERT_OP, class DELETE_OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, optional_ptr<SelectionVector> sel_vector,
 	                            idx_t max_count) const;
 
 	IndexPointer GetInsertedPointer() const;

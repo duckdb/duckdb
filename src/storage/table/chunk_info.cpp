@@ -69,7 +69,7 @@ ChunkConstantInfo::ChunkConstantInfo(idx_t start)
 
 template <class INSERT_OP, class DELETE_OP>
 idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
-                                               SelectionVector &sel_vector, idx_t max_count) const {
+                                               idx_t max_count) const {
 	if (INSERT_OP::UseInsertedVersion(start_time, transaction_id, insert_id) &&
 	    DELETE_OP::UseDeletedVersion(start_time, transaction_id, delete_id)) {
 		return max_count;
@@ -79,12 +79,12 @@ idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transac
 
 idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const {
 	return TemplatedGetSelVector<StandardInsertOperator, StandardDeleteOperator>(transaction.start_time, transaction.transaction_id,
-	                                                         sel_vector, max_count);
+	                                                         max_count);
 }
 
 idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
                                                SelectionVector &sel_vector, idx_t max_count) {
-	return TemplatedGetSelVector<CommittedInsertOperator, CommittedDeleteOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
+	return TemplatedGetSelVector<CommittedInsertOperator, CommittedDeleteOperator>(min_start_id, min_transaction_id, max_count);
 }
 
 idx_t ChunkConstantInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
@@ -171,7 +171,7 @@ ChunkVectorInfo::~ChunkVectorInfo() {
 
 template <class INSERT_OP, class DELETE_OP>
 idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
-                                             SelectionVector &sel_vector, idx_t max_count) const {
+                                             optional_ptr<SelectionVector> sel_vector, idx_t max_count) const {
 	if (HasConstantInsertionId()) {
 		if (!AnyDeleted()) {
 			// all tuples have the same inserted id: and no tuples were deleted
@@ -189,9 +189,13 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 		auto segment = allocator.GetHandle(GetDeletedPointer());
 		auto deleted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < max_count; i++) {
-			if (DELETE_OP::UseDeletedVersion(start_time, transaction_id, deleted[i])) {
-				sel_vector.set_index(count++, i);
+			if (!DELETE_OP::UseDeletedVersion(start_time, transaction_id, deleted[i])) {
+				continue;
 			}
+			if (sel_vector) {
+				sel_vector->set_index(count, i);
+			}
+			count++;
 		}
 		return count;
 	}
@@ -202,9 +206,13 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 
 		idx_t count = 0;
 		for (idx_t i = 0; i < max_count; i++) {
-			if (INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
-				sel_vector.set_index(count++, i);
+			if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
+				continue;
 			}
+			if (sel_vector) {
+				sel_vector->set_index(count, i);
+			}
+			count++;
 		}
 		return count;
 	}
@@ -217,10 +225,16 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 	auto delete_segment = allocator.GetHandle(GetDeletedPointer());
 	auto deleted = delete_segment.GetPtr<transaction_t>();
 	for (idx_t i = 0; i < max_count; i++) {
-		if (INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i]) &&
-		    DELETE_OP::UseDeletedVersion(start_time, transaction_id, deleted[i])) {
-			sel_vector.set_index(count++, i);
+		if (!INSERT_OP::UseInsertedVersion(start_time, transaction_id, inserted[i])) {
+			continue;
 		}
+		if (!DELETE_OP::UseDeletedVersion(start_time, transaction_id, deleted[i])) {
+			continue;
+		}
+		if (sel_vector) {
+			sel_vector->set_index(count, i);
+		}
+		count++;
 	}
 	return count;
 }
