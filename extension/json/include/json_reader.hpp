@@ -230,7 +230,7 @@ public:
 
 	void Initialize(Allocator &allocator, idx_t buffer_size);
 	bool InitializeScan(JSONReaderScanState &state, JSONFileReadType file_read_type);
-	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
+	bool ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
 	               const idx_t remaining);
 	bool ParseNextChunk(JSONReaderScanState &scan_state);
 	idx_t Scan(JSONReaderScanState &scan_state);

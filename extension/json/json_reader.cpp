@@ -618,7 +618,7 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(char *const bu
 	return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
 }
 
-void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
+bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
                            const idx_t remaining) {
 	yyjson_doc *doc;
 	yyjson_read_err err;
@@ -640,7 +640,7 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		}
 		if (!can_ignore_this_error) {
 			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, extra);
-			return;
+			return false;
 		}
 	}
 
@@ -652,7 +652,7 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		err.msg = "unexpected end of data";
 		err.pos = json_size;
 		AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
-		return;
+		return false;
 	} else if (!options.ignore_errors && read_size < json_size) {
 		idx_t off = read_size;
 		idx_t rem = json_size;
@@ -662,20 +662,21 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 			err.msg = "unexpected content after document";
 			err.pos = read_size;
 			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
-			return;
+			return false;
 		}
 	}
 
 	scan_state.lines_or_objects_in_buffer++;
 	if (!doc) {
 		scan_state.values[scan_state.scan_count] = nullptr;
-		return;
+		return true;
 	}
 
 	// Set the JSONLine and trim
 	scan_state.units[scan_state.scan_count] = JSONString(json_start, json_size);
 	TrimWhitespace(scan_state.units[scan_state.scan_count]);
 	scan_state.values[scan_state.scan_count] = doc->root;
+	return true;
 }
 
 void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
@@ -796,7 +797,9 @@ bool JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 		}
 
 		idx_t json_size = json_end - json_start;
-		ParseJSON(scan_state, json_start, json_size, remaining);
+		if (!ParseJSON(scan_state, json_start, json_size, remaining)) {
+			return false;
+		}
 		buffer_offset += json_size;
 
 		if (format == JSONFormat::ARRAY) {
