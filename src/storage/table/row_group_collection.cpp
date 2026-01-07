@@ -1156,7 +1156,7 @@ public:
 			while (true) {
 				scan_chunk.Reset();
 
-				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
+				current_row_group.Scan(scan_state.table_state, scan_chunk,
 				                                TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;

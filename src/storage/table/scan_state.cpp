@@ -248,7 +248,7 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type) {
 	while (row_group) {
-		row_group->GetNode().ScanCommitted(*this, result, type);
+		row_group->GetNode().Scan(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		} else {
@@ -263,7 +263,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 	while (row_group) {
-		row_group->GetNode().ScanCommitted(*this, result, type);
+		row_group->GetNode().Scan(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		}

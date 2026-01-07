@@ -383,7 +383,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		ScanCommitted(scan_state, scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
+		Scan(scan_state, scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -722,11 +722,11 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 	}
 }
 
-void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
-	ScanInternal(transaction, state, result, TScanType());
+void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result, TScanType type) {
+	ScanInternal(transaction, state, result, type);
 }
 
-void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
+void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
 	transaction_t start_ts;
@@ -754,7 +754,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	default:
 		throw InternalException("Unrecognized table scan type");
 	}
-	ScanInternal(transaction, state, result, scan_type);
+	Scan(transaction, state, result, scan_type);
 }
 
 optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {

@@ -140,8 +140,8 @@ public:
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);
-	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
+	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result, TScanType type = TScanType());
+	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
 
 	//! Whether or not this RowGroup should be
 	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
