@@ -56,7 +56,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		if (!base.partition_keys.empty()) {
 			unsupported_keywords.push_back("PARTITIONED BY");
 		}
-		if (!base.order_keys.empty()) {
+		if (!base.sort_keys.empty()) {
 			unsupported_keywords.push_back("SORTED BY");
 		}
 		if (!base.location.empty()) {

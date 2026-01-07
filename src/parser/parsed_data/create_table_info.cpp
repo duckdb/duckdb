@@ -26,8 +26,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &partition : partition_keys) {
 		result->partition_keys.push_back(partition->Copy());
 	}
-	for (auto &order : order_keys) {
-		result->order_keys.push_back(order->Copy());
+	for (auto &order : sort_keys) {
+		result->sort_keys.push_back(order->Copy());
 	}
 	result->location = location;
 	result->tbl_properties = tbl_properties;
@@ -54,9 +54,9 @@ string CreateTableInfo::ToString() const {
 			ret.pop_back();
 			ret += ")";
 		}
-		if (!order_keys.empty()) {
+		if (!sort_keys.empty()) {
 			ret += " SORTED BY (";
-			for (auto &order : order_keys) {
+			for (auto &order : sort_keys) {
 				ret += order->ToString() + ",";
 			}
 			ret.pop_back();

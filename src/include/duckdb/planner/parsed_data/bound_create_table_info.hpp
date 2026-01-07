@@ -44,13 +44,13 @@ struct BoundCreateTableInfo {
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table
 	vector<IndexStorageInfo> indexes;
-	//! partition info
+	//! partition info (Lakehouse only)
 	vector<unique_ptr<ParsedExpression>> partition_keys;
-	//! sort info
-	vector<unique_ptr<ParsedExpression>> order_keys;
-	//! location info
+	//! sort info (Lakehouse only)
+	vector<unique_ptr<ParsedExpression>> sort_keys;
+	//! location info (Lakehouse only)
 	string location;
-	//! tbl_properties info
+	//! Table properties info (Lakehouse only)
 	case_insensitive_map_t<Value> tbl_properties;
 
 	CreateTableInfo &Base() {

@@ -2677,11 +2677,11 @@ static const yytype_int16 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   525,   525,   541,   553,   562,   563,   564,   565,   566,
-     567,   568,   569,   570,   571,   572,   573,   574,   575,   576,
-     577,   578,   579,   580,   581,   582,   583,   584,   585,   586,
-     587,   588,   589,   590,   591,   592,   593,   594,   595,   596,
-     597,   598,   599,   600,   601,   602,   603,   604,   606,     9,
+       0,   530,   530,   546,   558,   567,   568,   569,   570,   571,
+     572,   573,   574,   575,   576,   577,   578,   579,   580,   581,
+     582,   583,   584,   585,   586,   587,   588,   589,   590,   591,
+     592,   593,   594,   595,   596,   597,   598,   599,   600,   601,
+     602,   603,   604,   605,   606,   607,   608,   609,   611,     9,
       18,    27,    36,    45,    54,    63,    72,    85,    87,    93,
       94,    99,   103,   107,   118,   126,   130,   138,   139,   143,
      150,   151,   156,   163,   173,   182,   191,   200,   209,   217,
@@ -3029,7 +3029,7 @@ static const char *const yytname[] =
   "key_actions", "OnCommitOption", "reloptions", "reltblproperties",
   "opt_no_inherit", "TableConstraint", "TableLikeOption", "reloption_list",
   "reltblproperty_list", "ExistingIndex", "ConstraintAttr",
-  "CreateTableOption", "CreateTableOptions", "OptWith", "definition",
+  "LakehouseOption", "OptLakehouseOptions", "OptWith", "definition",
   "TableLikeOptionList", "generic_option_name", "ConstraintAttributeElem",
   "regularColumnDef", "generatedColumnDef", "columnDef", "def_list",
   "index_name", "TableElement", "def_elem", "opt_definition",
@@ -21328,14 +21328,14 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 526 "third_party/libpg_query/grammar/grammar.y"
+#line 531 "third_party/libpg_query/grammar/grammar.y"
     {
 				pg_yyget_extra(yyscanner)->parsetree = (yyvsp[(1) - (1)].list);
 			;}
     break;
 
   case 3:
-#line 542 "third_party/libpg_query/grammar/grammar.y"
+#line 547 "third_party/libpg_query/grammar/grammar.y"
     {
 					if ((yyvsp[(1) - (3)].list) != NIL)
 					{
@@ -21350,7 +21350,7 @@ yyreduce:
     break;
 
   case 4:
-#line 554 "third_party/libpg_query/grammar/grammar.y"
+#line 559 "third_party/libpg_query/grammar/grammar.y"
     {
 					if ((yyvsp[(1) - (1)].node) != NULL)
 						(yyval.list) = list_make1(makeRawStmt((yyvsp[(1) - (1)].node), 0));
@@ -21360,7 +21360,7 @@ yyreduce:
     break;
 
   case 48:
-#line 606 "third_party/libpg_query/grammar/grammar.y"
+#line 611 "third_party/libpg_query/grammar/grammar.y"
     { (yyval.node) = NULL; ;}
     break;
 

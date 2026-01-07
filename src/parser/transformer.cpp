@@ -244,8 +244,8 @@ void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
 	ref.query_location = optional_idx(static_cast<idx_t>(query_location));
 }
 
-void Transformer::TransformOptions(case_insensitive_map_t<Value> &options,
-                                   optional_ptr<duckdb_libpgquery::PGList> pg_options) {
+void Transformer::TransformTableProperties(case_insensitive_map_t<Value> &options,
+                                           optional_ptr<duckdb_libpgquery::PGList> pg_options) {
 	if (!pg_options) {
 		return;
 	}
@@ -255,7 +255,7 @@ void Transformer::TransformOptions(case_insensitive_map_t<Value> &options,
 		auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 		auto lower_name = StringUtil::Lower(def_elem->defname);
 		if (options.find(lower_name) != options.end()) {
-			throw ParserException("Duplicate option \"%s\"", lower_name);
+			throw ParserException("Duplicate table property \"%s\"", lower_name);
 		}
 		if (!def_elem->arg) {
 			options[lower_name] = Value::BOOLEAN(true);
@@ -263,7 +263,7 @@ void Transformer::TransformOptions(case_insensitive_map_t<Value> &options,
 		}
 		auto expr = TransformExpression(def_elem->arg);
 		if (expr->type != ExpressionType::VALUE_CONSTANT) {
-			throw ParserException("Option \"%s\" must be a constant", lower_name);
+			throw ParserException("table property \"%s\" must be a constant", lower_name);
 		}
 		auto &constant = expr->Cast<ConstantExpression>();
 		options[lower_name] = constant.value;

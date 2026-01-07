@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			LakehouseOptions OptWith OnCommitOption
+			OptLakehouseOptions OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
 					$4->relpersistence = $2;
@@ -34,7 +34,7 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
-			OptTableElementList ')' LakehouseOptions OptWith
+			OptTableElementList ')' OptLakehouseOptions OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -64,7 +64,7 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
-			OptTableElementList ')' LakehouseOptions OptWith
+			OptTableElementList ')' OptLakehouseOptions OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -470,8 +470,8 @@ LakehouseOption:
 				}
 		;
 
-LakehouseOptions:
-			LakehouseOptions LakehouseOption	{ $$ = lappend($1, $2); }
+OptLakehouseOptions:
+			OptLakehouseOptions LakehouseOption	{ $$ = lappend($1, $2); }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 

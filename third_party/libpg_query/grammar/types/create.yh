@@ -13,7 +13,8 @@
 %type <boolean> opt_no_inherit
 %type <node> TableConstraint
 %type <ival> TableLikeOption
-%type <list> reloption_list reltblproperty_list
+%type <list> reloption_list
+%type <list> reltblproperty_list
 %type <str> ExistingIndex
 %type <node> ConstraintAttr
 %type <list> OptWith
@@ -39,7 +40,11 @@
 %type <constr> GeneratedColumnType opt_GeneratedColumnType
 %type <node> ConstraintElem GeneratedConstraintElem
 %type <defelt> LakehouseOption
-%type <list> TableElementList OptPartitionedBy OptSortedBy OptTblProperties LakehouseOptions
+%type <list> TableElementList
+%type <list> OptPartitionedBy
+%type <list> OptSortedBy
+%type <list> OptTblProperties
+%type <list> OptLakehouseOptions
 %type <str> OptLocation
 %type <ival> key_match
 %type <node> TableLikeClause
