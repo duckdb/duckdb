@@ -39,7 +39,7 @@ public:
 	//! Create a new deprecated prefix node and return a handle to it.
 	static PrefixHandle NewDeprecated(FixedSizeAllocator &allocator, Node &node);
 
-	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
+	static Node *TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 private:
 	PrefixHandle TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte);

@@ -48,19 +48,19 @@ PrefixHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &no
 	return handle;
 }
 
-void PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
+Node *PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
 	// Early-out, if we do not need any transformations.
 	if (!state.HasAllocator()) {
 		reference<Node> ref(node);
 		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
 			auto &alloc = Node::GetAllocator(art, PREFIX);
 			if (!alloc.LoadedFromStorage(ref)) {
-				return;
+				return nullptr;
 			}
 			PrefixHandle handle(art, ref);
 			ref = *handle.child;
 		}
-		return Node::TransformToDeprecated(art, ref, state);
+		return &ref.get();
 	}
 
 	// We need to create a new prefix (chain) in the deprecated format.
@@ -72,7 +72,7 @@ void PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprec
 	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		auto &alloc = Node::GetAllocator(art, PREFIX);
 		if (!alloc.LoadedFromStorage(current_node)) {
-			return;
+			return nullptr;
 		}
 
 		PrefixHandle current_handle(art, current_node);
@@ -87,7 +87,7 @@ void PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprec
 	}
 
 	node = new_node;
-	return Node::TransformToDeprecated(art, *new_handle.child, state);
+	return new_handle.child;
 }
 
 PrefixHandle PrefixHandle::TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte) {
