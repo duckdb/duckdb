@@ -26,7 +26,7 @@ bool DirectFileReader::TryInitializeScan(ClientContext &context, GlobalTableFunc
                                          LocalTableFunctionState &lstate) {
 	auto &state = gstate.Cast<ReadFileGlobalState>();
 	return file_list_idx.GetIndex() < state.file_list->GetTotalFileCount() && !done;
-};
+}
 
 static void AssertMaxFileSize(const string &file_name, idx_t file_size) {
 	const auto max_file_size = NumericLimits<uint32_t>::Maximum();
@@ -178,10 +178,10 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 	output.SetCardinality(1);
 	done = true;
 	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
-};
+}
 
 void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
 	return;
-};
+}
 
 } // namespace duckdb
