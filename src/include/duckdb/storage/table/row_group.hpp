@@ -234,7 +234,7 @@ private:
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
 
-	void ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result, TableScanType TYPE);
+	void ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result, TScanType type);
 
 	bool HasUnloadedDeletes() const;
 

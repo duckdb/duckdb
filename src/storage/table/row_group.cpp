@@ -587,9 +587,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 }
 
 void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result,
-                            TableScanType TYPE) {
-	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
-	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+                            TScanType scan_type) {
 	const auto &column_ids = state.GetColumnIds();
 	auto &filter_info = state.GetFilterInfo();
 	while (true) {
@@ -614,16 +612,6 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 		auto &current_row_group = state.row_group->GetNode();
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		TScanType scan_type;
-		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-			// standard scan type
-		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
-			scan_type.insert_type = InsertedScanType::ALL_ROWS;
-			scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
-		} else {
-			scan_type.insert_type = InsertedScanType::ALL_ROWS;
-			scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
-		}
 		idx_t count =
 		    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
 		if (count == 0) {
@@ -648,9 +636,7 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
-				if (!ALLOW_UPDATES) {
-					state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
-				}
+				state.column_scans[i].update_scan_type = scan_type.update_type;
 				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 			}
 		} else {
@@ -667,7 +653,6 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 			auto adaptive_filter = filter_info.GetAdaptiveFilter();
 			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
-				D_ASSERT(ALLOW_UPDATES);
 				auto &filter_list = filter_info.GetFilterList();
 				for (idx_t i = 0; i < filter_list.size(); i++) {
 					auto filter_idx = adaptive_filter->permutation[i];
@@ -722,9 +707,7 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 				}
 				auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
-				if (!ALLOW_UPDATES) {
-					state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
-				}
+				state.column_scans[i].update_scan_type = scan_type.update_type;
 				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
 				                approved_tuple_count);
 			}
@@ -740,7 +723,7 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 }
 
 void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
-	ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_REGULAR);
+	ScanInternal(transaction, state, result, TScanType());
 }
 
 void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
@@ -755,21 +738,28 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 		start_ts = transaction_manager.LowestActiveStart();
 		transaction_id = transaction_manager.LowestActiveId();
 	}
+	TScanType scan_type;
 	TransactionData transaction(transaction_id, start_ts);
 	switch (type) {
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
-		ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		scan_type.insert_type = InsertedScanType::ALL_ROWS;
+		scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES:
-		ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
+		scan_type.insert_type = InsertedScanType::ALL_ROWS;
+		scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
+		scan_type.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
-		ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		scan_type.insert_type = InsertedScanType::ALL_ROWS;
+		scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
+		scan_type.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
 	}
+	ScanInternal(transaction, state, result, scan_type);
 }
 
 optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
