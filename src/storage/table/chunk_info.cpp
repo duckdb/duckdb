@@ -73,17 +73,17 @@ unique_ptr<ChunkInfo> ChunkInfo::Read(FixedSizeAllocator &allocator, ReadStream 
 }
 
 idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
-	TScanType type;
-	type.insert_type = InsertedScanType::ALL_ROWS;
-	type.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
-	idx_t not_deleted_count = GetSelVector(TransactionData(0, 0), nullptr, max_count, type);
+	ScanOptions options;
+	options.insert_type = InsertedScanType::ALL_ROWS;
+	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+	idx_t not_deleted_count = GetSelVector(TransactionData(0, 0), nullptr, max_count, options);
 	return max_count - not_deleted_count;
 }
 
 idx_t ChunkInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
-	TScanType type;
-	type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
-	return GetSelVector(transaction, nullptr, max_count, type);
+	ScanOptions options;
+	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
+	return GetSelVector(transaction, nullptr, max_count, options);
 }
 
 //===--------------------------------------------------------------------===//
@@ -104,23 +104,23 @@ idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transac
 }
 
 idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
-                                      idx_t max_count, TScanType type) const {
-	if (type.insert_type == InsertedScanType::STANDARD) {
+                                      idx_t max_count, ScanOptions options) const {
+	if (options.insert_type == InsertedScanType::STANDARD) {
 		if (!StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
 		                                                insert_id)) {
 			return 0;
 		}
 	}
-	if (type.delete_type == DeletedScanType::STANDARD) {
+	if (options.delete_type == DeletedScanType::STANDARD) {
 		if (!StandardDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id, delete_id)) {
 			return 0;
 		}
-	} else if (type.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
+	} else if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 		if (!ActualCommittedDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id,
 		                                                      delete_id)) {
 			return 0;
 		}
-	} else if (type.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+	} else if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
 		if (!CommittedDeleteOperator::UseDeletedVersion(transaction.start_time, transaction.transaction_id,
 		                                                delete_id)) {
 			return 0;
@@ -271,35 +271,35 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 }
 
 idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
-                                    idx_t max_count, TScanType type) const {
-	if (type.insert_type == InsertedScanType::STANDARD) {
-		if (type.delete_type == DeletedScanType::STANDARD) {
+                                    idx_t max_count, ScanOptions options) const {
+	if (options.insert_type == InsertedScanType::STANDARD) {
+		if (options.delete_type == DeletedScanType::STANDARD) {
 			return TemplatedGetSelVector<StandardInsertOperator, StandardDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (type.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
+		if (options.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
 			return TemplatedGetSelVector<StandardInsertOperator, IncludeAllDeletedOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (type.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
+		if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<StandardInsertOperator, ActualCommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (type.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+		if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<StandardInsertOperator, CommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
 	}
-	if (type.insert_type == InsertedScanType::ALL_ROWS) {
-		if (type.delete_type == DeletedScanType::STANDARD) {
+	if (options.insert_type == InsertedScanType::ALL_ROWS) {
+		if (options.delete_type == DeletedScanType::STANDARD) {
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, StandardDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (type.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
+		if (options.delete_type == DeletedScanType::OMIT_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, ActualCommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}
-		if (type.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
+		if (options.delete_type == DeletedScanType::OMIT_FULLY_COMMITTED_DELETES) {
 			return TemplatedGetSelVector<IncludeAllInsertedOperator, CommittedDeleteOperator>(
 			    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 		}

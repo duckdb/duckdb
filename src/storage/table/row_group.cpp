@@ -586,8 +586,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result,
-                            TScanType scan_type) {
+void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result, ScanOptions options) {
 	const auto &column_ids = state.GetColumnIds();
 	auto &filter_info = state.GetFilterInfo();
 	while (true) {
@@ -613,7 +612,7 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count =
-		    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, scan_type);
+		    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, options);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -636,7 +635,7 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = scan_type.update_type;
+				state.column_scans[i].update_scan_type = options.update_type;
 				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 			}
 		} else {
@@ -707,7 +706,7 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 				}
 				auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = scan_type.update_type;
+				state.column_scans[i].update_scan_type = options.update_type;
 				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
 				                approved_tuple_count);
 			}
@@ -720,10 +719,6 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 		state.vector_index++;
 		break;
 	}
-}
-
-void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result, TScanType type) {
-	ScanInternal(transaction, state, result, type);
 }
 
 void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType type) {
@@ -740,21 +735,21 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 	}
 	TransactionData transaction(transaction_id, start_ts);
 
-	TScanType scan_type;
-	scan_type.insert_type = InsertedScanType::ALL_ROWS;
+	ScanOptions options;
+	options.insert_type = InsertedScanType::ALL_ROWS;
 	switch (type) {
 	case TableScanType::TABLE_SCAN_ALL_ROWS:
-		scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
+		options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 		break;
 	case TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED:
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
-		scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
-		scan_type.update_type = UpdateScanType::DISALLOW_UPDATES;
+		options.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
+		options.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
 	}
-	Scan(transaction, state, result, scan_type);
+	Scan(transaction, state, result, options);
 }
 
 optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
@@ -831,7 +826,7 @@ bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
-                             idx_t max_count, TScanType type) {
+                             idx_t max_count, ScanOptions options) {
 	if (type.insert_type == InsertedScanType::ALL_ROWS && type.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
 		return max_count;
 	}

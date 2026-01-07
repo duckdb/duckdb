@@ -29,7 +29,7 @@ public:
 
 	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id, idx_t count);
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count,
-	                   TScanType type);
+	                   ScanOptions options);
 	bool Fetch(TransactionData transaction, idx_t row);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);

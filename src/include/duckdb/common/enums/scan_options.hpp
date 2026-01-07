@@ -36,7 +36,7 @@ enum class UpdateScanType {
 	DISALLOW_UPDATES
 };
 
-struct TScanType {
+struct ScanOptions {
 	InsertedScanType insert_type = InsertedScanType::STANDARD;
 	DeletedScanType delete_type = DeletedScanType::STANDARD;
 	UpdateScanType update_type = UpdateScanType::STANDARD;

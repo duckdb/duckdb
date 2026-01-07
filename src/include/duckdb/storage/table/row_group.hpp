@@ -140,13 +140,14 @@ public:
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);
-	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result, TScanType type = TScanType());
+	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result,
+	          ScanOptions options = ScanOptions());
 	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
 
 	//! Whether or not this RowGroup should be
 	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count,
-	                   TScanType type);
+	                   ScanOptions options);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(TransactionData transaction, idx_t row);
@@ -233,8 +234,6 @@ private:
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
-
-	void ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result, TScanType type);
 
 	bool HasUnloadedDeletes() const;
 
