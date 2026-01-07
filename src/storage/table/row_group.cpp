@@ -383,7 +383,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		ScanCommitted(scan_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		ScanCommitted(scan_state, scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -731,7 +731,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 
 	transaction_t start_ts;
 	transaction_t transaction_id;
-	if (type == TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS) {
+	if (type == TableScanType::TABLE_SCAN_COMMITTED_ROWS) {
 		start_ts = transaction_manager.GetLastCommit() + 1;
 		transaction_id = MAX_TRANSACTION_ID;
 	} else {
@@ -743,11 +743,11 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	TScanType scan_type;
 	scan_type.insert_type = InsertedScanType::ALL_ROWS;
 	switch (type) {
-	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
+	case TableScanType::TABLE_SCAN_ALL_ROWS:
 		scan_type.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 		break;
-	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
-	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
+	case TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED:
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
 		scan_type.delete_type = DeletedScanType::OMIT_FULLY_COMMITTED_DELETES;
 		scan_type.update_type = UpdateScanType::DISALLOW_UPDATES;
 		break;

@@ -43,15 +43,13 @@ struct TScanType {
 };
 
 enum class TableScanType {
-	//! Regular table scan: scan all tuples that are relevant for the current transaction
-	TABLE_SCAN_REGULAR = 0,
 	//! Scan all rows, including any deleted rows. Committed updates are merged in.
-	TABLE_SCAN_COMMITTED_ROWS = 1,
+	TABLE_SCAN_ALL_ROWS = 1,
 	//! Scan all rows, excluding any permanently deleted rows.
 	//! Permanently deleted rows are rows which no transaction will ever need again.
-	TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED = 3,
+	TABLE_SCAN_OMIT_PERMANENTLY_DELETED = 2,
 	//! Scan the latest committed rows
-	TABLE_SCAN_LATEST_COMMITTED_ROWS = 4
+	TABLE_SCAN_COMMITTED_ROWS = 3
 };
 
 } // namespace duckdb
