@@ -117,7 +117,7 @@ void SetOperationNode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "left", SerializeChildNode(serializer, 0));
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "right", SerializeChildNode(serializer, 1));
 	serializer.WritePropertyWithDefault<bool>(203, "setop_all", setop_all, true);
-	if (serializer.ShouldSerialize("v1.5.0")) {
+	if (serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::V1_5_0))) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<QueryNode>>>(204, "children", children);
 	}
 }

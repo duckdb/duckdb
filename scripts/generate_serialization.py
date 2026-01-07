@@ -522,20 +522,43 @@ class SerializableClass:
             assignment=assignment,
         )
 
+        def serialize_string_or_constant(storage_version: int, entry: str, is_delete: bool):
+            exclamation = ""
+
+            if is_delete:
+                exclamation = "!"
+
+            # storage version 3 == serialization version 3 == v1.1.0
+            if storage_version <= 3:
+                # write the version string
+                if not entry.isdigit():
+                    code.append(f'\tif ({exclamation}serializer.ShouldSerialize("{entry}")) {{')
+                else:
+                    code.append(
+                        f'\tif ({exclamation}serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{'
+                    )
+
+            else:
+                # storage version 4 and higher
+                if not entry.isdigit():
+                    version_string = entry
+                else:
+                    version_string = get_version_string(storage_version)
+
+                formatted_version = version_string.upper().replace(".", "_")
+                code.append(
+                    f'\tif ({exclamation}serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::{formatted_version}))) {{'
+                )
+
         if conditional_serialization:
             code = []
             if entry.status != MemberVariableStatus.EXISTING:
                 # conditional delete
-                if not entry.version.isdigit():
-                    code.append(f'\tif (!serializer.ShouldSerialize("{entry.version}")) {{')
-                else:
-                    code.append(f'\tif (!serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{')
+                serialize_string_or_constant(storage_version, entry.version, True)
+
             else:
                 # conditional serialization
-                if not entry.version.isdigit():
-                    code.append(f'\tif (serializer.ShouldSerialize("{entry.version}")) {{')
-                else:
-                    code.append(f'\tif (serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{')
+                serialize_string_or_constant(storage_version, entry.version, False)
 
             code.append('\t' + serialization_code)
 

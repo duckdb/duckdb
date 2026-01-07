@@ -138,7 +138,7 @@ void JoinRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(205, "using_columns", using_columns);
 	serializer.WritePropertyWithDefault<bool>(206, "delim_flipped", delim_flipped);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", duplicate_eliminated_columns);
-	if (serializer.ShouldSerialize("v1.4.0")) {
+	if (serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::V1_4_0))) {
 		serializer.WritePropertyWithDefault<bool>(208, "is_implicit", is_implicit, true);
 	}
 }

@@ -147,7 +147,7 @@ string GetStorageVersionNameInternal(const idx_t storage_version) {
 }
 
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
-	if (storage_version < GetStorageVersionValue("v1.2.0")) {
+	if (storage_version < static_cast<idx_t>(StorageVersion::V1_2_0)) {
 		// special handling for lower storage versions
 		return "v1.0.0+";
 	}

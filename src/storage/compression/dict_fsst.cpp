@@ -70,7 +70,7 @@ struct DictFSSTCompressionStorage {
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &storage_manager = col_data.GetStorageManager();
-	if (storage_manager.GetStorageVersionValueIdx() < GetStorageVersionValue("v1.3.0")) {
+	if (storage_manager.GetStorageVersionValueIdx() < static_cast<idx_t>(StorageVersion::V1_3_0)) {
 		// dict_fsst not introduced yet, disable it
 		return nullptr;
 	}

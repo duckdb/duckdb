@@ -49,10 +49,14 @@ public:
 		return options.storage_compatibility.Compare(version_added);
 	}
 
+	bool ShouldSerialize(idx_t version_added) const {
+		return ShouldSerializeInternal(version_added);
+	}
+
 	bool ShouldSerialize(const string &string_version_added) const {
 		auto property_version = GetStorageVersionValue(string_version_added.c_str());
 
-		if (property_version < GetStorageVersionValue("v1.5.0")) {
+		if (property_version < static_cast<idx_t>(StorageVersion::V1_5_0)) {
 			// serialization version is used (older)
 			return options.storage_compatibility.CompareVersionString(string_version_added);
 		}

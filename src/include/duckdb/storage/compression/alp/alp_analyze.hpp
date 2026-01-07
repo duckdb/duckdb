@@ -36,7 +36,7 @@ public:
 	vector<vector<T>> rowgroup_sample;
 	vector<vector<T>> complete_vectors_sampled;
 	alp::AlpCompressionData<T, true> compression_data;
-	idx_t storage_version = GetStorageVersionValue("invalid");
+	idx_t storage_version = static_cast<idx_t>(StorageVersion::INVALID);
 
 public:
 	// Returns the required space to hyphotetically store the compressed segment
@@ -158,8 +158,8 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 		                                       analyze_state.compression_data);
 		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_to_compress.size();
 		const idx_t compressed_size = analyze_state.compression_data.RequiredSpace();
-		const bool should_compress =
-		    compressed_size < uncompressed_size || analyze_state.storage_version < GetStorageVersionValue("v1.5.0");
+		const bool should_compress = compressed_size < uncompressed_size ||
+		                             analyze_state.storage_version < static_cast<idx_t>(StorageVersion::V1_5_0);
 		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
 
 		if (!analyze_state.HasEnoughSpace(vector_size)) {
