@@ -82,14 +82,14 @@ bool RowVersionManager::ShouldCheckpointRowGroup(transaction_t checkpoint_id, id
 	return true;
 }
 
-idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
-                                      idx_t max_count, ScanOptions options) {
+idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector,
+                                      idx_t max_count) {
 	lock_guard<mutex> l(version_lock);
 	auto chunk_info = GetChunkInfo(vector_idx);
 	if (!chunk_info) {
 		return max_count;
 	}
-	return chunk_info->GetSelVector(transaction, sel_vector, max_count, type);
+	return chunk_info->GetSelVector(options, sel_vector, max_count);
 }
 
 bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {

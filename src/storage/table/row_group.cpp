@@ -586,9 +586,10 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result, ScanOptions options) {
+void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &result) {
 	const auto &column_ids = state.GetColumnIds();
 	auto &filter_info = state.GetFilterInfo();
+	auto &transaction = options.transaction;
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
 			// exceeded the amount of rows to scan
@@ -611,8 +612,7 @@ void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, Dat
 		auto &current_row_group = state.row_group->GetNode();
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count =
-		    current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count, options);
+		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -721,6 +721,9 @@ void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, Dat
 	}
 }
 
+ScanOptions::ScanOptions(TransactionData transaction) : transaction(transaction) {
+}
+
 void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
@@ -735,7 +738,7 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 	}
 	TransactionData transaction(transaction_id, start_ts);
 
-	ScanOptions options;
+	ScanOptions options(transaction);
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	switch (type) {
 	case TableScanType::TABLE_SCAN_ALL_ROWS:
@@ -749,7 +752,7 @@ void RowGroup::Scan(CollectionScanState &state, DataChunk &result, TableScanType
 	default:
 		throw InternalException("Unrecognized table scan type");
 	}
-	Scan(transaction, state, result, options);
+	Scan(options, state, result);
 }
 
 optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
@@ -825,16 +828,16 @@ bool RowGroup::ShouldCheckpointRowGroup(transaction_t checkpoint_id) const {
 	return vinfo->ShouldCheckpointRowGroup(checkpoint_id, count);
 }
 
-idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
-                             idx_t max_count, ScanOptions options) {
-	if (type.insert_type == InsertedScanType::ALL_ROWS && type.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
+idx_t RowGroup::GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
+	if (options.insert_type == InsertedScanType::ALL_ROWS &&
+	    options.delete_type == DeletedScanType::INCLUDE_ALL_DELETED) {
 		return max_count;
 	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
 	}
-	return vinfo->GetSelVector(transaction, vector_idx, sel_vector, max_count, type);
+	return vinfo->GetSelVector(options, vector_idx, sel_vector, max_count);
 }
 
 bool RowGroup::Fetch(TransactionData transaction, idx_t row) {

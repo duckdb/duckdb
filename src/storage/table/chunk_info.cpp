@@ -73,17 +73,17 @@ unique_ptr<ChunkInfo> ChunkInfo::Read(FixedSizeAllocator &allocator, ReadStream 
 }
 
 idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
-	ScanOptions options;
+	ScanOptions options(TransactionData(0, 0));
 	options.insert_type = InsertedScanType::ALL_ROWS;
 	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
-	idx_t not_deleted_count = GetSelVector(TransactionData(0, 0), nullptr, max_count, options);
+	idx_t not_deleted_count = GetSelVector(options, nullptr, max_count);
 	return max_count - not_deleted_count;
 }
 
 idx_t ChunkInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
-	ScanOptions options;
+	ScanOptions options(transaction);
 	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
-	return GetSelVector(transaction, nullptr, max_count, options);
+	return GetSelVector(options, nullptr, max_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -103,8 +103,9 @@ idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transac
 	return 0;
 }
 
-idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
-                                      idx_t max_count, ScanOptions options) const {
+idx_t ChunkConstantInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
+                                      idx_t max_count) const {
+	auto &transaction = options.transaction;
 	if (options.insert_type == InsertedScanType::STANDARD) {
 		if (!StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
 		                                                insert_id)) {
@@ -270,8 +271,9 @@ idx_t ChunkVectorInfo::TemplatedGetSelVector(transaction_t start_time, transacti
 	return count;
 }
 
-idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
-                                    idx_t max_count, ScanOptions options) const {
+idx_t ChunkVectorInfo::GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
+                                    idx_t max_count) const {
+	auto &transaction = options.transaction;
 	if (options.insert_type == InsertedScanType::STANDARD) {
 		if (options.delete_type == DeletedScanType::STANDARD) {
 			return TemplatedGetSelVector<StandardInsertOperator, StandardDeleteOperator>(

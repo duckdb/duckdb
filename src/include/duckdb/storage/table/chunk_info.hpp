@@ -41,8 +41,8 @@ public:
 public:
 	//! Gets up to max_count entries from the chunk info. If the ret is 0>ret>max_count, the selection vector is filled
 	//! with the tuples
-	virtual idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
-	                           ScanOptions options = ScanOptions()) const = 0;
+	virtual idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
+	                           idx_t max_count) const = 0;
 	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
@@ -85,8 +85,7 @@ public:
 	transaction_t delete_id;
 
 public:
-	idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
-	                   ScanOptions options = ScanOptions()) const override;
+	idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector, idx_t max_count) const override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	bool Cleanup(transaction_t lowest_transaction) const override;
@@ -111,8 +110,7 @@ public:
 	~ChunkVectorInfo() override;
 
 public:
-	idx_t GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector, idx_t max_count,
-	                   ScanOptions options = ScanOptions()) const override;
+	idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector, idx_t max_count) const override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	bool Cleanup(transaction_t lowest_transaction) const override;

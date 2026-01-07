@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
 
@@ -37,6 +37,9 @@ enum class UpdateScanType {
 };
 
 struct ScanOptions {
+	ScanOptions(TransactionData transaction); // NOLINT: allow implicit conversion from transaction
+
+	TransactionData transaction;
 	InsertedScanType insert_type = InsertedScanType::STANDARD;
 	DeletedScanType delete_type = DeletedScanType::STANDARD;
 	UpdateScanType update_type = UpdateScanType::STANDARD;
