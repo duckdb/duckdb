@@ -12,11 +12,39 @@
 
 namespace duckdb {
 
+enum class InsertedScanType {
+	// get all rows valid for the transaction
+	STANDARD,
+	// scan all rows including transaction local rows
+	ALL_ROWS
+};
+enum class DeletedScanType {
+	//! omit any rows that are deleted
+	STANDARD,
+	//! include all rows, including all deleted rows
+	INCLUDE_ALL_DELETED,
+	//! only omit permanently committed deleted rows (i.e. rows that no transaction still depends on)
+	OMIT_PERMANENTLY_COMMITTED
+};
+
 enum class UpdateScanType {
 	//! allow updates
 	STANDARD,
 	// disallow updates - throw on updates
 	DISALLOW_UPDATES
+};
+
+struct TScanType {
+	InsertedScanType insert_type = InsertedScanType::STANDARD;
+	DeletedScanType delete_type = DeletedScanType::STANDARD;
+	UpdateScanType update_type = UpdateScanType::STANDARD;
+	static TScanType IndexScan() {
+		TScanType type;
+		type.insert_type = InsertedScanType::ALL_ROWS;
+		type.delete_type = DeletedScanType::OMIT_PERMANENTLY_COMMITTED;
+		type.update_type = UpdateScanType::DISALLOW_UPDATES;
+		return type;
+	}
 };
 
 enum class TableScanType : uint8_t {

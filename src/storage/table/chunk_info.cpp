@@ -90,7 +90,7 @@ idx_t ChunkConstantInfo::TemplatedGetSelVector(transaction_t start_time, transac
 }
 
 idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
-                                      idx_t max_count) const {
+                                      idx_t max_count, TScanType type) const {
 	return TemplatedGetSelVector<StandardInsertOperator, StandardDeleteOperator>(transaction.start_time,
 	                                                                             transaction.transaction_id, max_count);
 }
@@ -260,7 +260,7 @@ idx_t ChunkVectorInfo::GetCommittedSelVector(transaction_t min_start_id, transac
 }
 
 idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, optional_ptr<SelectionVector> sel_vector,
-                                    idx_t max_count) const {
+                                    idx_t max_count, TScanType type) const {
 	return TemplatedGetSelVector<StandardInsertOperator, StandardDeleteOperator>(
 	    transaction.start_time, transaction.transaction_id, sel_vector, max_count);
 }
