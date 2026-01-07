@@ -291,3 +291,10 @@ FROM ints
 QUALIFY 1 > row_number() OVER(ORDER BY rand);
 ----
 logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+# taken from slt_good_12.test (this was previously causing issues in NightlyTests CI)
+statement ok
+CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+SELECT ALL 37 + 24 * - 44 FROM tab2 GROUP BY col1, col0, col0 HAVING col1 * col1 + - COALESCE ( - 56, COUNT ( * ) * + col1 ) IN ( CAST ( NULL AS INTEGER ) + + 78 )

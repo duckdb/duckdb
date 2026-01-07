@@ -1,5 +1,4 @@
 #include "duckdb/storage/data_pointer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/compression_function.hpp"

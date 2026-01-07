@@ -14,6 +14,10 @@ QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelect
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
+bool QualifyBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	return column_alias_binder.DoesColumnAliasExist(colref);
+}
+
 BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto result = duckdb::BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
 	if (!result.HasError()) {

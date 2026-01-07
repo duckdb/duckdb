@@ -19,4 +19,4 @@ enum class PhysicalTableScanExecutionStrategy : uint8_t {
 	TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS
 };
 
-}; // namespace duckdb
+} // namespace duckdb

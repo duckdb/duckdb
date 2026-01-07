@@ -2,10 +2,8 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/variant.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -230,9 +228,8 @@ void VariantStats::Serialize(const BaseStatistics &stats, Serializer &serializer
 }
 
 void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
-	auto &type = base.GetType();
-	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(base.GetType().InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(base.GetType().id() == LogicalTypeId::VARIANT);
 	auto &data = GetDataUnsafe(base);
 
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
@@ -497,6 +494,7 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &other_data = VariantStats::GetDataUnsafe(other);
 	auto &data = VariantStats::GetDataUnsafe(stats);
+	(void)other_data;
 	(void)data;
 
 	//! This is ensured by the CopyBase method of BaseStatistics
