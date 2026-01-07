@@ -22,7 +22,7 @@ struct StandardDeleteOperator {
 	}
 };
 
-struct CommittedInsertOperator {
+struct IncludeAllInsertedOperator {
 	static bool UseInsertedVersion(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
 		return true;
 	}
@@ -31,6 +31,12 @@ struct CommittedInsertOperator {
 struct CommittedDeleteOperator {
 	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
 		return (id >= min_start_time && id < TRANSACTION_ID_START) || id == NOT_DELETED_ID;
+	}
+};
+
+struct IncludeAllDeletedOperator {
+	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
+		return true;
 	}
 };
 
@@ -84,14 +90,12 @@ idx_t ChunkConstantInfo::GetSelVector(TransactionData transaction, SelectionVect
 
 idx_t ChunkConstantInfo::GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
                                                SelectionVector &sel_vector, idx_t max_count) {
-	return TemplatedGetSelVector<CommittedInsertOperator, CommittedDeleteOperator>(min_start_id, min_transaction_id, max_count);
+	return TemplatedGetSelVector<IncludeAllInsertedOperator, CommittedDeleteOperator>(min_start_id, min_transaction_id, max_count);
 }
 
 idx_t ChunkConstantInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
-	if (StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, insert_id)) {
-		return max_count;
-	}
-	return 0;
+	return TemplatedGetSelVector<StandardInsertOperator, IncludeAllDeletedOperator>(transaction.start_time, transaction.transaction_id,
+															 max_count);
 }
 
 bool ChunkConstantInfo::Fetch(TransactionData transaction, row_t row) {
@@ -246,7 +250,7 @@ idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t tran
 
 idx_t ChunkVectorInfo::GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
                                              SelectionVector &sel_vector, idx_t max_count) {
-	return TemplatedGetSelVector<CommittedInsertOperator, CommittedDeleteOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
+	return TemplatedGetSelVector<IncludeAllInsertedOperator, CommittedDeleteOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
 }
 
 idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const {
@@ -254,28 +258,8 @@ idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector
 }
 
 idx_t ChunkVectorInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
-	if (HasConstantInsertionId()) {
-		if (!StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
-		                                                    ConstantInsertId())) {
-			return 0;
-		}
-		return max_count;
-	}
-	auto insert_segment = allocator.GetHandle(GetInsertedPointer());
-	auto inserted = insert_segment.GetPtr<transaction_t>();
-
-	idx_t count = 0;
-	for (idx_t i = 0; i < max_count; i++) {
-		if (!StandardInsertOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id,
-		                                                    inserted[i])) {
-			continue;
-		}
-		if (i != count) {
-			throw InternalException("Error in ChunkVectorInfo::GetCheckpointRowCount - insertions are not sequential");
-		}
-		count++;
-	}
-	return count;
+	return TemplatedGetSelVector<StandardInsertOperator, IncludeAllDeletedOperator>(transaction.start_time, transaction.transaction_id, nullptr,
+															 max_count);
 }
 
 bool ChunkVectorInfo::Fetch(TransactionData transaction, row_t row) {
