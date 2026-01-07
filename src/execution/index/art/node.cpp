@@ -368,8 +368,6 @@ static void TransformToDeprecatedPushChildren(ART &art, Node &node, NType type, 
 }
 
 void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
-	D_ASSERT(node.HasMetadata());
-
 	vector<reference<Node>> stack;
 	stack.emplace_back(node);
 

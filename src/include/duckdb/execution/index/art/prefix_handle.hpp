@@ -39,7 +39,10 @@ public:
 	//! Create a new deprecated prefix node and return a handle to it.
 	static PrefixHandle NewDeprecated(FixedSizeAllocator &allocator, Node &node);
 
-	static Node *TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
+	//! Transform prefix chain to deprecated format.
+	//! nullptr denotes an early out optimization (the prefix has not been loaded from storage, hence we do not need
+	//! to transform it. Otherwise, we get a pointer to the child node at the end of the prefix chain.
+	static optional_ptr<Node> TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 private:
 	PrefixHandle TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte);

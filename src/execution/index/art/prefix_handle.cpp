@@ -48,7 +48,7 @@ PrefixHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &no
 	return handle;
 }
 
-Node *PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
+optional_ptr<Node> PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
 	// Early-out, if we do not need any transformations.
 	if (!state.HasAllocator()) {
 		reference<Node> ref(node);
@@ -60,7 +60,7 @@ Node *PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDepre
 			PrefixHandle handle(art, ref);
 			ref = *handle.child;
 		}
-		return &ref.get();
+		return ref.get();
 	}
 
 	// We need to create a new prefix (chain) in the deprecated format.
