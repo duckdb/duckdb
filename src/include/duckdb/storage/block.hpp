@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/storage_info.hpp"
 

@@ -1,13 +1,8 @@
 #include "duckdb/storage/table/variant_column_data.hpp"
-#include "duckdb/storage/table/struct_column_data.hpp"
-#include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 

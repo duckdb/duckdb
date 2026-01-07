@@ -1,4 +1,3 @@
-#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -7,7 +6,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 
 #include "zstd.h"
 

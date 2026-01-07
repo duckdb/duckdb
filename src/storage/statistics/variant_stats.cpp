@@ -2,10 +2,8 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/variant.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"

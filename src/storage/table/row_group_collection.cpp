@@ -17,7 +17,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
