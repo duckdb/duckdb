@@ -880,6 +880,7 @@ StorageCompatibility StorageCompatibility::Default() {
 
 StorageCompatibility StorageCompatibility::Latest() {
 	auto res = FromString("latest");
+	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
 }
