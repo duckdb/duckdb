@@ -232,7 +232,7 @@ public:
 	bool InitializeScan(JSONReaderScanState &state, JSONFileReadType file_read_type);
 	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
 	               const idx_t remaining);
-	void ParseNextChunk(JSONReaderScanState &scan_state);
+	bool ParseNextChunk(JSONReaderScanState &scan_state);
 	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
 	bool PrepareBufferForRead(JSONReaderScanState &scan_state);

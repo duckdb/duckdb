@@ -762,7 +762,7 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	return true;
 }
 
-void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
+bool JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 	const auto format = GetFormat();
 	auto &buffer_ptr = scan_state.buffer_ptr;
 	auto &buffer_offset = scan_state.buffer_offset;
@@ -809,11 +809,12 @@ void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 				err.msg = "unexpected character";
 				err.pos = json_size;
 				AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err);
-				return;
+				return false;
 			}
 		}
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 	}
+	return true;
 }
 
 void JSONReader::Initialize(Allocator &allocator, idx_t buffer_size) {
@@ -868,7 +869,10 @@ idx_t JSONReader::Scan(JSONReaderScanState &scan_state) {
 				return 0;
 			}
 		}
-		ParseNextChunk(scan_state);
+		if (!ParseNextChunk(scan_state)) {
+			// found an error but we can't handle it - return
+			return 0;
+		}
 	}
 	return scan_state.scan_count;
 }
