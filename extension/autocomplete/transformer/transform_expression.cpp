@@ -732,37 +732,85 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
 	throw NotImplementedException("AT TIME ZONE has not yet been implemented");
 }
 
+bool IsNumberLiteral(optional_ptr<ParseResult> pr) {
+	if (!pr) return false;
+	if (pr->name == "BaseExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		if (list.GetChild(1)->Cast<OptionalParseResult>().HasResult()) {
+			return false;
+		}
+		return IsNumberLiteral(list.GetChild(0));
+	}
+	if (pr->name == "SingleExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		return IsNumberLiteral(list.GetChild(0)->Cast<ChoiceParseResult>().result);
+	}
+	if (pr->name == "LiteralExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		return IsNumberLiteral(list.GetChild(0)->Cast<ChoiceParseResult>().result);
+	}
+	return pr->name == "NumberLiteral";
+}
+
+string GetRawText(optional_ptr<ParseResult> pr) {
+	if (pr->name == "NumberLiteral") {
+		return pr->Cast<NumberParseResult>().number;
+	}
+	if (pr->name == "BaseExpression") {
+		return GetRawText(pr->Cast<ListParseResult>().GetChild(0));
+	}
+	if (pr->name == "SingleExpression" || pr->name == "LiteralExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		return GetRawText(list.GetChild(0)->Cast<ChoiceParseResult>().result);
+	}
+	return "";
+}
+
 // PrefixExpression <- PrefixOperator* BaseExpression
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+    auto &list_pr = parse_result->Cast<ListParseResult>();
+    auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
+    auto base_expr_pr = list_pr.Child<ListParseResult>(1);
 
-	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
-	if (!prefix_opt.HasResult()) {
-		return expr;
-	}
+    if (!prefix_opt.HasResult()) {
+        return transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
+    }
 
-	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+    auto &prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
 
-	for (auto &prefix_expr : prefix_repeat.children) {
-		auto prefix = transformer.Transform<string>(prefix_expr);
+    // --- SPECIAL CASE: Handle -<Number> atomically to prevent overflow/precision loss ---
+    // We only do this if there is exactly one prefix and it is a minus.
+    if (prefix_repeat.children.size() == 1) {
+        auto prefix = transformer.Transform<string>(prefix_repeat.children[0]);
+        if (prefix == "-" && IsNumberLiteral(base_expr_pr)) {
+            string raw_number = GetRawText(base_expr_pr);
+            string full_text = "-" + raw_number;
+            return ConvertNumberToValue(full_text);
+        }
+    }
 
-		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
-			auto &const_expr = expr->Cast<ConstantExpression>();
-			if (TryNegateValue(const_expr.value)) {
-				continue;
-			}
-		}
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(std::move(expr));
-		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
-		func_expr->is_operator = true;
-		expr = std::move(func_expr);
-	}
-	return expr;
+    auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
+
+    // Apply prefixes in order (from right to left, as they were parsed)
+    for (auto &prefix_expr : prefix_repeat.children) {
+        auto prefix = transformer.Transform<string>(prefix_expr);
+
+        if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
+            auto &const_expr = expr->Cast<ConstantExpression>();
+            if (TryNegateValue(const_expr.value)) {
+                continue;
+            }
+        }
+
+        vector<unique_ptr<ParsedExpression>> children;
+        children.push_back(std::move(expr));
+        auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+        func_expr->is_operator = true;
+        expr = std::move(func_expr);
+    }
+    return expr;
 }
-
 string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
