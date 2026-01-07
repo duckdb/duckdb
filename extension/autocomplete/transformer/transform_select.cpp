@@ -658,7 +658,11 @@ JoinQualifier PEGTransformerFactory::TransformUsingClause(PEGTransformer &transf
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto column_list = ExtractParseResultsFromList(extract_parens);
 	for (auto column : column_list) {
-		result.using_columns.push_back(column->Cast<IdentifierParseResult>().identifier);
+		auto col_identifier = column->Cast<IdentifierParseResult>().identifier;
+		if (col_identifier.empty()) {
+			throw ParserException("Column identifier cannot be empty");
+		}
+		result.using_columns.push_back(col_identifier);
 	}
 	return result;
 }
