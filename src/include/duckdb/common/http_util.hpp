@@ -23,8 +23,6 @@ struct FileOpenerInfo;
 
 struct HTTPLogWriter {};
 
-enum class RequestType : uint8_t { GET_REQUEST, PUT_REQUEST, HEAD_REQUEST, DELETE_REQUEST, POST_REQUEST };
-
 struct HTTPParams {
 	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
 	}
@@ -53,11 +51,7 @@ struct HTTPParams {
 	shared_ptr<Logger> logger;
 
 	//! Overrides the current request method when set.
-	//! E.g.: We can do a PostRequestInfo , but if `custom_http_request_method` is set to 'GET',
-	//! the method sent will be 'GET' instead, even though it may have a request body as usual with POSTs.
-	//! Currently only supported for PostRequestInfo.
-	unique_ptr<RequestType> request_type_override;
-
+	string custom_request_method;
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
 
@@ -73,6 +67,7 @@ public:
 	}
 };
 
+enum class RequestType : uint8_t { GET_REQUEST, PUT_REQUEST, HEAD_REQUEST, DELETE_REQUEST, POST_REQUEST };
 
 struct HTTPHeaders {
 	using header_map_t = case_insensitive_map_t<string>;
@@ -219,7 +214,7 @@ struct DeleteRequestInfo : public BaseRequest {
 struct PostRequestInfo : public BaseRequest {
 	PostRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params, const_data_ptr_t buffer_in,
 	                idx_t buffer_in_len)
-	    : BaseRequest(params.request_type_override == nullptr ? RequestType::POST_REQUEST : *params.request_type_override , path, headers, params), buffer_in(buffer_in),
+	    : BaseRequest(RequestType::POST_REQUEST, path, headers, params), buffer_in(buffer_in),
 	      buffer_in_len(buffer_in_len) {
 	}
 
