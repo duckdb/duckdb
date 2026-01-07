@@ -59,7 +59,7 @@ CopyDatabaseType PEGTransformerFactory::TransformCopyDatabaseFlag(PEGTransformer
 }
 
 CopyDatabaseType PEGTransformerFactory::TransformSchemaOrData(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<CopyDatabaseType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
@@ -108,10 +108,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 			}
 			option_names.insert(option.name);
 			auto option_upper = StringUtil::Upper(option.name);
-			if (option_upper == "PARTITION_BY" ||
-				option_upper == "FORCE_QUOTE" ||
-				option_upper == "FORCE_NOT_NULL" ||
-				option_upper == "FORCE_NULL") {
+			if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE" || option_upper == "FORCE_NOT_NULL" ||
+			    option_upper == "FORCE_NULL") {
 				if (option.expression) {
 					info->parsed_options[option_upper] = std::move(option.expression);
 				} else {
@@ -140,7 +138,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 					if (option.children[0].IsNull()) {
 						info->parsed_options[option_upper] = make_uniq<ConstantExpression>(Value());
 					} else {
-						throw InvalidInputException("Unexpected argument %s for nullstr", option.children[0].ToString());
+						throw InvalidInputException("Unexpected argument %s for nullstr",
+						                            option.children[0].ToString());
 					}
 				}
 			} else {
@@ -262,14 +261,14 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 }
 
 GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
 	return GenericCopyOption("quote", string_literal);
 }
 
 GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool is_not = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto result = GenericCopyOption();
@@ -282,7 +281,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer
 }
 
 GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransformer &transformer,
-																   optional_ptr<ParseResult> parse_result) {
+                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = GenericCopyOption();
 	auto star_or_column_list_pr = list_pr.Child<ListParseResult>(2);

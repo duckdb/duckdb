@@ -164,7 +164,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		result->filter = std::move(filter_expr);
 	}
 
-
 	return std::move(result);
 }
 

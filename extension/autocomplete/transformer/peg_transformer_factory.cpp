@@ -186,7 +186,6 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformForceNullOption);
 	REGISTER_TRANSFORM(TransformPartitionByOption);
 	REGISTER_TRANSFORM(TransformSchemaOrData);
-
 }
 
 void PEGTransformerFactory::RegisterCreateIndex() {
