@@ -1,7 +1,7 @@
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/common/type_visitor.hpp"
 
 #include <string.h>
 
