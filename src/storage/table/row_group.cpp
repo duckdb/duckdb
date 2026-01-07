@@ -586,7 +586,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result, TableScanType TYPE) {
+void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result,
+                            TableScanType TYPE) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	const auto &column_ids = state.GetColumnIds();
@@ -649,15 +650,10 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
-				if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
-					if (!ALLOW_UPDATES) {
-						state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
-					}
-					col_data.Scan(TransactionData::Committed(), state.vector_index, state.column_scans[i],
-					              result.data[i]);
-				} else {
-					col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
+				if (!ALLOW_UPDATES) {
+					state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
 				}
+				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 			}
 		} else {
 			// partial scan: we have deletions or table filters
@@ -728,16 +724,11 @@ void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &st
 				}
 				auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
-				if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-					col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-					                approved_tuple_count);
-				} else {
-					if (!ALLOW_UPDATES) {
-						state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
-					}
-					col_data.Select(TransactionData::Committed(), state.vector_index, state.column_scans[i],
-					                result.data[i], sel, approved_tuple_count);
+				if (!ALLOW_UPDATES) {
+					state.column_scans[i].update_scan_type = UpdateScanType::DISALLOW_UPDATES;
 				}
+				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+				                approved_tuple_count);
 			}
 			filter_info.EndFilter(filter_state);
 
