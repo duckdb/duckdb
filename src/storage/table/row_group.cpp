@@ -586,8 +586,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	}
 }
 
-template <TableScanType TYPE>
-void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
+void RowGroup::ScanInternal(TransactionData transaction, CollectionScanState &state, DataChunk &result, TableScanType TYPE) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	const auto &column_ids = state.GetColumnIds();
@@ -752,7 +751,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 }
 
 void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
-	TemplatedScan<TableScanType::TABLE_SCAN_REGULAR>(transaction, state, result);
+	ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_REGULAR);
 }
 
 void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
@@ -767,17 +766,17 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 		start_ts = transaction_manager.LowestActiveStart();
 		transaction_id = transaction_manager.LowestActiveId();
 	}
-	TransactionData data(transaction_id, start_ts);
+	TransactionData transaction(transaction_id, start_ts);
 	switch (type) {
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS>(data, state, result);
+		ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES>(data, state, result);
+		ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(data, state, result);
+		ScanInternal(transaction, state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
