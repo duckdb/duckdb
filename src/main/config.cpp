@@ -180,7 +180,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
-    DUCKDB_GLOBAL(TempFileEncryptionSetting),
+    DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),

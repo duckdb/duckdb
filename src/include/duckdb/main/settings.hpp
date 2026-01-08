@@ -1301,9 +1301,9 @@ struct TempFileEncryptionSetting {
 	static constexpr const char *Name = "temp_file_encryption";
 	static constexpr const char *Description = "Encrypt all temporary files if database is encrypted";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ThreadsSetting {

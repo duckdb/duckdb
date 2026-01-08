@@ -639,7 +639,7 @@ void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
 }
 
 bool TemporaryFileManager::IsEncrypted() const {
-	return db.config.options.temp_file_encryption;
+	return DBConfig::GetSetting<TempFileEncryptionSetting>(db);
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,

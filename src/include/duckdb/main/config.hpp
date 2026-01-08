@@ -201,8 +201,6 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
-	//! Encrypt the temp files
-	bool temp_file_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.

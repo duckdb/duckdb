@@ -936,8 +936,11 @@
         "name": "temp_file_encryption",
         "description": "Encrypt all temporary files if database is encrypted",
         "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "threads",

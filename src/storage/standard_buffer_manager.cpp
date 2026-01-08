@@ -494,6 +494,10 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	}
 }
 
+bool StandardBufferManager::EncryptTemporaryFiles() {
+	return DBConfig::GetSetting<TempFileEncryptionSetting>(db);
+}
+
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
@@ -510,7 +514,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto path = GetTemporaryPath(block_id);
 
 	idx_t header_size = sizeof(idx_t) * 2;
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
@@ -527,7 +531,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 
 	idx_t offset = sizeof(idx_t) * 2;
 
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
 		//! Write the nonce (and tag for GCM).
@@ -565,7 +569,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
 
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		// encrypted
 		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];

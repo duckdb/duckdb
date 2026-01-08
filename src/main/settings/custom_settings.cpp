@@ -1750,44 +1750,15 @@ Value TempDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Temporary File Encryption
 //===----------------------------------------------------------------------===//
-void TempFileEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto setting = input.GetValue<bool>();
-	if (config.options.temp_file_encryption == setting) {
-		// setting is the current setting
+void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
 		return;
 	}
-
-	if (db) {
-		auto &buffer_manager = BufferManager::GetBufferManager(*db);
-		if (buffer_manager.HasFilesInTemporaryDirectory()) {
-			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
-			                          "while there are existing temporary files is disabled.");
-		}
+	auto &buffer_manager = BufferManager::GetBufferManager(*info.db);
+	if (buffer_manager.HasFilesInTemporaryDirectory()) {
+		throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
+		                          "while there are existing temporary files is disabled.");
 	}
-
-	config.options.temp_file_encryption = setting;
-}
-
-void TempFileEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (config.options.temp_file_encryption == true) {
-		// setting is the current setting
-		return;
-	}
-
-	if (db) {
-		auto &buffer_manager = BufferManager::GetBufferManager(*db);
-		if (buffer_manager.HasFilesInTemporaryDirectory()) {
-			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
-			                          "while there are existing temporary files is disabled.");
-		}
-	}
-
-	config.options.temp_file_encryption = true;
-}
-
-Value TempFileEncryptionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.temp_file_encryption);
 }
 
 //===----------------------------------------------------------------------===//
