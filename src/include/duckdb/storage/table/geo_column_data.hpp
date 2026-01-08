@@ -70,6 +70,8 @@ public:
 
 	void Verify(RowGroup &parent) override;
 
+	void VisitBlockIds(BlockIdVisitor &visitor) const override;
+
 private:
 	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryType geom_type, VertexType vert_type);
 	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryType geom_type, VertexType vert_type);
