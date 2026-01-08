@@ -794,7 +794,8 @@
         "name": "pin_threads",
         "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
         "type": "ENUM<ThreadPinMode>",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "auto"
     },
     {
         "name": "pivot_filter_threshold",

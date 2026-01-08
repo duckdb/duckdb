@@ -527,18 +527,8 @@ Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
-void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.pin_threads = EnumUtil::FromString<ThreadPinMode>(str_input);
-}
-
-void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.pin_threads = DBConfigOptions().pin_threads;
-}
-
-Value PinThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.pin_threads)));
+void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<ThreadPinMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

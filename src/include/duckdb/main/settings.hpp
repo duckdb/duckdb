@@ -1097,9 +1097,9 @@ struct PinThreadsSetting {
 	static constexpr const char *Description =
 	    "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "auto";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct PivotFilterThresholdSetting {

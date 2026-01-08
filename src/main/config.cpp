@@ -160,7 +160,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(PartitionedWriteMaxOpenFilesSetting),
     DUCKDB_GLOBAL(PasswordSetting),
     DUCKDB_SETTING_CALLBACK(PerfectHtThresholdSetting),
-    DUCKDB_GLOBAL(PinThreadsSetting),
+    DUCKDB_SETTING_CALLBACK(PinThreadsSetting),
     DUCKDB_SETTING(PivotFilterThresholdSetting),
     DUCKDB_SETTING(PivotLimitSetting),
     DUCKDB_SETTING(PreferRangeJoinsSetting),
