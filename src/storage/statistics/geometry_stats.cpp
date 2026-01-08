@@ -127,7 +127,7 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	});
 
 	// Read flags
-	deserializer.ReadProperty<uint8_t>(202, "flags", data.flags.flags);
+	deserializer.ReadPropertyWithDefault<uint8_t>(202, "flags", data.flags.flags);
 }
 
 string GeometryStats::ToString(const BaseStatistics &stats) {

@@ -154,7 +154,6 @@ unique_ptr<BaseStatistics> GeoColumnData::GetUpdateStatistics() {
 //----------------------------------------------------------------------------------------------------------------------
 // Checkpoint
 //----------------------------------------------------------------------------------------------------------------------
-namespace {
 
 class GeoColumnCheckpointState final : public ColumnCheckpointState {
 public:
@@ -163,6 +162,11 @@ public:
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 		// Make stats
 		global_stats = GeometryStats::CreateEmpty(column_data.type).ToUnique();
+
+		// Also pass on the shredding state
+		const auto &geo_column = column_data.Cast<GeoColumnData>();
+		geom_type = geo_column.geom_type;
+		vert_type = geo_column.vert_type;
 	}
 
 	// Shared pointer to the new/old inner column.
@@ -221,8 +225,6 @@ public:
 	}
 };
 
-} // namespace
-
 unique_ptr<ColumnCheckpointState> GeoColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                        PartialBlockManager &partial_block_manager) {
 	return make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
@@ -234,7 +236,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 	if (!HasAnyChanges()) {
 		// No changes, keep column
-		checkpoint_state->inner_column_state = base_column->Checkpoint(row_group, info);
+		checkpoint_state->inner_column = base_column;
+		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
 		return std::move(checkpoint_state);
 	}
 
@@ -255,7 +258,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 	if (has_mixed_type || has_only_geometry_collection || has_only_invalid || has_empty) {
 		// Cant specialize, keep column
-		checkpoint_state->inner_column_state = base_column->Checkpoint(row_group, info);
+		checkpoint_state->inner_column = base_column;
+		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
 		checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
 		return std::move(checkpoint_state);
 	}
@@ -303,7 +307,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	}
 
 	// Move then new column into our checkpoint state
-	checkpoint_state->inner_column = std::move(new_column);
+	checkpoint_state->inner_column = new_column;
 	checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
 
 	// Also set the shredding state
@@ -352,7 +356,8 @@ void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStat
 
 	// Else, this is a shredded point
 	const auto layout_type = Geometry::GetVectorizedType(geom_type, vert_type);
-	base_column = CreateColumn(block_manager, this->info, base_column->column_index, layout_type, GetDataType(), this);
+	base_column = CreateColumn(block_manager, info, base_column->column_index, layout_type, GetDataType(), this);
+	D_ASSERT(base_column != nullptr);
 
 	auto dummy_stats = BaseStatistics::CreateEmpty(layout_type);
 	base_column->InitializeColumn(column_data, dummy_stats);
@@ -377,6 +382,10 @@ void GeoColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_
 
 void GeoColumnData::Verify(RowGroup &parent) {
 	return base_column->Verify(parent);
+}
+
+void GeoColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
+	return base_column->VisitBlockIds(visitor);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
