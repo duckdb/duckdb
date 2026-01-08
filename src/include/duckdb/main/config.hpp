@@ -364,7 +364,12 @@ public:
 	OrderByNullType ResolveNullOrder(ClientContext &context, OrderType order_type, OrderByNullType null_type) const;
 	const string UserAgent() const;
 
+	//! Returns the value of a setting currently. If the setting is not set by the user, returns the default value.
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	//! Returns the value of a setting set by the user currently
+	SettingLookupResult TryGetCurrentUserSetting(const string &key, Value &result) const;
+	//! Returns the default value of an option
+	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
 	template <class OP, class SOURCE>
 	static typename std::enable_if<std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type

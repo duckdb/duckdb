@@ -669,11 +669,11 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 }
 
 bool DBConfig::TryGetSettingInternal(const ClientContext &context, const char *setting, Value &result) {
-	return context.TryGetCurrentSetting(setting, result);
+	return context.TryGetCurrentUserSetting(setting, result);
 }
 
 bool DBConfig::TryGetSettingInternal(const DBConfig &config, const char *setting, Value &result) {
-	auto lookup_result = config.TryGetCurrentSetting(setting, result);
+	auto lookup_result = config.TryGetCurrentUserSetting(setting, result);
 	return lookup_result;
 }
 
@@ -681,7 +681,7 @@ bool DBConfig::TryGetSettingInternal(const DatabaseInstance &db, const char *set
 	return TryGetSettingInternal(DBConfig::GetConfig(db), setting, result);
 }
 
-SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
+SettingLookupResult DBConfig::TryGetCurrentUserSetting(const string &key, Value &result) const {
 	const auto &global_config_map = options.set_variables;
 
 	auto global_value = global_config_map.find(key);
@@ -690,6 +690,24 @@ SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &res
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();
+}
+
+SettingLookupResult DBConfig::TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result) {
+	if (!option || !option->default_value) {
+		return SettingLookupResult();
+	}
+	auto input_type = ParseLogicalType(option->parameter_type);
+	result = Value(option->default_value).DefaultCastAs(input_type);
+	return SettingLookupResult(SettingScope::GLOBAL);
+}
+
+SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
+	auto lookup_result = TryGetCurrentUserSetting(key, result);
+	if (lookup_result) {
+		return lookup_result;
+	}
+	auto option = GetOptionByName(key);
+	return TryGetDefaultValue(option, result);
 }
 
 OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType order_type,

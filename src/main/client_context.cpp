@@ -1424,33 +1424,45 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSettingInternal(const string &key, Value &result) const {
+SettingLookupResult
+ClientContext::TryGetCurrentUserSettingInternal(const string &key, Value &result,
+                                                optional_ptr<const ConfigurationOption> &option) const {
+	// first check the built-in settings
+	auto &db_config = DBConfig::GetConfig(*this);
+	option = db_config.GetOptionByName(key);
+	if (option) {
+		if (option->get_setting) {
+			result = option->get_setting(*this);
+			return SettingLookupResult(SettingScope::LOCAL);
+		}
+	}
+	auto &key_name = option ? option->name : key;
+
 	// check the client session values
 	const auto &session_config_map = config.set_variables;
 
-	auto session_value = session_config_map.find(key);
+	auto session_value = session_config_map.find(key_name);
 	bool found_session_value = session_value != session_config_map.end();
 	if (found_session_value) {
 		result = session_value->second;
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// finally check the global session values
-	return db->TryGetCurrentSetting(key, result);
+	return db_config.TryGetCurrentUserSetting(key_name, result);
 }
 
 SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
-	// first check the built-in settings
-	auto &db_config = DBConfig::GetConfig(*this);
-	auto option = db_config.GetOptionByName(key);
-	if (option) {
-		if (option->get_setting) {
-			result = option->get_setting(*this);
-			return SettingLookupResult(SettingScope::LOCAL);
-		}
-		// alias - search for the default key
-		return TryGetCurrentSettingInternal(option->name, result);
+	optional_ptr<const ConfigurationOption> option;
+	auto lookup_result = TryGetCurrentUserSettingInternal(key, result, option);
+	if (lookup_result) {
+		return lookup_result;
 	}
-	return TryGetCurrentSettingInternal(key, result);
+	return DBConfig::TryGetDefaultValue(option, result);
+}
+
+SettingLookupResult ClientContext::TryGetCurrentUserSetting(const string &key, Value &result) const {
+	optional_ptr<const ConfigurationOption> option;
+	return TryGetCurrentUserSettingInternal(key, result, option);
 }
 
 ParserOptions ClientContext::GetParserOptions() const {
