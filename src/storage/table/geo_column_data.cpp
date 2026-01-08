@@ -234,10 +234,28 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto &partial_block_manager = info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
 
+	// Are there any changes?
 	if (!HasAnyChanges()) {
 		// No changes, keep column
 		checkpoint_state->inner_column = base_column;
 		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+		return std::move(checkpoint_state);
+	}
+
+	// Do we have enough rows to consider shredding?
+	auto &table_info = row_group.GetTableInfo();
+	auto &db = table_info.GetDB();
+	auto &config_options = DBConfig::Get(db).options;
+
+	const auto shredding_threshold = config_options.geometry_minimum_shredding_size;
+	const auto current_row_count = count.load();
+
+	auto should_shred = shredding_threshold >= 0 && current_row_count >= static_cast<idx_t>(shredding_threshold);
+	if (!should_shred) {
+		// Keep column
+		checkpoint_state->inner_column = base_column;
+		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+		checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
 		return std::move(checkpoint_state);
 	}
 
@@ -252,8 +270,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto has_only_geometry_collection = new_geom_type == GeometryType::GEOMETRYCOLLECTION;
 	auto has_only_invalid = new_geom_type == GeometryType::INVALID;
 
-	// We cant specialize empty points, or multipoints containing empty points
-	// Because we cant represent zero-vertex geometries in those layouts
+	// We cant specialize empty geometries, because we cant represent zero-vertex geometries in those layouts
 	const auto has_empty = flags.HasEmptyGeometry() || flags.HasEmptyPart();
 
 	if (has_mixed_type || has_only_geometry_collection || has_only_invalid || has_empty) {

@@ -6,6 +6,9 @@ load __TEST_DIR__/test_shred_types.db
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
 
 # Setup test table
 statement ok

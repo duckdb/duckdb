@@ -7,6 +7,9 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
 create table t1(g GEOMETRY);
 
 statement ok
@@ -41,7 +44,6 @@ select stats(g) from t1;
 
 # Now restart, to ensure persistence
 restart
-
 
 query I rowsort
 select distinct segment_type from pragma_storage_info('t1') order by all;

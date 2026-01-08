@@ -565,6 +565,14 @@
         "custom_implementation": true
     },
     {
+        "name": "geometry_minimum_shredding_size",
+        "description": "Minimum size of a rowgroup to enable GEOMETRY shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "30000",
+        "struct": "GeometryMinimumShreddingSize"
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",

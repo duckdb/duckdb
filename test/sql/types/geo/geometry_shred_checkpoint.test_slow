@@ -3,6 +3,9 @@
 # group: [geo]
 
 statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
 SET checkpoint_threshold='1TB'
 
 statement ok
