@@ -25,6 +25,7 @@ public:
 	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
 	static constexpr uint8_t ROW_ID_COUNT = ROW_ID_SIZE - 1;
 	static constexpr uint8_t DEPRECATED_COUNT = 15;
+	// The child pointer and the in_memory boolean.
 	static constexpr uint8_t METADATA_SIZE = sizeof(Node) + 1;
 
 public:

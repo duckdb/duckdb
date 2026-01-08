@@ -1012,9 +1012,6 @@ void ART::Deserialize(const BlockPointer &pointer) {
 }
 
 void ART::SetPrefixCount(const IndexStorageInfo &info) {
-	auto numeric_max = NumericLimits<uint8_t>().Maximum();
-	auto max_aligned = AlignValueFloor<uint8_t>(numeric_max - Prefix::METADATA_SIZE);
-
 	if (info.IsValid() && info.root_block_ptr.IsValid()) {
 		prefix_count = Prefix::DEPRECATED_COUNT;
 		return;
@@ -1031,13 +1028,18 @@ void ART::SetPrefixCount(const IndexStorageInfo &info) {
 		compound_size += GetTypeIdSize(type);
 	}
 
-	auto aligned = AlignValue(compound_size) - 1;
-	if (aligned > NumericCast<idx_t>(max_aligned)) {
-		prefix_count = max_aligned;
-		return;
-	}
+	// Get the maximum possible prefix size.
+	// Minus one to index the prefix count (last byte).
+	auto numeric_max = NumericLimits<uint8_t>().Maximum();
+	uint8_t max_aligned = AlignValueFloor<uint8_t>(numeric_max - Prefix::METADATA_SIZE) - 1;
 
-	prefix_count = NumericCast<uint8_t>(aligned);
+	// Ceiling of compound size,
+	// minus one to index the prefix count (last byte).
+	idx_t key_aligned = AlignValue(compound_size) - 1;
+
+	// Set the prefix size to the maximum of the (compound) key size and the maximum prefix size.
+	bool exceeds_max = key_aligned > NumericCast<idx_t>(max_aligned);
+	prefix_count = exceeds_max ? max_aligned : NumericCast<uint8_t>(key_aligned);
 }
 
 idx_t ART::GetInMemorySize(IndexLock &index_lock) {
