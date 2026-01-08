@@ -59,6 +59,10 @@ EXCLUDED_RULES = {
     "PragmaName",
     "SettingName",
     "CopyOptionName",
+    "AtTimeZoneOperator",
+    "Generated",
+    "ColumnConstraint",
+    "AlwaysOrByDefault",
 }
 
 

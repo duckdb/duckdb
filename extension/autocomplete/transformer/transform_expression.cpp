@@ -766,7 +766,17 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
 	if (!at_time_zone_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("AT TIME ZONE has not yet been implemented");
+	auto at_time_zone_repeat = at_time_zone_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &time_zone_expr : at_time_zone_repeat.children) {
+		auto &inner_list_pr = time_zone_expr->Cast<ListParseResult>();
+		vector<unique_ptr<ParsedExpression>> time_zone_children;
+		time_zone_children.push_back(
+		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
+		time_zone_children.push_back(std::move(expr));
+		auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "timezone", std::move(time_zone_children));
+		expr = std::move(func_expr);
+	}
+	return expr;
 }
 
 // PrefixExpression <- PrefixOperator* BaseExpression
