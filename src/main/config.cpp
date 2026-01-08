@@ -668,24 +668,17 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 	return GetSetting<DefaultOrderSetting>(context);
 }
 
-Value DBConfig::GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value) {
-	Value result_val;
-	if (context.TryGetCurrentSetting(setting, result_val)) {
-		return result_val;
-	}
-	return Value(default_value);
+bool DBConfig::TryGetSettingInternal(const ClientContext &context, const char *setting, Value &result) {
+	return context.TryGetCurrentSetting(setting, result);
 }
 
-Value DBConfig::GetSettingInternal(const DBConfig &config, const char *setting, const char *default_value) {
-	Value result_val;
-	if (config.TryGetCurrentSetting(setting, result_val)) {
-		return result_val;
-	}
-	return Value(default_value);
+bool DBConfig::TryGetSettingInternal(const DBConfig &config, const char *setting, Value &result) {
+	auto lookup_result = config.TryGetCurrentSetting(setting, result);
+	return lookup_result;
 }
 
-Value DBConfig::GetSettingInternal(const DatabaseInstance &db, const char *setting, const char *default_value) {
-	return GetSettingInternal(DBConfig::GetConfig(db), setting, default_value);
+bool DBConfig::TryGetSettingInternal(const DatabaseInstance &db, const char *setting, Value &result) {
+	return TryGetSettingInternal(DBConfig::GetConfig(db), setting, result);
 }
 
 SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
@@ -694,12 +687,6 @@ SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &res
 	auto global_value = global_config_map.find(key);
 	if (global_value != global_config_map.end()) {
 		result = global_value->second;
-		return SettingLookupResult(SettingScope::GLOBAL);
-	}
-	auto option = GetOptionByName(key);
-	if (option && option->default_value) {
-		auto input_type = ParseLogicalType(option->parameter_type);
-		result = Value(option->default_value).DefaultCastAs(input_type);
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();

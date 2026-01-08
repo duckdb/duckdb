@@ -369,14 +369,23 @@ public:
 	template <class OP, class SOURCE>
 	static typename std::enable_if<std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
 	GetSetting(const SOURCE &source) {
-		return EnumUtil::FromString<typename OP::RETURN_TYPE>(
-		    GetSettingInternal(source, OP::Name, OP::DefaultValue).ToString());
+		Value result;
+		if (TryGetSettingInternal(source, OP::Name, result)) {
+			return EnumUtil::FromString<typename OP::RETURN_TYPE>(StringValue::Get(result));
+		}
+		return EnumUtil::FromString<typename OP::RETURN_TYPE>(OP::DefaultValue);
 	}
 
 	template <class OP, class SOURCE>
 	static typename std::enable_if<!std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
 	GetSetting(const SOURCE &source) {
-		return GetSettingInternal(source, OP::Name, OP::DefaultValue).template GetValue<typename OP::RETURN_TYPE>();
+		Value result;
+		if (TryGetSettingInternal(source, OP::Name, result)) {
+			return result.template GetValue<typename OP::RETURN_TYPE>();
+		}
+		auto input_type = ParseLogicalType(OP::InputType);
+		auto default_value = Value(OP::DefaultValue).DefaultCastAs(input_type);
+		return default_value.template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
@@ -391,9 +400,9 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 
 private:
-	static Value GetSettingInternal(const DatabaseInstance &db, const char *setting, const char *default_value);
-	static Value GetSettingInternal(const DBConfig &config, const char *setting, const char *default_value);
-	static Value GetSettingInternal(const ClientContext &context, const char *setting, const char *default_value);
+	static bool TryGetSettingInternal(const DatabaseInstance &db, const char *setting, Value &result);
+	static bool TryGetSettingInternal(const DBConfig &config, const char *setting, Value &result);
+	static bool TryGetSettingInternal(const ClientContext &context, const char *setting, Value &result);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
