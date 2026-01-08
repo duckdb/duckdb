@@ -444,54 +444,6 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// H T T P Proxy
-//===----------------------------------------------------------------------===//
-void HTTPProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_proxy = input.GetValue<string>();
-}
-
-void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy = DBConfigOptions().http_proxy;
-}
-
-Value HTTPProxySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Proxy Password
-//===----------------------------------------------------------------------===//
-void HTTPProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_proxy_password = input.GetValue<string>();
-}
-
-void HTTPProxyPasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy_password = DBConfigOptions().http_proxy_password;
-}
-
-Value HTTPProxyPasswordSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy_password);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Proxy Username
-//===----------------------------------------------------------------------===//
-void HTTPProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_proxy_username = input.GetValue<string>();
-}
-
-void HTTPProxyUsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy_username = DBConfigOptions().http_proxy_username;
-}
-
-Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy_username);
-}
-
-//===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

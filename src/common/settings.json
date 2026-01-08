@@ -585,21 +585,24 @@
         "name": "http_proxy",
         "description": "HTTP proxy host",
         "type": "VARCHAR",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "",
         "struct": "HTTPProxySetting"
     },
     {
         "name": "http_proxy_password",
         "description": "Password for HTTP proxy",
         "type": "VARCHAR",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "",
         "struct": "HTTPProxyPasswordSetting"
     },
     {
         "name": "http_proxy_username",
         "description": "Username for HTTP proxy",
         "type": "VARCHAR",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "",
         "struct": "HTTPProxyUsernameSetting"
     },
     {

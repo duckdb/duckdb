@@ -811,9 +811,8 @@ struct HTTPProxySetting {
 	static constexpr const char *Name = "http_proxy";
 	static constexpr const char *Description = "HTTP proxy host";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct HTTPProxyPasswordSetting {
@@ -821,9 +820,8 @@ struct HTTPProxyPasswordSetting {
 	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct HTTPProxyUsernameSetting {
@@ -831,9 +829,8 @@ struct HTTPProxyUsernameSetting {
 	static constexpr const char *Name = "http_proxy_username";
 	static constexpr const char *Description = "Username for HTTP proxy";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct IeeeFloatingPointOpsSetting {
