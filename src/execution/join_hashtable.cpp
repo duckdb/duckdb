@@ -1252,10 +1252,36 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);
 
-		// for each match - mark the match as found
-		for (idx_t i = 0; i < result_count; i++) {
-			auto idx = chain_match_sel_vector.get_index(i);
-			Store<bool>(true, ptrs[idx] + ht.tuple_size);
+		if (ht.non_equality_predicates.empty()) {
+			// we only have equality predicates - the match is found for the entire chain
+			for (idx_t i = 0; i < result_count; i++) {
+				const auto idx = chain_match_sel_vector.get_index(i);
+				auto &ptr = ptrs[idx];
+				if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
+					ptr = ht.dead_end.get();
+					continue;
+				}
+
+				// Fully mark chain as found
+				while (true) {
+					// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
+					// threads Technically it is, but it does not matter, since the only value that can be written is
+					// "true"
+					Store<bool>(true, ptr + ht.tuple_size);
+					auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
+					if (!next_ptr) {
+						break;
+					}
+					ptr = next_ptr;
+				}
+			}
+		} else {
+			// we have non-equality predicates - we need to evaluate the join condition for every row
+			// for each match found in the current pass - mark the match as found
+			for (idx_t i = 0; i < result_count; i++) {
+				auto idx = chain_match_sel_vector.get_index(i);
+				Store<bool>(true, ptrs[idx] + ht.tuple_size);
+			}
 		}
 
 		// check the next set of pointers
