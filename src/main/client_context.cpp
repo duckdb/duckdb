@@ -1466,11 +1466,10 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(const string &key, V
 }
 
 ParserOptions ClientContext::GetParserOptions() const {
-	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
 	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
-	options.max_expression_depth = client_config.max_expression_depth;
+	options.max_expression_depth = DBConfig::GetSetting<MaxExpressionDepthSetting>(*this);
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	options.parser_override_setting = DBConfig::GetConfig(*this).options.allow_parser_override_extension;
 	return options;

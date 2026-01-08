@@ -968,9 +968,8 @@ struct MaxExpressionDepthSetting {
 	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
 	    "expressions might lead to stack overflow errors.";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "1000";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct MaxMemorySetting {

@@ -508,23 +508,6 @@ Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Max Expression Depth
-//===----------------------------------------------------------------------===//
-void MaxExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.max_expression_depth = input.GetValue<idx_t>();
-}
-
-void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).max_expression_depth = ClientConfig().max_expression_depth;
-}
-
-Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.max_expression_depth);
-}
-
-//===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

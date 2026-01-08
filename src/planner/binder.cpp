@@ -34,10 +34,11 @@ idx_t Binder::GetBinderDepth() const {
 
 void Binder::IncreaseDepth() {
 	depth++;
-	if (depth > context.config.max_expression_depth) {
+	auto max_expression_depth = DBConfig::GetSetting<MaxExpressionDepthSetting>(context);
+	if (depth > max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
-		                      context.config.max_expression_depth);
+		                      max_expression_depth);
 	}
 }
 

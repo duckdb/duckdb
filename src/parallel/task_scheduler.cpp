@@ -546,9 +546,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		// Whether to pin threads to cores
 		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
 		auto pin_thread_mode = DBConfig::GetSetting<PinThreadsSetting>(db);
-		const auto pin_threads = pin_thread_mode == ThreadPinMode::ON ||
-		                         (pin_thread_mode == ThreadPinMode::AUTO &&
-		                          std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
+		const auto pin_threads =
+		    pin_thread_mode == ThreadPinMode::ON ||
+		    (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
