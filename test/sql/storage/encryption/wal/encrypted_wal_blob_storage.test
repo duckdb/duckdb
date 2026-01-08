@@ -27,6 +27,9 @@ statement ok
 INSERT INTO enc.blobs VALUES('a'), ('\xAA'), ('\xAA\xFF\xAA'),  (''), (NULL), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01'), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01')
 
 statement ok
+DETACH enc
+
+statement ok
 ATTACH '__TEST_DIR__/encrypted_blob_storage_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 query I
