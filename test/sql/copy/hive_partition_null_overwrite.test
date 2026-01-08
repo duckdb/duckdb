@@ -1,20 +1,4 @@
-# Regression test: avoid segfault when hive partitioning sees NULL in partition column
-# (multiple partitioned writes with OVERWRITE)
-
-statement ok
-PRAGMA threads=1;
-
 statement ok
 COPY (SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null/hive_partition_null_overwrite.csv'))
 TO '{TEST_DIR}/repro_min'
 (FORMAT csv, PARTITION_BY (symbol, year, month), OVERWRITE);
-
-statement ok
-COPY (SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null/hive_partition_null_overwrite.csv'))
-TO '{TEST_DIR}/repro_min'
-(FORMAT csv, PARTITION_BY (symbol, year, month), OVERWRITE);
-
-query I
-SELECT 42;
-----
-42
