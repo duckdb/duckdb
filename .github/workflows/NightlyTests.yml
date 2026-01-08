@@ -25,7 +25,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
-  CCACHE_SAVE: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
   REDUCE_SYMBOLS: 1
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
 
@@ -101,7 +101,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -143,7 +143,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -171,6 +171,8 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -179,7 +181,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -217,6 +219,8 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
@@ -225,7 +229,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -250,11 +254,13 @@ jobs:
        with:
          fetch-depth: 0
 
+     - uses: ./.github/actions/cleanup_runner
+
      - name: Setup Ccache
        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
        with:
          key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
 
@@ -283,6 +289,8 @@ jobs:
        with:
          fetch-depth: 0
 
+     - uses: ./.github/actions/cleanup_runner
+
      - name: Install
        shell: bash
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -291,7 +299,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
 
@@ -342,7 +350,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - uses: ./.github/actions/cleanup_runner
 
@@ -386,6 +394,8 @@ jobs:
        with:
          fetch-depth: 0
 
+     - uses: ./.github/actions/cleanup_runner
+
      - name: Checkout tools repo
        uses: actions/checkout@v4
        with:
@@ -405,7 +415,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
 
@@ -455,7 +465,7 @@ jobs:
          python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
   vector-and-block-sizes:
-    name: Tests different vector and block sizes
+    name: Tests non-default vector and block size
     runs-on: ubuntu-24.04
     env:
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
@@ -474,7 +484,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - uses: ./.github/actions/cleanup_runner
 
@@ -484,18 +494,18 @@ jobs:
         id: build
         shell: bash
         env:
-          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+          CORE_EXTENSIONS: "json;parquet"
           GEN: ninja
           STANDARD_VECTOR_SIZE: 512
         run: make relassert
 
-      - name: Fast and storage tests with default and small block size
+      - name: All tests with 512 vector size and default block size
         shell: bash
-        run: |
-          ./build/relassert/test/unittest
-          ./build/relassert/test/unittest "test/sql/storage/*"
-          ./build/relassert/test/unittest --test-config test/configs/block_size_16kB.json
-          ./build/relassert/test/unittest "test/sql/storage/*" --test-config test/configs/block_size_16kB.json
+        run: ./build/relassert/test/unittest "*" --test-config test/configs/vector_size_512.json
+
+      - name: All tests with 512 vector size and 16kB block size
+        shell: bash
+        run: ./build/relassert/test/unittest "*" --test-config test/configs/block_size_16kB.json
 
   linux-debug-configs:
     name: Tests different configurations with a debug build
@@ -509,6 +519,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: ./.github/actions/cleanup_runner
+
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
@@ -517,7 +529,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - uses: ./.github/actions/cleanup_runner
 
@@ -534,8 +546,7 @@ jobs:
       - name: test/configs/enable_verification_for_debug.json
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
-        run: |
-          ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
+        run: ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -559,7 +570,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - uses: ./.github/actions/cleanup_runner
 
@@ -613,7 +624,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -677,7 +688,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ env.CCACHE_SAVE }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
 
