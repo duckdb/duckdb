@@ -8,7 +8,6 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -19,7 +18,6 @@
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "mbedtls_wrapper.hpp"
 
 #include <algorithm>
 #include <cstring>

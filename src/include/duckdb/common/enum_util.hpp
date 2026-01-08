@@ -432,8 +432,6 @@ enum class TablePartitionInfo : uint8_t;
 
 enum class TableReferenceType : uint8_t;
 
-enum class TableScanType : uint8_t;
-
 enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
@@ -1090,9 +1088,6 @@ const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
 
 template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value);
-
-template<>
-const char* EnumUtil::ToChars<TableScanType>(TableScanType value);
 
 template<>
 const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
@@ -1778,9 +1773,6 @@ TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value);
-
-template<>
-TableScanType EnumUtil::FromString<TableScanType>(const char *value);
 
 template<>
 TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);

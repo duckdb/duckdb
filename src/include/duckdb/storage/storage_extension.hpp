@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {

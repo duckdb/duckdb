@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 

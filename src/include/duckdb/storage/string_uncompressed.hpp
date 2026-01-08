@@ -9,16 +9,10 @@
 #pragma once
 
 #include "duckdb/common/likely.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 

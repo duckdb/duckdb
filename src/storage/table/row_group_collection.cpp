@@ -17,7 +17,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
@@ -1156,8 +1155,7 @@ public:
 			while (true) {
 				scan_chunk.Reset();
 
-				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
-				                                TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS);
+				current_row_group.Scan(scan_state.table_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;
 				}
@@ -1864,7 +1862,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
@@ -1872,7 +1870,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
+		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
