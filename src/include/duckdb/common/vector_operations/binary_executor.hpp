@@ -71,6 +71,7 @@ struct BinaryExecutor {
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+	AUTO_VEC_DISPATCH
 	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                            RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
@@ -188,6 +189,7 @@ struct BinaryExecutor {
 #endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
+	AUTO_VEC_DISPATCH
 	static void ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
 	                               const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
@@ -308,6 +310,7 @@ public:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
+	AUTO_VEC_DISPATCH
 	static inline idx_t SelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                                   const SelectionVector *sel, idx_t count, ValidityMask &validity_mask,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -372,6 +375,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+	AUTO_VEC_DISPATCH
 	static inline idx_t SelectFlatLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                                         const SelectionVector *sel, idx_t count, ValidityMask &mask,
 	                                         SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -432,6 +436,7 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 #endif
 	static inline idx_t
+	AUTO_VEC_DISPATCH
 	SelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                  const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                  const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
@@ -467,6 +472,7 @@ public:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 	static inline idx_t
+	AUTO_VEC_DISPATCH
 	SelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                           const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
@@ -486,6 +492,7 @@ public:
 #endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
+	AUTO_VEC_DISPATCH
 	static inline idx_t
 	SelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,

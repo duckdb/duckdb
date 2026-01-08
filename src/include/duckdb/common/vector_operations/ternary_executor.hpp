@@ -41,6 +41,7 @@ struct TernaryLambdaWrapperWithNulls {
 struct TernaryExecutor {
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
+	AUTO_VEC_DISPATCH
 	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
 	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector &asel, const SelectionVector &bsel,
@@ -123,6 +124,7 @@ public:
 
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+	AUTO_VEC_DISPATCH
 	static inline idx_t SelectLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
 	                               const C_TYPE *__restrict cdata, const SelectionVector *result_sel, idx_t count,
 	                               const SelectionVector &asel, const SelectionVector &bsel,

@@ -7,6 +7,7 @@ namespace duckdb {
 namespace {
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+AUTO_VEC_DISPATCH
 void DistinctExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                 RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
                                 const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
@@ -65,6 +66,7 @@ template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TR
 #else
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 #endif
+AUTO_VEC_DISPATCH
 idx_t DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                 const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                 const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
@@ -112,6 +114,7 @@ idx_t DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_T
 
 #ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
+AUTO_VEC_DISPATCH
 idx_t DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                          const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                          const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
@@ -131,6 +134,7 @@ idx_t DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, cons
 #endif
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
+AUTO_VEC_DISPATCH
 idx_t DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                       const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                       const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
@@ -165,6 +169,7 @@ idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionVector *
 #ifndef DUCKDB_SMALLER_BINARY
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+AUTO_VEC_DISPATCH
 idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, const SelectionVector *sel,
                              idx_t count, ValidityMask &lmask, ValidityMask &rmask, SelectionVector *true_sel,
                              SelectionVector *false_sel) {
@@ -193,6 +198,7 @@ idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL>
+AUTO_VEC_DISPATCH
 idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
                                       const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
                                       SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -210,6 +216,7 @@ idx_t DistinctSelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *_
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+AUTO_VEC_DISPATCH
 idx_t DistinctSelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
                                    const SelectionVector *sel, idx_t count, ValidityMask &lmask, ValidityMask &rmask,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
