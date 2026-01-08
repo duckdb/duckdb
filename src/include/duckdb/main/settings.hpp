@@ -1338,15 +1338,14 @@ struct ValidateExternalFileCacheSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct VariantMinimumShreddingSize {
+struct VariantMinimumShreddingSizeSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "variant_minimum_shredding_size";
 	static constexpr const char *Description = "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 "
 	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
 	static constexpr const char *InputType = "BIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "30000";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct WriteBufferRowGroupCountSetting {

@@ -171,6 +171,7 @@ public:
 	DUCKDB_API static void SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos);
 
 	DUCKDB_API static idx_t ToUnsigned(const string &str);
+	DUCKDB_API static int64_t ToSigned(const string &str);
 	DUCKDB_API static double ToDouble(const string &str);
 
 	template <class T>

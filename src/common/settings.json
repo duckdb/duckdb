@@ -970,9 +970,8 @@
         "name": "variant_minimum_shredding_size",
         "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
         "type": "BIGINT",
-        "scope": "global",
-        "default_value": "30000",
-        "struct": "VariantMinimumShreddingSize"
+        "default_scope": "global",
+        "default_value": "30000"
     },
     {
         "name": "write_buffer_row_group_count",

@@ -556,22 +556,6 @@ void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &p
 }
 
 //===----------------------------------------------------------------------===//
-// Variant Minimum Shredding Size
-//===----------------------------------------------------------------------===//
-void VariantMinimumShreddingSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.variant_minimum_shredding_size = input.GetValue<int64_t>();
-}
-
-void VariantMinimumShreddingSize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.variant_minimum_shredding_size = DBConfigOptions().variant_minimum_shredding_size;
-}
-
-Value VariantMinimumShreddingSize::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.variant_minimum_shredding_size);
-}
-
-//===----------------------------------------------------------------------===//
 // Zstd Min String Length
 //===----------------------------------------------------------------------===//
 void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
