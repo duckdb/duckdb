@@ -11,7 +11,6 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
@@ -236,6 +235,20 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 	// validate ASOF join conditions
 	if (is_asof) {
+		//	We can't support arbitrary predicates with some ASOF joins
+		switch (type) {
+		case JoinType::RIGHT:
+		case JoinType::OUTER:
+		case JoinType::SEMI:
+			if (!arbitrary_expressions.empty()) {
+				throw NotImplementedException("Unsupported ASOF JOIN type (%s) with arbitrary predicate",
+				                              EnumUtil::ToChars(type));
+			}
+			break;
+		default:
+			break;
+		}
+
 		idx_t asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
 			auto &cond = conditions[c];

@@ -23,17 +23,16 @@ INSERT INTO right_table VALUES
     (2, '2024-01-01 10:04:00', 'A', 150.50, false),
     (3, '2024-01-01 10:09:00', 'B', 379.00, true);
 
-query IIII
+statement error
 SELECT * 
 FROM left_table l 
 ASOF SEMI JOIN right_table r 
 	 ON l.symbol = r.symbol 
 	AND l.ts >= r.ts 
-	AND l.price + r.bid > 300;
+	AND l.price + r.bid > 300
+ORDER BY 1
 ----
-1	2024-01-01 10:00:00	A	150.000
-2	2024-01-01 10:05:00	A	151.000
-3	2024-01-01 10:10:00	B	380.000
+Not implemented Error: Unsupported ASOF JOIN type (SEMI) with arbitrary predicate
 
 query IIII
 SELECT * 
@@ -44,19 +43,17 @@ ASOF ANTI JOIN right_table r
 	AND l.price + r.bid > 300;
 ----
 
-query IIIIIIIII
+statement error
 SELECT * 
 FROM left_table l 
 ASOF RIGHT JOIN right_table r 
 	 ON l.symbol = r.symbol 
 	AND l.ts >= r.ts 
-	AND l.price + r.bid > 300;
+	AND l.price + r.bid > 300
 ----
-2	2024-01-01 10:05:00	A	151.000	2	2024-01-01 10:04:00	A	150.500	false
-3	2024-01-01 10:10:00	B	380.000	3	2024-01-01 10:09:00	B	379.000	true
-NULL	NULL	NULL	NULL	1	2024-01-01 09:59:00	A	149.500	true
+Not implemented Error: Unsupported ASOF JOIN type (RIGHT) with arbitrary predicate
 
-query IIIIIIIII
+statement error
 SELECT * 
 FROM left_table l 
 ASOF FULL JOIN right_table r 
@@ -64,7 +61,4 @@ ASOF FULL JOIN right_table r
 	AND l.ts >= r.ts 
 	AND l.price + r.bid > 300;
 ----
-2	2024-01-01 10:05:00	A	151.000	2	2024-01-01 10:04:00	A	150.500	false
-1	2024-01-01 10:00:00	A	150.000	NULL	NULL	NULL	NULL	NULL
-3	2024-01-01 10:10:00	B	380.000	3	2024-01-01 10:09:00	B	379.000	true
-NULL	NULL	NULL	NULL	1	2024-01-01 09:59:00	A	149.500	true
+Not implemented Error: Unsupported ASOF JOIN type (FULL) with arbitrary predicate
