@@ -192,7 +192,8 @@
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
         "internal_setting": "custom_extension_repo",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": ""
     },
     {
         "name": "custom_profiling_settings",

@@ -207,22 +207,6 @@ void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &con
 }
 
 //===----------------------------------------------------------------------===//
-// Custom Extension Repository
-//===----------------------------------------------------------------------===//
-void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.custom_extension_repo = input.GetValue<string>();
-}
-
-void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.custom_extension_repo = DBConfigOptions().custom_extension_repo;
-}
-
-Value CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.custom_extension_repo);
-}
-
-//===----------------------------------------------------------------------===//
 // Custom User Agent
 //===----------------------------------------------------------------------===//
 Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {

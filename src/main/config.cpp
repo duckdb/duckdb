@@ -81,7 +81,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
-    DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
+    DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_LOCAL(CustomProfilingSettingsSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_SETTING(DebugAsofIejoinSetting),

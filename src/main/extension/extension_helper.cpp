@@ -225,10 +225,10 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-static string GetAutoInstallExtensionsRepository(const DBConfigOptions &options) {
-	string repository_url = options.autoinstall_extension_repo;
+static string GetAutoInstallExtensionsRepository(const DBConfig &config) {
+	string repository_url = config.options.autoinstall_extension_repo;
 	if (repository_url.empty()) {
-		repository_url = options.custom_extension_repo;
+		repository_url = DBConfig::GetSetting<CustomExtensionRepositorySetting>(config);
 	}
 	return repository_url;
 }
@@ -241,7 +241,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
 		if (dbconfig.options.autoinstall_known_extensions) {
-			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
+			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
@@ -389,7 +389,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
-			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
+			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
