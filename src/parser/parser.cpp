@@ -271,7 +271,7 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
 					case StatementType::LOAD_STATEMENT:
-					case StatementType::EXPLAIN_STATEMENT:
+					// case StatementType::EXPLAIN_STATEMENT:
 					case StatementType::ATTACH_STATEMENT:
 					case StatementType::DETACH_STATEMENT:
 					case StatementType::DELETE_STATEMENT:
@@ -281,7 +281,9 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::INSERT_STATEMENT:
 					case StatementType::UPDATE_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
-					case StatementType::CREATE_STATEMENT: {
+					case StatementType::CREATE_STATEMENT:
+					case StatementType::COPY_STATEMENT:
+					case StatementType::SET_STATEMENT: {
 						is_supported = true;
 						break;
 					}

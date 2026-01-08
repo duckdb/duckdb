@@ -67,6 +67,8 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 		if (result->show_type == ShowType::SUMMARY) {
 			throw ParserException("Expected table name with SUMMARIZE");
 		}
+		result->table_name = "__show_tables_expanded";
+		result->show_type = ShowType::DESCRIBE;
 	}
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());

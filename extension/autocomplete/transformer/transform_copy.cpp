@@ -14,6 +14,66 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyStatement(PEGTransf
 	return transformer.Transform<unique_ptr<SQLStatement>>(copy_mode.Child<ChoiceParseResult>(0).result);
 }
 
+void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &options) {
+	case_insensitive_string_set_t option_names;
+	for (auto &option : options) {
+		if (option_names.find(option.name) != option_names.end()) {
+			throw ParserException("Unexpected duplicate option \"%s\"", option.name);
+		}
+		option_names.insert(option.name);
+		auto option_upper = StringUtil::Upper(option.name);
+		if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE" || option_upper == "FORCE_NOT_NULL" ||
+		    option_upper == "FORCE_NULL") {
+			if (option.expression) {
+				info->parsed_options[option_upper] = std::move(option.expression);
+			} else {
+				if (option.children.empty()) {
+					throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
+				}
+				vector<unique_ptr<ParsedExpression>> func_children;
+				for (auto partition : option.children) {
+					func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
+				}
+				auto row_func =
+				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
+				info->parsed_options[option_upper] = std::move(row_func);
+			}
+		} else if (option_upper == "NULL") {
+			// (Dtenwolde) Unclear why NULL should be in parsed options rather than options.
+			if (option.children.empty()) {
+				info->parsed_options[option_upper] = nullptr;
+			} else {
+				info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
+			}
+		} else if (option_upper == "NULLSTR") {
+			if (option.children.empty()) {
+				info->parsed_options[option_upper] = std::move(option.expression);
+			} else {
+				if (option.children[0].IsNull()) {
+					info->parsed_options[option_upper] = make_uniq<ConstantExpression>(Value());
+				} else {
+					throw InvalidInputException("Unexpected argument %s for nullstr", option.children[0].ToString());
+				}
+			}
+		} else {
+			if (option.expression) {
+				info->parsed_options[option_upper] = std::move(option.expression);
+			} else {
+				info->options[option_upper] = option.children;
+			}
+		}
+	}
+	auto format_option = info->options.find("format");
+	if (format_option != info->options.end()) {
+		if (format_option->second.empty()) {
+			throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+		}
+		info->format = format_option->second[0].GetValue<string>();
+		info->is_format_auto_detected = false;
+		info->options.erase(format_option);
+	}
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -26,9 +86,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransform
 	auto options_opt = list_pr.Child<OptionalParseResult>(3);
 	if (options_opt.HasResult()) {
 		auto options = transformer.Transform<vector<GenericCopyOption>>(options_opt.optional_result);
-		for (auto option : options) {
-			info->options.insert(make_pair(option.name, option.children));
-		}
+		SetCopyOptions(info, options);
 	}
 	info->select_statement = std::move(select_statement->node);
 	result->info = std::move(info);
@@ -104,60 +162,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	auto &copy_options_pr = list_pr.Child<OptionalParseResult>(4);
 	if (copy_options_pr.HasResult()) {
 		auto generic_options = transformer.Transform<vector<GenericCopyOption>>(copy_options_pr.optional_result);
-		case_insensitive_string_set_t option_names;
-		for (auto &option : generic_options) {
-			if (option_names.find(option.name) != option_names.end()) {
-				throw ParserException("Unexpected duplicate option \"%s\"", option.name);
-			}
-			option_names.insert(option.name);
-			auto option_upper = StringUtil::Upper(option.name);
-			if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE" || option_upper == "FORCE_NOT_NULL" ||
-			    option_upper == "FORCE_NULL") {
-				if (option.expression) {
-					info->parsed_options[option_upper] = std::move(option.expression);
-				} else {
-					if (option.children.empty()) {
-						throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
-					}
-					vector<unique_ptr<ParsedExpression>> func_children;
-					for (auto partition : option.children) {
-						func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
-					}
-					auto row_func =
-					    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
-					info->parsed_options[option_upper] = std::move(row_func);
-				}
-			} else if (option_upper == "NULL") {
-				// (Dtenwolde) Unclear why NULL should be in parsed options rather than options.
-				if (option.children.empty()) {
-					info->parsed_options[option_upper] = nullptr;
-				} else {
-					info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
-				}
-			} else if (option_upper == "NULLSTR") {
-				if (option.children.empty()) {
-					info->parsed_options[option_upper] = std::move(option.expression);
-				} else {
-					if (option.children[0].IsNull()) {
-						info->parsed_options[option_upper] = make_uniq<ConstantExpression>(Value());
-					} else {
-						throw InvalidInputException("Unexpected argument %s for nullstr",
-						                            option.children[0].ToString());
-					}
-				}
-			} else {
-				info->options[option_upper] = option.children;
-			}
-		}
-		auto format_option = info->options.find("format");
-		if (format_option != info->options.end()) {
-			if (format_option->second.empty()) {
-				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
-			}
-			info->format = format_option->second[0].GetValue<string>();
-			info->is_format_auto_detected = false;
-			info->options.erase(format_option);
-		}
+		SetCopyOptions(info, generic_options);
 	}
 
 	result->info = std::move(info);

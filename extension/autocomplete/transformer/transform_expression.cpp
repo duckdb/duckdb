@@ -1295,6 +1295,9 @@ PEGTransformerFactory::TransformSingleFrameExtent(PEGTransformer &transformer, o
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<WindowBoundaryExpression> result;
 	result.push_back(transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(0)));
+	WindowBoundaryExpression end_current_row;
+	end_current_row.boundary = WindowBoundary::CURRENT_ROW_ROWS;
+	result.push_back(std::move(end_current_row));
 	return result;
 }
 
@@ -1532,8 +1535,8 @@ PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(4)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<NumberParseResult>(2)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<NumberParseResult>(4)));
 	return results;
 }
 
