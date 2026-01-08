@@ -492,22 +492,6 @@ Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Lock Configuration
-//===----------------------------------------------------------------------===//
-void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.lock_configuration = input.GetValue<bool>();
-}
-
-void LockConfigurationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.lock_configuration = DBConfigOptions().lock_configuration;
-}
-
-Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.lock_configuration);
-}
-
-//===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

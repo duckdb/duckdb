@@ -658,7 +658,8 @@
         "name": "lock_configuration",
         "description": "Whether or not the configuration can be altered",
         "type": "BOOLEAN",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false"
     },
     {
         "name": "log_query_path",

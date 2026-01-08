@@ -142,7 +142,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(IntegerDivisionSetting),
     DUCKDB_LOCAL(LambdaSyntaxSetting),
     DUCKDB_SETTING(LateMaterializationMaxRowsSetting),
-    DUCKDB_GLOBAL(LockConfigurationSetting),
+    DUCKDB_SETTING(LockConfigurationSetting),
     DUCKDB_LOCAL(LogQueryPathSetting),
     DUCKDB_GLOBAL(LoggingLevel),
     DUCKDB_GLOBAL(LoggingMode),
@@ -523,7 +523,7 @@ void DBConfig::SetDefaultTempDirectory() {
 }
 
 void DBConfig::CheckLock(const String &name) {
-	if (!options.lock_configuration) {
+	if (!GetSetting<LockConfigurationSetting>(*this)) {
 		// not locked
 		return;
 	}
