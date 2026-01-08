@@ -26,6 +26,7 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   CCACHE_SAVE: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+  REDUCE_SYMBOLS: 1
 
 jobs:
   check-draft:
@@ -64,6 +65,8 @@ jobs:
 
      - uses: ./.github/actions/cleanup_runner
 
+     - uses: ./.github/actions/swap_space
+
      - name: Build
        shell: bash
        run: make
@@ -101,6 +104,8 @@ jobs:
         save: ${{ env.CCACHE_SAVE }}
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Build
       shell: bash
@@ -142,6 +147,8 @@ jobs:
 
     - uses: ./.github/actions/cleanup_runner
 
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -175,6 +182,8 @@ jobs:
         save: ${{ env.CCACHE_SAVE }}
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Build
       shell: bash
@@ -220,6 +229,8 @@ jobs:
 
     - uses: ./.github/actions/cleanup_runner
 
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -246,6 +257,8 @@ jobs:
          save: ${{ env.CCACHE_SAVE }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -281,6 +294,8 @@ jobs:
          save: ${{ env.CCACHE_SAVE }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -330,6 +345,8 @@ jobs:
           save: ${{ env.CCACHE_SAVE }}
 
       - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         shell: bash
@@ -391,6 +408,8 @@ jobs:
          save: ${{ env.CCACHE_SAVE }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -459,6 +478,8 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         id: build
         shell: bash
@@ -500,6 +521,8 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         id: build
         shell: bash
@@ -539,6 +562,8 @@ jobs:
           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         shell: bash
@@ -591,6 +616,8 @@ jobs:
         save: ${{ env.CCACHE_SAVE }}
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Print version
       shell: bash
@@ -653,6 +680,8 @@ jobs:
          save: ${{ env.CCACHE_SAVE }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
