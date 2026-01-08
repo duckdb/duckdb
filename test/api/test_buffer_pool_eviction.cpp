@@ -15,6 +15,20 @@ namespace {
 // Constants used in buffer pool memory limit setting.
 constexpr const char *EXCEPTION_POSTSCRIPT = "exception postscript";
 
+struct NonEvictableObject : public ObjectCacheEntry {
+	int value;
+	explicit NonEvictableObject(int value_p) : value(value_p) {}
+	~NonEvictableObject() override = default;
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "NonEvictableTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
+};
 struct EvictableTestObject : public ObjectCacheEntry {
 	int value;
 	idx_t size;
@@ -135,4 +149,104 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	// Check overall memory usage is equal to memory limit.
 	const auto final_memory_usage = buffer_manager.GetUsedMemory();
 	REQUIRE(final_memory_usage == total_memory_limit);
+}
+
+TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage][buffer_pool]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &cache = ObjectCache::GetObjectCache(context);
+	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+
+	// Set a memory limit that will force eviction
+	constexpr idx_t page_size = 1024 * 1024; // 1MiB per page
+	constexpr idx_t obj_size = 1024 * 1024;  // 1MiB per object cache entry
+	constexpr idx_t num_non_evictable_objects = 1;
+	constexpr idx_t num_evictable_objects = 4;
+	constexpr idx_t num_objects = num_non_evictable_objects + num_evictable_objects;
+	constexpr idx_t num_pages = 6;
+	const idx_t actual_page_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+
+	// Set limit to hold all pages, some objects, and initial overhead
+	const idx_t before_eviction_memory = num_objects * obj_size + num_pages * actual_page_alloc_size;
+	const idx_t after_eviction_memory = (num_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
+	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
+	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
+
+	// Add object cache entries first
+	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
+		cache.Put(StringUtil::Format("non-evictable-obj%llu", idx), make_shared_ptr<NonEvictableObject>(idx));
+	}
+	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
+		cache.Put(StringUtil::Format("evictable-obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
+	}
+	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
+	REQUIRE(after_objects_memory == initial_memory + num_evictable_objects * obj_size);
+	REQUIRE(cache.GetEntryCount() == num_objects);
+
+	// Now pin many pages, which makes sure the eviction of object cache entries
+	vector<BufferHandle> pinned_pages;
+	pinned_pages.reserve(num_pages);
+	for (idx_t idx = 0; idx < num_pages; ++idx) {
+		// If allocation exceeds memory limit, object cache entries will be evicted first.
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, /*can_destroy=*/true);
+		pinned_pages.emplace_back(std::move(pin));
+	}
+
+	// Check object cache entries are partially evicted.
+	vector<idx_t> evicted_entries;
+	for (idx_t idx = 0; idx < num_objects; ++idx) {
+		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
+		if (obj == nullptr) {
+			evicted_entries.emplace_back(idx);
+		}
+	}
+	// Check some of the evictable cache entries have been evicted, and eviction is performed in the order of insertion.
+	REQUIRE(evicted_entries == vector<idx_t> {1, 2});
+
+	// Check overall memory usage is equal to memory limit.
+	const auto final_memory_usage = buffer_manager.GetUsedMemory();
+	REQUIRE(final_memory_usage == total_memory_limit);
+}
+
+TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and object cache entries non-evictable", "[storage][buffer_pool]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &cache = ObjectCache::GetObjectCache(context);
+	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+
+	// Set a memory limit that will force eviction
+	constexpr idx_t page_size = 1024 * 1024; // 1MiB per page
+	constexpr idx_t obj_size = 1024 * 1024;  // 1MiB per object cache entry
+	constexpr idx_t num_objects = 5;
+	constexpr idx_t num_pages = 6;
+	const idx_t actual_page_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+
+	// Set limit to hold all pages, some objects, and initial overhead
+	const idx_t before_eviction_memory = num_objects * obj_size + num_pages * actual_page_alloc_size;
+	const idx_t after_eviction_memory = (num_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
+	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
+	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
+
+	// Add object cache entries first
+	for (idx_t idx = 0; idx < num_objects; ++idx) {
+		cache.Put(StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
+	}
+	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
+	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
+	REQUIRE(cache.GetEntryCount() == num_objects);
+
+	// Now pin many pages, which makes sure the eviction of object cache entries
+	vector<BufferHandle> pinned_pages;
+	pinned_pages.reserve(num_pages);
+	for (idx_t idx = 0; idx < num_pages; ++idx) {
+		// If allocation exceeds memory limit, object cache entries will be evicted first.
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, /*can_destroy=*/true);
+		pinned_pages.emplace_back(std::move(pin));
+	}
 }
