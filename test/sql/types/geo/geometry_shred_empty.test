@@ -7,6 +7,9 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
 CREATE TABLE t1(type VARCHAR, has_z BOOLEAN, has_m BOOLEAN, g GEOMETRY);
 
 statement ok

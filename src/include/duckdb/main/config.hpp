@@ -171,6 +171,8 @@ struct DBConfigOptions {
 	LogicalType force_variant_shredding = LogicalType::INVALID;
 	//! Minimum size of a rowgroup to enable VARIANT shredding, -1 to disable
 	int64_t variant_minimum_shredding_size = 30000;
+	//! Minimum size of a geometry to enable geometry shredding, -1 to disable
+	int64_t geometry_minimum_shredding_size = 30000;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
