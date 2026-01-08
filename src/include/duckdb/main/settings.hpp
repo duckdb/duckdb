@@ -1364,9 +1364,8 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *Description =
 	    "The (average) length at which to enable ZSTD compression, defaults to 4096";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "4096";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 //===----------------------------------------------------------------------===//
