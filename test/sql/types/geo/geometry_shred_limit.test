@@ -1,6 +1,8 @@
 # name: test/sql/types/geo/geometry_shred_limit.test
 # group: [geo]
 
+require vector_size 2048
+
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
