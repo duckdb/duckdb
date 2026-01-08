@@ -41,12 +41,11 @@ struct TernaryLambdaWrapperWithNulls {
 struct TernaryExecutor {
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
-	AUTO_VEC_DISPATCH
-	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
-	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector &asel, const SelectionVector &bsel,
-	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
-	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
+	AUTO_VEC_DISPATCH static inline void
+	ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata, const C_TYPE *__restrict cdata,
+	            RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
+	            const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
+	            ValidityMask &bvalidity, ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
 		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
@@ -124,12 +123,11 @@ public:
 
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-	AUTO_VEC_DISPATCH
-	static inline idx_t SelectLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
-	                               const C_TYPE *__restrict cdata, const SelectionVector *result_sel, idx_t count,
-	                               const SelectionVector &asel, const SelectionVector &bsel,
-	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
-	                               ValidityMask &cvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+	AUTO_VEC_DISPATCH static inline idx_t
+	SelectLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata, const C_TYPE *__restrict cdata,
+	           const SelectionVector *result_sel, idx_t count, const SelectionVector &asel, const SelectionVector &bsel,
+	           const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity, ValidityMask &cvalidity,
+	           SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = result_sel->get_index(i);

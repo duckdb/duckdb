@@ -15,11 +15,11 @@
 
 // Function Multi-Versioning attributes for auto SIMD optimizations
 #if defined(__GNUC__) && !defined(__clang__)
-    #if defined(__x86_64__)
-        #define AUTO_VEC_DISPATCH __attribute__((target_clones("arch=x86-64-v4","arch=x86-64-v3","default")))
-    #endif
+#if defined(__x86_64__)
+#define AUTO_VEC_DISPATCH __attribute__((target_clones("arch=x86-64-v4", "arch=x86-64-v3", "default")))
+#endif
 #else
-    #define AUTO_VEC_DISPATCH
+#define AUTO_VEC_DISPATCH
 #endif
 
 namespace duckdb {
