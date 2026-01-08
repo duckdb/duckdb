@@ -17,6 +17,8 @@
 #if defined(__GNUC__) && !defined(__clang__)
 #if defined(__x86_64__)
 #define AUTO_VEC_DISPATCH __attribute__((target_clones("arch=x86-64-v4", "arch=x86-64-v3", "default")))
+#else
+#define AUTO_VEC_DISPATCH
 #endif
 #else
 #define AUTO_VEC_DISPATCH
