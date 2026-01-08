@@ -240,6 +240,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		case JoinType::RIGHT:
 		case JoinType::OUTER:
 		case JoinType::SEMI:
+		case JoinType::ANTI:
 			if (!arbitrary_expressions.empty()) {
 				throw NotImplementedException("Unsupported ASOF JOIN type (%s) with arbitrary predicate",
 				                              EnumUtil::ToChars(type));

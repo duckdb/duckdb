@@ -34,7 +34,7 @@ ORDER BY 1
 ----
 Not implemented Error: Unsupported ASOF JOIN type (SEMI) with arbitrary predicate
 
-query IIII
+statement error
 SELECT * 
 FROM left_table l 
 ASOF ANTI JOIN right_table r 
@@ -42,6 +42,7 @@ ASOF ANTI JOIN right_table r
 	AND l.ts >= r.ts 
 	AND l.price + r.bid > 300;
 ----
+Not implemented Error: Unsupported ASOF JOIN type (ANTI) with arbitrary predicate
 
 statement error
 SELECT * 
