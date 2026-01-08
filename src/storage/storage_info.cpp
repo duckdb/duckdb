@@ -91,7 +91,7 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.4.2", 67},
 	{"v1.4.3", 67},
 	{"v1.4.4", 67},
-	{"v1.5.0", 67},
+	{"v1.5.0", 68},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
