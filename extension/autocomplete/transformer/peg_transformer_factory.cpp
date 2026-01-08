@@ -348,6 +348,11 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
 }
 
+void PEGTransformerFactory::RegisterExplain() {
+	// explain.gram
+	REGISTER_TRANSFORM(TransformExplainStatement);
+}
+
 void PEGTransformerFactory::RegisterExport() {
 	REGISTER_TRANSFORM(TransformExportSource);
 	REGISTER_TRANSFORM(TransformExportStatement);
@@ -891,6 +896,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterDetach();
 	RegisterDescribe();
 	RegisterDrop();
+	RegisterExplain();
 	RegisterExport();
 	RegisterExpression();
 	RegisterImport();

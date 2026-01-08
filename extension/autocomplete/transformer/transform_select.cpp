@@ -17,7 +17,8 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("No transformer function found for rule 'SelectStatement'");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
 }
 
 unique_ptr<SelectStatement>
@@ -144,7 +145,8 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	auto group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (group_opt.HasResult()) {
 		auto group_by_node = transformer.Transform<GroupByNode>(group_opt.optional_result);
-		if (ExpressionIsEmptyStar(*group_by_node.group_expressions[0])) {
+		if (group_by_node.group_expressions.size() == 1 && group_by_node.grouping_sets.size() == 1 &&
+		    ExpressionIsEmptyStar(*group_by_node.group_expressions[0])) {
 			select_node->aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
 			group_by_node.group_expressions.clear();
 			group_by_node.grouping_sets.clear();
@@ -606,7 +608,6 @@ JoinPrefix PEGTransformerFactory::TransformCrossJoinPrefix(PEGTransformer &trans
                                                            optional_ptr<ParseResult> parse_result) {
 	JoinPrefix result;
 	result.ref_type = JoinRefType::CROSS;
-	result.join_type = JoinType::INNER;
 	return result;
 }
 
@@ -623,7 +624,6 @@ JoinPrefix PEGTransformerFactory::TransformPositionalJoinPrefix(PEGTransformer &
                                                                 optional_ptr<ParseResult> parse_result) {
 	JoinPrefix result;
 	result.ref_type = JoinRefType::POSITIONAL;
-	result.join_type = JoinType::INNER;
 	return result;
 }
 
@@ -645,10 +645,6 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 
 	auto result = make_uniq<TableFunctionRef>();
 
-	// TODO(Dtenwolde) Figure out what to do with lateral
-	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
-		throw NotImplementedException("Lateral has not yet been implemented");
-	};
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	auto table_function_arguments =
 	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));

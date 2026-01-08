@@ -1207,7 +1207,7 @@ UsingKey <- 'USING' 'KEY' ColumnIdList
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'
-SelectClause <- ('SELECT' / 'QUACK') DistinctClause? TargetList
+SelectClause <- 'SELECT' DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(ColIdOrString))
 
@@ -1393,7 +1393,7 @@ CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
 CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
 FromOrTo <- 'FROM' / 'TO'
 
-CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
+CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
 CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
 CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
@@ -1493,9 +1493,7 @@ SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 SeqMinOrMax <- MinValue / MaxValue
 MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptions? Statement
-
-ExplainOptions <- GenericCopyOptionList
+ExplainStatement <- 'EXPLAIN' 'ANALYZE'? GenericCopyOptionList? Statement
 
 AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?

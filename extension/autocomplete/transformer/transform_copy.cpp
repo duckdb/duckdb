@@ -25,7 +25,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransform
 	info->file_path = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
 	auto options_opt = list_pr.Child<OptionalParseResult>(3);
 	if (options_opt.HasResult()) {
-		info->options = transformer.Transform<case_insensitive_map_t<vector<Value>>>(options_opt.optional_result);
+		auto options = transformer.Transform<vector<GenericCopyOption>>(options_opt.optional_result);
+		for (auto option : options) {
+			info->options.insert(make_pair(option.name, option.children));
+		}
 	}
 	info->select_statement = std::move(select_statement->node);
 	result->info = std::move(info);
