@@ -80,7 +80,6 @@ set(DUCKDB_LINK_LIBS
     duckdb_utf8proc
     duckdb_hyperloglog
     duckdb_fastpforlib
-    duckdb_skiplistlib
     duckdb_mbedtls
     duckdb_yyjson
     duckdb_zstd)
