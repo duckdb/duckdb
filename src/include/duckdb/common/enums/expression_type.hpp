@@ -208,6 +208,13 @@ enum class ExpressionClass : uint8_t {
 	BOUND_EXPANDED = 51
 };
 
+// Hash function for expression type.
+struct ExpressionTypeHash {
+	uint32_t operator()(ExpressionType type) const {
+		return static_cast<uint32_t>(type);
+	}
+};
+
 DUCKDB_API string ExpressionTypeToString(ExpressionType type);
 string ExpressionTypeToOperator(ExpressionType type);
 
