@@ -773,7 +773,8 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
 		time_zone_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		time_zone_children.push_back(std::move(expr));
-		auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "timezone", std::move(time_zone_children));
+		auto func_expr =
+		    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "timezone", std::move(time_zone_children));
 		expr = std::move(func_expr);
 	}
 	return expr;
