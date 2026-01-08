@@ -382,15 +382,43 @@ public:
 	}
 
 	template <class OP, class SOURCE>
-	static typename std::enable_if<!std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
+	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, string>::value, string>::type
 	GetSetting(const SOURCE &source) {
 		Value result;
 		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return result.template GetValue<typename OP::RETURN_TYPE>();
+			return StringValue::Get(result);
 		}
-		auto input_type = ParseLogicalType(OP::InputType);
-		auto default_value = Value(OP::DefaultValue).DefaultCastAs(input_type);
-		return default_value.template GetValue<typename OP::RETURN_TYPE>();
+		return OP::DefaultValue;
+	}
+
+	template <class OP, class SOURCE>
+	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, bool>::value, bool>::type
+	GetSetting(const SOURCE &source) {
+		Value result;
+		if (TryGetSettingInternal(source, OP::Name, result)) {
+			return BooleanValue::Get(result);
+		}
+		return StringUtil::Equals(OP::DefaultValue, "true");
+	}
+
+	template <class OP, class SOURCE>
+	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, idx_t>::value, idx_t>::type
+	GetSetting(const SOURCE &source) {
+		Value result;
+		if (TryGetSettingInternal(source, OP::Name, result)) {
+			return UBigIntValue::Get(result);
+		}
+		return StringUtil::ToUnsigned(OP::DefaultValue);
+	}
+
+	template <class OP, class SOURCE>
+	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, double>::value, double>::type
+	GetSetting(const SOURCE &source) {
+		Value result;
+		if (TryGetSettingInternal(source, OP::Name, result)) {
+			return DoubleValue::Get(result);
+		}
+		return StringUtil::ToDouble(OP::DefaultValue);
 	}
 
 	template <class OP>

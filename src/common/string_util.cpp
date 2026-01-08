@@ -77,6 +77,10 @@ idx_t StringUtil::ToUnsigned(const string &str) {
 	return std::stoull(str);
 }
 
+double StringUtil::ToDouble(const string &str) {
+	return std::stod(str);
+}
+
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
 	while (it != str.end() && CharacterIsSpace(*it)) {
