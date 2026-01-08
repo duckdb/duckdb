@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
@@ -299,8 +300,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 		}
 		if (queue->Dequeue(task)) {
-			auto process_mode = config.options.scheduler_process_partial ? TaskExecutionMode::PROCESS_PARTIAL
-			                                                             : TaskExecutionMode::PROCESS_ALL;
+			auto process_mode = TaskExecutionMode::PROCESS_ALL;
+			if (DBConfig::GetSetting<SchedulerProcessPartialSetting>(config)) {
+				process_mode = TaskExecutionMode::PROCESS_PARTIAL;
+			}
 			auto execute_result = task->Execute(process_mode);
 
 			switch (execute_result) {

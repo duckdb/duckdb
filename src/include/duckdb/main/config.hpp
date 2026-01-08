@@ -221,12 +221,6 @@ struct DBConfigOptions {
 	bool enable_external_file_cache = true;
 	//! Cache validation mode, by default all cache entries are validated.
 	CacheValidationMode validate_external_file_cache = CacheValidationMode::VALIDATE_ALL;
-	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	bool scheduler_process_partial = true;
-#else
-	bool scheduler_process_partial = false;
-#endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)

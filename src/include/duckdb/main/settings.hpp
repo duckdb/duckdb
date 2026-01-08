@@ -1219,9 +1219,8 @@ struct SchedulerProcessPartialSetting {
 	static constexpr const char *Description =
 	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct SchemaSetting {

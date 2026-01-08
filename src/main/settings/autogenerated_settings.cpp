@@ -542,22 +542,6 @@ Value PinThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Scheduler Process Partial
-//===----------------------------------------------------------------------===//
-void SchedulerProcessPartialSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.scheduler_process_partial = input.GetValue<bool>();
-}
-
-void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.scheduler_process_partial = DBConfigOptions().scheduler_process_partial;
-}
-
-Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.scheduler_process_partial);
-}
-
-//===----------------------------------------------------------------------===//
 // Storage Block Prefetch
 //===----------------------------------------------------------------------===//
 void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
