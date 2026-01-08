@@ -82,7 +82,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransform
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
 	info->is_from = false;
-	info->file_path = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+	auto file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	if (file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
+		auto &const_expr = file_name->Cast<ConstantExpression>();
+		info->file_path = const_expr.value.GetValue<string>();
+	} else {
+		info->file_path_expression = std::move(file_name);
+	}
 	auto options_opt = list_pr.Child<OptionalParseResult>(3);
 	if (options_opt.HasResult()) {
 		auto options = transformer.Transform<vector<GenericCopyOption>>(options_opt.optional_result);
@@ -156,7 +162,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 		info->select_list = transformer.Transform<vector<string>>(insert_column_list.optional_result);
 	}
 	info->is_from = transformer.Transform<bool>(list_pr.Child<ListParseResult>(2));
-	info->file_path = transformer.Transform<string>(list_pr.Child<ListParseResult>(3));
+	auto file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
+	if (file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
+		auto &const_expr = file_name->Cast<ConstantExpression>();
+		info->file_path = const_expr.value.GetValue<string>();
+	} else {
+		info->file_path_expression = std::move(file_name);
+	}
 	info->format = ExtractFormat(info->file_path);
 
 	auto &copy_options_pr = list_pr.Child<OptionalParseResult>(4);
@@ -176,23 +188,15 @@ bool PEGTransformerFactory::TransformFromOrTo(PEGTransformer &transformer, optio
 	return StringUtil::CIEquals(keyword.keyword, "from");
 }
 
-string PEGTransformerFactory::TransformCopyFileName(PEGTransformer &transformer,
-                                                    optional_ptr<ParseResult> parse_result) {
-	// TODO(dtenwolde) support stdin and stdout
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileName(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	if (choice_pr->name == "Expression") {
-		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
-		if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
-			throw ParserException("Expected a constant expression as file name");
-		}
-		auto &const_expr = expr->Cast<ConstantExpression>();
-		if (const_expr.value.type() != LogicalType::VARCHAR) {
-			throw ParserException("Expected a string as file name");
-		}
-		return const_expr.value.GetValue<string>();
+		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 	}
-	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto file_name = transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	return make_uniq<ConstantExpression>(Value(file_name));
 }
 
 string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer,
@@ -304,6 +308,27 @@ GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransform
 		}
 	}
 	return result;
+}
+
+GenericCopyOption PEGTransformerFactory::TransformNullAsOption(PEGTransformer &transformer,
+                                                               optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("null", string_literal);
+}
+
+GenericCopyOption PEGTransformerFactory::TransformDelimiterAsOption(PEGTransformer &transformer,
+                                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("delimiter", string_literal);
+}
+
+GenericCopyOption PEGTransformerFactory::TransformEscapeAsOption(PEGTransformer &transformer,
+                                                                 optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("escape", string_literal);
 }
 
 } // namespace duckdb

@@ -187,6 +187,9 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformQuoteAsOption);
 	REGISTER_TRANSFORM(TransformForceNullOption);
 	REGISTER_TRANSFORM(TransformPartitionByOption);
+	REGISTER_TRANSFORM(TransformNullAsOption);
+	REGISTER_TRANSFORM(TransformDelimiterAsOption);
+	REGISTER_TRANSFORM(TransformEscapeAsOption);
 	REGISTER_TRANSFORM(TransformSchemaOrData);
 }
 

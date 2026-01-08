@@ -1271,7 +1271,7 @@ WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transfor
 		}
 	}
 	transformer.TransformOptional<WindowExcludeMode>(list_pr, 2, result.exclude_clause);
-	return std::move(result);
+	return result;
 }
 
 vector<WindowBoundaryExpression> PEGTransformerFactory::TransformFrameExtent(PEGTransformer &transformer,

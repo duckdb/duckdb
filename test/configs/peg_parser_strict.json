@@ -14,7 +14,8 @@
         "test/sql/types/union/union_join.test",
         "test/sql/catalog/did_you_mean.test",
         "test/sql/storage/wal/wal_view_storage.test",
-        "test/sql/upsert/postgres/planner_preprocessing.test"
+        "test/sql/upsert/postgres/planner_preprocessing.test",
+        "test/sql/function/timestamp/test_icu_strftime.test"
       ]
     },
     {
@@ -90,7 +91,8 @@
       "paths": [
         "test/sql/copy/csv/unquoted_escape/basic.test",
         "test/sqlserver/sqlserver_cte.test",
-        "test/optimizer/compare_blob.test"
+        "test/optimizer/compare_blob.test",
+        "test/sql/copy/csv/test_copy.test"
       ]
     },
     {
