@@ -78,6 +78,7 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.4.1", StorageVersion::V1_4_1},
 	{"v1.4.2", StorageVersion::V1_4_2},
 	{"v1.4.3", StorageVersion::V1_4_3},
+	{"v1.4.4", StorageVersion::V1_4_4},
 	{"v1.5.0", StorageVersion::V1_5_0},
 	{"latest", StorageVersion::V1_5_0},
 	{nullptr, StorageVersion::INVALID}
@@ -109,6 +110,7 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.4.1", SerializationVersionDeprecated::V1_4_1},
 	{"v1.4.2", SerializationVersionDeprecated::V1_4_2},
 	{"v1.4.3", SerializationVersionDeprecated::V1_4_3},
+	{"v1.4.4", SerializationVersionDeprecated::V1_4_4},
 	{"v1.5.0", SerializationVersionDeprecated::V1_5_0},
 	{"latest", SerializationVersionDeprecated::V1_5_0},
 	{nullptr, SerializationVersionDeprecated::INVALID}

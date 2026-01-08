@@ -6,7 +6,19 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+ATTACH '__TEST_DIR__/version_1_5_0.db' as v1_5_0;
+
+statement ok
+CREATE TABLE v1_5_0.T AS SELECT 32;
+
+statement ok
 ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
+
+statement ok
+DETACH v1_5_0
+
+statement ok
+ATTACH '__TEST_DIR__/version_1_5_0.db' as v1_5_0 (STORAGE_VERSION 'v1.5.0');
 
 # exposed through tags
 query I
