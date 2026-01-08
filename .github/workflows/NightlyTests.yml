@@ -366,7 +366,7 @@ jobs:
       - name: Run Extension Medata Tests
         shell: bash
         run: |
-          ./scripts/run_extension_medata_tests.sh
+          ./scripts/run_extension_medata_tests.sh "${{ github.workspace }}/build/release/src/libduckdb_static.a"
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds

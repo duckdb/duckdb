@@ -8,13 +8,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      run: |
-        if [[ "$RUNNER_OS" != "Linux" ]]; then
-          echo "Skipping swap setup: not a Linux runner ($RUNNER_OS)"
-          exit 0
-        fi
-
     - uses: pierotofy/set-swap-space@v1.0
+      if: runner.os == 'Linux'
       with:
         swap-size-gb: ${{ inputs.swap-size-gb }}
