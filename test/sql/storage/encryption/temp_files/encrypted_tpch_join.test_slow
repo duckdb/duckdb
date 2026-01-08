@@ -17,20 +17,17 @@ statement ok
 ATTACH '__TEST_DIR__/tpch_enc_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
-USE enc;
-
-statement ok
 CALL dbgen (sf = 1) ;
 
 statement ok
-ALTER TABLE lineitem RENAME TO lineitem1;
+ALTER TABLE enc.lineitem RENAME TO enc.lineitem1;
 
 statement ok
-CREATE TABLE lineitem2 AS FROM lineitem1;
+CREATE TABLE enc.lineitem2 AS FROM enc.lineitem1;
 
 statement ok
 CREATE OR REPLACE TABLE ans as select l1.* , l2.* from lineitem1 l1
-JOIN lineitem2 l2 USING (l_orderkey , l_linenumber);
+JOIN enc.lineitem2 l2 USING (l_orderkey , l_linenumber);
 
 restart
 

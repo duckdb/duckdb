@@ -26,9 +26,6 @@ statement ok
 INSERT INTO attach_no_wal.integers FROM range(10000);
 
 statement ok
-DETACH attach_no_wal;
-
-statement ok
 ATTACH '__TEST_DIR__/attach_no_wal_${cipher}.db' AS attach_no_wal (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 # Verify that we don't have a WAL after attaching.
