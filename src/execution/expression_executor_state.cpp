@@ -52,6 +52,12 @@ void ExpressionState::Verify(ExpressionExecutorState &root_executor) {
 	}
 }
 
+void ExpressionState::ResetDictionaryStates() {
+	for (const auto &child : child_states) {
+		child->ResetDictionaryStates();
+	}
+}
+
 void ExpressionExecutorState::Verify() {
 	D_ASSERT(executor);
 	root_state->Verify(*this);
