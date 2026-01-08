@@ -244,7 +244,16 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 
 	const auto &type = input.GetType();
 
-	const auto reinterpret = Value::CreateValue<T>(data[sel.get_index(0)]).GetTypeMutable() != type;
+	const bool reinterpret = [&]() {
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = sel.get_index(i);
+			if (validity.RowIsValid(idx)) {
+				return Value::CreateValue<T>(data[idx]).GetTypeMutable() != type;
+			}
+		}
+		return false;
+	}();
+
 	if (reinterpret) {
 		for (idx_t i = 0; i < count; i++) {
 			auto &key = keys[i];
