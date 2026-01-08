@@ -688,9 +688,8 @@ struct ErrorsAsJSONSetting {
 	static constexpr const char *Name = "errors_as_json";
 	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct ExperimentalMetadataReuseSetting {

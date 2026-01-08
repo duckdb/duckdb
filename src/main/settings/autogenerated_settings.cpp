@@ -359,23 +359,6 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Errors As J S O N
-//===----------------------------------------------------------------------===//
-void ErrorsAsJSONSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.errors_as_json = input.GetValue<bool>();
-}
-
-void ErrorsAsJSONSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
-}
-
-Value ErrorsAsJSONSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.errors_as_json);
-}
-
-//===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
 void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

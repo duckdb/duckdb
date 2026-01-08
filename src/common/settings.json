@@ -495,7 +495,8 @@
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
-        "scope": "local",
+        "default_scope": "local",
+        "default_value": "false",
         "struct": "ErrorsAsJSONSetting"
     },
     {

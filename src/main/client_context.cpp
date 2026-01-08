@@ -183,7 +183,7 @@ void ClientContext::Destroy() {
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
-	if (config.errors_as_json) {
+	if (DBConfig::GetSetting<ErrorsAsJSONSetting>(*this)) {
 		error.ConvertErrorToJSON();
 	} else {
 		error.AddErrorLocation(query);

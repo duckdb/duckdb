@@ -92,9 +92,6 @@ struct ClientConfig {
 	//! types.
 	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
-	//! Output error messages as structured JSON instead of as a raw string
-	bool errors_as_json = false;
-
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 
