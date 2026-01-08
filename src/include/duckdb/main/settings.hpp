@@ -707,9 +707,9 @@ struct ExplainOutputSetting {
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "PHYSICAL_ONLY";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ExtensionDirectoriesSetting {

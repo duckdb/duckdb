@@ -21,7 +21,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	// Format the plan and set the output of the EXPLAIN.
 	op.physical_plan = plan.ToString(op.explain_format);
 	vector<string> keys, values;
-	switch (ClientConfig::GetConfig(context).explain_output_type) {
+	switch (DBConfig::GetSetting<ExplainOutputSetting>(context)) {
 	case ExplainOutputType::OPTIMIZED_ONLY:
 		keys = {"logical_opt"};
 		values = {logical_plan_opt};

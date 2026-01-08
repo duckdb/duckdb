@@ -509,8 +509,8 @@
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
-        "scope": "local",
-        "internal_setting": "explain_output_type"
+        "default_scope": "local",
+        "default_value": "PHYSICAL_ONLY"
     },
     {
         "name": "extension_directories",

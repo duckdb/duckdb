@@ -378,19 +378,8 @@ Value ErrorsAsJSONSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
-void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.explain_output_type = EnumUtil::FromString<ExplainOutputType>(str_input);
-}
-
-void ExplainOutputSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
-}
-
-Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.explain_output_type)));
+void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<ExplainOutputType>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
