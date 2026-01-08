@@ -39,7 +39,6 @@ static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &resu
 	}
 }
 
-#ifdef D_ASSERT_IS_ENABLED
 static bool IsVariantStringType(VariantLogicalType type_id) {
 	switch (type_id) {
 	case VariantLogicalType::GEOMETRY:
@@ -52,7 +51,6 @@ static bool IsVariantStringType(VariantLogicalType type_id) {
 		return false;
 	}
 }
-#endif
 
 static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                 const SelectionVector &value_index_sel, const SelectionVector &result_sel,
