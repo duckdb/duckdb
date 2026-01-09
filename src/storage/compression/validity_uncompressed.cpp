@@ -230,7 +230,16 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i));
 	}
+	// save boundary entries to verify we don't corrupt surrounding bits later.
+	idx_t debug_first_entry = result_offset / ValidityMask::BITS_PER_VALUE;
+	idx_t debug_last_entry = (result_offset + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
+	auto debug_result_data = (validity_t *)result_mask.GetData();
+	validity_t debug_original_first_entry =
+	    debug_result_data ? debug_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_original_last_entry =
+	    debug_result_data ? debug_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
 #endif
+
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
@@ -256,118 +265,78 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	idx_t input_entry = input_start / ValidityMask::BITS_PER_VALUE;
 	idx_t input_idx = input_start - input_entry * ValidityMask::BITS_PER_VALUE;
 
-	// now start the bit games
 	idx_t pos = 0;
 	while (pos < scan_count) {
-		// these are the current validity entries we are dealing with
-		idx_t current_result_idx = result_entry;
-		idx_t offset;
 		validity_t input_mask = input_data[input_entry];
+		idx_t bits_left = scan_count - pos;
+		idx_t input_bits_left = ValidityMask::BITS_PER_VALUE - input_idx;
+		idx_t result_bits_left = ValidityMask::BITS_PER_VALUE - result_idx;
+		idx_t input_window_size = MinValue(bits_left, input_bits_left);
+		idx_t result_window_size = MinValue(bits_left, result_bits_left);
+		idx_t current_input_idx = input_idx;
+		idx_t current_result_idx = result_idx;
+		idx_t current_result_entry = result_entry;
 
-		// construct the mask to AND together with the result
-		if (result_idx < input_idx) {
-			//         +======================================+
-			// input:  |xxxxxxxxx|                            |
-			//         +======================================+
-			//
-			//         +======================================+
-			// result: |                xxxxxxxxx|            |
-			//         +======================================+
-			// 1. We shift (>>) 'input' to line up with 'result'
-			// 2. We set the bits we shifted to 1
+		idx_t window_size = MinValue(input_window_size, result_window_size);
+		pos += window_size;
 
-			// we have to shift the input RIGHT if the result_idx is smaller than the input_idx
-			auto shift_amount = input_idx - result_idx;
-			D_ASSERT(shift_amount > 0 && shift_amount <= ValidityMask::BITS_PER_VALUE);
+		input_idx = (input_idx + window_size) % ValidityMask::BITS_PER_VALUE;
+		result_idx = (result_idx + window_size) % ValidityMask::BITS_PER_VALUE;
 
+		if (input_idx == 0) {
+			input_entry++;
+		}
+		if (result_idx == 0) {
+			result_entry++;
+		}
+
+		auto protected_upper_bits = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - current_result_idx - window_size];
+		if (current_result_idx < current_input_idx) {
+			idx_t shift_amount = current_input_idx - current_result_idx;
 			input_mask = input_mask >> shift_amount;
-
-			// now the upper "shift_amount" bits are set to 0
-			// we need them to be set to 1
-			// otherwise the subsequent bitwise & will modify values outside of the range of values we want to alter
-			input_mask |= ValidityUncompressed::UPPER_MASKS[shift_amount];
-
-			if (pos == 0) {
-				// We also need to set the lower bits, which are to the left of the relevant bits (x), to 1
-				// These are the bits that are "behind" this scan window, and should not affect this scan
-				auto non_relevant_mask = ValidityUncompressed::LOWER_MASKS[result_idx];
-				input_mask |= non_relevant_mask;
-			}
-
-			// after this, we move to the next input_entry
-			offset = ValidityMask::BITS_PER_VALUE - input_idx;
-			input_entry++;
-			input_idx = 0;
-			result_idx += offset;
-		} else if (result_idx > input_idx) {
-			//         +======================================+
-			// input:  |                xxxxxxxxx|            |
-			//         +======================================+
-			//
-			//         +======================================+
-			// result: |xxxxxxxxx|                            |
-			//         +======================================+
-			// 1. We set the bits to the left of the relevant bits (x) to 0
-			// 1. We shift (<<) 'input' to line up with 'result'
-			// 2. We set the bits that we zeroed to the right of the relevant bits (x) to 1
-
-			// we have to shift the input LEFT if the result_idx is bigger than the input_idx
-			auto shift_amount = result_idx - input_idx;
-			D_ASSERT(shift_amount > 0 && shift_amount <= ValidityMask::BITS_PER_VALUE);
-
-			// to avoid overflows, we set the upper "shift_amount" values to 0 first
-			input_mask = (input_mask & ~ValidityUncompressed::UPPER_MASKS[shift_amount]) << shift_amount;
-
-			// now the lower "shift_amount" bits are set to 0
-			// we need them to be set to 1
-			// otherwise the subsequent bitwise & will modify values outside of the range of values we want to alter
-			input_mask |= ValidityUncompressed::LOWER_MASKS[shift_amount];
-
-			// after this, we move to the next result_entry
-			offset = ValidityMask::BITS_PER_VALUE - result_idx;
-			result_entry++;
-			result_idx = 0;
-			input_idx += offset;
 		} else {
-			// if the input_idx is equal to result_idx they are already aligned
-			// we just move to the next entry for both after this
-			offset = ValidityMask::BITS_PER_VALUE - result_idx;
-			input_entry++;
-			result_entry++;
-			result_idx = input_idx = 0;
+			// current_result_idx > current_input_idx
+			idx_t shift_amount = current_result_idx - current_input_idx;
+			input_mask = (input_mask & ~protected_upper_bits);
+			input_mask = input_mask << shift_amount;
 		}
-		// now we need to check if we should include the ENTIRE mask
-		// OR if we need to mask from the right side
-		pos += offset;
-		if (pos > scan_count) {
-			//        +======================================+
-			// mask:  |            |xxxxxxxxxxxxxxxxxxxxxxxxx|
-			//        +======================================+
-			//
-			// The bits on the right side of the relevant bits (x) need to stay 1, to be adjusted by later scans
-			// so we adjust the mask to clear out any 0s that might be present on the right side.
 
-			// we need to set any bits that are past the scan_count on the right-side to 1
-			// this is required so we don't influence any bits that are not part of the scan
-			input_mask |= ValidityUncompressed::UPPER_MASKS[pos - scan_count];
-		}
-		// now finally we can merge the input mask with the result mask
+		auto protected_lower_bits = LOWER_MASKS[current_result_idx];
+		input_mask |= protected_upper_bits;
+		input_mask |= protected_lower_bits;
+
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
 				result_mask.Initialize();
 				result_data = (validity_t *)result_mask.GetData();
 			}
-			result_data[current_result_idx] &= input_mask;
+			result_data[current_result_entry] &= input_mask;
 		}
 	}
 #endif
 
 #ifdef DEBUG
-	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
 	ValidityMask input_mask(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
 	}
+	// verify surrounding bits weren't modified
+	auto debug_final_result_data = (validity_t *)result_mask.GetData();
+	validity_t debug_final_first_entry =
+	    debug_final_result_data ? debug_final_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_final_last_entry =
+	    debug_final_result_data ? debug_final_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+
+	idx_t first_bit_in_first_entry = result_offset % ValidityMask::BITS_PER_VALUE;
+	idx_t last_bit_in_last_entry = (result_offset + scan_count - 1) % ValidityMask::BITS_PER_VALUE;
+
+	// lower bits of first entry should be unchanged
+	validity_t lower_mask = LOWER_MASKS[first_bit_in_first_entry];
+	D_ASSERT((debug_original_first_entry & lower_mask) == (debug_final_first_entry & lower_mask));
+
+	// upper bits of last entry should be unchanged
+	validity_t upper_mask = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - last_bit_in_last_entry - 1];
+	D_ASSERT((debug_original_last_entry & upper_mask) == (debug_final_last_entry & upper_mask));
 #endif
 }
 
