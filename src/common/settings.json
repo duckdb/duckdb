@@ -539,8 +539,8 @@
         "name": "file_search_path",
         "description": "A comma separated list of directories to search for input files",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
+        "default_scope": "local",
+        "default_value": ""
     },
     {
         "name": "force_bitpacking_mode",

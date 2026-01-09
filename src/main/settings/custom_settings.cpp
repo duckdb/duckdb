@@ -1178,25 +1178,6 @@ bool ExternalThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &confi
 }
 
 //===----------------------------------------------------------------------===//
-// File Search Path
-//===----------------------------------------------------------------------===//
-void FileSearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	auto &client_data = ClientData::Get(context);
-	client_data.file_search_path = parameter;
-}
-
-void FileSearchPathSetting::ResetLocal(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	client_data.file_search_path.clear();
-}
-
-Value FileSearchPathSetting::GetSetting(const ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	return Value(client_data.file_search_path);
-}
-
-//===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

@@ -747,9 +747,8 @@ struct FileSearchPathSetting {
 	static constexpr const char *Name = "file_search_path";
 	static constexpr const char *Description = "A comma separated list of directories to search for input files";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
 struct ForceBitpackingModeSetting {
