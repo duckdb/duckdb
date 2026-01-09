@@ -1,10 +1,13 @@
-# name: test/sql/types/geo/geometry_shred_types.test
+# name: test/sql/types/geo/geometry_shred_types.test_slow
 # group: [geo]
 
 load __TEST_DIR__/test_shred_types.db
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
 SET geometry_minimum_shredding_size = 0;
