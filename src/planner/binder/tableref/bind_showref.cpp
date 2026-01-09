@@ -164,7 +164,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		      "  and (select current_database() = schema.database_name)) \"current\" "
 		      "FROM duckdb_schemas() schema "
 		      "JOIN duckdb_databases dbs USING (database_oid) "
-		      "WHERE dbs.internal = false;";
+		      "WHERE dbs.internal = false "
+		      "ORDER BY all;";
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
 	} else if (ref.show_type == ShowType::SHOW_FROM) {
