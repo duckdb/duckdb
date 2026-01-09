@@ -234,8 +234,10 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	idx_t debug_first_entry = result_offset / ValidityMask::BITS_PER_VALUE;
 	idx_t debug_last_entry = (result_offset + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
 	auto debug_result_data = (validity_t *)result_mask.GetData();
-	validity_t debug_original_first_entry = debug_result_data ? debug_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
-	validity_t debug_original_last_entry = debug_result_data ? debug_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_original_first_entry =
+	    debug_result_data ? debug_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_original_last_entry =
+	    debug_result_data ? debug_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
 #endif
 
 #if STANDARD_VECTOR_SIZE < 128
@@ -320,8 +322,10 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	}
 	// verify surrounding bits weren't modified
 	auto debug_final_result_data = (validity_t *)result_mask.GetData();
-	validity_t debug_final_first_entry = debug_final_result_data ? debug_final_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
-	validity_t debug_final_last_entry = debug_final_result_data ? debug_final_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_final_first_entry =
+	    debug_final_result_data ? debug_final_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_final_last_entry =
+	    debug_final_result_data ? debug_final_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
 
 	idx_t first_bit_in_first_entry = result_offset % ValidityMask::BITS_PER_VALUE;
 	idx_t last_bit_in_last_entry = (result_offset + scan_count - 1) % ValidityMask::BITS_PER_VALUE;
