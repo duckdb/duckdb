@@ -103,12 +103,6 @@ struct DBConfigOptions {
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
-#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
-	//! Whether known extensions are allowed to be automatically loaded when a query depends on them
-	bool autoload_known_extensions = DUCKDB_EXTENSION_AUTOLOAD_DEFAULT;
-#else
-	bool autoload_known_extensions = false;
-#endif
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.

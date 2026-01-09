@@ -220,7 +220,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 	// copy the map, to protect against modifications during
 	auto unrecognized_options_copy = config.options.unrecognized_options;
 
-	if (config.options.autoload_known_extensions) {
+	if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*this)) {
 		if (unrecognized_options_copy.empty()) {
 			// Nothing to do
 			return;

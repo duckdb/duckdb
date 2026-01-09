@@ -23,9 +23,7 @@ namespace duckdb {
 
 static bool TryLoadExtensionForReplacementScan(ClientContext &context, const string &table_name) {
 	auto lower_name = StringUtil::Lower(table_name);
-	auto &dbconfig = DBConfig::GetConfig(context);
-
-	if (!dbconfig.options.autoload_known_extensions) {
+	if (!DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 

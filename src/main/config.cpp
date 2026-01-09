@@ -77,7 +77,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(AsofLoopJoinThresholdSetting),
     DUCKDB_SETTING(AutoinstallExtensionRepositorySetting),
     DUCKDB_SETTING(AutoinstallKnownExtensionsSetting),
-    DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
+    DUCKDB_SETTING(AutoloadKnownExtensionsSetting),
     DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),

@@ -28,7 +28,7 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	auto &test_config = TestConfiguration::Get();
 	autoloading_mode = test_config.GetExtensionAutoLoadingMode();
 
-	config->options.autoload_known_extensions = false;
+	bool autoload_known_extensions = false;
 	bool autoinstall_known_extensions = false;
 	config->options.allow_unsigned_extensions = true;
 	local_extension_repo = "";
@@ -40,12 +40,12 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	}
 	case TestConfiguration::ExtensionAutoLoadingMode::AVAILABLE: {
 		autoinstall_is_checked = true;
-		config->options.autoload_known_extensions = true;
+		autoload_known_extensions = true;
 		break;
 	}
 	case TestConfiguration::ExtensionAutoLoadingMode::ALL: {
 		autoinstall_is_checked = false;
-		config->options.autoload_known_extensions = true;
+		autoload_known_extensions = true;
 		autoinstall_known_extensions = true;
 		break;
 	}
@@ -54,12 +54,13 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
 		local_extension_repo = env_var;
-		config->options.autoload_known_extensions = true;
+		autoload_known_extensions = true;
 		autoinstall_known_extensions = true;
-	} else if (config->options.autoload_known_extensions) {
+	} else if (autoload_known_extensions) {
 		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	}
 	config->SetOptionByName("autoinstall_known_extensions", autoinstall_known_extensions);
+	config->SetOptionByName("autoload_known_extensions", autoload_known_extensions);
 	for (auto &entry : test_config.GetConfigSettings()) {
 		config->SetOptionByName(entry.name, entry.value);
 	}
@@ -588,7 +589,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail(
 			    "require no_extension_autoloading explanation string should begin with either 'EXPECTED' or FIXME'");
 		}
-		if (config->options.autoload_known_extensions) {
+		if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*config)) {
 			// If autoloading is on, we skip this test
 			return RequireResult::MISSING;
 		}
@@ -611,7 +612,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	bool perform_install = false;
 	bool perform_load = false;
-	if (!config->options.autoload_known_extensions) {
+	if (!DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*config)) {
 		auto result = ExtensionLoadResult::NOT_LOADED;
 		try {
 			result = SQLLogicTestRunner::LoadExtension(*db, param);
@@ -1107,7 +1108,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			const char *env_actual = std::getenv(env_var.c_str());
 			string default_local_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO" &&
-			    config->options.autoload_known_extensions) {
+			    DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*config)) {
 				// Overriding LOCAL_EXTENSION_REPO here is a hacky
 				// More proper solution is wrapping std::getenv in a duckdb::test_getenv, and having a way to inject env
 				// variables

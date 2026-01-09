@@ -155,7 +155,11 @@
         "name": "autoload_known_extensions",
         "description": "Whether known extensions are allowed to be automatically loaded when a query depends on them",
         "type": "BOOLEAN",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false",
+        "conditional_defaults": {
+            "#if defined(DUCKDB_EXTENSION_AUTOLOAD_DEFAULT) && DUCKDB_EXTENSION_AUTOLOAD_DEFAULT": "true"
+        }
     },
     {
         "name": "block_allocator_memory",

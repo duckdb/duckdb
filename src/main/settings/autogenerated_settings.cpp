@@ -115,22 +115,6 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
-// Autoload Known Extensions
-//===----------------------------------------------------------------------===//
-void AutoloadKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoload_known_extensions = input.GetValue<bool>();
-}
-
-void AutoloadKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoload_known_extensions = DBConfigOptions().autoload_known_extensions;
-}
-
-Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.autoload_known_extensions);
-}
-
-//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {

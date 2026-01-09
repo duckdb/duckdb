@@ -247,9 +247,12 @@ struct AutoloadKnownExtensionsSetting {
 	static constexpr const char *Description =
 	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+#if defined(DUCKDB_EXTENSION_AUTOLOAD_DEFAULT) && DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+	static constexpr const char *DefaultValue = "true";
+#else
+	static constexpr const char *DefaultValue = "false";
+#endif
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct BlockAllocatorMemorySetting {

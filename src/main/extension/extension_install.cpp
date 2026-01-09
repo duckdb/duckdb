@@ -309,7 +309,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 		if (context) {
 			auto &db = DatabaseInstance::GetDatabase(*context);
 			if (extension == "httpfs" && !db.ExtensionIsLoaded("httpfs") &&
-			    db.config.options.autoload_known_extensions) {
+			    DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*context)) {
 				ExtensionHelper::AutoLoadExtension(*context, "httpfs");
 			}
 		}

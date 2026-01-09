@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <string>
 
@@ -207,9 +208,8 @@ public:
 	//! Lookup a name in an extension entry and try to autoload it
 	template <idx_t N>
 	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
-		auto &dbconfig = DBConfig::GetConfig(db);
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-		if (dbconfig.options.autoload_known_extensions) {
+		if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
 			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 				ExtensionHelper::AutoLoadExtension(db, extension_name);

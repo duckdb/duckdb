@@ -520,8 +520,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 		return true;
 	}
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (!dbconfig.options.autoload_known_extensions) {
+	if (!DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 	try {
@@ -537,8 +536,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name =
 		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -594,8 +592,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(db);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
 		if (IsAutoloadableFunction(type)) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);

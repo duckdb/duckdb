@@ -282,9 +282,8 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<D
 			}
 		}
 		if (!required_extension.empty() && db_instance && !db_instance->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(*db_instance);
 			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
-			    !dbconfig.options.autoload_known_extensions) {
+			    !DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*db_instance)) {
 				auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
 				error_message =
 				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db_instance, error_message, required_extension);

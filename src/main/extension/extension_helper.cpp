@@ -181,18 +181,16 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
                                                           const string &extension_name) {
 	string install_hint;
 
-	auto &config = db.config;
-
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
 		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
-	} else if (!config.options.autoload_known_extensions) {
+	} else if (!DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(db)) {
 		install_hint =
 		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
 		    extension_name + ";\nLOAD " + extension_name +
 		    ";\n\nAlternatively, consider enabling auto-install "
 		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
-	} else if (!DBConfig::GetSetting<AutoinstallKnownExtensionsSetting>(config)) {
+	} else if (!DBConfig::GetSetting<AutoinstallKnownExtensionsSetting>(db)) {
 		install_hint =
 		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
 		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
