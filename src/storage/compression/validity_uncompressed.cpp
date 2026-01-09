@@ -230,7 +230,14 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i));
 	}
+	// save boundary entries to verify we don't corrupt surrounding bits later.
+	idx_t debug_first_entry = result_offset / ValidityMask::BITS_PER_VALUE;
+	idx_t debug_last_entry = (result_offset + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
+	auto debug_result_data = (validity_t *)result_mask.GetData();
+	validity_t debug_original_first_entry = debug_result_data ? debug_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_original_last_entry = debug_result_data ? debug_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
 #endif
+
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
@@ -268,10 +275,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 		idx_t current_result_idx = result_idx;
 		idx_t current_result_entry = result_entry;
 
-		idx_t window_size = input_window_size;
-		if (input_window_size > result_window_size) {
-			window_size = result_window_size;
-		}
+		idx_t window_size = MinValue(input_window_size, result_window_size);
 		pos += window_size;
 
 		input_idx = (input_idx + window_size) % ValidityMask::BITS_PER_VALUE;
@@ -314,6 +318,21 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
 	}
+	// verify surrounding bits weren't modified
+	auto debug_final_result_data = (validity_t *)result_mask.GetData();
+	validity_t debug_final_first_entry = debug_final_result_data ? debug_final_result_data[debug_first_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+	validity_t debug_final_last_entry = debug_final_result_data ? debug_final_result_data[debug_last_entry] : ValidityMask::ValidityBuffer::MAX_ENTRY;
+
+	idx_t first_bit_in_first_entry = result_offset % ValidityMask::BITS_PER_VALUE;
+	idx_t last_bit_in_last_entry = (result_offset + scan_count - 1) % ValidityMask::BITS_PER_VALUE;
+
+	// lower bits of first entry should be unchanged
+	validity_t lower_mask = LOWER_MASKS[first_bit_in_first_entry];
+	D_ASSERT((debug_original_first_entry & lower_mask) == (debug_final_first_entry & lower_mask));
+
+	// upper bits of last entry should be unchanged
+	validity_t upper_mask = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - last_bit_in_last_entry - 1];
+	D_ASSERT((debug_original_last_entry & upper_mask) == (debug_final_last_entry & upper_mask));
 #endif
 }
 
