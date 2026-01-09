@@ -8,6 +8,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/settings.hpp"
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
@@ -535,7 +536,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a specific block size
 		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
-		if (config->options.default_block_alloc_size != required_block_size) {
+		auto block_size = DBConfig::GetSetting<DefaultBlockSizeSetting>(*config);
+		if (block_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
 		}

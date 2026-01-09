@@ -193,7 +193,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto block_alloc_size = test_config.GetBlockAllocSize();
 	if (block_alloc_size.IsValid()) {
 		Storage::VerifyBlockAllocSize(block_alloc_size.GetIndex());
-		result->options.default_block_alloc_size = block_alloc_size.GetIndex();
+		result->SetOptionByName("default_block_size", Value::UBIGINT(block_alloc_size.GetIndex()));
 	}
 
 	result->options.debug_initialize = test_config.GetDebugInitialize();

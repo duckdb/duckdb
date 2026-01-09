@@ -417,9 +417,9 @@ struct DefaultBlockSizeSetting {
 	static constexpr const char *Description =
 	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "262144";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DefaultCollationSetting {

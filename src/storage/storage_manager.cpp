@@ -355,7 +355,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			options.block_alloc_size = storage_options.block_alloc_size;
 		} else {
 			// No explicit option provided: use the default option.
-			options.block_alloc_size = config.options.default_block_alloc_size;
+			options.block_alloc_size = DBConfig::GetSetting<DefaultBlockSizeSetting>(config);
 		}
 		//! set the block header size for the encrypted database files
 		//! set the database to encrypted
