@@ -27,7 +27,7 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
-	if (showref.show_type == duckdb::ShowType::SUMMARY || showref.show_type == duckdb::ShowType::SHOW_UNQUALIFIED) {
+	if (showref.show_type != duckdb::ShowType::DESCRIBE) {
 		return false;
 	}
 	describe_table_name = "Describe";
