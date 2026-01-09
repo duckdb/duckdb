@@ -23,40 +23,6 @@ namespace duckdb {
 constexpr const idx_t BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
 
-BitpackingMode BitpackingModeFromString(const string &str) {
-	auto mode = StringUtil::Lower(str);
-	if (mode == "auto" || mode == "none") {
-		return BitpackingMode::AUTO;
-	} else if (mode == "constant") {
-		return BitpackingMode::CONSTANT;
-	} else if (mode == "constant_delta") {
-		return BitpackingMode::CONSTANT_DELTA;
-	} else if (mode == "delta_for") {
-		return BitpackingMode::DELTA_FOR;
-	} else if (mode == "for") {
-		return BitpackingMode::FOR;
-	} else {
-		return BitpackingMode::INVALID;
-	}
-}
-
-string BitpackingModeToString(const BitpackingMode &mode) {
-	switch (mode) {
-	case BitpackingMode::AUTO:
-		return "auto";
-	case BitpackingMode::CONSTANT:
-		return "constant";
-	case BitpackingMode::CONSTANT_DELTA:
-		return "constant_delta";
-	case BitpackingMode::DELTA_FOR:
-		return "delta_for";
-	case BitpackingMode::FOR:
-		return "for";
-	default:
-		throw NotImplementedException("Unknown bitpacking mode: " + to_string((uint8_t)mode) + "\n");
-	}
-}
-
 typedef struct {
 	BitpackingMode mode;
 	uint32_t offset;
