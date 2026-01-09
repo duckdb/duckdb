@@ -141,7 +141,8 @@
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",
         "internal_setting": "autoinstall_extension_repo",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": ""
     },
     {
         "name": "autoinstall_known_extensions",

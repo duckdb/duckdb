@@ -114,8 +114,6 @@ struct DBConfigOptions {
 #endif
 	//! Setting for the parser override registered by extensions. Allowed options: "default, "fallback", "strict"
 	string allow_parser_override_extension = "default";
-	//! Override for the default autoload extension repository
-	string autoinstall_extension_repo = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.

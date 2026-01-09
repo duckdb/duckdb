@@ -223,9 +223,8 @@ struct AutoinstallExtensionRepositorySetting {
 	static constexpr const char *Description =
 	    "Overrides the custom endpoint for extension installation on autoloading";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct AutoinstallKnownExtensionsSetting {
