@@ -244,35 +244,13 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 
 	const auto &type = input.GetType();
 
-	const bool reinterpret = [&]() {
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel.get_index(i);
-			if (validity.RowIsValid(idx)) {
-				return Value::CreateValue<T>(data[idx]).GetTypeMutable() != type;
-			}
-		}
-		return false;
-	}();
-
-	if (reinterpret) {
-		for (idx_t i = 0; i < count; i++) {
-			auto &key = keys[i];
-			const auto idx = sel.get_index(i);
-			if (validity.RowIsValid(idx)) {
-				key.values[col_idx] = GetHiveKeyValue(data[idx], type);
-			} else {
-				key.values[col_idx] = GetHiveKeyNullValue(type);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			auto &key = keys[i];
-			const auto idx = sel.get_index(i);
-			if (validity.RowIsValid(idx)) {
-				key.values[col_idx] = GetHiveKeyValue(data[idx]);
-			} else {
-				key.values[col_idx] = GetHiveKeyNullValue(type);
-			}
+	for (idx_t i = 0; i < count; i++) {
+		auto &key = keys[i];
+		const auto idx = sel.get_index(i);
+		if (validity.RowIsValid(idx)) {
+			key.values[col_idx] = GetHiveKeyValue(data[idx], type);
+		} else {
+			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}
 	}
 }
