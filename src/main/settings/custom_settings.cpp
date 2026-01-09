@@ -1197,27 +1197,6 @@ Value FileSearchPathSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Force Bitpacking Mode
-//===----------------------------------------------------------------------===//
-void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto mode_str = StringUtil::Lower(input.ToString());
-	auto mode = BitpackingModeFromString(mode_str);
-	if (mode == BitpackingMode::INVALID) {
-		throw ParserException("Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
-		                      "delta_for, or for");
-	}
-	config.options.force_bitpacking_mode = mode;
-}
-
-void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.force_bitpacking_mode = DBConfigOptions().force_bitpacking_mode;
-}
-
-Value ForceBitpackingModeSetting::GetSetting(const ClientContext &context) {
-	return Value(BitpackingModeToString(context.db->config.options.force_bitpacking_mode));
-}
-
-//===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

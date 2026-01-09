@@ -357,6 +357,13 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Force Bitpacking Mode
+//===----------------------------------------------------------------------===//
+void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::ResetLocal(ClientContext &context) {

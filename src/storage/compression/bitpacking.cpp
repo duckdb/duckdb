@@ -9,6 +9,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -338,11 +339,9 @@ struct BitpackingAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
-
 	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
-	state->state.mode = config.options.force_bitpacking_mode;
+	state->state.mode = DBConfig::GetSetting<ForceBitpackingModeSetting>(col_data.GetDatabase());
 
 	return std::move(state);
 }
@@ -393,9 +392,7 @@ public:
 		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
-
-		auto &config = DBConfig::GetConfig(checkpoint_data.GetDatabase());
-		state.mode = config.options.force_bitpacking_mode;
+		state.mode = DBConfig::GetSetting<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;

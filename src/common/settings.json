@@ -545,9 +545,9 @@
     {
         "name": "force_bitpacking_mode",
         "description": "DEBUG SETTING: forces a specific bitpacking mode",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "type": "ENUM<BitpackingMode>",
+        "default_scope": "global",
+        "default_value": "AUTO"
     },
     {
         "name": "force_compression",

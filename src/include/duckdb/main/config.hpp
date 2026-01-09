@@ -87,6 +87,9 @@ protected:
 	SerializationCompatibility() = default;
 };
 
+//! NOTE: DBConfigOptions is mostly deprecated.
+//! If you want to add a setting that can be set by the user, add it as a generic setting to `settings.json`.
+//! See e.g. "http_proxy" (HTTPProxySetting) as an example
 struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
 	string database_path;
@@ -151,8 +154,6 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
-	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
-	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Force a specific schema for VARIANT shredding
 	LogicalType force_variant_shredding = LogicalType::INVALID;
 	//! Database configuration variables as controlled by SET

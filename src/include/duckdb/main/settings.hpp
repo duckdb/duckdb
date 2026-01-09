@@ -751,13 +751,13 @@ struct FileSearchPathSetting {
 };
 
 struct ForceBitpackingModeSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = BitpackingMode;
 	static constexpr const char *Name = "force_bitpacking_mode";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific bitpacking mode";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ForceCompressionSetting {
