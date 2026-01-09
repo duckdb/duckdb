@@ -67,10 +67,10 @@
         "name": "allow_unredacted_secrets",
         "description": "Allow printing unredacted secrets",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {

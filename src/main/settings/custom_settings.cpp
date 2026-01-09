@@ -184,25 +184,17 @@ Value AllowPersistentSecretsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
-bool AllowUnredactedSecretsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+void AllowUnredactedSecretsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if ((info.db || info.context) && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
 	}
-	return true;
-}
-
-bool AllowUnredactedSecretsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
 // Disable Database Invalidation
 //===----------------------------------------------------------------------===//
 void DisableDatabaseInvalidationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	if ((info.db || info.context) && input.GetValue<bool>()) {
+	if (info.db || info.context) {
 		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
 	}
 }

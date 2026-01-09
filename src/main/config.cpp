@@ -66,7 +66,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_SETTING_CALLBACK(AllowParserOverrideExtensionSetting),
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
-    DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
+    DUCKDB_SETTING_CALLBACK(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
     DUCKDB_GLOBAL(AllowedDirectoriesSetting),
     DUCKDB_GLOBAL(AllowedPathsSetting),

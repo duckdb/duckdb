@@ -86,28 +86,6 @@ void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value
 }
 
 //===----------------------------------------------------------------------===//
-// Allow Unredacted Secrets
-//===----------------------------------------------------------------------===//
-void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allow_unredacted_secrets = input.GetValue<bool>();
-}
-
-void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allow_unredacted_secrets = DBConfigOptions().allow_unredacted_secrets;
-}
-
-Value AllowUnredactedSecretsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_unredacted_secrets);
-}
-
-//===----------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
 void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

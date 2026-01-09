@@ -22,7 +22,7 @@ namespace duckdb {
 
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
-	config->options.allow_unredacted_secrets = true;
+	config->SetOptionByName("allow_unredacted_secrets", true);
 	config->options.load_extensions = false;
 
 	auto &test_config = TestConfiguration::Get();
