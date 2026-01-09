@@ -20,6 +20,7 @@ public:
 	~PersistentTableData();
 
 	MetaBlockPointer base_table_pointer;
+	vector<MetaBlockPointer> read_metadata_pointers;
 	TableStatistics table_stats;
 	idx_t total_rows;
 	idx_t row_group_count;

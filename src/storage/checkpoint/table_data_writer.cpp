@@ -2,10 +2,14 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 
@@ -58,8 +62,11 @@ MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
 	return checkpoint_manager.GetMetadataManager();
 }
 
-void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
+void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
+                                                    const vector<MetaBlockPointer> &metadata_pointers,
+                                                    idx_t total_rows) {
 	existing_pointer = pointer;
+	existing_pointers = metadata_pointers;
 	existing_rows = total_rows;
 }
 
@@ -71,11 +78,14 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
                                               RowGroupCollection &collection, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
 		// write the metadata
 		// store the current position in the metadata writer
 		// this is where the row groups for this table start
 		pointer = table_data_writer.GetMetaBlockPointer();
+		vector<MetaBlockPointer> written_pointers;
+		table_data_writer.SetWrittenPointers(written_pointers);
 
 		// Serialize statistics as a single unit
 		BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
@@ -98,7 +108,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			RowGroup::Serialize(row_group_pointer, row_group_serializer);
 			row_group_serializer.End();
 		}
-		collection.FinalizeCheckpoint(pointer);
+		table_data_writer.SetWrittenPointers(nullptr);
+		collection.FinalizeCheckpoint(pointer, written_pointers);
 	} else {
 		// we have existing metadata and the table is unchanged - write a pointer to the existing metadata
 		pointer = existing_pointer;
@@ -106,9 +117,44 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 
 		// label the blocks as used again to prevent them from being freed
 		auto &metadata_manager = checkpoint_manager.GetMetadataManager();
-		MetadataReader reader(metadata_manager, pointer);
-		auto blocks = reader.GetRemainingBlocks();
-		metadata_manager.ClearModifiedBlocks(blocks);
+		metadata_manager.ClearModifiedBlocks(existing_pointers);
+
+		// verify that existing_pointers indeed corresponds to the metadata blocks
+		if (debug_verify_blocks) {
+			vector<MetaBlockPointer> read_pointers;
+			MetadataReader reader(metadata_manager, pointer, read_pointers);
+			auto bound_info = Binder::BindCreateTableCheckpoint(table.GetInfo(), table.schema);
+			TableDataReader data_reader(reader, *bound_info, pointer);
+			data_reader.ReadTableData();
+			for (idx_t row_group = 0; row_group < bound_info->data->row_group_count; ++row_group) {
+				BinaryDeserializer deserializer(reader);
+				deserializer.Begin();
+				auto row_group_pointer = RowGroup::Deserialize(deserializer);
+				deserializer.End();
+			}
+			set<idx_t> existing_block_ids;
+			for (auto &ptr : existing_pointers) {
+				existing_block_ids.insert(ptr.block_pointer);
+			}
+			set<idx_t> all_read_block_ids;
+			for (auto &ptr : read_pointers) {
+				all_read_block_ids.insert(ptr.block_pointer);
+			}
+			if (existing_block_ids != all_read_block_ids) {
+				std::stringstream oss;
+				oss << "Existing: ";
+				for (auto &block : existing_pointers) {
+					oss << block << ", ";
+				}
+				oss << "\n";
+				oss << "Read: ";
+				for (auto &block : read_pointers) {
+					oss << block << ", ";
+				}
+				oss << "\n";
+				throw InternalException("Reading existing blocks does not yield same blocks: " + oss.str());
+			}
+		}
 	}
 
 	// Now begin the metadata as a unit
@@ -125,7 +171,6 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
-	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
 	if (debug_verify_blocks) {
 		for (auto &entry : index_storage_infos) {
 			for (auto &allocator : entry.allocator_infos) {

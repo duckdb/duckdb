@@ -239,6 +239,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		row_t current_row = append_state.row_start;
 		// Remove the data from the indexes, if any.
 		collection.Scan(transaction, [&](DataChunk &chunk) -> bool {
+			if (current_row >= append_state.current_row) {
+				// Finished deleting all rows from the index.
+				return false;
+			}
 			// Remove the chunk.
 			try {
 				table.RevertIndexAppend(append_state, chunk, current_row);
@@ -248,10 +252,6 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			} // LCOV_EXCL_STOP
 
 			current_row += UnsafeNumericCast<row_t>(chunk.size());
-			if (current_row >= append_state.current_row) {
-				// Finished deleting all rows from the index.
-				return false;
-			}
 			return true;
 		});
 

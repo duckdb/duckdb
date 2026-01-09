@@ -182,7 +182,6 @@ vector<string> SplitQueries(const string &input_query) {
 	string final_segment = input_query.substr(last_split);
 	StringUtil::Trim(final_segment);
 	if (!final_segment.empty()) {
-		final_segment.append(";");
 		queries.push_back(std::move(final_segment));
 	}
 	return queries;
