@@ -942,9 +942,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
 			string log_path(DUCKDB_FORCE_QUERY_LOG);
-			client_data->log_query_writer =
-			    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
-			                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data->file_opener.get());
+			client_data->log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
+			                                                              BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 		} catch (...) {
 			return;
 		}
@@ -1118,6 +1117,10 @@ void ClientContext::Interrupt() {
 
 bool ClientContext::IsInterrupted() const {
 	return interrupted;
+}
+
+void ClientContext::ClearInterrupt() {
+	interrupted = false;
 }
 
 void ClientContext::CancelTransaction() {

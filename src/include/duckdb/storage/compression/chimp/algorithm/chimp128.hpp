@@ -8,12 +8,10 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/ring_buffer.hpp"
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 #include "duckdb/common/limits.hpp"

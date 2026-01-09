@@ -264,6 +264,16 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	}
 }
 
+unique_ptr<BaseStatistics> BaseStatistics::PushdownExtract(const StorageIndex &index) const {
+	auto stats_type = GetStatsType();
+	switch (stats_type) {
+	case StatisticsType::STRUCT_STATS:
+		return StructStats::PushdownExtract(*this, index);
+	default:
+		throw InternalException("PushdownExtract not supported for StatisticsType::%s", EnumUtil::ToString(stats_type));
+	}
+}
+
 BaseStatistics BaseStatistics::Copy() const {
 	BaseStatistics result(type);
 	result.Copy(*this);

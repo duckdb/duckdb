@@ -8,10 +8,35 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test_structs(id INT, s STRUCT(a integer, b bool));
+CREATE TABLE test_structs(
+	id INT,
+	s STRUCT(
+		a integer,
+		b bool
+	)
+);
 
 statement ok
-INSERT INTO test_structs VALUES (1, {'a': 42, 'b': true}), (2, NULL), (3, {'a': 84, 'b': NULL}), (4, {'a': NULL, 'b': false});
+INSERT INTO test_structs VALUES
+	(
+		1, {
+			'a': 42,
+			'b': true
+		}
+	),
+	(2, NULL),
+	(
+		3, {
+			'a': 84,
+			'b': NULL
+		}
+	),
+	(
+		4, {
+			'a': NULL,
+			'b': false
+		}
+	);
 
 statement ok
 COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
@@ -25,6 +50,15 @@ true
 NULL
 NULL
 false
+
+# Add a cast on top of the struct extract
+query I
+SELECT s.b::INTEGER FROM ${source}
+----
+1
+NULL
+NULL
+0
 
 query I
 SELECT s['b'] FROM ${source}
@@ -42,6 +76,15 @@ NULL	NULL
 NULL	{'a': 84, 'b': NULL}
 false	{'a': NULL, 'b': false}
 
+# Add a cast
+query II
+SELECT s['b']::INTEGER, s FROM ${source}
+----
+1	{'a': 42, 'b': true}
+NULL	NULL
+NULL	{'a': 84, 'b': NULL}
+0	{'a': NULL, 'b': false}
+
 query II
 SELECT s.b, s.a FROM ${source}
 ----
@@ -50,6 +93,15 @@ NULL	NULL
 NULL	84
 false	NULL
 
+# Add a cast
+query II
+SELECT s.b::INTEGER, s.a::BIGINT FROM ${source}
+----
+1	42
+NULL	NULL
+NULL	84
+0	NULL
+
 query I
 SELECT s FROM ${source} WHERE s.b
 ----
@@ -57,6 +109,12 @@ SELECT s FROM ${source} WHERE s.b
 
 query I
 SELECT a FROM (SELECT UNNEST(s) FROM ${source}) WHERE b
+----
+42
+
+# Add a cast
+query I
+SELECT a::BIGINT FROM (SELECT UNNEST(s) FROM ${source}) WHERE b::INTEGER
 ----
 42
 

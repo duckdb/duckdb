@@ -223,7 +223,11 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
 BlockAllocator::~BlockAllocator() {
 	GetBlockAllocatorThreadLocalState(*this).Clear();
 	if (IsActive()) {
-		FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+		try {
+			FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+		} catch (...) {
+			// Not allowed to throw in destructor!
+		}
 	}
 }
 

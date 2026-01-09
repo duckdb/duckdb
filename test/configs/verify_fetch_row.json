@@ -21,7 +21,9 @@
         "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_views.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
-        "test/sql/pg_catalog/sqlalchemy.test"
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
       ]
     },
     {
@@ -39,6 +41,12 @@
         "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
       ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+        "paths": [
+          "test/geoparquet/with_crs.test"
+        ]
     }
   ]
 }

@@ -5,7 +5,8 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
-#include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
 
@@ -15,7 +16,7 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
                                          MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
-    : db(buffer_manager.GetDatabase()),
+    : scheduler(TaskScheduler::GetScheduler(buffer_manager.GetDatabase())),
       stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
                                     : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
       layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p),
@@ -30,31 +31,8 @@ TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<Tupl
                           std::move(stl_allocator)) {
 }
 
-class TupleDataDestroyTask : public BaseExecutorTask {
-public:
-	TupleDataDestroyTask(TaskExecutor &executor, unsafe_arena_ptr<TupleDataSegment> segment_p)
-	    : BaseExecutorTask(executor), segment(std::move(segment_p)) {
-	}
-
-	void ExecuteTask() override {
-		segment.reset();
-	}
-
-private:
-	unsafe_arena_ptr<TupleDataSegment> segment;
-};
-
-void TupleDataCollection::Destroy() {
-	TaskExecutor executor(TaskScheduler::GetScheduler(db));
-	for (auto &segment : segments) {
-		auto destroy_task = make_uniq<TupleDataDestroyTask>(executor, std::move(segment));
-		executor.ScheduleTask(std::move(destroy_task));
-	}
-	executor.WorkOnTasks();
-}
-
 TupleDataCollection::~TupleDataCollection() {
-	Destroy();
+	ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments);
 }
 
 void TupleDataCollection::Initialize() {
@@ -115,7 +93,7 @@ idx_t TupleDataCollection::ChunkCount() const {
 }
 
 idx_t TupleDataCollection::SizeInBytes() const {
-	return data_size;
+	return data_size + stl_allocator->AllocationSize();
 }
 
 void TupleDataCollection::Unpin() {

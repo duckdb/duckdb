@@ -1,10 +1,8 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
-#include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "zstd.h"
@@ -761,9 +759,12 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 			// we want to remove all files in the directory
 			fs.RemoveDirectory(temp_directory);
 		} else {
+			vector<string> full_path_files_to_delete;
+			full_path_files_to_delete.reserve(files_to_delete.size());
 			for (auto &file : files_to_delete) {
-				fs.RemoveFile(fs.JoinPath(temp_directory, file));
+				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
 			}
+			fs.RemoveFiles(full_path_files_to_delete);
 		}
 	}
 }

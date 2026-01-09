@@ -290,10 +290,12 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 }
 
 void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
+#ifdef D_ASSERT_IS_ENABLED
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<RegexpExtractAllStructBindData>();
 	// Struct multi-match variant only supports constant pattern (enforced in Bind)
 	D_ASSERT(info.constant_pattern);
+#endif
 
 	// Expect arguments: string, pattern, list_of_group_names [, options]
 	auto &strings = args.data[0];
