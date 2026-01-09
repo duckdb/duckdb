@@ -365,8 +365,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 
 		// Collect all directories to search for extensions
 		vector<string> search_directories;
-		if (!db.config.options.extension_directory.empty()) {
-			search_directories.push_back(db.config.options.extension_directory);
+		auto custom_extension_directory = DBConfig::GetSetting<ExtensionDirectorySetting>(db);
+		if (!custom_extension_directory.empty()) {
+			search_directories.push_back(custom_extension_directory);
 		}
 
 		if (!db.config.options.extension_directories.empty()) {

@@ -100,8 +100,9 @@ vector<string> ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, 
 	vector<string> extension_directories;
 	auto &config = db.config;
 
-	if (!config.options.extension_directory.empty()) {
-		extension_directories.push_back(config.options.extension_directory);
+	auto custom_extension_directory = DBConfig::GetSetting<ExtensionDirectorySetting>(config);
+	if (!custom_extension_directory.empty()) {
+		extension_directories.push_back(custom_extension_directory);
 	}
 
 	if (!config.options.extension_directories.empty()) {

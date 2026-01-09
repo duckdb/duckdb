@@ -722,9 +722,8 @@ struct ExtensionDirectorySetting {
 	static constexpr const char *Name = "extension_directory";
 	static constexpr const char *Description = "Set the directory to store extensions in";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct ExternalThreadsSetting {
