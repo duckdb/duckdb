@@ -782,8 +782,8 @@
         "name": "password",
         "description": "The password to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": ""
     },
     {
         "name": "perfect_ht_threshold",
@@ -962,8 +962,8 @@
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true,
+        "default_scope": "global",
+        "default_value": "",
         "aliases": [
             "user"
         ]

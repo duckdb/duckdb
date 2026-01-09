@@ -1426,21 +1426,6 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 }
 
 //===----------------------------------------------------------------------===//
-// Password
-//===----------------------------------------------------------------------===//
-void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// nop
-}
-
-void PasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// nop
-}
-
-Value PasswordSetting::GetSetting(const ClientContext &context) {
-	return Value();
-}
-
-//===----------------------------------------------------------------------===//
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -1745,21 +1730,6 @@ void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
-}
-
-//===----------------------------------------------------------------------===//
-// Username
-//===----------------------------------------------------------------------===//
-void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// nop
-}
-
-void UsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// nop
-}
-
-Value UsernameSetting::GetSetting(const ClientContext &context) {
-	return Value();
 }
 
 } // namespace duckdb
