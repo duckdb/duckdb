@@ -145,7 +145,11 @@
         "name": "autoinstall_known_extensions",
         "description": "Whether known extensions are allowed to be automatically installed when a query depends on them",
         "type": "BOOLEAN",
-        "scope": "global"
+        "default_scope": "global",
+        "default_value": "false",
+        "conditional_defaults": {
+            "#if defined(DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT) && DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT": "true"
+        }
     },
     {
         "name": "autoload_known_extensions",
@@ -900,7 +904,7 @@
         "default_scope": "global",
         "default_value": "false",
         "conditional_defaults": {
-            "DUCKDB_ALTERNATIVE_VERIFY": "true"
+            "#ifdef DUCKDB_ALTERNATIVE_VERIFY": "true"
         }
     },
     {

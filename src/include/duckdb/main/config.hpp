@@ -109,12 +109,6 @@ struct DBConfigOptions {
 #else
 	bool autoload_known_extensions = false;
 #endif
-#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
-	//! Whether known extensions are allowed to be automatically installed when a query depends on them
-	bool autoinstall_known_extensions = DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT;
-#else
-	bool autoinstall_known_extensions = false;
-#endif
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.

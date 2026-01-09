@@ -38,7 +38,7 @@ def extract_declarations(setting) -> str:
     if setting.is_generic_setting:
         if setting.conditional_defaults is not None:
             for condition, default_val in setting.conditional_defaults.items():
-                definition += f"#ifdef {condition}\n"
+                definition += f"{condition}\n"
                 definition += f"    static constexpr const char *DefaultValue = \"{default_val}\";\n"
             definition += "#else\n"
         definition += f"    static constexpr const char *DefaultValue = \"{setting.default_value}\";\n"

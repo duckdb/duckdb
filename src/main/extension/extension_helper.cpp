@@ -192,7 +192,7 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
 		    extension_name + ";\nLOAD " + extension_name +
 		    ";\n\nAlternatively, consider enabling auto-install "
 		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
-	} else if (!config.options.autoinstall_known_extensions) {
+	} else if (!DBConfig::GetSetting<AutoinstallKnownExtensionsSetting>(config)) {
 		install_hint =
 		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
 		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
@@ -209,9 +209,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
-	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
-		if (dbconfig.options.autoinstall_known_extensions) {
+		if (DBConfig::GetSetting<AutoinstallKnownExtensionsSetting>(context)) {
 			auto autoinstall_repo_setting = DBConfig::GetSetting<AutoinstallExtensionRepositorySetting>(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(autoinstall_repo_setting);
 			ExtensionInstallOptions options;
@@ -240,7 +239,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 	auto &dbconfig = DBConfig::GetConfig(instance);
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
-		if (dbconfig.options.autoinstall_known_extensions) {
+		if (DBConfig::GetSetting<AutoinstallKnownExtensionsSetting>(instance)) {
 			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
@@ -388,7 +387,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	try {
 		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
-		if (dbconfig.options.autoinstall_known_extensions) {
+		if (DBConfig::GetSetting<AutoinstallKnownExtensionsSetting>(db)) {
 			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;

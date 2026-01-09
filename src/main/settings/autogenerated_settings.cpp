@@ -115,22 +115,6 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
-// Autoinstall Known Extensions
-//===----------------------------------------------------------------------===//
-void AutoinstallKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_known_extensions = input.GetValue<bool>();
-}
-
-void AutoinstallKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_known_extensions = DBConfigOptions().autoinstall_known_extensions;
-}
-
-Value AutoinstallKnownExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.autoinstall_known_extensions);
-}
-
-//===----------------------------------------------------------------------===//
 // Autoload Known Extensions
 //===----------------------------------------------------------------------===//
 void AutoloadKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

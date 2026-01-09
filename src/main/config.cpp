@@ -76,7 +76,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ArrowOutputVersionSetting),
     DUCKDB_SETTING(AsofLoopJoinThresholdSetting),
     DUCKDB_SETTING(AutoinstallExtensionRepositorySetting),
-    DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
+    DUCKDB_SETTING(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
     DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
