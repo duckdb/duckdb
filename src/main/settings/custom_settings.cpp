@@ -653,12 +653,15 @@ void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 			disabled_compression_methods.clear();
 			break;
 		}
-		auto compression_type = CompressionTypeFromString(param);
-		if (compression_type == CompressionType::COMPRESSION_UNCOMPRESSED) {
-			throw InvalidInputException("Uncompressed compression cannot be disabled");
-		}
-		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			throw InvalidInputException("Unrecognized compression method \"%s\"", entry);
+		auto compression_type = EnumUtil::FromString<CompressionType>(param);
+		switch (compression_type) {
+		case CompressionType::COMPRESSION_AUTO:
+		case CompressionType::COMPRESSION_CONSTANT:
+		case CompressionType::COMPRESSION_EMPTY:
+		case CompressionType::COMPRESSION_UNCOMPRESSED:
+			throw InvalidInputException("Compression method %s cannot be disabled", param);
+		default:
+			break;
 		}
 		disabled_compression_methods.push_back(compression_type);
 	}
@@ -1180,13 +1183,16 @@ bool ExternalThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &confi
 //===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
-void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
 	if (compression == "none" || compression == "auto") {
-		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
+		input = "auto";
 	} else {
-		auto compression_type = CompressionTypeFromString(compression);
-		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
+		auto compression_type = EnumUtil::FromString<CompressionType>(compression);
+		if (compression_type == CompressionType::COMPRESSION_CONSTANT ||
+		    compression_type == CompressionType::COMPRESSION_EMPTY) {
+			throw ParserException("auto / constant cannot be used for force_compression");
+		}
 		auto compression_availability_result = CompressionTypeIsAvailable(compression_type);
 		if (!compression_availability_result.IsAvailable()) {
 			if (compression_availability_result.IsDeprecated()) {
@@ -1197,21 +1203,7 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 				                      CompressionTypeToString(compression_type));
 			}
 		}
-		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");
-			throw ParserException("Unrecognized option for PRAGMA force_compression, expected %s", compression_types);
-		}
-		config.options.force_compression = compression_type;
 	}
-}
-
-void ForceCompressionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.force_compression = DBConfigOptions().force_compression;
-}
-
-Value ForceCompressionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(*context.db);
-	return CompressionTypeToString(config.options.force_compression);
 }
 
 //===----------------------------------------------------------------------===//

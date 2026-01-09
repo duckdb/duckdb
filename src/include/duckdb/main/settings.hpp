@@ -23,6 +23,7 @@
 #include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 
 namespace duckdb {
 
@@ -762,13 +763,13 @@ struct ForceBitpackingModeSetting {
 };
 
 struct ForceCompressionSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = CompressionType;
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "auto";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ForceVariantShredding {

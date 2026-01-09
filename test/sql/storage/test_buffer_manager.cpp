@@ -16,7 +16,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	config->options.maximum_threads = 1;
 	// ZSTD can store this in a smaller way, force uncompressed so the 5mb max test correctly fails
-	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
+	config->SetOptionByName("force_compression", "uncompressed");
 
 	uint64_t string_length = 64;
 	uint64_t desired_size = 10000000; // desired size is 10MB

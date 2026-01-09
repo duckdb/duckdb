@@ -552,9 +552,12 @@
     {
         "name": "force_compression",
         "description": "DEBUG SETTING: forces a specific compression method to be used",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "type": "ENUM<CompressionType>",
+        "default_scope": "global",
+        "default_value": "auto",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "force_variant_shredding",

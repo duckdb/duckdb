@@ -152,8 +152,6 @@ struct DBConfigOptions {
 	bool initialize_default_database = true;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
-	//! Force a specific compression method to be used when checkpointing (if available)
-	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Force a specific schema for VARIANT shredding
 	LogicalType force_variant_shredding = LogicalType::INVALID;
 	//! Database configuration variables as controlled by SET

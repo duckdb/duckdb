@@ -128,7 +128,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
-    DUCKDB_GLOBAL(ForceCompressionSetting),
+    DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),

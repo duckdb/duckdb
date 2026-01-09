@@ -39,6 +39,7 @@
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
@@ -1146,22 +1147,22 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "COMPRESSION_AUTO" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_UNCOMPRESSED), "COMPRESSION_UNCOMPRESSED" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CONSTANT), "COMPRESSION_CONSTANT" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_RLE), "COMPRESSION_RLE" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICTIONARY), "COMPRESSION_DICTIONARY" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PFOR_DELTA), "COMPRESSION_PFOR_DELTA" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_BITPACKING), "COMPRESSION_BITPACKING" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_FSST), "COMPRESSION_FSST" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CHIMP), "COMPRESSION_CHIMP" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "COMPRESSION_PATAS" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "COMPRESSION_ALP" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "COMPRESSION_DICT_FSST" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "AUTO" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_UNCOMPRESSED), "UNCOMPRESSED" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_RLE), "RLE" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICTIONARY), "DICTIONARY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PFOR_DELTA), "PFOR" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_BITPACKING), "BITPACKING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_FSST), "FSST" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CHIMP), "CHIMP" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "PATAS" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "ALP" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "ALPRD" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "ZSTD" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "ROARING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "DICT_FSST" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
