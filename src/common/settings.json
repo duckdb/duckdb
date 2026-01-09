@@ -898,7 +898,10 @@
         "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "conditional_defaults": {
+            "DUCKDB_ALTERNATIVE_VERIFY": "true"
+        }
     },
     {
         "name": "schema",

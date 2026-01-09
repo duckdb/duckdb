@@ -1206,7 +1206,11 @@ struct SchedulerProcessPartialSetting {
 	static constexpr const char *Description =
 	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
 	static constexpr const char *InputType = "BOOLEAN";
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	static constexpr const char *DefaultValue = "true";
+#else
 	static constexpr const char *DefaultValue = "false";
+#endif
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 

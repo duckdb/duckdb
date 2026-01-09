@@ -36,7 +36,14 @@ def extract_declarations(setting) -> str:
     if setting.scope is not None:
         definition += f"    static Value GetSetting(const ClientContext &context);\n"
     if setting.is_generic_setting:
+        if setting.conditional_defaults is not None:
+            for condition, default_val in setting.conditional_defaults.items():
+                definition += f"#ifdef {condition}\n"
+                definition += f"    static constexpr const char *DefaultValue = \"{default_val}\";\n"
+            definition += "#else\n"
         definition += f"    static constexpr const char *DefaultValue = \"{setting.default_value}\";\n"
+        if setting.conditional_defaults is not None:
+            definition += "#endif\n"
         definition += f"    static constexpr SetScope DefaultScope = SetScope::{setting.default_scope};\n"
         if setting.on_set:
             definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"

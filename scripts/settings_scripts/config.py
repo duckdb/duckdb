@@ -44,6 +44,7 @@ class Setting:
         aliases: List[str],
         default_scope: str,
         default_value: str,
+        conditional_defaults,
     ):
         self.name = self._get_valid_name(name)
         self.description = description
@@ -72,6 +73,7 @@ class Setting:
         self.struct_name = self._get_struct_name() if len(struct_name) == 0 else struct_name
         self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
         self.default_value = default_value
+        self.conditional_defaults = conditional_defaults
 
     # define all comparisons to be based on the setting's name attribute
     def __eq__(self, other) -> bool:
