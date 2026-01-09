@@ -14,7 +14,7 @@ void ValidChecker::Invalidate(string error) {
 }
 
 bool ValidChecker::IsInvalidated() {
-	if (db.config.options.disable_database_invalidation) {
+	if (DBConfig::GetSetting<DisableDatabaseInvalidationSetting>(db)) {
 		return false;
 	}
 	return is_invalidated;

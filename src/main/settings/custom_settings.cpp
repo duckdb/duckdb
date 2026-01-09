@@ -201,18 +201,10 @@ bool AllowUnredactedSecretsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig
 //===----------------------------------------------------------------------===//
 // Disable Database Invalidation
 //===----------------------------------------------------------------------===//
-bool DisableDatabaseInvalidationSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+void DisableDatabaseInvalidationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if ((info.db || info.context) && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
 	}
-	return true;
-}
-
-bool DisableDatabaseInvalidationSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
