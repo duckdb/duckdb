@@ -568,8 +568,9 @@
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": [
+        "default_scope": "local",
+        "default_value": "",
+        "on_callbacks": [
             "set"
         ]
     },

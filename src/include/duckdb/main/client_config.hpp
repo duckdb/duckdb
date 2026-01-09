@@ -27,8 +27,6 @@ class PreparedStatementData;
 typedef std::function<PhysicalOperator &(ClientContext &context, PreparedStatementData &data)> get_result_collector_t;
 
 struct ClientConfig {
-	//! The home directory used by the system (if any)
-	string home_directory;
 	//! If the query profiler is enabled or not.
 	bool enable_profiler = false;
 	//! If detailed query profiling is enabled

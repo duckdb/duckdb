@@ -364,18 +364,6 @@ void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &paramet
 }
 
 //===----------------------------------------------------------------------===//
-// Home Directory
-//===----------------------------------------------------------------------===//
-void HomeDirectorySetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).home_directory = ClientConfig().home_directory;
-}
-
-Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.home_directory);
-}
-
-//===----------------------------------------------------------------------===//
 // Lambda Syntax
 //===----------------------------------------------------------------------===//
 void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

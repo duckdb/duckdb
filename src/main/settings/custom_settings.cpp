@@ -1217,12 +1217,21 @@ Value ForceCompressionSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Home Directory
 //===----------------------------------------------------------------------===//
-void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (!input.IsNull() && FileSystem::GetFileSystem(context).IsRemoteFile(input.ToString())) {
-		throw InvalidInputException("Cannot set the home directory to a remote path");
+void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	optional_ptr<FileSystem> fs;
+	if (info.context) {
+		fs = FileSystem::GetFileSystem(*info.context);
+	} else if (info.db) {
+		fs = FileSystem::GetFileSystem(*info.db);
+	} else {
+		fs = info.config.file_system.get();
 	}
-	config.home_directory = input.IsNull() ? string() : input.ToString();
+	if (fs && !input.IsNull()) {
+		auto new_home_directory = input.ToString();
+		if (fs->IsRemoteFile(new_home_directory)) {
+			throw InvalidInputException("Cannot set the home directory to a remote path");
+		}
+	}
 }
 
 //===----------------------------------------------------------------------===//
