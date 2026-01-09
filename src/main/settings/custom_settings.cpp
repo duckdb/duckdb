@@ -1304,25 +1304,6 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
-// Lambda Syntax Setting
-//===----------------------------------------------------------------------===//
-void LambdaSyntaxSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto setting_type = EnumUtil::FromString<LambdaSyntax>(input.ToString());
-	auto &config = ClientConfig::GetConfig(context);
-	config.lambda_syntax = setting_type;
-}
-
-void LambdaSyntaxSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.lambda_syntax = LambdaSyntax::DEFAULT;
-}
-
-Value LambdaSyntaxSetting::GetSetting(const ClientContext &context) {
-	const auto &config = ClientConfig::GetConfig(context);
-	return Value(EnumUtil::ToString(config.lambda_syntax));
-}
-
-//===----------------------------------------------------------------------===//
 // Log Query Path
 //===----------------------------------------------------------------------===//
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {

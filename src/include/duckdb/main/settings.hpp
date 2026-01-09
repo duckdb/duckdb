@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
@@ -21,6 +20,9 @@
 #include "duckdb/common/enums/arrow_format_version.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
+#include "duckdb/common/enums/lambda_syntax.hpp"
+#include "duckdb/execution/physical_table_scan_enum.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 
 namespace duckdb {
 
@@ -883,14 +885,14 @@ struct IntegerDivisionSetting {
 };
 
 struct LambdaSyntaxSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = LambdaSyntax;
 	static constexpr const char *Name = "lambda_syntax";
 	static constexpr const char *Description =
 	    "Configures the use of the deprecated single arrow operator (->) for lambda functions.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SetScope DefaultScope = SetScope::SESSION;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct LateMaterializationMaxRowsSetting {

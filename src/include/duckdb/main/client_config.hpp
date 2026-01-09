@@ -85,9 +85,6 @@ struct ClientConfig {
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
 
-	//! If DEFAULT or ENABLE_SINGLE_ARROW, it is possible to use the deprecated single arrow operator (->) for lambda
-	//! functions. Otherwise, DISABLE_SINGLE_ARROW.
-	LambdaSyntax lambda_syntax = LambdaSyntax::DEFAULT;
 	//! The profiling coverage. SELECT is the default behavior, and ALL emits profiling information for all operator
 	//! types.
 	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;

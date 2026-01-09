@@ -376,6 +376,13 @@ Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Lambda Syntax
+//===----------------------------------------------------------------------===//
+void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<LambdaSyntax>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

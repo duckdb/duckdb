@@ -646,9 +646,9 @@
     {
         "name": "lambda_syntax",
         "description": "Configures the use of the deprecated single arrow operator (->) for lambda functions.",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
+        "type": "ENUM<LambdaSyntax>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "late_materialization_max_rows",
