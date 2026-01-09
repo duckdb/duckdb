@@ -16,6 +16,7 @@
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
@@ -354,6 +355,26 @@ const char* EnumUtil::ToChars<AggregateType>(AggregateType value) {
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value) {
 	return static_cast<AggregateType>(StringUtil::StringToEnum(GetAggregateTypeValues(), 2, "AggregateType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAllowParserOverrideValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AllowParserOverride::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(AllowParserOverride::FALLBACK), "FALLBACK" },
+		{ static_cast<uint32_t>(AllowParserOverride::STRICT), "STRICT" },
+		{ static_cast<uint32_t>(AllowParserOverride::STRICT_WHEN_SUPPORTED), "STRICT_WHEN_SUPPORTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AllowParserOverride>(AllowParserOverride value) {
+	return StringUtil::EnumToString(GetAllowParserOverrideValues(), 4, "AllowParserOverride", static_cast<uint32_t>(value));
+}
+
+template<>
+AllowParserOverride EnumUtil::FromString<AllowParserOverride>(const char *value) {
+	return static_cast<AllowParserOverride>(StringUtil::StringToEnum(GetAllowParserOverrideValues(), 4, "AllowParserOverride", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterDatabaseTypeValues() {

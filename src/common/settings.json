@@ -52,12 +52,9 @@
     {
         "name": "allow_parser_override_extension",
         "description": "Allow extensions to override the current parser",
-        "type": "VARCHAR",
-        "scope": "global",
-        "on_callbacks": [
-            "set",
-            "reset"
-        ]
+        "type": "ENUM<AllowParserOverride>",
+        "default_scope": "global",
+        "default_value": "DEFAULT"
     },
     {
         "name": "allow_persistent_secrets",

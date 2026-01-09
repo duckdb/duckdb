@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 
 namespace duckdb {
 class ParserExtension;
@@ -18,7 +19,7 @@ struct ParserOptions {
 	bool integer_division = false;
 	idx_t max_expression_depth = 1000;
 	const vector<ParserExtension> *extensions = nullptr;
-	string parser_override_setting = "default";
+	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT;
 };
 
 } // namespace duckdb

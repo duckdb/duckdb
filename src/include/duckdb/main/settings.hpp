@@ -20,6 +20,7 @@
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 
 namespace duckdb {
 
@@ -97,15 +98,13 @@ struct AllowExtensionsMetadataMismatchSetting {
 };
 
 struct AllowParserOverrideExtensionSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = AllowParserOverride;
 	static constexpr const char *Name = "allow_parser_override_extension";
 	static constexpr const char *Description = "Allow extensions to override the current parser";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllowPersistentSecretsSetting {

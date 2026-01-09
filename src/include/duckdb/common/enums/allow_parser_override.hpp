@@ -1,0 +1,17 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/enums/allow_parser_override.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/constants.hpp"
+
+namespace duckdb {
+
+enum class AllowParserOverride : uint8_t { DEFAULT, FALLBACK, STRICT, STRICT_WHEN_SUPPORTED };
+
+} // namespace duckdb
