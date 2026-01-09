@@ -668,8 +668,11 @@
         "name": "log_query_path",
         "description": "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
+        "default_scope": "local",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "logging_level",

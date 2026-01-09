@@ -1287,26 +1287,19 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 //===----------------------------------------------------------------------===//
 // Log Query Path
 //===----------------------------------------------------------------------===//
-void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &client_data = ClientData::Get(context);
+void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.context) {
+		throw InvalidInputException("log_query_path can only be set when a context is present");
+	}
+	auto &client_data = ClientData::Get(*info.context);
 	auto path = input.ToString();
 	if (path.empty()) {
 		// empty path: clean up query writer
 		client_data.log_query_writer = nullptr;
 	} else {
-		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*info.context), path,
 		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 	}
-}
-
-void LogQueryPathSetting::ResetLocal(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	client_data.log_query_writer = nullptr;
-}
-
-Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
 }
 
 //===----------------------------------------------------------------------===//
