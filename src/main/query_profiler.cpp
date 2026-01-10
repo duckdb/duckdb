@@ -207,10 +207,8 @@ void QueryProfiler::EndQuery() {
 
 	// Print or output the query profiling after query termination.
 	// EXPLAIN ANALYZE output is not written by the profiler.
-	if (IsEnabled()) {
-		if (!is_explain_analyze && ClientConfig::GetConfig(context).emit_profiler_output) {
-			emit_output = true;
-		}
+	if (IsEnabled() && !is_explain_analyze && ClientConfig::GetConfig(context).emit_profiler_output) {
+		emit_output = true;
 	}
 
 	is_explain_analyze = false;
