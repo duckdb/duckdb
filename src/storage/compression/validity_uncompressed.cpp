@@ -265,6 +265,33 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	idx_t input_entry = input_start / ValidityMask::BITS_PER_VALUE;
 	idx_t input_idx = input_start - input_entry * ValidityMask::BITS_PER_VALUE;
 
+	// Window scanning algorithm -- the goal is to copy a contiguous sequence of bits from input into result,
+	// and to do this using bit operations on 64 bit fields.
+	//
+	// On each loop iteration, we are inspecting a 64 bit field in both the input and result, starting at a certain
+	// index (in the code, these are denoted by input(result)_entry and input(result)index, respectively.
+	//
+	// For example, on the first loop iteration for the diagram, both entries are entry 0, and the starting indexes are
+	// the index of window 1 in each entry.
+	//
+	// input(result)_window is the window from input(result)_index to the end of the current bit field. So on the first
+	// iteration, input_window is just window 1, but result_window is the space containing windows 1 and 2.
+	//
+	// window is minimum(input_window, result_window), which is window 1 on the first iteration, window 2 on the
+	// second iteration, etc. These are what are shown in the diagram below.
+	//
+	// INPUT:
+	//  0                             63|                              127|                            191
+	//  +-------------------------------+--------------------------------+--------------------------------+
+	// .|                      [   1   ]|[          2         ][   3    ]|[          4         ][   5   ]|
+	//  +-------------------------------+--------------------------------+--------------------------------+
+	//
+	//  RESULT:
+	//  0                             63|                             127|                              191
+	//  +-------------------------------+--------------------------------+--------------------------------+
+	//   [   1   ][          2         ]|[   3    ][          4         ]|[   5    ]                      |
+	//  +-------------------------------+--------------------------------+--------------------------------+
+
 	idx_t pos = 0;
 	while (pos < scan_count) {
 		validity_t input_mask = input_data[input_entry];
@@ -290,17 +317,16 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			result_entry++;
 		}
 
-		auto protected_upper_bits = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - current_result_idx - window_size];
 		if (current_result_idx < current_input_idx) {
 			idx_t shift_amount = current_input_idx - current_result_idx;
 			input_mask = input_mask >> shift_amount;
 		} else {
-			// current_result_idx > current_input_idx
+			// current_result_idx >= current_input_idx
 			idx_t shift_amount = current_result_idx - current_input_idx;
-			input_mask = (input_mask & ~protected_upper_bits);
+			input_mask = (input_mask & ~UPPER_MASKS[shift_amount]);
 			input_mask = input_mask << shift_amount;
 		}
-
+		auto protected_upper_bits = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - current_result_idx - window_size];
 		auto protected_lower_bits = LOWER_MASKS[current_result_idx];
 		input_mask |= protected_upper_bits;
 		input_mask |= protected_lower_bits;
