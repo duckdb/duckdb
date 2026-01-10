@@ -73,5 +73,4 @@ Binder Error: The number of lambda parameters does not match the number of argum
 statement error
 SELECT invoke(NULL, 1);
 ----
-Binder Error:
-Invalid lambda expression passed to 'invoke' function.
+Binder Error: Invalid lambda expression passed to 'invoke' function.
