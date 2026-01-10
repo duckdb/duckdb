@@ -59,7 +59,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 static const ConfigurationOption internal_options[] = {
 
     DUCKDB_GLOBAL(AccessModeSetting),
-    DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
+    DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
     DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
     DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),

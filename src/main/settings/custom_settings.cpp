@@ -78,18 +78,10 @@ bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, cons
 //===----------------------------------------------------------------------===//
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
-bool AllocatorBackgroundThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
+void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db) {
+		TaskScheduler::GetScheduler(*info.db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
 	}
-	return true;
-}
-
-bool AllocatorBackgroundThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(DBConfigOptions().allocator_background_threads);
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//

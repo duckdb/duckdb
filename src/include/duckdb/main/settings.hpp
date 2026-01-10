@@ -50,11 +50,9 @@ struct AllocatorBackgroundThreadsSetting {
 	static constexpr const char *Name = "allocator_background_threads";
 	static constexpr const char *Description = "Whether to enable the allocator background thread.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllocatorBulkDeallocationFlushThresholdSetting {

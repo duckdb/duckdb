@@ -35,28 +35,6 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Allocator Background Threads
-//===----------------------------------------------------------------------===//
-void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allocator_background_threads = input.GetValue<bool>();
-}
-
-void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allocator_background_threads = DBConfigOptions().allocator_background_threads;
-}
-
-Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allocator_background_threads);
-}
-
-//===----------------------------------------------------------------------===//
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
 void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

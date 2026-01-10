@@ -12,10 +12,10 @@
         "name": "allocator_background_threads",
         "description": "Whether to enable the allocator background thread.",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
