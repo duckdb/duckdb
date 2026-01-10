@@ -42,6 +42,12 @@ SELECT invoke(lambda x: list_transform([1,2,3], LAMBDA y: y + x), 1);
 ----
 [2, 3, 4]
 
+# Lambda invoke with NULL
+query I
+select invoke(lambda x: x IS NULL, NULL);
+----
+true
+
 # Naming is correct
 query I
 select invoke(lambda x: alias(x), 1);
@@ -63,3 +69,9 @@ statement error
 SELECT invoke(lambda x: x + x, 2, 4, 6);
 ----
 Binder Error: The number of lambda parameters does not match the number of arguments passed to the 'invoke' function, expected 1, got 3.
+
+statement error
+SELECT invoke(NULL, 1);
+----
+Binder Error:
+Invalid lambda expression passed to 'invoke' function.

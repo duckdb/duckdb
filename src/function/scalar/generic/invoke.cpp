@@ -66,7 +66,7 @@ unique_ptr<FunctionData> LambdaInvokeBind(ClientContext &context, ScalarFunction
                                           vector<unique_ptr<Expression>> &arguments) {
 	// the list column and the bound lambda expression
 	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
-		throw BinderException("Invalid lambda expression!");
+		throw BinderException("Invalid lambda expression passed to 'invoke' function.");
 	}
 
 	auto &bound_lambda_expr = arguments[0]->Cast<BoundLambdaExpression>();
