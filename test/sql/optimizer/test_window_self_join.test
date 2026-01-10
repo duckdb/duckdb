@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/test_window_self_join.test
-# description: Test Count Window Elimination optimizer
+# description: Test Window Self-Join "constant aggrgate" optimizer
 # group: [optimizer]
 
 statement ok
@@ -19,7 +19,8 @@ EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
 query II
-FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1;
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1
+ORDER BY ALL;
 ----
 2024-01-01	101
 2024-01-02	100
