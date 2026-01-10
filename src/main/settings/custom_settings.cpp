@@ -1090,24 +1090,11 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
-bool ExternalThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_val = input.GetValue<int64_t>();
-	if (new_val < 0) {
-		throw SyntaxException("Must have a non-negative number of external threads!");
+void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto new_external_threads = input.GetValue<uint64_t>();
+	if (info.db) {
+		TaskScheduler::GetScheduler(*info.db).SetThreads(info.config.options.maximum_threads, new_external_threads);
 	}
-	auto new_external_threads = NumericCast<idx_t>(new_val);
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
-	}
-	return true;
-}
-
-bool ExternalThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_external_threads = DBConfigOptions().external_threads;
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1600,7 +1587,8 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 	}
 	auto new_maximum_threads = NumericCast<idx_t>(new_val);
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads,
+		                                            DBConfig::GetSetting<ExternalThreadsSetting>(config));
 	}
 	config.options.maximum_threads = new_maximum_threads;
 }
@@ -1608,7 +1596,8 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads,
+		                                            DBConfig::GetSetting<ExternalThreadsSetting>(config));
 	}
 	config.options.maximum_threads = new_maximum_threads;
 }

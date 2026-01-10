@@ -522,7 +522,8 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
 	if (threads.size() == new_thread_count) {
-		current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+		auto external_threads = DBConfig::GetSetting<ExternalThreadsSetting>(config);
+		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
 	if (threads.size() > new_thread_count) {
@@ -569,7 +570,8 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
-	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	auto external_threads = DBConfig::GetSetting<ExternalThreadsSetting>(config);
+	current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 	BlockAllocator::Get(db).FlushAll();
 #endif
 }

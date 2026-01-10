@@ -544,10 +544,10 @@
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "1",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {

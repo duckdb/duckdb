@@ -324,7 +324,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.options.maximum_threads, config.options.external_threads);
+	scheduler->SetThreads(config.options.maximum_threads, DBConfig::GetSetting<ExternalThreadsSetting>(config));
 	scheduler->RelaunchThreads();
 }
 

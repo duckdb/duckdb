@@ -177,28 +177,6 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// External Threads
-//===----------------------------------------------------------------------===//
-void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.external_threads = input.GetValue<idx_t>();
-}
-
-void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.external_threads = DBConfigOptions().external_threads;
-}
-
-Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.external_threads);
-}
-
-//===----------------------------------------------------------------------===//
 // Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
