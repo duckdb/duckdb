@@ -413,8 +413,11 @@
         "name": "enable_external_file_cache",
         "description": "Allow the database to cache external files (e.g., Parquet) in memory.",
         "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "enable_fsst_vectors",

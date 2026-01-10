@@ -287,7 +287,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
-	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	bool enable_external_file_cache = DBConfig::GetSetting<EnableExternalFileCacheSetting>(config);
+	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);

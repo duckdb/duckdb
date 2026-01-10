@@ -742,23 +742,10 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 //===----------------------------------------------------------------------===//
 // Enable External File Cache
 //===----------------------------------------------------------------------===//
-void EnableExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.enable_external_file_cache = input.GetValue<bool>();
-	if (db) {
-		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
+void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db) {
+		ExternalFileCache::Get(*info.db).SetEnabled(input.GetValue<bool>());
 	}
-}
-
-void EnableExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.enable_external_file_cache = DBConfigOptions().enable_external_file_cache;
-	if (db) {
-		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
-	}
-}
-
-Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.enable_external_file_cache);
 }
 
 //===----------------------------------------------------------------------===//
