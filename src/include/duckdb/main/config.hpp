@@ -167,8 +167,6 @@ struct DBConfigOptions {
 	set<string> allowed_directories;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
-	//! Cache validation mode, by default all cache entries are validated.
-	CacheValidationMode validate_external_file_cache = CacheValidationMode::VALIDATE_ALL;
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
 

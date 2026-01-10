@@ -38,8 +38,7 @@ CacheValidationMode ExternalFileCacheUtil::GetCacheValidationMode(const OpenFile
 	}
 
 	// No client context, fall back to database config.
-	auto &config = DBConfig::GetConfig(db);
-	return config.options.validate_external_file_cache;
+	return DBConfig::GetSetting<ValidateExternalFileCacheSetting>(db);
 }
 
 } // namespace duckdb

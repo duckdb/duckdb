@@ -12,7 +12,6 @@
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
