@@ -12,7 +12,7 @@ TEST_CASE("Test autoload of extension settings", "[api]") {
 	DBConfig config;
 	config.SetOptionByName("timezone", "America/Los_Angeles");
 
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 	config.SetOptionByName("autoload_known_extensions", true);
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (!env_var) {

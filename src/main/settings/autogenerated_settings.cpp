@@ -42,28 +42,6 @@ void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value
 }
 
 //===----------------------------------------------------------------------===//
-// Allow Unsigned Extensions
-//===----------------------------------------------------------------------===//
-void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allow_unsigned_extensions = input.GetValue<bool>();
-}
-
-void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allow_unsigned_extensions = DBConfigOptions().allow_unsigned_extensions;
-}
-
-Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_unsigned_extensions);
-}
-
-//===----------------------------------------------------------------------===//
 // Arrow Output Version
 //===----------------------------------------------------------------------===//
 void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

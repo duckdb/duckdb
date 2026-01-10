@@ -424,7 +424,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
-	if (!db.config.options.allow_unsigned_extensions) {
+	if (!DBConfig::GetSetting<AllowUnsignedExtensionsSetting>(db)) {
 		bool signature_valid;
 		if (parsed_metadata.AppearsValid()) {
 			bool allow_community_extensions = DBConfig::GetSetting<AllowCommunityExtensionsSetting>(db);

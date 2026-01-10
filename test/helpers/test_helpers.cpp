@@ -179,7 +179,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.
 	result->options.trim_free_blocks = true;
 #endif
-	result->options.allow_unsigned_extensions = true;
+	result->SetOptionByName("allow_unsigned_extensions", true);
 	auto storage_version = test_config.GetStorageVersion();
 	if (!storage_version.empty()) {
 		result->options.serialization_compatibility = SerializationCompatibility::FromString(storage_version);

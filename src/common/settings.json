@@ -77,10 +77,10 @@
         "name": "allow_unsigned_extensions",
         "description": "Allow to load extensions with invalid or missing signatures",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {

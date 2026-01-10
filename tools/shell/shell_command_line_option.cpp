@@ -68,7 +68,7 @@ MetadataResult AllowUnredacted(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
-	state.config.options.allow_unsigned_extensions = true;
+	state.config.SetOptionByName("allow_unsigned_extensions", true);
 	return MetadataResult::SUCCESS;
 }
 

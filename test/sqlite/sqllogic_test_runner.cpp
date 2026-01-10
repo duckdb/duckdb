@@ -30,7 +30,7 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 
 	bool autoload_known_extensions = false;
 	bool autoinstall_known_extensions = false;
-	config->options.allow_unsigned_extensions = true;
+	config->SetOptionByName("allow_unsigned_extensions", true);
 	local_extension_repo = "";
 	autoinstall_is_checked = false;
 
@@ -596,7 +596,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 	if (param == "allow_unsigned_extensions") {
-		if (config->options.allow_unsigned_extensions) {
+		if (DBConfig::GetSetting<AllowUnsignedExtensionsSetting>(*config)) {
 			return RequireResult::PRESENT;
 		}
 		return RequireResult::MISSING;
