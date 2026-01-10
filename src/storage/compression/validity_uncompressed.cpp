@@ -269,7 +269,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	// and to do this using bit operations on 64 bit fields.
 	//
 	// On each loop iteration, we are inspecting a 64 bit field in both the input and result, starting at a certain
-	// index (in the code, these are denoted by input(result)_entry and input(result)index, respectively.
+	// index (in the code, these are denoted by input(result)_entry and input(result)_index, respectively.
 	//
 	// For example, on the first loop iteration for the diagram, both entries are entry 0, and the starting indexes are
 	// the index of window 1 in each entry.
@@ -314,7 +314,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			// |XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX[=============WINDOW=============]XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
 			// +--------------------------------------------------------------------------------------------------+
 			// 								                                     ^
-			// 						                                     current_input_idx
+			// 						                                         input_idx
 			//
 			// RESULT ENTRY:
 			// 63                                                                                                 0
@@ -322,7 +322,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			// |PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP[=============WINDOW=============]PPPPPPPPPPPPPPPPPPPPPP|
 			// +--------------------------------------------------------------------------------------------------+
 			// 										                                       ^
-			// 								                                       current_result_idx
+			// 								                                           result_idx
 			//
 			idx_t shift_amount = input_idx - result_idx;
 			input_mask = input_mask >> shift_amount;
@@ -341,7 +341,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			// |000000000000XXXXXXXXXXXXXXXXXXXX[=============WINDOW=============]XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
 			// +--------------------------------------------------------------------------------------------------+
 			// 																     ^
-			// 											                  current_input_idx
+			// 											                     input_idx
 			//
 			// RESULT ENTRY:
 			// 63                                                                                                 0
@@ -349,7 +349,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			// |PPPPPPPPPPPPPPPPPPPP[=============WINDOW=============]PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP|
 			// +--------------------------------------------------------------------------------------------------+
 			// 													     ^
-			// 									              current_result_idx
+			// 									                 result_idx
 			input_mask = input_mask << shift_amount;
 		}
 
