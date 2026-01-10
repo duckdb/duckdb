@@ -29,10 +29,10 @@
         "type": "scalar_function"
     },
     {
-        "name": "lambda_invoke",
+        "name": "invoke",
         "parameters": "lambda, arg1, arg2, ...",
         "description": "Invokes a lambda function with the given arguments",
-        "example": "lambda_invoke(x -> x + 1, 5)",
+        "example": "invoke(x -> x + 1, 5)",
         "type": "scalar_function"
     }
 ]

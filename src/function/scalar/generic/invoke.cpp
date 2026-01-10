@@ -5,6 +5,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct LambdaInvokeData final : public LambdaFunctionData {
 	unique_ptr<Expression> lambda_expr;
 
@@ -55,13 +57,13 @@ struct LambdaInvokeState final : public FunctionLocalState {
 	}
 };
 
-static void LambdaInvokeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void LambdaInvokeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LambdaInvokeState>();
 	lstate.executor->ExecuteExpression(args, result);
 }
 
-static unique_ptr<FunctionData> LambdaInvokeBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> LambdaInvokeBind(ClientContext &context, ScalarFunction &bound_function,
+                                          vector<unique_ptr<Expression>> &arguments) {
 	// the list column and the bound lambda expression
 	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
@@ -70,7 +72,8 @@ static unique_ptr<FunctionData> LambdaInvokeBind(ClientContext &context, ScalarF
 	auto &bound_lambda_expr = arguments[0]->Cast<BoundLambdaExpression>();
 	if (bound_lambda_expr.parameter_count != arguments.size() - 1) {
 		throw BinderException("The number of lambda parameters does not match the number of arguments passed to the "
-		                      "lambda_invoke function!");
+		                      "'invoke' function, expected %d, got %d.",
+		                      bound_lambda_expr.parameter_count, arguments.size() - 1);
 	}
 
 	bound_function.SetReturnType(bound_lambda_expr.lambda_expr->return_type);
@@ -78,15 +81,16 @@ static unique_ptr<FunctionData> LambdaInvokeBind(ClientContext &context, ScalarF
 	return make_uniq<LambdaInvokeData>(bound_lambda_expr.Copy());
 }
 
-static LogicalType LambdaInvokeBindParameters(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                              const idx_t parameter_idx) {
+LogicalType LambdaInvokeBindParameters(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                       const idx_t parameter_idx) {
 	// The first parameter is always the lambda
 	return function_child_types[1 + parameter_idx];
 }
 
-ScalarFunction LambdaInvokeFun::GetFunction() {
-	ScalarFunction fun("lambda_invoke", {LogicalType::LAMBDA, LogicalType::ANY}, LogicalType::ANY,
-	                   LambdaInvokeFunction);
+} // namespace
+
+ScalarFunction InvokeFun::GetFunction() {
+	ScalarFunction fun("invoke", {LogicalType::LAMBDA, LogicalType::ANY}, LogicalType::ANY, LambdaInvokeFunction);
 	fun.bind = LambdaInvokeBind;
 	fun.varargs = LogicalType::ANY;
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
