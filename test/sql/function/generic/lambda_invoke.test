@@ -1,0 +1,65 @@
+# name: test/sql/function/generic/lambda_invoke.test
+# group: [generic]
+
+# Basic lambda invoke
+query I
+select lambda_invoke(lambda x: x * x, 3) as square_of_3
+----
+9
+
+# Simple reuse
+query I
+select lambda_invoke(lambda x: x * x, 2) as square_of_x
+----
+4
+
+# Multiple bindings using nested lambda_invoke
+query I
+select lambda_invoke(lambda a: lambda_invoke(lambda b: a + b, 4), 3) as sum_ab
+----
+7
+
+# Nested lambda_invoke expressions
+query I
+select lambda_invoke(lambda x: lambda_invoke(lambda y: y + 5, x + 3), 2) as result
+----
+10
+
+query I
+select lambda_invoke(lambda x: lambda_invoke(lambda y: y + x + 5, 3), 2) as result
+----
+10
+
+# Lambda invoke with row constructor
+query II
+SELECT unnest(lambda_invoke(lambda x: lambda_invoke(lambda y: row(x, y), 3), 2));
+----
+2	3
+
+# Lambda invoke with different types
+query I
+SELECT lambda_invoke(lambda name: lambda_invoke(lambda age: name || age, 30), 'Alice, ');
+----
+Alice, 30
+
+# Lambda invoke with nested lambda
+query I
+SELECT lambda_invoke(lambda x: list_transform([1,2,3], LAMBDA y: y + x), 1);
+----
+[2, 3, 4]
+
+# Naming is correct
+query I
+select lambda_invoke(lambda x: alias(x), 1);
+----
+x
+
+# Lambda invoke in non-SELECT context
+query I rowsort
+SELECT * FROM range(0, 10) as r(i) WHERE lambda_invoke(lambda x: x, i % 2 == 0) ORDER BY ALL;
+----
+0
+2
+4
+6
+8
