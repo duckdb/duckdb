@@ -47,10 +47,6 @@ constexpr const char *EnabledLogTypes::Name;
 constexpr const char *DisabledLogTypes::Name;
 constexpr const char *DisabledFilesystemsSetting::Name;
 
-const string GetDefaultUserAgent() {
-	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
-}
-
 namespace {
 
 template <class T>
@@ -683,24 +679,10 @@ Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Duckdb Api
 //===----------------------------------------------------------------------===//
-void DuckDBAPISetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_value = input.GetValue<string>();
-	if (db) {
+void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api = new_value;
-}
-
-void DuckDBAPISetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
-	}
-	config.options.duckdb_api = GetDefaultUserAgent();
-}
-
-Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.duckdb_api);
 }
 
 //===----------------------------------------------------------------------===//

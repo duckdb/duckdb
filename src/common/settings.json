@@ -388,8 +388,11 @@
         "name": "duckdb_api",
         "description": "DuckDB API surface",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true,
+        "default_scope": "global",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ],
         "struct": "DuckDBAPISetting"
     },
     {

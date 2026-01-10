@@ -105,7 +105,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
     DUCKDB_GLOBAL(DisabledLogTypes),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
-    DUCKDB_GLOBAL(DuckDBAPISetting),
+    DUCKDB_SETTING_CALLBACK(DuckDBAPISetting),
     DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalAccessSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalFileCacheSetting),
@@ -312,7 +312,7 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 			SettingCallbackInfo info(*this, db);
 			option.set_callback(info, input);
 		}
-		options.set_variables.emplace(option.name, std::move(input));
+		options.set_variables[option.name] = std::move(input);
 		return;
 	}
 	if (!option.set_global) {
@@ -730,11 +730,16 @@ OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType ord
 	}
 }
 
+string GetDefaultUserAgent() {
+	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+}
+
 const string DBConfig::UserAgent() const {
 	auto user_agent = GetDefaultUserAgent();
 
-	if (!options.duckdb_api.empty()) {
-		user_agent += " " + options.duckdb_api;
+	auto duckdb_api = GetSetting<DuckDBAPISetting>(*this);
+	if (!duckdb_api.empty()) {
+		user_agent += " " + duckdb_api;
 	}
 
 	if (!options.custom_user_agent.empty()) {

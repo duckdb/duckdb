@@ -17,8 +17,6 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
-const string GetDefaultUserAgent();
-
 enum class SettingScope : uint8_t {
 	//! Setting is from the global Setting scope
 	GLOBAL,
