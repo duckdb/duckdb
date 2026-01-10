@@ -118,8 +118,6 @@ struct DBConfigOptions {
 	bool trim_free_blocks = false;
 	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
 	bool buffer_manager_track_eviction_timestamps = false;
-	//! enable COPY and related commands
-	bool enable_external_access = true;
 	//! Whether or not the global http metadata cache is used
 	bool http_metadata_cache_enable = false;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made

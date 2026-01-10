@@ -188,7 +188,7 @@ void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &inp
 // Allowed Directories
 //===----------------------------------------------------------------------===//
 void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
 	if (!config.file_system) {
@@ -202,7 +202,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 }
 
 void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
 	config.options.allowed_directories = DBConfigOptions().allowed_directories;
@@ -221,7 +221,7 @@ Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 // Allowed Paths
 //===----------------------------------------------------------------------===//void
 void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
 	if (!config.file_system) {
@@ -236,7 +236,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 }
 
 void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
 	config.options.allowed_paths = DBConfigOptions().allowed_paths;
@@ -706,16 +706,17 @@ Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
-bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!db) {
-		return true;
+void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		return;
 	}
 	if (input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
-	if (db && config.options.enable_external_access) {
+	auto &config = info.config;
+	if (info.db && DBConfig::GetSetting<EnableExternalAccessSetting>(*info.db)) {
 		// we are turning off external access - add any already attached databases to the list of accepted paths
-		auto &db_manager = DatabaseManager::Get(*db);
+		auto &db_manager = DatabaseManager::Get(*info.db);
 		auto attached_paths = db_manager.GetAttachedDatabasePaths();
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
@@ -728,14 +729,6 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		// if temp directory is enabled we can also write there
 		config.AddAllowedDirectory(config.options.temporary_directory);
 	}
-	return true;
-}
-
-bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1534,7 +1527,7 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.options.temporary_directory = input.IsNull() ? "" : input.ToString();
@@ -1546,7 +1539,7 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.SetDefaultTempDirectory();

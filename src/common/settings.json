@@ -403,10 +403,10 @@
         "name": "enable_external_access",
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "true",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {

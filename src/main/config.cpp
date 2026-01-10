@@ -107,7 +107,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_GLOBAL(DuckDBAPISetting),
     DUCKDB_SETTING(DynamicOrFilterThresholdSetting),
-    DUCKDB_GLOBAL(EnableExternalAccessSetting),
+    DUCKDB_SETTING_CALLBACK(EnableExternalAccessSetting),
     DUCKDB_SETTING_CALLBACK(EnableExternalFileCacheSetting),
     DUCKDB_SETTING(EnableFSSTVectorsSetting),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
@@ -770,7 +770,7 @@ void DBConfig::AddAllowedPath(const string &path) {
 }
 
 bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
-	if (options.enable_external_access) {
+	if (DBConfig::GetSetting<EnableExternalAccessSetting>(*this)) {
 		// all external access is allowed
 		return true;
 	}

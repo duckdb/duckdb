@@ -315,7 +315,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	if (!db.config.options.enable_external_access) {
+	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(db)) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto filename = fs.ConvertSeparators(extension);

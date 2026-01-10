@@ -201,7 +201,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		auto &config = DBConfig::GetConfig(context);
-		if (context.config.use_replacement_scans && config.options.enable_external_access &&
+		if (context.config.use_replacement_scans && DBConfig::GetSetting<EnableExternalAccessSetting>(config) &&
 		    ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
 			if (!fs.IsDisabledForPath(full_path) && fs.FileExists(full_path)) {

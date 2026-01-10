@@ -109,28 +109,6 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
-// Enable External Access
-//===----------------------------------------------------------------------===//
-void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.enable_external_access = input.GetValue<bool>();
-}
-
-void EnableExternalAccessSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.enable_external_access = DBConfigOptions().enable_external_access;
-}
-
-Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.enable_external_access);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable H T T P Metadata Cache
 //===----------------------------------------------------------------------===//
 void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
