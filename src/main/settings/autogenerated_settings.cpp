@@ -109,22 +109,6 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
-// Enable H T T P Metadata Cache
-//===----------------------------------------------------------------------===//
-void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_metadata_cache_enable = input.GetValue<bool>();
-}
-
-void EnableHTTPMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_metadata_cache_enable = DBConfigOptions().http_metadata_cache_enable;
-}
-
-Value EnableHTTPMetadataCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
-}
-
-//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {

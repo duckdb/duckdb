@@ -442,8 +442,8 @@
         "name": "enable_http_metadata_cache",
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "BOOLEAN",
-        "scope": "global",
-        "internal_setting": "http_metadata_cache_enable",
+        "default_scope": "global",
+        "default_value": "false",
         "struct": "EnableHTTPMetadataCacheSetting"
     },
     {
