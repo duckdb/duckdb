@@ -274,8 +274,8 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	// For example, on the first loop iteration for the diagram, both entries are entry 0, and the starting indexes are
 	// the index of window 1 in each entry.
 	//
-	// input(result)_window is the window from input(result)_index to the end of the current bit field. So on the first
-	// iteration, input_window is just window 1, but result_window is the space containing windows 1 and 2.
+	// input(result)_window is the window from input(result)_index to the end of either the current bit field, or
+	// the end of the range of bits we are trying to copy if that is contained within the current entry.
 	//
 	// window is minimum(input_window, result_window), which is window 1 on the first iteration, window 2 on the
 	// second iteration, etc. These are what are shown in the diagram below.
@@ -283,7 +283,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	// INPUT:
 	//  0                             63|                              127|                            191
 	//  +-------------------------------+--------------------------------+--------------------------------+
-	// .|                      [   1   ]|[          2         ][   3    ]|[          4         ][   5   ]|
+	//  |                      [   1   ]|[          2         ][   3    ]|[          4         ][   5   ]|
 	//  +-------------------------------+--------------------------------+--------------------------------+
 	//
 	//  RESULT:
@@ -300,11 +300,73 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 		idx_t result_bits_left = ValidityMask::BITS_PER_VALUE - result_idx;
 		idx_t input_window_size = MinValue(bits_left, input_bits_left);
 		idx_t result_window_size = MinValue(bits_left, result_bits_left);
-		idx_t current_input_idx = input_idx;
-		idx_t current_result_idx = result_idx;
-		idx_t current_result_entry = result_entry;
-
 		idx_t window_size = MinValue(input_window_size, result_window_size);
+
+		// Now within each loop iteration, we can think of the general case that handles all scenarios as just
+		// copying one window from input into an equal sized window in the result.
+
+		// First, line up the windows:
+		if (result_idx < input_idx) {
+			// X is arbitrary bits, P is arbitrary protected bits.
+			// INPUT ENTRY:
+			// 63                                                                                                 0
+			// +--------------------------------------------------------------------------------------------------+
+			// |XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX[=============WINDOW=============]XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
+			// +--------------------------------------------------------------------------------------------------+
+			// 								                                     ^
+			// 						                                     current_input_idx
+			//
+			// RESULT ENTRY:
+			// 63                                                                                                 0
+			// +--------------------------------------------------------------------------------------------------+
+			// |PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP[=============WINDOW=============]PPPPPPPPPPPPPPPPPPPPPP|
+			// +--------------------------------------------------------------------------------------------------+
+			// 										                                       ^
+			// 								                                       current_result_idx
+			//
+			idx_t shift_amount = input_idx - result_idx;
+			input_mask = input_mask >> shift_amount;
+		} else {
+			// current_result_idx >= current_input_idx
+			idx_t shift_amount = result_idx - input_idx;
+			input_mask = (input_mask & ~UPPER_MASKS[shift_amount]);
+
+			// X is arbitrary bits, P is arbitrary protected bits.
+			// Note the zeroed out bits in INPUT_ENTRY - these have to be zeroed before shifting left to align with
+			// result window, to prevent overflow.
+			//
+			// INPUT ENTRY:
+			// 63                                                                                                 0
+			// +--------------------------------------------------------------------------------------------------+
+			// |000000000000XXXXXXXXXXXXXXXXXXXX[=============WINDOW=============]XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
+			// +--------------------------------------------------------------------------------------------------+
+			// 																     ^
+			// 											                  current_input_idx
+			//
+			// RESULT ENTRY:
+			// 63                                                                                                 0
+			// +--------------------------------------------------------------------------------------------------+
+			// |PPPPPPPPPPPPPPPPPPPP[=============WINDOW=============]PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP|
+			// +--------------------------------------------------------------------------------------------------+
+			// 													     ^
+			// 									              current_result_idx
+			input_mask = input_mask << shift_amount;
+		}
+
+		// Once the windows are aligned, mask the input to prevent overwriting protected bits in the result_mask.
+		auto protected_upper_bits = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - result_idx - window_size];
+		auto protected_lower_bits = LOWER_MASKS[result_idx];
+		input_mask |= protected_upper_bits;
+		input_mask |= protected_lower_bits;
+
+		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
+			if (!result_data) {
+				result_mask.Initialize();
+				result_data = (validity_t *)result_mask.GetData();
+			}
+			result_data[result_entry] &= input_mask;
+		}
+		// Now update pos, entries, and indexes for the next iteration.
 		pos += window_size;
 
 		input_idx = (input_idx + window_size) % ValidityMask::BITS_PER_VALUE;
@@ -315,28 +377,6 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 		}
 		if (result_idx == 0) {
 			result_entry++;
-		}
-
-		if (current_result_idx < current_input_idx) {
-			idx_t shift_amount = current_input_idx - current_result_idx;
-			input_mask = input_mask >> shift_amount;
-		} else {
-			// current_result_idx >= current_input_idx
-			idx_t shift_amount = current_result_idx - current_input_idx;
-			input_mask = (input_mask & ~UPPER_MASKS[shift_amount]);
-			input_mask = input_mask << shift_amount;
-		}
-		auto protected_upper_bits = UPPER_MASKS[ValidityMask::BITS_PER_VALUE - current_result_idx - window_size];
-		auto protected_lower_bits = LOWER_MASKS[current_result_idx];
-		input_mask |= protected_upper_bits;
-		input_mask |= protected_lower_bits;
-
-		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
-			if (!result_data) {
-				result_mask.Initialize();
-				result_data = (validity_t *)result_mask.GetData();
-			}
-			result_data[current_result_entry] &= input_mask;
 		}
 	}
 #endif
