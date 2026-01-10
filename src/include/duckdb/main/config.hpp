@@ -146,8 +146,6 @@ struct DBConfigOptions {
 	vector<string> extension_directories;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
-	//! Whether community extensions should be loaded
-	bool allow_community_extensions = true;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of user-provided options

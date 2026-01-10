@@ -35,28 +35,6 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Allow Community Extensions
-//===----------------------------------------------------------------------===//
-void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allow_community_extensions = input.GetValue<bool>();
-}
-
-void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allow_community_extensions = DBConfigOptions().allow_community_extensions;
-}
-
-Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_community_extensions);
-}
-
-//===----------------------------------------------------------------------===//
 // Allow Parser Override Extension
 //===----------------------------------------------------------------------===//
 void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

@@ -135,25 +135,10 @@ Value AllocatorFlushThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
-bool AllowCommunityExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && !config.options.allow_community_extensions) {
-		auto new_value = input.GetValue<bool>();
-		if (new_value) {
-			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
-		}
-		return false;
+void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db && input.GetValue<bool>()) {
+		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
 	}
-	return true;
-}
-
-bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db && !config.options.allow_community_extensions) {
-		if (DBConfigOptions().allow_community_extensions) {
-			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
-		}
-		return false;
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//

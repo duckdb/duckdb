@@ -82,11 +82,9 @@ struct AllowCommunityExtensionsSetting {
 	static constexpr const char *Name = "allow_community_extensions";
 	static constexpr const char *Description = "Allow to load community built extensions";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
-	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllowExtensionsMetadataMismatchSetting {

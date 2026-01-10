@@ -427,8 +427,8 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	if (!db.config.options.allow_unsigned_extensions) {
 		bool signature_valid;
 		if (parsed_metadata.AppearsValid()) {
-			signature_valid =
-			    CheckExtensionSignature(*handle, parsed_metadata, db.config.options.allow_community_extensions);
+			bool allow_community_extensions = DBConfig::GetSetting<AllowCommunityExtensionsSetting>(db);
+			signature_valid = CheckExtensionSignature(*handle, parsed_metadata, allow_community_extensions);
 		} else {
 			signature_valid = false;
 		}

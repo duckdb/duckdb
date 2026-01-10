@@ -36,10 +36,10 @@
         "name": "allow_community_extensions",
         "description": "Allow to load community built extensions",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "true",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
