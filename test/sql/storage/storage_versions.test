@@ -85,7 +85,7 @@ statement ok
 USE db2;
 
 statement ok
-CREATE TABLE T AS SELECT 32;
+CREATE TABLE IF NOT EXISTS T AS SELECT 32;
 
 statement ok
 USE random;
