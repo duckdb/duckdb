@@ -43,6 +43,7 @@ public:
 	                                 SetScope scope, const Value &value);
 
 	static void SetGenericVariable(ClientContext &context, const String &name, SetScope scope, Value target_value);
+	static SetScope GetSettingScope(const ConfigurationOption &option, SetScope variable_scope);
 
 public:
 	String name;

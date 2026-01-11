@@ -26,30 +26,33 @@ bool DBConfigOptions::debug_print_bindings = false;
 #define DUCKDB_SETTING(_PARAM)                                                                                         \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::DefaultScope, _PARAM::DefaultValue, nullptr                                                        \
+		    _PARAM::Scope, _PARAM::DefaultValue, nullptr                                                               \
 	}
 #define DUCKDB_SETTING_CALLBACK(_PARAM)                                                                                \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::DefaultScope, _PARAM::DefaultValue, _PARAM::OnSet                                                  \
+		    _PARAM::Scope, _PARAM::DefaultValue, _PARAM::OnSet                                                         \
 	}
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
-		    nullptr, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                         \
+		    nullptr, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr                                 \
 	}
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
-		    _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr                                                  \
+		    _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr                                          \
 	}
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
-		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SetScope::AUTOMATIC, nullptr, nullptr         \
+		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr \
 	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SetScope::AUTOMATIC, nullptr, nullptr }
+	{                                                                                                                  \
+		nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SettingScopeTarget::INVALID, nullptr,  \
+		    nullptr                                                                                                    \
+	}
 
 #define DUCKDB_SETTING_ALIAS(_ALIAS, _SETTING_INDEX)                                                                   \
 	{ _ALIAS, _SETTING_INDEX }
