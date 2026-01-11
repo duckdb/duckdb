@@ -21,6 +21,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 
 namespace duckdb {
 
@@ -438,6 +439,18 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	}
 }
 
+static void TryPlanExtensionLateralJoin(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+	for (auto &optimizer : binder.context.db->config.optimizer_extensions) {
+		if (optimizer.plan_lateral_join_function) {
+			PlanExtensionInput input {binder, optimizer.optimizer_info};
+			bool modified = optimizer.plan_lateral_join_function(input, plan);
+			if (modified) {
+				return;
+			}
+		}
+	}
+}
+
 unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
                                                     CorrelatedColumns &correlated, JoinType join_type,
                                                     unique_ptr<Expression> condition) {
@@ -465,7 +478,13 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	delim_join->arbitrary_expressions = std::move(arbitrary_expressions);
 	delim_join->conditions = std::move(conditions);
 	delim_join->AddChild(std::move(right));
-	return std::move(delim_join);
+
+	auto plan = unique_ptr_cast<LogicalDependentJoin, LogicalOperator>(std::move(delim_join));
+
+	// Try to plan extension lateral join
+	TryPlanExtensionLateralJoin(*this, plan);
+
+	return plan;
 }
 
 } // namespace duckdb
