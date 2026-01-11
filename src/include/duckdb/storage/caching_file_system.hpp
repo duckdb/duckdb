@@ -126,10 +126,10 @@ public:
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
 	FileSystem &file_system;
-	//! The External File Cache that caches the files
-	ExternalFileCache &external_file_cache;
 	//! The DatabaseInstance.
 	DatabaseInstance &db;
+	//! The External File Cache that caches the files
+	ExternalFileCache &external_file_cache;
 };
 
 } // namespace duckdb

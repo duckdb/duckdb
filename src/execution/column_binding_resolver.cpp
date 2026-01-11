@@ -42,6 +42,14 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// for now, only ASOF supports this.
 		if (comp_join.predicate) {
 			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			//	If this is a SEMI or ANTI join and we have an arbitrary predicate,
+			//	we need to include the bindings of the RHS
+			if (comp_join.join_type == JoinType::SEMI || comp_join.join_type == JoinType::ANTI) {
+				auto right_bindings = op.children[1]->GetColumnBindings();
+				bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+				auto &right_types = op.children[1]->types;
+				types.insert(types.end(), right_types.begin(), right_types.end());
+			}
 			VisitExpression(&comp_join.predicate);
 		}
 		return;

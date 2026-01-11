@@ -13,8 +13,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate_state.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -199,8 +197,8 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			// Filter on aggregate: count = 1
 			// Count is the first aggregate, so it's at agg_op->groups.size() in the types list
 			// Bindings: Aggregates are at aggregate_index
-			auto cnt_ref = make_uniq<BoundColumnRefExpression>(agg_op->types[agg_op->groups.size()],
-			                                                   ColumnBinding(aggregate_index, 0));
+			ColumnBinding new_binding(aggregate_index, 0);
+			auto cnt_ref = make_uniq<BoundColumnRefExpression>(agg_op->types[agg_op->groups.size()], new_binding);
 
 			auto filter_expr =
 			    make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(cnt_ref),
@@ -211,8 +209,8 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			rhs_filter->children.push_back(std::move(agg_op));
 			rhs_filter->ResolveOperatorTypes();
 
-			// Semi Join
-			auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+			// Inner Join on the partition keys
+			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 
 			for (size_t i = 0; i < w_expr.partitions.size(); ++i) {
 				JoinCondition cond;
@@ -227,38 +225,14 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			join->children.push_back(std::move(rhs_filter));
 			join->ResolveOperatorTypes();
 
-			// Create Constant 1
-			auto dummy_index = optimizer.binder.GenerateTableIndex();
-			auto dummy = make_uniq<LogicalDummyScan>(dummy_index);
-			dummy->ResolveOperatorTypes();
-
-			auto const_one = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
-			const_one->alias = "count_window_result";
-
-			auto proj_index = optimizer.binder.GenerateTableIndex();
-			vector<unique_ptr<Expression>> proj_expressions;
-			proj_expressions.push_back(std::move(const_one));
-
-			auto projection = make_uniq<LogicalProjection>(proj_index, std::move(proj_expressions));
-			projection->children.push_back(std::move(dummy));
-			projection->ResolveOperatorTypes();
-
-			// Cross Product
-			auto cross = make_uniq<LogicalCrossProduct>(std::move(join), std::move(projection));
-			cross->ResolveOperatorTypes();
-
 			// Replace Count binding
 			// Old window column: (window.window_index, 0)
-			// New constant column: (proj_index, 0)
+			// New constant column: (aggregate_index, 0)
 			ColumnBinding old_binding(window.window_index, 0);
-			ColumnBinding new_binding(proj_index, 0);
 
 			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
 
-			// We do NOT need to replace other bindings because CrossProduct preserves left child bindings,
-			// and Window (presumably) passed through input bindings without re-binding.
-
-			return std::move(cross);
+			return std::move(join);
 		}
 	} else if (!op->children.empty()) {
 		for (auto &child : op->children) {

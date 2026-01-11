@@ -210,19 +210,28 @@ public:
 			// use original error
 			return ParserExtensionParseResult();
 		}
-		auto splits = StringUtil::Split(lcase, "quack");
-		for (auto &split : splits) {
-			StringUtil::Trim(split);
-			if (!split.empty()) {
-				// we only accept quacks here
-				if (StringUtil::CIEquals(split, ";")) {
-					continue;
-				}
-				return ParserExtensionParseResult("This is not a quack: " + split);
+
+		idx_t count = 0;
+		size_t pos = 0;
+		size_t last_end = 0;
+		while ((pos = lcase.find("quack", last_end)) != string::npos) {
+			string between = lcase.substr(last_end, pos - last_end);
+			StringUtil::Trim(between);
+			if (!between.empty() && !StringUtil::CIEquals(between, ";")) {
+				return ParserExtensionParseResult("This is not a quack: " + between);
 			}
+			count++;
+			last_end = pos + 5;
 		}
+
+		string after = lcase.substr(last_end);
+		StringUtil::Trim(after);
+		if (!after.empty() && !StringUtil::CIEquals(after, ";")) {
+			return ParserExtensionParseResult("This is not a quack: " + after);
+		}
+
 		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size()));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(count));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,

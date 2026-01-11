@@ -582,11 +582,13 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
                                                 optional_ptr<const SelectionVector> sel,
                                                 optional_ptr<const SelectionVector> value_index_sel,
                                                 optional_ptr<const SelectionVector> result_sel, idx_t count) {
+	auto &child_vectors = StructVector::GetEntries(result);
+#ifdef D_ASSERT_IS_ENABLED
 	auto &result_type = result.GetType();
 	D_ASSERT(result_type.id() == LogicalTypeId::STRUCT);
 	auto &child_types = StructType::GetChildTypes(result_type);
-	auto &child_vectors = StructVector::GetEntries(result);
 	D_ASSERT(child_types.size() == child_vectors.size());
+#endif
 
 	auto &untyped_value_index = *child_vectors[0];
 	auto &typed_value = *child_vectors[1];

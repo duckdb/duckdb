@@ -12,11 +12,11 @@ statement ok
 INSERT INTO services VALUES ('2024-01-01', 100), ('2024-01-01', 100), ('2024-01-01', 101), ('2024-01-02', 100);
 
 # 1. Basic Case: count(*) = 1
-# Should be optimized to SEMI JOIN
+# Should be optimized to INNER JOIN
 query II
 EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<REGEX>:.*Join Type: INNER.*
 
 query II
 FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1;
@@ -72,7 +72,7 @@ FROM items QUALIFY count(*) OVER(PARTITION BY category) = 1;
 query IT
 EXPLAIN FROM items QUALIFY count(*) OVER(PARTITION BY category) = 1;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<REGEX>:.*Join Type: INNER.*
 
 # 8. Case with NULL partition keys
 # This tests that COMPARE_NOT_DISTINCT_FROM is used for join conditions
@@ -91,8 +91,8 @@ FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
 ----
 5	B
 
-# Verify the optimization is applied (SEMI JOIN instead of WINDOW)
+# Verify the optimization is applied (INNER JOIN instead of WINDOW)
 query II
 EXPLAIN FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
 ----
-physical_plan	<REGEX>:.*Join Type: SEMI.*
+physical_plan	<REGEX>:.*Join Type: INNER.*

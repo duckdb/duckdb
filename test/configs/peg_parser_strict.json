@@ -137,6 +137,12 @@
       ]
     },
     {
+      "reason": "Parser exception because of 'autocomplete' caused the CALL command to fail",
+      "paths": [
+        "test/sql/storage/memory/in_memory_compress.test"
+      ]
+    },
+    {
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
@@ -192,6 +198,8 @@
         "test/sql/storage/compression/rle/rle_nulls_edge_case.test",
         "test/sql/storage/compression/alp/alp_min_max.test",
         "test/sql/pragma/test_metadata_info.test",
+        "test/sql/secrets/create_secret_persistence_no_client_context.test",
+        "test/sql/pragma/profiling/call_enable_profiling_function.test",
         "test/sql/secrets/create_secret_persistence_no_client_context.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"

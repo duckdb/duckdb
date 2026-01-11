@@ -17,7 +17,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -28,10 +27,8 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/thread.hpp"
 
@@ -641,11 +638,13 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
 	auto &reader = dynamic_cast<MetadataReader &>(binary_deserializer.GetStream());
 
-	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer);
+	vector<MetaBlockPointer> read_pointers;
+	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer, read_pointers);
 	TableDataReader data_reader(table_data_reader, bound_info, table_pointer);
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
+	bound_info.data->read_metadata_pointers = read_pointers;
 }
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-# name: test/sql/window/test_window_groups.test
+# name: test/sql/window/test_window_groups.test_slow
 # description: GROUPS functionality tests. Taken from sqlite test/window8.test
 # group: [window]
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "duckdb/common/types/variant.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {

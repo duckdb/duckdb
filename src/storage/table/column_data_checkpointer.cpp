@@ -1,7 +1,6 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/scan_state.hpp"

@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -89,11 +88,6 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                            idx_t scan_count) {
-	return ScanCount(state, result, scan_count);
-}
-
-idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                    idx_t scan_count) {
 	return ScanCount(state, result, scan_count);
 }
 
