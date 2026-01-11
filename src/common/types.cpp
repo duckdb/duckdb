@@ -1626,10 +1626,14 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 		return "AGGREGATE_STATE<?>";
 	}
 	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
+	auto type_to_return = aggr_state.return_type;
+	if (aggr_state.state_type != LogicalType::INVALID) {
+		type_to_return = aggr_state.state_type;
+	}
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
 	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
 	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
-	       ")" + "::" + aggr_state.return_type.ToString() + ">";
+	       ")" + "::" + type_to_return.ToString() + ">";
 }
 
 //===--------------------------------------------------------------------===//

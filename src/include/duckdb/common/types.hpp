@@ -578,14 +578,16 @@ struct aggregate_state_t {
 	aggregate_state_t() {
 	}
 	// NOLINTNEXTLINE: work around bug in clang-tidy
-	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p)
+	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p, LogicalType state_type )
 	    : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)),
-	      bound_argument_types(std::move(bound_argument_types_p)) {
+	      bound_argument_types(std::move(bound_argument_types_p)), state_type(std::move(state_type)) {
 	}
 
 	string function_name;
 	LogicalType return_type;
 	vector<LogicalType> bound_argument_types;
+
+	LogicalType state_type;
 };
 
 
