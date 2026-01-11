@@ -266,6 +266,13 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	}
 }
 
+LogicalType GetAvgStateTypeDouble(const AggregateFunction &) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("count", LogicalType::UBIGINT);
+	children.emplace_back("value", LogicalType::DOUBLE);
+	return LogicalType::STRUCT(move(children));
+}
+
 unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -290,8 +297,11 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
-	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+
+	auto double_aggregate = AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
+		LogicalType::DOUBLE, LogicalType::DOUBLE);
+	double_aggregate.get_state_type = GetAvgStateTypeDouble;
+	avg.AddFunction(double_aggregate);
 
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
 	    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP));
