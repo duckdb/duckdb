@@ -21,6 +21,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 
 namespace duckdb {
@@ -440,7 +441,8 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 }
 
 static void TryPlanExtensionLateralJoin(Binder &binder, unique_ptr<LogicalOperator> &plan) {
-	for (auto &optimizer : binder.context.db->config.optimizer_extensions) {
+	auto &config = DBConfig::GetConfig(binder.context);
+	for (auto &optimizer : config.optimizer_extensions) {
 		if (optimizer.plan_lateral_join_function) {
 			PlanExtensionInput input {binder, optimizer.optimizer_info};
 			bool modified = optimizer.plan_lateral_join_function(input, plan);
