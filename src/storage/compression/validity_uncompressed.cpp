@@ -296,14 +296,20 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	while (pos < scan_count) {
 		validity_t input_mask = input_data[input_entry];
 		idx_t bits_left = scan_count - pos;
+
+		// these are bits left within the current entries (possibly extra than what we need).
 		idx_t input_bits_left = ValidityMask::BITS_PER_VALUE - input_idx;
 		idx_t result_bits_left = ValidityMask::BITS_PER_VALUE - result_idx;
+
+		// these are the bits left within the current entries that need to be processed.
 		idx_t input_window_size = MinValue(bits_left, input_bits_left);
 		idx_t result_window_size = MinValue(bits_left, result_bits_left);
+
+		// the smaller of the two is our next window to copy from input to result.
 		idx_t window_size = MinValue(input_window_size, result_window_size);
 
 		// Now within each loop iteration, we can think of the general case that handles all scenarios as just
-		// copying one window from input into an equal sized window in the result.
+		// copying the window from the starting index in input to the window in the starting index of result.
 
 		// First, line up the windows:
 		if (result_idx < input_idx) {
@@ -369,9 +375,11 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 		// Now update pos, entries, and indexes for the next iteration.
 		pos += window_size;
 
+		// Windows can only go until the end of the current entry, so the mod can only wrap to 0 here.
 		input_idx = (input_idx + window_size) % ValidityMask::BITS_PER_VALUE;
 		result_idx = (result_idx + window_size) % ValidityMask::BITS_PER_VALUE;
 
+		// Advance entries if the mod was 0.
 		if (input_idx == 0) {
 			input_entry++;
 		}
