@@ -744,10 +744,9 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		auto requested_compat_version = options.storage_version.version.GetIndex();
 		if (requested_compat_version < header.storage_compatibility.version.GetIndex()) {
 			throw InvalidInputException(
-			    "Error opening \"%s\": cannot initialize database with storage version %d (%s) - which is lower than "
-			    "what the database itself uses (%d). The storage version of an existing database cannot be lowered.",
-			    path, requested_compat_version, header.storage_compatibility.version_string,
-			    header.storage_compatibility.version.GetIndex());
+			    "Error opening \"%s\": cannot initialize database with storage version %s - which is lower than "
+			    "what the database itself uses (%s). The storage version of an existing database cannot be lowered.",
+			    path, options.storage_version.version_string, header.storage_compatibility.version_string);
 		}
 	} else {
 		// load storage version from header

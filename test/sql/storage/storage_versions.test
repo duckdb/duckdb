@@ -44,6 +44,7 @@ SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY d
 {storage_version=v1.0.0+}
 
 # We create a new database in most recent duckdb version (v1.4.3)
+# this database is created by duckdb "recent_storage.db" -c "CREATE TABLE T AS SELECT 32;"
 statement ok
 ATTACH '{DATA_DIR}/storage/recent_storage.db' as db;
 
@@ -76,3 +77,24 @@ query I
 SELECT tags FROM duckdb_databases() WHERE database_name='db';
 ----
 {storage_version=v1.4.0+}
+
+statement ok
+ATTACH '{DATA_DIR}/storage/recent_storage_bumped.db' as db2 (STORAGE_VERSION 'v1.4.0');
+
+statement ok
+USE db2;
+
+statement ok
+CREATE TABLE T AS SELECT 32;
+
+statement ok
+USE random;
+
+statement ok
+DETACH db2;
+
+# we now attach a db which is bumped to 1.4.0
+statement error
+ATTACH '{DATA_DIR}/storage/recent_storage_bumped.db' as db2 (STORAGE_VERSION 'v1.3.0');
+----
+cannot initialize database with storage version v1.3.0
