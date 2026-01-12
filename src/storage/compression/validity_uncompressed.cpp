@@ -291,7 +291,16 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	//  +-------------------------------+--------------------------------+--------------------------------+
 	//   [   1   ][          2         ]|[   3    ][          4         ]|[   5    ]                      |
 	//  +-------------------------------+--------------------------------+--------------------------------+
+	//
+	// Note: in case this ever becomes a bottleneck, it should be possible to make each loop iteration branchless.
+	// The idea would be to do an odd iteration before the loop, then have two loops depending on the layout of the
+	// windows that will either shift left then right on each iteration, or the other loop will always shift right
+	// then left. For example, in the diagram above, we would first apply the first window outside of the loop
+	// beforehand, then we can see that each loop iteration requires us to shift right, fetch a new result entry,
+	// shift left, fetch a new input entry. This would have to be generalized to two possible branchless loops,
+	// depending on the input.
 
+	// now start the bit games
 	idx_t pos = 0;
 	while (pos < scan_count) {
 		validity_t input_mask = input_data[input_entry];
@@ -390,6 +399,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #endif
 
 #ifdef DEBUG
+	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
 	ValidityMask input_mask(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
