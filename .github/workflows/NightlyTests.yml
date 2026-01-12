@@ -254,8 +254,6 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/cleanup_runner
-
      - name: Setup Ccache
        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
        with:
