@@ -1,26 +1,29 @@
 #include "capi_tester.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 class CustomLogStore {
 public:
 	// Concurrent insertions.
 	void Insert(const string &msg) {
-		m.lock();
+		unique_lock lck(m);
 		store.insert(msg);
-		m.unlock();
 	}
 
 	// NOTE: Not concurrency-safe helper functions.
 
 	void Reset() {
+		unique_lock lck(m);
 		store.clear();
 	}
 	bool Contains(const string &key) const {
+		unique_lock lck(m);
 		for (const auto &elem : store) {
 			if (StringUtil::Contains(elem, key)) {
 				return true;
@@ -29,12 +32,13 @@ public:
 		return false;
 	}
 	bool Find(const string &key) const {
+		unique_lock lck(m);
 		return store.find(key) != store.end();
 	}
 
 private:
 	mutex m;
-	unordered_set<string> store;
+	unordered_set<string> store DUCKDB_GUARDED_BY(m);
 };
 
 CustomLogStore my_log_store;
