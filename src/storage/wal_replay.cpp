@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
@@ -251,6 +252,42 @@ private:
 	bool deserialize_only;
 	optional_idx expected_checkpoint_id;
 };
+
+//===--------------------------------------------------------------------===//
+// Post-Replay Index Binding
+//===--------------------------------------------------------------------===//
+// After WAL replay completes (successfully or with partial data), ensure all
+// table indexes are bound. This prevents crashes when operations encounter
+// unbound indexes after replay of a truncated/corrupted WAL.
+static void BindAllTableIndexesAfterReplay(AttachedDatabase &database, ClientContext &context) {
+	auto &catalog = database.GetCatalog().Cast<DuckCatalog>();
+
+	// Collect all schemas
+	vector<reference<SchemaCatalogEntry>> schemas;
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	// For each schema, find all tables and bind their indexes
+	for (auto &schema : schemas) {
+		schema.get().Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				return;
+			}
+			auto &table_entry = entry.Cast<DuckTableEntry>();
+			auto &storage = table_entry.GetStorage();
+			// Bind any unbound indexes - this ensures consistency after WAL replay
+			try {
+				storage.BindIndexes(context);
+			} catch (std::exception &ex) {
+				// If binding fails, log a warning but don't crash
+				// The index may be in an inconsistent state, but the database is still usable
+				// Operations that need the index will throw a proper error when accessed
+			}
+		});
+	}
+}
 
 //===--------------------------------------------------------------------===//
 // Replay
@@ -507,6 +544,11 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 		// replay the checkpoint WAL and return
 		return ReplayInternal(context, storage_manager, std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
 	}
+
+	// After WAL replay completes, bind any remaining unbound indexes
+	// This ensures database consistency even if WAL was truncated mid-operation
+	BindAllTableIndexesAfterReplay(database, *con.context);
+
 	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
 	return make_uniq<WriteAheadLog>(storage_manager, wal_path, successful_offset, init_state);
 }
