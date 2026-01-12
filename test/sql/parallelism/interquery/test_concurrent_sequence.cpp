@@ -10,8 +10,8 @@ using namespace duckdb;
 
 struct ConcurrentData {
 	DuckDB &db;
-	mutex lock;
-	vector<int64_t> results DUCKDB_GUARDED_BY(lock);
+	duckdb::mutex lock;
+	duckdb::vector<int64_t> results DUCKDB_GUARDED_BY(lock);
 
 	explicit ConcurrentData(DuckDB &db) : db(db) {
 	}
@@ -25,7 +25,7 @@ static void append_values_from_sequence(ConcurrentData *data) {
 	for (size_t i = 0; i < CONCURRENT_SEQUENCE_INSERT_COUNT; i++) {
 		auto result = con.Query("SELECT nextval('seq')");
 		int64_t res = result->GetValue(0, 0).GetValue<int64_t>();
-		lock_guard<mutex> lock(data->lock);
+		duckdb::lock_guard<duckdb::mutex> lock(data->lock);
 		data->results.push_back(res);
 	}
 }
