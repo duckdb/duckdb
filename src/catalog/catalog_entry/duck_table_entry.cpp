@@ -59,11 +59,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		if (!base.sort_keys.empty()) {
 			unsupported_keywords.push_back("SORTED BY");
 		}
-		if (!base.location.empty()) {
-			unsupported_keywords.push_back("LOCATION");
-		}
 		if (!base.tbl_properties.empty()) {
-			unsupported_keywords.push_back("TBLPROPERTIES");
+			unsupported_keywords.push_back("WITH");
 		}
 		if (!unsupported_keywords.empty()) {
 			auto error_message = StringUtil::Join(unsupported_keywords, ", ") +

@@ -9,12 +9,11 @@
 %type <ival> key_update
 %type <ival> key_actions
 %type <oncommit> OnCommitOption
-%type <list> reloptions reltblproperties
+%type <list> reloptions
 %type <boolean> opt_no_inherit
 %type <node> TableConstraint
 %type <ival> TableLikeOption
 %type <list> reloption_list
-%type <list> reltblproperty_list
 %type <str> ExistingIndex
 %type <node> ConstraintAttr
 %type <list> OptWith
@@ -34,18 +33,13 @@
 %type <list> ColQualList
 %type <ival> key_delete
 %type <defelt> reloption_elem
-%type <defelt> reltblproperty_elem
 %type <list> columnList columnList_opt_comma
 %type <typnam> func_type
 %type <constr> GeneratedColumnType opt_GeneratedColumnType
 %type <node> ConstraintElem GeneratedConstraintElem
-%type <defelt> LakehouseOption
 %type <list> TableElementList
 %type <list> OptPartitionedBy
 %type <list> OptSortedBy
-%type <list> OptTblProperties
-%type <list> OptLakehouseOptions
-%type <str> OptLocation
 %type <ival> key_match
 %type <node> TableLikeClause
 %type <ival> OptTemp

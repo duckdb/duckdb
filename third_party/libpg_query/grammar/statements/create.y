@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			OptLakehouseOptions OptWith OnCommitOption
+			OptPartitionedBy OptSortedBy OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
 					$4->relpersistence = $2;
@@ -14,27 +14,15 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 
-					PGListCell *lc;
-					foreach(lc, $8) {
-						PGDefElem *de = (PGDefElem *) lfirst(lc);
-						if (strcmp(de->defname, "partitioned_by") == 0) {
-							n->partition_list = (PGList *)de->arg;
-						} else if (strcmp(de->defname, "sorted_by") == 0) {
-							n->sort_list = (PGList *)de->arg;
-						} else if (strcmp(de->defname, "location") == 0) {
-							n->location = strVal(de->arg);
-						} else if (strcmp(de->defname, "tblproperties") == 0) {
-							n->tbl_properties = (PGList *)de->arg;
-						}
-					}
-
-					n->options = $9;
-					n->oncommit = $10;
+					n->partition_list = $8;
+					n->sort_list = $9;
+					n->options = $10;
+					n->oncommit = $11;
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
-			OptTableElementList ')' OptLakehouseOptions OptWith
+			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -44,27 +32,15 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 
-					PGListCell *lc;
-					foreach(lc, $11) {
-						PGDefElem *de = (PGDefElem *) lfirst(lc);
-						if (strcmp(de->defname, "partitioned_by") == 0) {
-							n->partition_list = (PGList *)de->arg;
-						} else if (strcmp(de->defname, "sorted_by") == 0) {
-							n->sort_list = (PGList *)de->arg;
-						} else if (strcmp(de->defname, "location") == 0) {
-							n->location = strVal(de->arg);
-						} else if (strcmp(de->defname, "tblproperties") == 0) {
-							n->tbl_properties = (PGList *)de->arg;
-						}
-					}
-
-					n->options = $12;
-					n->oncommit = $13;
+					n->partition_list = $11;
+					n->sort_list = $12;
+					n->options = $13;
+					n->oncommit = $14;
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
-			OptTableElementList ')' OptLakehouseOptions OptWith
+			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -74,22 +50,10 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 
-					PGListCell *lc;
-					foreach(lc, $10) {
-						PGDefElem *de = (PGDefElem *) lfirst(lc);
-						if (strcmp(de->defname, "partitioned_by") == 0) {
-							n->partition_list = (PGList *)de->arg;
-						} else if (strcmp(de->defname, "sorted_by") == 0) {
-							n->sort_list = (PGList *)de->arg;
-						} else if (strcmp(de->defname, "location") == 0) {
-							n->location = strVal(de->arg);
-						} else if (strcmp(de->defname, "tblproperties") == 0) {
-							n->tbl_properties = (PGList *)de->arg;
-						}
-					}
-
-					n->options = $11;
-					n->oncommit = $12;
+					n->partition_list = $10;
+					n->sort_list = $11;
+					n->options = $12;
+					n->oncommit = $13;
 					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
@@ -352,10 +316,6 @@ reloptions:
 			'(' reloption_list ')'					{ $$ = $2; }
 		;
 
-reltblproperties:
-			'(' reltblproperty_list ')'				{ $$ = $2; }
-		;
-
 opt_no_inherit:	NO INHERIT							{  $$ = true; }
 			| /* EMPTY */							{  $$ = false; }
 		;
@@ -389,11 +349,6 @@ TableLikeOption:
 reloption_list:
 			reloption_elem							{ $$ = list_make1($1); }
 			| reloption_list ',' reloption_elem		{ $$ = lappend($1, $3); }
-		;
-
-reltblproperty_list:
-			reltblproperty_elem									{ $$ = list_make1($1); }
-			| reltblproperty_list ',' reltblproperty_elem		{ $$ = lappend($1, $3); }
 		;
 
 ExistingIndex:   USING INDEX index_name				{ $$ = $3; }
@@ -438,40 +393,6 @@ OptPartitionedBy:
 
 OptSortedBy:
 			SORTED BY '(' expr_list_opt_comma ')'		{ $$ = $4; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-OptLocation:
-			LOCATION Sconst								{ $$ = $2; }
-			| /*EMPTY*/									{ $$ = NULL; }
-		;
-
-OptTblProperties:
-			TBLPROPERTIES reltblproperties				{ $$ = $2; }
-			| /*EMPTY*/									{ $$ = NIL; }
-		;
-
-LakehouseOption:
-			PARTITIONED BY '(' expr_list_opt_comma ')'
-				{
-					$$ = makeDefElem("partitioned_by", (PGNode *)$4, @1);
-				}
-			| SORTED BY '(' expr_list_opt_comma ')'
-				{
-					$$ = makeDefElem("sorted_by", (PGNode *)$4, @1);
-				}
-			| LOCATION Sconst
-				{
-					$$ = makeDefElem("location", (PGNode *)makeString($2), @1);
-				}
-			| TBLPROPERTIES reltblproperties
-				{
-					$$ = makeDefElem("tblproperties", (PGNode *)$2, @1);
-				}
-		;
-
-OptLakehouseOptions:
-			OptLakehouseOptions LakehouseOption	{ $$ = lappend($1, $2); }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
@@ -640,6 +561,10 @@ reloption_elem:
 				{
 					$$ = makeDefElem($1, (PGNode *) $3, @1);
 				}
+			| Sconst '=' def_arg
+				{
+					$$ = makeDefElem($1, (PGNode *) $3, @1);
+				}
 			| ColLabel
 				{
 					$$ = makeDefElem($1, NULL, @1);
@@ -652,13 +577,6 @@ reloption_elem:
 			| ColLabel '.' ColLabel
 				{
 					$$ = makeDefElemExtended($1, $3, NULL, PG_DEFELEM_UNSPEC, @1);
-				}
-		;
-
-reltblproperty_elem:
-		  Sconst '=' def_arg
-				{
-					$$ = makeDefElem($1, (PGNode *) $3, @1);
 				}
 		;
 

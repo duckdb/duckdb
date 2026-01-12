@@ -1618,8 +1618,6 @@ typedef struct PGCreateStmt {
 	PGList *options;                      /* options from WITH clause */
 	PGList *partition_list;               /* e.g. expression list for partitioned by */
 	PGList *sort_list;                    /* e.g. expression list for sort by */
-	char *location;                       /* e.g. LOCATION 's3://bucket/path' */
-	PGList *tbl_properties;               /* e.g. options from TBLPROPERTIES clause */
 	PGOnCommitAction oncommit;            /* what do we do at COMMIT? */
 	char *tablespacename;                 /* table space to use, or NULL */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */

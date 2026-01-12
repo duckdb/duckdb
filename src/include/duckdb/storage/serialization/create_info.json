@@ -167,12 +167,6 @@
         "type": "vector<ParsedExpression*>"
       },
       {
-        "id": 206,
-        "name": "location",
-        "type": "string",
-        "default": "\"\""
-      },
-      {
         "id": 207,
         "name": "tbl_properties",
         "type": "case_insensitive_map_t<Value>",
