@@ -47,8 +47,7 @@ public:
 		return unique_lock<mutex>(lock);
 	}
 
-	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries(const unique_lock<mutex> &guard) {
-		VerifyLock(guard);
+	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries(const unique_lock<mutex> &guard) DUCKDB_REQUIRES(lock)  {
 		return run_boundaries;
 	}
 
@@ -61,15 +60,8 @@ public:
 	}
 
 private:
-	void VerifyLock(const unique_lock<mutex> &guard) const {
-#ifdef D_ASSERT_IS_ENABLED
-		D_ASSERT(guard.mutex() && RefersToSameObject(*guard.mutex(), lock));
-#endif
-	}
-
-private:
 	mutex lock;
-	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
+	unsafe_vector<SortedRunPartitionBoundary> run_boundaries DUCKDB_GUARDED_BY(lock);
 	atomic<bool> begin_computed;
 
 public:
