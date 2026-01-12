@@ -124,7 +124,6 @@ idx_t Iterator::ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, uns
 			break;
 		}
 		case NType::LEAF: {
-			// Handle deprecated storage - multiple row_ids for same key.
 			D_ASSERT(nested_depth == 0);
 			set<row_t> row_ids;
 			Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, NumericLimits<idx_t>::Maximum());

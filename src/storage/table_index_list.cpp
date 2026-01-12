@@ -283,11 +283,9 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 		auto &bound_index = index.Cast<BoundIndex>();
 		auto &art = bound_index.Cast<ART>();
 
-		// Acquire the index lock for the duration of the merge operations.
 		IndexLock index_lock;
 		art.InitializeLock(index_lock);
 
-		// Process removals first, then additions.
 		if (entry->removed_data_during_checkpoint) {
 			art.RemovalMerge(index_lock, *entry->removed_data_during_checkpoint);
 		}

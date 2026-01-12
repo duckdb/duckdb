@@ -252,15 +252,9 @@ idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 
 	idx_t count;
-	idx_t iterations = 0;
 	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
 		delete_count += DeleteKeys(keys, row_id_keys, count);
 		arena.Reset();
-		iterations++;
-		if (iterations > 10000) {
-			throw InternalException("RemovalMerge: too many iterations (%d), possible infinite loop. delete_count=%d, count=%d",
-			                        iterations, delete_count, count);
-		}
 	}
 
 	return delete_count;
@@ -284,18 +278,12 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 
 	idx_t count;
-	idx_t iterations = 0;
 	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
 		auto error = InsertKeys(arena, keys, row_id_keys, count, DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 		if (error.HasError()) {
 			return error;
 		}
 		arena.Reset();
-		iterations++;
-		if (iterations > 10000) {
-			throw InternalException("InsertMerge: too many iterations (%d), possible infinite loop. count=%d",
-			                        iterations, count);
-		}
 	}
 
 	return ErrorData();
