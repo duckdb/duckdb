@@ -518,6 +518,39 @@ string LogicalType::ToString() const {
 			auto &size_param = params[1];
 			return type_param->ToString() + "[" + size_param->ToString() + "]";
 		}
+		// So does STRUCT, MAP and UNION
+		if (result.empty() && StringUtil::CIEquals(type, "STRUCT")) {
+			if (params.empty()) {
+				return "STRUCT";
+			}
+			string struct_result = "STRUCT(";
+			for (idx_t i = 0; i < params.size(); i++) {
+				struct_result += params[i]->ToString();
+				if (i < params.size() - 1) {
+					struct_result += ", ";
+				}
+			}
+			struct_result += ")";
+			return struct_result;
+		}
+		if (result.empty() && StringUtil::CIEquals(type, "UNION")) {
+			if (params.empty()) {
+				return "UNION";
+			}
+			string union_result = "UNION(";
+			for (idx_t i = 0; i < params.size(); i++) {
+				union_result += params[i]->ToString();
+				if (i < params.size() - 1) {
+					union_result += ", ";
+				}
+			}
+			union_result += ")";
+			return union_result;
+		}
+
+		if (result.empty() && StringUtil::CIEquals(type, "MAP") && params.size() == 2) {
+			return "MAP(" + params[0]->ToString() + ", " + params[1]->ToString() + ")";
+		}
 
 		result += KeywordHelper::WriteOptionallyQuoted(type, '"', true, KeywordCategory::KEYWORD_COL_NAME);
 

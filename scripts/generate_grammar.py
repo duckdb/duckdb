@@ -276,7 +276,7 @@ if verbose:
 cmd += ["-o", result_source, "-d", target_file]
 print(' '.join(cmd))
 proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-res = proc.wait()  # ensure CI does not hang as was seen when running with Bison 3.x release.
+res = proc.wait(timeout=10)  # ensure CI does not hang as was seen when running with Bison 3.x release.
 
 if res != 0:
     text = proc.stderr.read().decode('utf8')

@@ -117,36 +117,22 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			StackCheck(extra_stack++);
 			auto arg = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
 
-			// If the bound is NULL, we have an dynamically sized list
-			if (!arg) {
-				vector<unique_ptr<TypeParameter>> type_params;
-				type_params.push_back(TypeParameter::TYPE("", std::move(result_type)));
-
-				result_type = LogicalType::UNBOUND("list", std::move(type_params));
-				continue;
-			}
-
-			// If the bound is an expression, we have a fixed-size array
-			if (arg->type == duckdb_libpgquery::T_PGAExpr || arg->type == duckdb_libpgquery::T_PGAConst ||
-			    arg->type == duckdb_libpgquery::T_PGFuncCall) {
-				auto bound_expr = TransformExpression(*arg);
-
-				vector<unique_ptr<TypeParameter>> type_params;
-				type_params.push_back(TypeParameter::TYPE("", std::move(result_type)));
-				type_params.push_back(TypeParameter::EXPRESSION("", std::move(bound_expr)));
-
-				result_type = LogicalType::UNBOUND("array", std::move(type_params));
-				continue;
-			}
-
 			if (arg->type == duckdb_libpgquery::T_PGInteger) {
 				auto int_node = PGPointerCast<duckdb_libpgquery::PGValue>(arg.get());
+				auto size = int_node->val.ival;
+
 				vector<unique_ptr<TypeParameter>> type_params;
 				type_params.push_back(TypeParameter::TYPE("", std::move(result_type)));
-				type_params.push_back(
-				    TypeParameter::EXPRESSION("", make_uniq<ConstantExpression>(Value::BIGINT(int_node->val.ival))));
+				if (size == -1) {
+					// LIST type
+					result_type = LogicalType::UNBOUND("list", std::move(type_params));
+				} else {
+					// ARRAY type
+					type_params.push_back(TypeParameter::EXPRESSION(
+					    "", make_uniq<ConstantExpression>(Value::BIGINT(int_node->val.ival))));
+					result_type = LogicalType::UNBOUND("array", std::move(type_params));
+				}
 
-				result_type = LogicalType::UNBOUND("array", std::move(type_params));
 				continue;
 			}
 

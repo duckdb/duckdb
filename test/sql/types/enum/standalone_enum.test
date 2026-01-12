@@ -36,4 +36,4 @@ ENUM type requires a set of VARCHAR arguments
 statement error
 SELECT 'hello'::ENUM(foobar 42);
 ----
-Binder Error: ENUM type arguments cannot have names (argument 1 has name "foobar")
+Parser Error: syntax error at or near "42"

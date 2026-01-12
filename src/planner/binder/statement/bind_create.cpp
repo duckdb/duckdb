@@ -475,7 +475,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		case TypeParameterKind::EXPRESSION: {
 			// We need to constant-fold expression type parameters
 
-			ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'"));
+			ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'", type_name));
 			auto expr = param->GetExpression()->Copy();
 			auto bound_expr = binder.Bind(expr);
 

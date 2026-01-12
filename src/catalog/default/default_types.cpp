@@ -113,6 +113,18 @@ LogicalType BindVarcharType(const BindLogicalTypeInput &input) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// BIT Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindBitType(const BindLogicalTypeInput &input) {
+	// BIT type can have a single modifier indicating the length, but we ignore it for now
+	auto &args = input.modifiers;
+	if (args.size() > 1) {
+		throw BinderException("BIT type takes at most one type modifier");
+	}
+	return LogicalType::BIT;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // INTERVAL Type
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindIntervalType(const BindLogicalTypeInput &input) {
@@ -467,8 +479,8 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"array", LogicalTypeId::ARRAY, BindArrayType},
                                            {"map", LogicalTypeId::MAP, BindMapType},
                                            {"union", LogicalTypeId::UNION, BindUnionType},
-                                           {"bit", LogicalTypeId::BIT, nullptr},
-                                           {"bitstring", LogicalTypeId::BIT, nullptr},
+                                           {"bit", LogicalTypeId::BIT, BindBitType},
+                                           {"bitstring", LogicalTypeId::BIT, BindBitType},
                                            {"variant", LogicalTypeId::VARIANT, BindVariantType},
                                            {"bignum", LogicalTypeId::BIGNUM, nullptr},
                                            {"varint", LogicalTypeId::BIGNUM, nullptr},

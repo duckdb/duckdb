@@ -18,7 +18,7 @@ CREATE TABLE t1(a INT, b INT[0]);
 statement error
 CREATE TABLE t1(a INT, b INT[4294967299]);
 ----
-<REGEX>:.*Binder Error.*ARRAY type size must be at most 100000.*
+Parser Error: syntax error at or near "4294967299"
 
 # Should not be able to create an array above limit
 # this is more than what we allow
@@ -37,13 +37,13 @@ SELECT array_value();
 statement error
 CREATE TABLE t1(a INT, b INT[-1]);
 ----
-Binder Error: ARRAY type size must be at least 1
+Parser Error: syntax error at or near "-"
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
 CREATE TABLE t1(a INT, b INT['foobar']);
 ----
-Binder Error: ARRAY type size modifier must be an integral type
+Parser Error: syntax error at or near "'foobar'"
 
 # Should not be able to cast array to 0 elements
 statement error
@@ -55,16 +55,16 @@ SELECT ([1,2,3]::INTEGER[3])::INTEGER[0];
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
 ----
-<REGEX>:.*Binder Error.*ARRAY type size must be at least 1.*
+Parser Error: syntax error at or near "-"
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
 ----
-Binder Error: ARRAY type size modifier must be an integral type
+Parser Error: syntax error at or near "1.5"
 
 # Should not be able to cast array to a non-integer number of elements
 statement error
 SELECT ([1,2,3]::INTEGER[3])::INTEGER['foobar'];
 ----
-Binder Error: ARRAY type size modifier must be an integral type
+Parser Error: syntax error at or near "'foobar'"
