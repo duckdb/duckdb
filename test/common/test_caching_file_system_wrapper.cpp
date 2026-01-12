@@ -396,7 +396,7 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	// Use two threads to read from the same file handle in parallel using pread semantics
 	vector<std::thread> threads;
 	mutex results_mutex;
-	vector<bool> results(THREAD_COUNT, false) DUCKDB_GUARDED_BY(results_mutex);
+	vector<bool> results(THREAD_COUNT, false);
 
 	const idx_t chunk_size = 20;
 	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
