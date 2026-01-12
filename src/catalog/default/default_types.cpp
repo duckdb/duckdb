@@ -26,7 +26,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 		if (width_value.IsNull()) {
 			throw BinderException("DECIMAL type width cannot be NULL");
 		}
-		if (width_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
+		if (width_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 			width = width_value.GetValueUnsafe<uint8_t>();
 			scale = 0; // reset scale to 0 if only width is provided
 		} else {
@@ -39,7 +39,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 		if (scale_value.IsNull()) {
 			throw BinderException("DECIMAL type scale cannot be NULL");
 		}
-		if (scale_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
+		if (scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 			scale = scale_value.GetValueUnsafe<uint8_t>();
 		} else {
 			throw BinderException("DECIMAL type scale must be a UTINYINT");
@@ -79,7 +79,7 @@ LogicalType BindTimestampType(const BindLogicalTypeInput &input) {
 		throw BinderException("TIMESTAMP type precision cannot be NULL");
 	}
 	uint8_t precision;
-	if (precision_value.TryCastAs(input.context, LogicalTypeId::UTINYINT)) {
+	if (precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 		precision = precision_value.GetValueUnsafe<uint8_t>();
 	} else {
 		throw BinderException("TIMESTAMP type precision must be a UTINYINT");
@@ -213,7 +213,7 @@ LogicalType BindArrayType(const BindLogicalTypeInput &input) {
 	if (!size_val.type().IsIntegral()) {
 		throw BinderException("ARRAY type size modifier must be an integral type");
 	}
-	if (!size_val.TryCastAs(input.context, LogicalTypeId::BIGINT)) {
+	if (!size_val.DefaultTryCastAs(LogicalTypeId::BIGINT)) {
 		throw BinderException("ARRAY type size modifier must be a BIGINT");
 	}
 
@@ -522,6 +522,29 @@ LogicalTypeId DefaultTypeGenerator::GetDefaultType(const string &name) {
 		}
 	}
 	return LogicalType::INVALID;
+}
+
+LogicalType DefaultTypeGenerator::TryDefaultBind(const string &name, const vector<pair<string, Value>> &params) {
+	auto entry = TryGetDefaultTypeEntry(name);
+	if (!entry) {
+		return LogicalTypeId::INVALID;
+	}
+
+	if (!entry->bind_function) {
+		if (params.empty()) {
+			return LogicalType(entry->type);
+		} else {
+			throw InvalidInputException("Type '%s' does not take any type parameters", name);
+		}
+	}
+
+	vector<TypeArgument> args;
+	for (auto &param : params) {
+		args.emplace_back(param.first, param.second);
+	}
+
+	BindLogicalTypeInput input {nullptr, LogicalType(entry->type), args};
+	return entry->bind_function(input);
 }
 
 DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry &schema)

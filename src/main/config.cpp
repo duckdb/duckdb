@@ -272,7 +272,7 @@ optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const String &
 }
 
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
-	SetOption(nullptr, nullptr, option, value);
+	SetOption(nullptr, option, value);
 }
 
 void DBConfig::SetOptionByName(const string &name, const Value &value) {
@@ -303,8 +303,7 @@ void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
 	}
 }
 
-void DBConfig::SetOption(optional_ptr<ClientContext> context, optional_ptr<DatabaseInstance> db,
-                         const ConfigurationOption &option, const Value &value) {
+void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	if (option.default_value) {
@@ -320,7 +319,7 @@ void DBConfig::SetOption(optional_ptr<ClientContext> context, optional_ptr<Datab
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
-	option.set_global(context.get(), db.get(), *this, input);
+	option.set_global(db.get(), *this, input);
 }
 
 void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option) {

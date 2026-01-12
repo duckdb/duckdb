@@ -39,7 +39,7 @@ private:
 };
 
 struct BindLogicalTypeInput {
-	ClientContext &context;
+	optional_ptr<ClientContext> context;
 	const LogicalType &base_type;
 	const vector<TypeArgument> &modifiers;
 };

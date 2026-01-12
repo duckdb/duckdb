@@ -64,8 +64,7 @@ struct SettingCallbackInfo {
 };
 
 typedef void (*set_callback_t)(SettingCallbackInfo &info, Value &parameter);
-typedef void (*set_global_function_t)(ClientContext *context, DatabaseInstance *db, DBConfig &config,
-                                      const Value &parameter);
+typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
 typedef void (*reset_local_function_t)(ClientContext &context);

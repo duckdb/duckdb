@@ -491,6 +491,10 @@ struct UnboundType {
 	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
 	DUCKDB_API static const string &GetCollation(const LogicalType &type);
 	DUCKDB_API static const vector<unique_ptr<TypeParameter>> &GetParameters(const LogicalType &type);
+
+	// Try to bind the unbound type into a concrete type, using just the built in types
+	DUCKDB_API static LogicalType TryParseAndDefaultBind(const string &type_str);
+	DUCKDB_API static LogicalType TryDefaultBind(const LogicalType &unbound_type);
 };
 
 struct EnumType {

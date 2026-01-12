@@ -605,7 +605,7 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	return type;
 }
 
-LogicalType TransformStringToLogicalType(const string &str) {
+LogicalType TransformStringToUnboundType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
@@ -673,7 +673,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 }
 
 LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
-	auto type = TransformStringToLogicalType(str);
+	auto type = TransformStringToUnboundType(str);
 	if (type.IsUnbound()) {
 		auto binder = Binder::CreateBinder(context, nullptr);
 		binder->BindLogicalType(type);
@@ -2113,6 +2113,49 @@ const string &UnboundType::GetCollation(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
 	return info->Cast<UnboundTypeInfo>().collation;
+}
+
+LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
+	if (type_str.empty()) {
+		return LogicalType::INVALID;
+	}
+	try {
+		ColumnList list = Parser::ParseColumnList("dummy " + type_str);
+		auto unbound = list.GetColumn(LogicalIndex(0)).Type();
+		return TryDefaultBind(unbound);
+	} catch (const std::runtime_error &e) {
+		throw InvalidInputException("Could not parse type string '%s' for unbound type", type_str);
+	}
+}
+
+LogicalType UnboundType::TryDefaultBind(const LogicalType &unbound_type) {
+	if (!unbound_type.IsUnbound()) {
+		return unbound_type;
+	}
+
+	// Now we try to bind the unbound type to a default type
+	auto &name = UnboundType::GetName(unbound_type);
+	auto &args = UnboundType::GetParameters(unbound_type);
+
+	vector<pair<string, Value>> bound_args;
+	for (auto &arg : args) {
+		if (arg->IsType()) {
+			auto type = TryDefaultBind(arg->GetType());
+			bound_args.emplace_back(arg->GetName(), Value::TYPE(type));
+
+		} else if (arg->IsExpression()) {
+			auto &expr = arg->GetExpression();
+			if (expr->type != ExpressionType::VALUE_CONSTANT) {
+				throw InvalidInputException("Cannot default bind unbound type with non-constant expression parameter");
+			}
+			auto &const_expr = expr->Cast<ConstantExpression>();
+			bound_args.emplace_back(arg->GetName(), const_expr.value);
+		} else {
+			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
+		}
+	}
+
+	return DefaultTypeGenerator::TryDefaultBind(name, bound_args);
 }
 
 //===--------------------------------------------------------------------===//

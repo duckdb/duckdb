@@ -20,7 +20,7 @@ def extract_declarations(setting) -> str:
         f"    static constexpr const char *InputType = \"{setting.sql_type}\";\n"
     )
     if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
-        definition += f"    static void SetGlobal(ClientContext *context, DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
+        definition += f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
         definition += f"    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);\n"
         if setting.on_set:
             definition += f"static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
