@@ -115,9 +115,17 @@ static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunctio
 	const auto crs_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	if (!crs_val.IsNull()) {
 		const auto &crs_str = StringValue::Get(crs_val);
-		// Attach the CRS to the return type
-		bound_function.return_type = LogicalType::GEOMETRY(crs_str);
+
+		// Try to convert to identify
+		auto lookup = CoordinateReferenceSystemUtil::Get(context).TryIdentify(crs_str);
+		if (lookup.Success()) {
+			bound_function.return_type = LogicalType::GEOMETRY(lookup.GetResult());
+		} else {
+			// Pass on the raw string (better than nothing)
+			bound_function.return_type = LogicalType::GEOMETRY(crs_str);
+		}
 	}
+
 	// Erase the CRS argument expression
 	return nullptr;
 }

@@ -25,6 +25,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -552,13 +553,23 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// which performs the WKB validation/transformation using the `ST_GeomFromWKB` function of DuckDB.
 		// This enables us to also support other geometry encodings (such as GeoArrow geometries) easier in the future.
 
+		// Try to parse the CRS
+		LogicalType target_type;
+
+		auto lookup = CoordinateReferenceSystemUtil::Get(context).TryIdentify(crs);
+		if (lookup.Success()) {
+			target_type = LogicalType::GEOMETRY(lookup.GetResult());
+		} else {
+			target_type = LogicalType::GEOMETRY(crs);
+		}
+
 		// Inner BLOB schema
 		vector<ParquetColumnSchema> geometry_child;
 		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx));
 
 		// Wrap in geometry schema
-		return ParquetColumnSchema::FromChildSchemas(s_ele.name, LogicalType::GEOMETRY(crs), max_define, max_repeat,
-		                                             this_idx, next_file_idx++, std::move(geometry_child),
+		return ParquetColumnSchema::FromChildSchemas(s_ele.name, target_type, max_define, max_repeat, this_idx,
+		                                             next_file_idx++, std::move(geometry_child),
 		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
 

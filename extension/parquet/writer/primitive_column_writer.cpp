@@ -320,8 +320,9 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 			state.stats_state->WriteGeoStats(column_chunk.meta_data.geospatial_statistics);
 		}
 		if (has_json_stats) {
+
 			// Add the geospatial statistics to the extra GeoParquet metadata
-			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
+			writer.GetGeoParquetData().AddGeoParquetStats(writer.GetContext(), column_schema.name, column_schema.type,
 			                                              *state.stats_state->GetGeoStats(), gpq_version);
 		}
 	}
@@ -453,7 +454,7 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 		schema_element.__isset.field_id = true;
 		schema_element.field_id = field_id.GetIndex();
 	}
-	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry);
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext());
 	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());

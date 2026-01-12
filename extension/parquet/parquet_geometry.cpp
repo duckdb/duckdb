@@ -14,6 +14,7 @@
 #include "yyjson.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "re2/re2.h"
 #include "reader/string_column_reader.hpp"
 
 namespace duckdb {
@@ -23,114 +24,8 @@ using namespace duckdb_yyjson; // NOLINT
 //------------------------------------------------------------------------------
 // GeoParquetFileMetadata
 //------------------------------------------------------------------------------
-static constexpr auto OGC_CRS84_PROJJSON = R"JSON_LITERAL({
-  "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
-  "type": "GeographicCRS",
-  "name": "WGS 84 (CRS84)",
-  "datum_ensemble": {
-    "name": "World Geodetic System 1984 ensemble",
-    "members": [
-      {
-        "name": "World Geodetic System 1984 (Transit)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1166
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G730)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1152
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G873)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1153
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G1150)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1154
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G1674)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1155
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G1762)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1156
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G2139)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1309
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G2296)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1383
-        }
-      }
-    ],
-    "ellipsoid": {
-      "name": "WGS 84",
-      "semi_major_axis": 6378137,
-      "inverse_flattening": 298.257223563
-    },
-    "accuracy": "2.0",
-    "id": {
-      "authority": "EPSG",
-      "code": 6326
-    }
-  },
-  "coordinate_system": {
-    "subtype": "ellipsoidal",
-    "axis": [
-      {
-        "name": "Geodetic longitude",
-        "abbreviation": "Lon",
-        "direction": "east",
-        "unit": "degree"
-      },
-      {
-        "name": "Geodetic latitude",
-        "abbreviation": "Lat",
-        "direction": "north",
-        "unit": "degree"
-      }
-    ]
-  },
-  "scope": "Not known.",
-  "area": "World.",
-  "bbox": {
-    "south_latitude": -90,
-    "west_longitude": -180,
-    "north_latitude": 90,
-    "east_longitude": 180
-  },
-  "id": {
-    "authority": "OGC",
-    "code": "CRS84"
-  }
-})JSON_LITERAL";
-
 unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
-                                                                   const ClientContext &context) {
+                                                                   ClientContext &context) {
 	// Conversion not enabled, or spatial is not loaded!
 	if (!IsGeoParquetConversionEnabled(context)) {
 		return nullptr;
@@ -233,7 +128,11 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 						free(crs_json);
 					} else {
 						// Otherwise, default to OGC:CRS84
-						column.projjson = OGC_CRS84_PROJJSON;
+						auto &crs_util = CoordinateReferenceSystemUtil::Get(context);
+						auto crs = crs_util.TryConvert("OGC:CRS84", CoordinateReferenceSystemType::PROJJSON);
+						if (crs.Success()) {
+							column.projjson = crs.GetResult().GetDefinition();
+						}
 					}
 
 					// TODO: Parse the bounding box, other metadata that might be useful.
@@ -255,7 +154,7 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 	return nullptr;
 }
 
-void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const LogicalType &type,
+void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const string &column_name, const LogicalType &type,
                                                 const GeometryStatsData &stats, GeoParquetVersion version) {
 	// Lock the metadata
 	lock_guard<mutex> glock(write_lock);
@@ -269,16 +168,25 @@ void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const
 		if (GeoType::HasCRS(type)) {
 			const auto &crs = GeoType::GetCRS(type);
 
-			// OGC:CRS84 is the default if no CRS is specified in GeoParquet, so we can skip writing it out if set
-			if (!StringUtil::CIEquals(crs.GetCode(), "OGC:CRS84")) {
-				// Only PROJJSON is supported in GeoParquet V1
-				if (version != GeoParquetVersion::V2 && crs.GetType() != CoordinateReferenceSystemType::PROJJSON) {
-					// TODO: Try to convert other CRS types to equivalent PROJJSON
-					throw InvalidInputException("Cannot write GeoParquet V1 metadata for column '%s': GeoParquet only "
-					                            "supports PROJJSON CRS definitions",
-					                            column_name);
-				}
+			if (crs.GetType() != CoordinateReferenceSystemType::PROJJSON) {
 
+				const auto &crs_util = CoordinateReferenceSystemUtil::Get(context);
+				auto lookup = crs_util.TryConvert(crs, CoordinateReferenceSystemType::PROJJSON);
+
+				if (!lookup.Success()) {
+					if (version != GeoParquetVersion::V2) {
+						throw InvalidInputException("Cannot write GeoParquet V1 metadata for column '%s': GeoParquet only "
+							"supports PROJJSON CRS definitions",
+							column_name);
+					}
+
+					// Dont write anything for V2 if not PROJJSON
+
+				} else {
+					column.projjson = lookup.GetResult().GetDefinition();
+				}
+			} else if (!StringUtil::CIEquals(crs.GetCode(), "OGC:CRS84")) {
+				// Don't write if this is the default (ogc:crs84)
 				column.projjson = crs.GetDefinition();
 			}
 		}
@@ -286,6 +194,7 @@ void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const
 		// Merge the stats
 		column.stats.Merge(stats);
 		column.insertion_index = geometry_columns.size() - 1;
+
 	} else {
 		it->second.stats.Merge(stats);
 	}

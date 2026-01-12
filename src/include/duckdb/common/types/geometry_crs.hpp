@@ -38,6 +38,11 @@ public:
 
 	//! Equivalent to calling "TryParse" and throwing an exception on failure
 	explicit CoordinateReferenceSystem(const string &crs);
+
+	CoordinateReferenceSystem(CoordinateReferenceSystemType type, string text, string name, string code)
+	    : type(type), text(std::move(text)), name(std::move(name)), code(std::move(code)) {
+	}
+
 	//! Get the identified type of the coordinate reference system
 	CoordinateReferenceSystemType GetType() const {
 		return type;
@@ -70,6 +75,17 @@ public:
 			return name;
 		}
 		return text;
+	}
+
+	//! Is this a fully-defined coordinate system?
+	bool IsComplete() const {
+		switch (GetType()) {
+		case CoordinateReferenceSystemType::PROJJSON:
+		case CoordinateReferenceSystemType::WKT2_2019:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	//! Attempt to determine if this CRS is equivalent to another CRS
@@ -123,6 +139,105 @@ private:
 	//! The "code" of the coordinate reference system (e.g. "EPSG:4326")
 	//! This can often be extracted from the definition, but is cached here for convenience
 	string code;
+};
+
+class CoordinateReferenceSystemLookupResult {
+public:
+	//! Return if the lookup was successful
+	bool Success() const {
+		return confidence != 0;
+	}
+
+	//! Get the confidence score (0-100) of the lookup
+	//! A failed lookup always has confidence 0
+	idx_t GetConfidenceScore() const {
+		return confidence;
+	}
+
+	//! Get the result of the lookup
+	//! Only valid if the lookup was successful
+	CoordinateReferenceSystem &GetResult() {
+		return crs;
+	}
+
+	void SetResult(CoordinateReferenceSystem crs_p, idx_t confidence_p = 100) {
+		crs = std::move(crs_p);
+		confidence = confidence_p;
+	}
+
+	void SetResult(const string &crs_str, idx_t confidence_p = 100) {
+		crs = CoordinateReferenceSystem(crs_str);
+		confidence = confidence_p;
+	}
+
+	//! Construct a failed lookup result
+	CoordinateReferenceSystemLookupResult() : confidence(0) {
+	}
+
+	//! Construct a successful lookup result
+	CoordinateReferenceSystemLookupResult(idx_t confidence, CoordinateReferenceSystem crs_p)
+	    : confidence(confidence), crs(std::move(crs_p)) {
+	}
+
+	static CoordinateReferenceSystemLookupResult NotFound() {
+		return CoordinateReferenceSystemLookupResult();
+	}
+
+	static CoordinateReferenceSystemLookupResult FromString(const string &text, idx_t confidence = 100) {
+		return CoordinateReferenceSystemLookupResult(confidence, CoordinateReferenceSystem(text));
+	}
+
+	operator bool() { // NOLINT: allow implicit lookup to bool
+		return confidence > 0;
+	}
+
+	bool operator<(const CoordinateReferenceSystemLookupResult &other) const {
+		return confidence < other.confidence;
+	}
+
+private:
+	idx_t confidence;
+	CoordinateReferenceSystem crs;
+};
+
+class CoordinateReferencesSystemProvider {
+public:
+	//! Try to convert a CRS to another format
+	virtual CoordinateReferenceSystemLookupResult TryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                         CoordinateReferenceSystemType target_type) = 0;
+
+	virtual ~CoordinateReferencesSystemProvider() = default;
+};
+
+class CoordinateReferenceSystemUtil {
+public:
+	CoordinateReferenceSystemUtil();
+
+
+	void AddProvider(shared_ptr<CoordinateReferencesSystemProvider> provider);
+
+	static CoordinateReferenceSystemUtil &Get(ClientContext &context);
+
+	//! Try to convert the CRS to another format
+	CoordinateReferenceSystemLookupResult TryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                 CoordinateReferenceSystemType target_type) const;
+
+	CoordinateReferenceSystemLookupResult TryConvert(const string &source_crs,
+	                                                 CoordinateReferenceSystemType target_type) const;
+
+	//! Try to identify a crs string into a fully defined CRS
+	CoordinateReferenceSystemLookupResult TryIdentify(const string &source_crs);
+
+	static CoordinateReferenceSystemLookupResult DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                               CoordinateReferenceSystemType target_type);
+
+	static CoordinateReferenceSystemLookupResult DefaultTryConvert(const string &source_crs,
+	                                                               CoordinateReferenceSystemType target_type);
+
+	static CoordinateReferenceSystemLookupResult DefaultTryIdentify(const string &source_crs);
+
+private:
+	vector<shared_ptr<CoordinateReferencesSystemProvider>> providers;
 };
 
 } // namespace duckdb
