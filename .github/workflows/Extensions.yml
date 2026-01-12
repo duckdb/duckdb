@@ -191,7 +191,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Build the extensions from .github/config/rust_based_extensions.cmake
@@ -208,7 +208,7 @@ jobs:
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Build the extensions from .github/config/external_extensions.cmake
@@ -225,7 +225,7 @@ jobs:
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Merge all extensions into a single, versioned repository
@@ -323,7 +323,7 @@ jobs:
 
   autoload-tests:
     name: Extension Autoloading Tests
-    if: ${{ !inputs.skip_tests}}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-latest
     needs: create-extension-repository
 
@@ -370,7 +370,7 @@ jobs:
 
   check-load-install-extensions:
     name: Checks extension entries
-    if: ${{ !inputs.skip_tests}}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-22.04
     needs: create-extension-repository
     env:
