@@ -47,7 +47,7 @@ public:
 		return unique_lock<mutex>(lock);
 	}
 
-	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries(const unique_lock<mutex> &guard) DUCKDB_REQUIRES(lock)  {
+	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries(const unique_lock<mutex> &guard) DUCKDB_REQUIRES(lock) {
 		return run_boundaries;
 	}
 
