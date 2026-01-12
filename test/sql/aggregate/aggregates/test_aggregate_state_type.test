@@ -2,9 +2,6 @@
 # description: Test the AGGREGATE_STATE type name with get_state_type callback
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 # avg(DOUBLE) has the new get_state_type callback
 query T
 SELECT typeof(avg(1.0::DOUBLE) EXPORT_STATE);
