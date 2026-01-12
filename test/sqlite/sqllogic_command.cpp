@@ -324,6 +324,9 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
     : Command(runner), definition(std::move(definition_p)) {
 }
 
+ContinueCommand::ContinueCommand(SQLLogicTestRunner &runner) : Command(runner) {
+}
+
 ModeCommand::ModeCommand(SQLLogicTestRunner &runner, string parameter_p)
     : Command(runner), parameter(std::move(parameter_p)) {
 }
@@ -442,8 +445,13 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		while (!finished && !runner.finished_processing_file) {
 			// execute the current iteration of the loop
 			context.running_loops.push_back(loop_def);
+			auto &def = context.running_loops.back();
 			for (auto &statement : loop_commands) {
 				statement->Execute(context);
+				if (def.is_skipped) {
+					//! Executed a CONTINUE statement
+					break;
+				}
 			}
 			context.running_loops.pop_back();
 			loop_def.loop_idx++;
@@ -453,6 +461,16 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 			}
 		}
 	}
+}
+
+void ContinueCommand::ExecuteInternal(ExecuteContext &context) const {
+	D_ASSERT(!context.running_loops.empty());
+	auto &deepest_loop = context.running_loops.back();
+	deepest_loop.is_skipped = true;
+}
+
+bool ContinueCommand::SupportsConcurrent() const {
+	return false;
 }
 
 bool LoopCommand::SupportsConcurrent() const {
