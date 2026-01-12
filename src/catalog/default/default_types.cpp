@@ -30,7 +30,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 			width = width_value.GetValueUnsafe<uint8_t>();
 			scale = 0; // reset scale to 0 if only width is provided
 		} else {
-			throw BinderException("DECIMAL type width must be a UTINYINT");
+			throw BinderException("DECIMAL type width must be between 1 and %d", Decimal::MAX_WIDTH_DECIMAL);
 		}
 	}
 
@@ -42,7 +42,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 		if (scale_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 			scale = scale_value.GetValueUnsafe<uint8_t>();
 		} else {
-			throw BinderException("DECIMAL type scale must be a UTINYINT");
+			throw BinderException("DECIMAL type scale must be between 0 and %d", Decimal::MAX_WIDTH_DECIMAL - 1);
 		}
 	}
 
@@ -82,7 +82,7 @@ LogicalType BindTimestampType(const BindLogicalTypeInput &input) {
 	if (precision_value.DefaultTryCastAs(LogicalTypeId::UTINYINT)) {
 		precision = precision_value.GetValueUnsafe<uint8_t>();
 	} else {
-		throw BinderException("TIMESTAMP type precision must be a UTINYINT");
+		throw BinderException("TIMESTAMP type precision must be between 0 and 9");
 	}
 
 	if (precision > 9) {

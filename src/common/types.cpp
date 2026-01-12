@@ -372,7 +372,33 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
+static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_list) {
+	string result;
+	if (mod_list.empty()) {
+		return result;
+	}
+	result = "(";
+	for (idx_t i = 0; i < mod_list.size(); i++) {
+		result += mod_list[i].ToString();
+		if (i < mod_list.size() - 1) {
+			result += ", ";
+		}
+	}
+	result += ")";
+	return result;
+}
+
 string LogicalType::ToString() const {
+	if (id_ != LogicalTypeId::UNBOUND) {
+		auto alias = GetAlias();
+		if (!alias.empty()) {
+			if (HasExtensionInfo()) {
+				auto &ext_info = *GetExtensionInfo();
+				alias += TypeModifierListToString(ext_info.modifiers);
+			}
+			return alias;
+		}
+	}
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
 		if (!type_info_) {

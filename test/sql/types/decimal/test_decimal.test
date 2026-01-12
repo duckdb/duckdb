@@ -144,13 +144,13 @@ SELECT '0.1'::DECIMAL(3, 4);
 statement error
 SELECT '0.1'::DECIMAL('hello');
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be a UTINYINT.*
+<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
 
 # ...or negative numbers
 statement error
 SELECT '0.1'::DECIMAL((-17));
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be a UTINYINT.*
+<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
 
 # width/scale out of range
 statement error
