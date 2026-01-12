@@ -236,9 +236,8 @@ unique_ptr<IndexScanState> ART::InitializeFullScan() {
 }
 
 //FIXME : Make this a more efficient structural tree removal merge
-idx_t ART::RemovalMerge(ART &source) {
-	lock_guard<mutex> l(lock);
-
+idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
+	auto &source = other_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
 		return 0;
 	}
@@ -253,8 +252,15 @@ idx_t ART::RemovalMerge(ART &source) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 
 	idx_t count;
+	idx_t iterations = 0;
 	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
 		delete_count += DeleteKeys(keys, row_id_keys, count);
+		arena.Reset();
+		iterations++;
+		if (iterations > 10000) {
+			throw InternalException("RemovalMerge: too many iterations (%d), possible infinite loop. delete_count=%d, count=%d",
+			                        iterations, delete_count, count);
+		}
 	}
 
 	return delete_count;
@@ -263,9 +269,8 @@ idx_t ART::RemovalMerge(ART &source) {
 // FIXME: We already have a structural tree merge, this only exists right now since the structural merge doesn't
 // handle deprecated leaves. This is being used in merging checkpoint deltas, to avoid a more inefficient table scan.
 // Once the structural merge adds support for deprecated leaves, we can replace the calls of this function with that.
-ErrorData ART::InsertMerge(ART &source) {
-	lock_guard<mutex> l(lock);
-
+ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
+	auto &source = other_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
 		return ErrorData();
 	}
@@ -279,10 +284,17 @@ ErrorData ART::InsertMerge(ART &source) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 
 	idx_t count;
+	idx_t iterations = 0;
 	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
 		auto error = InsertKeys(arena, keys, row_id_keys, count, DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 		if (error.HasError()) {
 			return error;
+		}
+		arena.Reset();
+		iterations++;
+		if (iterations > 10000) {
+			throw InternalException("InsertMerge: too many iterations (%d), possible infinite loop. count=%d",
+			                        iterations, count);
 		}
 	}
 

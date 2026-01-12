@@ -96,6 +96,11 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 
 idx_t Iterator::ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
                          idx_t max_count) {
+	// If the iterator was previously exhausted, return immediately.
+	if (exhausted) {
+		return 0;
+	}
+
 	idx_t count = 0;
 	bool has_next;
 	do {
@@ -164,6 +169,9 @@ idx_t Iterator::ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, uns
 		entered_nested_leaf = false;
 		has_next = Next();
 	} while (has_next);
+
+	// Mark the iterator as exhausted so subsequent calls return 0.
+	exhausted = true;
 	return count;
 }
 

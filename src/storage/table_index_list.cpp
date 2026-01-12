@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -282,14 +283,16 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 		auto &bound_index = index.Cast<BoundIndex>();
 		auto &art = bound_index.Cast<ART>();
 
+		// Acquire the index lock for the duration of the merge operations.
+		IndexLock index_lock;
+		art.InitializeLock(index_lock);
+
 		// Process removals first, then additions.
 		if (entry->removed_data_during_checkpoint) {
-			auto &delta_art = entry->removed_data_during_checkpoint->Cast<ART>();
-			art.RemovalMerge(delta_art);
+			art.RemovalMerge(index_lock, *entry->removed_data_during_checkpoint);
 		}
 		if (entry->added_data_during_checkpoint) {
-			auto &delta_art = entry->added_data_during_checkpoint->Cast<ART>();
-			auto error = art.InsertMerge(delta_art);
+			auto error = art.InsertMerge(index_lock, *entry->added_data_during_checkpoint);
 			if (error.HasError()) {
 				throw InternalException("Failed to merge checkpoint delta inserts - this signifies a bug or broken "
 				                        "index: %s",

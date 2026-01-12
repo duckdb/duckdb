@@ -84,10 +84,10 @@ public:
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	//! Returns the number of entries deleted.
-	idx_t RemovalMerge(ART &source);
+	idx_t RemovalMerge(IndexLock &state, BoundIndex &other_index);
 	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
 	//! Returns error data if constraint violation.
-	ErrorData InsertMerge(ART &source);
+	ErrorData InsertMerge(IndexLock &state, BoundIndex &other_index);
 
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;

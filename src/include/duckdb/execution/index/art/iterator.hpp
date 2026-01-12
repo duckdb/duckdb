@@ -99,6 +99,8 @@ private:
 	uint8_t nested_depth = 0;
 	//! True, if we entered a nested leaf to retrieve the next node.
 	bool entered_nested_leaf = false;
+	//! True, if the iterator has been exhausted (Next() returned false).
+	bool exhausted = false;
 
 private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,
