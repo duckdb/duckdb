@@ -85,7 +85,7 @@ CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &d
 //----------------------------------------------------------------------------------------------------------------------
 // WKT2:2019 Parsing
 //----------------------------------------------------------------------------------------------------------------------
-
+namespace {
 class WKTKeyword;
 class WKTNumber;
 class WKTString;
@@ -371,6 +371,9 @@ static string TryExtractIDFromWKTNode(const WKTKeyword &keyword) {
 
 	return string();
 }
+
+} // namespace
+
 bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateReferenceSystem &result) {
 	const auto node = WKTParser::Parse(text);
 
@@ -649,5 +652,257 @@ bool CoordinateReferenceSystem::TryParseAuthCode(const string &text, CoordinateR
 
 	return false;
 }
+
+//----------------------------------------------------------------------------------------------------------------------
+// Default CRS Provider
+//----------------------------------------------------------------------------------------------------------------------
+namespace {
+
+class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferencesSystemProvider {
+public:
+	static CoordinateReferenceSystemLookupResult DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                               CoordinateReferenceSystemType target_type);
+
+	CoordinateReferenceSystemLookupResult TryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                 CoordinateReferenceSystemType target_type) override {
+		return DefaultTryConvert(source_crs, target_type);
+	}
+};
+
+} // namespace
+
+//----------------------------------------------------------------------------------------------------------------------
+// Coordinate Reference System Utility
+//----------------------------------------------------------------------------------------------------------------------
+
+CoordinateReferenceSystemUtil::CoordinateReferenceSystemUtil() {
+	// Always add the default provider
+	providers.push_back(make_uniq<DefaultCoordinateReferenceSystemProvider>());
+}
+
+void CoordinateReferenceSystemUtil::AddProvider(shared_ptr<CoordinateReferencesSystemProvider> provider) {
+	// Insert at the front
+	providers.insert(providers.begin(), provider);
+}
+
+CoordinateReferenceSystemLookupResult
+CoordinateReferenceSystemUtil::TryConvert(const CoordinateReferenceSystem &source_crs,
+                                          CoordinateReferenceSystemType target_type) const {
+	std::priority_queue<CoordinateReferenceSystemLookupResult> candidates;
+
+	// Ask each provider, front to back
+	for (auto &provider : providers) {
+		auto result = provider->TryConvert(source_crs, target_type);
+		if (result.Success()) {
+			if (result.GetConfidenceScore() == 100) {
+				// Exact match!
+				return result;
+			}
+			candidates.emplace(std::move(result));
+		}
+	}
+
+	if (candidates.empty()) {
+		return CoordinateReferenceSystemLookupResult::NotFound();
+	}
+
+	return candidates.top();
+}
+
+CoordinateReferenceSystemUtil &CoordinateReferenceSystemUtil::Get(ClientContext &context) {
+	return *DBConfig::GetConfig(context).crs_util;
+}
+
+CoordinateReferenceSystemLookupResult
+CoordinateReferenceSystemUtil::DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
+                                                 CoordinateReferenceSystemType target_type) {
+	return DefaultCoordinateReferenceSystemProvider::DefaultTryConvert(source_crs, target_type);
+}
+
+CoordinateReferenceSystemLookupResult
+CoordinateReferenceSystemUtil::TryConvert(const string &source_crs, CoordinateReferenceSystemType target_type) const {
+	const CoordinateReferenceSystem source(source_crs);
+	return TryConvert(source, target_type);
+}
+
+CoordinateReferenceSystemLookupResult
+CoordinateReferenceSystemUtil::DefaultTryConvert(const string &source_crs, CoordinateReferenceSystemType target_type) {
+	const CoordinateReferenceSystem source(source_crs);
+	return DefaultCoordinateReferenceSystemProvider::DefaultTryConvert(source, target_type);
+}
+
+CoordinateReferenceSystemLookupResult CoordinateReferenceSystemUtil::TryIdentify(const string &source_crs) {
+	CoordinateReferenceSystem crs(source_crs);
+
+	// If the CRS is fully defined, then return it immediately
+	if (crs.IsComplete()) {
+		return CoordinateReferenceSystemLookupResult(100, std::move(crs));
+	}
+
+	// Otherwise, try to see if any of the providers can convert it into either PROJJSON or WKT2:2019
+	// We prefer PROJJSON as it is generally easier to deal with
+	auto result = TryConvert(source_crs, CoordinateReferenceSystemType::PROJJSON);
+	if (result.Success()) {
+		return result;
+	}
+
+	result = TryConvert(source_crs, CoordinateReferenceSystemType::WKT2_2019);
+	if (result.Success()) {
+		return result;
+	}
+
+	return result;
+}
+
+CoordinateReferenceSystemLookupResult CoordinateReferenceSystemUtil::DefaultTryIdentify(const string &source_crs) {
+	CoordinateReferenceSystem crs(source_crs);
+
+	if (crs.IsComplete()) {
+		return CoordinateReferenceSystemLookupResult(100, std::move(crs));
+	}
+
+	// Otherwise, try to see if we can convert it into either PROJJSON or WKT2:2019
+	// We prefer PROJJSON as it is generally easier to deal with
+	auto result = DefaultTryConvert(source_crs, CoordinateReferenceSystemType::PROJJSON);
+	if (result.Success()) {
+		return result;
+	}
+
+	result = DefaultTryConvert(source_crs, CoordinateReferenceSystemType::WKT2_2019);
+	if (result.Success()) {
+		return result;
+	}
+
+	return result;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Default Coordinate Systems
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+constexpr auto OGC_CRS84_PROJJSON = R"JSON_LITERAL({
+  "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+  "type": "GeographicCRS",
+  "name": "WGS 84 (CRS84)",
+  "datum_ensemble": {
+    "name": "World Geodetic System 1984 ensemble",
+    "members": [
+      {
+        "name": "World Geodetic System 1984 (Transit)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1166
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G730)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1152
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G873)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1153
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G1150)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1154
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G1674)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1155
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G1762)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1156
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G2139)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1309
+        }
+      },
+      {
+        "name": "World Geodetic System 1984 (G2296)",
+        "id": {
+          "authority": "EPSG",
+          "code": 1383
+        }
+      }
+    ],
+    "ellipsoid": {
+      "name": "WGS 84",
+      "semi_major_axis": 6378137,
+      "inverse_flattening": 298.257223563
+    },
+    "accuracy": "2.0",
+    "id": {
+      "authority": "EPSG",
+      "code": 6326
+    }
+  },
+  "coordinate_system": {
+    "subtype": "ellipsoidal",
+    "axis": [
+      {
+        "name": "Geodetic longitude",
+        "abbreviation": "Lon",
+        "direction": "east",
+        "unit": "degree"
+      },
+      {
+        "name": "Geodetic latitude",
+        "abbreviation": "Lat",
+        "direction": "north",
+        "unit": "degree"
+      }
+    ]
+  },
+  "scope": "Not known.",
+  "area": "World.",
+  "bbox": {
+    "south_latitude": -90,
+    "west_longitude": -180,
+    "north_latitude": 90,
+    "east_longitude": 180
+  },
+  "id": {
+    "authority": "OGC",
+    "code": "CRS84"
+  }
+})JSON_LITERAL";
+
+CoordinateReferenceSystemLookupResult
+DefaultCoordinateReferenceSystemProvider::DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
+                                                            CoordinateReferenceSystemType target_type) {
+	// TODO: Add more built-in CRS definitions
+	if (target_type == CoordinateReferenceSystemType::PROJJSON) {
+		if (source_crs.GetType() == CoordinateReferenceSystemType::AUTH_CODE) {
+			if (StringUtil::CIEquals(source_crs.GetDefinition(), "OGC:CRS84")) {
+				return CoordinateReferenceSystemLookupResult::FromString(OGC_CRS84_PROJJSON);
+			}
+		}
+	}
+
+	return CoordinateReferenceSystemLookupResult::NotFound();
+}
+
+} // namespace
 
 } // namespace duckdb

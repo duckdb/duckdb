@@ -85,14 +85,14 @@ class GeoParquetFileMetadata {
 public:
 	explicit GeoParquetFileMetadata(GeoParquetVersion geo_parquet_version) : version(geo_parquet_version) {
 	}
-	void AddGeoParquetStats(const string &column_name, const LogicalType &type, const GeometryStatsData &stats,
+	void AddGeoParquetStats(ClientContext &context, const string &column_name, const LogicalType &type, const GeometryStatsData &stats,
 	                        GeoParquetVersion version);
 	void Write(duckdb_parquet::FileMetaData &file_meta_data);
 
 	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
 	// available.
 	static unique_ptr<GeoParquetFileMetadata> TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
-	                                                  const ClientContext &context);
+	                                                  ClientContext &context);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 	optional_ptr<const GeoParquetColumnMetadata> GetColumnMeta(const string &column_name) const;
 
