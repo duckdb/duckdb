@@ -1,0 +1,62 @@
+# name: test/sql/aggregate/aggregates/test_aggregate_state_type.test
+# description: Test the AGGREGATE_STATE type name with get_state_type callback
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# avg(DOUBLE) has the new get_state_type callback
+query T
+SELECT typeof(avg(1.0::DOUBLE) EXPORT_STATE);
+----
+AGGREGATE_STATE<avg(DOUBLE)::STRUCT(count UBIGINT, "value" DOUBLE)>
+
+# sum(INT) does NOT have the new get_state_type callback yet, so it should show the return type
+query T
+SELECT typeof(sum(1) EXPORT_STATE);
+----
+AGGREGATE_STATE<sum(INTEGER)::HUGEINT>
+
+# other aggregate functions (with multiple arguments) that are not opted-in are not broken
+query T
+SELECT typeof(corr(1.0::DOUBLE, 2.0::DOUBLE) EXPORT_STATE);
+----
+AGGREGATE_STATE<corr(DOUBLE, DOUBLE)::DOUBLE>
+
+# Works in a table
+statement ok
+CREATE TABLE t1 AS SELECT avg(range::DOUBLE) EXPORT_STATE as state FROM range(10);
+
+query T
+SELECT column_type FROM (DESCRIBE t1) WHERE column_name = 'state';
+----
+AGGREGATE_STATE<avg(DOUBLE)::STRUCT(count UBIGINT, "value" DOUBLE)>
+
+# Test combine and finalize
+query R
+SELECT finalize(combine(state, state)) FROM t1;
+----
+4.500000
+
+# Test mixing structured and blob aggregate states
+query R
+SELECT finalize(combine(state, state::BLOB)) FROM t1;
+----
+4.500000
+
+# Test that state typing is independent of input expressions
+statement ok
+INSERT INTO t1 SELECT avg(range::DOUBLE + 10.0) EXPORT_STATE FROM range(10);
+
+query R
+SELECT finalize(state) FROM t1 ORDER BY 1;
+----
+4.500000
+14.500000
+
+# Test combine with multiple states
+query R
+SELECT finalize(combine(state, state)) FROM t1 ORDER BY 1;
+----
+4.500000
+14.500000
