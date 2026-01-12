@@ -60,7 +60,6 @@ env:
   AZURE_CODESIGN_ENDPOINT: https://eus.codesigning.azure.net/
   AZURE_CODESIGN_ACCOUNT: duckdb-signing-2
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
 
 jobs:
  check-draft:
@@ -86,11 +85,7 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -191,11 +186,7 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -233,11 +224,7 @@ jobs:
        with:
          python-version: '3.12'
 
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
-       with:
-         key: ${{ github.job }}
-         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+     - uses: ./.github/actions/ccache-action
 
      - name: Build
        shell: bash
@@ -306,11 +293,7 @@ jobs:
          shell: msys2 {0}
          run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
 
-       - name: Setup Ccache
-         uses: hendrikmuhs/ccache-action@main
-         with:
-           key: ${{ github.job }}
-           save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+       - uses: ./.github/actions/ccache-action
 
        - name: Build
          shell: msys2 {0}
