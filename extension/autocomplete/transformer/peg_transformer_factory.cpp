@@ -391,6 +391,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformOtherOperator);
 	REGISTER_TRANSFORM(TransformStringOperator);
+	REGISTER_TRANSFORM(TransformJsonOperator);
+	REGISTER_TRANSFORM(TransformInetOperator);
 	REGISTER_TRANSFORM(TransformAnyAllOperator);
 	REGISTER_TRANSFORM(TransformAnyOrAll);
 	REGISTER_TRANSFORM(TransformListOperator);

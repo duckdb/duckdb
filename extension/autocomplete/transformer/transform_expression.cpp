@@ -778,6 +778,19 @@ string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer
 	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+string PEGTransformerFactory::TransformJsonOperator(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<KeywordParseResult>(0).keyword;
+}
+
+string PEGTransformerFactory::TransformInetOperator(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
+}
+
 string PEGTransformerFactory::TransformStringOperator(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

@@ -678,6 +678,8 @@ private:
 	                                                                     optional_ptr<ParseResult> parse_result);
 	static string TransformOtherOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformStringOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformJsonOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformInetOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformListOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static pair<ExpressionType, bool> TransformAnyAllOperator(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
