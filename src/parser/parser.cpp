@@ -244,7 +244,7 @@ void Parser::ParseQuery(const string &query) {
 				if (!ext.parser_override) {
 					continue;
 				}
-				if (options.parser_override_setting == AllowParserOverride::DEFAULT) {
+				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
 					continue;
 				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
