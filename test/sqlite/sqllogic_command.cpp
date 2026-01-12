@@ -444,11 +444,12 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		bool finished = false;
 		while (!finished && !runner.finished_processing_file) {
 			// execute the current iteration of the loop
+			idx_t loop_index = context.running_loops.size();
 			context.running_loops.push_back(loop_def);
-			auto &def = context.running_loops.back();
+
 			for (auto &statement : loop_commands) {
 				statement->Execute(context);
-				if (def.is_skipped) {
+				if (context.running_loops[loop_index].is_skipped) {
 					//! Executed a CONTINUE statement
 					break;
 				}
