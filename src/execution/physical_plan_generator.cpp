@@ -185,4 +185,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	throw InternalException("Physical plan generator - no plan generated");
 }
 
+ArenaAllocator &PhysicalPlanGenerator::ArenaRef() {
+	if (!physical_plan) {
+		physical_plan = make_uniq<PhysicalPlan>(Allocator::Get(context));
+	}
+	return physical_plan->ArenaRef();
+}
+
 } // namespace duckdb
