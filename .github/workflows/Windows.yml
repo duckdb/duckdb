@@ -60,6 +60,7 @@ env:
   AZURE_CODESIGN_ENDPOINT: https://eus.codesigning.azure.net/
   AZURE_CODESIGN_ACCOUNT: duckdb-signing-2
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
 
 jobs:
  check-draft:
@@ -89,7 +90,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -193,7 +194,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -234,7 +235,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - name: Build
        shell: bash
@@ -307,7 +308,7 @@ jobs:
          uses: hendrikmuhs/ccache-action@main
          with:
            key: ${{ github.job }}
-           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+           save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
        - name: Build
          shell: msys2 {0}

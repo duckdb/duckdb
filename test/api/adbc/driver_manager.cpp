@@ -987,10 +987,10 @@ AdbcStatusCode AdbcConnectionGetOptionBytes(struct AdbcConnection *connection, c
 		if (it == args->bytes_options.end()) {
 			return ADBC_STATUS_NOT_FOUND;
 		}
-		if (*length >= it->second.size() + 1) {
-			std::memcpy(value, it->second.data(), it->second.size() + 1);
+		if (*length >= it->second.size()) {
+			std::memcpy(value, it->second.data(), it->second.size());
 		}
-		*length = it->second.size() + 1;
+		*length = it->second.size();
 		return ADBC_STATUS_OK;
 	}
 	INIT_ERROR(error, connection);

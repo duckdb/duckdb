@@ -104,8 +104,10 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	}
 	auto default_schema = catalog.GetDefaultSchema();
 	if (schema_name.empty() && schema_name != default_schema) {
-		view_search_path.emplace_back(catalog.GetName(), default_schema);
+		view_search_path.emplace_back(catalog_name, default_schema);
 	}
+	//! Signal that this catalog should be checked, regardless of the schema in the reference
+	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA);
 	return view_search_path;
 }
 
@@ -226,7 +228,6 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		table_or_view =
 		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
-
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table

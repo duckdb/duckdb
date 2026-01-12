@@ -106,3 +106,9 @@ add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_generated_extension_loader>
     PARENT_SCOPE)
+
+install(
+  TARGETS duckdb_generated_extension_loader
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
