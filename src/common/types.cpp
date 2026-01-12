@@ -1793,6 +1793,12 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 // Unbound Type
 //===--------------------------------------------------------------------===//
+LogicalType LogicalType::UNBOUND(const string &name) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(INVALID_CATALOG, INVALID_SCHEMA, name,
+	                                             vector<unique_ptr<TypeParameter>>(), string());
+	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
+}
+
 LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters,
                                  const string &collation) {
 	auto info =
