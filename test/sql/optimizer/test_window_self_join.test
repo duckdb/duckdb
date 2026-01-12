@@ -1,5 +1,5 @@
 # name: test/sql/optimizer/test_window_self_join.test
-# description: Test Count Window Elimination optimizer
+# description: Test Window Self-Join "constant aggrgate" optimizer
 # group: [optimizer]
 
 statement ok
@@ -19,7 +19,8 @@ EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
 query II
-FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1 ORDER BY date;
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1
+ORDER BY ALL;
 ----
 2024-01-01	101
 2024-01-02	100
@@ -27,11 +28,11 @@ FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1 ORDER B
 # 2. Case with explicit count(*) function (if different syntax supported)
 # DuckDB treats count(*) same as count() usually.
 
-# 3. Case where optimization should NOT apply: count(*) > 1
+# 3. Case where optimization should apply: count(*) > 1
 query II
 EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
 ----
-physical_plan	<REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*Join Type: INNER.*
 
 query II
 FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
@@ -39,11 +40,23 @@ FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
 2024-01-01	100
 2024-01-01	100
 
-# 4. Case where optimization should NOT apply: count(*) = 2
+query II
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
+----
+2024-01-01	100
+2024-01-01	100
+
+# 4. Case where optimization should apply: count(*) = 2
 query II
 EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 2;
 ----
-physical_plan	<REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 2;
+----
+2024-01-01	100
+2024-01-01	100
 
 # 5. Case with no partitions (should not optimize per current logic)
 query II
