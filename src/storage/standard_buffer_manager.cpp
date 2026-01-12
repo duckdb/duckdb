@@ -2,6 +2,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -247,7 +248,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
 	if (block_count == 1) {
-		if (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+		if (Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
 			// prefetching with block_count == 1 has no performance impact since we can't batch reads
 			// skip the prefetch in this case
 			// we do it anyway if alternative_verify is on for extra testing
@@ -495,7 +496,7 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 bool StandardBufferManager::EncryptTemporaryFiles() {
-	return DBConfig::GetSetting<TempFileEncryptionSetting>(db);
+	return Settings::Get<TempFileEncryptionSetting>(db);
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {

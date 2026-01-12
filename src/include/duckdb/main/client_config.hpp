@@ -113,16 +113,6 @@ public:
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);
 
-	template <class OP>
-	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
-		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
-	}
-
-	template <class OP>
-	static Value GetSettingValue(const ClientContext &context) {
-		return OP::GetSetting(context);
-	}
-
 public:
 	void SetDefaultStreamingBufferSize();
 };

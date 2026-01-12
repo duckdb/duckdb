@@ -204,7 +204,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	double penalty;
 	idx_t average_length = state.total_size / state.count;
-	auto threshold = DBConfig::GetSetting<ZstdMinStringLengthSetting>(state.config);
+	auto threshold = Settings::Get<ZstdMinStringLengthSetting>(state.config);
 	if (average_length >= threshold) {
 		penalty = 1.0;
 	} else {

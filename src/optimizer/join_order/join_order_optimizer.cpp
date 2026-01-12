@@ -26,7 +26,7 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
-	auto max_expression_depth = DBConfig::GetSetting<MaxExpressionDepthSetting>(query_graph_manager.context);
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(query_graph_manager.context);
 	if (depth > max_expression_depth) {
 		// Very deep plans will eventually consume quite some stack space
 		// Returning the current plan is always a valid choice

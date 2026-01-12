@@ -184,7 +184,7 @@ void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &inp
 // Allowed Directories
 //===----------------------------------------------------------------------===//
 void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
 	if (!config.file_system) {
@@ -198,7 +198,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 }
 
 void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
 	config.options.allowed_directories = DBConfigOptions().allowed_directories;
@@ -217,7 +217,7 @@ Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 // Allowed Paths
 //===----------------------------------------------------------------------===//void
 void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
 	if (!config.file_system) {
@@ -232,7 +232,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 }
 
 void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
 	config.options.allowed_paths = DBConfigOptions().allowed_paths;
@@ -696,7 +696,7 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
 	auto &config = info.config;
-	if (info.db && DBConfig::GetSetting<EnableExternalAccessSetting>(*info.db)) {
+	if (info.db && Settings::Get<EnableExternalAccessSetting>(*info.db)) {
 		// we are turning off external access - add any already attached databases to the list of accepted paths
 		auto &db_manager = DatabaseManager::Get(*info.db);
 		auto attached_paths = db_manager.GetAttachedDatabasePaths();
@@ -1509,7 +1509,7 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.options.temporary_directory = input.IsNull() ? "" : input.ToString();
@@ -1521,7 +1521,7 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(config)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.SetDefaultTempDirectory();
@@ -1561,8 +1561,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 	}
 	auto new_maximum_threads = NumericCast<idx_t>(new_val);
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads,
-		                                            DBConfig::GetSetting<ExternalThreadsSetting>(config));
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	}
 	config.options.maximum_threads = new_maximum_threads;
 }
@@ -1570,8 +1569,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads,
-		                                            DBConfig::GetSetting<ExternalThreadsSetting>(config));
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	}
 	config.options.maximum_threads = new_maximum_threads;
 }

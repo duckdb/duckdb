@@ -457,7 +457,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	auto db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto http_proxy_setting = DBConfig::GetSetting<HTTPProxySetting>(*db);
+		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(*db);
 		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;
@@ -465,8 +465,8 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 			http_proxy = host;
 			http_proxy_port = port;
 		}
-		http_proxy_username = DBConfig::GetSetting<HTTPProxyUsernameSetting>(*db);
-		http_proxy_password = DBConfig::GetSetting<HTTPProxyPasswordSetting>(*db);
+		http_proxy_username = Settings::Get<HTTPProxyUsernameSetting>(*db);
+		http_proxy_password = Settings::Get<HTTPProxyPasswordSetting>(*db);
 	}
 
 	auto client_context = FileOpener::TryGetClientContext(opener);

@@ -43,8 +43,7 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 		}
 	}
 
-	if (!DBConfig::GetSetting<AllowUnredactedSecretsSetting>(context) &&
-	    result->redact == SecretDisplayType::UNREDACTED) {
+	if (!Settings::Get<AllowUnredactedSecretsSetting>(context) && result->redact == SecretDisplayType::UNREDACTED) {
 		throw InvalidInputException("Displaying unredacted secrets is disabled");
 	}
 

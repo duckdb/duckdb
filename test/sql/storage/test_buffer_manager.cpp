@@ -160,7 +160,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
-	auto block_size = DBConfig::GetSetting<DefaultBlockSizeSetting>(*config) - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto block_size = Settings::Get<DefaultBlockSizeSetting>(*config) - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	idx_t requested_size = block_size;
 	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
 	auto block = handle.GetBlockHandle();
@@ -240,7 +240,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 
 	// Set memory limit to hold exactly 10 blocks
 	idx_t pin_count = 10;
-	auto block_alloc_size = DBConfig::GetSetting<DefaultBlockSizeSetting>(*config);
+	auto block_alloc_size = Settings::Get<DefaultBlockSizeSetting>(*config);
 	auto block_size = block_alloc_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", block_alloc_size * pin_count)));
 
@@ -335,7 +335,7 @@ TEST_CASE("Test buffer allocator", "[storage][.]") {
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
 
 	auto &allocator = buffer_manager.GetBufferAllocator();
-	auto block_size = DBConfig::GetSetting<DefaultBlockSizeSetting>(*config) - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto block_size = Settings::Get<DefaultBlockSizeSetting>(*config) - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	idx_t requested_size = block_size;
 	auto pointer = allocator.AllocateData(requested_size);
 	idx_t current_size = requested_size;

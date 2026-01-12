@@ -307,7 +307,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
-	state->state.mode = DBConfig::GetSetting<ForceBitpackingModeSetting>(col_data.GetDatabase());
+	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(col_data.GetDatabase());
 
 	return std::move(state);
 }
@@ -358,7 +358,7 @@ public:
 		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
-		state.mode = DBConfig::GetSetting<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
+		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;

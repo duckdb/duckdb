@@ -363,7 +363,7 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(context)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		// if enable_external_access is disabled we don't search the file system
 		return result;
 	}

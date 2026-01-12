@@ -78,7 +78,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		}
 	}
 	if (this->plan) {
-		auto max_tree_depth = DBConfig::GetSetting<MaxExpressionDepthSetting>(context);
+		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));

@@ -640,7 +640,7 @@ void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
 }
 
 bool TemporaryFileManager::IsEncrypted() const {
-	return DBConfig::GetSetting<TempFileEncryptionSetting>(db);
+	return Settings::Get<TempFileEncryptionSetting>(db);
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,

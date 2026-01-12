@@ -48,7 +48,7 @@ void ExpressionBinder::InitializeStackCheck() {
 
 StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
 	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
-	auto max_expression_depth = DBConfig::GetSetting<MaxExpressionDepthSetting>(context);
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 	if (stack_depth + extra_stack >= max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",

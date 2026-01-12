@@ -23,7 +23,7 @@ namespace duckdb {
 
 static bool TryLoadExtensionForReplacementScan(ClientContext &context, const string &table_name) {
 	auto lower_name = StringUtil::Lower(table_name);
-	if (!DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(context)) {
+	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 
@@ -201,7 +201,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		auto &config = DBConfig::GetConfig(context);
-		if (context.config.use_replacement_scans && DBConfig::GetSetting<EnableExternalAccessSetting>(config) &&
+		if (context.config.use_replacement_scans && Settings::Get<EnableExternalAccessSetting>(config) &&
 		    ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
 			if (!fs.IsDisabledForPath(full_path) && fs.FileExists(full_path)) {

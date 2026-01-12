@@ -183,7 +183,7 @@ void ClientContext::Destroy() {
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
-	if (DBConfig::GetSetting<ErrorsAsJSONSetting>(*this)) {
+	if (Settings::Get<ErrorsAsJSONSetting>(*this)) {
 		error.ConvertErrorToJSON();
 	} else {
 		error.AddErrorLocation(query);
@@ -1467,11 +1467,11 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(const string &key, V
 
 ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
-	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
-	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
-	options.max_expression_depth = DBConfig::GetSetting<MaxExpressionDepthSetting>(*this);
+	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
+	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
-	options.parser_override_setting = DBConfig::GetSetting<AllowParserOverrideExtensionSetting>(*this);
+	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	return options;
 }
 
@@ -1483,13 +1483,13 @@ ClientProperties ClientContext::GetClientProperties() {
 		timezone = result.ToString();
 	}
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
-	if (DBConfig::GetSetting<ArrowLargeBufferSizeSetting>(*this)) {
+	if (Settings::Get<ArrowLargeBufferSizeSetting>(*this)) {
 		arrow_offset_size = ArrowOffsetSize::LARGE;
 	}
-	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
-	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
-	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
-	auto arrow_format_version = DBConfig::GetSetting<ArrowOutputVersionSetting>(*this);
+	bool arrow_use_list_view = Settings::Get<ArrowOutputListViewSetting>(*this);
+	bool arrow_lossless_conversion = Settings::Get<ArrowLosslessConversionSetting>(*this);
+	bool arrow_use_string_view = Settings::Get<ProduceArrowStringViewSetting>(*this);
+	auto arrow_format_version = Settings::Get<ArrowOutputVersionSetting>(*this);
 	return {timezone,
 	        arrow_offset_size,
 	        arrow_use_list_view,

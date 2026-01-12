@@ -24,7 +24,7 @@ static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 static unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
-	if (!DBConfig::GetSetting<EnableExternalAccessSetting>(context)) {
+	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		throw PermissionException("getenv is disabled through configuration");
 	}
 	return nullptr;

@@ -16,6 +16,7 @@
 namespace duckdb {
 
 struct DBConfig;
+struct ConfigurationOption;
 struct ExtensionOption;
 
 //! PhysicalSet represents a SET operation (e.g. SET a = 42)

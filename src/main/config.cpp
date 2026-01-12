@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -526,7 +527,7 @@ void DBConfig::SetDefaultTempDirectory() {
 }
 
 void DBConfig::CheckLock(const String &name) {
-	if (!GetSetting<LockConfigurationSetting>(*this)) {
+	if (!Settings::Get<LockConfigurationSetting>(*this)) {
 		// not locked
 		return;
 	}
@@ -668,20 +669,7 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 	if (order_type != OrderType::ORDER_DEFAULT) {
 		return order_type;
 	}
-	return GetSetting<DefaultOrderSetting>(context);
-}
-
-bool DBConfig::TryGetSettingInternal(const ClientContext &context, const char *setting, Value &result) {
-	return context.TryGetCurrentUserSetting(setting, result);
-}
-
-bool DBConfig::TryGetSettingInternal(const DBConfig &config, const char *setting, Value &result) {
-	auto lookup_result = config.TryGetCurrentUserSetting(setting, result);
-	return lookup_result;
-}
-
-bool DBConfig::TryGetSettingInternal(const DatabaseInstance &db, const char *setting, Value &result) {
-	return TryGetSettingInternal(DBConfig::GetConfig(db), setting, result);
+	return Settings::Get<DefaultOrderSetting>(context);
 }
 
 SettingLookupResult DBConfig::TryGetCurrentUserSetting(const string &key, Value &result) const {
@@ -718,7 +706,7 @@ OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType ord
 	if (null_type != OrderByNullType::ORDER_DEFAULT) {
 		return null_type;
 	}
-	auto null_order = GetSetting<DefaultNullOrderSetting>(context);
+	auto null_order = Settings::Get<DefaultNullOrderSetting>(context);
 	switch (null_order) {
 	case DefaultOrderByNullType::NULLS_FIRST:
 		return OrderByNullType::NULLS_FIRST;
@@ -740,7 +728,7 @@ string GetDefaultUserAgent() {
 const string DBConfig::UserAgent() const {
 	auto user_agent = GetDefaultUserAgent();
 
-	auto duckdb_api = GetSetting<DuckDBAPISetting>(*this);
+	auto duckdb_api = Settings::Get<DuckDBAPISetting>(*this);
 	if (!duckdb_api.empty()) {
 		user_agent += " " + duckdb_api;
 	}
@@ -778,7 +766,7 @@ void DBConfig::AddAllowedPath(const string &path) {
 }
 
 bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
-	if (DBConfig::GetSetting<EnableExternalAccessSetting>(*this)) {
+	if (Settings::Get<EnableExternalAccessSetting>(*this)) {
 		// all external access is allowed
 		return true;
 	}

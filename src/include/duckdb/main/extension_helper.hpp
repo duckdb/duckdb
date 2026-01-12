@@ -209,7 +209,7 @@ public:
 	template <idx_t N>
 	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-		if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(db)) {
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
 			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
 				ExtensionHelper::AutoLoadExtension(db, extension_name);

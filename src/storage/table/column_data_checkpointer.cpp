@@ -171,7 +171,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 			forced_methods[i] = ForceCompression(storage_manager, functions, compression_type);
 		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			auto force_compression = DBConfig::GetSetting<ForceCompressionSetting>(config);
+			auto force_compression = Settings::Get<ForceCompressionSetting>(config);
 			if (force_compression != CompressionType::COMPRESSION_AUTO) {
 				forced_methods[i] = ForceCompression(storage_manager, functions, force_compression);
 			}

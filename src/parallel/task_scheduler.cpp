@@ -227,8 +227,8 @@ ProducerToken::~ProducerToken() {
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
       allocator_flush_threshold(db.config.options.allocator_flush_threshold),
-      allocator_background_threads(DBConfig::GetSetting<AllocatorBackgroundThreadsSetting>(db)),
-      requested_thread_count(0), current_thread_count(1) {
+      allocator_background_threads(Settings::Get<AllocatorBackgroundThreadsSetting>(db)), requested_thread_count(0),
+      current_thread_count(1) {
 	SetAllocatorBackgroundThreads(allocator_background_threads);
 }
 
@@ -301,7 +301,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		}
 		if (queue->Dequeue(task)) {
 			auto process_mode = TaskExecutionMode::PROCESS_ALL;
-			if (DBConfig::GetSetting<SchedulerProcessPartialSetting>(config)) {
+			if (Settings::Get<SchedulerProcessPartialSetting>(config)) {
 				process_mode = TaskExecutionMode::PROCESS_PARTIAL;
 			}
 			auto execute_result = task->Execute(process_mode);
@@ -522,7 +522,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
 	if (threads.size() == new_thread_count) {
-		auto external_threads = DBConfig::GetSetting<ExternalThreadsSetting>(config);
+		auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
@@ -546,7 +546,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 
 		// Whether to pin threads to cores
 		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
-		auto pin_thread_mode = DBConfig::GetSetting<PinThreadsSetting>(db);
+		auto pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
 		const auto pin_threads =
 		    pin_thread_mode == ThreadPinMode::ON ||
 		    (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
@@ -570,7 +570,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
-	auto external_threads = DBConfig::GetSetting<ExternalThreadsSetting>(config);
+	auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 	current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 	BlockAllocator::Get(db).FlushAll();
 #endif

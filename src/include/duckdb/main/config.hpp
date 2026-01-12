@@ -303,81 +303,10 @@ public:
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
-	template <class OP, class SOURCE>
-	static typename std::enable_if<std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
-	GetSetting(const SOURCE &source) {
-		Value result;
-		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return EnumUtil::FromString<typename OP::RETURN_TYPE>(StringValue::Get(result));
-		}
-		return EnumUtil::FromString<typename OP::RETURN_TYPE>(OP::DefaultValue);
-	}
-
-	template <class OP, class SOURCE>
-	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, string>::value, string>::type
-	GetSetting(const SOURCE &source) {
-		Value result;
-		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return StringValue::Get(result);
-		}
-		return OP::DefaultValue;
-	}
-
-	template <class OP, class SOURCE>
-	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, bool>::value, bool>::type
-	GetSetting(const SOURCE &source) {
-		Value result;
-		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return BooleanValue::Get(result);
-		}
-		return StringUtil::Equals(OP::DefaultValue, "true");
-	}
-
-	template <class OP, class SOURCE>
-	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, idx_t>::value, idx_t>::type
-	GetSetting(const SOURCE &source) {
-		Value result;
-		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return UBigIntValue::Get(result);
-		}
-		return StringUtil::ToUnsigned(OP::DefaultValue);
-	}
-
-	template <class OP, class SOURCE>
-	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, int64_t>::value, int64_t>::type
-	GetSetting(const SOURCE &source) {
-		Value result;
-		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return BigIntValue::Get(result);
-		}
-		return StringUtil::ToSigned(OP::DefaultValue);
-	}
-
-	template <class OP, class SOURCE>
-	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, double>::value, double>::type
-	GetSetting(const SOURCE &source) {
-		Value result;
-		if (TryGetSettingInternal(source, OP::Name, result)) {
-			return DoubleValue::Get(result);
-		}
-		return StringUtil::ToDouble(OP::DefaultValue);
-	}
-
-	template <class OP>
-	Value GetSettingValue(const ClientContext &context) const {
-		lock_guard<mutex> lock(config_lock);
-		return OP::GetSetting(context);
-	}
-
 	bool CanAccessFile(const string &path, FileType type);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
-
-private:
-	static bool TryGetSettingInternal(const DatabaseInstance &db, const char *setting, Value &result);
-	static bool TryGetSettingInternal(const DBConfig &config, const char *setting, Value &result);
-	static bool TryGetSettingInternal(const ClientContext &context, const char *setting, Value &result);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

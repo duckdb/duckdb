@@ -594,7 +594,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
-			if (task && DBConfig::GetSetting<SchedulerProcessPartialSetting>(context)) {
+			if (task && Settings::Get<SchedulerProcessPartialSetting>(context)) {
 				auto &token = *task->token;
 				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
 				task.reset();

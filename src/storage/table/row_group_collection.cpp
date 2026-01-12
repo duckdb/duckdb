@@ -1392,7 +1392,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
-		auto max_vacuum_tasks = DBConfig::GetSetting<MaxVacuumTasksSetting>(writer.GetDatabase());
+		auto max_vacuum_tasks = Settings::Get<MaxVacuumTasksSetting>(writer.GetDatabase());
 		for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 			auto vacuum_tasks =
 			    ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx, total_vacuum_tasks < max_vacuum_tasks);
@@ -1430,7 +1430,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same
-	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
+	if (Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
@@ -1510,7 +1510,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			new_row_group = entry->ReferenceNode();
 		}
 		RowGroupPointer pointer_copy;
-		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
+		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
 
 		// check if we should write this row group to the persistent storage

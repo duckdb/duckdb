@@ -538,7 +538,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a specific block size
 		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
-		auto block_size = DBConfig::GetSetting<DefaultBlockSizeSetting>(*config);
+		auto block_size = Settings::Get<DefaultBlockSizeSetting>(*config);
 		if (block_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
@@ -589,14 +589,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail(
 			    "require no_extension_autoloading explanation string should begin with either 'EXPECTED' or FIXME'");
 		}
-		if (DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*config)) {
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(*config)) {
 			// If autoloading is on, we skip this test
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
 	}
 	if (param == "allow_unsigned_extensions") {
-		if (DBConfig::GetSetting<AllowUnsignedExtensionsSetting>(*config)) {
+		if (Settings::Get<AllowUnsignedExtensionsSetting>(*config)) {
 			return RequireResult::PRESENT;
 		}
 		return RequireResult::MISSING;
@@ -612,7 +612,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	bool perform_install = false;
 	bool perform_load = false;
-	if (!DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*config)) {
+	if (!Settings::Get<AutoloadKnownExtensionsSetting>(*config)) {
 		auto result = ExtensionLoadResult::NOT_LOADED;
 		try {
 			result = SQLLogicTestRunner::LoadExtension(*db, param);
@@ -1108,7 +1108,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			const char *env_actual = std::getenv(env_var.c_str());
 			string default_local_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO" &&
-			    DBConfig::GetSetting<AutoloadKnownExtensionsSetting>(*config)) {
+			    Settings::Get<AutoloadKnownExtensionsSetting>(*config)) {
 				// Overriding LOCAL_EXTENSION_REPO here is a hacky
 				// More proper solution is wrapping std::getenv in a duckdb::test_getenv, and having a way to inject env
 				// variables
