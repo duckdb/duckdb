@@ -176,11 +176,8 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::SET_SORTED_BY:
 		result = SetSortedByInfo::Deserialize(deserializer);
 		break;
-	case AlterTableType::SET_LOCATION:
-		result = SetLocationInfo::Deserialize(deserializer);
-		break;
-	case AlterTableType::SET_TBLPROPERTIES:
-		result = SetTblPropertiesInfo::Deserialize(deserializer);
+	case AlterTableType::SET_TABLE_OPTIONS:
+		result = SetTableOptionsInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterTableInfo!");
@@ -630,25 +627,14 @@ unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializ
 	return std::move(result);
 }
 
-void SetLocationInfo::Serialize(Serializer &serializer) const {
+void SetTableOptionsInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
-	serializer.WriteProperty(400, "location", location);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<string>>(400, "table_options", table_options);
 }
 
-unique_ptr<AlterTableInfo> SetLocationInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SetLocationInfo>(new SetLocationInfo());
-	deserializer.ReadProperty(400, "location", result->location);
-	return std::move(result);
-}
-
-void SetTblPropertiesInfo::Serialize(Serializer &serializer) const {
-	AlterTableInfo::Serialize(serializer);
-	serializer.WriteProperty(400, "tbl_properties", tbl_properties);
-}
-
-unique_ptr<AlterTableInfo> SetTblPropertiesInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SetTblPropertiesInfo>(new SetTblPropertiesInfo());
-	deserializer.ReadProperty(400, "tbl_properties", result->tbl_properties);
+unique_ptr<AlterTableInfo> SetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetTableOptionsInfo>(new SetTableOptionsInfo());
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<string>>(400, "table_options", result->table_options);
 	return std::move(result);
 }
 
