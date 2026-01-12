@@ -5,7 +5,7 @@
  *
  *****************************************************************************/
 CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			OptPartitionedBy OptSortedBy OptWith OnCommitOption
+			OptPartitionSortedOptions OptWith OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
 					$4->relpersistence = $2;
@@ -14,15 +14,22 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 
-					n->partition_list = $8;
-					n->sort_list = $9;
-					n->options = $10;
-					n->oncommit = $11;
+					PGListCell *lc;
+					foreach(lc, $8) {
+						PGDefElem *de = (PGDefElem *) lfirst(lc);
+						if (strcmp(de->defname, "partitioned_by") == 0) {
+							n->partition_list = (PGList *)de->arg;
+						} else if (strcmp(de->defname, "sorted_by") == 0) {
+							n->sort_list = (PGList *)de->arg;
+						}
+					}
+					n->options = $9;
+					n->oncommit = $10;
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
-			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
+			OptTableElementList ')' OptPartitionSortedOptions OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -32,15 +39,22 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 
-					n->partition_list = $11;
-					n->sort_list = $12;
-					n->options = $13;
-					n->oncommit = $14;
+					PGListCell *lc;
+					foreach(lc, $11) {
+						PGDefElem *de = (PGDefElem *) lfirst(lc);
+						if (strcmp(de->defname, "partitioned_by") == 0) {
+							n->partition_list = (PGList *)de->arg;
+						} else if (strcmp(de->defname, "sorted_by") == 0) {
+							n->sort_list = (PGList *)de->arg;
+						}
+					}
+					n->options = $12;
+					n->oncommit = $13;
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
-			OptTableElementList ')' OptPartitionedBy OptSortedBy OptWith
+			OptTableElementList ')' OptPartitionSortedOptions OptWith
 			OnCommitOption
 				{
 					PGCreateStmt *n = makeNode(PGCreateStmt);
@@ -50,10 +64,17 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->ofTypename = NULL;
 					n->constraints = NIL;
 
-					n->partition_list = $10;
-					n->sort_list = $11;
-					n->options = $12;
-					n->oncommit = $13;
+					PGListCell *lc;
+					foreach(lc, $10) {
+						PGDefElem *de = (PGDefElem *) lfirst(lc);
+						if (strcmp(de->defname, "partitioned_by") == 0) {
+							n->partition_list = (PGList *)de->arg;
+						} else if (strcmp(de->defname, "sorted_by") == 0) {
+							n->sort_list = (PGList *)de->arg;
+						}
+					}
+					n->options = $11;
+					n->oncommit = $12;
 					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
@@ -386,14 +407,21 @@ ConstraintAttr:
 				}
 		;
 
-OptPartitionedBy:
-			PARTITIONED BY '(' expr_list_opt_comma ')'	{ $$ = $4; }
-			| /*EMPTY*/									{ $$ = NIL; }
+/* New non-terminal to handle PARTITIONED BY and SORTED BY in any order */
+OptPartitionSortedOptions:
+			OptPartitionSortedOptions OptPartitionSortedOption	{ $$ = lappend($1, $2); }
+			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
-OptSortedBy:
-			SORTED BY '(' expr_list_opt_comma ')'		{ $$ = $4; }
-			| /*EMPTY*/								{ $$ = NIL; }
+OptPartitionSortedOption:
+			PARTITIONED BY '(' expr_list_opt_comma ')'
+				{
+					$$ = makeDefElem("partitioned_by", (PGNode *)$4, @1);
+				}
+			| SORTED BY '(' expr_list_opt_comma ')'
+				{
+					$$ = makeDefElem("sorted_by", (PGNode *)$4, @1);
+				}
 		;
 
 OptWith:
@@ -767,7 +795,6 @@ OptTemp:	TEMPORARY					{ $$ = PG_RELPERSISTENCE_TEMP; }
 			| UNLOGGED					{ $$ = PG_RELPERSISTENCE_UNLOGGED; }
 			| /*EMPTY*/					{ $$ = RELPERSISTENCE_PERMANENT; }
 		;
-
 
 generated_when:
 			ALWAYS			{ $$ = PG_ATTRIBUTE_IDENTITY_ALWAYS; }
