@@ -51,7 +51,7 @@ struct HTTPParams {
 	shared_ptr<Logger> logger;
 
 	//! Used to send a GET request with a body (non-standard but supported by some servers)
-	bool send_post_as_get_request;
+	bool send_post_as_get_request = false;
 
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
