@@ -681,6 +681,17 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformQualifyClause);
 	REGISTER_TRANSFORM(TransformWindowClause);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
+
+	REGISTER_TRANSFORM(TransformSampleClause);
+	REGISTER_TRANSFORM(TransformSampleEntry);
+	REGISTER_TRANSFORM(TransformSampleEntryFunction);
+	REGISTER_TRANSFORM(TransformSampleEntryCount);
+	REGISTER_TRANSFORM(TransformSampleCount);
+	REGISTER_TRANSFORM(TransformSampleUnit);
+	REGISTER_TRANSFORM(TransformSampleProperties);
+	REGISTER_TRANSFORM(TransformSampleSeed);
+	REGISTER_TRANSFORM(TransformSampleFunction);
+	REGISTER_TRANSFORM(TransformRepeatableSample);
 }
 
 void PEGTransformerFactory::RegisterUse() {
@@ -876,6 +887,9 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<GenericCopyOption>("OidsOption", GenericCopyOption("oids", Value()));
 	RegisterEnum<GenericCopyOption>("CsvOption", GenericCopyOption("format", Value("csv")));
 	RegisterEnum<GenericCopyOption>("HeaderOption", GenericCopyOption("header", Value(true)));
+
+	RegisterEnum<bool>("SamplePercentage", true);
+	RegisterEnum<bool>("SampleRows", false);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

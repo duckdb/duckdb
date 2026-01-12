@@ -1173,6 +1173,22 @@ private:
 	                                                                  optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformWindowDefinition(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SampleOptions> TransformSampleClause(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SampleOptions> TransformSampleEntry(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SampleOptions> TransformSampleEntryFunction(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SampleOptions> TransformSampleEntryCount(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SampleOptions> TransformSampleCount(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static bool TransformSampleUnit(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<SampleMethod, optional_idx> TransformSampleProperties(PEGTransformer &transformer,
+	                                                                  optional_ptr<ParseResult> parse_result);
+	static optional_idx TransformSampleSeed(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static SampleMethod TransformSampleFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static optional_idx TransformRepeatableSample(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,

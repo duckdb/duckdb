@@ -679,6 +679,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
 	result->alias = table_alias;
+	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
 	return std::move(result);
 }
 
@@ -748,6 +749,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer
 		result->column_name_alias = table_alias.column_name_alias;
 	}
 	transformer.TransformOptional<unique_ptr<AtClause>>(list_pr, 3, result->at_clause);
+	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
 	return std::move(result);
 }
 
@@ -1310,6 +1312,103 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
 	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
 	return window_function;
+}
+
+unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleClause(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<SampleOptions>>(list_pr.Child<ListParseResult>(1));
+}
+
+unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntry(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<SampleOptions>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto sample_count = transformer.Transform<unique_ptr<SampleOptions>>(extract_parens);
+	transformer.TransformOptional<SampleMethod>(list_pr, 0, sample_count->method);
+	auto repeatable_sample_opt = list_pr.Child<OptionalParseResult>(2);
+	if (repeatable_sample_opt.HasResult()) {
+		auto repeatable_seed = transformer.Transform<optional_idx>(repeatable_sample_opt.optional_result);
+		sample_count->seed = repeatable_seed;
+		sample_count->repeatable = true;
+	}
+	return sample_count;
+}
+
+unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryCount(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto sample_count = transformer.Transform<unique_ptr<SampleOptions>>(list_pr.Child<ListParseResult>(0));
+	auto optional_properties = list_pr.Child<OptionalParseResult>(1);
+	if (optional_properties.HasResult()) {
+		auto extract_parens = ExtractResultFromParens(optional_properties.optional_result)->Cast<ListParseResult>();
+		auto properties = transformer.Transform<pair<SampleMethod, optional_idx>>(extract_parens);
+		sample_count->method = properties.first;
+		sample_count->seed = properties.second;
+	}
+	return sample_count;
+}
+
+SampleMethod PEGTransformerFactory::TransformSampleFunction(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto method = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	return EnumUtil::FromString<SampleMethod>(method);
+}
+
+unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<SampleOptions>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		throw NotImplementedException("Can only handle constant expressions for sample counts");
+	}
+	auto &const_expr = expr->Cast<ConstantExpression>();
+	result->sample_size = const_expr.value;
+	transformer.TransformOptional<bool>(list_pr, 1, result->is_percentage);
+	result->method = SampleMethod::RESERVOIR_SAMPLE;
+	return result;
+}
+
+bool PEGTransformerFactory::TransformSampleUnit(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+pair<SampleMethod, optional_idx>
+PEGTransformerFactory::TransformSampleProperties(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto sample_str = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto sample_method = EnumUtil::FromString<SampleMethod>(sample_str);
+	auto seed_opt = list_pr.Child<OptionalParseResult>(1);
+	optional_idx seed = optional_idx::Invalid();
+	if (seed_opt.HasResult()) {
+		auto inner_list = seed_opt.optional_result->Cast<ListParseResult>();
+		seed = transformer.Transform<optional_idx>(inner_list.Child<ListParseResult>(1));
+	}
+	return make_pair(sample_method, seed);
+}
+
+optional_idx PEGTransformerFactory::TransformRepeatableSample(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.GetChild(1));
+	return transformer.Transform<optional_idx>(extract_parens);
+}
+
+optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto const_expr = expr->Cast<ConstantExpression>();
+	return optional_idx(const_expr.value.GetValue<idx_t>());
 }
 
 } // namespace duckdb

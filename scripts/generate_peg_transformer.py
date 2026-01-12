@@ -66,6 +66,8 @@ EXCLUDED_RULES = {
     "Lateral",
     "ConstraintNameClause",
     "ReservedSchemaQualification",
+    "UsingSample",
+    "TableSample",
 }
 
 
