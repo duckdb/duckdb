@@ -1011,7 +1011,6 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"Identifier <- QuotedIdentifier / PlainIdentifier\n"
 	"ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier\n"
 	"ColIdOrString <- ColId / StringLiteral\n"
-	"FuncName <- UnreservedKeyword / FuncNameKeyword / Identifier\n"
 	"TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier\n"
 	"TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier\n"
 	"ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier\n"

@@ -146,8 +146,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	auto group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (group_opt.HasResult()) {
 		auto group_by_node = transformer.Transform<GroupByNode>(group_opt.optional_result);
-		if (group_by_node.group_expressions.size() == 1 && group_by_node.grouping_sets.size() == 1 &&
-		    ExpressionIsEmptyStar(*group_by_node.group_expressions[0])) {
+		if (group_by_node.group_expressions.size() == 1 && ExpressionIsEmptyStar(*group_by_node.group_expressions[0])) {
 			select_node->aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
 			group_by_node.group_expressions.clear();
 			group_by_node.grouping_sets.clear();

@@ -63,6 +63,9 @@ EXCLUDED_RULES = {
     "Generated",
     "ColumnConstraint",
     "AlwaysOrByDefault",
+    "Lateral",
+    "ConstraintNameClause",
+    "ReservedSchemaQualification",
 }
 
 

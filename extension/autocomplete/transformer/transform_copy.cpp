@@ -38,6 +38,12 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
 				info->parsed_options[option_upper] = std::move(row_func);
 			}
+		} else if (option_upper == "HEADER" || option_upper == "ESCAPE") {
+			if (option.children.empty()) {
+				info->parsed_options[option_upper] = nullptr;
+			} else {
+				info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
+			}
 		} else if (option_upper == "NULL") {
 			// (Dtenwolde) Unclear why NULL should be in parsed options rather than options.
 			if (option.children.empty()) {
