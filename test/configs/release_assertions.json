@@ -1,0 +1,18 @@
+{
+  "description": "Config for NightlyTests Release Assertions that skips tests that take too long.",
+  "skip_tests": [
+    {
+      "reason": "Takes too long.",
+      "paths": [
+        "test/optimizer/sampling_pushdown.test_slow",
+        "test/sql/aggregate/distinct/grouped/distinct_grouping_tpch.test_slow",
+        "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
+        "test/sql/storage/types/variant/tpch_sf1.test_slow",
+        "test/sql/storage/types/variant/tpcds_sf1.test_slow",
+        "test/sql/storage/tpch/tpch_storage.test_slow",
+        "test/sql/storage/all_types_storage_large.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_various_distributions.test_slow"
+      ]
+    }
+  ]
+}

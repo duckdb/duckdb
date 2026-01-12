@@ -47,7 +47,12 @@
         "test/sql/copy/csv/csv_memory_management.test_slow",
         "test/sql/copy/parquet/parquet_1723.test_slow",
         "test/sql/copy/parquet/batched_write/batch_memory_usage.test_slow",
-        "test/optimizer/sampling_pushdown.test_slow"
+        "test/optimizer/sampling_pushdown.test_slow",
+        "test/sql/storage/reclaim_space/reclaim_space_rollback_optimistic_write_checkpoint.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_compression_ratio.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_various_distributions.test_slow",
+        "test/sql/storage/vacuum/vacuum_deletes_cleanup.test_slow",
+        "test/sql/parallelism/interquery/concurrent_append_transactions.test_slow"
       ]
     },
     {
