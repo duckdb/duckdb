@@ -38,6 +38,7 @@
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/user_settings.hpp"
 
 namespace duckdb {
 
@@ -131,8 +132,6 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific schema for VARIANT shredding
 	LogicalType force_variant_shredding = LogicalType::INVALID;
-	//! Database configuration variables as controlled by SET
-	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
 	//! Additional directories to store extension binaries in
@@ -220,6 +219,8 @@ public:
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	//! Reference to the database file path manager
 	shared_ptr<DatabaseFilePathManager> path_manager;
+	//! Database configuration variables as controlled by SET
+	UserSettings user_settings;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

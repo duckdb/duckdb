@@ -64,8 +64,6 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 
 	auto bind_data = make_uniq<EnableProfilingBindData>();
 
-	auto config = ClientConfig::GetConfig(context);
-
 	bool metrics_set = false;
 
 	for (const auto &named_param : input.named_parameters) {

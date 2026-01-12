@@ -16,7 +16,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		config.ResetOption(name);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
-		client_config.set_variables[name.ToStdString()] = extension_option.default_value;
+		client_config.user_settings.SetUserSetting(name, extension_option.default_value);
 	}
 }
 
@@ -57,7 +57,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 		}
 		if (variable_scope == SetScope::SESSION) {
 			auto &client_config = ClientConfig::GetConfig(context.client);
-			client_config.set_variables.erase(option->name);
+			client_config.user_settings.ClearSetting(option->name);
 		} else {
 			config.ResetGenericOption(option->name);
 		}

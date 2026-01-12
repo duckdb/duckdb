@@ -316,7 +316,7 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 			SettingCallbackInfo info(*this, db);
 			option.set_callback(info, input);
 		}
-		options.set_variables[option.name] = std::move(input);
+		user_settings.SetUserSetting(option.name, std::move(input));
 		return;
 	}
 	if (!option.set_global) {
@@ -327,10 +327,9 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 }
 
 void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option) {
-	lock_guard<mutex> l(config_lock);
 	if (option.default_value) {
 		// generic option
-		options.set_variables.erase(option.name);
+		user_settings.ClearSetting(option.name);
 		return;
 	}
 	if (!option.reset_global) {
@@ -341,8 +340,7 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 }
 
 void DBConfig::SetOption(const String &name, Value value) {
-	lock_guard<mutex> l(config_lock);
-	options.set_variables[name.ToStdString()] = std::move(value);
+	user_settings.SetUserSetting(name, std::move(value));
 }
 
 void DBConfig::ResetOption(const String &name) {
@@ -352,16 +350,15 @@ void DBConfig::ResetOption(const String &name) {
 	auto &default_value = extension_option->second.default_value;
 	if (!default_value.IsNull()) {
 		// Default is not NULL, override the setting
-		options.set_variables[name.ToStdString()] = default_value;
+		user_settings.SetUserSetting(name, default_value);
 	} else {
 		// Otherwise just remove it from the 'set_variables' map
-		options.set_variables.erase(name.ToStdString());
+		user_settings.ClearSetting(name);
 	}
 }
 
 void DBConfig::ResetGenericOption(const String &name) {
-	lock_guard<mutex> l(config_lock);
-	options.set_variables.erase(name.ToStdString());
+	user_settings.ClearSetting(name);
 }
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {
@@ -467,12 +464,12 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
 	if (iter != options.unrecognized_options.end()) {
-		options.set_variables[name] = iter->second;
+		user_settings.SetUserSetting(name, iter->second);
 		options.unrecognized_options.erase(iter);
 	}
-	if (!default_value.IsNull() && options.set_variables.find(name) == options.set_variables.end()) {
+	if (!default_value.IsNull() && !user_settings.IsSet(name)) {
 		// Default value is set, insert it into the 'set_variables' list
-		options.set_variables[name] = default_value;
+		user_settings.SetUserSetting(name, default_value);
 	}
 }
 
@@ -673,11 +670,7 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 }
 
 SettingLookupResult DBConfig::TryGetCurrentUserSetting(const string &key, Value &result) const {
-	const auto &global_config_map = options.set_variables;
-
-	auto global_value = global_config_map.find(key);
-	if (global_value != global_config_map.end()) {
-		result = global_value->second;
+	if (user_settings.TryGetSetting(key, result)) {
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();

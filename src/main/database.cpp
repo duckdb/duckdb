@@ -415,6 +415,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+	config.user_settings = new_config.user_settings;
 
 	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");

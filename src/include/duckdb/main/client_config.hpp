@@ -17,6 +17,7 @@
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/user_settings.hpp"
 
 namespace duckdb {
 
@@ -88,7 +89,7 @@ struct ClientConfig {
 	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
 	//! Generic options
-	case_insensitive_map_t<Value> set_variables;
+	UserSettings user_settings;
 
 	//! Variables set by the user
 	case_insensitive_map_t<Value> user_variables;

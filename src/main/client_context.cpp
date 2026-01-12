@@ -1439,12 +1439,7 @@ ClientContext::TryGetCurrentUserSettingInternal(const string &key, Value &result
 	auto &key_name = option ? option->name : key;
 
 	// check the client session values
-	const auto &session_config_map = config.set_variables;
-
-	auto session_value = session_config_map.find(key_name);
-	bool found_session_value = session_value != session_config_map.end();
-	if (found_session_value) {
-		result = session_value->second;
+	if (config.user_settings.TryGetSetting(key_name, result)) {
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// finally check the global session values

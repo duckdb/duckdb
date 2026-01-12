@@ -12,7 +12,7 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, const String &name,
 		config.SetOption(name, std::move(target_value));
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context);
-		client_config.set_variables[name.ToStdString()] = std::move(target_value);
+		client_config.user_settings.SetUserSetting(name, std::move(target_value));
 	}
 }
 

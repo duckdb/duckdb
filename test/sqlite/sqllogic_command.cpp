@@ -501,6 +501,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
+	runner.config->user_settings = runner.con->context->db->config.user_settings;
 	auto client_config = runner.con->context->config;
 	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
 	string low_query_writer_path;
