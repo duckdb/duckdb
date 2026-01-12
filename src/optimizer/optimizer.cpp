@@ -47,6 +47,7 @@ namespace duckdb {
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotEliminationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
@@ -89,6 +90,10 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 }
 
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
+	if (context.IsInterrupted()) {
+		throw InterruptException();
+	}
+
 	if (OptimizerDisabled(type)) {
 		// optimizer is marked as disabled: skip
 		return;

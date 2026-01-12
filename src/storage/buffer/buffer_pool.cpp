@@ -1,7 +1,5 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
-#include "duckdb/common/allocator.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"

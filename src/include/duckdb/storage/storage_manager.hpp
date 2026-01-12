@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"

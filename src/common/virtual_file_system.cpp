@@ -5,6 +5,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/caching_file_system_wrapper.hpp"
 
 namespace duckdb {
 
@@ -33,14 +34,29 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
-	// open the base file handle in UNCOMPRESSED mode
 
+	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
-	auto file_handle = FindFileSystem(file.path, opener).OpenFile(file, flags, opener);
+
+	auto &internal_filesystem = FindFileSystem(file.path, opener);
+
+	// File handle gets created.
+	unique_ptr<FileHandle> file_handle = nullptr;
+
+	// Handle caching logic.
+	if (flags.GetCachingMode() != CachingMode::NO_CACHING) {
+		auto caching_filesystem =
+		    make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
+		// caching filesystem's lifecycle is extended inside of caching file handle.
+		file_handle = caching_filesystem->OpenFile(file, flags, opener);
+	} else {
+		file_handle = internal_filesystem.OpenFile(file, flags, opener);
+	}
 	if (!file_handle) {
 		return nullptr;
 	}
 
+	// Evaluate and apply compression option then.
 	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
@@ -136,6 +152,17 @@ void VirtualFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpen
 
 bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	return FindFileSystem(filename).TryRemoveFile(filename, opener);
+}
+
+void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	reference_map_t<FileSystem, vector<string>> files_by_fs;
+	for (const auto &filename : filenames) {
+		auto &fs = FindFileSystem(filename);
+		files_by_fs[fs].push_back(filename);
+	}
+	for (auto &entry : files_by_fs) {
+		entry.first.get().RemoveFiles(entry.second, opener);
+	}
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

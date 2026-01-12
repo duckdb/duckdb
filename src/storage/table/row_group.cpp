@@ -8,7 +8,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -19,7 +18,6 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
@@ -1418,19 +1416,19 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(const RowGroup &row_group_p, bool is_exact_p)
-	    : row_group(row_group_p), is_exact(is_exact_p) {
+	explicit DuckDBPartitionRowGroup(shared_ptr<RowGroup> row_group_p, bool is_exact_p)
+	    : row_group(std::move(row_group_p)), is_exact(is_exact_p) {
 	}
 
-	const RowGroup &row_group;
+	shared_ptr<RowGroup> row_group;
 	const bool is_exact;
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
-		return row_group.GetStatistics(storage_index);
+		return row_group->GetStatistics(storage_index);
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &stats, const StorageIndex &) override {
-		if (!is_exact || row_group.HasChanges()) {
+		if (!is_exact || row_group->HasChanges()) {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
@@ -1444,17 +1442,19 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 };
 
-PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
+PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group) {
+	auto &row_group_ref = row_group.GetNode();
+
 	PartitionStatistics result;
-	result.row_start = row_group_start;
-	result.count = count;
-	if (HasUnloadedDeletes() || version_info.load().get()) {
+	result.row_start = row_group.GetRowStart();
+	result.count = row_group_ref.count;
+	if (row_group_ref.HasUnloadedDeletes() || row_group_ref.GetVersionInfoIfLoaded()) {
 		// we have version info - approx count
 		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, false);
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), false);
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this, true);
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), true);
 	}
 
 	return result;

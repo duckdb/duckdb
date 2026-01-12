@@ -6,7 +6,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 

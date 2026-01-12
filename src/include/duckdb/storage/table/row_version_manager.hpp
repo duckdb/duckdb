@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 

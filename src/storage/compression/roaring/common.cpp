@@ -1,7 +1,5 @@
 #include "duckdb/storage/compression/roaring/roaring.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/likely.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"

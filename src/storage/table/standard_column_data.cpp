@@ -3,9 +3,7 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
