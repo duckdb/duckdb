@@ -672,52 +672,28 @@ string SetSortedByInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
-// SetLocationInfo
-//===--------------------------------------------------------------------===//
-SetLocationInfo::SetLocationInfo() : AlterTableInfo(AlterTableType::SET_LOCATION) {
-}
-
-SetLocationInfo::SetLocationInfo(AlterEntryData data, string location_p)
-    : AlterTableInfo(AlterTableType::SET_LOCATION, std::move(data)), location(std::move(location_p)) {
-}
-
-SetLocationInfo::~SetLocationInfo() {
-}
-
-unique_ptr<AlterInfo> SetLocationInfo::Copy() const {
-	return make_uniq<SetLocationInfo>(GetAlterEntryData(), location);
-}
-
-string SetLocationInfo::ToString() const {
-	string result = "ALTER TABLE ";
-	result += QualifierToString(catalog, schema, name);
-	result += " SET LOCATION " + KeywordHelper::WriteQuoted(location, '\'');
-	return result;
-}
-
-//===--------------------------------------------------------------------===//
 // SetTblPropertiesInfo
 //===--------------------------------------------------------------------===//
-SetTblPropertiesInfo::SetTblPropertiesInfo() : AlterTableInfo(AlterTableType::SET_TBLPROPERTIES) {
+SetTableOptionsInfo::SetTableOptionsInfo() : AlterTableInfo(AlterTableType::SET_TABLE_OPTIONS) {
 }
 
-SetTblPropertiesInfo::SetTblPropertiesInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties_p)
-    : AlterTableInfo(AlterTableType::SET_TBLPROPERTIES, std::move(data)), tbl_properties(std::move(tbl_properties_p)) {
+SetTableOptionsInfo::SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties_p)
+    : AlterTableInfo(AlterTableType::SET_TABLE_OPTIONS, std::move(data)), table_options(std::move(tbl_properties_p)) {
 }
 
-SetTblPropertiesInfo::~SetTblPropertiesInfo() {
+SetTableOptionsInfo::~SetTableOptionsInfo() {
 }
 
-unique_ptr<AlterInfo> SetTblPropertiesInfo::Copy() const {
-	return make_uniq<SetTblPropertiesInfo>(GetAlterEntryData(), tbl_properties);
+unique_ptr<AlterInfo> SetTableOptionsInfo::Copy() const {
+	return make_uniq<SetTableOptionsInfo>(GetAlterEntryData(), table_options);
 }
 
-string SetTblPropertiesInfo::ToString() const {
+string SetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
 	result += QualifierToString(catalog, schema, name);
-	result += " SET TBLPROPERTIES (";
+	result += " SET (";
 	idx_t i = 0;
-	for (auto &entry : tbl_properties) {
+	for (auto &entry : table_options) {
 		if (i > 0) {
 			result += ", ";
 		}

@@ -85,8 +85,7 @@ enum class AlterTableType : uint8_t {
 	ADD_FIELD = 14,
 	REMOVE_FIELD = 15,
 	RENAME_FIELD = 16,
-	SET_LOCATION = 17,
-	SET_TBLPROPERTIES = 18
+	SET_TABLE_OPTIONS = 17
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -496,33 +495,13 @@ private:
 };
 
 //===--------------------------------------------------------------------===//
-// SetLocationInfo
-//===--------------------------------------------------------------------===//
-struct SetLocationInfo : public AlterTableInfo {
-	SetLocationInfo(AlterEntryData data, string location);
-	~SetLocationInfo() override;
-
-	string location;
-
-public:
-	unique_ptr<AlterInfo> Copy() const override;
-	string ToString() const override;
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
-
-private:
-	SetLocationInfo();
-};
-
-//===--------------------------------------------------------------------===//
 // SetTblPropertiesInfo
 //===--------------------------------------------------------------------===//
-struct SetTblPropertiesInfo : public AlterTableInfo {
-	SetTblPropertiesInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties);
-	~SetTblPropertiesInfo() override;
+struct SetTableOptionsInfo : public AlterTableInfo {
+	SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> table_options);
+	~SetTableOptionsInfo() override;
 
-	case_insensitive_map_t<string> tbl_properties;
+	case_insensitive_map_t<string> table_options;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -532,7 +511,7 @@ public:
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
-	SetTblPropertiesInfo();
+	SetTableOptionsInfo();
 };
 
 } // namespace duckdb

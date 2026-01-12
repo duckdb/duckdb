@@ -6,6 +6,11 @@ statement ok
 CREATE TABLE tbl1(i INTEGER);
 
 statement error
-ALTER TABLE tbl1 SET TBLPROPERTIES ('foo'='baz', 'buzz'='wizz');
+ALTER TABLE tbl1 SET ('foo'='baz', 'buzz'='wizz');
 ----
-Not implemented Error: SET TBLPROPERTIES is not supported for DuckDB tables
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
+
+statement error
+ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
+----
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*

@@ -223,20 +223,28 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			result->info = make_uniq<SetSortedByInfo>(std::move(data), std::move(orders));
 			break;
 		}
-		case duckdb_libpgquery::PG_AT_SetLocation: {
-			result->info = make_uniq<SetLocationInfo>(std::move(data), command->location);
-			break;
-		}
-		case duckdb_libpgquery::PG_AT_SetTblProperties: {
-			case_insensitive_map_t<string> tbl_properties;
-			if (command->tbl_properties) {
-				for (auto cell = command->tbl_properties->head; cell != nullptr; cell = cell->next) {
+		case duckdb_libpgquery::PG_AT_SetRelOptions: {
+			case_insensitive_map_t<string> options;
+			if (command->options) {
+				for (auto cell = command->options->head; cell != nullptr; cell = cell->next) {
 					auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 					auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
-					tbl_properties[def_elem->defname] = val->val.str;
+					options[def_elem->defname] = val->val.str;
 				}
 			}
-			result->info = make_uniq<SetTblPropertiesInfo>(std::move(data), std::move(tbl_properties));
+			result->info = make_uniq<SetTableOptionsInfo>(std::move(data), std::move(options));
+			break;
+		}
+		case duckdb_libpgquery::PG_AT_ResetRelOptions: {
+			case_insensitive_map_t<string> options;
+			if (command->options) {
+				for (auto cell = command->options->head; cell != nullptr; cell = cell->next) {
+					auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
+					auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
+					options[def_elem->defname] = val->val.str;
+				}
+			}
+			result->info = make_uniq<SetTableOptionsInfo>(std::move(data), std::move(options));
 			break;
 		}
 		default:

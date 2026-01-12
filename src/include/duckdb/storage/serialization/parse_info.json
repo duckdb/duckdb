@@ -776,5 +776,17 @@
         "type": "vector<OrderByNode>"
       }
     ]
+  },
+  {
+    "class": "SetTableOptionsInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_TABLE_OPTIONS",
+    "members": [
+      {
+        "id": 400,
+        "name": "table_options",
+        "type": "case_insensitive_map_t<string>"
+      }
+    ]
   }
 ]
