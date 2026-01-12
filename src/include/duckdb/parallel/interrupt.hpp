@@ -65,17 +65,16 @@ protected:
 class StateWithBlockableTasks {
 public:
 	unique_lock<mutex> Lock() {
-		return unique_lock<mutex>(lock);
+		unique_lock<mutex> l(lock);
+		return std::move(l);
 	}
 
-	void PreventBlocking(const unique_lock<mutex> &guard) {
-		VerifyLock(guard);
+	void PreventBlocking(const unique_lock<mutex> &guard) DUCKDB_REQUIRES(lock) {
 		can_block = false;
 	}
 
 	//! Add a task to 'blocked_tasks' before returning SourceResultType::BLOCKED (must hold the lock)
-	bool BlockTask(const unique_lock<mutex> &guard, const InterruptState &interrupt_state) {
-		VerifyLock(guard);
+	bool BlockTask(const unique_lock<mutex> &guard, const InterruptState &interrupt_state) DUCKDB_REQUIRES(lock) {
 		if (can_block) {
 			blocked_tasks.push_back(interrupt_state);
 			return true;
@@ -83,14 +82,12 @@ public:
 		return false;
 	}
 
-	bool CanBlock(const unique_lock<mutex> &guard) const {
-		VerifyLock(guard);
+	bool CanBlock(const unique_lock<mutex> &guard) const DUCKDB_REQUIRES(lock) {
 		return can_block;
 	}
 
 	//! Unblock all tasks (must hold the lock)
-	bool UnblockTasks(const unique_lock<mutex> &guard) {
-		VerifyLock(guard);
+	bool UnblockTasks(const unique_lock<mutex> &guard) DUCKDB_REQUIRES(lock) {
 		if (blocked_tasks.empty()) {
 			return false;
 		}
@@ -109,19 +106,13 @@ public:
 		return BlockTask(guard, interrupt_state) ? SourceResultType::BLOCKED : SourceResultType::FINISHED;
 	}
 
-	void VerifyLock(const unique_lock<mutex> &guard) const {
-#ifdef DEBUG
-		D_ASSERT(guard.mutex() && RefersToSameObject(*guard.mutex(), lock));
-#endif
-	}
-
 private:
 	//! Whether we can block tasks
-	atomic<bool> can_block {true};
+	bool can_block DUCKDB_GUARDED_BY(lock) = true;
 	//! Global lock, acquired by calling Lock()
 	mutable mutex lock;
 	//! Tasks that are currently blocked
-	mutable vector<InterruptState> blocked_tasks;
+	mutable vector<InterruptState> blocked_tasks DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb
