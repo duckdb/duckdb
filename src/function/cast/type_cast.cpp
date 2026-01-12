@@ -5,13 +5,11 @@ namespace duckdb {
 
 BoundCastInfo DefaultCasts::TypeCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	// now switch on the result type
-	switch (target.id()) {
-	case LogicalTypeId::VARCHAR:
-		// pointer to varchar
+	if (target == LogicalType::VARCHAR) {
+		// type to varchar
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::CastFromType>);
-	default:
-		return nullptr;
 	}
+	return nullptr;
 }
 
 } // namespace duckdb

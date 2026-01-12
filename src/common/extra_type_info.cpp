@@ -262,30 +262,38 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
 //===--------------------------------------------------------------------===//
 // User Type Info
 //===--------------------------------------------------------------------===//
-UserTypeInfo::UserTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO) {
+void UnboundTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(202, "schema", schema);
+	// [DELETED] 203 was "user_type_modifiers"
+	serializer.WritePropertyWithDefault<string>(204, "collation", collation);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<TypeParameter>>>(205, "parameters", parameters);
 }
 
-UserTypeInfo::UserTypeInfo(string name_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
-}
+shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<UnboundTypeInfo>(new UnboundTypeInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema);
 
-UserTypeInfo::UserTypeInfo(string name_p, vector<Value> modifiers_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)),
-      user_type_modifiers(std::move(modifiers_p)) {
-}
+	// From the old "user" type
+	auto mods = deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers");
+	if (!mods.empty()) {
+		// Turn the old-style value type modifiers into TypeParameters
+		vector<unique_ptr<TypeParameter>> args;
+		for (auto &mod : mods) {
+			args.push_back(TypeParameter::EXPRESSION("", make_uniq<ConstantExpression>(mod)));
+		}
 
-UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
-      user_type_name(std::move(name_p)), user_type_modifiers(std::move(modifiers_p)) {
-}
+		result->parameters = std::move(args);
+		return std::move(result);
+	}
 
-bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
-	auto &other = other_p->Cast<UserTypeInfo>();
-	return other.user_type_name == user_type_name;
-}
-
-shared_ptr<ExtraTypeInfo> UserTypeInfo::Copy() const {
-	return make_shared_ptr<UserTypeInfo>(*this);
+	deserializer.ReadPropertyWithDefault<string>(204, "collation", result->collation);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TypeParameter>>>(205, "parameters", result->parameters);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//

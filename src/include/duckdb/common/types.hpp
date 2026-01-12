@@ -187,8 +187,7 @@ enum class LogicalTypeId : uint8_t {
 	SQLNULL = 1, /* NULL type, used for constant NULL */
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
 	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
-	USER = 4,    /* A User Defined Type (e.g., ENUMs before the binder) */
-
+	UNBOUND = 4,    /* A parsed but unbound type, used during query planning */
 
 	// A "template" type functions as a "placeholder" type for function arguments and return types.
 	// Templates only exist during the binding phase, in the scope of a function, and are replaced with concrete types
@@ -197,8 +196,7 @@ enum class LogicalTypeId : uint8_t {
 	// name are always resolved to the same concrete type.
 	TEMPLATE = 5,
 
-	UNBOUND = 6, /* Unbound type, used during query planning */
-	TYPE = 7,    /* Type type, used for type parameters */
+	TYPE = 6,    /* Type type, used for type parameters */
 
 	BOOLEAN = 10,
 	TINYINT = 11,

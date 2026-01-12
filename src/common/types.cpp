@@ -160,7 +160,6 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTEGER_LITERAL:
 	case LogicalTypeId::TEMPLATE:
 		return PhysicalType::INVALID;
-	case LogicalTypeId::USER:
 	case LogicalTypeId::UNBOUND:
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
@@ -373,33 +372,7 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
-static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_list) {
-	string result;
-	if (mod_list.empty()) {
-		return result;
-	}
-	result = "(";
-	for (idx_t i = 0; i < mod_list.size(); i++) {
-		result += mod_list[i].ToString();
-		if (i < mod_list.size() - 1) {
-			result += ", ";
-		}
-	}
-	result += ")";
-	return result;
-}
-
 string LogicalType::ToString() const {
-	if (id_ != LogicalTypeId::USER) {
-		auto alias = GetAlias();
-		if (!alias.empty()) {
-			if (HasExtensionInfo()) {
-				auto &ext_info = *GetExtensionInfo();
-				alias += TypeModifierListToString(ext_info.modifiers);
-			}
-			return alias;
-		}
-	}
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
 		if (!type_info_) {
@@ -565,9 +538,6 @@ string LogicalType::ToString() const {
 			result += ")";
 		}
 		return result;
-	}
-	case LogicalTypeId::USER: {
-		return "USER";
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -1406,7 +1376,6 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
-	case LogicalTypeId::USER:
 	case LogicalTypeId::UNBOUND:
 	case LogicalTypeId::TYPE:
 		break;

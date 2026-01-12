@@ -25,14 +25,13 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 4,
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
-	USER_TYPE_INFO = 7,
+	UNBOUND_TYPE_INFO = 7,
 	AGGREGATE_STATE_TYPE_INFO = 8,
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
 	TEMPLATE_TYPE_INFO = 12,
 	GEO_TYPE_INFO = 13,
-	UNBOUND_TYPE_INFO = 14
 };
 
 struct ExtraTypeInfo {
@@ -158,28 +157,6 @@ protected:
 
 private:
 	AggregateStateTypeInfo();
-};
-
-struct UserTypeInfo : public ExtraTypeInfo {
-	explicit UserTypeInfo(string name_p);
-	UserTypeInfo(string name_p, vector<Value> modifiers_p);
-	UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p);
-
-	string catalog;
-	string schema;
-	string user_type_name;
-	vector<Value> user_type_modifiers;
-
-public:
-	void Serialize(Serializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	shared_ptr<ExtraTypeInfo> Copy() const override;
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
-
-private:
-	UserTypeInfo();
 };
 
 // If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.

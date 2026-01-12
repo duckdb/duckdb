@@ -162,35 +162,6 @@
     "constructor": ["child_type", "size"]
   },
   {
-    "class": "UserTypeInfo",
-    "base": "ExtraTypeInfo",
-    "enum": "USER_TYPE_INFO",
-    "members": [
-      {
-        "id": 200,
-        "name": "user_type_name",
-        "type": "string"
-      },
-      {
-        "id": 201,
-        "name": "catalog",
-        "type": "string",
-        "default": "string()"
-      },
-      {
-        "id": 202,
-        "name": "schema",
-        "type": "string",
-        "default": "string()"
-      },
-      {
-        "id": 203,
-        "name": "user_type_modifiers",
-        "type": "vector<Value>"
-      }
-    ]
-  },
-  {
     "class": "EnumTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "ENUM_TYPE_INFO",
@@ -266,32 +237,6 @@
     "base": "ExtraTypeInfo",
     "enum": "UNBOUND_TYPE_INFO",
     "includes": [ "duckdb/common/type_parameter.hpp"],
-    "members": [
-      {
-        "id": 200,
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "string"
-      },
-      {
-        "id": 202,
-        "name": "catalog",
-        "type": "string"
-      },
-      {
-        "id": 203,
-        "name": "collation",
-        "type": "string"
-      },
-      {
-        "id": 204,
-        "name": "parameters",
-        "type": "vector<unique_ptr<TypeParameter>>"
-      }
-    ]
+    "custom_implementation": true
   }
 ]
