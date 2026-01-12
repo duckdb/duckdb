@@ -536,9 +536,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<JoinRef>();
-	auto asof = list_pr.Child<OptionalParseResult>(0);
-	if (asof.HasResult()) {
-		throw NotImplementedException("ASOF join not implemented");
+	auto asof = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (asof) {
+		result->ref_type = JoinRefType::ASOF;
 	}
 	auto join_type = JoinType::INNER;
 	transformer.TransformOptional<JoinType>(list_pr, 1, join_type);
