@@ -174,7 +174,9 @@ OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
     AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
 AnyAllOperator <- ComparisonOperator AnyOrAll
-AnyOrAll <- 'ANY' / 'ALL'
+AnyOrAll <- SubqueryAny / SubqueryAll
+SubqueryAny <- 'ANY'
+SubqueryAll <- 'ALL'
 InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'

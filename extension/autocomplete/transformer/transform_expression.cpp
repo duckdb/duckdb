@@ -125,8 +125,8 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
-
-	if (StringUtil::CIEquals(qualified_function.name, "if")) {
+	auto lowercase_name = StringUtil::Lower(qualified_function.name);
+	if (lowercase_name == "if") {
 		if (function_children.size() != 3) {
 			throw ParserException("Wrong number of arguments to IF.");
 		}
@@ -137,8 +137,72 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		expr->case_checks.push_back(std::move(check));
 		expr->else_expr = std::move(function_children[2]);
 		return std::move(expr);
-	}
+	} else if (lowercase_name == "unpack") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(function_children);
+		return std::move(expr);
+	} else if (lowercase_name == "try") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to TRY expression");
+		}
+		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		try_expression->children = std::move(function_children);
+		return std::move(try_expression);
+	} else if (lowercase_name == "construct_array") {
+		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		construct_array->children = std::move(function_children);
+		return std::move(construct_array);
+	} else if (lowercase_name == "__internal_position_operator") {
+		if (function_children.size() != 2) {
+			throw ParserException("Wrong number of arguments to __internal_position_operator.");
+		}
+		// swap arguments for POSITION(x IN y)
+		std::swap(function_children[0], function_children[1]);
+		lowercase_name = "position";
+	} else if (lowercase_name == "ifnull") {
+		if (function_children.size() != 2) {
+			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
 
+		//  Two-argument COALESCE
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->children.push_back(std::move(function_children[0]));
+		coalesce_op->children.push_back(std::move(function_children[1]));
+		return std::move(coalesce_op);
+	} else if (lowercase_name == "date") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
+	}
+	// TODO(Dtenwolde) Implement the list with an order by
+	// else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
+	// 	// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+	// 	if (function_children.size() != 1) {
+	// 		throw ParserException("Wrong number of arguments to LIST.");
+	// 	}
+	// 	auto arg_expr = function_children[0].get();
+	// 	auto &order_by = order_bys->orders[0];
+	// 	if (arg_expr->Equals(*order_by.expression)) {
+	// 		auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
+	// 		auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
+	// 		order_bys = nullptr;
+	// 		auto unordered = make_uniq<FunctionExpression>(catalog, schema, lowercase_name.c_str(), std::move(children),
+	// 		                                               std::move(filter_expr), std::move(order_bys),
+	// 		                                               root.agg_distinct, false, root.export_state);
+	// 		lowercase_name = "list_sort";
+	// 		order_bys.reset();   // NOLINT
+	// 		filter_expr.reset(); // NOLINT
+	// 		children.clear();    // NOLINT
+	// 		root.agg_distinct = false;
+	// 		function_children.emplace_back(std::move(unordered));
+	// 		function_children.emplace_back(std::move(sense));
+	// 		function_children.emplace_back(std::move(nulls));
+	// 	}
+	// }
 	vector<OrderByNode> order_by;
 	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
@@ -674,17 +738,35 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 	auto other_operator_repeat = other_operator_opt.optional_result->Cast<RepeatParseResult>();
 	for (auto &other_operator_expr : other_operator_repeat.children) {
 		auto &inner_list_pr = other_operator_expr->Cast<ListParseResult>();
-		auto other_operator = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
-		if (other_operator == "||" || other_operator == "^@") {
+		auto other_operator_pr = inner_list_pr.Child<ListParseResult>(0);
+		auto other_operator_choice = other_operator_pr.Child<ChoiceParseResult>(0).result;
+		if (StringUtil::CIEquals(other_operator_choice->name, "AnyAllOperator")) {
+			auto any_all = transformer.Transform<pair<ExpressionType, bool>>(other_operator_choice);
+			auto is_any = any_all.second;
+			auto comparison_type = is_any ? any_all.first : NegateComparisonExpression(any_all.first);
+
+			auto subquery_expr = make_uniq<SubqueryExpression>();
+			subquery_expr->subquery_type = SubqueryType::ANY;
+			subquery_expr->comparison_type = comparison_type;
+			if (right_expr->GetExpressionClass() != ExpressionClass::SUBQUERY) {
+				throw NotImplementedException("ANY/ALL expected a subquery");
+			}
+			auto &right_expr_subquery = right_expr->Cast<SubqueryExpression>();
+			subquery_expr->subquery = std::move(right_expr_subquery.subquery);
+			subquery_expr->child = std::move(expr);
+			expr = std::move(subquery_expr);
+			if (!is_any) {
+				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(expr));
+			}
+		} else {
+			auto other_operator = transformer.Transform<string>(other_operator_pr);
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
 			auto func_expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
 			func_expr->is_operator = true;
 			expr = std::move(func_expr);
-		} else {
-			throw NotImplementedException("Other operator for %s is not implemented.", other_operator);
 		}
 	}
 	return expr;
@@ -701,6 +783,26 @@ string PEGTransformerFactory::TransformStringOperator(PEGTransformer &transforme
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	return choice_pr->Cast<KeywordParseResult>().keyword;
+}
+
+string PEGTransformerFactory::TransformListOperator(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
+}
+
+pair<ExpressionType, bool> PEGTransformerFactory::TransformAnyAllOperator(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto comparison_type = transformer.Transform<ExpressionType>(list_pr.Child<ListParseResult>(0));
+	auto subquery_type = transformer.Transform<bool>(list_pr.Child<ListParseResult>(1));
+	return make_pair(comparison_type, subquery_type);
+}
+
+bool PEGTransformerFactory::TransformAnyOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 // BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*

@@ -5,6 +5,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
+#include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
@@ -390,6 +391,9 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformOtherOperator);
 	REGISTER_TRANSFORM(TransformStringOperator);
+	REGISTER_TRANSFORM(TransformAnyAllOperator);
+	REGISTER_TRANSFORM(TransformAnyOrAll);
+	REGISTER_TRANSFORM(TransformListOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBitwiseExpression);
 	REGISTER_TRANSFORM(TransformAdditiveExpression);
@@ -890,6 +894,9 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<bool>("SamplePercentage", true);
 	RegisterEnum<bool>("SampleRows", false);
+
+	RegisterEnum<bool>("SubqueryAny", true);
+	RegisterEnum<bool>("SubqueryAll", false);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
