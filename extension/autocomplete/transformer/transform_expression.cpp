@@ -76,6 +76,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEG
 }
 
 unique_ptr<ColumnRefExpression>
+PEGTransformerFactory::TransformCatalogReservedSchemaTableColumnName(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<string> column_names;
+	column_names.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
+	column_names.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(1)));
+	column_names.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(2)));
+	column_names.push_back(list_pr.Child<IdentifierParseResult>(3).identifier);
+	return make_uniq<ColumnRefExpression>(std::move(column_names));
+}
+
+unique_ptr<ColumnRefExpression>
 PEGTransformerFactory::TransformSchemaReservedTableColumnName(PEGTransformer &transformer,
                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -129,10 +141,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 
 	vector<OrderByNode> order_by;
 	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
-	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
-	if (ignore_nulls_opt.HasResult()) {
-		throw NotImplementedException("Ignore nulls has not yet been implemented");
-	}
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (within_group_opt.HasResult()) {
 		throw NotImplementedException("Within group has not yet been implemented");
@@ -142,13 +150,43 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	auto export_opt = list_pr.Child<OptionalParseResult>(4);
 	auto over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
-		auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
-		window_function->catalog = qualified_function.catalog;
-		window_function->schema = qualified_function.schema;
-		window_function->function_name = StringUtil::Lower(qualified_function.name);
-		window_function->children = std::move(function_children);
-		window_function->type = WindowExpression::WindowToExpressionType(window_function->function_name);
-		return std::move(window_function);
+		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
+		expr->catalog = qualified_function.catalog;
+		expr->schema = qualified_function.schema;
+		expr->function_name = StringUtil::Lower(qualified_function.name);
+		expr->type = WindowExpression::WindowToExpressionType(expr->function_name);
+		if (expr->type == ExpressionType::WINDOW_AGGREGATE) {
+			expr->children = std::move(function_children);
+		} else {
+			if (!function_children.empty()) {
+				expr->children.push_back(std::move(function_children[0]));
+			}
+			if (expr->type == ExpressionType::WINDOW_LEAD || expr->type == ExpressionType::WINDOW_LAG) {
+				if (function_children.size() > 1) {
+					expr->offset_expr = std::move(function_children[1]);
+				}
+				if (function_children.size() > 2) {
+					expr->default_expr = std::move(function_children[2]);
+				}
+				if (function_children.size() > 3) {
+					throw ParserException("Incorrect number of parameters for function %s", qualified_function.name);
+				}
+			} else if (expr->type == ExpressionType::WINDOW_NTH_VALUE) {
+				if (function_children.size() > 1) {
+					expr->children.push_back(std::move(function_children[1]));
+				}
+				if (function_children.size() > 2) {
+					throw ParserException("Incorrect number of parameters for function %s", qualified_function.name);
+				}
+			} else {
+				if (function_children.size() > 1) {
+					throw ParserException("Incorrect number of parameters for function %s", qualified_function.name);
+				}
+			}
+		}
+		auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
+		expr->ignore_nulls = ignore_nulls_opt.HasResult();
+		return std::move(expr);
 	}
 
 	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema,
@@ -223,6 +261,14 @@ PEGTransformerFactory::TransformArrayBoundedListExpression(PEGTransformer &trans
 		return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "list_value", std::move(list_expr));
 	}
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR, std::move(list_expr));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFilterClause(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto inner_list = extract_parens->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(inner_list.Child<ListParseResult>(1));
 }
 
 unique_ptr<ParsedExpression>

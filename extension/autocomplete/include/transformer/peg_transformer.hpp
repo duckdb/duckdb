@@ -620,6 +620,8 @@ private:
 	// explain.gram
 	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformExplainableStatements(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
 
 	// export.gram
 	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer,
@@ -700,6 +702,8 @@ private:
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ColumnRefExpression>
+	TransformCatalogReservedSchemaTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ColumnRefExpression>
 	TransformSchemaReservedTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformReservedTableQualification(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
@@ -730,6 +734,8 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformCatalogReservedSchemaFunctionName(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformFilterClause(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 
 	static ExpressionType TransformOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformConjunctionOperator(PEGTransformer &transformer,

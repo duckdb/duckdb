@@ -51,4 +51,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTra
 	return make_uniq<ExplainStatement>(std::move(statement), explain_type, explain_format);
 }
 
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainableStatements(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (StringUtil::CIEquals(choice_pr->name, "SelectStatementInternal")) {
+		return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
+	}
+	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
 } // namespace duckdb

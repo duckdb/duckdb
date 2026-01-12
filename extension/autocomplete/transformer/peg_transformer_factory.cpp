@@ -354,6 +354,7 @@ void PEGTransformerFactory::RegisterDrop() {
 void PEGTransformerFactory::RegisterExplain() {
 	// explain.gram
 	REGISTER_TRANSFORM(TransformExplainStatement);
+	REGISTER_TRANSFORM(TransformExplainableStatements);
 }
 
 void PEGTransformerFactory::RegisterExport() {
@@ -402,6 +403,7 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTableColumnName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTableColumnName);
 	REGISTER_TRANSFORM(TransformReservedTableQualification);
 	REGISTER_TRANSFORM(TransformLiteralExpression);
@@ -416,6 +418,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformArrayBoundedListExpression);
 	REGISTER_TRANSFORM(TransformArrayParensSelect);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
+	REGISTER_TRANSFORM(TransformFilterClause);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 	REGISTER_TRANSFORM(TransformSchemaReservedFunctionName);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaFunctionName);
