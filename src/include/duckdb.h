@@ -3457,6 +3457,20 @@ This allows NULL values to be written to the vector, regardless of whether a val
 DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
+Safely assigns a string element in the vector at the specified location. Supersedes
+`duckdb_vector_assign_string_element`. The vector type must be VARCHAR and the input must be valid UTF-8. Otherwise, it
+returns an invalid Unicode error.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the string to
+* @param str The null-terminated string
+* @return If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the return value must be
+destroyed with `duckdb_destroy_error_data`.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_vector vector, idx_t index,
+                                                                        const char *str);
+
+/*!
 Assigns a string element in the vector at the specified location.
 
 * @param vector The vector to alter

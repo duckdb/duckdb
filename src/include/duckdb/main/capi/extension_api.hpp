@@ -671,6 +671,7 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
+	duckdb_error_data (*duckdb_vector_safe_assign_string_element)(duckdb_vector vector, idx_t index, const char *str);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -1221,6 +1222,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
+	result.duckdb_vector_safe_assign_string_element = duckdb_vector_safe_assign_string_element;
 	return result;
 }
 
