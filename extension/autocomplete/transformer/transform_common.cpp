@@ -246,8 +246,8 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 				qualified_type_name.schema = qualified_type_name.catalog;
 				qualified_type_name.catalog = INVALID_CATALOG;
 			}
-			result =
-			    LogicalType::UNBOUND(qualified_type_name.catalog, qualified_type_name.schema, qualified_type_name.name);
+			result = LogicalType::UNBOUND(qualified_type_name.catalog, qualified_type_name.schema,
+			                              qualified_type_name.name, {});
 		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);
