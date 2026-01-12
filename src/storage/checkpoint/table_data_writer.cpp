@@ -78,7 +78,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
                                               RowGroupCollection &collection, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
-	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
+	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
 		// write the metadata
 		// store the current position in the metadata writer
@@ -171,7 +171,6 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
-	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (debug_verify_blocks) {
 		for (auto &entry : index_storage_infos) {
 			for (auto &allocator : entry.allocator_infos) {
