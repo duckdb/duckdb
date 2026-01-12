@@ -513,6 +513,10 @@ idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx
 
 static string ConstructForeignKeyError(optional_idx conflict, bool is_append, Index &index, DataChunk &input) {
 	D_ASSERT(index.IsBound());
+	if (!index.IsBound()) {
+		throw InternalException("Cannot construct foreign key error: index '%s' is not bound (possible WAL corruption)",
+		                        index.GetIndexName());
+	}
 	auto &bound_index = index.Cast<BoundIndex>();
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
 	return bound_index.GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
@@ -691,6 +695,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 				return false;
 			}
 			D_ASSERT(index.IsBound());
+			if (!index.IsBound()) {
+				throw InternalException("Cannot verify unique constraint: index '%s' is not bound (possible WAL corruption)",
+				                        index.GetIndexName());
+			}
 			auto &art = index.Cast<ART>();
 
 			lock_guard<mutex> guard(entry.lock);
@@ -721,6 +729,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 			return false;
 		}
 		D_ASSERT(index.IsBound());
+		if (!index.IsBound()) {
+			throw InternalException("Cannot check conflict target: index '%s' is not bound (possible WAL corruption)",
+			                        index.GetIndexName());
+		}
 		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
@@ -751,6 +763,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 			return false;
 		}
 		D_ASSERT(index.IsBound());
+		if (!index.IsBound()) {
+			throw InternalException("Cannot verify append: index '%s' is not bound (possible WAL corruption)",
+			                        index.GetIndexName());
+		}
 		auto &art = index.Cast<ART>();
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
@@ -1713,6 +1729,11 @@ void DataTable::CommitDropTable() {
 	// propagate dropping this table to its indexes: frees all index memory
 	info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.IsBound());
+		if (!index.IsBound()) {
+			// Unbound indexes can be dropped without calling CommitDrop
+			// as they have no allocated memory to free
+			return false;
+		}
 		index.Cast<BoundIndex>().CommitDrop();
 		return false;
 	});
