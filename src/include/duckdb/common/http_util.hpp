@@ -50,8 +50,8 @@ struct HTTPParams {
 	HTTPUtil &http_util;
 	shared_ptr<Logger> logger;
 
-	//! Overrides the current request method when set.
-	string custom_request_method;
+	//! Used to send a GET request with a body (non-standard but supported by some servers)
+	bool send_post_as_get_request;
 public:
 	void Initialize(optional_ptr<FileOpener> opener);
 
