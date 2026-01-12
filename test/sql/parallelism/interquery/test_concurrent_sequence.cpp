@@ -1,19 +1,19 @@
 #include "catch.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/thread.hpp"
+#include "duckdb/common/vector.hpp"
 #include "test_helpers.hpp"
 
 #include <algorithm>
-#include <mutex>
-#include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 struct ConcurrentData {
 	DuckDB &db;
 	mutex lock;
-	duckdb::vector<int64_t> results;
+	vector<int64_t> results DUCKDB_GUARDED_BY(lock);
 
-	ConcurrentData(DuckDB &db) : db(db) {
+	explicit ConcurrentData(DuckDB &db) : db(db) {
 	}
 };
 
