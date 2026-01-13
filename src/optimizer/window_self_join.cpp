@@ -17,6 +17,21 @@ namespace duckdb {
 
 class WindowSelfJoinTableRebinder : public LogicalOperatorVisitor {
 public:
+	static bool CanRebind(const LogicalOperator &op) {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_GET:
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+			if (!op.children.empty()) {
+				return CanRebind(*op.children[0]);
+			}
+			return true;
+		default:
+			break;
+		}
+		return false;
+	}
+
 	explicit WindowSelfJoinTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
@@ -63,6 +78,46 @@ public:
 		}
 		VisitExpressionChildren(**expression);
 	}
+
+	unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
+		auto agg_func = *w_expr.aggregate;
+		unique_ptr<FunctionData> bind_info;
+		if (w_expr.bind_info) {
+			bind_info = w_expr.bind_info->Copy();
+		} else {
+			bind_info = nullptr;
+		}
+
+		vector<unique_ptr<Expression>> children;
+		for (auto &child : w_expr.children) {
+			auto child_copy = child->Copy();
+			VisitExpression(&child_copy); // Update bindings
+			children.push_back(std::move(child_copy));
+		}
+
+		unique_ptr<Expression> filter;
+		if (w_expr.filter_expr) {
+			filter = w_expr.filter_expr->Copy();
+			VisitExpression(&filter); // Update bindings
+		}
+
+		auto aggr_type = w_expr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
+
+		auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
+		                                                  std::move(bind_info), aggr_type);
+
+		if (!w_expr.arg_orders.empty()) {
+			result->order_bys = make_uniq<BoundOrderModifier>();
+			auto &orders = result->order_bys->orders;
+			for (auto &order : w_expr.arg_orders) {
+				auto order_copy = order.Copy();
+				VisitExpression(&order_copy.expression); // Update bindings
+				orders.emplace_back(std::move(order_copy));
+			}
+		}
+
+		return std::move(result);
+	}
 };
 
 WindowSelfJoinOptimizer::WindowSelfJoinOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
@@ -77,6 +132,22 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::Optimize(unique_ptr<Logical
 	return op;
 }
 
+bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr) const {
+	if (w_expr.type != ExpressionType::WINDOW_AGGREGATE) {
+		return false;
+	}
+	if (!w_expr.orders.empty()) {
+		return false;
+	}
+	if (w_expr.partitions.empty()) {
+		return false;
+	}
+	if (w_expr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                       ColumnBindingReplacer &replacer) {
 	if (op->type == LogicalOperatorType::LOGICAL_WINDOW) {
@@ -85,21 +156,16 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Check recursively
 		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
 
-		if (window.expressions.size() != 1) {
+		if (!WindowSelfJoinTableRebinder::CanRebind(*window.children[0])) {
 			return op;
 		}
-		if (window.expressions[0]->type != ExpressionType::WINDOW_AGGREGATE) {
+
+		if (window.expressions.size() != 1) {
 			return op;
 		}
 
 		auto &w_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-		if (w_expr.aggregate->name != "count" && w_expr.aggregate->name != "count_star") {
-			return op;
-		}
-		if (!w_expr.orders.empty()) {
-			return op;
-		}
-		if (w_expr.partitions.empty()) {
+		if (!CanOptimize(w_expr)) {
 			return op;
 		}
 
@@ -125,27 +191,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			groups.push_back(std::move(part_copy));
 		}
 
-		auto count_func = *w_expr.aggregate;
-		unique_ptr<FunctionData> bind_info;
-		if (w_expr.bind_info) {
-			bind_info = w_expr.bind_info->Copy();
-		} else {
-			bind_info = nullptr;
-		}
-
-		vector<unique_ptr<Expression>> children;
-		for (auto &child : w_expr.children) {
-			auto child_copy = child->Copy();
-			rebinder.VisitExpression(&child_copy); // Update bindings
-			children.push_back(std::move(child_copy));
-		}
-
-		auto aggr_type = w_expr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
-
-		auto agg_expr = make_uniq<BoundAggregateExpression>(std::move(count_func), std::move(children), nullptr,
-		                                                    std::move(bind_info), aggr_type);
-
-		aggregates.push_back(std::move(agg_expr));
+		aggregates.emplace_back(rebinder.TranslateAggregate(w_expr));
 
 		// args: group_index, aggregate_index, ...
 		auto agg_op = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
