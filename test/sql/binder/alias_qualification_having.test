@@ -58,7 +58,7 @@ c	4
 
 query II
 FROM VALUES ('CS', 'Bachelor'), ('CS', 'Bachelor'), ('CS', 'PhD'), ('Math', 'Masters') AS t(c1, c2)
-SELECT c1, STRING_AGG(c2, ',') as c3
+SELECT c1, STRING_AGG(c2, ',' order by c2) as c3
 GROUP BY c1
 HAVING len(c3) > 7
 ----
@@ -67,7 +67,7 @@ CS	Bachelor,Bachelor,PhD
 
 query II
 FROM VALUES ('CS', 'Bachelor'), ('CS', 'Bachelor'), ('CS', 'PhD'), ('Math', 'Masters') AS t(c1, c2)
-SELECT c1, STRING_AGG(c2, ',') as c3
+SELECT c1, STRING_AGG(c2, ',' order by c2) as c3
 GROUP BY c1
 HAVING c3.len() > 7
 ----
