@@ -284,10 +284,26 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 		result += name;
 		return;
 	}
-	auto &child_types = StructType::GetChildTypes(type);
-	for (auto &child_index : index.GetChildIndexes()) {
-		auto &ele = child_types[child_index.GetPrimaryIndex()];
-		AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &child_index : index.GetChildIndexes()) {
+			if (child_index.HasPrimaryIndex()) {
+				auto &ele = child_types[child_index.GetPrimaryIndex()];
+				AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+			} else {
+				auto field_type = child_index.HasType() ? child_index.GetType() : LogicalType::VARIANT();
+				AddProjectionNames(child_index, name + "." + child_index.GetFieldName(), field_type, result);
+			}
+		}
+	} else if (type.id() == LogicalTypeId::VARIANT) {
+		for (auto &child_index : index.GetChildIndexes()) {
+			D_ASSERT(!child_index.HasPrimaryIndex());
+			auto field_type = child_index.HasType() ? child_index.GetType() : LogicalType::VARIANT();
+			AddProjectionNames(child_index, name + "." + child_index.GetFieldName(), field_type, result);
+		}
+	} else {
+		throw InternalException("Unexpected type (%s) in AddProjectionNames", type.ToString());
 	}
 }
 

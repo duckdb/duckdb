@@ -105,6 +105,39 @@ static void AssertShreddedStats(const BaseStatistics &stats) {
 	}
 }
 
+optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const BaseStatistics &stats,
+                                                                        const VariantPathComponent &component) {
+	AssertShreddedStats(stats);
+
+	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
+	auto &typed_value_type = typed_value_stats.GetType();
+	switch (component.lookup_mode) {
+	case VariantChildLookupMode::BY_INDEX: {
+		if (typed_value_type.id() != LogicalTypeId::LIST) {
+			return nullptr;
+		}
+		auto &child_stats = ListStats::GetChildStats(typed_value_stats);
+		return child_stats;
+	}
+	case VariantChildLookupMode::BY_KEY: {
+		if (typed_value_type.id() != LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		auto &object_fields = StructType::GetChildTypes(typed_value_type);
+		for (idx_t i = 0; i < object_fields.size(); i++) {
+			auto &object_field = object_fields[i];
+			if (StringUtil::CIEquals(object_field.first, component.key)) {
+				return StructStats::GetChildStats(typed_value_stats, i);
+			}
+		}
+		return nullptr;
+	}
+	default:
+		throw InternalException("VariantChildLookupMode::%s not implemented for FindShreddedStats",
+		                        EnumUtil::ToString(component.lookup_mode));
+	}
+}
+
 bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
 	AssertShreddedStats(stats);
 
@@ -307,6 +340,18 @@ static BaseStatistics WrapTypedValue(BaseStatistics &untyped_value_index, BaseSt
 	StructStats::GetChildStats(shredded, 0).Copy(untyped_value_index);
 	StructStats::GetChildStats(shredded, 1).Copy(typed_value);
 	return shredded;
+}
+
+unique_ptr<BaseStatistics> VariantStats::WrapExtractedFieldAsVariant(const BaseStatistics &base_variant,
+                                                                     const BaseStatistics &extracted_field) {
+	D_ASSERT(base_variant.type.id() == LogicalTypeId::VARIANT);
+	AssertShreddedStats(extracted_field);
+
+	BaseStatistics copy = BaseStatistics::CreateUnknown(base_variant.GetType());
+	copy.Copy(base_variant);
+	copy.child_stats[1] = BaseStatistics::CreateUnknown(extracted_field.GetType());
+	copy.child_stats[1].Copy(extracted_field);
+	return copy.ToUnique();
 }
 
 bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &other, BaseStatistics &new_stats) {
@@ -520,6 +565,60 @@ const VariantStatsData &VariantStats::GetDataUnsafe(const BaseStatistics &stats)
 VariantStatsData &VariantStats::GetDataUnsafe(BaseStatistics &stats) {
 	AssertVariant(stats);
 	return stats.stats_union.variant_data;
+}
+
+static bool CanUseShreddedStats(optional_ptr<const BaseStatistics> shredded_stats) {
+	return shredded_stats && VariantShreddedStats::IsFullyShredded(*shredded_stats);
+}
+
+unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &stats, const StorageIndex &index) {
+	if (!VariantStats::IsShredded(stats)) {
+		//! Not shredded at all, no stats available
+		return nullptr;
+	}
+
+	optional_ptr<const BaseStatistics> res(VariantStats::GetShreddedStats(stats));
+	if (!CanUseShreddedStats(res)) {
+		//! Not fully shredded, can't say anything meaningful about the stats
+		return nullptr;
+	}
+
+	reference<const StorageIndex> index_iter(index);
+	while (true) {
+		auto &current = index_iter.get();
+		D_ASSERT(!current.HasPrimaryIndex());
+		auto &field_name = current.GetFieldName();
+		VariantPathComponent path(field_name);
+		res = VariantShreddedStats::FindChildStats(*res, path);
+		if (!CanUseShreddedStats(res)) {
+			//! Not fully shredded, can't say anything meaningful about the stats
+			return nullptr;
+		}
+		if (!index_iter.get().HasChildren()) {
+			break;
+		}
+	}
+	auto &shredded_child_stats = *res;
+
+	auto &typed_value_stats = StructStats::GetChildStats(shredded_child_stats, 1);
+	auto &last_index = index_iter.get();
+	auto &child_type = typed_value_stats.type;
+	if (!last_index.HasType() || last_index.GetType().id() == LogicalTypeId::VARIANT) {
+		//! Return the variant stats, not the 'typed_value' (non-variant) stats, since there's no cast pushed down
+		return WrapExtractedFieldAsVariant(stats, shredded_child_stats);
+	}
+	if (!VariantShreddedStats::IsFullyShredded(shredded_child_stats)) {
+		//! Not all data is shredded, so there are values in the column that are not of the shredded type
+		return nullptr;
+	}
+
+	auto &cast_type = last_index.GetType();
+	if (child_type != cast_type) {
+		//! FIXME: support try_cast
+		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, cast_type);
+	}
+	auto result = typed_value_stats.ToUnique();
+	return result;
 }
 
 } // namespace duckdb
