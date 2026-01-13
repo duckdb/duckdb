@@ -69,6 +69,8 @@ jobs:
       shell: bash
       run: brew install ninja
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Build
       shell: bash
       run: GEN=ninja make release
