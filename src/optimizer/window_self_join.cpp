@@ -22,6 +22,9 @@ public:
 		case LogicalOperatorType::LOGICAL_GET:
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+			if (!op.children.empty()) {
+				return CanRebind(*op.children[0]);
+			}
 			return true;
 		default:
 			break;
