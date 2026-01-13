@@ -111,8 +111,6 @@ CREATE TYPE regression_result AS UNION (
     err STRUCT(
         v1_4_0_blocks HUGEINT,
         v1_5_0_blocks HUGEINT,
-        v1_4_0_ratio FLOAT,
-        v1_5_0_ratio FLOAT,
         regression_factor FLOAT
     )
 );
@@ -126,8 +124,6 @@ SELECT
         ELSE {
             'v1_4_0_blocks': v1_4_0.compressed_blocks,
             'v1_5_0_blocks': v1_5_0.compressed_blocks,
-            'v1_4_0_ratio': v1_4_0.original_data_blocks::FLOAT / v1_4_0.compressed_blocks::FLOAT,
-            'v1_5_0_ratio': v1_5_0.original_data_blocks::FLOAT / v1_5_0.compressed_blocks::FLOAT,
             'regression_factor': v1_5_0.compressed_blocks::FLOAT / v1_4_0.compressed_blocks::FLOAT
         }::regression_result
     END
@@ -141,14 +137,12 @@ true
 query I
 SELECT
     CASE
-        WHEN (v1_5_0.original_data_blocks::FLOAT / v1_5_0.compressed_blocks::FLOAT) >= 1
+        WHEN (v1_5_0.compressed_blocks::FLOAT <= v1_5_0.original_data_blocks::FLOAT)
             THEN True::regression_result
         ELSE {
             'v1_4_0_blocks': NULL,
             'v1_5_0_blocks': v1_5_0.compressed_blocks,
-            'v1_4_0_ratio': NULL,
-            'v1_5_0_ratio': v1_5_0.original_data_blocks::FLOAT / v1_5_0.compressed_blocks::FLOAT,
-            'regression_factor': NULL
+            'regression_factor': v1_5_0.original_data_blocks::FLOAT / v1_5_0.compressed_blocks::FLOAT
         }::regression_result
     END
 FROM v1_5_0_metrics v1_5_0;
