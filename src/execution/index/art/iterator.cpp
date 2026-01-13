@@ -72,39 +72,50 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 		}
 		case NType::LEAF: {
 			D_ASSERT(nested_depth == 0);
-			set<row_t> row_ids;
-			Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, NumericLimits<idx_t>::Maximum());
-			for (auto &rid : row_ids) {
+			if (!has_cached_row_ids) {
+				cached_row_ids.clear();
+				Leaf::DeprecatedGetRowIds(art, last_leaf, cached_row_ids, NumericLimits<idx_t>::Maximum());
+				cached_row_ids_it = cached_row_ids.begin();
+				has_cached_row_ids = true;
+			}
+			while (cached_row_ids_it != cached_row_ids.end()) {
 				if (output.IsFull(max_count)) {
 					return false;
 				}
-				output.Emit(rid);
+				output.Emit(*cached_row_ids_it);
+				++cached_row_ids_it;
 			}
+			has_cached_row_ids = false;
 			break;
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
-			uint8_t byte = 0;
-			while (last_leaf.GetNextByte(art, byte)) {
+			if (!nested_started) {
+				nested_byte = 0;
+				nested_started = true;
+			}
+			while (last_leaf.GetNextByte(art, nested_byte)) {
 				if (output.IsFull(max_count)) {
 					return false;
 				}
-				row_id[ROW_ID_SIZE - 1] = byte;
+				row_id[ROW_ID_SIZE - 1] = nested_byte;
 				ARTKey rid_key(&row_id[0], ROW_ID_SIZE);
 				output.Emit(rid_key.GetRowId());
 
-				if (byte == NumericLimits<uint8_t>::Maximum()) {
+				if (nested_byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
-				byte++;
+				nested_byte++;
 			}
+			nested_started = false;
 			break;
 		}
 		default:
 			throw InternalException("Invalid leaf type for index scan.");
 		}
 
+		// Move to next leaf.
 		entered_nested_leaf = false;
 		has_next = Next();
 	} while (has_next);

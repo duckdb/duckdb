@@ -156,6 +156,15 @@ private:
 	//! True, if we entered a nested leaf to retrieve the next node.
 	bool entered_nested_leaf = false;
 
+	//! State for resuming within a leaf after early return due to max_count.
+	//! For LEAF: cached row IDs and current position.
+	set<row_t> cached_row_ids;
+	set<row_t>::iterator cached_row_ids_it;
+	bool has_cached_row_ids = false;
+	//! For nested leaves: current byte position and whether we've started.
+	uint8_t nested_byte = 0;
+	bool nested_started = false;
+
 private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,
 	//! returns false if there is no next leaf.
