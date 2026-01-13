@@ -637,7 +637,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// the setting is not in an extension
 	// get a list of all options
 	vector<string> potential_names = DBConfig::GetOptionNames();
-	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
+	for (auto &entry : DBConfig::GetConfig(context).GetExtensionSettings()) {
 		potential_names.push_back(entry.first);
 	}
 	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);

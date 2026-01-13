@@ -243,14 +243,14 @@ void DatabaseInstance::LoadExtensionSettings() {
 				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
 				    extension_name);
 			}
-			auto it = config.extension_parameters.find(name);
-			if (it == config.extension_parameters.end()) {
+			ExtensionOption extension_option;
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
 			}
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
+			PhysicalSet::SetExtensionVariable(context, extension_option, name, SetScope::GLOBAL, value);
 			extension_options.push_back(name);
 		}
 
@@ -434,7 +434,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
-	config.extension_parameters = new_config.extension_parameters;
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {

@@ -13,7 +13,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		extension_option.set_function(context.client, scope, extension_option.default_value);
 	}
 	if (scope == SetScope::GLOBAL) {
-		config.ResetOption(name);
+		config.ResetOption(name, extension_option);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
 		client_config.user_settings.SetUserSetting(name, extension_option.default_value);
@@ -30,18 +30,16 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	auto &config = DBConfig::GetConfig(context.client);
 	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
-
 	if (!option) {
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(name.ToStdString());
-		if (entry == config.extension_parameters.end()) {
+		ExtensionOption extension_option;
+		if (!config.TryGetExtensionOption(name, extension_option)) {
 			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(name.ToStdString());
-			if (entry == config.extension_parameters.end()) {
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
-		ResetExtensionVariable(context, config, entry->second);
+		ResetExtensionVariable(context, config, extension_option);
 		return SourceResultType::FINISHED;
 	}
 

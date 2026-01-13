@@ -67,16 +67,15 @@ SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChu
 	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
+		ExtensionOption extension_option;
 		// check if this is an extra extension variable
-		auto entry = config.extension_parameters.find(name.ToStdString());
-		if (entry == config.extension_parameters.end()) {
+		if (!config.TryGetExtensionOption(name, extension_option)) {
 			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
-			entry = config.extension_parameters.find(name.ToStdString());
-			if (entry == config.extension_parameters.end()) {
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
-		SetExtensionVariable(context.client, entry->second, name, scope, value);
+		SetExtensionVariable(context.client, extension_option, name, scope, value);
 		return SourceResultType::FINISHED;
 	}
 	SetScope variable_scope = GetSettingScope(*option, scope);
