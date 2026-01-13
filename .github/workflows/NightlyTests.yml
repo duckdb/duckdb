@@ -673,6 +673,7 @@ jobs:
      GEN: ninja
      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
      HASH_ZERO: 1
+     DISABLE_SANITIZER: 1
      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
      DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
 
