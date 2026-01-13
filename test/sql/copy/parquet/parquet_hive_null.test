@@ -51,12 +51,17 @@ ORDER BY ALL
 NULL	NULL	NULL
 
 # Test __HIVE_DEFAULT_PARTITION__ is treated as NULL when reading
+# First create the nested directory structure using a dummy partitioned write
+statement ok
+copy (select 0 as c, NULL::INT as a, NULL::INT as b) to '__TEST_DIR__/hive-default-partition-test' (PARTITION_BY (a, b), FORMAT 'parquet', OVERWRITE);
+
+# Now overwrite the file in that directory to test reading __HIVE_DEFAULT_PARTITION__
 statement ok
 copy (select 1 as c) to '__TEST_DIR__/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet' (FORMAT 'parquet');
 
 query III
 select *
-from parquet_scan('__TEST_DIR__/hive-default-partition-test/**/*.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
+from parquet_scan('__TEST_DIR__/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
 ORDER BY ALL
 ----
 1	NULL	NULL
