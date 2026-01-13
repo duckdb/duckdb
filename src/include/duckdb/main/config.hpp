@@ -246,12 +246,14 @@ public:
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOption(idx_t setting_index, Value value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
-	DUCKDB_API void SetOption(const String &name, Value value);
-	DUCKDB_API void ResetOption(const String &name, ExtensionOption &extension_option);
-	DUCKDB_API void ResetGenericOption(const String &name);
+	DUCKDB_API void ResetOption(const ExtensionOption &extension_option);
+	DUCKDB_API void ResetGenericOption(idx_t setting_index);
+	DUCKDB_API optional_idx TryGetSettingIndex(const String &name,
+	                                           optional_ptr<const ConfigurationOption> &option) const;
 	static LogicalType ParseLogicalType(const string &type);
 
 	DUCKDB_API void CheckLock(const String &name);
@@ -299,7 +301,7 @@ public:
 	//! Returns the value of a setting currently. If the setting is not set by the user, returns the default value.
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 	//! Returns the value of a setting set by the user currently
-	SettingLookupResult TryGetCurrentUserSetting(const string &key, Value &result) const;
+	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 

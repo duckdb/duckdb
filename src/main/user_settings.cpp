@@ -2,20 +2,20 @@
 
 namespace duckdb {
 
-void UserSettingsMap::SetUserSetting(const String &name, Value target_value) {
-	set_variables[name.ToStdString()] = std::move(target_value);
+void UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
+	set_variables[setting_index] = std::move(target_value);
 }
 
-void UserSettingsMap::ClearSetting(const String &name) {
-	set_variables.erase(name.ToStdString());
+void UserSettingsMap::ClearSetting(idx_t setting_index) {
+	set_variables.erase(setting_index);
 }
 
-bool UserSettingsMap::IsSet(const String &name) const {
-	return set_variables.find(name.ToStdString()) != set_variables.end();
+bool UserSettingsMap::IsSet(idx_t setting_index) const {
+	return set_variables.find(setting_index) != set_variables.end();
 }
 
-bool UserSettingsMap::TryGetSetting(const String &name, Value &result_value) const {
-	auto entry = set_variables.find(name.ToStdString());
+bool UserSettingsMap::TryGetSetting(idx_t setting_index, Value &result_value) const {
+	auto entry = set_variables.find(setting_index);
 	if (entry == set_variables.end()) {
 		return false;
 	}
@@ -41,26 +41,26 @@ GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &othe
 	return *this;
 }
 
-void GlobalUserSettings::SetUserSetting(const String &name, Value target_value) {
+void GlobalUserSettings::SetUserSetting(idx_t setting_index, Value target_value) {
 	lock_guard<mutex> guard(lock);
-	settings_map.SetUserSetting(name, std::move(target_value));
+	settings_map.SetUserSetting(setting_index, std::move(target_value));
 	++settings_version;
 }
 
-void GlobalUserSettings::ClearSetting(const String &name) {
+void GlobalUserSettings::ClearSetting(idx_t setting_index) {
 	lock_guard<mutex> guard(lock);
-	settings_map.ClearSetting(name);
+	settings_map.ClearSetting(setting_index);
 	++settings_version;
 }
 
-bool GlobalUserSettings::IsSet(const String &name) const {
+bool GlobalUserSettings::IsSet(idx_t setting_index) const {
 	lock_guard<mutex> guard(lock);
-	return settings_map.IsSet(name);
+	return settings_map.IsSet(setting_index);
 }
 
-SettingLookupResult GlobalUserSettings::TryGetSetting(const String &name, Value &result_value) const {
+SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value &result_value) const {
 	lock_guard<mutex> guard(lock);
-	if (!settings_map.TryGetSetting(name, result_value)) {
+	if (!settings_map.TryGetSetting(setting_index, result_value)) {
 		return SettingLookupResult();
 	}
 	return SettingLookupResult(SettingScope::GLOBAL);
@@ -71,10 +71,13 @@ bool GlobalUserSettings::HasExtensionOption(const string &name) const {
 	return extension_parameters.find(name) != extension_parameters.end();
 }
 
-void GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
+idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
 	lock_guard<mutex> l(lock);
+	auto setting_index = GeneratedSettingInfo::MaxSettingIndex + extension_parameters.size();
+	extension_option.setting_index = setting_index;
 	extension_parameters.insert(make_pair(name, std::move(extension_option)));
 	++settings_version;
+	return setting_index;
 }
 
 case_insensitive_map_t<ExtensionOption> GlobalUserSettings::GetExtensionSettings() const {
@@ -120,26 +123,26 @@ CachedGlobalSettings::CachedGlobalSettings(idx_t version, UserSettingsMap settin
 LocalUserSettings::~LocalUserSettings() {
 }
 
-void LocalUserSettings::SetUserSetting(const String &name, Value target_value) {
-	settings_map.SetUserSetting(name, std::move(target_value));
+void LocalUserSettings::SetUserSetting(idx_t setting_index, Value target_value) {
+	settings_map.SetUserSetting(setting_index, std::move(target_value));
 }
 
-void LocalUserSettings::ClearSetting(const String &name) {
-	settings_map.ClearSetting(name);
+void LocalUserSettings::ClearSetting(idx_t setting_index) {
+	settings_map.ClearSetting(setting_index);
 }
 
-bool LocalUserSettings::IsSet(const String &name) const {
-	return settings_map.IsSet(name);
+bool LocalUserSettings::IsSet(idx_t setting_index) const {
+	return settings_map.IsSet(setting_index);
 }
 
-SettingLookupResult LocalUserSettings::TryGetSetting(const GlobalUserSettings &global_settings, const String &name,
+SettingLookupResult LocalUserSettings::TryGetSetting(const GlobalUserSettings &global_settings, idx_t setting_index,
                                                      Value &result_value) const {
-	if (settings_map.TryGetSetting(name, result_value)) {
+	if (settings_map.TryGetSetting(setting_index, result_value)) {
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// look-up in global settings
 	auto cache = global_settings.GetSettings(global_settings_cache);
-	if (cache->settings.TryGetSetting(name, result_value)) {
+	if (cache->settings.TryGetSetting(setting_index, result_value)) {
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();

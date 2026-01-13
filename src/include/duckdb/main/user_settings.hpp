@@ -17,13 +17,13 @@ namespace duckdb {
 
 struct UserSettingsMap {
 public:
-	void SetUserSetting(const String &name, Value target_value);
-	void ClearSetting(const String &name);
-	bool IsSet(const String &name) const;
-	bool TryGetSetting(const String &name, Value &result_value) const;
+	void SetUserSetting(idx_t setting_index, Value target_value);
+	void ClearSetting(idx_t setting_index);
+	bool IsSet(idx_t setting_index) const;
+	bool TryGetSetting(idx_t setting_index, Value &result_value) const;
 
 private:
-	case_insensitive_map_t<Value> set_variables;
+	unordered_map<idx_t, Value> set_variables;
 };
 
 struct CachedGlobalSettings {
@@ -40,12 +40,12 @@ public:
 	GlobalUserSettings(const GlobalUserSettings &other);
 	GlobalUserSettings &operator=(const GlobalUserSettings &);
 
-	void SetUserSetting(const String &name, Value target_value);
-	void ClearSetting(const String &name);
-	bool IsSet(const String &name) const;
-	SettingLookupResult TryGetSetting(const String &name, Value &result_value) const;
+	void SetUserSetting(idx_t setting_index, Value target_value);
+	void ClearSetting(idx_t setting_index);
+	bool IsSet(idx_t setting_index) const;
+	SettingLookupResult TryGetSetting(idx_t setting_index, Value &result_value) const;
 	bool HasExtensionOption(const string &name) const;
-	void AddExtensionOption(const string &name, ExtensionOption extension_option);
+	idx_t AddExtensionOption(const string &name, ExtensionOption extension_option);
 	case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
 	bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
 	shared_ptr<CachedGlobalSettings> GetSettings(shared_ptr<CachedGlobalSettings> &cache) const;
@@ -63,10 +63,10 @@ struct LocalUserSettings {
 public:
 	~LocalUserSettings();
 
-	void SetUserSetting(const String &name, Value target_value);
-	void ClearSetting(const String &name);
-	bool IsSet(const String &name) const;
-	SettingLookupResult TryGetSetting(const GlobalUserSettings &global_settings, const String &name,
+	void SetUserSetting(idx_t setting_index, Value target_value);
+	void ClearSetting(idx_t setting_index);
+	bool IsSet(idx_t setting_index) const;
+	SettingLookupResult TryGetSetting(const GlobalUserSettings &global_settings, idx_t setting_index,
 	                                  Value &result_value) const;
 
 private:

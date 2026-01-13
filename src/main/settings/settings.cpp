@@ -4,17 +4,17 @@
 
 namespace duckdb {
 
-bool Settings::TryGetSettingInternal(const ClientContext &context, const char *setting, Value &result) {
-	return context.TryGetCurrentUserSetting(setting, result);
+bool Settings::TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result) {
+	return context.TryGetCurrentUserSetting(setting_index, result);
 }
 
-bool Settings::TryGetSettingInternal(const DBConfig &config, const char *setting, Value &result) {
-	auto lookup_result = config.TryGetCurrentUserSetting(setting, result);
+bool Settings::TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result) {
+	auto lookup_result = config.TryGetCurrentUserSetting(setting_index, result);
 	return lookup_result;
 }
 
-bool Settings::TryGetSettingInternal(const DatabaseInstance &db, const char *setting, Value &result) {
-	return TryGetSettingInternal(DBConfig::GetConfig(db), setting, result);
+bool Settings::TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_index, Value &result) {
+	return TryGetSettingInternal(DBConfig::GetConfig(db), setting_index, result);
 }
 
 } // namespace duckdb
