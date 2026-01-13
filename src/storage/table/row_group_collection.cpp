@@ -30,12 +30,12 @@ RowGroupSegmentTree::RowGroupSegmentTree(RowGroupCollection &collection, idx_t b
 RowGroupSegmentTree::~RowGroupSegmentTree() {
 }
 
-void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
+void RowGroupSegmentTree::Initialize(PersistentTableData &data, optional_ptr<vector<MetaBlockPointer>> read_pointers) {
 	D_ASSERT(data.row_group_count > 0);
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
+	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer, read_pointers);
 	root_pointer = data.block_pointer;
 }
 
@@ -107,13 +107,16 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(owned_row_groups->GetBaseRowId() == 0);
 	auto l = owned_row_groups->Lock();
 	this->total_rows = data.total_rows;
-	owned_row_groups->Initialize(data);
-	stats.Initialize(types, data);
 	metadata_pointer = data.base_table_pointer;
+	metadata_pointers = data.read_metadata_pointers;
+	owned_row_groups->Initialize(data, metadata_pointers);
+	stats.Initialize(types, data);
 }
 
-void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer) {
+void RowGroupCollection::FinalizeCheckpoint(MetaBlockPointer pointer,
+                                            const vector<MetaBlockPointer> &existing_pointers) {
 	metadata_pointer = pointer;
+	metadata_pointers = existing_pointers;
 }
 
 void RowGroupCollection::Initialize(PersistentCollectionData &data) {
@@ -1155,8 +1158,7 @@ public:
 			while (true) {
 				scan_chunk.Reset();
 
-				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
-				                                TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS);
+				current_row_group.Scan(scan_state.table_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;
 				}
@@ -1463,8 +1465,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
 				row_group.CheckpointDeletes(*row_group_writer);
 			}
-			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
-
+			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load());
 			// copy over existing stats into the global stats
 			CopyStats(global_stats);
 			return;
@@ -1863,7 +1864,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
@@ -1871,7 +1872,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
+		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
