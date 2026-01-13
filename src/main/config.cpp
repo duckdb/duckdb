@@ -130,7 +130,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ForceBitpackingModeSetting),
     DUCKDB_GLOBAL(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
-    DUCKDB_GLOBAL(GeometryMinimumShreddingSize),
+    DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_LOCAL(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     DUCKDB_GLOBAL(HTTPProxySetting),

@@ -9,6 +9,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -293,9 +294,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	// Do we have enough rows to consider shredding?
 	auto &table_info = row_group.GetTableInfo();
 	auto &db = table_info.GetDB();
-	auto &config_options = DBConfig::Get(db).options;
 
-	const auto shredding_threshold = config_options.geometry_minimum_shredding_size;
+	const auto shredding_threshold = DBConfig::GetSetting<GeometryMinimumShreddingSize>(DBConfig::Get(db));
 	const auto current_row_count = count.load();
 
 	auto should_shred = shredding_threshold >= 0 && current_row_count >= static_cast<idx_t>(shredding_threshold);
