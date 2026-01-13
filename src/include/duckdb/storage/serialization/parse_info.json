@@ -788,5 +788,17 @@
         "type": "case_insensitive_map_t<string>"
       }
     ]
+  },
+  {
+    "class": "ResetTableOptionsInfo",
+    "base": "AlterTableInfo",
+    "enum": "RESET_TABLE_OPTIONS",
+    "members": [
+      {
+        "id": 400,
+        "name": "table_options",
+        "type": "case_insensitive_map_t<string>"
+      }
+    ]
   }
 ]
