@@ -416,10 +416,24 @@ FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableF
 	lock_guard<mutex> l(stats_lock);
 	if (index.IsPushdownExtract()) {
 		auto child_stats = stats->statistics.PushdownExtract(index.GetChildIndex(0));
-		D_ASSERT(child_stats);
+		if (!child_stats) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		return filter.CheckStatistics(*child_stats);
 	}
 	return filter.CheckStatistics(stats->statistics);
+}
+
+const BaseStatistics &ColumnData::GetStatisticsRef() const {
+	if (stats) {
+		return stats->statistics;
+	}
+	D_ASSERT(HasParent());
+	return parent->GetChildStats(*this);
+}
+
+const BaseStatistics &ColumnData::GetChildStats(const ColumnData &child) const {
+	throw InternalException("GetChildStats not implemented for ColumnData of type %s", type.ToString());
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetStatistics() const {
