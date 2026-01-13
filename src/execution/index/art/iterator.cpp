@@ -57,7 +57,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 
 		// Calculate the column key length (excluding any row_id bytes from nested leaves).
 		// For unique indexes (LEAF_INLINED), nested_depth is 0.
-		// For non-unique indexes, nested_depth tracks how many row_id bytes are in current_key.
+		// For non-unique indexes + duplicates, nested_depth tracks how many row_id bytes are in current_key.
 		D_ASSERT(current_key.Size() >= nested_depth);
 		auto column_key_len = current_key.Size() - nested_depth;
 		output.SetKey(current_key, column_key_len);

@@ -1,5 +1,5 @@
-# name: test/tmp.test
-# group: [test]
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_insert.test
+# group: [interquery]
 
 loop j 0 100
 
