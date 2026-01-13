@@ -60,7 +60,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 		// For non-unique indexes, nested_depth tracks how many row_id bytes are in current_key.
 		D_ASSERT(current_key.Size() >= nested_depth);
 		auto column_key_len = current_key.Size() - nested_depth;
-		output.SetKeyContext(current_key, column_key_len);
+		output.SetKey(current_key, column_key_len);
 
 		switch (last_leaf.GetType()) {
 		case NType::LEAF_INLINED: {
@@ -85,7 +85,6 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
-			// Nested leaves - iterate through all row IDs.
 			uint8_t byte = 0;
 			while (last_leaf.GetNextByte(art, byte)) {
 				if (output.IsFull(max_count)) {

@@ -50,7 +50,6 @@ public:
 		key.len = sizeof(value);
 	}
 
-	//! Create an ARTKey by copying raw bytes into arena-allocated memory.
 	static inline ARTKey CreateKeyFromBytes(ArenaAllocator &allocator, const_data_ptr_t data, idx_t len) {
 		auto new_data = allocator.Allocate(len);
 		memcpy(new_data, data, len);

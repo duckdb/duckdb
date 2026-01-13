@@ -72,7 +72,7 @@ struct RowIdSetOutput {
 	bool IsFull(idx_t max_count) const {
 		return row_ids.size() >= max_count;
 	}
-	void SetKeyContext(const IteratorKey &, idx_t) {
+	void SetKey(const IteratorKey &, idx_t) {
 		// No-op: we don't need keys for row ID output.
 	}
 	void Emit(row_t rid) {
@@ -103,7 +103,7 @@ struct KeyVectorOutput {
 	bool IsFull(idx_t max_count) const {
 		return count >= max_count;
 	}
-	void SetKeyContext(const IteratorKey &current_key, idx_t column_key_len) {
+	void SetKey(const IteratorKey &current_key, idx_t column_key_len) {
 		key_data = current_key.Data();
 		key_len = column_key_len;
 	}

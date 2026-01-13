@@ -294,7 +294,6 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 				                        error.Message());
 			}
 		}
-
 		entry->removed_data_during_checkpoint.reset();
 		entry->added_data_during_checkpoint.reset();
 		entry->last_written_checkpoint = checkpoint_id;

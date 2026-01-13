@@ -80,18 +80,18 @@ public:
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
-	//! Perform a lookup on the ART, fetching up to max_count keys and row IDs.
-	//! Returns true if scan completed, false if stopped due to max_count.
-	bool ScanWithKeys(IndexScanState &state, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-	                  unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	//! Returns the number of entries deleted.
+	// FIXME: replace with structural tree delete merge.
 	idx_t RemovalMerge(IndexLock &state, BoundIndex &other_index);
 	//! Obtains a lock and calls RemovalMerge while holding that lock.
 	idx_t RemovalMerge(BoundIndex &other_index);
 	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
 	//! Returns error data if constraint violation.
+	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existed
+	// MergeIndexes which don't support deprecated leaf chains. Once support for that is added, this simpler insert
+	// merge may be removed.
 	ErrorData InsertMerge(IndexLock &state, BoundIndex &other_index);
 	//! Obtains a lock and calls InsertMerge while holding that lock.
 	ErrorData InsertMerge(BoundIndex &other_index);
@@ -103,8 +103,13 @@ public:
 
 	//! Insert a chunk.
 	ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
-	//! Insert a chunk and verifies constraint violations.
+	//! Insert a chunk and verify constraint violations (generates keys and calls InsertKeys which does the
+	//! verification.
 	ErrorData Insert(IndexLock &l, DataChunk &data, Vector &row_ids, IndexAppendInfo &info) override;
+	//! Insert keys and row_ids into ART and verify constraint violations.
+	ErrorData InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+	                     idx_t count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
+	                     optional_ptr<DataChunk> chunk = nullptr);
 
 	//! Verify that data can be appended to the index without a constraint violation.
 	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) override;
@@ -112,6 +117,11 @@ public:
 	//! Delete a chunk from the ART.
 	idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
 	                optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) override;
+	//! Delete keys and row_ids from the ART.
+	idx_t DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t count,
+	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
+
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 
@@ -168,19 +178,6 @@ private:
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
 	                      set<row_t> &row_ids);
 
-	//! WithKeys variants - return keys and row_id_keys instead of set<row_t>.
-	bool FullScanWithKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
-	                      idx_t &count, idx_t max_count);
-	bool SearchEqualWithKeys(ARTKey &key, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-	                         unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
-	bool SearchGreaterWithKeys(ARTKey &key, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-	                           unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
-	bool SearchLessWithKeys(ARTKey &upper_bound, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-	                        unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
-	bool SearchCloseRangeWithKeys(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal,
-	                              ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-	                              unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
-
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
 	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
@@ -205,16 +202,6 @@ private:
 	string ToStringInternal(bool display_ascii);
 	void VerifyInternal();
 	void VerifyAllocationsInternal();
-
-	//! Core insert logic after key generation. Handles insert loop, rollback, verification, and error messages.
-	ErrorData InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
-	                     idx_t count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
-	                     optional_ptr<DataChunk> chunk = nullptr);
-
-	//! Core delete logic after key generation. Handles delete loop, selection vectors, and verification.
-	idx_t DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t count,
-	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
-	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 };
 
 template <>

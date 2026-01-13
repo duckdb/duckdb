@@ -235,84 +235,6 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 unique_ptr<IndexScanState> ART::InitializeFullScan() {
 	return make_uniq<ARTIndexScanState>();
 }
-
-// FIXME : Make this a more efficient structural tree removal merge
-idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
-	auto &source = other_index.Cast<ART>();
-	if (!source.tree.HasMetadata()) {
-		return 0;
-	}
-
-	ArenaAllocator arena(BufferAllocator::Get(db));
-	idx_t delete_count = 0;
-
-	Iterator it(source);
-	it.FindMinimum(source.tree);
-
-	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
-	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
-	ARTKey empty_key = ARTKey();
-
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	bool complete;
-	do {
-		output.Reset();
-		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
-		if (output.Count() > 0) {
-			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
-		}
-	} while (!complete);
-
-	return delete_count;
-}
-
-// FIXME: We already have a structural tree merge, this only exists right now since the structural merge doesn't
-// handle deprecated leaves. This is being used in merging checkpoint deltas, to avoid a more inefficient table scan.
-// Once the structural merge adds support for deprecated leaves, we can replace the calls of this function with that.
-ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
-	auto &source = other_index.Cast<ART>();
-	if (!source.tree.HasMetadata()) {
-		return ErrorData();
-	}
-
-	ArenaAllocator arena(BufferAllocator::Get(db));
-
-	Iterator it(source);
-	it.FindMinimum(source.tree);
-
-	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
-	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
-	ARTKey empty_key = ARTKey();
-
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	bool complete;
-	do {
-		output.Reset();
-		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
-		if (output.Count() > 0) {
-			auto error =
-			    InsertKeys(arena, keys, row_id_keys, output.Count(), DeleteIndexInfo(), IndexAppendMode::DEFAULT);
-			if (error.HasError()) {
-				return error;
-			}
-		}
-	} while (!complete);
-
-	return ErrorData();
-}
-
-idx_t ART::RemovalMerge(BoundIndex &other_index) {
-	IndexLock state;
-	InitializeLock(state);
-	return RemovalMerge(state, other_index);
-}
-
-ErrorData ART::InsertMerge(BoundIndex &other_index) {
-	IndexLock state;
-	InitializeLock(state);
-	return InsertMerge(state, other_index);
-}
-
 //===--------------------------------------------------------------------===//
 // ART Keys
 //===--------------------------------------------------------------------===//
@@ -523,7 +445,8 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
-	it.Scan(empty_key, row_ids_debug, NumericLimits<idx_t>().Maximum(), false);
+	RowIdSetOutput output(row_ids_debug);
+	it.Scan(empty_key, output, NumericLimits<idx_t>().Maximum(), false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif
 
@@ -533,72 +456,6 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 //===--------------------------------------------------------------------===//
 // Insert and Constraint Checking
 //===--------------------------------------------------------------------===//
-
-ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
-                          idx_t count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
-                          optional_ptr<DataChunk> chunk) {
-	auto conflict_type = ARTConflictType::NO_CONFLICT;
-	idx_t conflict_idx = 0;
-	auto was_empty = !tree.HasMetadata();
-
-	// Insert the entries into the index.
-	for (idx_t i = 0; i < count; i++) {
-		if (keys[i].Empty()) {
-			continue;
-		}
-		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
-		                                    delete_info, append_mode);
-		if (conflict_type != ARTConflictType::NO_CONFLICT) {
-			conflict_idx = i;
-			break;
-		}
-	}
-
-	// Remove any previously inserted entries on conflict.
-	if (conflict_type != ARTConflictType::NO_CONFLICT) {
-		for (idx_t i = 0; i < conflict_idx; i++) {
-			if (keys[i].Empty()) {
-				continue;
-			}
-			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
-			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
-		}
-	}
-
-	if (was_empty) {
-		VerifyAllocationsInternal();
-	}
-
-	if (conflict_type == ARTConflictType::TRANSACTION) {
-		if (chunk) {
-			auto msg = AppendRowError(*chunk, conflict_idx);
-			return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
-		}
-		return ErrorData(TransactionException("write-write conflict during insert"));
-	}
-
-	if (conflict_type == ARTConflictType::CONSTRAINT) {
-		if (chunk) {
-			auto msg = AppendRowError(*chunk, conflict_idx);
-			return ErrorData(
-			    ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
-		}
-		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation during insert"));
-	}
-
-#ifdef DEBUG
-	for (idx_t i = 0; i < count; i++) {
-		if (keys[i].Empty()) {
-			continue;
-		}
-		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		D_ASSERT(leaf);
-		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
-	}
-#endif
-
-	return ErrorData();
-}
 
 ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
 	IndexAppendInfo info;
@@ -616,6 +473,70 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 
 	return InsertKeys(arena, keys, row_id_keys, row_count, DeleteIndexInfo(info.delete_indexes), info.append_mode,
 	                  &chunk);
+}
+
+ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+                          idx_t row_count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
+                          optional_ptr<DataChunk> chunk) {
+	auto conflict_type = ARTConflictType::NO_CONFLICT;
+	optional_idx conflict_idx;
+	auto was_empty = !tree.HasMetadata();
+
+	// Insert the entries into the index.
+	for (idx_t i = 0; i < row_count; i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
+		                                    delete_info, append_mode);
+		if (conflict_type != ARTConflictType::NO_CONFLICT) {
+			conflict_idx = i;
+			break;
+		}
+	}
+
+	// Remove any previously inserted entries on conflict.
+	if (conflict_type != ARTConflictType::NO_CONFLICT) {
+		D_ASSERT(conflict_idx.IsValid());
+		for (idx_t i = 0; i < conflict_idx.GetIndex(); i++) {
+			if (keys[i].Empty()) {
+				continue;
+			}
+			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
+			ARTOperator::Delete(*this, tree, keys[i], row_id_keys[i]);
+		}
+	}
+
+	if (was_empty) {
+		// All nodes are in-memory.
+		VerifyAllocationsInternal();
+	}
+
+	if (conflict_type == ARTConflictType::TRANSACTION) {
+		// chunk is only null when called from MergeCheckpointDeltas.
+		D_ASSERT(chunk);
+		auto msg = AppendRowError(*chunk, conflict_idx.GetIndex());
+		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
+	}
+
+	if (conflict_type == ARTConflictType::CONSTRAINT) {
+		// chunk is only null when called from MergeCheckpointDeltas.
+		D_ASSERT(chunk);
+		auto msg = AppendRowError(*chunk, conflict_idx.GetIndex());
+		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
+	}
+
+#ifdef DEBUG
+	for (idx_t i = 0; i < row_count; i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		D_ASSERT(leaf);
+		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
+	}
+#endif
+	return ErrorData();
 }
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
@@ -659,10 +580,28 @@ void ART::CommitDrop(IndexLock &index_lock) {
 	tree.Clear();
 }
 
-idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t count,
+idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
+                     optional_ptr<SelectionVector> non_deleted_sel) {
+	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
+	// FIXME: but rather all row IDs up to the conflicting row.
+	auto row_count = entries.size();
+
+	DataChunk expr_chunk;
+	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
+	ExecuteExpressions(entries, expr_chunk);
+
+	ArenaAllocator allocator(BufferAllocator::Get(db));
+	unsafe_vector<ARTKey> keys(row_count);
+	unsafe_vector<ARTKey> row_id_keys(row_count);
+	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
+
+	return DeleteKeys(keys, row_id_keys, row_count, deleted_sel, non_deleted_sel);
+}
+
+idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t row_count,
                       optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
 	idx_t delete_count = 0;
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		bool deleted = true;
 		if (!keys[i].Empty()) {
 			D_ASSERT(tree.GetGateStatus() == GateStatus::GATE_NOT_SET);
@@ -685,7 +624,7 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 	}
 
 #ifdef DEBUG
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
 			continue;
 		}
@@ -697,24 +636,6 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 	}
 #endif
 	return delete_count;
-}
-
-idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
-                     optional_ptr<SelectionVector> non_deleted_sel) {
-	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
-	// FIXME: but rather all row IDs up to the conflicting row.
-	auto row_count = entries.size();
-
-	DataChunk expr_chunk;
-	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(entries, expr_chunk);
-
-	ArenaAllocator allocator(BufferAllocator::Get(db));
-	unsafe_vector<ARTKey> keys(row_count);
-	unsafe_vector<ARTKey> row_id_keys(row_count);
-	GenerateKeyVectors(allocator, expr_chunk, row_ids, keys, row_id_keys);
-
-	return DeleteKeys(keys, row_id_keys, row_count, deleted_sel, non_deleted_sel);
 }
 
 //===--------------------------------------------------------------------===//
@@ -837,145 +758,6 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 	return SearchCloseRange(key, upper_bound, left_equal, right_equal, max_count, row_ids);
-}
-
-//===--------------------------------------------------------------------===//
-// Point and range lookups (WithKeys variants)
-//===--------------------------------------------------------------------===//
-
-bool ART::FullScanWithKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
-                           idx_t &count, idx_t max_count) {
-	if (!tree.HasMetadata()) {
-		return true;
-	}
-	Iterator it(*this);
-	it.FindMinimum(tree);
-	ARTKey empty_key = ARTKey();
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	auto result = it.Scan(empty_key, output, max_count, false);
-	count = output.Count();
-	return result;
-}
-
-bool ART::SearchEqualWithKeys(ARTKey &key, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-                              unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
-	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
-	if (!leaf) {
-		return true;
-	}
-
-	Iterator it(*this);
-	it.FindMinimum(*leaf);
-	ARTKey empty_key = ARTKey();
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	auto result = it.Scan(empty_key, output, max_count, false);
-	count = output.Count();
-	return result;
-}
-
-bool ART::SearchGreaterWithKeys(ARTKey &key, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-                                unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
-	if (!tree.HasMetadata()) {
-		return true;
-	}
-
-	// Find the lowest value that satisfies the predicate.
-	Iterator it(*this);
-
-	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(tree, key, equal)) {
-		return true;
-	}
-
-	// We continue the scan. We do not check the bounds as any value following this value is
-	// greater and satisfies our predicate.
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	auto result = it.Scan(ARTKey(), output, max_count, false);
-	count = output.Count();
-	return result;
-}
-
-bool ART::SearchLessWithKeys(ARTKey &upper_bound, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-                             unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
-	if (!tree.HasMetadata()) {
-		return true;
-	}
-
-	// Find the minimum value in the ART: we start scanning from this value.
-	Iterator it(*this);
-	it.FindMinimum(tree);
-
-	// Early-out, if the minimum value is higher than the upper bound.
-	if (it.current_key.GreaterThan(upper_bound, equal, it.GetNestedDepth())) {
-		return true;
-	}
-
-	// Continue the scan until we reach the upper bound.
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	auto result = it.Scan(upper_bound, output, max_count, equal);
-	count = output.Count();
-	return result;
-}
-
-bool ART::SearchCloseRangeWithKeys(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal,
-                                   ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-                                   unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
-	// Find the first node that satisfies the left predicate.
-	Iterator it(*this);
-
-	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(tree, lower_bound, left_equal)) {
-		return true;
-	}
-
-	// Continue the scan until we reach the upper bound.
-	KeyVectorOutput output(arena, keys, row_id_keys);
-	auto result = it.Scan(upper_bound, output, max_count, right_equal);
-	count = output.Count();
-	return result;
-}
-
-bool ART::ScanWithKeys(IndexScanState &state, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
-                       unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
-	auto &scan_state = state.Cast<ARTIndexScanState>();
-	if (scan_state.values[0].IsNull()) {
-		// full scan
-		lock_guard<mutex> l(lock);
-		return FullScanWithKeys(arena, keys, row_id_keys, count, max_count);
-	}
-	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
-	auto key = ARTKey::CreateKey(arena, types[0], scan_state.values[0]);
-	auto max_len = MAX_KEY_LEN * prefix_count;
-	key.VerifyKeyLength(max_len);
-
-	lock_guard<mutex> l(lock);
-	if (scan_state.values[1].IsNull()) {
-		// Single predicate.
-		switch (scan_state.expressions[0]) {
-		case ExpressionType::COMPARE_EQUAL:
-			return SearchEqualWithKeys(key, arena, keys, row_id_keys, count, max_count);
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return SearchGreaterWithKeys(key, true, arena, keys, row_id_keys, count, max_count);
-		case ExpressionType::COMPARE_GREATERTHAN:
-			return SearchGreaterWithKeys(key, false, arena, keys, row_id_keys, count, max_count);
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return SearchLessWithKeys(key, true, arena, keys, row_id_keys, count, max_count);
-		case ExpressionType::COMPARE_LESSTHAN:
-			return SearchLessWithKeys(key, false, arena, keys, row_id_keys, count, max_count);
-		default:
-			throw InternalException("Index scan type not implemented");
-		}
-	}
-
-	// Two predicates.
-	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
-	auto upper_bound = ARTKey::CreateKey(arena, types[0], scan_state.values[1]);
-	upper_bound.VerifyKeyLength(max_len);
-
-	bool left_equal = scan_state.expressions[0] == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	bool right_equal = scan_state.expressions[1] == ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	return SearchCloseRangeWithKeys(key, upper_bound, left_equal, right_equal, arena, keys, row_id_keys, count,
-	                                max_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1482,6 +1264,84 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 	tree = other_art.tree;
 	other_art.tree.Clear();
 	return true;
+}
+
+// FIXME : Make this a more efficient structural tree removal merge
+//		   Right now this is only used in MergeCheckpointDeltas to avoid having to do a table scan.
+idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
+	auto &source = other_index.Cast<ART>();
+	if (!source.tree.HasMetadata()) {
+		return 0;
+	}
+
+	ArenaAllocator arena(BufferAllocator::Get(db));
+	idx_t delete_count = 0;
+
+	Iterator it(source);
+	it.FindMinimum(source.tree);
+
+	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
+	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
+	ARTKey empty_key = ARTKey();
+
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	bool complete;
+	do {
+		output.Reset();
+		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
+		if (output.Count() > 0) {
+			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
+		}
+	} while (!complete);
+
+	return delete_count;
+}
+
+// FIXME: We already have a structural tree merge, this only exists right now since the structural merge doesn't
+// handle deprecated leaves. This is being used in merging checkpoint deltas, to avoid a more inefficient table scan.
+// Once the structural merge adds support for deprecated leaves, we can replace the calls of this function with that.
+ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
+	auto &source = other_index.Cast<ART>();
+	if (!source.tree.HasMetadata()) {
+		return ErrorData();
+	}
+
+	ArenaAllocator arena(BufferAllocator::Get(db));
+
+	Iterator it(source);
+	it.FindMinimum(source.tree);
+
+	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
+	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
+	ARTKey empty_key = ARTKey();
+
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	bool complete;
+	do {
+		output.Reset();
+		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
+		if (output.Count() > 0) {
+			auto error =
+			    InsertKeys(arena, keys, row_id_keys, output.Count(), DeleteIndexInfo(), IndexAppendMode::DEFAULT);
+			if (error.HasError()) {
+				return error;
+			}
+		}
+	} while (!complete);
+
+	return ErrorData();
+}
+
+idx_t ART::RemovalMerge(BoundIndex &other_index) {
+	IndexLock state;
+	InitializeLock(state);
+	return RemovalMerge(state, other_index);
+}
+
+ErrorData ART::InsertMerge(BoundIndex &other_index) {
+	IndexLock state;
+	InitializeLock(state);
+	return InsertMerge(state, other_index);
 }
 
 //===--------------------------------------------------------------------===//
