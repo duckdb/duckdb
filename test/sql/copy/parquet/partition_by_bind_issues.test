@@ -3,11 +3,7 @@ require parquet
 statement ok
 CREATE TABLE test AS SELECT
 	'test' AS user,
-	'2025' AS year,
-	'01' AS month,
-	'01' AS day,
-	'123' AS run_id,
-	'test' AS payload;
+	'2025' AS year
 
 # 'user' is also the name of a SQLValueFunction, this used to bind incorrectly (#20324)
 statement ok
@@ -16,7 +12,12 @@ COPY (
 		*
 	FROM
 		test
-) TO './test.parquet' (
+) TO '__TEST_DIR__/partition_by_test.parquet' (
 	FORMAT PARQUET,
 	PARTITION_BY user
 )
+
+query II
+select * from '__TEST_DIR__/partition_by_test.parquet'
+----
+2025	test
