@@ -360,8 +360,8 @@ AggregateType EnumUtil::FromString<AggregateType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetAllowParserOverrideValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AllowParserOverride::DEFAULT_OVERRIDE), "DEFAULT" },
-		{ static_cast<uint32_t>(AllowParserOverride::FALLBACK), "FALLBACK" },
-		{ static_cast<uint32_t>(AllowParserOverride::STRICT), "STRICT" },
+		{ static_cast<uint32_t>(AllowParserOverride::FALLBACK_OVERRIDE), "FALLBACK" },
+		{ static_cast<uint32_t>(AllowParserOverride::STRICT_OVERRIDE), "STRICT" },
 		{ static_cast<uint32_t>(AllowParserOverride::STRICT_WHEN_SUPPORTED), "STRICT_WHEN_SUPPORTED" }
 	};
 	return values;
