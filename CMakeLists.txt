@@ -256,7 +256,6 @@ if(${MAIN_BRANCH_VERSIONING})
 endif()
 
 if (UNSAFE_NUMERIC_CAST)
-  message(status "UNSAFE_NUMERIC_CAST")
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
 endif()
 if (ENABLE_EXTENSION_AUTOLOADING)
