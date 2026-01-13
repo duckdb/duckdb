@@ -659,6 +659,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformValuesClause);
 	REGISTER_TRANSFORM(TransformValuesExpressions);
 	REGISTER_TRANSFORM(TransformTableStatement);
+	REGISTER_TRANSFORM(TransformParensTableRef);
 
 	REGISTER_TRANSFORM(TransformResultModifiers);
 	REGISTER_TRANSFORM(TransformLimitOffset);

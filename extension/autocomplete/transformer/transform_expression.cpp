@@ -126,6 +126,10 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		function_children.clear();
 	}
 	auto lowercase_name = StringUtil::Lower(qualified_function.name);
+	if (lowercase_name == "count" && function_children.empty()) {
+		lowercase_name = "count_star";
+	}
+
 	if (lowercase_name == "if") {
 		if (function_children.size() != 3) {
 			throw ParserException("Wrong number of arguments to IF.");
@@ -217,7 +221,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		expr->catalog = qualified_function.catalog;
 		expr->schema = qualified_function.schema;
-		expr->function_name = StringUtil::Lower(qualified_function.name);
+		expr->function_name = lowercase_name;
 		expr->type = WindowExpression::WindowToExpressionType(expr->function_name);
 		if (expr->type == ExpressionType::WINDOW_AGGREGATE) {
 			expr->children = std::move(function_children);
@@ -253,8 +257,8 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		return std::move(expr);
 	}
 
-	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema,
-	                                            qualified_function.name, std::move(function_children));
+	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema, lowercase_name,
+	                                            std::move(function_children));
 	result->export_state = export_opt.HasResult();
 	result->distinct = distinct;
 	if (!order_by.empty()) {
@@ -589,6 +593,24 @@ ExpressionType PEGTransformerFactory::TransformComparisonOperator(PEGTransformer
 	return transformer.TransformEnum<ExpressionType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+bool TryNegateLikeFunction(string &function_name) {
+	if (function_name == "~~") {
+		function_name = "!~~";
+		return true;
+	} else if (function_name == "~~*") {
+		function_name = "!~~*";
+		return true;
+	} else if (function_name == "~~~") {
+		// Assuming '~~~' (GLOB) negates to something specific
+		// in your system, otherwise wrap in NOT
+		return false;
+	} else if (function_name == "regexp_full_match") {
+		function_name = "!~";
+		return true;
+	}
+	return false;
+}
+
 // BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transformer,
@@ -615,7 +637,12 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 			func_expr->children.insert(func_expr->children.begin(), std::move(expr));
 		}
 		if (has_not) {
-			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
+			if (!TryNegateLikeFunction(func_expr->function_name)) {
+				// If it wasn't a special "Like" function, wrap it in a standard NOT operator
+				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
+			} else {
+				expr = std::move(func_expr);
+			}
 		} else {
 			expr = std::move(func_expr);
 		}

@@ -1123,6 +1123,8 @@ private:
 	                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformBaseTableRef(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TableRef> TransformParensTableRef(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AtClause> TransformAtClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AtClause> TransformAtSpecifier(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
