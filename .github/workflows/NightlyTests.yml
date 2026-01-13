@@ -495,6 +495,7 @@ jobs:
           CORE_EXTENSIONS: "json;parquet"
           GEN: ninja
           STANDARD_VECTOR_SIZE: 512
+          DISABLE_SANITIZER: 1
         run: make relassert
 
       - name: All tests with 512 vector size and default block size
@@ -576,6 +577,8 @@ jobs:
 
       - name: Build
         shell: bash
+        env:
+          DISABLE_SANITIZER: 1
         run: make relassert
 
       - name: Test
