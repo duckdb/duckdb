@@ -1,0 +1,73 @@
+# name: test/sql/storage/compression/zstd/zstd_select_memory.test
+# description: A point lookup in a ZSTD column must only decompress the selected rows, not the entire vector
+# group: [zstd]
+
+require vector_size 2048
+
+load {TEST_DIR}/zstd_select_memory.db readwrite v1.2.0
+
+statement ok
+PRAGMA force_compression='zstd'
+
+statement ok
+SET threads=1
+
+# 2048 rows of 128KB fill exactly one ZSTD vector; the values are highly compressible so the
+# database file stays small
+# the NULLs matter: without them the validity column is constant-compressed, with them it is
+# uncompressed, which is the case that used to fall back to scanning the entire vector
+statement ok
+CREATE TABLE t AS
+SELECT
+	i AS id,
+	i % 512 = 1 AS sparse,
+	CASE WHEN i % 7 = 0 THEN NULL ELSE repeat(chr((97 + i % 26)::INTEGER), 128000) END AS v
+FROM range(2048) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE segment_type='VARCHAR'
+----
+ZSTD
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE column_name='v' AND segment_type='VALIDITY'
+----
+Uncompressed
+
+# reopen so the scan reads the segment cold from disk
+restart
+
+statement ok
+SET threads=1
+
+# disable spilling so the memory limit actually bites
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA max_temp_directory_size='0B'
+
+# decompressing the selected rows needs a few hundred KB, decompressing the whole vector needs
+# a 256MB buffer and does not fit in this limit
+statement ok
+SET memory_limit='100MB'
+
+query II
+SELECT id, length(v) FROM t WHERE id = 1000
+----
+1000	128000
+
+query II
+SELECT id, length(v) FROM t WHERE id BETWEEN 1000 AND 1002 ORDER BY id
+----
+1000	128000
+1001	NULL
+1002	128000
+
+query III
+SELECT count(*), count(v), sum(length(v)) FROM t WHERE sparse
+----
+4	4	512000

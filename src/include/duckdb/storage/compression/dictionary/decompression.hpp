@@ -22,6 +22,7 @@ public:
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
+	void Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count);
 
 private:
 	string_t FetchStringFromDict(uint32_t dict_offset, uint16_t string_len);
