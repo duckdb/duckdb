@@ -589,10 +589,6 @@ reloption_elem:
 				{
 					$$ = makeDefElem($1, (PGNode *) $3, @1);
 				}
-			| Sconst '=' def_arg
-				{
-					$$ = makeDefElem($1, (PGNode *) $3, @1);
-				}
 			| ColLabel
 				{
 					$$ = makeDefElem($1, NULL, @1);
@@ -605,6 +601,10 @@ reloption_elem:
 			| ColLabel '.' ColLabel
 				{
 					$$ = makeDefElemExtended($1, $3, NULL, PG_DEFELEM_UNSPEC, @1);
+				}
+			| Sconst '=' def_arg /* for table options CREATE .. WITH ('filesize.bytes'= 2048)*/
+				{
+					$$ = makeDefElem($1, (PGNode *) $3, @1);
 				}
 		;
 
