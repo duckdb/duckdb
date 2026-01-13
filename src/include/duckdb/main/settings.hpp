@@ -791,9 +791,8 @@ struct GeometryMinimumShreddingSize {
 	static constexpr const char *Description = "Minimum size of a rowgroup to enable GEOMETRY shredding, or set to -1 "
 	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
 	static constexpr const char *InputType = "BIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "30000";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct HomeDirectorySetting {

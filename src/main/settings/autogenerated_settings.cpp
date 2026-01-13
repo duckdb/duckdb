@@ -432,22 +432,6 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Geometry Minimum Shredding Size
-//===----------------------------------------------------------------------===//
-void GeometryMinimumShreddingSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.geometry_minimum_shredding_size = input.GetValue<int64_t>();
-}
-
-void GeometryMinimumShreddingSize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.geometry_minimum_shredding_size = DBConfigOptions().geometry_minimum_shredding_size;
-}
-
-Value GeometryMinimumShreddingSize::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.geometry_minimum_shredding_size);
-}
-
-//===----------------------------------------------------------------------===//
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::ResetLocal(ClientContext &context) {
