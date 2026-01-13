@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ struct StorageOptions {
 	//! The row group size for this attached database (if any)
 	optional_idx row_group_size;
 	//! Target storage version (if any)
-	optional_idx storage_version;
+	StorageVersionMapping storage_version;
 	//! Block header size (only used for encryption)
 	optional_idx block_header_size;
 

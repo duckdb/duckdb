@@ -676,11 +676,10 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 	if (runner.db) {
 		if (version.empty()) {
 			//! No version was provided, use the default of the main db.
-			runner.config->options.serialization_compatibility =
-			    runner.db->instance->config.options.serialization_compatibility;
+			runner.config->options.storage_compatibility = runner.db->instance->config.options.storage_compatibility;
 		} else {
 			try {
-				runner.config->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+				runner.config->options.storage_compatibility = StorageCompatibility::FromString(version);
 			} catch (std::exception &ex) {
 				ErrorData err(ex);
 				SQLLogicTestLogger::LoadDatabaseFail(runner.file_name, dbpath, err.Message());

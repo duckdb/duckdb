@@ -45,7 +45,7 @@ struct StorageManagerOptions {
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
-	optional_idx storage_version;
+	StorageVersionMapping storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
 	//! Unique database identifier and optional encryption salt.
@@ -156,6 +156,7 @@ private:
 	static void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id);
 	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
+	uint64_t SetSerializeOrStorageVersion(uint64_t version_number) const;
 
 	//! Check and adding Encryption Keys
 	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);

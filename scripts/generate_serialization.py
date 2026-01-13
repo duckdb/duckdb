@@ -68,6 +68,23 @@ def verify_serialization_versions(version_map):
 verify_serialization_versions(version_map)
 
 
+def get_version_string(storage_version: int):
+    versions = version_map['serialization']['values']
+
+    reverse_versions = {}
+    for k, v in versions.items():
+        if v not in reverse_versions and k != "latest":
+            reverse_versions[v] = k
+
+    try:
+        search_key = int(storage_version)
+    except (ValueError, TypeError):
+        search_key = storage_version
+
+    result_string = reverse_versions.get(search_key, storage_version)
+    return result_string
+
+
 def lookup_serialization_version(version: str):
     if version.lower() == "latest":
         print(
@@ -505,14 +522,44 @@ class SerializableClass:
             assignment=assignment,
         )
 
+        def serialize_string_or_constant(storage_version: int, entry: str, is_delete: bool):
+            exclamation = ""
+
+            if is_delete:
+                exclamation = "!"
+
+            # storage version 3 == serialization version 3 == v1.1.0
+            if storage_version <= 3:
+                # write the version string
+                if not entry.isdigit():
+                    code.append(f'\tif ({exclamation}serializer.ShouldSerialize("{entry}")) {{')
+                else:
+                    code.append(
+                        f'\tif ({exclamation}serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{'
+                    )
+
+            else:
+                # storage version 4 and higher
+                if not entry.isdigit():
+                    version_string = entry
+                else:
+                    version_string = get_version_string(storage_version)
+
+                formatted_version = version_string.upper().replace(".", "_")
+                code.append(
+                    f'\tif ({exclamation}serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::{formatted_version}))) {{'
+                )
+
         if conditional_serialization:
             code = []
             if entry.status != MemberVariableStatus.EXISTING:
                 # conditional delete
-                code.append(f'\tif (!serializer.ShouldSerialize({storage_version})) {{')
+                serialize_string_or_constant(storage_version, entry.version, True)
+
             else:
                 # conditional serialization
-                code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+                serialize_string_or_constant(storage_version, entry.version, False)
+
             code.append('\t' + serialization_code)
 
             result = '\n'.join(code) + '\t}\n'

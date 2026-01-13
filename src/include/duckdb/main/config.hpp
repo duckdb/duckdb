@@ -64,27 +64,30 @@ struct DatabaseCacheEntry;
 struct DBConfig;
 struct SettingLookupResult;
 
-class SerializationCompatibility {
+class StorageCompatibility {
 public:
-	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
-	static SerializationCompatibility FromIndex(idx_t serialization_version);
-	static SerializationCompatibility FromString(const string &input);
-	static SerializationCompatibility Default();
-	static SerializationCompatibility Latest();
+	static StorageCompatibility FromDatabase(AttachedDatabase &db);
+	static StorageCompatibility FromIndex(const StorageVersionMapping &storage_version_p);
+	static StorageCompatibility FromString(const string &input);
+	static StorageCompatibility Default();
+	static StorageCompatibility Latest();
 
 public:
 	bool Compare(idx_t property_version) const;
+	bool CompareVersionString(const string &property_version) const;
+	StorageVersionMapping GetStorageVersionMapping() const;
 
 public:
 	//! The user provided version
 	string duckdb_version;
 	//! The max version that should be serialized
-	idx_t serialization_version;
+	idx_t storage_version;
 	//! Whether this was set by a manual SET/PRAGMA or default
 	bool manually_set;
+	//! serialization version (2 or 3, which are both storage version 64)
 
 protected:
-	SerializationCompatibility() = default;
+	StorageCompatibility() = default;
 };
 
 struct DBConfigOptions {
@@ -155,7 +158,7 @@ struct DBConfigOptions {
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;

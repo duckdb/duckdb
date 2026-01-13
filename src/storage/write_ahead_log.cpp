@@ -358,8 +358,16 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
 	case_insensitive_map_t<Value> options;
-	auto storage_version = db.GetStorageManager().GetStorageVersion();
-	auto v1_0_0_storage = storage_version < 3;
+	auto storage_version = db.GetStorageManager().GetStorageVersionValueIdx();
+	bool v1_0_0_storage = false;
+	if (storage_version < static_cast<idx_t>(StorageVersion::V1_2_0)) {
+		auto deprecated_serialization_version = db.GetStorageManager().GetDuckDBVersionString();
+		auto ser_version = GetSerializationVersionDeprecated(deprecated_serialization_version.GetString().c_str());
+		if (ser_version <
+		    SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V1_1_0)) {
+			v1_0_0_storage = true;
+		}
+	}
 	if (!v1_0_0_storage) {
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}

@@ -187,14 +187,67 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	return header;
 }
 
-void DatabaseHeader::Write(WriteStream &ser) {
+void DatabaseHeader::Write(WriteStream &ser) const {
 	ser.Write<uint64_t>(iteration);
 	ser.Write<idx_t>(meta_block);
 	ser.Write<idx_t>(free_list);
 	ser.Write<uint64_t>(block_count);
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
-	ser.Write<idx_t>(serialization_compatibility);
+
+	auto storage_header_version = storage_compatibility.version.GetIndex();
+	if (storage_compatibility.version.GetIndex() < static_cast<idx_t>(StorageVersion::V1_5_0)) {
+		storage_header_version = GetSerializationVersionDeprecated(storage_compatibility.version_string.c_str());
+	}
+	ser.Write<idx_t>(storage_header_version);
+}
+
+void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version) {
+	// Note that the main_header version number will never be changed after the database is created
+	// even if the db file gets bumped to a higher version
+	// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
+	// Note that there is one exception on this
+	if (main_version < static_cast<idx_t>(StorageVersion::V1_5_0) &&
+	    read_version < static_cast<idx_t>(StorageVersion::V1_5_0)) {
+		// if the main header version and db header version are < v1.5.0
+		// then we fall back to the serialization version
+		switch (read_version) {
+		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
+			// If read version is 0
+		case static_cast<idx_t>(StorageVersion::INVALID):
+			// In some old duckdb versions, storage version (64) is serialized instead of ser version
+		case static_cast<idx_t>(StorageVersion::V0_10_2):
+			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
+			header.storage_compatibility.version_string = "v0.10.2";
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_0_0):
+			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
+			header.storage_compatibility.version_string = "v1.0.0";
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_1_0):
+			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
+			header.storage_compatibility.version_string = "v1.1.0";
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0):
+			header.storage_compatibility.version = static_cast<idx_t>(StorageVersion::V1_2_0);
+			header.storage_compatibility.version_string = "v1.2.0";
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_3_0):
+			header.storage_compatibility.version = static_cast<idx_t>(StorageVersion::V1_3_0);
+			header.storage_compatibility.version_string = "v1.3.0";
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_4_0):
+			header.storage_compatibility.version = static_cast<idx_t>(StorageVersion::V1_4_0);
+			header.storage_compatibility.version_string = "v1.4.0";
+			break;
+		default:
+			throw InvalidInputException("Deprecated Serialization Version is not found!");
+		}
+	} else {
+		// From v1.5.0 onwards, we use and store only the storage version number
+		header.storage_compatibility.version = read_version;
+		header.storage_compatibility.version_string = "v1.5.0";
+	}
 }
 
 DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
@@ -221,8 +274,8 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
-	// Default to 1 for version 64, else read from file.
-	header.serialization_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
+	auto database_header_storage_version = source.Read<idx_t>();
+	SetStorageVersion(header, main_header.version_number, database_header_storage_version);
 
 	return header;
 }
@@ -278,17 +331,19 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 }
 
 void SingleFileBlockManager::AddStorageVersionTag() {
-	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.GetIndex(), true);
+	D_ASSERT(options.storage_version.version.IsValid());
+	// Note that this version differs from
+	// options.storage_version.version_string
+	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.version.GetIndex(), true);
 }
 
 uint64_t SingleFileBlockManager::GetVersionNumber() const {
-	auto storage_version = options.storage_version.GetIndex();
-	if (storage_version < 4) {
-		return VERSION_NUMBER;
+	if (options.storage_version.version.IsValid()) {
+		// If version number is explicitly given at attach, we set it.
+		return options.storage_version.version.GetIndex();
 	}
-	// Look up the matching version number.
-	auto version_name = GetStorageVersionName(storage_version, false);
-	return GetStorageVersion(version_name.c_str()).GetIndex();
+	// we return the default version number
+	return VERSION_NUMBER;
 }
 
 MainHeader ConstructMainHeader(idx_t version_number) {
@@ -308,6 +363,23 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 
 void SingleFileBlockManager::StoreDBIdentifier(MainHeader &main_header, data_ptr_t db_identifier) {
 	main_header.SetDBIdentifier(db_identifier);
+}
+
+uint64_t SingleFileBlockManager::SetSerializeOrStorageVersion(uint64_t version_number) const {
+	auto storage_version = options.storage_version.version;
+
+	if (version_number >= static_cast<idx_t>(StorageVersion::V1_5_0) ||
+	    storage_version.GetIndex() >= static_cast<idx_t>(StorageVersion::V1_5_0)) {
+		// for newer versions, we store the StorageVersion instead of Serialization number
+		return storage_version.GetIndex();
+	}
+
+	// For older db files, we fall back to the serialization version
+	auto serialization_version = GetSerializationVersionDeprecated(options.storage_version.version_string.c_str());
+	D_ASSERT(serialization_version <= static_cast<idx_t>(SerializationVersionDeprecated::V1_4_0) ||
+	         serialization_version == UINT64_MAX);
+
+	return serialization_version;
 }
 
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
@@ -378,13 +450,11 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
 	header_buffer.Clear();
-
 	options.version_number = GetVersionNumber();
-	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
+	db.GetStorageManager().SetStorageVersion(options.storage_version);
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-
 	// Derive the encryption key and add it to the cache.
 	// Not used for plain databases.
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
@@ -392,7 +462,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
 	memset(options.db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
-	if (encryption_enabled || options.version_number.GetIndex() >= 67) {
+
+	if (encryption_enabled || options.version_number.GetIndex() >= static_cast<idx_t>(StorageVersion::V1_4_0)) {
 		GenerateDBIdentifier(options.db_identifier);
 	}
 
@@ -442,7 +513,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
-	h1.serialization_compatibility = options.storage_version.GetIndex();
+	h1.storage_compatibility.version = SetSerializeOrStorageVersion(main_header.version_number);
+	h1.storage_compatibility.version_string = options.storage_version.version_string;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -455,7 +527,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
-	h2.serialization_compatibility = options.storage_version.GetIndex();
+	h2.storage_compatibility.version = SetSerializeOrStorageVersion(main_header.version_number);
+	h2.storage_compatibility.version_string = options.storage_version.version_string;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -527,7 +600,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
 
-		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a proper validation
 		// of the cipher used instead of this trick to avoid downgrades
 		if (stored_cipher != EncryptionTypes::GCM) {
 			if (config_cipher == EncryptionTypes::INVALID) {
@@ -666,27 +739,30 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = NumericCast<block_id_t>(header.block_count);
-	if (options.storage_version.IsValid()) {
+	if (options.storage_version.version.IsValid()) {
 		// storage version specified explicity - use requested storage version
-		auto requested_compat_version = options.storage_version.GetIndex();
-		if (requested_compat_version < header.serialization_compatibility) {
+		auto requested_compat_version = options.storage_version.version.GetIndex();
+		if (requested_compat_version < header.storage_compatibility.version.GetIndex()) {
 			throw InvalidInputException(
-			    "Error opening \"%s\": cannot initialize database with storage version %d - which is lower than what "
-			    "the database itself uses (%d). The storage version of an existing database cannot be lowered.",
-			    path, requested_compat_version, header.serialization_compatibility);
+			    "Error opening \"%s\": cannot initialize database with storage version %s - which is lower than "
+			    "what the database itself uses (%s). The storage version of an existing database cannot be lowered.",
+			    path, options.storage_version.version_string, header.storage_compatibility.version_string);
 		}
 	} else {
 		// load storage version from header
-		options.storage_version = header.serialization_compatibility;
+		// this is immutable, so it can differ from the serialized storage version in the database header
+		options.storage_version.version = header.storage_compatibility.version;
+		options.storage_version.version_string = header.storage_compatibility.version_string;
 	}
-	if (header.serialization_compatibility > SerializationCompatibility::Latest().serialization_version) {
+
+	if (header.storage_compatibility.version.GetIndex() > StorageCompatibility::Latest().storage_version) {
 		throw InvalidInputException(
 		    "Error opening \"%s\": file was written with a storage version greater than the latest version supported "
 		    "by this DuckDB instance. Try opening the file with a newer version of DuckDB.",
 		    path);
 	}
 
-	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
+	db.GetStorageManager().SetStorageVersion(options.storage_version);
 
 	if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != header.block_alloc_size) {
 		throw InvalidInputException(
@@ -1188,7 +1264,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.block_count = NumericCast<idx_t>(max_block);
 	lock.unlock();
 
-	header.serialization_compatibility = options.storage_version.GetIndex();
+	// what if we write with v1_0_0, test this!
+	header.storage_compatibility.version = SetSerializeOrStorageVersion(options.storage_version.version.GetIndex());
+	header.storage_compatibility.version_string = options.storage_version.version_string;
 
 	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
@@ -1197,12 +1275,15 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 
 	// We need to fsync BEFORE we write the header to ensure that all the previous blocks are written as well
 	handle->Sync();
-
 	header_buffer.Clear();
+
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
-	if (options.version_number.GetIndex() == 64 && options.storage_version.GetIndex() >= 4) {
-		// rewrite the main header
-		options.version_number = 65;
+	auto deprecated_serialization_version =
+	    GetSerializationVersionDeprecated(options.storage_version.version_string.c_str());
+	if (options.version_number.GetIndex() == static_cast<idx_t>(StorageVersion::V0_10_2) &&
+	    deprecated_serialization_version >= static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0)) {
+		// rewrite the main header with storage version v1.2.0+
+		options.version_number = static_cast<idx_t>(StorageVersion::V1_2_0);
 		MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 		// now write the header to the file

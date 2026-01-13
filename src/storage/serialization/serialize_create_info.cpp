@@ -26,7 +26,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(108, "tags", tags, InsertionOrderPreservingMap<string>());
-	if (serializer.ShouldSerialize(2)) {
+	if (serializer.ShouldSerialize("v0.10.3")) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 }

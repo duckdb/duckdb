@@ -823,65 +823,83 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 }
 
 SerializationOptions::SerializationOptions(AttachedDatabase &db) {
-	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
+	storage_compatibility = StorageCompatibility::FromDatabase(db);
 }
 
-SerializationCompatibility SerializationCompatibility::FromDatabase(AttachedDatabase &db) {
-	return FromIndex(db.GetStorageManager().GetStorageVersion());
+StorageCompatibility StorageCompatibility::FromDatabase(AttachedDatabase &db) {
+	return FromIndex(db.GetStorageManager().GetStorageVersionMap());
 }
 
-SerializationCompatibility SerializationCompatibility::FromIndex(const idx_t version) {
-	SerializationCompatibility result;
-	result.duckdb_version = "";
-	result.serialization_version = version;
+StorageCompatibility StorageCompatibility::FromIndex(const StorageVersionMapping &storage_version_p) {
+	StorageCompatibility result;
+	result.duckdb_version = storage_version_p.version_string;
+	result.storage_version = storage_version_p.version.GetIndex();
 	result.manually_set = false;
 	return result;
 }
 
-SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
+StorageCompatibility StorageCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
 	}
 
-	auto serialization_version = GetSerializationVersion(input.c_str());
-	if (!serialization_version.IsValid()) {
-		auto candidates = GetSerializationCandidates();
+	auto storage_version = GetStorageVersion(input.c_str());
+
+	if (!storage_version.version.IsValid()) {
+		auto candidates = GetStorageCandidates();
 		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
 	}
-	SerializationCompatibility result;
+
+	StorageCompatibility result;
 	result.duckdb_version = input;
-	result.serialization_version = serialization_version.GetIndex();
+	result.storage_version = storage_version.version.GetIndex();
 	result.manually_set = true;
 	return result;
 }
 
-SerializationCompatibility SerializationCompatibility::Default() {
+StorageCompatibility StorageCompatibility::Default() {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto res = FromString("latest");
+	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
 #else
 #ifdef DUCKDB_LATEST_STORAGE
 	auto res = FromString("latest");
+	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
 #else
 	auto res = FromString("v0.10.2");
+	res.duckdb_version = "v0.10.2";
 	res.manually_set = false;
 	return res;
 #endif
 #endif
 }
 
-SerializationCompatibility SerializationCompatibility::Latest() {
+StorageCompatibility StorageCompatibility::Latest() {
 	auto res = FromString("latest");
+	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
 }
 
-bool SerializationCompatibility::Compare(idx_t property_version) const {
-	return property_version <= serialization_version;
+bool StorageCompatibility::Compare(idx_t property_version) const {
+	return property_version <= storage_version;
 }
 
+bool StorageCompatibility::CompareVersionString(const string &property_version) const {
+	auto property_version_val = GetSerializationVersionDeprecated(property_version.c_str());
+	auto deprecated_serialization_version = GetSerializationVersionDeprecated(duckdb_version.c_str());
+	return property_version_val <= deprecated_serialization_version;
+}
+
+StorageVersionMapping StorageCompatibility::GetStorageVersionMapping() const {
+	StorageVersionMapping result;
+	result.version = storage_version;
+	result.version_string = duckdb_version;
+	return result;
+}
 } // namespace duckdb

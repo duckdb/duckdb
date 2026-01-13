@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -28,15 +29,18 @@ struct CompressionMethodRequirements {
 CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compression_type,
                                                          optional_ptr<StorageManager> storage_manager) {
 	//! Max storage compatibility
-	vector<CompressionMethodRequirements> candidates({{CompressionType::COMPRESSION_PATAS, optional_idx(), 0},
-	                                                  {CompressionType::COMPRESSION_CHIMP, optional_idx(), 0},
-	                                                  {CompressionType::COMPRESSION_DICTIONARY, 0, 4},
-	                                                  {CompressionType::COMPRESSION_FSST, 0, 4},
-	                                                  {CompressionType::COMPRESSION_DICT_FSST, 5, optional_idx()}});
+	vector<CompressionMethodRequirements> candidates(
+	    {{CompressionType::COMPRESSION_PATAS, optional_idx(), static_cast<idx_t>(StorageVersion::INVALID)},
+	     {CompressionType::COMPRESSION_CHIMP, optional_idx(), static_cast<idx_t>(StorageVersion::INVALID)},
+	     {CompressionType::COMPRESSION_DICTIONARY, static_cast<idx_t>(StorageVersion::INVALID),
+	      static_cast<idx_t>(StorageVersion::V1_2_0)},
+	     {CompressionType::COMPRESSION_FSST, static_cast<idx_t>(StorageVersion::INVALID),
+	      static_cast<idx_t>(StorageVersion::V1_2_0)},
+	     {CompressionType::COMPRESSION_DICT_FSST, static_cast<idx_t>(StorageVersion::V1_3_0), optional_idx()}});
 
 	optional_idx current_storage_version;
 	if (storage_manager && storage_manager->HasStorageVersion()) {
-		current_storage_version = storage_manager->GetStorageVersion();
+		current_storage_version = storage_manager->GetStorageVersionValueIdx();
 	}
 	for (auto &candidate : candidates) {
 		auto &type = candidate.type;
@@ -70,6 +74,7 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 		}
 		return CompressionAvailabilityResult();
 	}
+	// default is available
 	return CompressionAvailabilityResult();
 }
 

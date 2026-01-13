@@ -105,15 +105,23 @@ public:
 	virtual BlockManager &GetBlockManager() = 0;
 	virtual void Destroy();
 
-	void SetStorageVersion(idx_t version) {
+	void SetStorageVersion(const StorageVersionMapping &version) {
 		storage_version = version;
 	}
-	bool HasStorageVersion() const {
-		return storage_version.IsValid();
-	}
-	idx_t GetStorageVersion() const {
+	StorageVersionMapping GetStorageVersionMap() const {
 		D_ASSERT(HasStorageVersion());
-		return storage_version.GetIndex();
+		return storage_version;
+	}
+	bool HasStorageVersion() const {
+		return storage_version.version.IsValid();
+	}
+	idx_t GetStorageVersionValueIdx() const {
+		D_ASSERT(HasStorageVersion());
+		return storage_version.version.GetIndex();
+	}
+	string_t GetDuckDBVersionString() const {
+		D_ASSERT(HasStorageVersion());
+		return storage_version.version_string;
 	}
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
@@ -152,7 +160,7 @@ protected:
 	//! return nullptr when loading a database
 	bool load_complete = false;
 	//! The serialization compatibility version when reading and writing from this database
-	optional_idx storage_version;
+	StorageVersionMapping storage_version;
 	//! Estimated size of changes for determining automatic checkpointing on in-memory databases and databases without a
 	//! WAL.
 	atomic<idx_t> wal_size;

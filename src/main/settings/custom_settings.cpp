@@ -1682,18 +1682,18 @@ Value SecretDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto version_string = input.GetValue<string>();
-	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
-	config.options.serialization_compatibility = serialization_compatibility;
+	auto storage_compatibility = StorageCompatibility::FromString(version_string);
+	config.options.storage_compatibility = storage_compatibility;
 }
 
 void StorageCompatibilityVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.serialization_compatibility = DBConfigOptions().serialization_compatibility;
+	config.options.storage_compatibility = DBConfigOptions().storage_compatibility;
 }
 
 Value StorageCompatibilityVersionSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 
-	auto &version_name = config.options.serialization_compatibility.duckdb_version;
+	auto &version_name = config.options.storage_compatibility.duckdb_version;
 	return Value(version_name);
 }
 

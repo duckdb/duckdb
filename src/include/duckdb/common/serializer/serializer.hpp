@@ -33,7 +33,7 @@ public:
 
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 };
 
 class Serializer {
@@ -45,8 +45,23 @@ public:
 	virtual ~Serializer() {
 	}
 
-	bool ShouldSerialize(idx_t version_added) {
-		return options.serialization_compatibility.Compare(version_added);
+	bool ShouldSerializeInternal(idx_t version_added) const {
+		return options.storage_compatibility.Compare(version_added);
+	}
+
+	bool ShouldSerialize(idx_t version_added) const {
+		return ShouldSerializeInternal(version_added);
+	}
+
+	bool ShouldSerialize(const string &string_version_added) const {
+		auto property_version = GetStorageVersionValue(string_version_added.c_str());
+
+		if (property_version < static_cast<idx_t>(StorageVersion::V1_5_0)) {
+			// serialization version is used (older)
+			return options.storage_compatibility.CompareVersionString(string_version_added);
+		}
+
+		return ShouldSerializeInternal(property_version);
 	}
 
 	class List {

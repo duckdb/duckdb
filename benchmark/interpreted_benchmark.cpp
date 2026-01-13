@@ -59,7 +59,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig(const string &version = "") {
 		auto result = make_uniq<DBConfig>();
 		if (!version.empty()) {
-			result->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+			result->options.storage_compatibility = StorageCompatibility::FromString(version);
 		}
 		result->options.load_extensions = false;
 		return result;

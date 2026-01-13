@@ -289,7 +289,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 vector<unique_ptr<ParsedExpression>>
 MacroFunction::GetPositionalParametersForSerialization(Serializer &serializer) const {
 	vector<unique_ptr<ParsedExpression>> result;
-	if (serializer.ShouldSerialize(6)) {
+	if (serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::V1_4_0))) {
 		// We serialize all positional parameters as-is
 		for (auto &param : parameters) {
 			result.push_back(param->Copy());

@@ -2078,7 +2078,7 @@ void Value::SerializeChildren(Serializer &serializer, const vector<Value> &child
 }
 
 void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const {
-	if (serialize_type || !serializer.ShouldSerialize(4)) {
+	if (serialize_type || !serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::V1_2_0))) {
 		// only the root value needs to serialize its type
 		// for forwards compatibility reasons, we also serialize the type always when targeting versions < v1.2.0
 		serializer.WriteProperty(100, "type", type_);
