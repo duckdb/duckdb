@@ -27,6 +27,7 @@ env:
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
   REDUCE_SYMBOLS: 1
+  PYTHONUNBUFFERED: 1
 
 jobs:
   check-draft:
