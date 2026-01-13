@@ -119,6 +119,18 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	return true;
 }
 
+void ExecuteFunctionState::ResetDictionaryStates() {
+
+	// Clear the cached dictionary information
+	current_input_dictionary_id.clear();
+	output_dictionary_id.clear();
+	output_dictionary.reset();
+
+	for (const auto &child_state : child_states) {
+		child_state->ResetDictionaryStates();
+	}
+}
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
