@@ -122,9 +122,6 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		}
 	} else {
 		comparison_values = values;
-		for (auto &val : comparison_values) {
-			val = runner.LoopReplacement(val, context.running_loops);
-		}
 	}
 
 	// compute the hash of the results if there is a hash label or we are past the hash threshold
