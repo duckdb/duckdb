@@ -244,7 +244,7 @@ void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
 	ref.query_location = optional_idx(static_cast<idx_t>(query_location));
 }
 
-void Transformer::TransformTableProperties(case_insensitive_map_t<Value> &options,
+void Transformer::TransformTableProperties(case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
                                            optional_ptr<duckdb_libpgquery::PGList> pg_options) {
 	if (!pg_options) {
 		return;
@@ -258,15 +258,11 @@ void Transformer::TransformTableProperties(case_insensitive_map_t<Value> &option
 			throw ParserException("Duplicate table property \"%s\"", lower_name);
 		}
 		if (!def_elem->arg) {
-			options[lower_name] = Value::BOOLEAN(true);
+			options.emplace(lower_name, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
 			continue;
 		}
 		auto expr = TransformExpression(def_elem->arg);
-		if (expr->type != ExpressionType::VALUE_CONSTANT) {
-			throw ParserException("table property \"%s\" must be a constant", lower_name);
-		}
-		auto &constant = expr->Cast<ConstantExpression>();
-		options[lower_name] = constant.value;
+		options.emplace(lower_name, std::move(expr));
 	}
 }
 

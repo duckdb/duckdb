@@ -167,10 +167,9 @@
         "type": "vector<ParsedExpression*>"
       },
       {
-        "id": 207,
+        "id": 206,
         "name": "options",
-        "type": "case_insensitive_map_t<Value>",
-        "default": "case_insensitive_map_t<Value>()"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },

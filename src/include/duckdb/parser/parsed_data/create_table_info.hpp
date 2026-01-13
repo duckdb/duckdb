@@ -34,7 +34,7 @@ struct CreateTableInfo : public CreateInfo {
 	//! Table Sort definitions
 	vector<unique_ptr<ParsedExpression>> sort_keys;
 	//! Extra Table options if any
-	case_insensitive_map_t<Value> options;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

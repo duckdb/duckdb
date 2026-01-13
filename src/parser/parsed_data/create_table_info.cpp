@@ -29,7 +29,9 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &order : sort_keys) {
 		result->sort_keys.push_back(order->Copy());
 	}
-	result->options = options;
+	for (auto &option : options) {
+		result->options.emplace(option.first, option.second->Copy());
+	}
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
@@ -64,7 +66,7 @@ string CreateTableInfo::ToString() const {
 		if (!options.empty()) {
 			ret += " WITH (";
 			for (auto &entry : options) {
-				ret += "'" + entry.first + "'='" + entry.second.ToString() + "',";
+				ret += "'" + entry.first + "'=" + entry.second->ToString() + ",";
 			}
 			ret.pop_back();
 			ret += ")";
