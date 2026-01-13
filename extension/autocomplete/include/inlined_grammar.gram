@@ -1098,7 +1098,7 @@ DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral
 ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'
 LoadStatement <- 'LOAD' ColIdOrString
-InstallStatement <- 'FORCE'? 'INSTALL' Identifier FromSource? VersionNumber?
+InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 FromSource <- 'FROM' (Identifier / StringLiteral)
 VersionNumber <- Identifier
 DropStatement <- 'DROP' DropEntries DropBehavior?
@@ -1569,5 +1569,5 @@ UseStatement <- 'USE' UseTarget
 
 UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
 
-CallStatement <- 'CALL' TableFunctionName TableFunctionArguments
+CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 

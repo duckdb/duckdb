@@ -1037,7 +1037,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ReservedKeywordValue <- ReservedKeyword\n"
 	"NoneLiteral <- 'NONE'\n"
 	"LoadStatement <- 'LOAD' ColIdOrString\n"
-	"InstallStatement <- 'FORCE'? 'INSTALL' Identifier FromSource? VersionNumber?\n"
+	"InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?\n"
 	"FromSource <- 'FROM' (Identifier / StringLiteral)\n"
 	"VersionNumber <- Identifier\n"
 	"DropStatement <- 'DROP' DropEntries DropBehavior?\n"
@@ -1409,7 +1409,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DetachStatement <- 'DETACH' Database? IfExists? CatalogName\n"
 	"UseStatement <- 'USE' UseTarget\n"
 	"UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName\n"
-	"CallStatement <- 'CALL' TableFunctionName TableFunctionArguments\n"
+	"CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments\n"
 
 };
 
