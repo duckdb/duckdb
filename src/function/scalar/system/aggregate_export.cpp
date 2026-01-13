@@ -260,6 +260,24 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
+
+	auto aggregate_state_export_callback = bind_data.aggregate->function.GetAggregateStateExportCallback();
+	auto aggregate_state_type = bind_data.aggregate->function.GetStateType();
+	if (aggregate_state_export_callback != nullptr && aggregate_state_type.id() != LogicalTypeId::INVALID) {
+		// if we opt-in to the export, we also have to know how to import
+		D_ASSERT(bind_data.aggregate->function.GetAggregateStateImportCallback());
+
+		result.Flatten(count);
+		aggregate_state_export_callback(
+			state,
+			aggr_input_data,
+			result,
+			count,
+			offset
+		);
+		return;
+	}
+
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 	auto blob_ptr = FlatVector::GetData<string_t>(result);
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
@@ -313,12 +331,19 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
 	LogicalType state_layout = LogicalType::INVALID;
+
+	LogicalType return_type;
 	if (bound_function.HasGetStateTypeCallback()) {
 		state_layout = bound_function.GetStateType();
 	}
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
 	                             child_aggregate->function.arguments, state_layout);
-	auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type));
+
+	if (state_layout == LogicalType::INVALID) {
+		return_type = LogicalType::AGGREGATE_STATE(std::move(state_type));
+	} else {
+		return_type = state_layout;
+	}
 
 	auto export_function =
 	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.arguments, return_type,
