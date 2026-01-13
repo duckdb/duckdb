@@ -72,27 +72,27 @@ idx_t GeoColumnData::Scan(TransactionData transaction, idx_t vector_index, Colum
 	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type, 0);
 	return scan_count;
 }
-
-idx_t GeoColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                   idx_t target_count) {
-	auto &layout_type = base_column->GetType();
-
-	// Not a shredded column, so just emit the binary format immediately
-	if (layout_type.id() == LogicalTypeId::GEOMETRY) {
-		return base_column->ScanCommitted(vector_index, state, result, target_count);
-	}
-
-	// Setup an intermediate chunk to scan the actual data, based on how much we actually scanned
-	// TODO: Put this in a scan state
-	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, target_count);
-
-	const auto scan_count = base_column->ScanCommitted(vector_index, state, scan_chunk.data[0], target_count);
-
-	// Now reassemble
-	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type, 0);
-	return scan_count;
-}
+//
+// idx_t GeoColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+//                                    idx_t target_count) {
+// 	auto &layout_type = base_column->GetType();
+//
+// 	// Not a shredded column, so just emit the binary format immediately
+// 	if (layout_type.id() == LogicalTypeId::GEOMETRY) {
+// 		return base_column->Scan(vector_index, state, result, target_count);
+// 	}
+//
+// 	// Setup an intermediate chunk to scan the actual data, based on how much we actually scanned
+// 	// TODO: Put this in a scan state
+// 	DataChunk scan_chunk;
+// 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, target_count);
+//
+// 	const auto scan_count = base_column->ScanCommitted(vector_index, state, scan_chunk.data[0], target_count);
+//
+// 	// Now reassemble
+// 	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type, 0);
+// 	return scan_count;
+// }
 
 idx_t GeoColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t target_count, idx_t result_offset) {
 	auto &layout_type = base_column->GetType();
@@ -354,7 +354,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		scan_chunk.Reset();
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		ScanCommitted(vector_index++, scan_state, scan_chunk.data[0], false, to_scan);
+		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
 
 		// Verify the scan chunk
 		scan_chunk.Verify();
