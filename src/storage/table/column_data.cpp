@@ -771,7 +771,7 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 	}
 
 	// Serialize the extra data
-	serializer.WritePropertyWithDefault(150, "extra_data", extra_data);
+	serializer.WritePropertyWithDefault(99, "extra_data", extra_data);
 
 	// TODO: Dont special-case this
 	if (logical_type.id() == LogicalTypeId::VARIANT) {
@@ -817,7 +817,7 @@ void PersistentColumnData::DeserializeField(Deserializer &deserializer, field_id
 
 static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializer) {
 	auto extra_data =
-	    deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ExtraPersistentColumnData>>(150, "extra_data", nullptr);
+	    deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ExtraPersistentColumnData>>(99, "extra_data", nullptr);
 
 	if (!extra_data) {
 		// Get the type from the parent scope
