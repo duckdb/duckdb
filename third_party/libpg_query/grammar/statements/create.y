@@ -565,6 +565,10 @@ reloption_elem:
 			 	{
 			 		$$ = makeDefElem($1, (PGNode *) $3, @1);
                 }
+            | Sconst
+            	{
+            		$$ = makeDefElem($1, NULL, @1);
+            	}
 		;
 
 

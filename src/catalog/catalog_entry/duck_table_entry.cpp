@@ -244,6 +244,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		throw NotImplementedException("SET SORTED BY is not supported for DuckDB tables");
 	case AlterTableType::SET_TABLE_OPTIONS:
 		throw NotImplementedException("SET (<options>) is not supported for DuckDB tables");
+	case AlterTableType::RESET_TABLE_OPTIONS: {
+		throw NotImplementedException("RESET (<options>) is not supported for DuckDB tables");
+	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}

@@ -704,4 +704,37 @@ string SetTableOptionsInfo::ToString() const {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// SetTblPropertiesInfo
+//===--------------------------------------------------------------------===//
+ResetTableOptionsInfo::ResetTableOptionsInfo() : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS) {
+}
+
+ResetTableOptionsInfo::ResetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties_p)
+    : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS, std::move(data)), table_options(std::move(tbl_properties_p)) {
+}
+
+ResetTableOptionsInfo::~ResetTableOptionsInfo() {
+}
+
+unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
+	return make_uniq<ResetTableOptionsInfo>(GetAlterEntryData(), table_options);
+}
+
+string ResetTableOptionsInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " RESET (";
+	idx_t i = 0;
+	for (auto &entry : table_options) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + KeywordHelper::WriteQuoted(entry.second, '\'');
+		i++;
+	}
+	result += ")";
+	return result;
+}
+
 } // namespace duckdb

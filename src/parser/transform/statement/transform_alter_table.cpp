@@ -229,7 +229,11 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				for (auto cell = command->options->head; cell != nullptr; cell = cell->next) {
 					auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 					auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
-					options[def_elem->defname] = val->val.str;
+					if (val) {
+						options[def_elem->defname] = val->val.str;
+					} else {
+						options[def_elem->defname] = "";
+					}
 				}
 			}
 			result->info = make_uniq<SetTableOptionsInfo>(std::move(data), std::move(options));
@@ -241,10 +245,14 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 				for (auto cell = command->options->head; cell != nullptr; cell = cell->next) {
 					auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 					auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
-					options[def_elem->defname] = val->val.str;
+					if (val) {
+						options[def_elem->defname] = val->val.str;
+					} else {
+						options[def_elem->defname] = "";
+					}
 				}
 			}
-			result->info = make_uniq<SetTableOptionsInfo>(std::move(data), std::move(options));
+			result->info = make_uniq<ResetTableOptionsInfo>(std::move(data), std::move(options));
 			break;
 		}
 		default:
