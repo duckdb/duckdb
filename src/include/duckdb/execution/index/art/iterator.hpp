@@ -11,6 +11,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 
@@ -57,6 +58,61 @@ private:
 	unsafe_vector<uint8_t> key_bytes;
 };
 
+//===--------------------------------------------------------------------===//
+// Scan Output Policies
+//===--------------------------------------------------------------------===//
+
+//! Output policy for scanning row IDs only into a set.
+struct RowIdSetOutput {
+	set<row_t> &row_ids;
+
+	explicit RowIdSetOutput(set<row_t> &row_ids_p) : row_ids(row_ids_p) {
+	}
+
+	bool IsFull(idx_t max_count) const {
+		return row_ids.size() >= max_count;
+	}
+	void SetKeyContext(const IteratorKey &, idx_t) {
+		// No-op: we don't need keys for row ID output.
+	}
+	void Emit(row_t rid) {
+		row_ids.insert(rid);
+	}
+};
+
+//! Output policy for scanning keys and row IDs into vectors.
+struct KeyVectorOutput {
+	ArenaAllocator &arena;
+	unsafe_vector<ARTKey> &keys;
+	unsafe_vector<ARTKey> &row_id_keys;
+	idx_t count = 0;
+	const_data_ptr_t key_data = nullptr;
+	idx_t key_len = 0;
+
+	KeyVectorOutput(ArenaAllocator &arena_p, unsafe_vector<ARTKey> &keys_p, unsafe_vector<ARTKey> &row_id_keys_p)
+	    : arena(arena_p), keys(keys_p), row_id_keys(row_id_keys_p) {
+	}
+
+	idx_t Count() const {
+		return count;
+	}
+	void Reset() {
+		count = 0;
+		arena.Reset();
+	}
+	bool IsFull(idx_t max_count) const {
+		return count >= max_count;
+	}
+	void SetKeyContext(const IteratorKey &current_key, idx_t column_key_len) {
+		key_data = current_key.Data();
+		key_len = column_key_len;
+	}
+	void Emit(row_t rid) {
+		keys[count] = ARTKey::CreateKeyFromBytes(arena, key_data, key_len);
+		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
+		count++;
+	}
+};
 
 class Iterator {
 public:
@@ -68,11 +124,11 @@ public:
 	IteratorKey current_key;
 
 public:
-	//! Scans the tree, starting at the current top node on the stack, and ending at upper_bound.
-	//! If upper_bound is the empty ARTKey, than there is no upper bound.
-	bool Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal);
-	//! Scans the tree and populates key/row_id vectors. Returns the number of entries scanned.
-	idx_t ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t max_count);
+	//! Templated scan implementation. Output policy defines how results are emitted.
+	//! Returns true if scan completed, false if stopped due to max_count.
+	template <typename Output>
+	bool Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, bool equal);
+
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(const Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
@@ -99,8 +155,6 @@ private:
 	uint8_t nested_depth = 0;
 	//! True, if we entered a nested leaf to retrieve the next node.
 	bool entered_nested_leaf = false;
-	//! True, if the iterator has been exhausted (Next() returned false).
-	bool exhausted = false;
 
 private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,

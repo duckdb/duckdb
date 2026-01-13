@@ -23,6 +23,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
@@ -235,7 +236,7 @@ unique_ptr<IndexScanState> ART::InitializeFullScan() {
 	return make_uniq<ARTIndexScanState>();
 }
 
-//FIXME : Make this a more efficient structural tree removal merge
+// FIXME : Make this a more efficient structural tree removal merge
 idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 	auto &source = other_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
@@ -250,12 +251,17 @@ idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 
 	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
+	ARTKey empty_key = ARTKey();
 
-	idx_t count;
-	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
-		delete_count += DeleteKeys(keys, row_id_keys, count);
-		arena.Reset();
-	}
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	bool complete;
+	do {
+		output.Reset();
+		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
+		if (output.Count() > 0) {
+			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
+		}
+	} while (!complete);
 
 	return delete_count;
 }
@@ -276,17 +282,35 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
 
 	unsafe_vector<ARTKey> keys(STANDARD_VECTOR_SIZE);
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
+	ARTKey empty_key = ARTKey();
 
-	idx_t count;
-	while ((count = it.ScanKeys(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE)) > 0) {
-		auto error = InsertKeys(arena, keys, row_id_keys, count, DeleteIndexInfo(), IndexAppendMode::DEFAULT);
-		if (error.HasError()) {
-			return error;
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	bool complete;
+	do {
+		output.Reset();
+		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
+		if (output.Count() > 0) {
+			auto error =
+			    InsertKeys(arena, keys, row_id_keys, output.Count(), DeleteIndexInfo(), IndexAppendMode::DEFAULT);
+			if (error.HasError()) {
+				return error;
+			}
 		}
-		arena.Reset();
-	}
+	} while (!complete);
 
 	return ErrorData();
+}
+
+idx_t ART::RemovalMerge(BoundIndex &other_index) {
+	IndexLock state;
+	InitializeLock(state);
+	return RemovalMerge(state, other_index);
+}
+
+ErrorData ART::InsertMerge(BoundIndex &other_index) {
+	IndexLock state;
+	InitializeLock(state);
+	return InsertMerge(state, other_index);
 }
 
 //===--------------------------------------------------------------------===//
@@ -522,8 +546,8 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 		if (keys[i].Empty()) {
 			continue;
 		}
-		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i],
-		                                    GateStatus::GATE_NOT_SET, delete_info, append_mode);
+		conflict_type = ARTOperator::Insert(arena, *this, tree, keys[i], 0, row_id_keys[i], GateStatus::GATE_NOT_SET,
+		                                    delete_info, append_mode);
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -556,7 +580,8 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 	if (conflict_type == ARTConflictType::CONSTRAINT) {
 		if (chunk) {
 			auto msg = AppendRowError(*chunk, conflict_idx);
-			return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
+			return ErrorData(
+			    ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 		}
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation during insert"));
 	}
@@ -589,7 +614,8 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(arena, chunk, row_ids, keys, row_id_keys);
 
-	return InsertKeys(arena, keys, row_id_keys, row_count, DeleteIndexInfo(info.delete_indexes), info.append_mode, &chunk);
+	return InsertKeys(arena, keys, row_id_keys, row_count, DeleteIndexInfo(info.delete_indexes), info.append_mode,
+	                  &chunk);
 }
 
 ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
@@ -701,7 +727,8 @@ bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
-	return it.Scan(empty_key, max_count, row_ids, false);
+	RowIdSetOutput output(row_ids);
+	return it.Scan(empty_key, output, max_count, false);
 }
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
@@ -713,7 +740,8 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	Iterator it(*this);
 	it.FindMinimum(*leaf);
 	ARTKey empty_key = ARTKey();
-	return it.Scan(empty_key, max_count, row_ids, false);
+	RowIdSetOutput output(row_ids);
+	return it.Scan(empty_key, output, max_count, false);
 }
 
 bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) {
@@ -731,7 +759,8 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &ro
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	return it.Scan(ARTKey(), max_count, row_ids, false);
+	RowIdSetOutput output(row_ids);
+	return it.Scan(ARTKey(), output, max_count, false);
 }
 
 bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) {
@@ -749,7 +778,8 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, max_count, row_ids, equal);
+	RowIdSetOutput output(row_ids);
+	return it.Scan(upper_bound, output, max_count, equal);
 }
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
@@ -763,7 +793,8 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	}
 
 	// Continue the scan until we reach the upper bound.
-	return it.Scan(upper_bound, max_count, row_ids, right_equal);
+	RowIdSetOutput output(row_ids);
+	return it.Scan(upper_bound, output, max_count, right_equal);
 }
 
 bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
@@ -806,6 +837,145 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 	return SearchCloseRange(key, upper_bound, left_equal, right_equal, max_count, row_ids);
+}
+
+//===--------------------------------------------------------------------===//
+// Point and range lookups (WithKeys variants)
+//===--------------------------------------------------------------------===//
+
+bool ART::FullScanWithKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+                           idx_t &count, idx_t max_count) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+	Iterator it(*this);
+	it.FindMinimum(tree);
+	ARTKey empty_key = ARTKey();
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	auto result = it.Scan(empty_key, output, max_count, false);
+	count = output.Count();
+	return result;
+}
+
+bool ART::SearchEqualWithKeys(ARTKey &key, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+                              unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
+	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
+	if (!leaf) {
+		return true;
+	}
+
+	Iterator it(*this);
+	it.FindMinimum(*leaf);
+	ARTKey empty_key = ARTKey();
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	auto result = it.Scan(empty_key, output, max_count, false);
+	count = output.Count();
+	return result;
+}
+
+bool ART::SearchGreaterWithKeys(ARTKey &key, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+                                unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+
+	// Find the lowest value that satisfies the predicate.
+	Iterator it(*this);
+
+	// Early-out, if the maximum value in the ART is lower than the lower bound.
+	if (!it.LowerBound(tree, key, equal)) {
+		return true;
+	}
+
+	// We continue the scan. We do not check the bounds as any value following this value is
+	// greater and satisfies our predicate.
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	auto result = it.Scan(ARTKey(), output, max_count, false);
+	count = output.Count();
+	return result;
+}
+
+bool ART::SearchLessWithKeys(ARTKey &upper_bound, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+                             unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+
+	// Find the minimum value in the ART: we start scanning from this value.
+	Iterator it(*this);
+	it.FindMinimum(tree);
+
+	// Early-out, if the minimum value is higher than the upper bound.
+	if (it.current_key.GreaterThan(upper_bound, equal, it.GetNestedDepth())) {
+		return true;
+	}
+
+	// Continue the scan until we reach the upper bound.
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	auto result = it.Scan(upper_bound, output, max_count, equal);
+	count = output.Count();
+	return result;
+}
+
+bool ART::SearchCloseRangeWithKeys(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal,
+                                   ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+                                   unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
+	// Find the first node that satisfies the left predicate.
+	Iterator it(*this);
+
+	// Early-out, if the maximum value in the ART is lower than the lower bound.
+	if (!it.LowerBound(tree, lower_bound, left_equal)) {
+		return true;
+	}
+
+	// Continue the scan until we reach the upper bound.
+	KeyVectorOutput output(arena, keys, row_id_keys);
+	auto result = it.Scan(upper_bound, output, max_count, right_equal);
+	count = output.Count();
+	return result;
+}
+
+bool ART::ScanWithKeys(IndexScanState &state, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+                       unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count) {
+	auto &scan_state = state.Cast<ARTIndexScanState>();
+	if (scan_state.values[0].IsNull()) {
+		// full scan
+		lock_guard<mutex> l(lock);
+		return FullScanWithKeys(arena, keys, row_id_keys, count, max_count);
+	}
+	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
+	auto key = ARTKey::CreateKey(arena, types[0], scan_state.values[0]);
+	auto max_len = MAX_KEY_LEN * prefix_count;
+	key.VerifyKeyLength(max_len);
+
+	lock_guard<mutex> l(lock);
+	if (scan_state.values[1].IsNull()) {
+		// Single predicate.
+		switch (scan_state.expressions[0]) {
+		case ExpressionType::COMPARE_EQUAL:
+			return SearchEqualWithKeys(key, arena, keys, row_id_keys, count, max_count);
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			return SearchGreaterWithKeys(key, true, arena, keys, row_id_keys, count, max_count);
+		case ExpressionType::COMPARE_GREATERTHAN:
+			return SearchGreaterWithKeys(key, false, arena, keys, row_id_keys, count, max_count);
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			return SearchLessWithKeys(key, true, arena, keys, row_id_keys, count, max_count);
+		case ExpressionType::COMPARE_LESSTHAN:
+			return SearchLessWithKeys(key, false, arena, keys, row_id_keys, count, max_count);
+		default:
+			throw InternalException("Index scan type not implemented");
+		}
+	}
+
+	// Two predicates.
+	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
+	auto upper_bound = ARTKey::CreateKey(arena, types[0], scan_state.values[1]);
+	upper_bound.VerifyKeyLength(max_len);
+
+	bool left_equal = scan_state.expressions[0] == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+	bool right_equal = scan_state.expressions[1] == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	return SearchCloseRangeWithKeys(key, upper_bound, left_equal, right_equal, arena, keys, row_id_keys, count,
+	                                max_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -907,7 +1077,8 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete
 	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
 	set<row_t> row_ids;
-	auto success = it.Scan(empty_key, 2, row_ids, false);
+	RowIdSetOutput output(row_ids);
+	auto success = it.Scan(empty_key, output, 2, false);
 	if (!success || row_ids.size() != 2) {
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}

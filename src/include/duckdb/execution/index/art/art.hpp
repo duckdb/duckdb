@@ -18,7 +18,6 @@ enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK 
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
-
 class ConflictManager;
 class ARTKey;
 class ARTKeySection;
@@ -81,13 +80,21 @@ public:
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
+	//! Perform a lookup on the ART, fetching up to max_count keys and row IDs.
+	//! Returns true if scan completed, false if stopped due to max_count.
+	bool ScanWithKeys(IndexScanState &state, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+	                  unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	//! Returns the number of entries deleted.
 	idx_t RemovalMerge(IndexLock &state, BoundIndex &other_index);
+	//! Obtains a lock and calls RemovalMerge while holding that lock.
+	idx_t RemovalMerge(BoundIndex &other_index);
 	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
 	//! Returns error data if constraint violation.
 	ErrorData InsertMerge(IndexLock &state, BoundIndex &other_index);
+	//! Obtains a lock and calls InsertMerge while holding that lock.
+	ErrorData InsertMerge(BoundIndex &other_index);
 
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
@@ -160,6 +167,19 @@ private:
 	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
 	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
 	                      set<row_t> &row_ids);
+
+	//! WithKeys variants - return keys and row_id_keys instead of set<row_t>.
+	bool FullScanWithKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+	                      idx_t &count, idx_t max_count);
+	bool SearchEqualWithKeys(ARTKey &key, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+	                         unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
+	bool SearchGreaterWithKeys(ARTKey &key, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+	                           unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
+	bool SearchLessWithKeys(ARTKey &upper_bound, bool equal, ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+	                        unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
+	bool SearchCloseRangeWithKeys(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal,
+	                              ArenaAllocator &arena, unsafe_vector<ARTKey> &keys,
+	                              unsafe_vector<ARTKey> &row_id_keys, idx_t &count, idx_t max_count);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);

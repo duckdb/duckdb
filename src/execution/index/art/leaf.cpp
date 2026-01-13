@@ -115,7 +115,8 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	Iterator it(art);
 	it.FindMinimum(node);
 	ARTKey empty_key = ARTKey();
-	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids, false);
+	RowIdSetOutput output(row_ids);
+	it.Scan(empty_key, output, NumericLimits<row_t>().Maximum(), false);
 	Node::FreeTree(art, node);
 	D_ASSERT(row_ids.size() > 1);
 

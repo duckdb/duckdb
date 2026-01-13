@@ -42,7 +42,8 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t
 // Iterator
 //===--------------------------------------------------------------------===//
 
-bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal) {
+template <typename Output>
+bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, bool equal) {
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
@@ -54,29 +55,46 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 			}
 		}
 
+		// Calculate the column key length (excluding any row_id bytes from nested leaves).
+		// For unique indexes (LEAF_INLINED), nested_depth is 0.
+		// For non-unique indexes, nested_depth tracks how many row_id bytes are in current_key.
+		D_ASSERT(current_key.Size() >= nested_depth);
+		auto column_key_len = current_key.Size() - nested_depth;
+		output.SetKeyContext(current_key, column_key_len);
+
 		switch (last_leaf.GetType()) {
-		case NType::LEAF_INLINED:
-			if (row_ids.size() + 1 > max_count) {
+		case NType::LEAF_INLINED: {
+			if (output.IsFull(max_count)) {
 				return false;
 			}
-			row_ids.insert(last_leaf.GetRowId());
+			output.Emit(last_leaf.GetRowId());
 			break;
-		case NType::LEAF:
-			if (!Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, max_count)) {
-				return false;
+		}
+		case NType::LEAF: {
+			D_ASSERT(nested_depth == 0);
+			set<row_t> row_ids;
+			Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, NumericLimits<idx_t>::Maximum());
+			for (auto &rid : row_ids) {
+				if (output.IsFull(max_count)) {
+					return false;
+				}
+				output.Emit(rid);
 			}
 			break;
+		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
+			// Nested leaves - iterate through all row IDs.
 			uint8_t byte = 0;
 			while (last_leaf.GetNextByte(art, byte)) {
-				if (row_ids.size() + 1 > max_count) {
+				if (output.IsFull(max_count)) {
 					return false;
 				}
 				row_id[ROW_ID_SIZE - 1] = byte;
-				ARTKey key(&row_id[0], ROW_ID_SIZE);
-				row_ids.insert(key.GetRowId());
+				ARTKey rid_key(&row_id[0], ROW_ID_SIZE);
+				output.Emit(rid_key.GetRowId());
+
 				if (byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
@@ -94,85 +112,9 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 	return true;
 }
 
-idx_t Iterator::ScanKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
-                         idx_t max_count) {
-	// If the iterator was previously exhausted, return immediately.
-	if (exhausted) {
-		return 0;
-	}
-
-	idx_t count = 0;
-	bool has_next;
-	do {
-		// Check if we've reached the maximum count.
-		if (count >= max_count) {
-			return count;
-		}
-
-		// Calculate the column key length (excluding any row_id bytes from nested leaves).
-		// For unique indexes (LEAF_INLINED), nested_depth is 0.
-		// For non-unique indexes, nested_depth tracks how many row_id bytes are in current_key.
-		D_ASSERT(current_key.Size() >= nested_depth);
-		auto column_key_len = current_key.Size() - nested_depth;
-
-		switch (last_leaf.GetType()) {
-		case NType::LEAF_INLINED: {
-			D_ASSERT(nested_depth == 0);
-			keys[count] = ARTKey::CreateKeyFromBytes(arena, current_key.Data(), column_key_len);
-			row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, last_leaf.GetRowId());
-			count++;
-			break;
-		}
-		case NType::LEAF: {
-			D_ASSERT(nested_depth == 0);
-			set<row_t> row_ids;
-			Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, NumericLimits<idx_t>::Maximum());
-			for (auto &rid : row_ids) {
-				if (count >= max_count) {
-					return count;
-				}
-				keys[count] = ARTKey::CreateKeyFromBytes(arena, current_key.Data(), column_key_len);
-				row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
-				count++;
-			}
-			break;
-		}
-		case NType::NODE_7_LEAF:
-		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF: {
-			// Nested leaves - iterate through all row IDs.
-			// current_key contains column_key + row_id_prefix, we only want column_key.
-			uint8_t byte = 0;
-			while (last_leaf.GetNextByte(art, byte)) {
-				if (count >= max_count) {
-					return count;
-				}
-				row_id[ROW_ID_SIZE - 1] = byte;
-				ARTKey rid_key(&row_id[0], ROW_ID_SIZE);
-
-				keys[count] = ARTKey::CreateKeyFromBytes(arena, current_key.Data(), column_key_len);
-				row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid_key.GetRowId());
-				count++;
-
-				if (byte == NumericLimits<uint8_t>::Maximum()) {
-					break;
-				}
-				byte++;
-			}
-			break;
-		}
-		default:
-			throw InternalException("Invalid leaf type for index scan.");
-		}
-
-		entered_nested_leaf = false;
-		has_next = Next();
-	} while (has_next);
-
-	// Mark the iterator as exhausted so subsequent calls return 0.
-	exhausted = true;
-	return count;
-}
+// Explicit template instantiations for the two output policies.
+template bool Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, idx_t, bool);
+template bool Iterator::Scan<KeyVectorOutput>(const ARTKey &, KeyVectorOutput &, idx_t, bool);
 
 void Iterator::FindMinimum(const Node &node) {
 	reference<const Node> ref(node);

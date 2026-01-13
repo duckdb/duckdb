@@ -1,3 +1,6 @@
+# name: test/tmp.test
+# group: [test]
+
 loop j 0 100
 
 load __TEST_DIR__/bla_${j}.db

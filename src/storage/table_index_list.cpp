@@ -283,14 +283,11 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 		auto &bound_index = index.Cast<BoundIndex>();
 		auto &art = bound_index.Cast<ART>();
 
-		IndexLock index_lock;
-		art.InitializeLock(index_lock);
-
 		if (entry->removed_data_during_checkpoint) {
-			art.RemovalMerge(index_lock, *entry->removed_data_during_checkpoint);
+			art.RemovalMerge(*entry->removed_data_during_checkpoint);
 		}
 		if (entry->added_data_during_checkpoint) {
-			auto error = art.InsertMerge(index_lock, *entry->added_data_during_checkpoint);
+			auto error = art.InsertMerge(*entry->added_data_during_checkpoint);
 			if (error.HasError()) {
 				throw InternalException("Failed to merge checkpoint delta inserts - this signifies a bug or broken "
 				                        "index: %s",
