@@ -702,10 +702,11 @@ static bool EnableShredding(int64_t minimum_size, idx_t current_size) {
 }
 
 unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &row_group,
-                                                                ColumnCheckpointInfo &checkpoint_info) {
+                                                                ColumnCheckpointInfo &checkpoint_info,
+                                                                const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 
 	auto &table_info = row_group.GetTableInfo();
 	auto &db = table_info.GetDB();
@@ -735,8 +736,11 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	}
 
 	if (!should_shred) {
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
+		checkpoint_state->child_states.push_back(
+		    sub_columns[0]->Checkpoint(row_group, checkpoint_info, VariantStats::GetUnshreddedStats(old_stats)));
+		if (sub_columns.size() > 1) {
+			checkpoint_state->child_states.push_back(
+			    sub_columns[1]->Checkpoint(row_group, checkpoint_info, VariantStats::GetShreddedStats(old_stats)));
 		}
 		return std::move(checkpoint_state);
 	}
@@ -749,8 +753,10 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	auto &shredded = checkpoint_state->shredded_data[1];
 
 	//! Now checkpoint the shredded data
-	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(
+	    unshredded->Checkpoint(row_group, checkpoint_info, VariantStats::GetUnshreddedStats(column_stats)));
+	checkpoint_state->child_states.push_back(
+	    shredded->Checkpoint(row_group, checkpoint_info, VariantStats::GetShreddedStats(column_stats)));
 
 	return std::move(checkpoint_state);
 }

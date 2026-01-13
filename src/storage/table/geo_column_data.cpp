@@ -99,7 +99,7 @@ idx_t GeoColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 }
 
 void GeoColumnData::Skip(ColumnScanState &state, idx_t count) {
-	return base_column->Skip(state);
+	return base_column->Skip(state, count);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -230,15 +230,20 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::CreateCheckpointState(const Row
 	return make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) {
+unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+                                                            const BaseStatistics &old_stats) {
 	auto &partial_block_manager = info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
+
+	auto &old_column_stats =
+	    base_column->GetType().id() == LogicalTypeId::GEOMETRY ? old_stats : base_column->stats->statistics;
 
 	// Are there any changes?
 	if (!HasAnyChanges()) {
 		// No changes, keep column
 		checkpoint_state->inner_column = base_column;
-		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+		checkpoint_state->inner_column_state =
+		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
 		return std::move(checkpoint_state);
 	}
 
@@ -254,7 +259,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	if (!should_shred) {
 		// Keep column
 		checkpoint_state->inner_column = base_column;
-		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+		checkpoint_state->inner_column_state =
+		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
 		checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
 		return std::move(checkpoint_state);
 	}
@@ -263,8 +269,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto new_geom_type = GeometryType::POINT;
 	auto new_vert_type = VertexType::XY;
 
-	const auto &types = GeometryStats::GetTypes(this->stats->statistics);
-	const auto &flags = GeometryStats::GetFlags(this->stats->statistics);
+	const auto &types = GeometryStats::GetTypes(old_stats);
+	const auto &flags = GeometryStats::GetFlags(old_stats);
 
 	auto has_mixed_type = !types.TryGetSingleType(new_geom_type, new_vert_type);
 	auto has_only_geometry_collection = new_geom_type == GeometryType::GEOMETRYCOLLECTION;
@@ -276,7 +282,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	if (has_mixed_type || has_only_geometry_collection || has_only_invalid || has_empty) {
 		// Cant specialize, keep column
 		checkpoint_state->inner_column = base_column;
-		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+		checkpoint_state->inner_column_state =
+		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
 		checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
 		return std::move(checkpoint_state);
 	}
@@ -324,8 +331,9 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	}
 
 	// Move then new column into our checkpoint state
+	auto empty_stats = BaseStatistics::CreateEmpty(new_column->GetType());
 	checkpoint_state->inner_column = new_column;
-	checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info);
+	checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info, empty_stats);
 
 	// Also set the shredding state
 	checkpoint_state->geom_type = new_geom_type;

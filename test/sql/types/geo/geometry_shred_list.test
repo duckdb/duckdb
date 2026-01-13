@@ -1,0 +1,20 @@
+# name: test/sql/types/geo/geometry_shred_list.test
+# group: [geo]
+
+require vector_size 2048
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET geometry_minimum_shredding_size = 3;
+
+statement ok
+create table t1(g geometry[], id integer);
+
+statement ok
+insert into t1 select [printf('POINT(%d %d)', i, i)::geometry], i from range(0,3000) as r(i);
+
+statement ok
+CHECKPOINT;
+
