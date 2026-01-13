@@ -230,7 +230,7 @@ public:
 	                                          VertexType vert_type);
 	//! Convert from vectorized format
 	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
-	                                            VertexType vert_type);
+	                                            VertexType vert_type, idx_t result_offset);
 
 	//! Get the vectorized logical type for a given geometry and vertex type
 	DUCKDB_API static LogicalType GetVectorizedType(GeometryType geom_type, VertexType vert_type);
