@@ -68,6 +68,8 @@ EXCLUDED_RULES = {
     "ReservedSchemaQualification",
     "UsingSample",
     "TableSample",
+    "TypeList",
+    "NamedParameterAssignment",
 }
 
 
