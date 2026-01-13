@@ -410,11 +410,6 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
 		return;
 	}
-	if (fs.IsRemoteFile(file_path) && overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-		// we can only remove files for local file systems currently
-		// as remote file systems (e.g. S3) do not support RemoveFile
-		throw NotImplementedException("OVERWRITE is not supported for remote file systems");
-	}
 	vector<string> file_list;
 	vector<string> directory_list;
 	directory_list.push_back(file_path);
