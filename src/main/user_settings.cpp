@@ -51,9 +51,12 @@ bool GlobalUserSettings::IsSet(const String &name) const {
 	return settings_map.IsSet(name);
 }
 
-bool GlobalUserSettings::TryGetSetting(const String &name, Value &result_value) const {
+SettingLookupResult GlobalUserSettings::TryGetSetting(const String &name, Value &result_value) const {
 	lock_guard<mutex> guard(lock);
-	return settings_map.TryGetSetting(name, result_value);
+	if (!settings_map.TryGetSetting(name, result_value)) {
+		return SettingLookupResult();
+	}
+	return SettingLookupResult(SettingScope::GLOBAL);
 }
 
 bool GlobalUserSettings::HasExtensionOption(const string &name) const {
@@ -93,8 +96,12 @@ bool LocalUserSettings::IsSet(const String &name) const {
 	return settings_map.IsSet(name);
 }
 
-bool LocalUserSettings::TryGetSetting(const String &name, Value &result_value) const {
-	return settings_map.TryGetSetting(name, result_value);
+SettingLookupResult LocalUserSettings::TryGetSetting(const GlobalUserSettings &global_settings, const String &name,
+                                                     Value &result_value) const {
+	if (settings_map.TryGetSetting(name, result_value)) {
+		return SettingLookupResult(SettingScope::LOCAL);
+	}
+	return global_settings.TryGetSetting(name, result_value);
 }
 
 } // namespace duckdb

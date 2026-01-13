@@ -36,7 +36,7 @@ public:
 	void SetUserSetting(const String &name, Value target_value);
 	void ClearSetting(const String &name);
 	bool IsSet(const String &name) const;
-	bool TryGetSetting(const String &name, Value &result_value) const;
+	SettingLookupResult TryGetSetting(const String &name, Value &result_value) const;
 	bool HasExtensionOption(const string &name) const;
 	void AddExtensionOption(const string &name, ExtensionOption extension_option);
 	case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
@@ -54,7 +54,8 @@ public:
 	void SetUserSetting(const String &name, Value target_value);
 	void ClearSetting(const String &name);
 	bool IsSet(const String &name) const;
-	bool TryGetSetting(const String &name, Value &result_value) const;
+	SettingLookupResult TryGetSetting(const GlobalUserSettings &global_settings, const String &name,
+	                                  Value &result_value) const;
 
 private:
 	UserSettingsMap settings_map;

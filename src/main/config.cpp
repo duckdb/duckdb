@@ -672,10 +672,7 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 }
 
 SettingLookupResult DBConfig::TryGetCurrentUserSetting(const string &key, Value &result) const {
-	if (user_settings.TryGetSetting(key, result)) {
-		return SettingLookupResult(SettingScope::GLOBAL);
-	}
-	return SettingLookupResult();
+	return user_settings.TryGetSetting(key, result);
 }
 
 SettingLookupResult DBConfig::TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result) {

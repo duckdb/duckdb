@@ -1437,13 +1437,7 @@ ClientContext::TryGetCurrentUserSettingInternal(const string &key, Value &result
 		}
 	}
 	auto &key_name = option ? option->name : key;
-
-	// check the client session values
-	if (config.user_settings.TryGetSetting(key_name, result)) {
-		return SettingLookupResult(SettingScope::LOCAL);
-	}
-	// finally check the global session values
-	return db_config.TryGetCurrentUserSetting(key_name, result);
+	return config.user_settings.TryGetSetting(db_config.user_settings, key_name, result);
 }
 
 SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
