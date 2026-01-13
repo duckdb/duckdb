@@ -1,22 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/physical_table_scan_enum.hpp
+// duckdb/common/enums/allow_parser_override.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <stdint.h>
+#include "duckdb/common/constants.hpp"
 
 namespace duckdb {
 
-enum class PhysicalTableScanExecutionStrategy : uint8_t {
-	DEFAULT,
-	TASK_EXECUTOR,
-	SYNCHRONOUS,
-	TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS
+enum class AllowParserOverride : uint8_t {
+	DEFAULT_OVERRIDE,
+	FALLBACK_OVERRIDE,
+	STRICT_OVERRIDE,
+	STRICT_WHEN_SUPPORTED
 };
 
 } // namespace duckdb

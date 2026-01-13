@@ -16,6 +16,7 @@
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
@@ -38,6 +39,7 @@
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
@@ -353,6 +355,26 @@ const char* EnumUtil::ToChars<AggregateType>(AggregateType value) {
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value) {
 	return static_cast<AggregateType>(StringUtil::StringToEnum(GetAggregateTypeValues(), 2, "AggregateType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAllowParserOverrideValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AllowParserOverride::DEFAULT_OVERRIDE), "DEFAULT" },
+		{ static_cast<uint32_t>(AllowParserOverride::FALLBACK_OVERRIDE), "FALLBACK" },
+		{ static_cast<uint32_t>(AllowParserOverride::STRICT_OVERRIDE), "STRICT" },
+		{ static_cast<uint32_t>(AllowParserOverride::STRICT_WHEN_SUPPORTED), "STRICT_WHEN_SUPPORTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AllowParserOverride>(AllowParserOverride value) {
+	return StringUtil::EnumToString(GetAllowParserOverrideValues(), 4, "AllowParserOverride", static_cast<uint32_t>(value));
+}
+
+template<>
+AllowParserOverride EnumUtil::FromString<AllowParserOverride>(const char *value) {
+	return static_cast<AllowParserOverride>(StringUtil::StringToEnum(GetAllowParserOverrideValues(), 4, "AllowParserOverride", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterDatabaseTypeValues() {
@@ -1124,22 +1146,22 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "COMPRESSION_AUTO" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_UNCOMPRESSED), "COMPRESSION_UNCOMPRESSED" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CONSTANT), "COMPRESSION_CONSTANT" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_RLE), "COMPRESSION_RLE" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICTIONARY), "COMPRESSION_DICTIONARY" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PFOR_DELTA), "COMPRESSION_PFOR_DELTA" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_BITPACKING), "COMPRESSION_BITPACKING" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_FSST), "COMPRESSION_FSST" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CHIMP), "COMPRESSION_CHIMP" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "COMPRESSION_PATAS" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "COMPRESSION_ALP" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
-		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "COMPRESSION_DICT_FSST" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "AUTO" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_UNCOMPRESSED), "UNCOMPRESSED" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_RLE), "RLE" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICTIONARY), "DICTIONARY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PFOR_DELTA), "PFOR" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_BITPACKING), "BITPACKING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_FSST), "FSST" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CHIMP), "CHIMP" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "PATAS" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "ALP" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "ALPRD" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "ZSTD" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "ROARING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "DICT_FSST" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
