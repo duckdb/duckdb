@@ -12,6 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -60,6 +61,7 @@ public:
 
 private:
 	mutable mutex lock;
+	//! Database-global settings
 	UserSettingsMap settings_map;
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
@@ -78,7 +80,9 @@ public:
 	                                  Value &result_value) const;
 
 private:
+	//! Client-local settings
 	UserSettingsMap settings_map;
+	//! Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
 	mutable shared_ptr<CachedGlobalSettings> global_settings_cache;
 };
 } // namespace duckdb
