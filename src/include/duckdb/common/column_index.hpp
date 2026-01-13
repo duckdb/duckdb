@@ -25,18 +25,36 @@ enum class ColumnIndexType : uint8_t {
 struct ColumnIndex {
 public:
 	//! FIXME: this initializes the index to COLUMN_IDENTIFIER_ROW_ID (same numeric representation as INVALID_INDEX)
-	ColumnIndex() : index(DConstants::INVALID_INDEX), index_type(ColumnIndexType::INVALID) {
+	ColumnIndex() : has_index(true), index(DConstants::INVALID_INDEX), index_type(ColumnIndexType::FULL_READ) {
 	}
 	explicit ColumnIndex(idx_t index)
-	    : index(index), type(LogicalType::INVALID), index_type(ColumnIndexType::FULL_READ) {
+	    : has_index(true), index(index), type(LogicalType::INVALID), index_type(ColumnIndexType::FULL_READ) {
 	}
+	explicit ColumnIndex(const string &field)
+	    : has_index(false), field(field), type(LogicalType::INVALID), index_type(ColumnIndexType::FULL_READ) {
+	}
+
 	ColumnIndex(idx_t index, vector<ColumnIndex> child_indexes_p)
-	    : index(index), index_type(ColumnIndexType::FULL_READ), child_indexes(std::move(child_indexes_p)) {
+	    : has_index(true), index(index), index_type(ColumnIndexType::FULL_READ),
+	      child_indexes(std::move(child_indexes_p)) {
+	}
+	ColumnIndex(const string &field, vector<ColumnIndex> child_indexes_p)
+	    : has_index(false), field(field), index_type(ColumnIndexType::FULL_READ),
+	      child_indexes(std::move(child_indexes_p)) {
 	}
 
 	inline bool operator==(const ColumnIndex &rhs) const {
-		if (index != rhs.index) {
+		if (has_index != rhs.has_index) {
 			return false;
+		}
+		if (has_index) {
+			if (index != rhs.index) {
+				return false;
+			}
+		} else {
+			if (field != rhs.field) {
+				return false;
+			}
 		}
 		if (type != rhs.type) {
 			return false;
@@ -66,11 +84,27 @@ public:
 	}
 
 public:
+	bool HasPrimaryIndex() const {
+		return has_index;
+	}
 	idx_t GetPrimaryIndex() const {
+		if (!has_index) {
+			throw InternalException("Attempted to get the primary index (numeric) for an index that consists of a "
+			                        "field identifier (string: %s)",
+			                        field);
+		}
 		return index;
 	}
+	const string &GetFieldName() const {
+		if (has_index) {
+			throw InternalException("Attempted to get the field identifier (string) for an index that consists of a "
+			                        "primary index (numeric: %d)",
+			                        index);
+		}
+		return field;
+	}
 	LogicalIndex ToLogical() const {
-		return LogicalIndex(index);
+		return LogicalIndex(GetPrimaryIndex());
 	}
 	bool HasChildren() const {
 		return !child_indexes.empty();
@@ -100,23 +134,38 @@ public:
 	void SetType(const LogicalType &type_information) {
 		type = type_information;
 	}
-	void SetPushdownExtractType(const LogicalType &type_information, optional_ptr<LogicalType> cast_type = nullptr) {
+	void SetPushdownExtractType(const LogicalType &type_information,
+	                            optional_ptr<const LogicalType> cast_type = nullptr) {
 		//! We can upgrade the optional prune hint to a PUSHDOWN_EXTRACT, which is no longer optional
 		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 		type = type_information;
 		D_ASSERT(child_indexes.size() == 1);
 
 		auto &child = child_indexes[0];
-		auto &child_types = StructType::GetChildTypes(type);
-		auto &child_type = child_types[child.GetPrimaryIndex()].second;
-		if (child.child_indexes.empty()) {
-			if (cast_type) {
-				child.SetType(*cast_type);
+		if (child.HasPrimaryIndex()) {
+			auto &child_types = StructType::GetChildTypes(type);
+			auto &child_type = child_types[child.GetPrimaryIndex()].second;
+			if (child.child_indexes.empty()) {
+				if (cast_type) {
+					child.SetType(*cast_type);
+				} else {
+					child.SetType(child_type);
+				}
 			} else {
-				child.SetType(child_type);
+				child.SetPushdownExtractType(child_type, cast_type);
 			}
 		} else {
-			child.SetPushdownExtractType(child_type, cast_type);
+			D_ASSERT(type_information.id() == LogicalTypeId::VARIANT);
+			if (child.child_indexes.empty()) {
+				if (cast_type) {
+					child.SetType(*cast_type);
+				} else {
+					//! Without a cast, the child will always be VARIANT
+					child.SetType(type_information);
+				}
+			} else {
+				child.SetPushdownExtractType(type_information, cast_type);
+			}
 		}
 	}
 	const LogicalType &GetScanType() const {
@@ -134,12 +183,21 @@ public:
 		this->child_indexes.push_back(std::move(new_index));
 	}
 	bool IsRowIdColumn() const {
+		if (!has_index) {
+			return false;
+		}
 		return index == COLUMN_IDENTIFIER_ROW_ID;
 	}
 	bool IsEmptyColumn() const {
+		if (!has_index) {
+			return false;
+		}
 		return index == COLUMN_IDENTIFIER_EMPTY;
 	}
 	bool IsVirtualColumn() const {
+		if (!has_index) {
+			return false;
+		}
 		return index >= VIRTUAL_COLUMN_START;
 	}
 	void VerifySinglePath() const {
@@ -160,8 +218,20 @@ public:
 		reference<const ColumnIndex> b(path);
 
 		while (true) {
-			if (a.get().GetPrimaryIndex() != b.get().GetPrimaryIndex()) {
-				return false;
+			if (a.get().HasPrimaryIndex()) {
+				if (!b.get().HasPrimaryIndex()) {
+					return false;
+				}
+				if (a.get().GetPrimaryIndex() != b.get().GetPrimaryIndex()) {
+					return false;
+				}
+			} else {
+				if (b.get().HasPrimaryIndex()) {
+					return false;
+				}
+				if (a.get().GetFieldName() != b.get().GetFieldName()) {
+					return false;
+				}
 			}
 			const bool a_has_children = a.get().HasChildren();
 			const bool b_has_children = b.get().HasChildren();
@@ -187,7 +257,12 @@ public:
 	static ColumnIndex Deserialize(Deserializer &deserializer);
 
 private:
+	//! The column/field index (if structured type)
+	bool has_index = true;
 	idx_t index;
+	//! The column/field name (if semi-structured type)
+	string field;
+
 	//! The logical type of the column this references (if pushdown extract)
 	LogicalType type = LogicalType::INVALID;
 	//! The type of index, controlling how it's interpreted
