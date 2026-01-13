@@ -3,7 +3,7 @@
 
 require tpcds
 
-load __TEST_DIR__/tpcds_sf1_variant.db
+load __TEST_DIR__/tpcds_sf001_variant.db
 
 statement ok
 call dsdgen(sf=0.01, suffix='_normal')
@@ -62,7 +62,7 @@ CREATE VIEW web_site as SELECT
     web_site.web_gmt_offset::DECIMAL(5,2) as web_gmt_offset,
     web_site.web_tax_percentage::DECIMAL(5,2) as web_tax_percentage
 FROM
-    tpcds_sf1_variant.web_site_variant;
+    tpcds_sf001_variant.web_site_variant;
 
 statement ok
 CREATE VIEW web_sales as SELECT
@@ -101,7 +101,7 @@ CREATE VIEW web_sales as SELECT
     web_sales.ws_net_paid_inc_ship_tax::DECIMAL(7,2) as ws_net_paid_inc_ship_tax,
     web_sales.ws_net_profit::DECIMAL(7,2) as ws_net_profit
 FROM
-    tpcds_sf1_variant.web_sales_variant;
+    tpcds_sf001_variant.web_sales_variant;
 
 statement ok
 CREATE VIEW web_returns as SELECT
@@ -130,7 +130,7 @@ CREATE VIEW web_returns as SELECT
     web_returns.wr_account_credit::DECIMAL(7,2) as wr_account_credit,
     web_returns.wr_net_loss::DECIMAL(7,2) as wr_net_loss
 FROM
-    tpcds_sf1_variant.web_returns_variant;
+    tpcds_sf001_variant.web_returns_variant;
 
 statement ok
 CREATE VIEW web_page as SELECT
@@ -149,7 +149,7 @@ CREATE VIEW web_page as SELECT
     web_page.wp_image_count::BIGINT as wp_image_count,
     web_page.wp_max_ad_count::INTEGER as wp_max_ad_count
 FROM
-    tpcds_sf1_variant.web_page_variant;
+    tpcds_sf001_variant.web_page_variant;
 
 statement ok
 CREATE VIEW warehouse as SELECT
@@ -168,7 +168,7 @@ CREATE VIEW warehouse as SELECT
     warehouse.w_country::VARCHAR as w_country,
     warehouse.w_gmt_offset::DECIMAL(5,2) as w_gmt_offset
 FROM
-    tpcds_sf1_variant.warehouse_variant;
+    tpcds_sf001_variant.warehouse_variant;
 
 statement ok
 CREATE VIEW time_dim as SELECT
@@ -183,7 +183,7 @@ CREATE VIEW time_dim as SELECT
     time_dim.t_sub_shift::VARCHAR as t_sub_shift,
     time_dim.t_meal_time::VARCHAR as t_meal_time
 FROM
-    tpcds_sf1_variant.time_dim_variant;
+    tpcds_sf001_variant.time_dim_variant;
 
 statement ok
 CREATE VIEW store_sales as SELECT
@@ -211,7 +211,7 @@ CREATE VIEW store_sales as SELECT
     store_sales.ss_net_paid_inc_tax::DECIMAL(7,2) as ss_net_paid_inc_tax,
     store_sales.ss_net_profit::DECIMAL(7,2) as ss_net_profit
 FROM
-    tpcds_sf1_variant.store_sales_variant;
+    tpcds_sf001_variant.store_sales_variant;
 
 statement ok
 CREATE VIEW store_returns as SELECT
@@ -236,7 +236,7 @@ CREATE VIEW store_returns as SELECT
     store_returns.sr_store_credit::DECIMAL(7,2) as sr_store_credit,
     store_returns.sr_net_loss::DECIMAL(7,2) as sr_net_loss
 FROM
-    tpcds_sf1_variant.store_returns_variant;
+    tpcds_sf001_variant.store_returns_variant;
 
 statement ok
 CREATE VIEW store as SELECT
@@ -270,7 +270,7 @@ CREATE VIEW store as SELECT
     store.s_gmt_offset::DECIMAL(5,2) as s_gmt_offset,
     store.s_tax_percentage::DECIMAL(5,2) as s_tax_percentage
 FROM
-    tpcds_sf1_variant.store_variant;
+    tpcds_sf001_variant.store_variant;
 
 statement ok
 CREATE VIEW ship_mode as SELECT
@@ -281,7 +281,7 @@ CREATE VIEW ship_mode as SELECT
     ship_mode.sm_carrier::VARCHAR as sm_carrier,
     ship_mode.sm_contract::VARCHAR as sm_contract
 FROM
-    tpcds_sf1_variant.ship_mode_variant;
+    tpcds_sf001_variant.ship_mode_variant;
 
 statement ok
 CREATE VIEW reason as SELECT
@@ -289,7 +289,7 @@ CREATE VIEW reason as SELECT
     reason.r_reason_id::VARCHAR as r_reason_id,
     reason.r_reason_desc::VARCHAR as r_reason_desc
 FROM
-    tpcds_sf1_variant.reason_variant;
+    tpcds_sf001_variant.reason_variant;
 
 statement ok
 CREATE VIEW promotion as SELECT
@@ -313,7 +313,7 @@ CREATE VIEW promotion as SELECT
     promotion.p_purpose::VARCHAR as p_purpose,
     promotion.p_discount_active::VARCHAR as p_discount_active
 FROM
-    tpcds_sf1_variant.promotion_variant;
+    tpcds_sf001_variant.promotion_variant;
 
 statement ok
 CREATE VIEW item as SELECT
@@ -340,7 +340,7 @@ CREATE VIEW item as SELECT
     item.i_manager_id::BIGINT as i_manager_id,
     item.i_product_name::VARCHAR as i_product_name
 FROM
-    tpcds_sf1_variant.item_variant;
+    tpcds_sf001_variant.item_variant;
 
 statement ok
 CREATE VIEW inventory as SELECT
@@ -349,7 +349,7 @@ CREATE VIEW inventory as SELECT
     inventory.inv_warehouse_sk::BIGINT as inv_warehouse_sk,
     inventory.inv_quantity_on_hand::INTEGER as inv_quantity_on_hand
 FROM
-    tpcds_sf1_variant.inventory_variant;
+    tpcds_sf001_variant.inventory_variant;
 
 statement ok
 CREATE VIEW income_band as SELECT
@@ -357,7 +357,7 @@ CREATE VIEW income_band as SELECT
     income_band.ib_lower_bound::BIGINT as ib_lower_bound,
     income_band.ib_upper_bound::INTEGER as ib_upper_bound
 FROM
-    tpcds_sf1_variant.income_band_variant;
+    tpcds_sf001_variant.income_band_variant;
 
 statement ok
 CREATE VIEW household_demographics as SELECT
@@ -367,7 +367,7 @@ CREATE VIEW household_demographics as SELECT
     household_demographics.hd_dep_count::BIGINT as hd_dep_count,
     household_demographics.hd_vehicle_count::INTEGER as hd_vehicle_count
 FROM
-    tpcds_sf1_variant.household_demographics_variant;
+    tpcds_sf001_variant.household_demographics_variant;
 
 statement ok
 CREATE VIEW date_dim as SELECT
@@ -400,7 +400,7 @@ CREATE VIEW date_dim as SELECT
     date_dim.d_current_quarter::VARCHAR as d_current_quarter,
     date_dim.d_current_year::VARCHAR as d_current_year
 FROM
-    tpcds_sf1_variant.date_dim_variant;
+    tpcds_sf001_variant.date_dim_variant;
 
 statement ok
 CREATE VIEW customer_demographics as SELECT
@@ -414,7 +414,7 @@ CREATE VIEW customer_demographics as SELECT
     customer_demographics.cd_dep_employed_count::BIGINT as cd_dep_employed_count,
     customer_demographics.cd_dep_college_count::INTEGER as cd_dep_college_count
 FROM
-    tpcds_sf1_variant.customer_demographics_variant;
+    tpcds_sf001_variant.customer_demographics_variant;
 
 statement ok
 CREATE VIEW customer_address as SELECT
@@ -432,7 +432,7 @@ CREATE VIEW customer_address as SELECT
     customer_address.ca_gmt_offset::DECIMAL(5,2) as ca_gmt_offset,
     customer_address.ca_location_type::VARCHAR as ca_location_type
 FROM
-    tpcds_sf1_variant.customer_address_variant;
+    tpcds_sf001_variant.customer_address_variant;
 
 statement ok
 CREATE VIEW customer as SELECT
@@ -455,7 +455,7 @@ CREATE VIEW customer as SELECT
     customer.c_email_address::VARCHAR as c_email_address,
     customer.c_last_review_date_sk::INTEGER as c_last_review_date_sk
 FROM
-    tpcds_sf1_variant.customer_variant;
+    tpcds_sf001_variant.customer_variant;
 
 statement ok
 CREATE VIEW catalog_sales as SELECT
@@ -494,7 +494,7 @@ CREATE VIEW catalog_sales as SELECT
     catalog_sales.cs_net_paid_inc_ship_tax::DECIMAL(7,2) as cs_net_paid_inc_ship_tax,
     catalog_sales.cs_net_profit::DECIMAL(7,2) as cs_net_profit
 FROM
-    tpcds_sf1_variant.catalog_sales_variant;
+    tpcds_sf001_variant.catalog_sales_variant;
 
 statement ok
 CREATE VIEW catalog_returns as SELECT
@@ -526,7 +526,7 @@ CREATE VIEW catalog_returns as SELECT
     catalog_returns.cr_store_credit::DECIMAL(7,2) as cr_store_credit,
     catalog_returns.cr_net_loss::DECIMAL(7,2) as cr_net_loss
 FROM
-    tpcds_sf1_variant.catalog_returns_variant;
+    tpcds_sf001_variant.catalog_returns_variant;
 
 statement ok
 CREATE VIEW catalog_page as SELECT
@@ -540,7 +540,7 @@ CREATE VIEW catalog_page as SELECT
     catalog_page.cp_description::VARCHAR as cp_description,
     catalog_page.cp_type::VARCHAR as cp_type
 FROM
-    tpcds_sf1_variant.catalog_page_variant;
+    tpcds_sf001_variant.catalog_page_variant;
 
 statement ok
 CREATE VIEW call_center as SELECT
@@ -576,7 +576,7 @@ CREATE VIEW call_center as SELECT
     call_center.cc_gmt_offset::DECIMAL(5,2) as cc_gmt_offset,
     call_center.cc_tax_percentage::DECIMAL(5,2) as cc_tax_percentage
 FROM
-    tpcds_sf1_variant.call_center_variant;
+    tpcds_sf001_variant.call_center_variant;
 
 # --- Run queries ---
 

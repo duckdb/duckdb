@@ -1,0 +1,49 @@
+# name: test/sql/storage/types/variant/struct_of_variant.test
+# group: [variant]
+
+load __TEST_DIR__/list_of_variant.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE variant_list(
+	col STRUCT(
+		f1 INTEGER,
+		f2 VARIANT,
+		f3 VARCHAR,
+		f4 BOOL
+	)
+);
+
+statement ok
+INSERT INTO variant_list SELECT {
+	'f1': i,
+	'f2': {'a': i::INTEGER, 'b': 'val' || i},
+	'f3': 'test',
+	'f4': i % 2 == 0
+} from range(1000) t(i)
+
+statement ok
+checkpoint;
+
+restart
+
+query III
+select
+	col.f2.a::INTEGER,
+	col.f2.b::VARCHAR,
+	col.f4
+from variant_list limit 10
+----
+0	val0	true
+1	val1	false
+2	val2	true
+3	val3	false
+4	val4	true
+5	val5	false
+6	val6	true
+7	val7	false
+8	val8	true
+9	val9	false
