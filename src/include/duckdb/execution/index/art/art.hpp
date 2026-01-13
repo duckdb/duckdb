@@ -82,11 +82,10 @@ public:
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
-	//! Returns the number of entries deleted.
 	// FIXME: replace with structural tree delete merge.
-	idx_t RemovalMerge(IndexLock &state, BoundIndex &other_index);
+	void RemovalMerge(IndexLock &state, BoundIndex &other_index);
 	//! Obtains a lock and calls RemovalMerge while holding that lock.
-	idx_t RemovalMerge(BoundIndex &other_index);
+	void RemovalMerge(BoundIndex &other_index);
 	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
 	//! Returns error data if constraint violation.
 	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existed

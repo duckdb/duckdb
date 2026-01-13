@@ -1268,13 +1268,14 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 // FIXME : Make this a more efficient structural tree removal merge
 //		   Right now this is only used in MergeCheckpointDeltas to avoid having to do a table scan.
-idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
+void ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 	auto &source = other_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
-		return 0;
+		return;
 	}
 
 	ArenaAllocator arena(BufferAllocator::Get(db));
+	idx_t scan_count = 0;
 	idx_t delete_count = 0;
 
 	Iterator it(source);
@@ -1290,11 +1291,15 @@ idx_t ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 		output.Reset();
 		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
 		if (output.Count() > 0) {
+			scan_count += output.Count();
 			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
 		}
 	} while (!complete);
 
-	return delete_count;
+	if (delete_count != scan_count) {
+		throw InternalException("Failed to remove all rows while merging checkpoint deltas - "
+		                        "this signifies a bug or broken index");
+	}
 }
 
 // FIXME: We already have a structural tree merge, this only exists right now since the structural merge doesn't
@@ -1332,10 +1337,10 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
 	return ErrorData();
 }
 
-idx_t ART::RemovalMerge(BoundIndex &other_index) {
+void ART::RemovalMerge(BoundIndex &other_index) {
 	IndexLock state;
 	InitializeLock(state);
-	return RemovalMerge(state, other_index);
+	RemovalMerge(state, other_index);
 }
 
 ErrorData ART::InsertMerge(BoundIndex &other_index) {
