@@ -246,6 +246,7 @@ public:
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void SetOption(idx_t setting_index, Value value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);

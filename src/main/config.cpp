@@ -343,6 +343,15 @@ void DBConfig::SetOption(idx_t setting_index, Value value) {
 	user_settings.SetUserSetting(setting_index, std::move(value));
 }
 
+void DBConfig::SetOption(const string &name, Value value) {
+	optional_ptr<const ConfigurationOption> option;
+	auto setting_index = TryGetSettingIndex(name, option);
+	if (!setting_index.IsValid()) {
+		throw InternalException("Unrecognized option %s in DBConfig::SetOption", name);
+	}
+	SetOption(setting_index.GetIndex(), std::move(value));
+}
+
 void DBConfig::ResetOption(const ExtensionOption &extension_option) {
 	auto &default_value = extension_option.default_value;
 	auto setting_index = extension_option.setting_index.GetIndex();
