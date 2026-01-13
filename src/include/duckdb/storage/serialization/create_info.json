@@ -168,7 +168,7 @@
       },
       {
         "id": 207,
-        "name": "tbl_properties",
+        "name": "options",
         "type": "case_insensitive_map_t<Value>",
         "default": "case_insensitive_map_t<Value>()"
       }
