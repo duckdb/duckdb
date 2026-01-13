@@ -1230,6 +1230,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// extend file_tags for jit eval
 			file_tags.insert(file_tags.begin(), token.parameters.begin(), token.parameters.end());
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_CONTINUE) {
+			if (!InLoop()) {
+				parser.Fail("continue cannot be called outside of a loop");
+			}
+			auto command = make_uniq<ContinueCommand>(*this);
+			command->conditions = std::move(conditions);
+			ExecuteCommand(std::move(command));
 		}
 	}
 	if (InLoop()) {
