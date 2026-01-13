@@ -619,6 +619,16 @@ struct EnableMacroDependenciesSetting {
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
+struct EnableMbedtlsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_mbedtls";
+	static constexpr const char *Description = "Enable mbedtls for encryption (WARNING: unsafe to use)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableObjectCacheSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_object_cache";
