@@ -219,55 +219,44 @@ optional_ptr<SegmentNode<RowGroup>> CollectionScanState::GetRootSegment() const 
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
 	while (row_group) {
-		row_group->GetNode().Scan(transaction, *this, result);
+		row_group->GetNode().Scan(TransactionData(transaction), *this, result);
 		if (result.size() > 0) {
 			return true;
-		} else if (max_row <= row_group->GetRowStart() + row_group->GetNode().count) {
+		}
+		if (max_row <= row_group->GetRowStart() + row_group->GetNode().count) {
 			row_group = nullptr;
 			return false;
-		} else {
-			do {
-				row_group = GetNextRowGroup(*row_group).get();
-				if (row_group) {
-					if (row_group->GetRowStart() >= max_row) {
-						row_group = nullptr;
-						break;
-					}
-					bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
-					if (scan_row_group) {
-						// scan this row group
-						break;
-					}
-				}
-			} while (row_group);
 		}
-	}
-	return false;
-}
-
-bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type) {
-	while (row_group) {
-		row_group->GetNode().ScanCommitted(*this, result, type);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			row_group = GetNextRowGroup(l, *row_group).get();
+		do {
+			row_group = GetNextRowGroup(*row_group).get();
 			if (row_group) {
-				row_group->GetNode().InitializeScan(*this, *row_group);
+				if (row_group->GetRowStart() >= max_row) {
+					row_group = nullptr;
+					break;
+				}
+				bool scan_row_group = row_group->GetNode().InitializeScan(*this, *row_group);
+				if (scan_row_group) {
+					// scan this row group
+					break;
+				}
 			}
-		}
+		} while (row_group);
 	}
 	return false;
 }
 
-bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
+bool CollectionScanState::Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l) {
 	while (row_group) {
-		row_group->GetNode().ScanCommitted(*this, result, type);
+		row_group->GetNode().Scan(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		}
-
-		row_group = GetNextRowGroup(*row_group).get();
+		// move to the next row group
+		if (l) {
+			row_group = GetNextRowGroup(*l, *row_group).get();
+		} else {
+			row_group = GetNextRowGroup(*row_group).get();
+		}
 		if (row_group) {
 			row_group->GetNode().InitializeScan(*this, *row_group);
 		}

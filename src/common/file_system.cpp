@@ -611,10 +611,6 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
-void FileSystem::UnregisterSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
-}
-
 unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
 }
@@ -716,6 +712,14 @@ bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
 }
 
 int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
+	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+}
+
+int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+	}
+
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
