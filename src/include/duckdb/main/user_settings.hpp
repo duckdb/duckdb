@@ -15,6 +15,17 @@
 
 namespace duckdb {
 
+struct UserSettingsMap {
+public:
+	void SetUserSetting(const String &name, Value target_value);
+	void ClearSetting(const String &name);
+	bool IsSet(const String &name) const;
+	bool TryGetSetting(const String &name, Value &result_value) const;
+
+private:
+	case_insensitive_map_t<Value> set_variables;
+};
+
 struct UserSettings {
 public:
 	UserSettings();
@@ -33,7 +44,7 @@ public:
 
 private:
 	mutable mutex lock;
-	case_insensitive_map_t<Value> set_variables;
+	UserSettingsMap settings_map;
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 };
