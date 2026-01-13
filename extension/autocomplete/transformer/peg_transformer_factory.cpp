@@ -18,7 +18,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
+	if (!transformer.named_parameter_map.empty()) {
+		// Avoid overriding a previous move with nothing
+		result->named_param_map = transformer.named_parameter_map;
+	}
+	return result;
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, const char *root_rule) {
@@ -417,6 +422,12 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTableColumnName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTableColumnName);
 	REGISTER_TRANSFORM(TransformReservedTableQualification);
+
+	REGISTER_TRANSFORM(TransformParameter);
+	REGISTER_TRANSFORM(TransformAnonymousParameter);
+	REGISTER_TRANSFORM(TransformColLabelParameter);
+	REGISTER_TRANSFORM(TransformNumberedParameter);
+
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformParensExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);

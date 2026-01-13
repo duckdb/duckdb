@@ -44,4 +44,12 @@ void PEGTransformer::ClearParameters() {
 	named_parameter_map.clear();
 }
 
+idx_t PEGTransformer::ParamCount() const {
+	return prepared_statement_parameter_index;
+}
+
+void PEGTransformer::SetParamCount(idx_t new_count) {
+	prepared_statement_parameter_index = new_count;
+}
+
 } // namespace duckdb

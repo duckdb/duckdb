@@ -760,7 +760,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(extract_parens);
 	transformer.TransformOptional<string>(list_pr, 0, table_ref->alias);
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 2, table_ref->sample);
-	return std::move(table_ref);
+	return table_ref;
 }
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &transformer,

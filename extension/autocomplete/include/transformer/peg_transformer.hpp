@@ -133,6 +133,8 @@ public:
 	static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type);
 	void SetParam(const string &name, idx_t index, PreparedParamType type);
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
+	void SetParamCount(idx_t new_count);
+	idx_t ParamCount() const;
 
 public:
 	ArenaAllocator &allocator;
@@ -720,6 +722,15 @@ private:
 	TransformSchemaReservedTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformReservedTableQualification(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformParameter(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformAnonymousParameter(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformNumberedParameter(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformColLabelParameter(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,

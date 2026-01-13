@@ -13,6 +13,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPrepareStatement(PEGTra
 		throw NotImplementedException("TypeList for prepared statement has not been implemented.");
 	}
 	result->statement = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(4));
+	transformer.ClearParameters();
 	return result;
 }
 

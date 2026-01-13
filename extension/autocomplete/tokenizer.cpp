@@ -199,6 +199,7 @@ bool BaseTokenizer::TokenizeInput() {
 				}
 				if (sql[i + 1] >= '0' && sql[i + 1] <= '9') {
 					// $[numeric] is a parameter, not a dollar-quoted string
+					tokens.emplace_back(string(1, c), i);
 					break;
 				}
 				// Dollar-quoted string

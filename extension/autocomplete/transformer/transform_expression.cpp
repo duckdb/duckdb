@@ -1006,6 +1006,83 @@ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transforme
 	return transformer.TransformEnum<string>(choice_pr.result);
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParameter(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
+	// Parameter <- AnonymousParameter / NumberedParameter / ColLabelParameter
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
+	// AnonymousParameter <- '?'
+	auto expr = make_uniq<ParameterExpression>();
+
+	// Auto-increment the parameter count
+	idx_t known_param_index = transformer.ParamCount() + 1;
+	string identifier = StringUtil::Format("%d", known_param_index);
+
+	// Register it
+	transformer.SetParam(identifier, known_param_index, PreparedParamType::AUTO_INCREMENT);
+	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+
+	expr->identifier = identifier;
+	return std::move(expr);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+	// NumberedParameter <- '$' NumberLiteral
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+
+	auto &const_expr = number->Cast<ConstantExpression>();
+	int32_t param_number = const_expr.value.GetValue<int32_t>();
+
+	if (param_number <= 0) {
+		throw ParserException("Parameter numbers must be greater than 0");
+	}
+
+	auto expr = make_uniq<ParameterExpression>();
+	string identifier = const_expr.value.ToString();
+	idx_t known_param_index = DConstants::INVALID_INDEX;
+
+	transformer.GetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+
+	if (known_param_index == DConstants::INVALID_INDEX) {
+		known_param_index = NumericCast<idx_t>(param_number);
+		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
+	}
+
+	expr->identifier = identifier;
+	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+	return std::move(expr);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+	// ColLabelParameter <- '$' ColLabel
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	string identifier = transformer.Transform<string>(list_pr.GetChild(1));
+
+	auto expr = make_uniq<ParameterExpression>();
+	idx_t known_param_index = DConstants::INVALID_INDEX;
+
+	// 1. Check if we've seen this $name before
+	transformer.GetParam(identifier, known_param_index, PreparedParamType::NAMED);
+
+	if (known_param_index == DConstants::INVALID_INDEX) {
+		// New named parameter gets the next available index
+		known_param_index = transformer.ParamCount() + 1;
+		transformer.SetParam(identifier, known_param_index, PreparedParamType::NAMED);
+	}
+
+	expr->identifier = identifier;
+	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+	return std::move(expr);
+}
+
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
