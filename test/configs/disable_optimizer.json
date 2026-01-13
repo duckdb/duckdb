@@ -25,6 +25,12 @@
       ]
     },
     {
+      "reason": "Select pushdown into compressed data requires filter pushdown from optimizer.",
+      "paths": [
+        "test/sql/storage/compression/zstd/zstd_select_memory.test"
+      ]
+    },
+    {
       "reason": "Unoptimized statement differs from original result (cross product, conversion, overflow, statistics).",
       "paths": [
         "test/fuzzer/duckfuzz/semi_join_has_correct_left_right_relations.test",
