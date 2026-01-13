@@ -1424,34 +1424,31 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult
-ClientContext::TryGetCurrentUserSettingInternal(const string &key, Value &result,
-                                                optional_ptr<const ConfigurationOption> &option) const {
-	// first check the built-in settings
-	auto &db_config = DBConfig::GetConfig(*this);
-	option = db_config.GetOptionByName(key);
-	if (option) {
-		if (option->get_setting) {
-			result = option->get_setting(*this);
-			return SettingLookupResult(SettingScope::LOCAL);
-		}
-	}
-	auto &key_name = option ? option->name : key;
-	return config.user_settings.TryGetSetting(db_config.user_settings, key_name, result);
-}
-
 SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
 	optional_ptr<const ConfigurationOption> option;
-	auto lookup_result = TryGetCurrentUserSettingInternal(key, result, option);
-	if (lookup_result) {
-		return lookup_result;
+	// try to get the setting index
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto setting_index = db_config.TryGetSettingIndex(key, option);
+	if (setting_index.IsValid()) {
+		// generic setting - try to fetch it
+		auto lookup_result =
+		    config.user_settings.TryGetSetting(db_config.user_settings, setting_index.GetIndex(), result);
+		if (lookup_result) {
+			return lookup_result;
+		}
 	}
+	if (option && option->get_setting) {
+		// legacy callback
+		result = option->get_setting(*this);
+		return SettingLookupResult(SettingScope::LOCAL);
+	}
+	// setting is not set - get the default value
 	return DBConfig::TryGetDefaultValue(option, result);
 }
 
-SettingLookupResult ClientContext::TryGetCurrentUserSetting(const string &key, Value &result) const {
-	optional_ptr<const ConfigurationOption> option;
-	return TryGetCurrentUserSettingInternal(key, result, option);
+SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
+	auto &db_config = DBConfig::GetConfig(*this);
+	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
 ParserOptions ClientContext::GetParserOptions() const {

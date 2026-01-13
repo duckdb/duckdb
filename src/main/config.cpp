@@ -27,32 +27,33 @@ bool DBConfigOptions::debug_print_bindings = false;
 #define DUCKDB_SETTING(_PARAM)                                                                                         \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::Scope, _PARAM::DefaultValue, nullptr                                                               \
+		    _PARAM::Scope, _PARAM::DefaultValue, nullptr, _PARAM::SettingIndex                                         \
 	}
 #define DUCKDB_SETTING_CALLBACK(_PARAM)                                                                                \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::Scope, _PARAM::DefaultValue, _PARAM::OnSet                                                         \
+		    _PARAM::Scope, _PARAM::DefaultValue, _PARAM::OnSet, _PARAM::SettingIndex                                   \
 	}
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
-		    nullptr, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr                                 \
+		    nullptr, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx()                 \
 	}
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
-		    _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr                                          \
+		    _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx()                          \
 	}
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
-		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr \
+		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr,         \
+		    nullptr, optional_idx()                                                                                    \
 	}
 #define FINAL_SETTING                                                                                                  \
 	{                                                                                                                  \
 		nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SettingScopeTarget::INVALID, nullptr,  \
-		    nullptr                                                                                                    \
+		    nullptr, optional_idx()                                                                                    \
 	}
 
 #define DUCKDB_SETTING_ALIAS(_ALIAS, _SETTING_INDEX)                                                                   \
@@ -293,7 +294,7 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	ExtensionOption extension_option;
 	if (TryGetExtensionOption(name, extension_option)) {
 		Value target_value = value.DefaultCastAs(extension_option.type);
-		SetOption(name, std::move(target_value));
+		SetOption(extension_option.setting_index.GetIndex(), std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
 	}
@@ -315,7 +316,7 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 			SettingCallbackInfo info(*this, db);
 			option.set_callback(info, input);
 		}
-		user_settings.SetUserSetting(option.name, std::move(input));
+		user_settings.SetUserSetting(option.setting_idx.GetIndex(), std::move(input));
 		return;
 	}
 	if (!option.set_global) {
@@ -328,7 +329,7 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option) {
 	if (option.default_value) {
 		// generic option
-		user_settings.ClearSetting(option.name);
+		user_settings.ClearSetting(option.setting_idx.GetIndex());
 		return;
 	}
 	if (!option.reset_global) {
@@ -338,23 +339,24 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 	option.reset_global(db.get(), *this);
 }
 
-void DBConfig::SetOption(const String &name, Value value) {
-	user_settings.SetUserSetting(name, std::move(value));
+void DBConfig::SetOption(idx_t setting_index, Value value) {
+	user_settings.SetUserSetting(setting_index, std::move(value));
 }
 
-void DBConfig::ResetOption(const String &name, ExtensionOption &extension_option) {
+void DBConfig::ResetOption(const ExtensionOption &extension_option) {
 	auto &default_value = extension_option.default_value;
+	auto setting_index = extension_option.setting_index.GetIndex();
 	if (!default_value.IsNull()) {
 		// Default is not NULL, override the setting
-		user_settings.SetUserSetting(name, default_value);
+		user_settings.SetUserSetting(setting_index, default_value);
 	} else {
 		// Otherwise just remove it from the 'set_variables' map
-		user_settings.ClearSetting(name);
+		user_settings.ClearSetting(setting_index);
 	}
 }
 
-void DBConfig::ResetGenericOption(const String &name) {
-	user_settings.ClearSetting(name);
+void DBConfig::ResetGenericOption(idx_t setting_index) {
+	user_settings.ClearSetting(setting_index);
 }
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {
@@ -457,17 +459,18 @@ bool DBConfig::TryGetExtensionOption(const String &name, ExtensionOption &result
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
-	user_settings.AddExtensionOption(
-	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope));
+	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
+	                                 default_scope);
+	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
 	if (iter != options.unrecognized_options.end()) {
-		user_settings.SetUserSetting(name, iter->second);
+		user_settings.SetUserSetting(setting_index, iter->second);
 		options.unrecognized_options.erase(iter);
 	}
-	if (!default_value.IsNull() && !user_settings.IsSet(name)) {
+	if (!default_value.IsNull() && !user_settings.IsSet(setting_index)) {
 		// Default value is set, insert it into the 'set_variables' list
-		user_settings.SetUserSetting(name, default_value);
+		user_settings.SetUserSetting(setting_index, default_value);
 	}
 }
 
@@ -671,8 +674,8 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 	return Settings::Get<DefaultOrderSetting>(context);
 }
 
-SettingLookupResult DBConfig::TryGetCurrentUserSetting(const string &key, Value &result) const {
-	return user_settings.TryGetSetting(key, result);
+SettingLookupResult DBConfig::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
+	return user_settings.TryGetSetting(setting_index, result);
 }
 
 SettingLookupResult DBConfig::TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result) {
@@ -685,12 +688,30 @@ SettingLookupResult DBConfig::TryGetDefaultValue(optional_ptr<const Configuratio
 }
 
 SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
-	auto lookup_result = TryGetCurrentUserSetting(key, result);
-	if (lookup_result) {
-		return lookup_result;
+	optional_ptr<const ConfigurationOption> option;
+	auto setting_index = TryGetSettingIndex(key, option);
+	if (setting_index.IsValid()) {
+		auto lookup_result = TryGetCurrentUserSetting(setting_index.GetIndex(), result);
+		if (lookup_result) {
+			return lookup_result;
+		}
 	}
-	auto option = GetOptionByName(key);
 	return TryGetDefaultValue(option, result);
+}
+
+optional_idx DBConfig::TryGetSettingIndex(const String &name, optional_ptr<const ConfigurationOption> &option) const {
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(name, extension_option)) {
+		// extension setting
+		return extension_option.setting_index;
+	}
+	option = GetOptionByName(name);
+	if (option) {
+		// built-in setting
+		return option->setting_idx;
+	}
+	// unknown setting
+	return optional_idx();
 }
 
 OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType order_type,

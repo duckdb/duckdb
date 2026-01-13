@@ -24,6 +24,8 @@ SQL_TYPE_MAP = {
     "VARCHAR": "string",
 }
 
+setting_index = 0
+
 
 # global Setting structure
 @total_ordering
@@ -55,6 +57,7 @@ class Setting:
         self.scope = self._get_valid_scope(scope) if scope is not None else None
         self.on_set, self.on_reset = self._get_on_callbacks(on_callbacks)
         self.is_generic_setting = default_value is not None
+        self.setting_index = None
         if self.is_enum and self.is_generic_setting:
             self.on_set = True
         custom_callbacks = ['set', 'reset', 'get']
@@ -74,6 +77,11 @@ class Setting:
         self.default_scope = self._get_valid_default_scope(default_scope) if default_scope is not None else None
         self.default_value = default_value
         self.conditional_defaults = conditional_defaults
+        if self.default_value is not None:
+            global setting_index
+            self.setting_index = setting_index
+            setting_index += 1
+
         if self.default_scope is not None and self.scope is not None:
             raise ValueError("Only default_scope or scope can be specified")
 

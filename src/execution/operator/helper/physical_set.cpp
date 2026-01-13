@@ -6,13 +6,13 @@
 
 namespace duckdb {
 
-void PhysicalSet::SetGenericVariable(ClientContext &context, const String &name, SetScope scope, Value target_value) {
+void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value) {
 	if (scope == SetScope::GLOBAL) {
 		auto &config = DBConfig::GetConfig(context);
-		config.SetOption(name, std::move(target_value));
+		config.SetOption(setting_index, std::move(target_value));
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context);
-		client_config.user_settings.SetUserSetting(name, std::move(target_value));
+		client_config.user_settings.SetUserSetting(setting_index, std::move(target_value));
 	}
 }
 
@@ -26,7 +26,8 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 	if (scope == SetScope::AUTOMATIC) {
 		scope = extension_option.default_scope;
 	}
-	SetGenericVariable(context, name, scope, std::move(target_value));
+	auto setting_index = extension_option.setting_index.GetIndex();
+	SetGenericVariable(context, setting_index, scope, std::move(target_value));
 }
 
 SetScope PhysicalSet::GetSettingScope(const ConfigurationOption &option, SetScope variable_scope) {
@@ -86,7 +87,8 @@ SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChu
 			SettingCallbackInfo info(context.client, variable_scope);
 			option->set_callback(info, input_val);
 		}
-		SetGenericVariable(context.client, option->name, variable_scope, std::move(input_val));
+		auto setting_index = option->setting_idx.GetIndex();
+		SetGenericVariable(context.client, setting_index, variable_scope, std::move(input_val));
 		return SourceResultType::FINISHED;
 	}
 	switch (variable_scope) {
