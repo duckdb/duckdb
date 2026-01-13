@@ -17,7 +17,13 @@ class TableFunctionBinder : public ExpressionBinder {
 public:
 	TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name = string(),
 	                    string clause = "Table function");
-
+public:
+	void DisableSQLValueFunctions() {
+		accept_sql_value_functions = false;
+	}
+	void EnableSQLValueFunctions() {
+		accept_sql_value_functions = true;
+	}
 protected:
 	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindColumnReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
@@ -28,6 +34,8 @@ protected:
 private:
 	string table_function_name;
 	string clause;
+	//! Whether sql_value_functions (GetSQLValueFunctionName) are considered when binding column refs
+	bool accept_sql_value_functions = true;
 };
 
 } // namespace duckdb

@@ -1,0 +1,22 @@
+require parquet
+
+statement ok
+CREATE TABLE test AS SELECT
+	'test' AS user,
+	'2025' AS year,
+	'01' AS month,
+	'01' AS day,
+	'123' AS run_id,
+	'test' AS payload;
+
+# 'user' is also the name of a SQLValueFunction, this used to bind incorrectly (#20324)
+statement ok
+COPY (
+	SELECT
+		*
+	FROM
+		test
+) TO './test.parquet' (
+	FORMAT PARQUET,
+	PARTITION_BY user
+)
