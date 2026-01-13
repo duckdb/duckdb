@@ -14,6 +14,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 # This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original.
+# BUT it seems to not affect ALPRD as bad as standard ALP.
 statement ok
 CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
@@ -111,7 +112,7 @@ CREATE TYPE regression_result AS UNION (
     err STRUCT(
         v1_4_0_blocks HUGEINT,
         v1_5_0_blocks HUGEINT,
-        regression_factor FLOAT
+        original_data_blocks HUGEINT
     )
 );
 
@@ -124,7 +125,7 @@ SELECT
         ELSE {
             'v1_4_0_blocks': v1_4_0.compressed_blocks,
             'v1_5_0_blocks': v1_5_0.compressed_blocks,
-            'regression_factor': v1_5_0.compressed_blocks::FLOAT / v1_4_0.compressed_blocks::FLOAT
+            'original_data_blocks': v1_4_0.original_data_blocks
         }::regression_result
     END
 FROM
@@ -133,18 +134,16 @@ FROM
 ----
 true
 
-
-
 # Additional verification: v1.5.0 should never use MORE blocks than uncompressed
 query I
 SELECT
     CASE
-        WHEN (v1_5_0.compressed_blocks::FLOAT <= v1_5_0.original_data_blocks::FLOAT)
+        WHEN v1_5_0.compressed_blocks <= v1_5_0.original_data_blocks
             THEN True::regression_result
         ELSE {
             'v1_4_0_blocks': NULL,
             'v1_5_0_blocks': v1_5_0.compressed_blocks,
-            'regression_factor': v1_5_0.original_data_blocks::FLOAT / v1_5_0.compressed_blocks::FLOAT
+            'original_data_blocks': v1_5_0.original_data_blocks
         }::regression_result
     END
 FROM v1_5_0_metrics v1_5_0;
