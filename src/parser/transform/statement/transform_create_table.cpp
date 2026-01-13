@@ -147,7 +147,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 	info->sort_keys = std::move(order_keys);
 
 	if (stmt.options) {
-		TransformTableProperties(info->tbl_properties, stmt.options);
+		TransformTableProperties(info->options, stmt.options);
 	}
 
 	if (!column_count) {

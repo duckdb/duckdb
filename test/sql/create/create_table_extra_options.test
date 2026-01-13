@@ -1,4 +1,4 @@
-# name: test/sql/create/create_table_lakehouse_options.test
+# name: test/sql/create/create_table_extra_options.test
 # description: Test CREATE OR REPLACE TABLE
 # group: [create]
 

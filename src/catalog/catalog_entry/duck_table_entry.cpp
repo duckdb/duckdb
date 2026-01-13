@@ -59,7 +59,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		if (!base.sort_keys.empty()) {
 			unsupported_keywords.push_back("SORTED BY");
 		}
-		if (!base.tbl_properties.empty()) {
+		if (!base.options.empty()) {
 			unsupported_keywords.push_back("WITH");
 		}
 		if (!unsupported_keywords.empty()) {
