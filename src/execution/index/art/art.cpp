@@ -523,7 +523,7 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
-	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids_debug, false);
+	it.Scan(empty_key, row_ids_debug, NumericLimits<idx_t>().Maximum(), false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif
 
