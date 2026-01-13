@@ -5,6 +5,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -459,20 +460,20 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 
 	auto &table_info = row_group.GetTableInfo();
 	auto &db = table_info.GetDB();
-	auto &config_options = DBConfig::Get(db).options;
+	auto &config = DBConfig::Get(db);
 
 	bool should_shred = true;
 	if (!HasAnyChanges()) {
 		should_shred = false;
 	}
-	if (!EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+	if (!EnableShredding(Settings::Get<VariantMinimumShreddingSizeSetting>(config), row_group.count.load())) {
 		should_shred = false;
 	}
 
 	LogicalType shredded_type;
 	if (should_shred) {
-		if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
-			shredded_type = config_options.force_variant_shredding;
+		if (config.options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
+			shredded_type = config.options.force_variant_shredding;
 		} else {
 			shredded_type = GetShreddedType();
 		}

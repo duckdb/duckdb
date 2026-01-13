@@ -8,6 +8,8 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -961,7 +963,7 @@ bool SingleFileBlockManager::IsRemote() {
 }
 
 bool SingleFileBlockManager::Prefetch() {
-	switch (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db.GetDatabase())) {
+	switch (Settings::Get<StorageBlockPrefetchSetting>(db.GetDatabase())) {
 	case StorageBlockPrefetch::NEVER:
 		return false;
 	case StorageBlockPrefetch::DEBUG_FORCE_ALWAYS:
@@ -1190,7 +1192,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
-	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}

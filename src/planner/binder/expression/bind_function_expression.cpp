@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -23,8 +24,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		return BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 
-	auto &config = ClientConfig::GetConfig(context);
-	auto setting = config.lambda_syntax;
+	auto setting = Settings::Get<LambdaSyntaxSetting>(context);
 	bool invalid_syntax =
 	    setting == LambdaSyntax::DISABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
 	bool warn_deprecated_syntax = setting == LambdaSyntax::DEFAULT && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
