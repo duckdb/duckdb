@@ -1035,6 +1035,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ducklake_retry_wait_ms", "ducklake"},
     {"enable_curl_server_cert_verification", "httpfs"},
     {"enable_geoparquet_conversion", "parquet"},
+    {"enable_global_s3_configuration", "httpfs"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
     {"hf_max_per_page", "httpfs"},
