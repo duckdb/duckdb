@@ -290,9 +290,9 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 		return;
 	}
 
-	auto param = extension_parameters.find(name);
-	if (param != extension_parameters.end()) {
-		Value target_value = value.DefaultCastAs(param->second.type);
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(name, extension_option)) {
+		Value target_value = value.DefaultCastAs(extension_option.type);
 		SetOption(name, std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
@@ -308,7 +308,6 @@ void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
 }
 
 void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value) {
-	lock_guard<mutex> l(config_lock);
 	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	if (option.default_value) {
 		// generic option
@@ -343,11 +342,8 @@ void DBConfig::SetOption(const String &name, Value value) {
 	user_settings.SetUserSetting(name, std::move(value));
 }
 
-void DBConfig::ResetOption(const String &name) {
-	lock_guard<mutex> l(config_lock);
-	auto extension_option = extension_parameters.find(name.ToStdString());
-	D_ASSERT(extension_option != extension_parameters.end());
-	auto &default_value = extension_option->second.default_value;
+void DBConfig::ResetOption(const String &name, ExtensionOption &extension_option) {
+	auto &default_value = extension_option.default_value;
 	if (!default_value.IsNull()) {
 		// Default is not NULL, override the setting
 		user_settings.SetUserSetting(name, default_value);
@@ -451,16 +447,18 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
-bool DBConfig::HasExtensionOption(const string &name) {
-	lock_guard<mutex> l(config_lock);
-	return extension_parameters.find(name) != extension_parameters.end();
+bool DBConfig::HasExtensionOption(const string &name) const {
+	return user_settings.HasExtensionOption(name);
+}
+
+bool DBConfig::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
+	return user_settings.TryGetExtensionOption(name, result);
 }
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
-	lock_guard<mutex> l(config_lock);
-	extension_parameters.insert(make_pair(
-	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));
+	user_settings.AddExtensionOption(
+	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
 	if (iter != options.unrecognized_options.end()) {
@@ -471,6 +469,10 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 		// Default value is set, insert it into the 'set_variables' list
 		user_settings.SetUserSetting(name, default_value);
 	}
+}
+
+case_insensitive_map_t<ExtensionOption> DBConfig::GetExtensionSettings() const {
+	return user_settings.GetExtensionSettings();
 }
 
 bool DBConfig::IsInMemoryDatabase(const char *database_path) {

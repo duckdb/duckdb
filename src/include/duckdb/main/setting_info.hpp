@@ -102,6 +102,8 @@ struct ConfigurationAlias {
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
+	ExtensionOption() : set_function(nullptr), default_scope(SetScope::AUTOMATIC) {
+	}
 	// NOLINTNEXTLINE: work around bug in clang-tidy
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
 	                Value default_value_p, SetScope default_scope_p)

@@ -5,11 +5,13 @@ namespace duckdb {
 UserSettings::UserSettings() {
 }
 
-UserSettings::UserSettings(const UserSettings &other) : set_variables(other.set_variables) {
+UserSettings::UserSettings(const UserSettings &other)
+    : set_variables(other.set_variables), extension_parameters(other.extension_parameters) {
 }
 
 UserSettings &UserSettings::operator=(const UserSettings &other) {
 	set_variables = other.set_variables;
+	extension_parameters = other.extension_parameters;
 	return *this;
 }
 
@@ -35,6 +37,31 @@ bool UserSettings::TryGetSetting(const String &name, Value &result_value) const 
 		return false;
 	}
 	result_value = entry->second;
+	return true;
+}
+
+bool UserSettings::HasExtensionOption(const string &name) const {
+	lock_guard<mutex> l(lock);
+	return extension_parameters.find(name) != extension_parameters.end();
+}
+
+void UserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
+	lock_guard<mutex> l(lock);
+	extension_parameters.insert(make_pair(name, std::move(extension_option)));
+}
+
+case_insensitive_map_t<ExtensionOption> UserSettings::GetExtensionSettings() const {
+	lock_guard<mutex> l(lock);
+	return extension_parameters;
+}
+
+bool UserSettings::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
+	lock_guard<mutex> l(lock);
+	auto entry = extension_parameters.find(name.ToStdString());
+	if (entry == extension_parameters.end()) {
+		return false;
+	}
+	result = entry->second;
 	return true;
 }
 
