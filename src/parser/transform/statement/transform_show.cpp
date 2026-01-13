@@ -31,12 +31,15 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 		} else {
 			// describing a set (e.g. SHOW ALL TABLES) - push it in the table name
 			showref->table_name = stmt.set;
+			showref->show_type = ShowType::SHOW_UNQUALIFIED;
 		}
 	} else if (!stmt.relation->schemaname) {
 		// describing an unqualified relation - check if this is a "special" relation
 		string table_name = StringUtil::Lower(stmt.relation->relname);
-		if (table_name == "databases" || table_name == "tables" || table_name == "variables") {
+		if (table_name == "databases" || table_name == "schemas" || table_name == "tables" ||
+		    table_name == "variables") {
 			showref->table_name = "\"" + std::move(table_name) + "\"";
+			showref->show_type = ShowType::SHOW_UNQUALIFIED;
 		}
 	}
 	if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
