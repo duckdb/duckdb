@@ -1,6 +1,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
 
@@ -863,6 +864,88 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 }
 
 template <class OP>
+idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                            OptionalSelection &true_opt, OptionalSelection &false_opt,
+                            optional_ptr<ValidityMask> null_mask) {
+	idx_t true_count = 0;
+	idx_t false_count = 0;
+
+	// Convert vectors to unified format for easier access
+	UnifiedVectorFormat left_data, right_data;
+	left.ToUnifiedFormat(count, left_data);
+	right.ToUnifiedFormat(count, right_data);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto result_idx = sel.get_index(i);
+		auto left_idx = left_data.sel->get_index(i);
+		auto right_idx = right_data.sel->get_index(i);
+
+		// Check for NULL values
+		bool left_null = !left_data.validity.RowIsValid(left_idx);
+		bool right_null = !right_data.validity.RowIsValid(right_idx);
+
+		bool comparison_result;
+		if (left_null || right_null) {
+			// Handle NULL semantics based on operation type
+			if (std::is_same<OP, duckdb::DistinctFrom>::value) {
+				comparison_result = !(left_null && right_null);
+			} else if (std::is_same<OP, duckdb::NotDistinctFrom>::value) {
+				comparison_result = (left_null && right_null);
+			} else {
+				// For ordering operations, NULLs are treated as maximal
+				if (left_null && right_null) {
+					comparison_result = false; // NULL == NULL for ordering
+				} else if (left_null) {
+					// NULL > anything, so left_null means left is greater
+					comparison_result = std::is_same<OP, duckdb::DistinctGreaterThan>::value ||
+					                    std::is_same<OP, duckdb::DistinctGreaterThanEquals>::value;
+				} else {
+					// right_null, so right is greater
+					comparison_result = std::is_same<OP, duckdb::DistinctLessThan>::value ||
+					                    std::is_same<OP, duckdb::DistinctLessThanEquals>::value;
+				}
+			}
+		} else {
+			// Both non-NULL, convert to Values and use appropriate Value operation
+			Value left_val = left.GetValue(left_idx);
+			Value right_val = right.GetValue(right_idx);
+
+			if (std::is_same<OP, duckdb::DistinctFrom>::value) {
+				comparison_result = ValueOperations::DistinctFrom(left_val, right_val);
+			} else if (std::is_same<OP, duckdb::NotDistinctFrom>::value) {
+				comparison_result = ValueOperations::NotDistinctFrom(left_val, right_val);
+			} else if (std::is_same<OP, duckdb::DistinctGreaterThan>::value) {
+				comparison_result = ValueOperations::DistinctGreaterThan(left_val, right_val);
+			} else if (std::is_same<OP, duckdb::DistinctGreaterThanEquals>::value) {
+				comparison_result = ValueOperations::DistinctGreaterThanEquals(left_val, right_val);
+			} else if (std::is_same<OP, duckdb::DistinctLessThan>::value) {
+				comparison_result = ValueOperations::DistinctLessThan(left_val, right_val);
+			} else if (std::is_same<OP, duckdb::DistinctLessThanEquals>::value) {
+				comparison_result = ValueOperations::DistinctLessThanEquals(left_val, right_val);
+			} else {
+				throw InternalException("Unsupported operation for VARIANT comparison");
+			}
+		}
+
+		if (comparison_result) {
+			true_opt.Append(true_count, result_idx);
+		} else {
+			false_opt.Append(false_count, result_idx);
+		}
+
+		// Set null mask if needed
+		if (null_mask && (left_null || right_null)) {
+			null_mask->SetInvalid(result_idx);
+		}
+	}
+
+	true_opt.Advance(true_count);
+	false_opt.Advance(false_count);
+
+	return true_count;
+}
+
+template <class OP>
 idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, const idx_t count,
                            optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                            optional_ptr<ValidityMask> null_mask) {
@@ -899,10 +982,16 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 		match_count +=
 		    DistinctSelectList<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
 		break;
-	case PhysicalType::STRUCT:
+	case PhysicalType::STRUCT: {
+		if (left_type.id() == LogicalTypeId::VARIANT) {
+			match_count +=
+			    DistinctSelectVariant<OP>(l_not_null, r_not_null, unknown, *sel, true_opt, false_opt, null_mask);
+			break;
+		}
 		match_count +=
 		    DistinctSelectStruct<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
 		break;
+	}
 	case PhysicalType::ARRAY:
 		match_count +=
 		    DistinctSelectArray<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);

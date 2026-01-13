@@ -1,0 +1,19 @@
+# name: test/parquet/variant/variant_comparison.test
+# group: [variant]
+
+require parquet
+
+statement ok
+COPY (SELECT COLUMNS(*)::VARIANT from (VALUES
+		(-123::BIGINT)
+	) t(col)
+) to '__TEST_DIR__/variant_test.parquet';
+
+query I
+select col from '__TEST_DIR__/variant_test.parquet' where col > 100 OR col == 123
+----
+
+query I
+select col from '__TEST_DIR__/variant_test.parquet' where col > 100 OR col == -123
+----
+-123
