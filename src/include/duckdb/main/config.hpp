@@ -217,7 +217,7 @@ public:
 	//! Reference to the database file path manager
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! Database configuration variables as controlled by SET
-	UserSettings user_settings;
+	GlobalUserSettings user_settings;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

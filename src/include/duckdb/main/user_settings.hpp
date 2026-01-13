@@ -26,12 +26,12 @@ private:
 	case_insensitive_map_t<Value> set_variables;
 };
 
-struct UserSettings {
+struct GlobalUserSettings {
 public:
-	UserSettings();
+	GlobalUserSettings();
 	// enable copy constructors
-	UserSettings(const UserSettings &other);
-	UserSettings &operator=(const UserSettings &);
+	GlobalUserSettings(const GlobalUserSettings &other);
+	GlobalUserSettings &operator=(const GlobalUserSettings &);
 
 	void SetUserSetting(const String &name, Value target_value);
 	void ClearSetting(const String &name);
@@ -49,4 +49,14 @@ private:
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 };
 
+struct LocalUserSettings {
+public:
+	void SetUserSetting(const String &name, Value target_value);
+	void ClearSetting(const String &name);
+	bool IsSet(const String &name) const;
+	bool TryGetSetting(const String &name, Value &result_value) const;
+
+private:
+	UserSettingsMap settings_map;
+};
 } // namespace duckdb

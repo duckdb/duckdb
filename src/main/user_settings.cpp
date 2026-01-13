@@ -23,55 +23,55 @@ bool UserSettingsMap::TryGetSetting(const String &name, Value &result_value) con
 	return true;
 }
 
-UserSettings::UserSettings() {
+GlobalUserSettings::GlobalUserSettings() {
 }
 
-UserSettings::UserSettings(const UserSettings &other)
+GlobalUserSettings::GlobalUserSettings(const GlobalUserSettings &other)
     : settings_map(other.settings_map), extension_parameters(other.extension_parameters) {
 }
 
-UserSettings &UserSettings::operator=(const UserSettings &other) {
+GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &other) {
 	settings_map = other.settings_map;
 	extension_parameters = other.extension_parameters;
 	return *this;
 }
 
-void UserSettings::SetUserSetting(const String &name, Value target_value) {
+void GlobalUserSettings::SetUserSetting(const String &name, Value target_value) {
 	lock_guard<mutex> guard(lock);
 	settings_map.SetUserSetting(name, std::move(target_value));
 }
 
-void UserSettings::ClearSetting(const String &name) {
+void GlobalUserSettings::ClearSetting(const String &name) {
 	lock_guard<mutex> guard(lock);
 	settings_map.ClearSetting(name);
 }
 
-bool UserSettings::IsSet(const String &name) const {
+bool GlobalUserSettings::IsSet(const String &name) const {
 	lock_guard<mutex> guard(lock);
 	return settings_map.IsSet(name);
 }
 
-bool UserSettings::TryGetSetting(const String &name, Value &result_value) const {
+bool GlobalUserSettings::TryGetSetting(const String &name, Value &result_value) const {
 	lock_guard<mutex> guard(lock);
 	return settings_map.TryGetSetting(name, result_value);
 }
 
-bool UserSettings::HasExtensionOption(const string &name) const {
+bool GlobalUserSettings::HasExtensionOption(const string &name) const {
 	lock_guard<mutex> l(lock);
 	return extension_parameters.find(name) != extension_parameters.end();
 }
 
-void UserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
+void GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
 	lock_guard<mutex> l(lock);
 	extension_parameters.insert(make_pair(name, std::move(extension_option)));
 }
 
-case_insensitive_map_t<ExtensionOption> UserSettings::GetExtensionSettings() const {
+case_insensitive_map_t<ExtensionOption> GlobalUserSettings::GetExtensionSettings() const {
 	lock_guard<mutex> l(lock);
 	return extension_parameters;
 }
 
-bool UserSettings::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
+bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
 	lock_guard<mutex> l(lock);
 	auto entry = extension_parameters.find(name.ToStdString());
 	if (entry == extension_parameters.end()) {
@@ -79,6 +79,22 @@ bool UserSettings::TryGetExtensionOption(const String &name, ExtensionOption &re
 	}
 	result = entry->second;
 	return true;
+}
+
+void LocalUserSettings::SetUserSetting(const String &name, Value target_value) {
+	settings_map.SetUserSetting(name, std::move(target_value));
+}
+
+void LocalUserSettings::ClearSetting(const String &name) {
+	settings_map.ClearSetting(name);
+}
+
+bool LocalUserSettings::IsSet(const String &name) const {
+	return settings_map.IsSet(name);
+}
+
+bool LocalUserSettings::TryGetSetting(const String &name, Value &result_value) const {
+	return settings_map.TryGetSetting(name, result_value);
 }
 
 } // namespace duckdb

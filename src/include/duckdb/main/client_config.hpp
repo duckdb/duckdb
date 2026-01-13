@@ -89,7 +89,7 @@ struct ClientConfig {
 	ProfilingCoverage profiling_coverage = ProfilingCoverage::SELECT;
 
 	//! Generic options
-	UserSettings user_settings;
+	LocalUserSettings user_settings;
 
 	//! Variables set by the user
 	case_insensitive_map_t<Value> user_variables;
