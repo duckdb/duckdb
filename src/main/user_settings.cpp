@@ -1,4 +1,6 @@
 #include "duckdb/main/user_settings.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
