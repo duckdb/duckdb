@@ -17,7 +17,6 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("TransformSelectStatement");
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
 }
@@ -184,12 +183,14 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformFromSelectClause(PEGTrans
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
+	auto from_table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
 	auto opt_select = list_pr.Child<OptionalParseResult>(1);
 	if (opt_select.HasResult()) {
 		select_node = transformer.Transform<unique_ptr<SelectNode>>(opt_select.optional_result);
+	} else {
+		select_node->select_list.push_back(make_uniq<StarExpression>());
 	}
-	select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
+	select_node->from_table = std::move(from_table);
 	return select_node;
 }
 

@@ -249,6 +249,14 @@ void Parser::ParseQuery(const string &query) {
 				if (StringUtil::CIEquals(parser_override_option, "default")) {
 					continue;
 				}
+				auto statement = GetStatement(query);
+				if (!statement) {
+					break;
+				}
+				if (statement && statement->type == StatementType::SELECT_STATEMENT) {
+					break; // Continue for now
+				}
+
 				auto result = ext.parser_override(ext.parser_info.get(), query);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
@@ -258,7 +266,6 @@ void Parser::ParseQuery(const string &query) {
 					ThrowParserOverrideError(result);
 				}
 				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
-					auto statement = GetStatement(query);
 					if (!statement) {
 						break;
 					}

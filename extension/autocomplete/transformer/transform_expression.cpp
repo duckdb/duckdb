@@ -159,7 +159,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(function_children);
 		return std::move(construct_array);
-	} else if (lowercase_name == "__internal_position_operator") {
+	} else if (lowercase_name == "position") {
 		if (function_children.size() != 2) {
 			throw ParserException("Wrong number of arguments to __internal_position_operator.");
 		}
@@ -1879,12 +1879,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 	auto result = make_uniq<CaseExpression>();
 	unique_ptr<ParsedExpression> opt_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
-	auto else_expr_opt = list_pr.Child<OptionalParseResult>(3);
-	if (else_expr_opt.HasResult()) {
-		result->else_expr = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.optional_result);
-	} else {
-		result->else_expr = make_uniq<ConstantExpression>(Value());
-	}
 
 	auto cases_pr = list_pr.Child<RepeatParseResult>(2).children;
 	for (auto &case_pr : cases_pr) {
@@ -1898,6 +1892,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		}
 		new_case.then_expr = std::move(case_expr.then_expr);
 		result->case_checks.push_back(std::move(new_case));
+	}
+	auto else_expr_opt = list_pr.Child<OptionalParseResult>(3);
+	if (else_expr_opt.HasResult()) {
+		result->else_expr = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.optional_result);
+	} else {
+		result->else_expr = make_uniq<ConstantExpression>(Value());
 	}
 	return std::move(result);
 }
