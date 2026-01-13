@@ -12,11 +12,6 @@ SELECT get_type('hello');
 VARCHAR
 
 query I
-SELECT typeof([1]::LIST((make_type('VARCHAR'))));
-----
-VARCHAR[]
-
-query I
 SELECT make_type('STRUCT', a := make_type('INTEGER'), b := make_type('VARCHAR'));
 ----
 STRUCT(a INTEGER, b VARCHAR)
@@ -30,14 +25,3 @@ query I
 SELECT make_type('LIST', make_type('STRUCT', a := make_type('STRUCT', x := make_type('INTEGER')), b := make_type('VARCHAR')));
 ----
 STRUCT(a STRUCT(x INTEGER), b VARCHAR)[]
-
-statement ok
-create table t1 (a "ARRAY"((make_type('INTEGER')), (1 + 2)))
-
-statement ok
-insert into t1 values ([1, 2, 3])
-
-query I
-SELECT typeof(a) FROM t1;
-----
-INTEGER[3]

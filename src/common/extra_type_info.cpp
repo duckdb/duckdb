@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/type_parameter.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -284,7 +285,7 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 		// Turn the old-style value type modifiers into TypeParameters
 		vector<unique_ptr<TypeParameter>> args;
 		for (auto &mod : mods) {
-			args.push_back(TypeParameter::EXPRESSION("", make_uniq<ConstantExpression>(mod)));
+			args.push_back(TypeParameter::EXPRESSION("", make_uniq_base<ParsedExpression, ConstantExpression>(mod)));
 		}
 
 		result->parameters = std::move(args);
