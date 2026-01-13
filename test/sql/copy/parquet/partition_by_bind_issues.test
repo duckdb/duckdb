@@ -1,3 +1,6 @@
+# name: test/sql/copy/parquet/partition_by_bind_issues.test
+# group: [parquet]
+
 require parquet
 
 statement ok

@@ -425,7 +425,8 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	const bool is_partition_by = StringUtil::CIEquals(name, "partition_by");
 
 	if (is_partition_by) {
-		//! When binding the 'partition_by' option, we don't want to resolve a column reference to a SQLValueFunction (like 'user')
+		//! When binding the 'partition_by' option, we don't want to resolve a column reference to a SQLValueFunction
+		//! (like 'user')
 		option_binder.DisableSQLValueFunctions();
 	}
 	auto bound_expr = option_binder.Bind(expr);
