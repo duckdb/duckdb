@@ -392,9 +392,10 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertStatement &stmt, 
 				named_column_map.push_back(col.Logical());
 			}
 		} else {
+			// Ensure that the columns are valid.
 			for (auto &col_name : stmt.columns) {
-				auto &col = table.GetColumn(col_name);
-				named_column_map.push_back(col.Logical());
+				auto col_idx = table.GetColumnIndex(col_name);
+				named_column_map.push_back(col_idx);
 			}
 		}
 		ExpandDefaultInValuesList(stmt, table, values_list, named_column_map);
