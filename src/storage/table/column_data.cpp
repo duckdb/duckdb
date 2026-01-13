@@ -680,6 +680,14 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(const RowGroup &row_group,
                                                          ColumnCheckpointInfo &checkpoint_info) {
+	if (!stats) {
+		throw InternalException("ColumnData::Checkpoint called without stats on a nested column");
+	}
+	return Checkpoint(row_group, checkpoint_info, this->stats->statistics);
+}
+
+unique_ptr<ColumnCheckpointState>
+ColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info, const BaseStatistics &stats) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
