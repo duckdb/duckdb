@@ -3,23 +3,42 @@
 namespace duckdb {
 
 void UserSettingsMap::SetUserSetting(idx_t setting_index, Value target_value) {
-	set_variables[setting_index] = std::move(target_value);
+	if (setting_index >= settings.size()) {
+		settings.resize(setting_index + 1);
+	}
+	auto &generic_setting = settings[setting_index];
+	generic_setting.is_set = true;
+	generic_setting.value = std::move(target_value);
 }
 
 void UserSettingsMap::ClearSetting(idx_t setting_index) {
-	set_variables.erase(setting_index);
+	if (setting_index >= settings.size()) {
+		// never set
+		return;
+	}
+	auto &generic_setting = settings[setting_index];
+	generic_setting.is_set = false;
+	generic_setting.value = Value();
 }
 
 bool UserSettingsMap::IsSet(idx_t setting_index) const {
-	return set_variables.find(setting_index) != set_variables.end();
+	if (setting_index >= settings.size()) {
+		// never set
+		return false;
+	}
+	return settings[setting_index].is_set;
 }
 
 bool UserSettingsMap::TryGetSetting(idx_t setting_index, Value &result_value) const {
-	auto entry = set_variables.find(setting_index);
-	if (entry == set_variables.end()) {
+	if (setting_index >= settings.size()) {
+		// never set
 		return false;
 	}
-	result_value = entry->second;
+	auto &generic_setting = settings[setting_index];
+	if (!generic_setting.is_set) {
+		return false;
+	}
+	result_value = generic_setting.value;
 	return true;
 }
 

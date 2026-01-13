@@ -15,6 +15,14 @@
 
 namespace duckdb {
 
+struct GenericSetting {
+	GenericSetting() : is_set(false) {
+	}
+
+	bool is_set;
+	Value value;
+};
+
 struct UserSettingsMap {
 public:
 	void SetUserSetting(idx_t setting_index, Value target_value);
@@ -23,7 +31,7 @@ public:
 	bool TryGetSetting(idx_t setting_index, Value &result_value) const;
 
 private:
-	unordered_map<idx_t, Value> set_variables;
+	vector<GenericSetting> settings;
 };
 
 struct CachedGlobalSettings {
