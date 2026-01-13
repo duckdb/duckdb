@@ -273,6 +273,23 @@ LogicalType GetAvgStateTypeDouble(const AggregateFunction &) {
 	return LogicalType::STRUCT(std::move(children));
 }
 
+void AvgAggregateStateExportDouble(Vector &state, AggregateInputData &aggr_input_data, Vector &result,
+										 idx_t count, idx_t offset) {
+	D_ASSERT(offset == 0);
+
+	auto states = FlatVector::GetData<data_ptr_t>(state);
+	auto &children = StructVector::GetEntries(result);
+
+	auto count_data = FlatVector::GetData<uint64_t>(*children[0]);
+	auto value_data = FlatVector::GetData<double>(*children[1]);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &avg_state = *reinterpret_cast<AvgState<double> *>(states[i]);
+		count_data[i] = avg_state.count;
+		value_data[i] = avg_state.value;
+	}
+}
+
 unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -302,6 +319,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	    AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
 	        LogicalType::DOUBLE, LogicalType::DOUBLE);
 	double_aggregate.get_state_type = GetAvgStateTypeDouble;
+	double_aggregate.aggregate_state_export = AvgAggregateStateExportDouble;
 	avg.AddFunction(double_aggregate);
 
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
