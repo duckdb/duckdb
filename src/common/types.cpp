@@ -1627,7 +1627,7 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 	}
 	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
 	auto type_to_return = aggr_state.return_type;
-	if (aggr_state.state_type != LogicalType::INVALID) {
+	if (aggr_state.state_type.IsValid()) {
 		type_to_return = aggr_state.state_type;
 	}
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
