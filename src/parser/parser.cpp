@@ -252,7 +252,7 @@ void Parser::ParseQuery(const string &query) {
 					statements = std::move(result.statements);
 					return;
 				}
-				if (options.parser_override_setting == AllowParserOverride::STRICT) {
+				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
 					ThrowParserOverrideError(result);
 				}
 				if (options.parser_override_setting == AllowParserOverride::STRICT_WHEN_SUPPORTED) {
@@ -298,7 +298,7 @@ void Parser::ParseQuery(const string &query) {
 					if (is_supported) {
 						ThrowParserOverrideError(result);
 					}
-				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK) {
+				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK_OVERRIDE) {
 					continue;
 				}
 			}

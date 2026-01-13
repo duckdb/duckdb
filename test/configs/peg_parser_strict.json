@@ -189,6 +189,7 @@
         "test/sql/settings/allowed_directories.test",
         "test/sql/types/enum/test_enum.test",
         "test/sql/types/struct/nested_struct_projection_pushdown.test",
+        "test/sql/types/struct/struct_projection_pushdown.test",
         "test/sql/types/struct/struct_cast_superset.test",
         "test/sql/attach/attach_new_compression.test",
         "test/sql/attach/attach_wal_alter.test",

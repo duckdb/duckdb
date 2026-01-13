@@ -1,0 +1,53 @@
+# name: test/sql/storage/types/variant/test_all_types_single_object.test
+# group: [variant]
+
+load __TEST_DIR__/variant_test_all_types_single_table.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table tbl (
+	col VARIANT
+)
+
+statement ok
+insert into tbl select t::VARIANT var from test_all_types() t
+
+statement ok
+checkpoint
+
+restart
+
+foreach col bool tinyint smallint int bigint hugeint uhugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob bit int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map fixed_int_array fixed_varchar_array fixed_nested_int_array fixed_nested_varchar_array fixed_struct_array struct_of_fixed_array fixed_array_of_int_list list_of_fixed_int_array
+
+statement ok
+set variable col_type = (select typeof("${col}") from test_all_types() limit 1);
+
+statement ok
+set variable col_name = (select '${col}');
+
+# Select the regular column from 'test_all_types'
+query I nosort expected_res
+select "${col}" from test_all_types();
+----
+
+# Pushed down the extract + the cast
+# SELECT col.${col}::<col_type> from tbl
+query I nosort expected_res
+from query($$select col."$$ || getvariable('col_name') || $$"::$$ || getvariable('col_type') || ' from tbl');
+
+# Push down only the extract
+statement ok
+create or replace table intermediate as
+	from query($$select col."$$ || getvariable('col_name') || $$" extracted from tbl$$);
+
+# Add the cast to the regular type, to make the comparison work
+# SELECT extracted::<col_type> from intermediate
+query I nosort expected_res
+from query('select extracted::' || getvariable('col_type') || ' from intermediate');
+
+reset label expected_res
+
+endloop
