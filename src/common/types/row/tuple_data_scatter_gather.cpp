@@ -449,7 +449,9 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			auto &struct_source = *struct_sources[struct_col_idx];
 			auto &struct_format = source_format.children[struct_col_idx];
+#ifdef D_ASSERT_IS_ENABLED
 			D_ASSERT(!struct_format.combined_list_data);
+#endif
 			if (!struct_format.combined_list_data) {
 				struct_format.combined_list_data = make_uniq<CombinedListData>();
 			}
@@ -513,8 +515,10 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 
 	D_ASSERT(source_format.children.size() == 1);
 	auto &child_format = source_format.children[0];
+#ifdef D_ASSERT_IS_ENABLED
 	// Should be deleted by ResetCombinedListData if assertions are enabled
 	D_ASSERT(!child_format.combined_list_data);
+#endif
 	if (!child_format.combined_list_data) {
 		child_format.combined_list_data = make_uniq<CombinedListData>();
 	}
