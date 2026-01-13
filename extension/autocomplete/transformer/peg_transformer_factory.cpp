@@ -352,6 +352,11 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
 }
 
+void PEGTransformerFactory::RegisterExecute() {
+	// execute.gram
+	REGISTER_TRANSFORM(TransformExecuteStatement);
+}
+
 void PEGTransformerFactory::RegisterExplain() {
 	// explain.gram
 	REGISTER_TRANSFORM(TransformExplainStatement);
@@ -574,6 +579,11 @@ void PEGTransformerFactory::RegisterPragma() {
 	REGISTER_TRANSFORM(TransformPragmaAssign);
 	REGISTER_TRANSFORM(TransformPragmaFunction);
 	REGISTER_TRANSFORM(TransformPragmaParameters);
+}
+
+void PEGTransformerFactory::RegisterPrepare() {
+	// prepare.gram
+	REGISTER_TRANSFORM(TransformPrepareStatement);
 }
 
 void PEGTransformerFactory::RegisterSelect() {
@@ -925,6 +935,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterDetach();
 	RegisterDescribe();
 	RegisterDrop();
+	RegisterExecute();
 	RegisterExplain();
 	RegisterExport();
 	RegisterExpression();
@@ -933,6 +944,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterLoad();
 	RegisterMergeInto();
 	RegisterPragma();
+	RegisterPrepare();
 	RegisterSelect();
 	RegisterUse();
 	RegisterSet();

@@ -24,6 +24,7 @@ add_library_unity(
   transform_describe.cpp
   transform_detach.cpp
   transform_drop.cpp
+  transform_execute.cpp
   transform_explain.cpp
   transform_export.cpp
   transform_expression.cpp
@@ -32,6 +33,7 @@ add_library_unity(
   transform_load.cpp
   transform_merge_into.cpp
   transform_pragma.cpp
+  transform_prepare.cpp
   transform_select.cpp
   transform_set.cpp
   transform_transaction.cpp

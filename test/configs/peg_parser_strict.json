@@ -170,15 +170,6 @@
       ]
     },
     {
-      "reason": "PreparedStatement",
-      "paths": [
-        "test/sql/catalog/table/create_table_parameters.test",
-        "test/sql/explain/explain_all_statements.test",
-        "test/sql/explain/explain_execute.test",
-        "test/sql/index/art/scan/test_art_prepared_scan.test"
-      ]
-    },
-    {
       "reason": "Parser error",
       "paths": [
         "test/sql/catalog/issue_9459.test"

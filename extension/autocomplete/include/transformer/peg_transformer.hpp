@@ -195,6 +195,7 @@ public:
 	void RegisterDetach();
 	void RegisterDescribe();
 	void RegisterDrop();
+	void RegisterExecute();
 	void RegisterExplain();
 	void RegisterExport();
 	void RegisterExpression();
@@ -203,6 +204,7 @@ public:
 	void RegisterLoad();
 	void RegisterMergeInto();
 	void RegisterPragma();
+	void RegisterPrepare();
 	void RegisterSelect();
 	void RegisterUse();
 	void RegisterSet();
@@ -617,6 +619,10 @@ private:
 	                                                     optional_ptr<ParseResult> parse_result);
 	static string TransformDropSecretStorage(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
+	// execute.gram
+	static unique_ptr<SQLStatement> TransformExecuteStatement(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+
 	// explain.gram
 	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
@@ -994,6 +1000,10 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformPragmaParameters(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
+
+	// prepare.gram
+	static unique_ptr<SQLStatement> TransformPrepareStatement(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 
 	// select.gram
 	static unique_ptr<SQLStatement> TransformSelectStatement(PEGTransformer &transformer,
