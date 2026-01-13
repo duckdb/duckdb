@@ -1195,7 +1195,7 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 }
 
 template <class V = VertexXY>
-static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
@@ -1208,8 +1208,10 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		const auto out_idx = result_offset + row_idx;
+
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
 
@@ -1231,7 +1233,7 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 		}
 
 		blob.Finalize();
-		geom_data[row_idx] = blob;
+		geom_data[out_idx] = blob;
 	}
 }
 
@@ -1307,7 +1309,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 }
 
 template <class V = VertexXY>
-static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
@@ -1320,8 +1322,9 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		const auto out_idx = result_offset + row_idx;
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
 
@@ -1350,7 +1353,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 		}
 
 		blob.Finalize();
-		FlatVector::GetData<string_t>(target_vec)[row_idx] = blob;
+		FlatVector::GetData<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1454,7 +1457,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 }
 
 template <class V = VertexXY>
-static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	source_vec.Flatten(row_count);
 
 	const auto poly_data = ListVector::GetData(source_vec);
@@ -1468,8 +1471,10 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		const auto out_idx = result_offset + row_idx;
+
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
 
@@ -1514,7 +1519,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 		}
 
 		blob.Finalize();
-		FlatVector::GetData<string_t>(target_vec)[row_idx] = blob;
+		FlatVector::GetData<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1593,7 +1598,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 }
 
 template <class V = VertexXY>
-static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
@@ -1606,8 +1611,9 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		const auto out_idx = result_offset + row_idx;
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
 
@@ -1649,7 +1655,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 		}
 
 		blob.Finalize();
-		FlatVector::GetData<string_t>(target_vec)[row_idx] = blob;
+		FlatVector::GetData<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1761,7 +1767,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 }
 
 template <class V = VertexXY>
-static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	// Flatten the source vector to extract all vertices
 
 	source_vec.Flatten(row_count);
@@ -1776,8 +1782,9 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		const auto out_idx = result_offset + row_idx;
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
 
@@ -1828,7 +1835,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 			}
 		}
 		blob.Finalize();
-		FlatVector::GetData<string_t>(target_vec)[row_idx] = blob;
+		FlatVector::GetData<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -1955,7 +1962,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 }
 
 template <class V = VertexXY>
-static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
@@ -1971,8 +1978,9 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		const auto out_idx = result_offset + row_idx;
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
 
@@ -2037,7 +2045,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 		}
 
 		blob.Finalize();
-		FlatVector::GetData<string_t>(target_vec)[row_idx] = blob;
+		FlatVector::GetData<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -2088,25 +2096,26 @@ void Geometry::ToVectorizedFormat(Vector &source, Vector &target, idx_t count, G
 }
 
 template <class V = VertexXY>
-static void FromVectorizedFormatInternal(Vector &source, Vector &target, idx_t count, GeometryType geom_type) {
+static void FromVectorizedFormatInternal(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+                                         idx_t result_offset) {
 	switch (geom_type) {
 	case GeometryType::POINT:
-		FromPoints<V>(source, target, count);
+		FromPoints<V>(source, target, count, result_offset);
 		break;
 	case GeometryType::LINESTRING:
-		FromLineStrings<V>(source, target, count);
+		FromLineStrings<V>(source, target, count, result_offset);
 		break;
 	case GeometryType::POLYGON:
-		FromPolygons<V>(source, target, count);
+		FromPolygons<V>(source, target, count, result_offset);
 		break;
 	case GeometryType::MULTIPOINT:
-		FromMultiPoints<V>(source, target, count);
+		FromMultiPoints<V>(source, target, count, result_offset);
 		break;
 	case GeometryType::MULTILINESTRING:
-		FromMultiLineStrings<V>(source, target, count);
+		FromMultiLineStrings<V>(source, target, count, result_offset);
 		break;
 	case GeometryType::MULTIPOLYGON:
-		FromMultiPolygons<V>(source, target, count);
+		FromMultiPolygons<V>(source, target, count, result_offset);
 		break;
 	default:
 		throw NotImplementedException("Unsupported geometry type %d", static_cast<int>(geom_type));
@@ -2114,19 +2123,19 @@ static void FromVectorizedFormatInternal(Vector &source, Vector &target, idx_t c
 }
 
 void Geometry::FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
-                                    VertexType vert_type) {
+                                    VertexType vert_type, idx_t result_offset) {
 	switch (vert_type) {
 	case VertexType::XY:
-		FromVectorizedFormatInternal<VertexXY>(source, target, count, geom_type);
+		FromVectorizedFormatInternal<VertexXY>(source, target, count, geom_type, result_offset);
 		break;
 	case VertexType::XYZ:
-		FromVectorizedFormatInternal<VertexXYZ>(source, target, count, geom_type);
+		FromVectorizedFormatInternal<VertexXYZ>(source, target, count, geom_type, result_offset);
 		break;
 	case VertexType::XYM:
-		FromVectorizedFormatInternal<VertexXYM>(source, target, count, geom_type);
+		FromVectorizedFormatInternal<VertexXYM>(source, target, count, geom_type, result_offset);
 		break;
 	case VertexType::XYZM:
-		FromVectorizedFormatInternal<VertexXYZM>(source, target, count, geom_type);
+		FromVectorizedFormatInternal<VertexXYZM>(source, target, count, geom_type, result_offset);
 		break;
 	default:
 		throw InvalidInputException("Unsupported vertex type %d", static_cast<int>(vert_type));
