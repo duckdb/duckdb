@@ -7,18 +7,18 @@ foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
 # avg() has the new get_state_type callback
 query T
-SELECT typeof(avg(1.0::${type}) EXPORT_STATE);
+SELECT typeof(avg(1.0::${type}) EXPORT_STATE) = 'AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>';
 ----
-AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>
+true
 
 # Works in a table
 statement ok
 CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM range(10);
 
-query T
-SELECT column_type FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
+query I
+SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
 ----
-AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>
+true
 
 # Test combine and finalize
 query R
