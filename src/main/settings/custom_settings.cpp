@@ -787,7 +787,7 @@ bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &co
 		return true;
 	}
 	if (input.GetValue<bool>()) {
-		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+		throw InvalidInputException("Cannot enable external access while database is running");
 	}
 	if (db && config.options.enable_external_access) {
 		// we are turning off external access - add any already attached databases to the list of accepted paths
