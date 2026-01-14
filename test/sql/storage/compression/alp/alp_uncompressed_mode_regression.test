@@ -13,7 +13,9 @@ load __TEST_DIR__/test_alp_regression_v1_4_0.db readwrite v1.4.0
 statement ok
 PRAGMA force_compression='uncompressed'
 
-# This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original.
+# This parquet file generates numerous ALP exceptions, which, under certain circumstances
+# (depends on default block and vector size), previously resulted in the compressed data being larger than the original.
+
 statement ok
 CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
@@ -59,7 +61,6 @@ load __TEST_DIR__/test_alp_regression_v1_5_0.db readwrite v1.5.0
 statement ok
 PRAGMA force_compression='uncompressed'
 
-# This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original.
 statement ok
 CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
@@ -114,23 +115,6 @@ CREATE TYPE regression_result AS UNION (
         original_data_blocks HUGEINT
     )
 );
-
-# sanity check - v1.4.0 compression ends up larger than the original data (because of exceptions in our parquet file).
-query I
-SELECT
-    CASE
-        WHEN v1_4_0.compressed_blocks > v1_4_0.original_data_blocks
-            THEN True::regression_result
-        ELSE {
-            'v1_4_0_blocks': v1_4_0.compressed_blocks,
-            'v1_5_0_blocks': NULL,
-            'original_data_blocks': v1_4_0.original_data_blocks
-        }::regression_result
-    END
-FROM
-    v1_4_0_db.v1_4_0_metrics v1_4_0;
-----
-true
 
 # v1.5.0 should use <= blocks than v1.4.0 (equal or better compression)
 query I
