@@ -55,12 +55,10 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 			}
 		}
 
-		// Calculate the column key length (excluding any row_id bytes from nested leaves).
-		// For unique indexes (LEAF_INLINED), nested_depth is 0.
-		// For non-unique indexes + duplicates, nested_depth tracks how many row_id bytes are in current_key.
+		// Set the current key in the output policy.
 		D_ASSERT(current_key.Size() >= nested_depth);
-		auto column_key_len = current_key.Size() - nested_depth;
-		output.SetKey(current_key, column_key_len);
+		auto key_len = current_key.Size() - nested_depth;
+		output.SetKey(current_key, key_len);
 
 		switch (last_leaf.GetType()) {
 		case NType::LEAF_INLINED: {
@@ -78,8 +76,10 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 				cached_row_ids_it = cached_row_ids.begin();
 				has_cached_row_ids = true;
 			}
+			// Try to output the next entry in the deprecated leaf chain.
 			while (cached_row_ids_it != cached_row_ids.end()) {
 				if (output.IsFull(max_count)) {
+					// If we return false here, then scanning will resume at cached_row_ids_it.
 					return false;
 				}
 				output.Emit(*cached_row_ids_it);
@@ -91,12 +91,16 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
+			// If we haven't traversed this leaf yet, set nested_started to true (allows us to pick up iteration again
+			// in case we fill the output with max_count.
 			if (!nested_started) {
 				nested_byte = 0;
 				nested_started = true;
 			}
+			// Try to output the next inlined leaf.
 			while (last_leaf.GetNextByte(art, nested_byte)) {
 				if (output.IsFull(max_count)) {
+					// If we return false here, then scanning will resume at nested_byte in the current leaf.
 					return false;
 				}
 				row_id[ROW_ID_SIZE - 1] = nested_byte;
@@ -115,7 +119,6 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 			throw InternalException("Invalid leaf type for index scan.");
 		}
 
-		// Move to next leaf.
 		entered_nested_leaf = false;
 		has_next = Next();
 	} while (has_next);

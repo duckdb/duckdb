@@ -274,7 +274,7 @@ vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, c
 void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
-		// Merge any data appended/removed from the index while the checkpoint was running.
+		// Merge any data appended to the index while the checkpoint was running.
 		auto &index = *entry->index;
 		if (!index.IsBound()) {
 			continue;
@@ -289,8 +289,8 @@ void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t che
 		if (entry->added_data_during_checkpoint) {
 			auto error = art.InsertMerge(*entry->added_data_during_checkpoint);
 			if (error.HasError()) {
-				throw InternalException("Failed to merge checkpoint delta inserts - this signifies a bug or broken "
-				                        "index: %s",
+				throw InternalException("Failed to append while merging checkpoint deltas - this "
+				                        "signifies a bug or broken index: %s",
 				                        error.Message());
 			}
 		}
