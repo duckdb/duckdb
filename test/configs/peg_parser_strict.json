@@ -85,7 +85,8 @@
         "test/sql/copy/csv/unquoted_escape/basic.test",
         "test/sqlserver/sqlserver_cte.test",
         "test/optimizer/compare_blob.test",
-        "test/sql/copy/csv/test_copy.test"
+        "test/sql/copy/csv/test_copy.test",
+        "test/sql/copy/csv/unquoted_escape/mixed.test"
       ]
     },
     {
@@ -158,7 +159,9 @@
         "test/sql/export/parquet/export_parquet_enum.test",
         "test/sql/copy/return_stats.test",
         "test/sql/copy/csv/multidelimiter/test_abac.test",
-        "test/sql/cast/string_to_list_cast.test"
+        "test/sql/cast/string_to_list_cast.test",
+        "test/sql/copy/csv/test_validator.test",
+        "test/sql/copy/csv/pollock/test_quotation_char.test"
       ]
     },
     {
@@ -196,7 +199,8 @@
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
         "test/sql/catalog/table/create_table_parameters.test",
-        "test/sql/show_select/test_show_select.test"
+        "test/sql/show_select/test_show_select.test",
+        "test/sql/copy/csv/glob/copy_csv_glob.test"
       ]
     }
   ]
