@@ -13,7 +13,8 @@ load __TEST_DIR__/test_alprd_regression_v1_4_0.db readwrite v1.4.0
 statement ok
 PRAGMA force_compression='uncompressed'
 
-# This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original.
+# This parquet file generates numerous ALP exceptions, which, under certain circumstances
+# (depends on default block and vector size), previously resulted in the compressed data being larger than the original.
 # BUT it seems to not affect ALPRD as bad as standard ALP.
 statement ok
 CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
@@ -60,7 +61,6 @@ load __TEST_DIR__/test_alprd_regression_v1_5_0.db readwrite v1.5.0
 statement ok
 PRAGMA force_compression='uncompressed'
 
-# This parquet file generates numerous ALP exceptions, which previously resulted in the compressed data being larger than the original.
 statement ok
 CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
 
