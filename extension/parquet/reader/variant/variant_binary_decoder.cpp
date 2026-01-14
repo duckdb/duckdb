@@ -140,41 +140,41 @@ hugeint_t DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	return result;
 }
 
-VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
-                                                       const_data_ptr_t data) {
+VariantValueIntermediate VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
+                                                                   const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return VariantValue(Value());
+		return VariantValueIntermediate(Value());
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
-		return VariantValue(Value::BOOLEAN(true));
+		return VariantValueIntermediate(Value::BOOLEAN(true));
 	}
 	case VariantPrimitiveType::BOOLEAN_FALSE: {
-		return VariantValue(Value::BOOLEAN(false));
+		return VariantValueIntermediate(Value::BOOLEAN(false));
 	}
 	case VariantPrimitiveType::INT8: {
 		auto value = Load<int8_t>(data);
-		return VariantValue(Value::TINYINT(value));
+		return VariantValueIntermediate(Value::TINYINT(value));
 	}
 	case VariantPrimitiveType::INT16: {
 		auto value = Load<int16_t>(data);
-		return VariantValue(Value::SMALLINT(value));
+		return VariantValueIntermediate(Value::SMALLINT(value));
 	}
 	case VariantPrimitiveType::INT32: {
 		auto value = Load<int32_t>(data);
-		return VariantValue(Value::INTEGER(value));
+		return VariantValueIntermediate(Value::INTEGER(value));
 	}
 	case VariantPrimitiveType::INT64: {
 		auto value = Load<int64_t>(data);
-		return VariantValue(Value::BIGINT(value));
+		return VariantValueIntermediate(Value::BIGINT(value));
 	}
 	case VariantPrimitiveType::DOUBLE: {
 		double value = Load<double>(data);
-		return VariantValue(Value::DOUBLE(value));
+		return VariantValueIntermediate(Value::DOUBLE(value));
 	}
 	case VariantPrimitiveType::FLOAT: {
 		float value = Load<float>(data);
-		return VariantValue(Value::FLOAT(value));
+		return VariantValueIntermediate(Value::FLOAT(value));
 	}
 	case VariantPrimitiveType::DECIMAL4: {
 		uint8_t scale;
@@ -182,7 +182,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 
 		auto value = DecodeDecimal<int32_t>(data, scale, width);
 		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValueIntermediate(Value(value_str));
 	}
 	case VariantPrimitiveType::DECIMAL8: {
 		uint8_t scale;
@@ -190,7 +190,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 
 		auto value = DecodeDecimal<int64_t>(data, scale, width);
 		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValueIntermediate(Value(value_str));
 	}
 	case VariantPrimitiveType::DECIMAL16: {
 		uint8_t scale;
@@ -198,17 +198,17 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 
 		auto value = DecodeDecimal<hugeint_t>(data, scale, width);
 		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValueIntermediate(Value(value_str));
 	}
 	case VariantPrimitiveType::DATE: {
 		date_t value;
 		value.days = Load<int32_t>(data);
-		return VariantValue(Value::DATE(value));
+		return VariantValueIntermediate(Value::DATE(value));
 	}
 	case VariantPrimitiveType::TIMESTAMP_MICROS: {
 		timestamp_tz_t micros_ts_tz;
 		micros_ts_tz.value = Load<int64_t>(data);
-		return VariantValue(Value::TIMESTAMPTZ(micros_ts_tz));
+		return VariantValueIntermediate(Value::TIMESTAMPTZ(micros_ts_tz));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS: {
 		timestamp_t micros_ts;
@@ -216,7 +216,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 
 		auto value = Value::TIMESTAMP(micros_ts);
 		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValueIntermediate(Value(value_str));
 	}
 	case VariantPrimitiveType::BINARY: {
 		//! Follow the JSON serialization guide by converting BINARY to Base64:
@@ -224,7 +224,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		auto size = Load<uint32_t>(data);
 		auto string_data = reinterpret_cast<const char *>(data + sizeof(uint32_t));
 		auto base64_string = Blob::ToBase64(string_t(string_data, size));
-		return VariantValue(Value(base64_string));
+		return VariantValueIntermediate(Value(base64_string));
 	}
 	case VariantPrimitiveType::STRING: {
 		auto size = Load<uint32_t>(data);
@@ -232,12 +232,12 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		if (!Utf8Proc::IsValid(string_data, size)) {
 			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
-		return VariantValue(Value(string(string_data, size)));
+		return VariantValueIntermediate(Value(string(string_data, size)));
 	}
 	case VariantPrimitiveType::TIME_NTZ_MICROS: {
 		dtime_t micros_time;
 		micros_time.micros = Load<int64_t>(data);
-		return VariantValue(Value::TIME(micros_time));
+		return VariantValueIntermediate(Value::TIME(micros_time));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NANOS: {
 		timestamp_ns_t nanos_ts;
@@ -245,7 +245,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 
 		//! Convert the nanos timestamp to a micros timestamp (not lossless)
 		auto micros_ts = Timestamp::FromEpochNanoSeconds(nanos_ts.value);
-		return VariantValue(Value::TIMESTAMPTZ(timestamp_tz_t(micros_ts)));
+		return VariantValueIntermediate(Value::TIMESTAMPTZ(timestamp_tz_t(micros_ts)));
 	}
 	case VariantPrimitiveType::TIMESTAMP_NTZ_NANOS: {
 		timestamp_ns_t nanos_ts;
@@ -253,12 +253,12 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 
 		auto value = Value::TIMESTAMPNS(nanos_ts);
 		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValueIntermediate(Value(value_str));
 	}
 	case VariantPrimitiveType::UUID: {
 		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data);
 		auto value_str = UUID::ToString(uuid_value);
-		return VariantValue(Value(value_str));
+		return VariantValueIntermediate(Value(value_str));
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
@@ -266,19 +266,20 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 	}
 }
 
-VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantValueMetadata &value_metadata,
-                                                     const_data_ptr_t data) {
+VariantValueIntermediate VariantBinaryDecoder::ShortStringDecode(const VariantValueMetadata &value_metadata,
+                                                                 const_data_ptr_t data) {
 	D_ASSERT(value_metadata.string_size < 64);
 	auto string_data = reinterpret_cast<const char *>(data);
 	if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
 		throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
 	}
-	return VariantValue(Value(string(string_data, value_metadata.string_size)));
+	return VariantValueIntermediate(Value(string(string_data, value_metadata.string_size)));
 }
 
-VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
-                                                const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
-	VariantValue ret(VariantValueType::OBJECT);
+VariantValueIntermediate VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
+                                                            const VariantValueMetadata &value_metadata,
+                                                            const_data_ptr_t data) {
+	VariantValueIntermediate ret(VariantValueType::OBJECT);
 
 	auto field_offset_size = value_metadata.field_offset_size;
 	auto field_id_size = value_metadata.field_id_size;
@@ -311,9 +312,10 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 	return ret;
 }
 
-VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
-                                               const VariantValueMetadata &value_metadata, const_data_ptr_t data) {
-	VariantValue ret(VariantValueType::ARRAY);
+VariantValueIntermediate VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
+                                                           const VariantValueMetadata &value_metadata,
+                                                           const_data_ptr_t data) {
+	VariantValueIntermediate ret(VariantValueType::ARRAY);
 
 	auto field_offset_size = value_metadata.field_offset_size;
 	auto is_large = value_metadata.is_large;
@@ -340,7 +342,7 @@ VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
 	return ret;
 }
 
-VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadata, const_data_ptr_t data) {
+VariantValueIntermediate VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadata, const_data_ptr_t data) {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(data[0]);
 
 	data++;

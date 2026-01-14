@@ -1848,6 +1848,17 @@ const vector<Value> &MapValue::GetChildren(const Value &value) {
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
 
+LogicalType VariantValue::GetStructuredType(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling VariantValueIntermediate::GetStructuredType on a NULL value");
+	}
+	Vector tmp(value);
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::GetTypeOfValue(vector_data, 0, 0);
+}
+
 const vector<Value> &ListValue::GetChildren(const Value &value) {
 	if (value.is_null) {
 		throw InternalException("Calling ListValue::GetChildren on a NULL value");

@@ -76,6 +76,11 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		is_equality = false;
 		break;
 	}
+
+	// if (left_type.id() == LogicalTypeId::VARIANT || right_type.id() == LogicalTypeId::VARIANT) {
+	//	throw BinderException("Can't compare on type VARIANT, an explicit cast is needed");
+	//}
+
 	if (is_equality) {
 		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
 	} else {

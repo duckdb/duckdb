@@ -80,7 +80,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	vector<VariantValue> intermediate;
+	vector<VariantValueIntermediate> intermediate;
 	if (typed_value_reader) {
 		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
 		if (typed_values != value_values) {
@@ -90,7 +90,7 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	}
 	intermediate =
 	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values, false);
-	VariantValue::ToVARIANT(intermediate, result);
+	VariantValueIntermediate::ToVARIANT(intermediate, result);
 
 	read_count = value_values;
 	return read_count.GetIndex();

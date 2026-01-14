@@ -910,6 +910,19 @@ idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, const Sele
 			Value left_val = left.GetValue(left_idx);
 			Value right_val = right.GetValue(right_idx);
 
+			auto left_structured_type = VariantValue::GetStructuredType(left_val);
+			auto right_structured_type = VariantValue::GetStructuredType(right_val);
+
+			LogicalType max_logical_type;
+			auto res = LogicalType::TryGetMaxLogicalTypeUnchecked(left_structured_type, right_structured_type,
+			                                                      max_logical_type);
+			if (!res) {
+				throw InvalidInputException(
+				    "Can't compare values of type %s (%s) and type %s (%s) - an explicit cast is required",
+				    left_structured_type.ToString(), left_val.ToString(), right_structured_type.ToString(),
+				    right_val.ToString());
+			}
+
 			if (std::is_same<OP, duckdb::DistinctFrom>::value) {
 				comparison_result = ValueOperations::DistinctFrom(left_val, right_val);
 			} else if (std::is_same<OP, duckdb::NotDistinctFrom>::value) {

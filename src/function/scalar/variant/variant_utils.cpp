@@ -182,6 +182,10 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);
 }
 
+LogicalType VariantUtils::GetTypeOfValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
+	return VariantVisitor<TypeConverter>::Visit(variant, row, values_idx);
+}
+
 void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);
