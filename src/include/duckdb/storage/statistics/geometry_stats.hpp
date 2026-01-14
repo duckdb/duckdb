@@ -296,8 +296,6 @@ struct GeometryStats {
 
 	static GeometryStatsData &GetDataUnsafe(BaseStatistics &stats);
 	static const GeometryStatsData &GetDataUnsafe(const BaseStatistics &stats);
-
-private:
 };
 
 } // namespace duckdb
