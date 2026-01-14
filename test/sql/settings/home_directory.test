@@ -1,0 +1,13 @@
+# name: test/sql/settings/home_directory.test
+# description: Test behavior of home_directory
+# group: [settings]
+
+require skip_reload
+
+statement ok
+SET home_directory = '~';
+
+query I
+SELECT current_setting('home_directory') != '~';
+----
+true
