@@ -323,8 +323,11 @@ bool VirtualFileSystem::IsDisabledForPath(const string &path) {
 	if (disabled_file_systems.empty()) {
 		return false;
 	}
-	auto &fs = FindFileSystem(path, nullptr);
-	return disabled_file_systems.find(fs.GetName()) != disabled_file_systems.end();
+	auto fs = FindFileSystemInternal(*registry, path);
+	if (!fs) {
+		fs = registry->default_fs->file_system;
+	}
+	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
 }
 
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
