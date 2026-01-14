@@ -249,7 +249,8 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<unique_ptr<IndexStorageInfo>> TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+vector<unique_ptr<IndexStorageInfo>> TableIndexList::SerializeToDisk(QueryContext context,
+                                                                     const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
 	vector<unique_ptr<IndexStorageInfo>> result;
 	for (auto &entry : index_entries) {
