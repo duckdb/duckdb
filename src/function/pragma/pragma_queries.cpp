@@ -201,8 +201,7 @@ static string PragmaDatabaseSize(ClientContext &context, const FunctionParameter
 }
 
 static string PragmaStorageInfo(ClientContext &context, const FunctionParameters &parameters) {
-	return StringUtil::Format("SELECT * FROM pragma_storage_info(%s);",
-	                          KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
+	return StringUtil::Format("SELECT * FROM pragma_storage_info(%s);", SQLString(parameters.values[0].ToString()));
 }
 
 static string PragmaMetadataInfo(ClientContext &context, const FunctionParameters &parameters) {
