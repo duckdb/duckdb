@@ -29,6 +29,37 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 	SetGenericVariable(context, name, scope, std::move(target_value));
 }
 
+SetScope PhysicalSet::GetSettingScope(const ConfigurationOption &option, SetScope variable_scope) {
+	if (variable_scope == SetScope::AUTOMATIC) {
+		if (option.set_local) {
+			return SetScope::SESSION;
+		}
+		if (option.set_global) {
+			return SetScope::GLOBAL;
+		}
+		// generic setting
+		switch (option.scope) {
+		case SettingScopeTarget::LOCAL_ONLY:
+		case SettingScopeTarget::LOCAL_DEFAULT:
+			return SetScope::SESSION;
+		case SettingScopeTarget::GLOBAL_ONLY:
+		case SettingScopeTarget::GLOBAL_DEFAULT:
+			return SetScope::GLOBAL;
+		default:
+			throw InvalidInputException("Setting \"%s\" does not have a valid scope defined", option.name);
+		}
+	}
+	if (variable_scope == SetScope::SESSION && option.scope == SettingScopeTarget::GLOBAL_ONLY) {
+		throw InvalidInputException("Setting \"%s\" cannot be set as a session variable - it can only be set globally",
+		                            option.name);
+	}
+	if (variable_scope == SetScope::GLOBAL && option.scope == SettingScopeTarget::LOCAL_ONLY) {
+		throw InvalidInputException(
+		    "Setting \"%s\" cannot be set as a global variable - it can only be set per session", option.name);
+	}
+	return variable_scope;
+}
+
 SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                               OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
@@ -48,16 +79,7 @@ SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChu
 		SetExtensionVariable(context.client, entry->second, name, scope, value);
 		return SourceResultType::FINISHED;
 	}
-	SetScope variable_scope = scope;
-	if (variable_scope == SetScope::AUTOMATIC) {
-		if (option->set_local) {
-			variable_scope = SetScope::SESSION;
-		} else if (option->set_global) {
-			variable_scope = SetScope::GLOBAL;
-		} else {
-			variable_scope = option->default_scope;
-		}
-	}
+	SetScope variable_scope = GetSettingScope(*option, scope);
 
 	Value input_val = value.CastAs(context.client, DBConfig::ParseLogicalType(option->parameter_type));
 	if (option->default_value) {
