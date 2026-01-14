@@ -245,7 +245,11 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			auto unordered = make_uniq<FunctionExpression>(
 			    qualified_function.catalog, qualified_function.schema, lowercase_name, std::move(function_children),
 			    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
-			// lowercase_name = "list_sort";
+			lowercase_name = "list_sort";
+			order_modifier.reset();    // NOLINT
+			filter_expr.reset();       // NOLINT
+			function_children.clear(); // NOLINT
+			distinct = false;
 			function_children.emplace_back(std::move(unordered));
 			function_children.emplace_back(std::move(sense));
 			function_children.emplace_back(std::move(nulls));
@@ -328,15 +332,8 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	}
 
 	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema, lowercase_name,
-	                                            std::move(function_children));
-	result->export_state = export_opt.HasResult();
-	result->distinct = distinct;
-	if (!order_modifier->orders.empty()) {
-		result->order_bys = std::move(order_modifier);
-	}
-	if (filter_expr) {
-		result->filter = std::move(filter_expr);
-	}
+	                                            std::move(function_children), std::move(filter_expr),
+	                                            std::move(order_modifier), distinct, false, export_opt.HasResult());
 
 	return std::move(result);
 }

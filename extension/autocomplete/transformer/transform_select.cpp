@@ -1410,15 +1410,15 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(PE
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto sample_count = transformer.Transform<unique_ptr<SampleOptions>>(extract_parens);
-	transformer.TransformOptional<SampleMethod>(list_pr, 0, sample_count->method);
+	auto result = transformer.Transform<unique_ptr<SampleOptions>>(extract_parens);
+	transformer.TransformOptional<SampleMethod>(list_pr, 0, result->method);
 	auto repeatable_sample_opt = list_pr.Child<OptionalParseResult>(2);
 	if (repeatable_sample_opt.HasResult()) {
 		auto repeatable_seed = transformer.Transform<optional_idx>(repeatable_sample_opt.optional_result);
-		sample_count->seed = repeatable_seed;
-		sample_count->repeatable = true;
+		result->seed = repeatable_seed;
+		result->repeatable = true;
 	}
-	return sample_count;
+	return result;
 }
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryCount(PEGTransformer &transformer,
@@ -1451,9 +1451,26 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 		throw NotImplementedException("Can only handle constant expressions for sample counts");
 	}
 	auto &const_expr = expr->Cast<ConstantExpression>();
-	result->sample_size = const_expr.value;
+	auto &sample_value = const_expr.value;
 	transformer.TransformOptional<bool>(list_pr, 1, result->is_percentage);
-	result->method = SampleMethod::RESERVOIR_SAMPLE;
+	if (result->is_percentage) {
+		// sample size is given in sample_size: use system sampling
+		auto percentage = sample_value.GetValue<double>();
+		if (percentage < 0 || percentage > 100) {
+			throw ParserException("Sample sample_size %llf out of range, must be between 0 and 100", percentage);
+		}
+		result->sample_size = Value::DOUBLE(percentage);
+		result->method = SampleMethod::SYSTEM_SAMPLE;
+	} else {
+		// sample size is given in rows: use reservoir sampling
+		auto rows = sample_value.GetValue<int64_t>();
+		if (rows < 0 || sample_value.GetValue<uint64_t>() > SampleOptions::MAX_SAMPLE_ROWS) {
+			throw ParserException("Sample rows %lld out of range, must be between 0 and %lld", rows,
+			                      SampleOptions::MAX_SAMPLE_ROWS);
+		}
+		result->sample_size = Value::BIGINT(rows);
+		result->method = SampleMethod::RESERVOIR_SAMPLE;
+	}
 	return result;
 }
 
