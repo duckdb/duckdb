@@ -470,14 +470,6 @@ alter_table_cmd:
 					n->options = $2;
 					$$ = (PGNode *)n;
 				}
-			 /* ALTER TABLE <name> UNSET (...) */
-			| UNSET reloptions
-				{
-					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
-					n->subtype = PG_AT_ResetRelOptions;
-					n->options = $2;
-					$$ = (PGNode *)n;
-				}
 			| alter_generic_options
 				{
 					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);

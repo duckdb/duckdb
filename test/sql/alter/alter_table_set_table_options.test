@@ -5,6 +5,9 @@
 statement ok
 CREATE TABLE tbl1(i INTEGER);
 
+statement ok
+set variable location='my/location/path';
+
 statement error
 ALTER TABLE tbl1 SET ('foo'='baz', 'buzz'='wizz');
 ----
@@ -15,15 +18,11 @@ ALTER TABLE tbl1 SET (foo='baz', buzz='wizz');
 ----
 <REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
 
+# works with Functions
 statement error
-ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
+ALTER TABLE tbl1 SET (foo=getvariable('location'));
 ----
-<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
-
-statement error
-ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
-----
-<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
 
 statement error
 ALTER TABLE tbl1 RESET ('foo', 'buzz');
@@ -36,19 +35,21 @@ ALTER TABLE tbl1 RESET (foo, buzz);
 <REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
 
 statement error
-ALTER TABLE tbl1 UNSET ('foo'='baz', 'buzz'='wizz');
+ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
 ----
-<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+<REGEX>:.*Invalid Input Error: RESET .*options.* cannot have value. Use SET to update options.*
 
 statement error
-ALTER TABLE tbl1 UNSET ('foo', 'buzz');
+ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
 ----
-<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
-
-statement ok
-set variable location='my/location/path';
+<REGEX>:.*Invalid Input Error: RESET .*options.* cannot have value. Use SET to update options.*
 
 statement error
-ALTER TABLE tbl1 UNSET ('foo'=getvariable('location'));
+ALTER TABLE tbl1 RESET ();
 ----
-<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+<REGEX>:.*Parser Error.*syntax error.*
+
+statement error
+ALTER TABLE tbl1 SET ();
+----
+<REGEX>:.*Parser Error.*syntax error.*
