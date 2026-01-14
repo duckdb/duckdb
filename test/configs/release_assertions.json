@@ -35,7 +35,21 @@
         "test/sql/outofcore/out_of_core_sort.test_slow",
         "test/sql/outofcore/out_of_core_window.test_slow",
         "test/sql/outofcore/out_of_core_asof_join.test_slow",
-        "test/sql/outofcore/out_of_core_ie_join.test_slow"
+        "test/sql/outofcore/out_of_core_ie_join.test_slow",
+        "test/sql/window/test_quantile_window.test_slow",
+        "test/sql/merge/merge_into_tpch.test_slow",
+        "test/sql/window/test_window_sort.test_slow",
+        "test/sql/copy/csv/parallel/csv_parallel_tpcds.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_wal_optimistic_index.test_slow",
+        "test/sql/json/tpch_round_trip.test_slow",
+        "test/sql/tpch/tpch_topn.test_slow",
+        "test/sql/storage/compression/roaring/roaring_compression_ratio.test_slow ",
+        "test/sql/storage/external_file_cache/external_file_cache_parquet_tpcds.test_slow",
+        "test/sql/index/art/types/test_art_bigint.test_slow",
+        "test/sql/index/art/types/test_art_integer.test_slow",
+        "test/sql/index/art/types/test_art_smallint.test_slow",
+        "test/sql/outofcore/leftover_temp_files_issue_6420.test_slow",
+        "test/sql/index/art/multi_column/test_art_multi_column.test_slow"
       ]
     }
   ]
