@@ -1187,7 +1187,7 @@ const vector<MetaBlockPointer> &RowGroup::GetColumnStartPointers() const {
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
+	if (Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
 	    !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
 		// re-use previous metadata

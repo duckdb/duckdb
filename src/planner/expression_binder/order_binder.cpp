@@ -61,7 +61,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			// ORDER BY <constant> has no effect
 			// this is disabled by default (matching Postgres) - but we can control this with a setting
 			auto order_by_non_integer_literal =
-			    DBConfig::GetSetting<OrderByNonIntegerLiteralSetting>(binders[0].get().context);
+			    Settings::Get<OrderByNonIntegerLiteralSetting>(binders[0].get().context);
 			if (!order_by_non_integer_literal) {
 				throw BinderException(expr,
 				                      "%s non-integer literal has no effect.\n* SET "

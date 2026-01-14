@@ -15,7 +15,7 @@ LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extensio
 statement error
 set allow_parser_override_extension=doesnotexist;
 ----
-Invalid Input Error: Unrecognized value for parser override setting. Valid options are: default, fallback, strict, strict_when_supported
+unrecognized value "doesnotexist" for enum "AllowParserOverride"
 
 # Default behavior is not using the parser override
 statement error

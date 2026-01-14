@@ -1,6 +1,5 @@
 #include "duckdb/main/valid_checker.hpp"
-
-#include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -14,7 +13,7 @@ void ValidChecker::Invalidate(string error) {
 }
 
 bool ValidChecker::IsInvalidated() {
-	if (db.config.options.disable_database_invalidation) {
+	if (Settings::Get<DisableDatabaseInvalidationSetting>(db)) {
 		return false;
 	}
 	return is_invalidated;

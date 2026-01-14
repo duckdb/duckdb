@@ -274,7 +274,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto &table_info = row_group.GetTableInfo();
 	auto &db = table_info.GetDB();
 
-	const auto shredding_threshold = DBConfig::GetSetting<GeometryMinimumShreddingSize>(DBConfig::Get(db));
+	const auto shredding_threshold = Settings::Get<GeometryMinimumShreddingSize>(DBConfig::Get(db));
 	const auto current_row_count = count.load();
 
 	auto should_shred = shredding_threshold >= 0 && current_row_count >= static_cast<idx_t>(shredding_threshold);
