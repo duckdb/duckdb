@@ -41,6 +41,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 
 namespace duckdb {
 
@@ -1127,6 +1128,14 @@ private:
 	static JoinPrefix TransformNaturalJoinPrefix(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static JoinPrefix TransformPositionalJoinPrefix(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static PivotColumn TransformPivotValueList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformPivotHeader(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static vector<PivotColumnEntry> TransformPivotTargetList(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+
 	static unique_ptr<TableRef> TransformInnerTableRef(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformTableFunction(PEGTransformer &transformer,

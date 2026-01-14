@@ -664,6 +664,11 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformCrossJoinPrefix);
 	REGISTER_TRANSFORM(TransformNaturalJoinPrefix);
 	REGISTER_TRANSFORM(TransformPositionalJoinPrefix);
+	REGISTER_TRANSFORM(TransformTablePivotClause);
+	REGISTER_TRANSFORM(TransformPivotValueList);
+	REGISTER_TRANSFORM(TransformPivotHeader);
+	REGISTER_TRANSFORM(TransformPivotTargetList);
+
 	REGISTER_TRANSFORM(TransformInnerTableRef);
 	REGISTER_TRANSFORM(TransformTableFunction);
 	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);

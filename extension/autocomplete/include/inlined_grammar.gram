@@ -1229,11 +1229,10 @@ ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
-TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueLists GroupByClause?) TableAlias?
-TableUnpivotClause <- 'UNPIVOT' IncludeExcludeNulls? Parens(UnpivotHeader 'FOR' PivotValueLists) TableAlias?
+TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ GroupByClause?) TableAlias?
+TableUnpivotClause <- 'UNPIVOT' IncludeExcludeNulls? Parens(UnpivotHeader 'FOR' PivotValueList+) TableAlias?
 
 PivotHeader <- BaseExpression
-PivotValueLists <- PivotValueList PivotValueList*
 PivotValueList <- PivotHeader 'IN' PivotTargetList
 PivotTargetList <- Identifier / Parens(TargetList)
 

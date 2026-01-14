@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/tableref/at_clause.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 
 namespace duckdb {
 
@@ -505,9 +506,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 		for (auto join_or_pivot : repeat_join_or_pivot.children) {
 			auto transform_join_or_pivot = transformer.Transform<unique_ptr<TableRef>>(join_or_pivot);
 			if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
-				auto join_ref = unique_ptr_cast<TableRef, JoinRef>(std::move(transform_join_or_pivot));
-				join_ref->left = std::move(inner_table_ref);
-				inner_table_ref = std::move(join_ref);
+				auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
+				join_ref.left = std::move(inner_table_ref);
+				inner_table_ref = std::move(transform_join_or_pivot);
+			} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
+				auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
+				pivot_ref.source = std::move(inner_table_ref);
+				inner_table_ref = std::move(transform_join_or_pivot);
+			} else {
+				throw NotImplementedException("Unsupported TableRef type encountered: %s",
+				                              EnumUtil::ToString(transform_join_or_pivot->type));
 			}
 		}
 	}
@@ -525,6 +533,67 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinOrPivot(PEGTransformer 
                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto inner_list = extract_parens->Cast<ListParseResult>();
+	auto result = make_uniq<PivotRef>();
+	result->aggregates =
+	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(inner_list.Child<ListParseResult>(0));
+	auto pivot_values_list = inner_list.Child<RepeatParseResult>(2);
+	for (auto pivot_value : pivot_values_list.children) {
+		result->pivots.push_back(transformer.Transform<PivotColumn>(pivot_value));
+	}
+	GroupByNode group_by;
+	transformer.TransformOptional<GroupByNode>(inner_list, 3, group_by);
+	if (!group_by.group_expressions.empty()) {
+		throw NotImplementedException("Groups in pivot clause has not yet been implemented");
+	}
+	return result;
+}
+
+PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &transformer,
+                                                           optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	PivotColumn result;
+	result.pivot_expressions.push_back(
+	    transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
+	result.entries = transformer.Transform<vector<PivotColumnEntry>>(list_pr.Child<ListParseResult>(2));
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPivotHeader(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+}
+
+vector<PivotColumnEntry> PEGTransformerFactory::TransformPivotTargetList(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<PivotColumnEntry> result;
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->type == ParseResultType::IDENTIFIER) {
+		PivotColumnEntry pivot_entry;
+		pivot_entry.values.push_back(Value(choice_pr->Cast<IdentifierParseResult>().identifier));
+		result.push_back(std::move(pivot_entry));
+	} else {
+		auto extract_target_list = ExtractResultFromParens(choice_pr);
+		auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_target_list);
+		for (auto &target : target_list) {
+			PivotColumnEntry pivot_entry;
+			if (target->GetExpressionClass() != ExpressionClass::CONSTANT) {
+				throw NotImplementedException("Expected constant entries for the pivot targets");
+			}
+			auto const_expr = target->Cast<ConstantExpression>();
+			pivot_entry.values.push_back(const_expr.value);
+			result.push_back(std::move(pivot_entry));
+		}
+	}
+	return result;
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinClause(PEGTransformer &transformer,

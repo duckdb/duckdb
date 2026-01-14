@@ -70,6 +70,8 @@ EXCLUDED_RULES = {
     "TableSample",
     "TypeList",
     "NamedParameterAssignment",
+    "WithOrdinality",
+    "ByName",
 }
 
 
