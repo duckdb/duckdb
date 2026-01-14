@@ -49,7 +49,7 @@ string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOpt
 	return str + "\n" + child;
 }
 
-void ConstPrefixHandle::Verify(ART &art, const Node &node) {
+optional_ptr<const Node> ConstPrefixHandle::Verify(ART &art, const Node &node) {
 	reference<const Node> ref(node);
 
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
@@ -57,7 +57,7 @@ void ConstPrefixHandle::Verify(ART &art, const Node &node) {
 		D_ASSERT(handle.data[art.PrefixCount()] <= art.PrefixCount());
 	});
 
-	ref.get().Verify(art);
+	return &ref.get();
 }
 
 } // namespace duckdb
