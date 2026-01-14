@@ -275,6 +275,7 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::EXPLAIN_STATEMENT:
 					case StatementType::PREPARE_STATEMENT:
 					case StatementType::ATTACH_STATEMENT:
+					case StatementType::SELECT_STATEMENT:
 					case StatementType::DETACH_STATEMENT:
 					case StatementType::DELETE_STATEMENT:
 					case StatementType::DROP_STATEMENT:

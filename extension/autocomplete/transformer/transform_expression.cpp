@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 
@@ -104,6 +105,50 @@ string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
+static bool IsExcludableWindowFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_AGGREGATE:
+		return true;
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
+		return false;
+	default:
+		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
+	}
+}
+
+static bool IsOrderableWindowFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
+	case ExpressionType::WINDOW_AGGREGATE:
+		return true;
+	case ExpressionType::WINDOW_RANK_DENSE:
+		return false;
+	default:
+		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
+	}
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
                                                    optional_ptr<ParseResult> parse_result) {
@@ -120,7 +165,13 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			function_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(function_argument));
 		}
 	}
+	auto order_modifier = make_uniq<OrderModifier>();
+	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_modifier->orders);
 
+	unique_ptr<ParsedExpression> filter_expr;
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, filter_expr);
+	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
+	auto export_opt = list_pr.Child<OptionalParseResult>(4);
 	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0])) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
@@ -181,48 +232,59 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("Wrong number of arguments provided to DATE function");
 		}
 		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
+	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1) {
+		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments to LIST.");
+		}
+		auto arg_expr = function_children[0].get();
+		auto &order_by = order_modifier->orders[0];
+		if (arg_expr->Equals(*order_by.expression)) {
+			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
+			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
+			auto unordered = make_uniq<FunctionExpression>(
+			    qualified_function.catalog, qualified_function.schema, lowercase_name, std::move(function_children),
+			    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
+			// lowercase_name = "list_sort";
+			function_children.emplace_back(std::move(unordered));
+			function_children.emplace_back(std::move(sense));
+			function_children.emplace_back(std::move(nulls));
+		}
 	}
-	// TODO(Dtenwolde) Implement the list with an order by
-	// else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
-	// 	// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
-	// 	if (function_children.size() != 1) {
-	// 		throw ParserException("Wrong number of arguments to LIST.");
-	// 	}
-	// 	auto arg_expr = function_children[0].get();
-	// 	auto &order_by = order_bys->orders[0];
-	// 	if (arg_expr->Equals(*order_by.expression)) {
-	// 		auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
-	// 		auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
-	// 		order_bys = nullptr;
-	// 		auto unordered = make_uniq<FunctionExpression>(catalog, schema, lowercase_name.c_str(), std::move(children),
-	// 		                                               std::move(filter_expr), std::move(order_bys),
-	// 		                                               root.agg_distinct, false, root.export_state);
-	// 		lowercase_name = "list_sort";
-	// 		order_bys.reset();   // NOLINT
-	// 		filter_expr.reset(); // NOLINT
-	// 		children.clear();    // NOLINT
-	// 		root.agg_distinct = false;
-	// 		function_children.emplace_back(std::move(unordered));
-	// 		function_children.emplace_back(std::move(sense));
-	// 		function_children.emplace_back(std::move(nulls));
-	// 	}
-	// }
-	vector<OrderByNode> order_by;
-	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (within_group_opt.HasResult()) {
 		throw NotImplementedException("Within group has not yet been implemented");
 	}
-	unique_ptr<ParsedExpression> filter_expr;
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, filter_expr);
-	auto export_opt = list_pr.Child<OptionalParseResult>(4);
 	auto over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
+		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
+		if (win_fun_type == ExpressionType::INVALID) {
+			throw InternalException("Unknown/unsupported window function");
+		}
+
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && distinct) {
+			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
+		}
+
+		if (!order_modifier->orders.empty() && !IsOrderableWindowFunction(win_fun_type)) {
+			throw ParserException("ORDER BY is not supported for the window function \"%s\"", lowercase_name.c_str());
+		}
+
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && filter_expr) {
+			throw ParserException("FILTER is not implemented for non-aggregate window functions!");
+		}
+		if (export_opt.HasResult()) {
+			throw ParserException("EXPORT_STATE is not supported for window functions!");
+		}
+
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && ignore_nulls_opt.HasResult()) {
+			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
+		}
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		expr->catalog = qualified_function.catalog;
 		expr->schema = qualified_function.schema;
 		expr->function_name = lowercase_name;
-		expr->type = WindowExpression::WindowToExpressionType(expr->function_name);
+		expr->type = win_fun_type;
 		if (expr->type == ExpressionType::WINDOW_AGGREGATE) {
 			expr->children = std::move(function_children);
 		} else {
@@ -252,8 +314,16 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 				}
 			}
 		}
-		auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
 		expr->ignore_nulls = ignore_nulls_opt.HasResult();
+		expr->filter_expr = std::move(filter_expr);
+		expr->arg_orders = std::move(order_modifier->orders);
+		expr->distinct = distinct;
+
+		if (expr->exclude_clause != WindowExcludeMode::NO_OTHER && !expr->arg_orders.empty() &&
+		    !IsExcludableWindowFunction(expr->type)) {
+			throw ParserException("EXCLUDE is not supported for the window function \"%s\"",
+			                      expr->function_name.c_str());
+		}
 		return std::move(expr);
 	}
 
@@ -261,10 +331,8 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	                                            std::move(function_children));
 	result->export_state = export_opt.HasResult();
 	result->distinct = distinct;
-	if (!order_by.empty()) {
-		auto order_by_modifier = make_uniq<OrderModifier>();
-		order_by_modifier->orders = std::move(order_by);
-		result->order_bys = std::move(order_by_modifier);
+	if (!order_modifier->orders.empty()) {
+		result->order_bys = std::move(order_modifier);
 	}
 	if (filter_expr) {
 		result->filter = std::move(filter_expr);
@@ -1431,7 +1499,8 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTran
 		if (it == transformer.window_clauses.end()) {
 			throw ParserException("window \"%s\" does not exist", window_name);
 		}
-		return std::move(it->second);
+		auto copied_expr = it->second->Copy();
+		return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
 	}
 	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
 }
@@ -1480,6 +1549,14 @@ PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer,
 	auto order_by_opt = list_pr.Child<OptionalParseResult>(1);
 	if (order_by_opt.HasResult()) {
 		result->orders = transformer.Transform<vector<OrderByNode>>(order_by_opt.optional_result);
+		for (auto &order : result->orders) {
+			if (order.expression->GetExpressionType() == ExpressionType::STAR) {
+				auto &star = order.expression->Cast<StarExpression>();
+				if (!star.expr) {
+					throw ParserException("Cannot ORDER BY ALL in a window expression");
+				}
+			}
+		}
 	}
 	auto frame_opt = list_pr.Child<OptionalParseResult>(2);
 	if (frame_opt.HasResult()) {
@@ -1525,11 +1602,17 @@ WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transfor
 			throw ParserException("Invalid result from frame: %s", framing);
 		}
 	}
+	if (frame_extent[0].boundary == WindowBoundary::UNBOUNDED_FOLLOWING) {
+		throw ParserException("Frame start cannot be UNBOUNDED FOLLOWING");
+	}
 	result.start = frame_extent[0].boundary;
 	if (frame_extent[0].expr) {
 		result.start_expr = std::move(frame_extent[0].expr);
 	}
 	if (frame_extent.size() == 2) {
+		if (frame_extent[1].boundary == WindowBoundary::UNBOUNDED_PRECEDING) {
+			throw ParserException("Frame end cannot be UNBOUNDED PRECEDING");
+		}
 		result.end = frame_extent[1].boundary;
 		if (frame_extent[1].expr) {
 			result.end_expr = std::move(frame_extent[1].expr);

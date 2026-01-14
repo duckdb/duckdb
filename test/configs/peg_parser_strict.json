@@ -71,14 +71,6 @@
       ]
     },
     {
-      "reason": "Implement transform sample",
-      "paths": [
-        "test/sql/index/art/scan/test_random_uuid.test",
-        "test/sql/index/art/issues/test_art_internal_issue_4742.test",
-        "test/sql/show_select/show_quote_identifier.test"
-      ]
-    },
-    {
       "reason": "Error handling",
       "paths": [
         "test/sql/error/error_position.test",
@@ -203,7 +195,8 @@
       "paths": [
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
-        "test/sql/catalog/table/create_table_parameters.test"
+        "test/sql/catalog/table/create_table_parameters.test",
+        "test/sql/show_select/test_show_select.test"
       ]
     }
   ]

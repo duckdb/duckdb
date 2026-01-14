@@ -1486,7 +1486,7 @@ optional_idx PEGTransformerFactory::TransformRepeatableSample(PEGTransformer &tr
 optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto const_expr = expr->Cast<ConstantExpression>();
 	return optional_idx(const_expr.value.GetValue<idx_t>());
 }
