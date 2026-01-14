@@ -568,8 +568,12 @@ void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> ope
 
 bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	if (FileExists(filename, opener)) {
-		RemoveFile(filename, opener);
-		return true;
+		try {
+			RemoveFile(filename, opener);
+			return true;
+		} catch (...) {
+			return false;
+		}
 	}
 	return false;
 }
