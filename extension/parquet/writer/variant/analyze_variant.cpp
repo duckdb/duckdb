@@ -14,6 +14,7 @@ unique_ptr<ParquetAnalyzeSchemaState> VariantColumnWriter::AnalyzeSchemaInit() {
 
 static void AnalyzeSchemaInternal(VariantAnalyzeData &state, UnifiedVariantVectorData &variant, idx_t row,
                                   uint32_t values_index) {
+	state.total_count++;
 	if (!variant.RowIsValid(row)) {
 		state.type_map[static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL)]++;
 		return;
@@ -98,20 +99,26 @@ static void CheckPrimitive(const VariantAnalyzeData &state, ShredAnalysisState &
 	if (count <= result.highest_count) {
 		return;
 	}
-	result.highest_count = count;
 	if (VARIANT_TYPE == VariantLogicalType::DECIMAL) {
 		D_ASSERT(count);
 		if (!state.decimal_consistent) {
 			return;
 		}
+		result.highest_count = count;
 		result.type = LogicalType::DECIMAL(state.decimal_width, state.decimal_scale);
 	} else {
+		result.highest_count = count;
 		result.type = SHREDDED_TYPE;
 	}
 }
 
 static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 	ShredAnalysisState result;
+
+	if (state.type_map[0] == state.total_count) {
+		//! All NULL, emit INT32
+		return LogicalType::INTEGER;
+	}
 
 	CheckPrimitive<VariantLogicalType::BOOL_TRUE, LogicalTypeId::BOOLEAN>(state, result);
 	CheckPrimitive<VariantLogicalType::INT8, LogicalTypeId::TINYINT>(state, result);

@@ -31,6 +31,7 @@ public:
 	uint32_t decimal_width;
 	uint32_t decimal_scale;
 	bool decimal_consistent = false;
+	idx_t total_count = 0;
 
 	//! Map for every decimal value what physical type it has
 	unique_ptr<ObjectAnalyzeData> object_data = nullptr;
