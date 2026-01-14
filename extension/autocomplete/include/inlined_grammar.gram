@@ -724,8 +724,10 @@ ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
 ReplaceEntrySingle <- ReplaceEntry
 ReplaceEntryList <- Parens(List(ReplaceEntry))
 ReplaceEntry <- Expression 'AS' ColumnReference
-RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
-RenameEntry <- ColumnReference 'AS' Identifier
+RenameList <- 'RENAME' (RenameEntryList / SingleRenameEntry)
+RenameEntryList <- Parens(List(RenameEntry))
+SingleRenameEntry <- RenameEntry
+RenameEntry <- ExcludeName 'AS' Identifier
 SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
 CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression

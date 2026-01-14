@@ -529,6 +529,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 	REGISTER_TRANSFORM(TransformGroupingExpression);
 	REGISTER_TRANSFORM(TransformMethodExpression);
+	REGISTER_TRANSFORM(TransformRenameList);
+	REGISTER_TRANSFORM(TransformRenameEntryList);
+	REGISTER_TRANSFORM(TransformSingleRenameEntry);
+	REGISTER_TRANSFORM(TransformRenameEntry);
 }
 
 void PEGTransformerFactory::RegisterImport() {

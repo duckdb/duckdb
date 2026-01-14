@@ -921,6 +921,14 @@ private:
 
 	static unique_ptr<ParsedExpression> TransformGroupingExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
+	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static qualified_column_map_t<string> TransformRenameEntryList(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static qualified_column_map_t<string> TransformSingleRenameEntry(PEGTransformer &transformer,
+	                                                                 optional_ptr<ParseResult> parse_result);
+	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,

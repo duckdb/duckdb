@@ -1430,10 +1430,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	if (replace_list_opt.HasResult()) {
 		result->replace_list = transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
 		    replace_list_opt.optional_result);
+		for (auto &replace_entry : result->replace_list) {
+			if (result->replace_list.find(replace_entry.first) != result->replace_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first);
+			}
+			if (result->exclude_list.find(QualifiedColumnName(replace_entry.first)) != result->exclude_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
+				                      replace_entry.first);
+			}
+		}
 	}
 	auto rename_list_opt = list_pr.Child<OptionalParseResult>(4);
 	if (rename_list_opt.HasResult()) {
 		result->rename_list = transformer.Transform<qualified_column_map_t<string>>(rename_list_opt.optional_result);
+		for (auto &rename_column : result->rename_list) {
+			if (result->exclude_list.find(rename_column.first) != result->exclude_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
+				                      rename_column.first.ToString());
+			}
+			if (result->replace_list.find(rename_column.first.column) != result->replace_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
+				                      rename_column.first.ToString());
+			}
+		}
 	}
 	return std::move(result);
 }
@@ -2227,4 +2246,42 @@ PEGTransformerFactory::TransformGroupingExpression(PEGTransformer &transformer,
 	auto result = make_uniq<OperatorExpression>(ExpressionType::GROUPING_FUNCTION, std::move(grouping_expressions));
 	return result;
 }
+
+qualified_column_map_t<string> PEGTransformerFactory::TransformRenameList(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto inner_list = list_pr.Child<ListParseResult>(1);
+	return transformer.Transform<qualified_column_map_t<string>>(inner_list.Child<ChoiceParseResult>(0).result);
+}
+
+qualified_column_map_t<string> PEGTransformerFactory::TransformRenameEntryList(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto entry_list = ExtractParseResultsFromList(extract_parens);
+	qualified_column_map_t<string> result;
+	for (auto entry : entry_list) {
+		auto rename_entry = transformer.Transform<pair<QualifiedColumnName, string>>(entry);
+		result[rename_entry.first] = rename_entry.second;
+	}
+	return result;
+}
+
+qualified_column_map_t<string>
+PEGTransformerFactory::TransformSingleRenameEntry(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	qualified_column_map_t<string> result;
+	auto rename_entry = transformer.Transform<pair<QualifiedColumnName, string>>(list_pr.GetChild(0));
+	result[rename_entry.first] = rename_entry.second;
+	return result;
+}
+
+pair<QualifiedColumnName, string> PEGTransformerFactory::TransformRenameEntry(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto column_name = transformer.Transform<QualifiedColumnName>(list_pr.GetChild(0));
+	auto alias = list_pr.Child<IdentifierParseResult>(2).identifier;
+	return make_pair(column_name, alias);
+}
+
 } // namespace duckdb
