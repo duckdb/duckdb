@@ -25,18 +25,24 @@ CREATE TABLE iceberg_table (
   id int,
   data string,
   category string)
-WITH (location = 's3://amzn-s3-demo-bucket/iceberg-folder');
+WITH (
+	'location' = 's3://amzn-s3-demo-bucket/iceberg-folder',
+	'table_type'='ICEBERG',
+    'format'='parquet'
+);
 ----
 <REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
 
+# with statement key is not quoted
 statement error
 CREATE TABLE iceberg_table (
   id int,
   data string,
   category string)
 WITH (
-  table_type='ICEBERG',
-  format='parquet'
+	location = 's3://amzn-s3-demo-bucket/iceberg-folder',
+	table_type = 'ICEBERG',
+    format = 'parquet'
 );
 ----
 <REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
@@ -83,18 +89,6 @@ WITH (
 ----
 <REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
 
-statement error
-CREATE TABLE iceberg_table (
-  id int,
-  data string,
-  category string)
-WITH (
-  table_type='ICEBERG',
-  format='parquet'
-);
-----
-<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
-
 
 # different orders
 statement error
@@ -127,3 +121,44 @@ SORTED BY (date)
 PARTITIONED BY (id);
 ----
 <REGEX>:.*Parser Error.*
+
+statement ok
+SET VARIABLE location_var='boop'
+
+# Paritioned by variable
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+Partitioned by (getvariable('location_var'));
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+# Table options using a environment variable
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location=getvariable('location_var'),
+  table_type='ICEBERG',
+  format='parquet'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# check when option keys are quoted
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location'=getvariable('location_var'),
+  'table_type'='ICEBERG',
+  'format'='parquet'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*

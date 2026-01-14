@@ -244,8 +244,8 @@ void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
 	ref.query_location = optional_idx(static_cast<idx_t>(query_location));
 }
 
-void Transformer::TransformTableProperties(case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
-                                           optional_ptr<duckdb_libpgquery::PGList> pg_options) {
+void Transformer::TransformTableOptions(case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
+                                        optional_ptr<duckdb_libpgquery::PGList> pg_options) {
 	if (!pg_options) {
 		return;
 	}

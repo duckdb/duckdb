@@ -585,7 +585,7 @@ key_delete: ON DELETE_P key_action		{ $$ = $3; }
 
 
 reloption_elem:
-			ColLabel '=' def_arg
+			ColLabel '=' a_expr
 				{
 					$$ = makeDefElem($1, (PGNode *) $3, @1);
 				}
@@ -602,9 +602,9 @@ reloption_elem:
 				{
 					$$ = makeDefElemExtended($1, $3, NULL, PG_DEFELEM_UNSPEC, @1);
 				}
-			| Sconst '=' def_arg /* for table options CREATE .. WITH ('filesize.bytes'= 2048)*/
+			| Sconst '=' a_expr /* for table options with quoted key CREATE .. WITH ('filesize.bytes'= 2048)*/
 				{
-					$$ = makeDefElem($1, (PGNode *) $3, @1);
+					$$ = makeDefElem($1, $3, @1);
 				}
 		;
 
