@@ -777,7 +777,7 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 		return arr;
 	}
 	default:
-		throw InternalException("Can't serialize this VariantValueIntermediate type to JSON");
+		throw InternalException("Can't serialize this VariantValue type to JSON");
 	}
 }
 
