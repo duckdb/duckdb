@@ -249,21 +249,19 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+vector<unique_ptr<IndexStorageInfo>> TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
-	IndexSerializationResult result;
+	vector<unique_ptr<IndexStorageInfo>> result;
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (index.IsBound()) {
 			auto storage_info = index.Cast<BoundIndex>().SerializeToDisk(context, info.options);
 			D_ASSERT(storage_info->IsValid() && !storage_info->name.empty());
-			result.bound_infos.push_back(std::move(storage_info));
+			result.push_back(std::move(storage_info));
 			continue;
 		}
-		// For unbound indexes, just get a reference - no ownership transfer
-		auto &storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
-		D_ASSERT(!storage_info.name.empty());
-		result.unbound_infos.push_back(storage_info);
+		// Indexes should be bound by this point.
+		throw InternalException("cannot serialize unbound index to disk, checkpoint should have been aborted");
 	}
 	return result;
 }
