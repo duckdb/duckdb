@@ -9109,6 +9109,16 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   if (next_scheme == scheme && next_host == host_ && next_port == port_) {
     return detail::redirect(*this, req, res, path, location, error);
   }
+  	if (next_scheme == "https") {
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+  		SSLClient cli(next_host, next_port);
+  		cli.copy_settings(*this);
+  		if (ca_cert_store_) { cli.set_ca_cert_store(ca_cert_store_); }
+  		return detail::redirect(cli, req, res, path, location, error);
+#else
+  		return false;
+#endif
+  	}
 
   // Cross-host/scheme redirect - create new client with robust setup
   return create_redirect_client(next_scheme, next_host, next_port, req, res,
