@@ -11,7 +11,7 @@
 namespace duckdb {
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
-	debug_vector_verification = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
+	debug_vector_verification = Settings::Get<DebugVerifyVectorSetting>(context);
 }
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)

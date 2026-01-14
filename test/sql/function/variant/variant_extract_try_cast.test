@@ -1,0 +1,63 @@
+# name: test/sql/function/variant/variant_extract_try_cast.test
+# group: [variant]
+
+load __TEST_DIR__/variant_extract_try_cast.db
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table tbl(col VARIANT);
+
+statement ok
+insert into tbl SELECT * FROM UNNEST([
+	{'almost_a_number': c} for c in ['12', '24', '25a6', '24c', '16']
+])
+
+statement ok
+checkpoint
+
+restart
+
+query I
+from tbl order by all
+----
+{'almost_a_number': 12}
+{'almost_a_number': 16}
+{'almost_a_number': 24}
+{'almost_a_number': 24c}
+{'almost_a_number': 25a6}
+
+query I
+select col.almost_a_number from tbl order by all
+----
+12
+16
+24
+24c
+25a6
+
+# Can't use CAST
+statement error
+select col.almost_a_number::BIGINT from tbl order by all
+----
+Conversion Error: Could not convert string '25a6' to INT64
+
+# Use TRY_CAST instead
+query I
+select TRY_CAST(col.almost_a_number AS BIGINT) from tbl order by all
+----
+12
+16
+24
+NULL
+NULL
+
+statement ok
+set explain_output='optimized_only';
+
+# Very that the EXPLAIN plan doesn't contain a pushed down extract
+query II
+EXPLAIN select TRY_CAST(col.almost_a_number AS BIGINT) from tbl order by all
+----
+logical_opt	<REGEX>:.*Expressions:.*TRY_CAST.*

@@ -470,7 +470,7 @@ void PlanEnumerator::InitLeafPlans() {
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 void PlanEnumerator::SolveJoinOrder() {
-	bool force_no_cross_product = DBConfig::GetSetting<DebugForceNoCrossProductSetting>(query_graph_manager.context);
+	bool force_no_cross_product = Settings::Get<DebugForceNoCrossProductSetting>(query_graph_manager.context);
 	// first try to solve the join order exactly
 	if (query_graph_manager.relation_manager.NumRelations() >= THRESHOLD_TO_SWAP_TO_APPROXIMATE) {
 		SolveJoinOrderApproximately();
