@@ -936,14 +936,15 @@ void ART::TransformToDeprecated() {
 	}
 }
 
-IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage) {
+unique_ptr<IndexStorageInfo> ART::PrepareSerialize(const case_insensitive_map_t<Value> &options,
+                                                   const bool v1_0_0_storage) {
 	if (v1_0_0_storage) {
 		TransformToDeprecated();
 	}
 
-	IndexStorageInfo info(name);
-	info.root = tree.Get();
-	info.options = options;
+	auto info = make_uniq<IndexStorageInfo>(name);
+	info->root = tree.Get();
+	info->options = options;
 
 	for (auto &allocator : *allocators) {
 		allocator->RemoveEmptyBuffers();
@@ -962,7 +963,7 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	return info;
 }
 
-IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+unique_ptr<IndexStorageInfo> ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 	lock_guard<mutex> guard(lock);
 
 	// If the storage format uses deprecated leaf storage,
@@ -976,13 +977,13 @@ IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensiti
 	WritePartialBlocks(context, v1_0_0_storage);
 
 	for (idx_t i = 0; i < allocator_count; i++) {
-		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+		info->allocator_infos.push_back((*allocators)[i]->GetInfo());
 	}
 
 	return info;
 }
 
-IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+unique_ptr<IndexStorageInfo> ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
 	auto v1_0_0_option = options.find("v1_0_0_storage");
@@ -992,11 +993,11 @@ IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &option
 
 	// Set the correct allocation sizes and get the map containing all buffers.
 	for (idx_t i = 0; i < allocator_count; i++) {
-		info.buffers.push_back((*allocators)[i]->InitSerializationToWAL());
+		info->buffers.push_back((*allocators)[i]->InitSerializationToWAL());
 	}
 
 	for (idx_t i = 0; i < allocator_count; i++) {
-		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+		info->allocator_infos.push_back((*allocators)[i]->GetInfo());
 	}
 
 	return info;

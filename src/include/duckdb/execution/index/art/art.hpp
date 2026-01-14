@@ -22,6 +22,7 @@ class ConflictManager;
 class ARTKey;
 class ARTKeySection;
 class FixedSizeAllocator;
+class IndexStorageInfo;
 
 struct ARTIndexScanState;
 
@@ -111,9 +112,10 @@ public:
 	void Vacuum(IndexLock &state) override;
 
 	//! Serializes ART memory to disk and returns the ART storage information.
-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
+	unique_ptr<IndexStorageInfo> SerializeToDisk(QueryContext context,
+	                                             const case_insensitive_map_t<Value> &options) override;
 	//! Serializes ART memory to the WAL and returns the ART storage information.
-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+	unique_ptr<IndexStorageInfo> SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
@@ -169,7 +171,8 @@ private:
 
 	void InitAllocators(const IndexStorageInfo &info);
 	void TransformToDeprecated();
-	IndexStorageInfo PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage);
+	unique_ptr<IndexStorageInfo> PrepareSerialize(const case_insensitive_map_t<Value> &options,
+	                                              const bool v1_0_0_storage);
 	void Deserialize(const BlockPointer &pointer);
 	void WritePartialBlocks(QueryContext context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);

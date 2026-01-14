@@ -368,10 +368,10 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 		if (name == index.GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index.IsBound());
-			const auto &info = index.Cast<BoundIndex>().SerializeToWAL(options);
-			serializer.WriteProperty(102, "index_storage_info", info);
-			serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
-				auto &buffers = info.buffers[i];
+			auto info_ptr = index.Cast<BoundIndex>().SerializeToWAL(options);
+			serializer.WriteProperty(102, "index_storage_info", info_ptr);
+			serializer.WriteList(103, "index_storage", info_ptr->buffers.size(), [&](Serializer::List &list, idx_t i) {
+				auto &buffers = info_ptr->buffers[i];
 				for (auto buffer : buffers) {
 					list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
 				}

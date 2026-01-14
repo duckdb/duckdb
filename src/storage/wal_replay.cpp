@@ -239,7 +239,7 @@ protected:
 	void ReplayCheckpoint();
 
 private:
-	void ReplayIndexData(IndexStorageInfo &info);
+	unique_ptr<IndexStorageInfo> ReplayIndexData(unique_ptr<IndexStorageInfo> info);
 
 private:
 	ReplayState &state;
@@ -685,15 +685,15 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	catalog.Alter(context, info);
 }
 
-void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
-	D_ASSERT(info.IsValid() && !info.name.empty());
+unique_ptr<IndexStorageInfo> WriteAheadLogDeserializer::ReplayIndexData(unique_ptr<IndexStorageInfo> info) {
+	D_ASSERT(info->IsValid() && !info->name.empty());
 
 	auto &single_file_sm = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	auto &block_manager = single_file_sm.block_manager;
 	auto &buffer_manager = block_manager->buffer_manager;
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
-		auto &data_info = info.allocator_infos[i];
+		auto &data_info = info->allocator_infos[i];
 
 		// Read the data into buffer handles and convert them to blocks on disk.
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
@@ -713,6 +713,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			}
 		}
 	});
+	return std::move(info);
 }
 
 void WriteAheadLogDeserializer::ReplayAlter() {
@@ -722,8 +723,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
-	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	ReplayIndexData(index_storage_info);
+	auto index_storage_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<IndexStorageInfo>>(
+	    102, "index_storage_info", unique_ptr<IndexStorageInfo>());
+	index_storage_info = ReplayIndexData(std::move(index_storage_info));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -766,8 +768,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &storage = table.GetStorage();
 	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
-	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
-	                       index_storage_info.options);
+	                       index_storage_info->name, column_ids, unbound_expressions, *index_storage_info,
+	                       index_storage_info->options);
 
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
@@ -938,9 +940,10 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
-	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	auto index_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<IndexStorageInfo>>(
+	    102, "index_storage_info", unique_ptr<IndexStorageInfo>());
 
-	ReplayIndexData(index_info);
+	index_info = ReplayIndexData(std::move(index_info));
 	if (DeserializeOnly()) {
 		return;
 	}

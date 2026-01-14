@@ -43,7 +43,7 @@ struct BoundCreateTableInfo {
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table
-	vector<IndexStorageInfo> indexes;
+	vector<unique_ptr<IndexStorageInfo>> indexes;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

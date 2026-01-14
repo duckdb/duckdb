@@ -27,17 +27,19 @@
 
 namespace duckdb {
 
-IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_storage, unique_ptr<CreateInfo> &info,
-                              const idx_t id) {
+namespace {
+unique_ptr<IndexStorageInfo> GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_storage,
+                                          unique_ptr<CreateInfo> &info, const idx_t id) {
 	auto &table_info = info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(type) + "_";
 	auto name = constraint_name + table_info.table + "_" + to_string(id);
-	IndexStorageInfo index_info(name);
+	auto index_info = make_uniq<IndexStorageInfo>(name);
 	if (!v1_0_0_storage) {
-		index_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
+		index_info->options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 	return index_info;
 }
+} // namespace
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage)
@@ -73,18 +75,18 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, index_info);
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
 				continue;
 			}
 
 			// We read the index from an old storage version applying a dummy name.
-			if (info.indexes[indexes_idx].name.empty()) {
+			auto index_storage_info = std::move(info.indexes[indexes_idx++]);
+			if (index_storage_info->name.empty()) {
 				auto name_info = GetIndexInfo(constraint_type, true, info.base, i);
-				info.indexes[indexes_idx].name = name_info.name;
+				index_storage_info->name = name_info->name;
 			}
 
-			// Now we can add the index.
-			storage->AddIndex(columns, column_indexes, constraint_type, info.indexes[indexes_idx++]);
+			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info));
 			continue;
 		}
 
@@ -102,24 +104,33 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, index_info);
+					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
 					continue;
 				}
 
 				// We read the index from an old storage version applying a dummy name.
-				if (info.indexes[indexes_idx].name.empty()) {
+				auto index_storage_info = std::move(info.indexes[indexes_idx++]);
+				if (index_storage_info->name.empty()) {
 					auto name_info = GetIndexInfo(IndexConstraintType::FOREIGN, true, info.base, i);
-					info.indexes[indexes_idx].name = name_info.name;
+					index_storage_info->name = name_info->name;
 				}
 
-				// Now we can add the index.
-				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
+				// Transfer ownership to the index.
+				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info));
 			}
 		}
 	}
 
-	if (!info.indexes.empty()) {
-		storage->SetIndexStorageInfo(std::move(info.indexes));
+	// Move any remaining unused IndexStorageInfos to storage
+	// (filter out any that were moved out during index creation)
+	vector<unique_ptr<IndexStorageInfo>> remaining_indexes;
+	for (auto &index : info.indexes) {
+		if (index) {
+			remaining_indexes.push_back(std::move(index));
+		}
+	}
+	if (!remaining_indexes.empty()) {
+		storage->SetIndexStorageInfo(std::move(remaining_indexes));
 	}
 }
 

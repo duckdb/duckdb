@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "duckdb/execution/index/buffered_index_replays.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
+struct BufferedIndexReplays;
 class ColumnDataCollection;
 
 class UnboundIndex final : public Index {
@@ -22,20 +22,12 @@ private:
 	//! The CreateInfo of the index.
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
-	IndexStorageInfo storage_info;
-
-	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
-	BufferedIndexReplays buffered_replays;
-
-	//! Maps the column IDs in the buffered replays to a physical table offset.
-	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
-	//! physical table index mapped_column_ids[i].
-	//! This is in sorted order of physical column IDs.
-	vector<StorageIndex> mapped_column_ids;
+	//! This contains buffered_replays and mapped_column_ids when they exist.
+	unique_ptr<IndexStorageInfo> storage_info;
 
 public:
-	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
-	             AttachedDatabase &db);
+	UnboundIndex(unique_ptr<CreateInfo> create_info, unique_ptr<IndexStorageInfo> storage_info,
+	             TableIOManager &table_io_manager, AttachedDatabase &db);
 
 public:
 	bool IsBound() const override {
@@ -54,7 +46,7 @@ public:
 		return create_info->Cast<CreateIndexInfo>();
 	}
 	const IndexStorageInfo &GetStorageInfo() const {
-		return storage_info;
+		return *storage_info;
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
@@ -71,16 +63,24 @@ public:
 	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
 	                 BufferedIndexReplay replay_type);
 	bool HasBufferedReplays() const {
-		return buffered_replays.HasBufferedReplays();
+		return storage_info->buffered_replays && storage_info->buffered_replays->HasBufferedReplays();
 	}
 
 	BufferedIndexReplays &GetBufferedReplays() {
-		return buffered_replays;
+		D_ASSERT(storage_info->buffered_replays);
+		return *storage_info->buffered_replays;
 	}
 
 	const vector<StorageIndex> &GetMappedColumnIds() const {
-		return mapped_column_ids;
+		return storage_info->mapped_column_ids;
 	}
+
+	//! Move storage_info out for serialization, updating options for the current checkpoint.
+	//! The storage_info should be set back on this UnboundIndex after serialization.
+	unique_ptr<IndexStorageInfo> TakeStorageInfo(const case_insensitive_map_t<Value> &options);
+
+	//! Set IndexStorageInfo after serialization/deserialization. Takes ownership of the entire storage_info.
+	void SetStorageInfo(unique_ptr<IndexStorageInfo> info);
 };
 
 } // namespace duckdb

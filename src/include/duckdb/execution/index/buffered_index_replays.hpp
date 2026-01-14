@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -42,7 +43,8 @@ struct BufferedIndexReplays {
 	unique_ptr<ColumnDataCollection> buffered_inserts;
 	unique_ptr<ColumnDataCollection> buffered_deletes;
 
-	BufferedIndexReplays() = default;
+	BufferedIndexReplays();
+	~BufferedIndexReplays();
 
 	unique_ptr<ColumnDataCollection> &GetBuffer(const BufferedIndexReplay replay_type) {
 		if (replay_type == BufferedIndexReplay::INSERT_ENTRY) {

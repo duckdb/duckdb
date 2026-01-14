@@ -56,6 +56,36 @@
     "pointer_type": "none"
   },
   {
+    "class": "IndexStorageInfo",
+    "includes": [
+      "duckdb/storage/table_storage_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "root",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "allocator_infos",
+        "type": "vector<FixedSizeAllocatorInfo>"
+      },
+      {
+        "id": 103,
+        "name": "options",
+        "type": "case_insensitive_map_t<Value>",
+        "default": "case_insensitive_map_t<Value>()"
+      }
+    ],
+    "pointer_type": "unique_ptr"
+  },
+  {
     "class": "BlockPointer",
     "members": [
       {
