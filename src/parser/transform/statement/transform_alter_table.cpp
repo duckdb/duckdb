@@ -226,20 +226,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 		case duckdb_libpgquery::PG_AT_SetRelOptions: {
 			case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 			if (command->options) {
-				duckdb_libpgquery::PGListCell *cell;
-				for_each_cell(cell, command->options->head) {
-					auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
-					auto lower_name = StringUtil::Lower(def_elem->defname);
-					if (options.find(lower_name) != options.end()) {
-						throw ParserException("Duplicate table property \"%s\"", lower_name);
-					}
-					if (!def_elem->arg) {
-						options.emplace(lower_name, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
-						continue;
-					}
-					auto expr = TransformExpression(def_elem->arg);
-					options.emplace(lower_name, std::move(expr));
-				}
+				TransformTableOptions(options, command->options);
 			}
 			result->info = make_uniq<SetTableOptionsInfo>(std::move(data), std::move(options));
 			break;
@@ -247,20 +234,7 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 		case duckdb_libpgquery::PG_AT_ResetRelOptions: {
 			case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 			if (command->options) {
-				duckdb_libpgquery::PGListCell *cell;
-				for_each_cell(cell, command->options->head) {
-					auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
-					auto lower_name = StringUtil::Lower(def_elem->defname);
-					if (options.find(lower_name) != options.end()) {
-						throw ParserException("Duplicate table property \"%s\"", lower_name);
-					}
-					if (!def_elem->arg) {
-						options.emplace(lower_name, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
-						continue;
-					}
-					auto expr = TransformExpression(def_elem->arg);
-					options.emplace(lower_name, std::move(expr));
-				}
+				TransformTableOptions(options, command->options);
 			}
 			result->info = make_uniq<ResetTableOptionsInfo>(std::move(data), std::move(options));
 			break;
