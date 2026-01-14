@@ -8,6 +8,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_file_opener.hpp"
+#include "duckdb/main/settings.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -456,16 +457,16 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	auto db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto &config = db->config;
-		if (!config.options.http_proxy.empty()) {
+		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(*db);
+		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;
-			HTTPUtil::ParseHTTPProxyHost(config.options.http_proxy, host, port);
+			HTTPUtil::ParseHTTPProxyHost(http_proxy_setting, host, port);
 			http_proxy = host;
 			http_proxy_port = port;
 		}
-		http_proxy_username = config.options.http_proxy_username;
-		http_proxy_password = config.options.http_proxy_password;
+		http_proxy_username = Settings::Get<HTTPProxyUsernameSetting>(*db);
+		http_proxy_password = Settings::Get<HTTPProxyPasswordSetting>(*db);
 	}
 
 	auto client_context = FileOpener::TryGetClientContext(opener);

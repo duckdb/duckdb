@@ -8,7 +8,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -363,8 +363,7 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		// if enable_external_access is disabled we don't search the file system
 		return result;
 	}

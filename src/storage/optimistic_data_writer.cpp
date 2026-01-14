@@ -65,7 +65,7 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 
 	row_groups.complete_row_groups++;
 	auto unflushed_row_groups = row_groups.complete_row_groups - row_groups.last_flushed;
-	if (unflushed_row_groups >= DBConfig::GetSetting<WriteBufferRowGroupCountSetting>(context)) {
+	if (unflushed_row_groups >= Settings::Get<WriteBufferRowGroupCountSetting>(context)) {
 		// we have crossed our flush threshold - flush any unwritten row groups to disk
 		vector<const_reference<RowGroup>> to_flush;
 		vector<int64_t> segment_indexes;

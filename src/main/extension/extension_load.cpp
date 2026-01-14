@@ -315,7 +315,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	if (!db.config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto filename = fs.ConvertSeparators(extension);
@@ -365,8 +365,9 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 
 		// Collect all directories to search for extensions
 		vector<string> search_directories;
-		if (!db.config.options.extension_directory.empty()) {
-			search_directories.push_back(db.config.options.extension_directory);
+		auto custom_extension_directory = Settings::Get<ExtensionDirectorySetting>(db);
+		if (!custom_extension_directory.empty()) {
+			search_directories.push_back(custom_extension_directory);
 		}
 
 		if (!db.config.options.extension_directories.empty()) {
@@ -423,11 +424,11 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
-	if (!db.config.options.allow_unsigned_extensions) {
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		bool signature_valid;
 		if (parsed_metadata.AppearsValid()) {
-			signature_valid =
-			    CheckExtensionSignature(*handle, parsed_metadata, db.config.options.allow_community_extensions);
+			bool allow_community_extensions = Settings::Get<AllowCommunityExtensionsSetting>(db);
+			signature_valid = CheckExtensionSignature(*handle, parsed_metadata, allow_community_extensions);
 		} else {
 			signature_valid = false;
 		}
@@ -439,7 +440,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		if (!signature_valid) {
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
-	} else if (!DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(db)) {
+	} else if (!Settings::Get<AllowExtensionsMetadataMismatchSetting>(db)) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
@@ -514,8 +515,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(db, fs, extension, result, error)) {
-		auto &config = DBConfig::GetConfig(db);
-		if (!config.options.autoinstall_known_extensions || !ExtensionHelper::AllowAutoInstall(extension)) {
+		if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db) || !ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
