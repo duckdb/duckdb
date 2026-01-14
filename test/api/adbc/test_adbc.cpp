@@ -212,8 +212,8 @@ TEST_CASE("ADBC - Cancel connection while consuming stream", "[adbc]") {
 		stream.release(&stream);
 	}
 
-	// After the stream is released, there should be nothing left to cancel.
-	REQUIRE(AdbcConnectionCancel(&db.adbc_connection, &db.adbc_error) == ADBC_STATUS_INVALID_STATE);
+	// After the stream is released, cancel on idle connection still succeeds.
+	REQUIRE(AdbcConnectionCancel(&db.adbc_connection, &db.adbc_error) == ADBC_STATUS_OK);
 
 	// Connection should be reusable after cancel.
 	REQUIRE(db.QueryAndCheck("SELECT 1"));
