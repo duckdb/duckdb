@@ -50,19 +50,19 @@ static void AnalyzeSchemaInternal(VariantAnalyzeData &state, UnifiedVariantVecto
 		}
 	} else if (type_id == VariantLogicalType::DECIMAL) {
 		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
-		auto physical_type = decimal_data.GetPhysicalType();
-		switch (physical_type) {
-		case PhysicalType::INT32:
-			state.decimal_type_map[0]++;
-			break;
-		case PhysicalType::INT64:
-			state.decimal_type_map[1]++;
-			break;
-		case PhysicalType::INT128:
-			state.decimal_type_map[2]++;
-			break;
-		default:
-			break;
+		auto decimal_count = state.type_map[static_cast<uint8_t>(VariantLogicalType::DECIMAL)];
+		decimal_count--;
+		if (!decimal_count) {
+			state.decimal_width = decimal_data.width;
+			state.decimal_scale = decimal_data.scale;
+			state.decimal_consistent = true;
+			return;
+		}
+		if (!state.decimal_consistent) {
+			return;
+		}
+		if (decimal_data.width != state.decimal_width || decimal_data.scale != state.decimal_scale) {
+			state.decimal_consistent = false;
 		}
 	} else if (type_id == VariantLogicalType::BOOL_FALSE) {
 		//! Move it to bool_true to have the counts all in one place
@@ -87,8 +87,7 @@ namespace {
 
 struct ShredAnalysisState {
 	idx_t highest_count = 0;
-	LogicalTypeId type_id;
-	PhysicalType decimal_type;
+	LogicalType type;
 };
 
 } // namespace
@@ -96,30 +95,18 @@ struct ShredAnalysisState {
 template <VariantLogicalType VARIANT_TYPE, LogicalTypeId SHREDDED_TYPE>
 static void CheckPrimitive(const VariantAnalyzeData &state, ShredAnalysisState &result) {
 	auto count = state.type_map[static_cast<uint8_t>(VARIANT_TYPE)];
+	if (count <= result.highest_count) {
+		return;
+	}
+	result.highest_count = count;
 	if (VARIANT_TYPE == VariantLogicalType::DECIMAL) {
-		if (!count) {
+		D_ASSERT(count);
+		if (!state.decimal_consistent) {
 			return;
 		}
-		auto int32_count = state.decimal_type_map[0];
-		if (int32_count > result.highest_count) {
-			result.type_id = LogicalTypeId::DECIMAL;
-			result.decimal_type = PhysicalType::INT32;
-		}
-		auto int64_count = state.decimal_type_map[1];
-		if (int64_count > result.highest_count) {
-			result.type_id = LogicalTypeId::DECIMAL;
-			result.decimal_type = PhysicalType::INT64;
-		}
-		auto int128_count = state.decimal_type_map[2];
-		if (int128_count > result.highest_count) {
-			result.type_id = LogicalTypeId::DECIMAL;
-			result.decimal_type = PhysicalType::INT128;
-		}
+		result.type = LogicalType::DECIMAL(state.decimal_width, state.decimal_scale);
 	} else {
-		if (count > result.highest_count) {
-			result.highest_count = count;
-			result.type_id = SHREDDED_TYPE;
-		}
+		result.type = SHREDDED_TYPE;
 	}
 }
 
@@ -133,9 +120,7 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 	CheckPrimitive<VariantLogicalType::INT64, LogicalTypeId::BIGINT>(state, result);
 	CheckPrimitive<VariantLogicalType::FLOAT, LogicalTypeId::FLOAT>(state, result);
 	CheckPrimitive<VariantLogicalType::DOUBLE, LogicalTypeId::DOUBLE>(state, result);
-	//! FIXME: It's not enough for decimals to have the same PhysicalType, their width+scale has to match in order to
-	//! shred on the type.
-	// CheckPrimitive<VariantLogicalType::DECIMAL, LogicalTypeId::DECIMAL>(state, result);
+	CheckPrimitive<VariantLogicalType::DECIMAL, LogicalTypeId::DECIMAL>(state, result);
 	CheckPrimitive<VariantLogicalType::DATE, LogicalTypeId::DATE>(state, result);
 	CheckPrimitive<VariantLogicalType::TIME_MICROS, LogicalTypeId::TIME>(state, result);
 	CheckPrimitive<VariantLogicalType::TIMESTAMP_MICROS, LogicalTypeId::TIMESTAMP>(state, result);
@@ -165,18 +150,7 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 			return LogicalType::STRUCT(field_types);
 		}
 	}
-
-	if (result.type_id == LogicalTypeId::DECIMAL) {
-		//! TODO: what should the scale be???
-		if (result.decimal_type == PhysicalType::INT32) {
-			return LogicalType::DECIMAL(DecimalWidth<int32_t>::max, 0);
-		} else if (result.decimal_type == PhysicalType::INT64) {
-			return LogicalType::DECIMAL(DecimalWidth<int64_t>::max, 0);
-		} else if (result.decimal_type == PhysicalType::INT128) {
-			return LogicalType::DECIMAL(DecimalWidth<hugeint_t>::max, 0);
-		}
-	}
-	return result.type_id;
+	return result.type;
 }
 
 void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state_p) {

@@ -865,7 +865,7 @@ LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType 
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::ARRAY:
-		throw BinderException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
+		throw BinderException("'%s' can't appear inside a 'typed_value' shredded type!", type.ToString());
 	default:
 		return type;
 	}
