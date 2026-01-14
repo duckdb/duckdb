@@ -2,6 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -871,10 +872,15 @@ idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, const Sele
 	idx_t false_count = 0;
 
 	// Convert vectors to unified format for easier access
-	UnifiedVectorFormat left_data, right_data;
-	left.ToUnifiedFormat(count, left_data);
-	right.ToUnifiedFormat(count, right_data);
+	RecursiveUnifiedVectorFormat left_recursive_data, right_recursive_data;
+	Vector::RecursiveToUnifiedFormat(left, count, left_recursive_data);
+	Vector::RecursiveToUnifiedFormat(right, count, right_recursive_data);
 
+	UnifiedVariantVectorData left_variant(left_recursive_data);
+	UnifiedVariantVectorData right_variant(right_recursive_data);
+
+	auto &left_data = left_recursive_data.unified;
+	auto &right_data = right_recursive_data.unified;
 	for (idx_t i = 0; i < count; i++) {
 		auto result_idx = sel.get_index(i);
 		auto left_idx = left_data.sel->get_index(i);
@@ -907,21 +913,22 @@ idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, const Sele
 			}
 		} else {
 			// Both non-NULL, convert to Values and use appropriate Value operation
-			Value left_val = left.GetValue(left_idx);
-			Value right_val = right.GetValue(right_idx);
-
-			auto left_structured_type = VariantValue::GetStructuredType(left_val);
-			auto right_structured_type = VariantValue::GetStructuredType(right_val);
+			auto left_structured_type = VariantUtils::GetTypeOfValue(left_variant, i, 0);
+			auto right_structured_type = VariantUtils::GetTypeOfValue(right_variant, i, 0);
 
 			LogicalType max_logical_type;
 			auto res = LogicalType::TryGetMaxLogicalTypeUnchecked(left_structured_type, right_structured_type,
 			                                                      max_logical_type);
 			if (!res) {
+				Value left_val = left.GetValue(i);
+				Value right_val = right.GetValue(i);
 				throw InvalidInputException(
 				    "Can't compare values of type %s (%s) and type %s (%s) - an explicit cast is required",
 				    left_structured_type.ToString(), left_val.ToString(), right_structured_type.ToString(),
 				    right_val.ToString());
 			}
+			Value left_val = left.GetValue(i);
+			Value right_val = right.GetValue(i);
 
 			if (std::is_same<OP, duckdb::DistinctFrom>::value) {
 				comparison_result = ValueOperations::DistinctFrom(left_val, right_val);
