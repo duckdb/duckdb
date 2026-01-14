@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_reset.hpp"
+#include "duckdb/execution/operator/helper/physical_set.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
@@ -45,16 +46,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	}
 
 	// Transform scope
-	SetScope variable_scope = scope;
-	if (variable_scope == SetScope::AUTOMATIC) {
-		if (option->set_local) {
-			variable_scope = SetScope::SESSION;
-		} else if (option->set_global) {
-			variable_scope = SetScope::GLOBAL;
-		} else {
-			variable_scope = option->default_scope;
-		}
-	}
+	SetScope variable_scope = PhysicalSet::GetSettingScope(*option, scope);
 
 	if (option->default_value) {
 		if (option->set_callback) {

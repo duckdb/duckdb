@@ -1,8 +1,8 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index a925782..b1d8f9d 100644
+index cc81600..7ea5de9 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -284,8 +284,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+@@ -290,8 +290,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
  void RTreeIndex::Vacuum(IndexLock &state) {
  }
  
@@ -37,11 +37,56 @@ index 202a6c7..243a476 100644
  
  	//! Ensures that the node allocation counts match the node counts.
  	void VerifyAllocations(IndexLock &state) override;
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index f24f049..fefd285 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -9,6 +9,7 @@
+ 
+ // DuckDB
+ #include "duckdb/main/database.hpp"
++#include "duckdb/main/settings.hpp"
+ #include "duckdb/common/enums/file_glob_options.hpp"
+ #include "duckdb/common/multi_file/multi_file_reader.hpp"
+ #include "duckdb/function/table/arrow.hpp"
+@@ -237,7 +238,7 @@ public:
+ 			}
+ 
+ 			// Fall back to GDAL instead (if external access is enabled)
+-			if (!context.db->config.options.enable_external_access) {
++			if (!Settings::Get<EnableExternalAccessSetting>(context)) {
+ 				if (bSetError) {
+ 					VSIError(VSIE_FileError, "Failed to open file %s with GDAL: External access is disabled",
+ 					         file_name);
+@@ -444,7 +445,7 @@ void GDALClientContextState::QueryEnd() {
+ string GDALClientContextState::GetPrefix(const string &value) const {
+ 	// If the user explicitly asked for a VSI prefix, we don't add our own
+ 	if (StringUtil::StartsWith(value, "/vsi")) {
+-		if (!context.db->config.options.enable_external_access) {
++		if (!Settings::Get<EnableExternalAccessSetting>(context)) {
+ 			throw PermissionException("Cannot open file '%s' with VSI prefix: External access is disabled", value);
+ 		}
+ 		return value;
+@@ -963,12 +964,12 @@ struct ST_Read : ArrowTableFunction {
+ 			state.all_columns.Reset();
+ 			state.all_columns.SetCardinality(output_size);
+ 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), state.all_columns,
+-			                                  gstate.lines_read - output_size, false);
++			                                   false);
+ 			output.ReferenceColumns(state.all_columns, gstate.projection_ids);
+ 		} else {
+ 			output.SetCardinality(output_size);
+ 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), output,
+-			                                  gstate.lines_read - output_size, false);
++			                                   false);
+ 		}
+ 
+ 		if (!data.keep_wkb) {
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 60ca737..a44cfc7 100644
+index 96d04f1..468dcaf 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
-@@ -9243,6 +9243,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
+@@ -9342,6 +9342,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
  	static constexpr auto ORDINATE = VertexOrdinate::M;
  };
  
