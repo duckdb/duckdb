@@ -36,7 +36,6 @@ class Value {
 	friend struct UnionValue;
 	friend struct ArrayValue;
 	friend struct MapValue;
-	friend struct VariantValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -453,10 +452,6 @@ struct StructValue {
 
 struct MapValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
-};
-
-struct VariantValue {
-	DUCKDB_API static LogicalType GetStructuredType(const Value &value);
 };
 
 struct ListValue {

@@ -135,17 +135,15 @@ public:
 	VariantBinaryDecoder() = delete;
 
 public:
-	static VariantValueIntermediate Decode(const VariantMetadata &metadata, const_data_ptr_t data);
+	static VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
-	static VariantValueIntermediate PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
-	                                                    const_data_ptr_t data);
-	static VariantValueIntermediate ShortStringDecode(const VariantValueMetadata &value_metadata,
-	                                                  const_data_ptr_t data);
-	static VariantValueIntermediate ObjectDecode(const VariantMetadata &metadata,
-	                                             const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	static VariantValueIntermediate ArrayDecode(const VariantMetadata &metadata,
-	                                            const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+	static VariantValue PrimitiveTypeDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+	static VariantValue ShortStringDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data);
+	static VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                 const_data_ptr_t data);
+	static VariantValue ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
+	                                const_data_ptr_t data);
 };
 
 } // namespace duckdb

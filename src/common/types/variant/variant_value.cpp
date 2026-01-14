@@ -20,17 +20,17 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-void VariantValueIntermediate::AddChild(const string &key, VariantValueIntermediate &&val) {
+void VariantValue::AddChild(const string &key, VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::OBJECT);
 	object_children.emplace(key, std::move(val));
 }
 
-void VariantValueIntermediate::AddItem(VariantValueIntermediate &&val) {
+void VariantValue::AddItem(VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::ARRAY);
 	array_items.push_back(std::move(val));
 }
 
-static void AnalyzeValue(const VariantValueIntermediate &value, idx_t row, DataChunk &offsets) {
+static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
 	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
 	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
 	auto &values_offset = variant::OffsetData::GetValues(offsets)[row];
@@ -211,9 +211,8 @@ static void AnalyzeValue(const VariantValueIntermediate &value, idx_t row, DataC
 			break;
 		}
 		default:
-			throw InternalException(
-			    "Encountered unrecognized LogicalType in VariantValueIntermediate::AnalyzeValue: %s",
-			    primitive.type().ToString());
+			throw InternalException("Encountered unrecognized LogicalType in VariantValue::AnalyzeValue: %s",
+			                        primitive.type().ToString());
 		}
 		break;
 	}
@@ -228,9 +227,8 @@ uint32_t GetOrCreateIndex(OrderedOwningStringMap<uint32_t> &dictionary, const st
 	return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
 }
 
-static void ConvertValue(const VariantValueIntermediate &value, VariantVectorData &result, idx_t row,
-                         DataChunk &offsets, SelectionVector &keys_selvec,
-                         OrderedOwningStringMap<uint32_t> &dictionary) {
+static void ConvertValue(const VariantValue &value, VariantVectorData &result, idx_t row, DataChunk &offsets,
+                         SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary) {
 	auto blob_data = data_ptr_cast(result.blob_data[row].GetDataWriteable());
 	auto keys_list_offset = result.keys_data[row].offset;
 	auto children_list_offset = result.children_data[row].offset;
@@ -553,9 +551,8 @@ static void ConvertValue(const VariantValueIntermediate &value, VariantVectorDat
 			break;
 		}
 		default:
-			throw InternalException(
-			    "Encountered unrecognized LogicalType in VariantValueIntermediate::ConvertValue: %s",
-			    primitive.type().ToString());
+			throw InternalException("Encountered unrecognized LogicalType in VariantValue::ConvertValue: %s",
+			                        primitive.type().ToString());
 		}
 		values_offset++;
 		break;
@@ -627,7 +624,7 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	selvec_size = keys_offset;
 }
 
-void VariantValueIntermediate::ToVARIANT(vector<VariantValueIntermediate> &input, Vector &result) {
+void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	auto count = input.size();
 	if (input.empty()) {
 		return;
@@ -714,7 +711,7 @@ void VariantValueIntermediate::ToVARIANT(vector<VariantValueIntermediate> &input
 	result.Verify(count);
 }
 
-yyjson_mut_val *VariantValueIntermediate::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {
+yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {
 	switch (value_type) {
 	case VariantValueType::PRIMITIVE: {
 		if (primitive_value.IsNull()) {

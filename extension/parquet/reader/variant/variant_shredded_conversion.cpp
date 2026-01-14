@@ -13,118 +13,118 @@ namespace duckdb {
 
 template <class T>
 struct ConvertShreddedValue {
-	static VariantValueIntermediate Convert(T val);
-	static VariantValueIntermediate ConvertDecimal(T val, uint8_t width, uint8_t scale) {
+	static VariantValue Convert(T val);
+	static VariantValue ConvertDecimal(T val, uint8_t width, uint8_t scale) {
 		throw InternalException("ConvertShreddedValue::ConvertDecimal not implemented for type");
 	}
-	static VariantValueIntermediate ConvertBlob(T val) {
+	static VariantValue ConvertBlob(T val) {
 		throw InternalException("ConvertShreddedValue::ConvertBlob not implemented for type");
 	}
 };
 
 //! boolean
 template <>
-VariantValueIntermediate ConvertShreddedValue<bool>::Convert(bool val) {
-	return VariantValueIntermediate(Value::BOOLEAN(val));
+VariantValue ConvertShreddedValue<bool>::Convert(bool val) {
+	return VariantValue(Value::BOOLEAN(val));
 }
 //! int8
 template <>
-VariantValueIntermediate ConvertShreddedValue<int8_t>::Convert(int8_t val) {
-	return VariantValueIntermediate(Value::TINYINT(val));
+VariantValue ConvertShreddedValue<int8_t>::Convert(int8_t val) {
+	return VariantValue(Value::TINYINT(val));
 }
 //! int16
 template <>
-VariantValueIntermediate ConvertShreddedValue<int16_t>::Convert(int16_t val) {
-	return VariantValueIntermediate(Value::SMALLINT(val));
+VariantValue ConvertShreddedValue<int16_t>::Convert(int16_t val) {
+	return VariantValue(Value::SMALLINT(val));
 }
 //! int32
 template <>
-VariantValueIntermediate ConvertShreddedValue<int32_t>::Convert(int32_t val) {
-	return VariantValueIntermediate(Value::INTEGER(val));
+VariantValue ConvertShreddedValue<int32_t>::Convert(int32_t val) {
+	return VariantValue(Value::INTEGER(val));
 }
 //! int64
 template <>
-VariantValueIntermediate ConvertShreddedValue<int64_t>::Convert(int64_t val) {
-	return VariantValueIntermediate(Value::BIGINT(val));
+VariantValue ConvertShreddedValue<int64_t>::Convert(int64_t val) {
+	return VariantValue(Value::BIGINT(val));
 }
 //! float
 template <>
-VariantValueIntermediate ConvertShreddedValue<float>::Convert(float val) {
-	return VariantValueIntermediate(Value::FLOAT(val));
+VariantValue ConvertShreddedValue<float>::Convert(float val) {
+	return VariantValue(Value::FLOAT(val));
 }
 //! double
 template <>
-VariantValueIntermediate ConvertShreddedValue<double>::Convert(double val) {
-	return VariantValueIntermediate(Value::DOUBLE(val));
+VariantValue ConvertShreddedValue<double>::Convert(double val) {
+	return VariantValue(Value::DOUBLE(val));
 }
 //! decimal4/decimal8/decimal16
 template <>
-VariantValueIntermediate ConvertShreddedValue<int32_t>::ConvertDecimal(int32_t val, uint8_t width, uint8_t scale) {
+VariantValue ConvertShreddedValue<int32_t>::ConvertDecimal(int32_t val, uint8_t width, uint8_t scale) {
 	auto value_str = Decimal::ToString(val, width, scale);
-	return VariantValueIntermediate(Value(value_str));
+	return VariantValue(Value(value_str));
 }
 template <>
-VariantValueIntermediate ConvertShreddedValue<int64_t>::ConvertDecimal(int64_t val, uint8_t width, uint8_t scale) {
+VariantValue ConvertShreddedValue<int64_t>::ConvertDecimal(int64_t val, uint8_t width, uint8_t scale) {
 	auto value_str = Decimal::ToString(val, width, scale);
-	return VariantValueIntermediate(Value(value_str));
+	return VariantValue(Value(value_str));
 }
 template <>
-VariantValueIntermediate ConvertShreddedValue<hugeint_t>::ConvertDecimal(hugeint_t val, uint8_t width, uint8_t scale) {
+VariantValue ConvertShreddedValue<hugeint_t>::ConvertDecimal(hugeint_t val, uint8_t width, uint8_t scale) {
 	auto value_str = Decimal::ToString(val, width, scale);
-	return VariantValueIntermediate(Value(value_str));
+	return VariantValue(Value(value_str));
 }
 //! date
 template <>
-VariantValueIntermediate ConvertShreddedValue<date_t>::Convert(date_t val) {
-	return VariantValueIntermediate(Value::DATE(val));
+VariantValue ConvertShreddedValue<date_t>::Convert(date_t val) {
+	return VariantValue(Value::DATE(val));
 }
 //! time
 template <>
-VariantValueIntermediate ConvertShreddedValue<dtime_t>::Convert(dtime_t val) {
-	return VariantValueIntermediate(Value::TIME(val));
+VariantValue ConvertShreddedValue<dtime_t>::Convert(dtime_t val) {
+	return VariantValue(Value::TIME(val));
 }
 //! timestamptz(6)
 template <>
-VariantValueIntermediate ConvertShreddedValue<timestamp_tz_t>::Convert(timestamp_tz_t val) {
-	return VariantValueIntermediate(Value::TIMESTAMPTZ(val));
+VariantValue ConvertShreddedValue<timestamp_tz_t>::Convert(timestamp_tz_t val) {
+	return VariantValue(Value::TIMESTAMPTZ(val));
 }
 ////! timestamptz(9)
 // template <>
-// VariantValueIntermediate ConvertShreddedValue<timestamp_ns_tz_t>::Convert(timestamp_ns_tz_t val) {
-//	return VariantValueIntermediate(Value::TIMESTAMPNS_TZ(val));
+// VariantValue ConvertShreddedValue<timestamp_ns_tz_t>::Convert(timestamp_ns_tz_t val) {
+//	return VariantValue(Value::TIMESTAMPNS_TZ(val));
 //}
 //! timestampntz(6)
 template <>
-VariantValueIntermediate ConvertShreddedValue<timestamp_t>::Convert(timestamp_t val) {
-	return VariantValueIntermediate(Value::TIMESTAMP(val));
+VariantValue ConvertShreddedValue<timestamp_t>::Convert(timestamp_t val) {
+	return VariantValue(Value::TIMESTAMP(val));
 }
 //! timestampntz(9)
 template <>
-VariantValueIntermediate ConvertShreddedValue<timestamp_ns_t>::Convert(timestamp_ns_t val) {
-	return VariantValueIntermediate(Value::TIMESTAMPNS(val));
+VariantValue ConvertShreddedValue<timestamp_ns_t>::Convert(timestamp_ns_t val) {
+	return VariantValue(Value::TIMESTAMPNS(val));
 }
 //! binary
 template <>
-VariantValueIntermediate ConvertShreddedValue<string_t>::ConvertBlob(string_t val) {
-	return VariantValueIntermediate(Value(Blob::ToBase64(val)));
+VariantValue ConvertShreddedValue<string_t>::ConvertBlob(string_t val) {
+	return VariantValue(Value(Blob::ToBase64(val)));
 }
 //! string
 template <>
-VariantValueIntermediate ConvertShreddedValue<string_t>::Convert(string_t val) {
+VariantValue ConvertShreddedValue<string_t>::Convert(string_t val) {
 	if (!Utf8Proc::IsValid(val.GetData(), val.GetSize())) {
 		throw InternalException("Can't decode Variant string, it isn't valid UTF8");
 	}
-	return VariantValueIntermediate(Value(val.GetString()));
+	return VariantValue(Value(val.GetString()));
 }
 //! uuid
 template <>
-VariantValueIntermediate ConvertShreddedValue<hugeint_t>::Convert(hugeint_t val) {
-	return VariantValueIntermediate(Value(UUID::ToString(val)));
+VariantValue ConvertShreddedValue<hugeint_t>::Convert(hugeint_t val) {
+	return VariantValue(Value(UUID::ToString(val)));
 }
 
 template <class T, class OP, LogicalTypeId TYPE_ID>
-vector<VariantValueIntermediate> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &blob, idx_t offset,
-                                                    idx_t length, idx_t total_size, const bool is_field) {
+vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &blob, idx_t offset, idx_t length,
+                                        idx_t total_size, const bool is_field) {
 	UnifiedVectorFormat metadata_format;
 	metadata.ToUnifiedFormat(length, metadata_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
@@ -148,7 +148,7 @@ vector<VariantValueIntermediate> ConvertTypedValues(Vector &vec, Vector &metadat
 		type.GetDecimalProperties(width, scale);
 	}
 
-	vector<VariantValueIntermediate> ret(length);
+	vector<VariantValue> ret(length);
 	if (validity.AllValid()) {
 		for (idx_t i = 0; i < length; i++) {
 			auto index = typed_format.sel->get_index(i + offset);
@@ -190,12 +190,11 @@ vector<VariantValueIntermediate> ConvertTypedValues(Vector &vec, Vector &metadat
 	return ret;
 }
 
-vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedLeaf(Vector &metadata, Vector &value,
-                                                                                Vector &typed_value, idx_t offset,
-                                                                                idx_t length, idx_t total_size,
-                                                                                const bool is_field) {
+vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &metadata, Vector &value,
+                                                                    Vector &typed_value, idx_t offset, idx_t length,
+                                                                    idx_t total_size, const bool is_field) {
 	D_ASSERT(!typed_value.GetType().IsNested());
-	vector<VariantValueIntermediate> result;
+	vector<VariantValue> result;
 
 	auto &type = typed_value.GetType();
 	switch (type.id()) {
@@ -310,14 +309,14 @@ public:
 public:
 	string field_name;
 	//! Values for the field, for all rows
-	vector<VariantValueIntermediate> values;
+	vector<VariantValue> values;
 };
 
 } // namespace
 
 template <bool IS_REQUIRED>
-static vector<VariantValueIntermediate> ConvertBinaryEncoding(Vector &metadata, Vector &value, idx_t offset,
-                                                              idx_t length, idx_t total_size) {
+static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &value, idx_t offset, idx_t length,
+                                                  idx_t total_size) {
 	UnifiedVectorFormat value_format;
 	value.ToUnifiedFormat(total_size, value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
@@ -328,14 +327,14 @@ static vector<VariantValueIntermediate> ConvertBinaryEncoding(Vector &metadata, 
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
 	auto metadata_validity = metadata_format.validity;
 
-	vector<VariantValueIntermediate> ret(length);
+	vector<VariantValue> ret(length);
 	if (IS_REQUIRED) {
 		for (idx_t i = 0; i < length; i++) {
 			auto index = value_format.sel->get_index(i + offset);
 
 			// Variant itself is NULL
 			if (!validity.RowIsValid(index) && !metadata_validity.RowIsValid(metadata_format.sel->get_index(i))) {
-				ret[i] = VariantValueIntermediate(Value());
+				ret[i] = VariantValue(Value());
 				continue;
 			}
 
@@ -363,11 +362,10 @@ static vector<VariantValueIntermediate> ConvertBinaryEncoding(Vector &metadata, 
 	return ret;
 }
 
-static VariantValueIntermediate ConvertPartiallyShreddedObject(vector<ShreddedVariantField> &shredded_fields,
-                                                               const UnifiedVectorFormat &metadata_format,
-                                                               const UnifiedVectorFormat &value_format, idx_t i,
-                                                               idx_t offset) {
-	auto ret = VariantValueIntermediate(VariantValueType::OBJECT);
+static VariantValue ConvertPartiallyShreddedObject(vector<ShreddedVariantField> &shredded_fields,
+                                                   const UnifiedVectorFormat &metadata_format,
+                                                   const UnifiedVectorFormat &value_format, idx_t i, idx_t offset) {
+	auto ret = VariantValue(VariantValueType::OBJECT);
 	auto index = value_format.sel->get_index(i + offset);
 	auto value_data = value_format.GetData<string_t>(value_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
@@ -400,10 +398,9 @@ static VariantValueIntermediate ConvertPartiallyShreddedObject(vector<ShreddedVa
 	return ret;
 }
 
-vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedObject(Vector &metadata, Vector &value,
-                                                                                  Vector &typed_value, idx_t offset,
-                                                                                  idx_t length, idx_t total_size,
-                                                                                  const bool is_field) {
+vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &metadata, Vector &value,
+                                                                      Vector &typed_value, idx_t offset, idx_t length,
+                                                                      idx_t total_size, const bool is_field) {
 	auto &type = typed_value.GetType();
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 	auto &fields = StructType::GetChildTypes(type);
@@ -440,7 +437,7 @@ vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedObjec
 		shredded_field.values = Convert(metadata, field_vec, offset, length, total_size, true);
 	}
 
-	vector<VariantValueIntermediate> ret(length);
+	vector<VariantValue> ret(length);
 	if (typed_validity.AllValid()) {
 		for (idx_t i = 0; i < length; i++) {
 			ret[i] = ConvertPartiallyShreddedObject(shredded_fields, metadata_format, value_format, i, offset);
@@ -472,10 +469,9 @@ vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedObjec
 	return ret;
 }
 
-vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedArray(Vector &metadata, Vector &value,
-                                                                                 Vector &typed_value, idx_t offset,
-                                                                                 idx_t length, idx_t total_size,
-                                                                                 const bool is_field) {
+vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &metadata, Vector &value,
+                                                                     Vector &typed_value, idx_t offset, idx_t length,
+                                                                     idx_t total_size, const bool is_field) {
 	auto &child = ListVector::GetEntry(typed_value);
 	auto list_size = ListVector::GetListSize(typed_value);
 
@@ -496,14 +492,14 @@ vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedArray
 	auto &validity = list_format.validity;
 	auto &value_validity = value_format.validity;
 
-	vector<VariantValueIntermediate> ret(length);
+	vector<VariantValue> ret(length);
 	if (validity.AllValid()) {
 		//! We can be sure that none of the values are binary encoded
 		for (idx_t i = 0; i < length; i++) {
 			auto typed_index = list_format.sel->get_index(i + offset);
 			auto entry = list_data[typed_index];
 			Vector child_metadata(metadata.GetValue(i));
-			ret[i] = VariantValueIntermediate(VariantValueType::ARRAY);
+			ret[i] = VariantValue(VariantValueType::ARRAY);
 			ret[i].array_items = Convert(child_metadata, child, entry.offset, entry.length, list_size, false);
 		}
 	} else {
@@ -513,7 +509,7 @@ vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedArray
 			if (validity.RowIsValid(typed_index)) {
 				auto entry = list_data[typed_index];
 				Vector child_metadata(metadata.GetValue(i));
-				ret[i] = VariantValueIntermediate(VariantValueType::ARRAY);
+				ret[i] = VariantValue(VariantValueType::ARRAY);
 				ret[i].array_items = Convert(child_metadata, child, entry.offset, entry.length, list_size, false);
 			} else {
 				if (is_field && !value_validity.RowIsValid(value_index)) {
@@ -531,8 +527,8 @@ vector<VariantValueIntermediate> VariantShreddedConversion::ConvertShreddedArray
 	return ret;
 }
 
-vector<VariantValueIntermediate> VariantShreddedConversion::Convert(Vector &metadata, Vector &group, idx_t offset,
-                                                                    idx_t length, idx_t total_size, bool is_field) {
+vector<VariantValue> VariantShreddedConversion::Convert(Vector &metadata, Vector &group, idx_t offset, idx_t length,
+                                                        idx_t total_size, bool is_field) {
 	D_ASSERT(group.GetType().id() == LogicalTypeId::STRUCT);
 
 	auto &group_entries = StructVector::GetEntries(group);
@@ -560,7 +556,7 @@ vector<VariantValueIntermediate> VariantShreddedConversion::Convert(Vector &meta
 
 	if (typed_value) {
 		auto &type = typed_value->GetType();
-		vector<VariantValueIntermediate> ret;
+		vector<VariantValue> ret;
 		if (type.id() == LogicalTypeId::STRUCT) {
 			return ConvertShreddedObject(metadata, *value, *typed_value, offset, length, total_size, is_field);
 		} else if (type.id() == LogicalTypeId::LIST) {
