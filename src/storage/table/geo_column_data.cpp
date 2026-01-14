@@ -259,7 +259,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
 
 	auto &old_column_stats =
-	    base_column->GetType().id() == LogicalTypeId::GEOMETRY ? old_stats : base_column->stats->statistics;
+	    base_column->GetType().id() == LogicalTypeId::GEOMETRY ? old_stats : base_column->GetStatisticsRef();
 
 	// Are there any changes?
 	if (!HasAnyChanges()) {

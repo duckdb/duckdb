@@ -253,8 +253,6 @@ protected:
 	mutable mutex stats_lock;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
-
-public:
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 
