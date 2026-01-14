@@ -22,7 +22,20 @@
         "test/sql/storage/compression/alp/alp_tpch.test_slow",
         "test/sql/storage/compression/alp/alp_tpcds.test_slow",
         "test/sql/storage/compression/alprd/alprd_tpcds.test_slow",
-        "test/sql/storage/compression/alprd/alprd_tpch.test_slow"
+        "test/sql/storage/compression/alprd/alprd_tpch.test_slow",
+        "test/sql/storage/parallel/reclaim_space_batch_insert.test_slow",
+        "test/sql/storage/parallel/reclaim_space_primary_key_optimistic.test_slow",
+        "test/sql/storage/vacuum/vacuum_deletes_cleanup.test_slow",
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow",
+        "test/sql/index/art/memory/test_art_varchar.test_slow",
+        "test/sql/json/test_json_struct_projection_pushdown.test_slow",
+        "test/sql/tpch/gzip_csv_auto_detect.test_slow",
+        "test/sql/outofcore/out_of_core_aggregation.test_slow",
+        "test/sql/outofcore/out_of_core_hash_join.test_slow",
+        "test/sql/outofcore/out_of_core_sort.test_slow",
+        "test/sql/outofcore/out_of_core_window.test_slow",
+        "test/sql/outofcore/out_of_core_asof_join.test_slow",
+        "test/sql/outofcore/out_of_core_ie_join.test_slow"
       ]
     }
   ]
