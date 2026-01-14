@@ -72,6 +72,7 @@ EXCLUDED_RULES = {
     "NamedParameterAssignment",
     "WithOrdinality",
     "ByName",
+    "CollateOperator",
 }
 
 

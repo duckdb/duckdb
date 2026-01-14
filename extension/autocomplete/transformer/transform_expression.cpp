@@ -10,6 +10,7 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/expression/collate_expression.hpp"
 
 namespace duckdb {
 
@@ -1008,7 +1009,27 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(P
 	if (!collate_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("Collate has not yet been implemented");
+	auto collate_expr_repeat = collate_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &collate_expr_pr : collate_expr_repeat.children) {
+		auto &inner_list_pr = collate_expr_pr->Cast<ListParseResult>();
+		vector<unique_ptr<ParsedExpression>> collate_children;
+		auto collate_string_expr =
+		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+		string collate_string;
+		if (collate_string_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			auto &const_expr = collate_string_expr->Cast<ConstantExpression>();
+			collate_string = const_expr.value.GetValue<string>();
+		} else if (collate_string_expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			auto &col_ref = collate_string_expr->Cast<ColumnRefExpression>();
+			collate_string = col_ref.GetColumnName();
+		} else {
+			throw NotImplementedException("Unexpected expression encountered for collate, %s",
+			                              EnumUtil::ToString(collate_string_expr->GetExpressionClass()));
+		}
+		auto collate_expr = make_uniq<CollateExpression>(collate_string, std::move(expr));
+		expr = std::move(collate_expr);
+	}
+	return expr;
 }
 
 // AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
