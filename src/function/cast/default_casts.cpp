@@ -11,6 +11,8 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <duckdb/common/extra_type_info.hpp>
+
 namespace duckdb {
 
 BindCastInfo::~BindCastInfo() {
@@ -75,6 +77,15 @@ static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count
 	}
 	result.Reinterpret(source);
 	return true;
+}
+
+static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	auto info = source.AuxInfo()->Cast<AggregateStateTypeInfo>();
+	auto exported_state_type = info.state_type.state_type;
+	if (exported_state_type.IsValid()) {
+		return input.GetCastFunction(exported_state_type, target);
+	}
+	return AggregateStateToBlobCast;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -167,7 +178,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
-		return AggregateStateToBlobCast;
+		return AggregateStateCast(input, source, target);
 	default:
 		return nullptr;
 	}

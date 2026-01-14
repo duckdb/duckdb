@@ -160,8 +160,17 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
-	case LogicalTypeId::AGGREGATE_STATE:
-		return PhysicalType::VARCHAR;
+	case LogicalTypeId::AGGREGATE_STATE: {
+		auto info = type_info_;
+		if (!info) {
+			return PhysicalType::VARCHAR;
+		}
+		auto aggregate_state_info = AuxInfo()->Cast<AggregateStateTypeInfo>();
+		if (aggregate_state_info.state_type.state_type.id() == LogicalTypeId::INVALID) {
+			return PhysicalType::VARCHAR;
+		}
+		return aggregate_state_info.state_type.state_type.InternalType();
+	}
 	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
 	default:
@@ -1641,7 +1650,11 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	         type.id() == LogicalTypeId::VARIANT);
+	         type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::AGGREGATE_STATE);
+
+	if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
+		return StructType::GetChildTypes(type.AuxInfo()->Cast<AggregateStateTypeInfo>().state_type.state_type);
+	}
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);

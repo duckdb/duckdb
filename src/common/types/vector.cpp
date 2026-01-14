@@ -2416,7 +2416,11 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 //===--------------------------------------------------------------------===//
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
-	         vector.GetType().id() == LogicalTypeId::VARIANT);
+	         vector.GetType().id() == LogicalTypeId::VARIANT ||
+	         // AGGREGATE_STATE is also valid, but only if the physical type is STRUCT
+	         // (set by LogicalType::GetInternalType()), otherwise the auxiliary would be corrupted in this case
+	         (vector.GetType().id() == LogicalTypeId::AGGREGATE_STATE &&
+	          vector.GetType().InternalType() == PhysicalType::STRUCT));
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
