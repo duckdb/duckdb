@@ -219,6 +219,8 @@ struct PostRequestInfo : public BaseRequest {
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
 	string buffer_out;
+	//! Used to send a GET request with a body (non-standard but supported by some servers)
+	bool send_post_as_get_request = false;
 };
 
 class HTTPClient {
