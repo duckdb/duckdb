@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-static void GetColumnIndex(unique_ptr<Expression> &expr, idx_t &index, string &alias) {
+static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
 	if (expr->type == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
 		index = bound_ref.index;
@@ -59,7 +59,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	return filter.CheckStatistics(stats);
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter) {
+void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter) {
 	// FIXME: update stats...
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
@@ -79,7 +79,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 	}
 }
 
-static bool IsConstantOrNullFilter(TableFilter &table_filter) {
+static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
 	if (table_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
 		return false;
 	}
@@ -91,7 +91,7 @@ static bool IsConstantOrNullFilter(TableFilter &table_filter) {
 	return ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true));
 }
 
-static bool CanReplaceConstantOrNull(TableFilter &table_filter) {
+static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
 		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
 	}

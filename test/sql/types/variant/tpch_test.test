@@ -9,10 +9,20 @@ statement ok
 call dbgen(sf=0.001)
 
 statement ok
-create table variant_lineitem as select variant_normalize(STRUCT_PACK(*COLUMNS(*))::VARIANT) from lineitem;
+attach '__TEST_DIR__/tpch_sf0001_variant.db' as foo
+
+statement ok
+create table foo.variant_lineitem as select variant_normalize(STRUCT_PACK(*COLUMNS(*))::VARIANT) from lineitem;
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+checkpoint;
 
 query I
-select * from variant_lineitem limit 10;
+select * from foo.variant_lineitem limit 10;
 ----
 {'l_comment': to beans x-ray carefull, 'l_commitdate': 1996-02-12, 'l_discount': 0.04, 'l_extendedprice': 17954.55, 'l_linenumber': 1, 'l_linestatus': O, 'l_orderkey': 1, 'l_partkey': 156, 'l_quantity': 17.00, 'l_receiptdate': 1996-03-22, 'l_returnflag': N, 'l_shipdate': 1996-03-13, 'l_shipinstruct': DELIVER IN PERSON, 'l_shipmode': TRUCK, 'l_suppkey': 4, 'l_tax': 0.02}
 {'l_comment': ' according to the final foxes. qui', 'l_commitdate': 1996-02-28, 'l_discount': 0.09, 'l_extendedprice': 34850.16, 'l_linenumber': 2, 'l_linestatus': O, 'l_orderkey': 1, 'l_partkey': 68, 'l_quantity': 36.00, 'l_receiptdate': 1996-04-20, 'l_returnflag': N, 'l_shipdate': 1996-04-12, 'l_shipinstruct': TAKE BACK RETURN, 'l_shipmode': MAIL, 'l_suppkey': 9, 'l_tax': 0.06}
@@ -26,7 +36,7 @@ select * from variant_lineitem limit 10;
 {'l_comment': e carefully fina, 'l_commitdate': 1993-11-22, 'l_discount': 0.06, 'l_extendedprice': 27786.24, 'l_linenumber': 3, 'l_linestatus': F, 'l_orderkey': 3, 'l_partkey': 129, 'l_quantity': 27.00, 'l_receiptdate': 1994-01-23, 'l_returnflag': A, 'l_shipdate': 1994-01-16, 'l_shipinstruct': DELIVER IN PERSON, 'l_shipmode': SHIP, 'l_suppkey': 8, 'l_tax': 0.07}
 
 query I
-select COLUMNS(*)::JSON from variant_lineitem limit 10;
+select COLUMNS(*)::JSON from foo.variant_lineitem limit 10;
 ----
 {"l_comment":"to beans x-ray carefull","l_commitdate":"1996-02-12","l_discount":0.04,"l_extendedprice":17954.55,"l_linenumber":1,"l_linestatus":"O","l_orderkey":1,"l_partkey":156,"l_quantity":17.00,"l_receiptdate":"1996-03-22","l_returnflag":"N","l_shipdate":"1996-03-13","l_shipinstruct":"DELIVER IN PERSON","l_shipmode":"TRUCK","l_suppkey":4,"l_tax":0.02}
 {"l_comment":" according to the final foxes. qui","l_commitdate":"1996-02-28","l_discount":0.09,"l_extendedprice":34850.16,"l_linenumber":2,"l_linestatus":"O","l_orderkey":1,"l_partkey":68,"l_quantity":36.00,"l_receiptdate":"1996-04-20","l_returnflag":"N","l_shipdate":"1996-04-12","l_shipinstruct":"TAKE BACK RETURN","l_shipmode":"MAIL","l_suppkey":9,"l_tax":0.06}
