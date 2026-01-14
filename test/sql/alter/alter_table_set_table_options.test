@@ -11,12 +11,27 @@ ALTER TABLE tbl1 SET ('foo'='baz', 'buzz'='wizz');
 <REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
 
 statement error
+ALTER TABLE tbl1 SET (foo='baz', buzz='wizz');
+----
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
+
+statement error
 ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
 ----
 <REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
 
 statement error
+ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
+----
+<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+
+statement error
 ALTER TABLE tbl1 RESET ('foo', 'buzz');
+----
+<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+
+statement error
+ALTER TABLE tbl1 RESET (foo, buzz);
 ----
 <REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
 
@@ -27,5 +42,13 @@ ALTER TABLE tbl1 UNSET ('foo'='baz', 'buzz'='wizz');
 
 statement error
 ALTER TABLE tbl1 UNSET ('foo', 'buzz');
+----
+<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+
+statement ok
+set variable location='my/location/path';
+
+statement error
+ALTER TABLE tbl1 UNSET ('foo'=getvariable('location'));
 ----
 <REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*

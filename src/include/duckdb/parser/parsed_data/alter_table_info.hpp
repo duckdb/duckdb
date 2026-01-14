@@ -499,10 +499,10 @@ private:
 // SetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct SetTableOptionsInfo : public AlterTableInfo {
-	SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> table_options);
+	SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options);
 	~SetTableOptionsInfo() override;
 
-	case_insensitive_map_t<string> table_options;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -519,10 +519,10 @@ private:
 // SetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct ResetTableOptionsInfo : public AlterTableInfo {
-	ResetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> table_options);
+	ResetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options);
 	~ResetTableOptionsInfo() override;
 
-	case_insensitive_map_t<string> table_options;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

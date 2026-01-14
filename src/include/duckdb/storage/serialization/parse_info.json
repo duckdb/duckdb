@@ -785,7 +785,7 @@
       {
         "id": 400,
         "name": "table_options",
-        "type": "case_insensitive_map_t<string>"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },
@@ -797,7 +797,7 @@
       {
         "id": 400,
         "name": "table_options",
-        "type": "case_insensitive_map_t<string>"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   }

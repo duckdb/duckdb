@@ -677,15 +677,20 @@ string SetSortedByInfo::ToString() const {
 SetTableOptionsInfo::SetTableOptionsInfo() : AlterTableInfo(AlterTableType::SET_TABLE_OPTIONS) {
 }
 
-SetTableOptionsInfo::SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties_p)
-    : AlterTableInfo(AlterTableType::SET_TABLE_OPTIONS, std::move(data)), table_options(std::move(tbl_properties_p)) {
+SetTableOptionsInfo::SetTableOptionsInfo(AlterEntryData data,
+                                         case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options)
+    : AlterTableInfo(AlterTableType::SET_TABLE_OPTIONS, std::move(data)), table_options(std::move(table_options)) {
 }
 
 SetTableOptionsInfo::~SetTableOptionsInfo() {
 }
 
 unique_ptr<AlterInfo> SetTableOptionsInfo::Copy() const {
-	return make_uniq<SetTableOptionsInfo>(GetAlterEntryData(), table_options);
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options_copy;
+	for (auto &option : table_options) {
+		table_options_copy.emplace(option.first, option.second->Copy());
+	}
+	return make_uniq<SetTableOptionsInfo>(GetAlterEntryData(), std::move(table_options_copy));
 }
 
 string SetTableOptionsInfo::ToString() const {
@@ -697,7 +702,7 @@ string SetTableOptionsInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + KeywordHelper::WriteQuoted(entry.second, '\'');
+		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + entry.second->ToString();
 		i++;
 	}
 	result += ")";
@@ -710,15 +715,20 @@ string SetTableOptionsInfo::ToString() const {
 ResetTableOptionsInfo::ResetTableOptionsInfo() : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS) {
 }
 
-ResetTableOptionsInfo::ResetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<string> tbl_properties_p)
-    : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS, std::move(data)), table_options(std::move(tbl_properties_p)) {
+ResetTableOptionsInfo::ResetTableOptionsInfo(AlterEntryData data,
+                                             case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options)
+    : AlterTableInfo(AlterTableType::RESET_TABLE_OPTIONS, std::move(data)), table_options(std::move(table_options)) {
 }
 
 ResetTableOptionsInfo::~ResetTableOptionsInfo() {
 }
 
 unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
-	return make_uniq<ResetTableOptionsInfo>(GetAlterEntryData(), table_options);
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options_copy;
+	for (auto &option : table_options) {
+		table_options_copy.emplace(option.first, option.second->Copy());
+	}
+	return make_uniq<ResetTableOptionsInfo>(GetAlterEntryData(), std::move(table_options_copy));
 }
 
 string ResetTableOptionsInfo::ToString() const {
@@ -730,7 +740,7 @@ string ResetTableOptionsInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + KeywordHelper::WriteQuoted(entry.second, '\'');
+		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + entry.second->ToString();
 		i++;
 	}
 	result += ")";
