@@ -1,0 +1,19 @@
+diff --git a/test/sql/copy/csv/test_csv_remote.test b/test/sql/copy/csv/test_csv_remote.test
+index 9e51585..955505c 100644
+--- a/test/sql/copy/csv/test_csv_remote.test
++++ b/test/sql/copy/csv/test_csv_remote.test
+@@ -21,12 +21,12 @@ require-env LOCAL_EXTENSION_REPO
+ 
+ # regular csv file
+ query ITTTIITITTIIII nosort webpagecsv
+-SELECT * FROM read_csv_auto('data/csv/real/web_page.csv') ORDER BY 1;
++SELECT * FROM read_csv_auto('{DATA_DIR}/csv/real/web_page.csv') ORDER BY 1;
+ ----
+ 
+ # file with gzip
+ query IIIIIIIIIIIIIII nosort lineitemcsv
+-SELECT * FROM read_csv_auto('data/csv/lineitem1k.tbl.gz') ORDER BY ALL;
++SELECT * FROM read_csv_auto('{DATA_DIR}/csv/lineitem1k.tbl.gz') ORDER BY ALL;
+ ----
+ 
+ query ITTTIITITTIIII nosort webpagecsv
