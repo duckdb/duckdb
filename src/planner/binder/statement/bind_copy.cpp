@@ -422,10 +422,21 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 			return result;
 		}
 	}
+	const bool is_partition_by = StringUtil::CIEquals(name, "partition_by");
+
+	if (is_partition_by) {
+		//! When binding the 'partition_by' option, we don't want to resolve a column reference to a SQLValueFunction
+		//! (like 'user')
+		option_binder.DisableSQLValueFunctions();
+	}
 	auto bound_expr = option_binder.Bind(expr);
 	if (bound_expr->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
+	if (is_partition_by) {
+		option_binder.EnableSQLValueFunctions();
+	}
+
 	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 	if (val.IsNull()) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
