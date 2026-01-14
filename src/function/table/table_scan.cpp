@@ -676,8 +676,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 
-	auto scan_percentage = DBConfig::GetSetting<IndexScanPercentageSetting>(context);
-	auto scan_max_count = DBConfig::GetSetting<IndexScanMaxCountSetting>(context);
+	auto scan_percentage = Settings::Get<IndexScanPercentageSetting>(context);
+	auto scan_max_count = Settings::Get<IndexScanMaxCountSetting>(context);
 
 	auto total_rows = storage.GetTotalRows();
 	auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * scan_percentage);
@@ -823,7 +823,7 @@ static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, cons
 		return false;
 	}
 	auto column_type = column.GetType();
-	if (column_type.id() != LogicalTypeId::STRUCT) {
+	if (column_type.id() != LogicalTypeId::STRUCT && column_type.id() != LogicalTypeId::VARIANT) {
 		return false;
 	}
 	return true;

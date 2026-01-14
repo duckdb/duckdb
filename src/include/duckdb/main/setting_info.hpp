@@ -17,8 +17,6 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
-const string GetDefaultUserAgent();
-
 enum class SettingScope : uint8_t {
 	//! Setting is from the global Setting scope
 	GLOBAL,
@@ -28,6 +26,18 @@ enum class SettingScope : uint8_t {
 	SECRET,
 	//! The setting was not found or invalid in some other way
 	INVALID
+};
+
+enum class SettingScopeTarget {
+	INVALID,
+	//! Setting can be set in global scope only
+	GLOBAL_ONLY,
+	//! Setting can be set in local scope only
+	LOCAL_ONLY,
+	//! Setting can be set in both scopes - but defaults to global
+	GLOBAL_DEFAULT,
+	//! Setting can be set in both scopes - but defaults to local
+	LOCAL_DEFAULT
 };
 
 struct SettingLookupResult {
@@ -79,7 +89,7 @@ struct ConfigurationOption {
 	reset_global_function_t reset_global;
 	reset_local_function_t reset_local;
 	get_setting_function_t get_setting;
-	SetScope default_scope;
+	SettingScopeTarget scope;
 	const char *default_value;
 	set_callback_t set_callback;
 };

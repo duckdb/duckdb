@@ -133,6 +133,9 @@ struct ColumnScanState {
 	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
 
 public:
+	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
+
+public:
 	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
 	                optional_ptr<TableScanOptions> options);
 	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
