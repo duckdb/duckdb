@@ -746,6 +746,9 @@ void release(struct ArrowArrayStream *stream) {
 			free(result_wrapper->last_error);
 			result_wrapper->last_error = nullptr;
 		}
+		// Clear adbc_error before freeing wrapper to avoid dangling pointers
+		result_wrapper->adbc_error.message = nullptr;
+		result_wrapper->adbc_error.release = nullptr;
 	}
 	free(stream->private_data);
 	stream->private_data = nullptr;
@@ -762,6 +765,10 @@ const char *get_last_error(struct ArrowArrayStream *stream) {
 
 const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status) {
 	if (!stream || !stream->private_data) {
+		return nullptr;
+	}
+	// Verify the stream comes from this driver by checking the release function
+	if (stream->release != release) {
 		return nullptr;
 	}
 	auto result_wrapper = reinterpret_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
