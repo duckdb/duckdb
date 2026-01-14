@@ -1316,9 +1316,27 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 		    transformer.Transform<pair<string, unique_ptr<CommonTableExpressionInfo>>>(with_statement_list[entry_idx]);
 
 		if (is_recursive) {
+			auto &query_node = with_entry.second->query->node;
+			if (!query_node->modifiers.empty()) {
+				for (auto &modifier : query_node->modifiers) {
+					if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
+					    modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+						throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
+					}
+					if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+						throw ParserException("ORDER BY in a recursive query is not allowed");
+					}
+				}
+			}
 			// Now safe to call on SELECT, VALUES, etc.
-			with_entry.second->query->node =
-			    ToRecursiveCTE(std::move(with_entry.second->query->node), with_entry.first, with_entry.second->aliases);
+			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases);
+		}
+		auto cte_name = string(with_entry.first);
+
+		auto it = result.map.find(cte_name);
+		if (it != result.map.end()) {
+			// can't have two CTEs with same name
+			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}

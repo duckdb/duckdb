@@ -693,7 +693,11 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 	if (between_in_like_expr->GetExpressionClass() == ExpressionClass::BETWEEN) {
 		auto between_expr = unique_ptr_cast<ParsedExpression, BetweenExpression>(std::move(between_in_like_expr));
 		between_expr->input = std::move(expr);
-		expr = std::move(between_expr);
+		if (has_not) {
+			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_expr));
+		} else {
+			expr = std::move(between_expr);
+		}
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(between_in_like_expr));
 		if (func_expr->function_name == "contains") {
@@ -733,9 +737,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeOp(PEG
 		return expr;
 	}
 	// Don't handle the OPERATOR_NOT here for functions such as contains and like since those are special cases
-	if (expr->GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
-		expr->type = ExpressionType::COMPARE_NOT_BETWEEN;
-	} else if (expr->GetExpressionType() == ExpressionType::COMPARE_IN) {
+	if (expr->GetExpressionType() == ExpressionType::COMPARE_IN) {
 		expr->type = ExpressionType::COMPARE_NOT_IN;
 	}
 	return expr;
@@ -1431,9 +1433,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 		result->replace_list = transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
 		    replace_list_opt.optional_result);
 		for (auto &replace_entry : result->replace_list) {
-			if (result->replace_list.find(replace_entry.first) != result->replace_list.end()) {
-				throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first);
-			}
 			if (result->exclude_list.find(QualifiedColumnName(replace_entry.first)) != result->exclude_list.end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
 				                      replace_entry.first);
