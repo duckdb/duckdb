@@ -271,7 +271,7 @@ vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, c
 	return infos;
 }
 
-void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id) {
+void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		// Merge any data appended to the index while the checkpoint was running.

@@ -127,7 +127,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 
 // Explicit template instantiations for the two output policies.
 template bool Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, idx_t, bool);
-template bool Iterator::Scan<KeyVectorOutput>(const ARTKey &, KeyVectorOutput &, idx_t, bool);
+template bool Iterator::Scan<KeyRowIdVectorOutput>(const ARTKey &, KeyRowIdVectorOutput &, idx_t, bool);
 
 void Iterator::FindMinimum(const Node &node) {
 	reference<const Node> ref(node);

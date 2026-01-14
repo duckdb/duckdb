@@ -66,10 +66,13 @@ private:
 struct RowIdSetOutput {
 	set<row_t> &row_ids;
 
-	explicit RowIdSetOutput(set<row_t> &row_ids_p) : row_ids(row_ids_p) {
+	explicit RowIdSetOutput(set<row_t> &row_ids) : row_ids(row_ids) {
 	}
 
 	bool IsFull(idx_t max_count) const {
+#ifdef DEBUG
+		D_ASSERT(row_ids.size() >= 0 && row_ids.size() <= max_count);
+#endif
 		return row_ids.size() >= max_count;
 	}
 	void SetKey(const IteratorKey &, idx_t) {
@@ -81,7 +84,7 @@ struct RowIdSetOutput {
 };
 
 //! Output policy for scanning keys and row IDs into vectors.
-struct KeyVectorOutput {
+struct KeyRowIdVectorOutput {
 	ArenaAllocator &arena;
 	unsafe_vector<ARTKey> &keys;
 	unsafe_vector<ARTKey> &row_id_keys;
@@ -89,8 +92,8 @@ struct KeyVectorOutput {
 	const_data_ptr_t key_data = nullptr;
 	idx_t key_len = 0;
 
-	KeyVectorOutput(ArenaAllocator &arena_p, unsafe_vector<ARTKey> &keys_p, unsafe_vector<ARTKey> &row_id_keys_p)
-	    : arena(arena_p), keys(keys_p), row_id_keys(row_id_keys_p) {
+	KeyRowIdVectorOutput(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys)
+	    : arena(arena), keys(keys), row_id_keys(row_id_keys) {
 	}
 
 	idx_t Count() const {
@@ -101,6 +104,9 @@ struct KeyVectorOutput {
 		arena.Reset();
 	}
 	bool IsFull(idx_t max_count) const {
+#ifdef DEBUG
+		D_ASSERT(count >= 0 && count <= max_count);
+#endif
 		return count >= max_count;
 	}
 	void SetKey(const IteratorKey &current_key, idx_t column_key_len) {

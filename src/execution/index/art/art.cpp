@@ -495,7 +495,7 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 		}
 	}
 
-	// Remove any previously inserted entries on conflict.
+	// Remove any previously inserted entries.
 	if (conflict_type != ARTConflictType::NO_CONFLICT) {
 		D_ASSERT(conflict_idx.IsValid());
 		for (idx_t i = 0; i < conflict_idx.GetIndex(); i++) {
@@ -1285,7 +1285,7 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 	ARTKey empty_key = ARTKey();
 
-	KeyVectorOutput output(arena, keys, row_id_keys);
+	KeyRowIdVectorOutput output(arena, keys, row_id_keys);
 	bool complete;
 	do {
 		output.Reset();
@@ -1320,7 +1320,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 	ARTKey empty_key = ARTKey();
 
-	KeyVectorOutput output(arena, keys, row_id_keys);
+	KeyRowIdVectorOutput output(arena, keys, row_id_keys);
 	bool complete;
 	do {
 		output.Reset();
