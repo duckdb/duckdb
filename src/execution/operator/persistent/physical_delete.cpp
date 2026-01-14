@@ -14,10 +14,11 @@ namespace duckdb {
 
 PhysicalDelete::PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
                                DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints,
-                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk)
+                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk,
+                               vector<idx_t> return_columns)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
-      return_chunk(return_chunk) {
+      return_chunk(return_chunk), return_columns(std::move(return_columns)) {
 }
 //===--------------------------------------------------------------------===//
 // Sink
@@ -64,7 +65,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &g_state = input.global_state.Cast<DeleteGlobalState>();
 	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
-	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_ids = chunk.data[row_id_index];
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
@@ -74,59 +74,78 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto types = table.GetTypes();
-	auto to_be_fetched = vector<bool>(types.size(), return_chunk);
-	vector<StorageIndex> column_ids;
-	vector<LogicalType> column_types;
-	if (return_chunk) {
-		// Fetch all columns.
-		column_types = types;
-		for (idx_t i = 0; i < table.ColumnCount(); i++) {
-			column_ids.emplace_back(i);
-		}
-
-	} else {
-		// Fetch only the required columns for updating the delete indexes.
-		auto &local_storage = LocalStorage::Get(context.client, table.db);
-		auto storage = local_storage.GetStorage(table);
-		unordered_set<column_t> indexed_column_id_set;
-		storage->delete_indexes.Scan([&](Index &index) {
-			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
-			}
-			auto &set = index.GetColumnIdSet();
-			indexed_column_id_set.insert(set.begin(), set.end());
-			return false;
-		});
-		for (auto &col : indexed_column_id_set) {
-			column_ids.emplace_back(col);
-		}
-		sort(column_ids.begin(), column_ids.end());
-		for (auto &col : column_ids) {
-			auto i = col.GetPrimaryIndex();
-			to_be_fetched[i] = true;
-			column_types.push_back(types[i]);
-		}
-	}
-
 	l_state.delete_chunk.Reset();
 	row_ids.Flatten(chunk.size());
 
-	// Fetch the to-be-deleted chunk.
-	DataChunk fetch_chunk;
-	fetch_chunk.Initialize(Allocator::Get(context.client), column_types, chunk.size());
-	auto fetch_state = ColumnFetchState();
-	table.Fetch(transaction, fetch_chunk, column_ids, row_ids, chunk.size(), fetch_state);
+	// Check if we can use columns from the input chunk (passed through from the scan)
+	// instead of fetching them by row ID
+	bool use_input_columns = !return_columns.empty();
 
-	// Reference the necessary columns of the fetch_chunk.
-	idx_t fetch_idx = 0;
-	for (idx_t i = 0; i < table.ColumnCount(); i++) {
-		if (to_be_fetched[i]) {
-			l_state.delete_chunk.data[i].Reference(fetch_chunk.data[fetch_idx++]);
-			continue;
+	if (use_input_columns) {
+		// Use columns from the input chunk - they were passed through from the scan
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			D_ASSERT(return_columns[i] != DConstants::INVALID_INDEX);
+			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
 		}
-		l_state.delete_chunk.data[i].Reference(Value(types[i]));
+		l_state.delete_chunk.SetCardinality(chunk.size());
+	} else {
+		// Fall back to fetching columns by row ID
+		// This path is used when:
+		// - Table has generated columns (can't be scanned, must be computed)
+		// - Unique indexes exist but no RETURNING (need indexed columns for delete tracking)
+		// - MERGE INTO operations (optimization not implemented there yet)
+		auto &transaction = DuckTransaction::Get(context.client, table.db);
+		auto to_be_fetched = vector<bool>(types.size(), return_chunk);
+		vector<StorageIndex> column_ids;
+		vector<LogicalType> column_types;
+
+		if (return_chunk) {
+			// Fetch all columns.
+			column_types = types;
+			for (idx_t i = 0; i < table.ColumnCount(); i++) {
+				column_ids.emplace_back(i);
+			}
+		} else {
+			// Fetch only the required columns for updating the delete indexes.
+			auto &local_storage = LocalStorage::Get(context.client, table.db);
+			auto storage = local_storage.GetStorage(table);
+			unordered_set<column_t> indexed_column_id_set;
+			storage->delete_indexes.Scan([&](Index &index) {
+				if (!index.IsBound() || !index.IsUnique()) {
+					return false;
+				}
+				auto &set = index.GetColumnIdSet();
+				indexed_column_id_set.insert(set.begin(), set.end());
+				return false;
+			});
+			for (auto &col : indexed_column_id_set) {
+				column_ids.emplace_back(col);
+			}
+			sort(column_ids.begin(), column_ids.end());
+			for (auto &col : column_ids) {
+				auto i = col.GetPrimaryIndex();
+				to_be_fetched[i] = true;
+				column_types.push_back(types[i]);
+			}
+		}
+
+		// Fetch the to-be-deleted chunk.
+		DataChunk fetch_chunk;
+		fetch_chunk.Initialize(Allocator::Get(context.client), column_types, chunk.size());
+		auto fetch_state = ColumnFetchState();
+		table.Fetch(transaction, fetch_chunk, column_ids, row_ids, chunk.size(), fetch_state);
+
+		// Reference the necessary columns of the fetch_chunk.
+		idx_t fetch_idx = 0;
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			if (to_be_fetched[i]) {
+				l_state.delete_chunk.data[i].Reference(fetch_chunk.data[fetch_idx++]);
+				continue;
+			}
+			l_state.delete_chunk.data[i].Reference(Value(types[i]));
+		}
+		l_state.delete_chunk.SetCardinality(fetch_chunk);
 	}
-	l_state.delete_chunk.SetCardinality(fetch_chunk);
 
 	// Append the deleted row IDs to the delete indexes.
 	// If we only delete local row IDs, then the delete_chunk is empty.
