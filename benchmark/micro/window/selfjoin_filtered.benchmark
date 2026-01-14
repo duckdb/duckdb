@@ -1,0 +1,14 @@
+# name: benchmark/micro/window/selfjoin_filtered.benchmark
+# description: Measure performance of the window self-join optimisation with filtering
+# group: [window]
+
+name Window Self-Join, Filtered
+group micro
+subgroup window
+
+load
+CREATE TABLE services AS FROM 'data/micro/window/services.parquet';
+
+run
+FROM services 
+QUALIFY count(*) OVER(PARTITION BY "Service:Date", "Service:Train number") = 1
