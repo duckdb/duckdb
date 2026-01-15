@@ -49,6 +49,9 @@ void OpenerFileSystem::VerifyCanWriteFile(const string &path) {
 	    !config.options.extension_directory.empty() ? config.options.extension_directory : default_extension_folder;
 
 	extension_folder = FileSystem::ExpandPath(extension_folder, nullptr);
+	if (extension_folder[0] != '/') {
+		extension_folder = config.SanitizeAllowedPath(GetWorkingDirectory() + '/' + extension_folder);
+	}
 
 	// Now extension folder is absolute
 
