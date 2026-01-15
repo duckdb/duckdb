@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode_regression.test
+# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode_regression.test_slow
 # description: Verify that v1.5.0 (with uncompressed mode) never regresses vs v1.4.0 (without it)
 # group: [alprd]
 
