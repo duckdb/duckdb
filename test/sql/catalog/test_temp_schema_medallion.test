@@ -1,0 +1,649 @@
+# name: test/sql/catalog/test_temp_schema_medallion.test
+# description: Test temp schema shadowing with medallion architecture (bronze/silver/gold)
+# group: [catalog]
+
+require noforcestorage
+
+# =============================================================================
+# Setup: Persistent Chain with Shadowed and Non-Shadowed Objects
+# =============================================================================
+# Each layer has:
+# - Objects that WILL be shadowed (raw_data, cleaned, report)
+# - Objects that will NOT be shadowed (other_data, other_cleaned, other_report)
+# - A combined view that UNIONs shadowed and non-shadowed objects
+#
+# Query flow: dashboard -> gold.report -> silver.cleaned -> bronze.raw_data
+
+statement ok
+CREATE SCHEMA gold
+
+statement ok
+CREATE SCHEMA silver
+
+statement ok
+CREATE SCHEMA bronze
+
+# -----------------------------------------------------------------------------
+# Bronze Layer: raw source tables
+# -----------------------------------------------------------------------------
+
+# Table that WILL be shadowed
+statement ok
+CREATE TABLE bronze.raw_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO bronze.raw_data VALUES ('data1', 'persistent bronze')
+
+# Table that will NOT be shadowed
+statement ok
+CREATE TABLE bronze.other_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO bronze.other_data VALUES ('data2', 'persistent bronze other')
+
+# Combined view: UNION of shadowed + non-shadowed
+statement ok
+CREATE VIEW bronze.combined AS SELECT * FROM bronze.raw_data UNION ALL SELECT * FROM bronze.other_data
+
+# -----------------------------------------------------------------------------
+# Silver Layer: cleaned views
+# -----------------------------------------------------------------------------
+
+# View that WILL be shadowed (references bronze)
+statement ok
+CREATE VIEW silver.cleaned AS SELECT * FROM bronze.raw_data
+
+# View that will NOT be shadowed
+statement ok
+CREATE VIEW silver.other_cleaned AS SELECT * FROM bronze.other_data
+
+# Combined view: UNION of shadowed + non-shadowed
+statement ok
+CREATE VIEW silver.combined AS SELECT * FROM silver.cleaned UNION ALL SELECT * FROM silver.other_cleaned
+
+# -----------------------------------------------------------------------------
+# Gold Layer: business-ready views
+# -----------------------------------------------------------------------------
+
+# View that WILL be shadowed (references silver)
+statement ok
+CREATE VIEW gold.report AS SELECT * FROM silver.cleaned
+
+# View that will NOT be shadowed
+statement ok
+CREATE VIEW gold.other_report AS SELECT * FROM silver.other_cleaned
+
+# Combined view: UNION of shadowed + non-shadowed
+statement ok
+CREATE VIEW gold.combined AS SELECT * FROM gold.report UNION ALL SELECT * FROM gold.other_report
+
+# -----------------------------------------------------------------------------
+# Main Layer: entry point views
+# -----------------------------------------------------------------------------
+
+statement ok
+CREATE VIEW dashboard AS SELECT * FROM gold.report
+
+statement ok
+CREATE VIEW full_dashboard AS SELECT * FROM gold.combined
+
+# Verify the persistent chain works
+query II
+SELECT * FROM dashboard
+----
+data1	persistent bronze
+
+query II rowsort
+SELECT * FROM full_dashboard
+----
+data1	persistent bronze
+data2	persistent bronze other
+
+# =============================================================================
+# Part 1: Single-Layer Shadowing Tests
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Test 1.1: Shadow at Bronze Level (source table)
+# -----------------------------------------------------------------------------
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | bronze | raw_data | [P]           | [T] <--shadow |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE SCHEMA temp.bronze
+
+statement ok
+CREATE TEMPORARY TABLE temp.bronze.raw_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO temp.bronze.raw_data VALUES ('data1', 'TEMP bronze')
+
+statement ok
+SET SEARCH_PATH = 'temp.bronze,memory.bronze,memory.silver,memory.gold,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP bronze
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP TABLE temp.bronze.raw_data
+
+# -----------------------------------------------------------------------------
+# Test 1.2: Shadow at Silver Level (intermediate view)
+# -----------------------------------------------------------------------------
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | silver | cleaned  | [P]           | [T] <--shadow |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE SCHEMA temp.silver
+
+statement ok
+CREATE TEMPORARY VIEW temp.silver.cleaned AS SELECT 'data1' as val, 'TEMP silver' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.silver,memory.silver,memory.bronze,memory.gold,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP silver
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP VIEW temp.silver.cleaned
+
+# -----------------------------------------------------------------------------
+# Test 1.3: Shadow at Gold Level (business view)
+# -----------------------------------------------------------------------------
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | gold   | report   | [P]           | [T] <--shadow |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE SCHEMA temp.gold
+
+statement ok
+CREATE TEMPORARY VIEW temp.gold.report AS SELECT 'data1' as val, 'TEMP gold' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.gold,memory.gold,memory.silver,memory.bronze,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP gold
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP VIEW temp.gold.report
+
+# -----------------------------------------------------------------------------
+# Test 1.4: Shadow at Main Level (entry point)
+# -----------------------------------------------------------------------------
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | main   | dashboard| [P]           | [T*] <--query |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY VIEW dashboard AS SELECT 'data1' as val, 'TEMP main' as layer
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP main
+
+# Reset for next test
+statement ok
+DROP VIEW temp.dashboard
+
+# -----------------------------------------------------------------------------
+# Test 1.5: Multi-level Shadow (all layers)
+# -----------------------------------------------------------------------------
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | bronze | raw_data | [P]           | [T] shadow    |
+# | silver | cleaned  | [P]           | [T] shadow    |
+# | gold   | report   | [P]           | [T] shadow    |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+# Query resolves: dashboard -> temp.gold.report (first match wins)
+
+statement ok
+CREATE TEMPORARY TABLE temp.bronze.raw_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO temp.bronze.raw_data VALUES ('data1', 'TEMP bronze')
+
+statement ok
+CREATE TEMPORARY VIEW temp.silver.cleaned AS SELECT 'data1' as val, 'TEMP silver' as layer
+
+statement ok
+CREATE TEMPORARY VIEW temp.gold.report AS SELECT 'data1' as val, 'TEMP gold' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.gold,temp.silver,temp.bronze,memory.gold,memory.silver,memory.bronze,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP gold
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP VIEW temp.gold.report
+
+statement ok
+DROP VIEW temp.silver.cleaned
+
+statement ok
+DROP TABLE temp.bronze.raw_data
+
+# =============================================================================
+# Part 2: Drop and Fallback Tests
+# =============================================================================
+# Verify that dropping a temp object causes automatic fallback to persistent
+# WITHOUT resetting search path.
+
+# -----------------------------------------------------------------------------
+# Test 2.1: Drop temp bronze, fallback to persistent bronze
+# -----------------------------------------------------------------------------
+# BEFORE DROP:
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | bronze | raw_data | [P]           | [T] <--shadow |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY TABLE temp.bronze.raw_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO temp.bronze.raw_data VALUES ('data1', 'TEMP bronze')
+
+statement ok
+SET SEARCH_PATH = 'temp.bronze,memory.bronze,memory.silver,memory.gold,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP bronze
+
+statement ok
+DROP TABLE temp.bronze.raw_data
+
+# AFTER DROP:
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | bronze | raw_data | [P] <--now    | (dropped)     |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+query II
+SELECT * FROM dashboard
+----
+data1	persistent bronze
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+# -----------------------------------------------------------------------------
+# Test 2.2: Drop temp silver, fallback to persistent silver
+# -----------------------------------------------------------------------------
+# BEFORE DROP:
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | silver | cleaned  | [P]           | [T] <--shadow |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY VIEW temp.silver.cleaned AS SELECT 'data1' as val, 'TEMP silver' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.silver,memory.silver,memory.bronze,memory.gold,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP silver
+
+statement ok
+DROP VIEW temp.silver.cleaned
+
+# AFTER DROP:
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | silver | cleaned  | [P] <--now    | (dropped)     |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+query II
+SELECT * FROM dashboard
+----
+data1	persistent bronze
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+# -----------------------------------------------------------------------------
+# Test 2.3: Drop temp gold, fallback to persistent gold
+# -----------------------------------------------------------------------------
+# BEFORE DROP:
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | gold   | report   | [P]           | [T] <--shadow |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY VIEW temp.gold.report AS SELECT 'data1' as val, 'TEMP gold' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.gold,memory.gold,memory.silver,memory.bronze,memory.main'
+
+query II
+SELECT * FROM dashboard
+----
+data1	TEMP gold
+
+statement ok
+DROP VIEW temp.gold.report
+
+# AFTER DROP:
+# +--------+----------+---------------+---------------+
+# | Layer  | Object   | Persistent    | Temp          |
+# +--------+----------+---------------+---------------+
+# | gold   | report   | [P] <--now    | (dropped)     |
+# | main   | dashboard| [*] <--query  |               |
+# +--------+----------+---------------+---------------+
+
+query II
+SELECT * FROM dashboard
+----
+data1	persistent bronze
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+# =============================================================================
+# Part 3: Combined View Shadowing Tests
+# =============================================================================
+# Test that UNION views correctly pick up temp shadows while keeping
+# non-shadowed objects from the persistent catalog.
+
+# -----------------------------------------------------------------------------
+# Test 3.1: Shadow at Bronze Level -> Test All Combined Views
+# -----------------------------------------------------------------------------
+# +--------+------------+---------------+---------------+
+# | Layer  | Object     | Persistent    | Temp          |
+# +--------+------------+---------------+---------------+
+# | bronze | raw_data   | [P]           | [T] <--shadow |
+# | bronze | other_data | [P]           |               |
+# | bronze | combined   | [P*] <--query |               |
+# +--------+------------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY TABLE temp.bronze.raw_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO temp.bronze.raw_data VALUES ('data1', 'TEMP bronze')
+
+statement ok
+SET SEARCH_PATH = 'temp.bronze,memory.bronze,memory.silver,memory.gold,memory.main'
+
+# Direct query should see temp version
+query II
+SELECT * FROM bronze.raw_data
+----
+data1	TEMP bronze
+
+# bronze.combined should see: TEMP bronze + persistent bronze other
+query II rowsort
+SELECT * FROM bronze.combined
+----
+data1	TEMP bronze
+data2	persistent bronze other
+
+# silver.combined should propagate the temp bronze
+query II rowsort
+SELECT * FROM silver.combined
+----
+data1	TEMP bronze
+data2	persistent bronze other
+
+# gold.combined should propagate the temp bronze
+query II rowsort
+SELECT * FROM gold.combined
+----
+data1	TEMP bronze
+data2	persistent bronze other
+
+# full_dashboard should propagate the temp bronze
+query II rowsort
+SELECT * FROM full_dashboard
+----
+data1	TEMP bronze
+data2	persistent bronze other
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP TABLE temp.bronze.raw_data
+
+# -----------------------------------------------------------------------------
+# Test 3.2: Shadow at Silver Level -> Test All Combined Views
+# -----------------------------------------------------------------------------
+# +--------+---------------+---------------+---------------+
+# | Layer  | Object        | Persistent    | Temp          |
+# +--------+---------------+---------------+---------------+
+# | silver | cleaned       | [P]           | [T] <--shadow |
+# | silver | other_cleaned | [P]           |               |
+# | silver | combined      | [P*] <--query |               |
+# +--------+---------------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY VIEW temp.silver.cleaned AS SELECT 'data1' as val, 'TEMP silver' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.silver,memory.silver,memory.bronze,memory.gold,memory.main'
+
+# Direct query should see temp version
+query II
+SELECT * FROM silver.cleaned
+----
+data1	TEMP silver
+
+# silver.combined should see: TEMP silver + persistent bronze other
+query II rowsort
+SELECT * FROM silver.combined
+----
+data1	TEMP silver
+data2	persistent bronze other
+
+# gold.combined should propagate the temp silver
+query II rowsort
+SELECT * FROM gold.combined
+----
+data1	TEMP silver
+data2	persistent bronze other
+
+# full_dashboard should propagate the temp silver
+query II rowsort
+SELECT * FROM full_dashboard
+----
+data1	TEMP silver
+data2	persistent bronze other
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP VIEW temp.silver.cleaned
+
+# -----------------------------------------------------------------------------
+# Test 3.3: Shadow at Gold Level -> Test All Combined Views
+# -----------------------------------------------------------------------------
+# +--------+--------------+---------------+---------------+
+# | Layer  | Object       | Persistent    | Temp          |
+# +--------+--------------+---------------+---------------+
+# | gold   | report       | [P]           | [T] <--shadow |
+# | gold   | other_report | [P]           |               |
+# | gold   | combined     | [P*] <--query |               |
+# +--------+--------------+---------------+---------------+
+
+statement ok
+CREATE TEMPORARY VIEW temp.gold.report AS SELECT 'data1' as val, 'TEMP gold' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.gold,memory.gold,memory.silver,memory.bronze,memory.main'
+
+# Direct query should see temp version
+query II
+SELECT * FROM gold.report
+----
+data1	TEMP gold
+
+# gold.combined should see: TEMP gold + persistent bronze other
+query II rowsort
+SELECT * FROM gold.combined
+----
+data1	TEMP gold
+data2	persistent bronze other
+
+# full_dashboard should propagate the temp gold
+query II rowsort
+SELECT * FROM full_dashboard
+----
+data1	TEMP gold
+data2	persistent bronze other
+
+# Reset for next test
+statement ok
+SET SEARCH_PATH = ''
+
+statement ok
+DROP VIEW temp.gold.report
+
+# -----------------------------------------------------------------------------
+# Test 3.4: Shadow Multiple Layers Simultaneously
+# -----------------------------------------------------------------------------
+# +--------+------------+---------------+------------------+
+# | Layer  | Object     | Persistent    | Temp             |
+# +--------+------------+---------------+------------------+
+# | bronze | raw_data   | [P]           | [T] shadow       |
+# | gold   | report     | [P]           | [T] <--shadow    |
+# | gold   | combined   | [P*] <--query |                  |
+# +--------+------------+---------------+------------------+
+# gold.report should use temp.gold.report (not follow chain to temp.bronze)
+# gold.other_report should still use persistent path (bronze.other_data)
+
+statement ok
+CREATE TEMPORARY TABLE temp.bronze.raw_data(val VARCHAR, layer VARCHAR)
+
+statement ok
+INSERT INTO temp.bronze.raw_data VALUES ('data1', 'TEMP bronze')
+
+statement ok
+CREATE TEMPORARY VIEW temp.gold.report AS SELECT 'data1' as val, 'TEMP gold' as layer
+
+statement ok
+SET SEARCH_PATH = 'temp.gold,temp.bronze,memory.gold,memory.silver,memory.bronze,memory.main'
+
+# gold.report should see temp.gold.report directly
+query II
+SELECT * FROM gold.report
+----
+data1	TEMP gold
+
+# gold.other_report should still use persistent path
+query II
+SELECT * FROM gold.other_report
+----
+data2	persistent bronze other
+
+# gold.combined should mix: TEMP gold + persistent bronze other
+query II rowsort
+SELECT * FROM gold.combined
+----
+data1	TEMP gold
+data2	persistent bronze other
+
+# -----------------------------------------------------------------------------
+# Test 3.5: Reset Search Path -> Instant Revert to Persistent
+# -----------------------------------------------------------------------------
+# Verify that clearing the search path instantly reverts all views back to
+# persistent versions, even with temp shadows still present.
+
+# Temp shadows are still present from Test 3.4
+# Reset search path to default
+statement ok
+SET SEARCH_PATH = ''
+
+# All queries should now see persistent versions only
+query II
+SELECT * FROM dashboard
+----
+data1	persistent bronze
+
+query II rowsort
+SELECT * FROM full_dashboard
+----
+data1	persistent bronze
+data2	persistent bronze other
+
+query II rowsort
+SELECT * FROM gold.combined
+----
+data1	persistent bronze
+data2	persistent bronze other
+
+query II rowsort
+SELECT * FROM silver.combined
+----
+data1	persistent bronze
+data2	persistent bronze other
+
+query II rowsort
+SELECT * FROM bronze.combined
+----
+data1	persistent bronze
+data2	persistent bronze other
