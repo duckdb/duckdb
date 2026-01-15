@@ -3,7 +3,6 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {

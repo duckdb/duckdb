@@ -44,7 +44,6 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
@@ -392,170 +391,33 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-static bool IsValidTypeEntry(optional_ptr<CatalogEntry> entry) {
-	if (!entry) {
-		return false;
-	}
-	return entry->Cast<TypeCatalogEntry>().user_type.id() != LogicalTypeId::INVALID;
-}
-
-LogicalType Binder::BindTypeExpression(const unique_ptr<ParsedExpression> &type_expr, optional_ptr<Catalog> catalog,
-                                       const string &schema) {
-	D_ASSERT(type_expr->type == ExpressionType::TYPE);
-	auto &parsed_type_expr = type_expr->Cast<TypeExpression>();
-
-	auto &type_name = parsed_type_expr.GetTypeName();
-	auto type_schema = parsed_type_expr.GetSchema();
-	auto type_catalog = parsed_type_expr.GetCatalog();
-
-	QueryErrorContext error_context(*type_expr);
-	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, type_name, error_context);
-
-	optional_ptr<CatalogEntry> entry = nullptr;
-
-	if (catalog) {
-		// The search order is:
-		// 1) In the explicitly set schema (my_schema.my_type)
-		// 2) In the same schema as the table
-		// 3) In the same catalog
-		// 4) System catalog
-
-		if (!type_schema.empty()) {
-			entry = entry_retriever.GetEntry(*catalog, type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidTypeEntry(entry)) {
-			entry = entry_retriever.GetEntry(*catalog, schema, type_lookup, OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidTypeEntry(entry)) {
-			entry = entry_retriever.GetEntry(*catalog, INVALID_SCHEMA, type_lookup, OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidTypeEntry(entry)) {
-			entry = entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
-			                                 OnEntryNotFound::THROW_EXCEPTION);
-		}
-	} else {
-		BindSchemaOrCatalog(context, type_catalog, type_schema);
-
-		// TODO: Not sure about this code path, but seems required for WAL lookup to work
-		if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
-			// Look in the system catalog if no catalog was specified
-			entry = entry_retriever.GetEntry(SYSTEM_CATALOG, type_schema, type_lookup);
-		} else {
-			entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
-		}
-	}
-
-	// By this point we have to have found a type in the catalog
-	D_ASSERT(entry != nullptr);
-	auto &type_entry = entry->Cast<TypeCatalogEntry>();
-
-	// Now handle type parameters
-	auto &unbound_parameters = parsed_type_expr.GetTypeArguments();
-
-	if (!type_entry.bind_function) {
-		if (!unbound_parameters.empty()) {
-			// This type does not support type parameters
-			throw BinderException(*type_expr, "Type '%s' does not take any type parameters", type_name);
-		}
-
-		/*
-		if (!type_collation.empty()) {
-		    if (type_entry.user_type != LogicalType::VARCHAR) {
-		        throw BinderException("Only VARCHAR types can have collations");
-		    }
-		    ExpressionBinder::TestCollation(context, type_collation);
-		    return LogicalType::VARCHAR_COLLATION(type_collation);
-		}
-		*/
-
-		// Otherwise, return the user type directly!
-		return type_entry.user_type;
-	}
-
-	// Bind value parameters
-	vector<TypeArgument> bound_parameters;
-
-	for (auto &param : unbound_parameters) {
-		// Is this parameter also a type expression?
-		if (param->GetExpressionType() == ExpressionType::TYPE) {
-			auto type = BindTypeExpression(param, catalog, schema);
-			bound_parameters.emplace_back(param->GetName(), Value::TYPE(type));
-
-			continue;
-		}
-
-		// Otherwise, try to fold it to a constant value
-		ConstantBinder binder(*this, context, StringUtil::Format("Type parameter for type '%s'", type_name));
-		auto expr = param->Copy();
-		auto bound_expr = binder.Bind(expr);
-
-		if (!bound_expr->IsFoldable()) {
-			throw BinderException(*type_expr, "Type parameter expression for type '%s' is not a constant", type_name);
-		}
-
-		// Shortcut for constant expressions
-		if (bound_expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			auto &const_expr = bound_expr->Cast<BoundConstantExpression>();
-			bound_parameters.emplace_back(param->GetName(), const_expr.value);
-			continue;
-		}
-
-		// Otherwise we need to evaluate the expression
-		auto bound_param = ExpressionExecutor::EvaluateScalar(context, *bound_expr);
-		bound_parameters.emplace_back(param->GetName(), bound_param);
-	};
-
-	// Call the bind function
-	BindLogicalTypeInput input {context, type_entry.user_type, bound_parameters};
-	auto result_type = type_entry.bind_function(input);
-
-	// Handle collation
-	/*
-	if (!type_collation.empty()) {
-	    if (result_type != LogicalType::VARCHAR) {
-	        throw BinderException("Only VARCHAR types can have collations");
-	    }
-	    ExpressionBinder::TestCollation(context, type_collation);
-	    return LogicalType::VARCHAR_COLLATION(type_collation);
-	}
-	*/
-
-	// Return the result type!
-	return result_type;
-}
-
-LogicalType Binder::BindParsedTypeExpression(const unique_ptr<ParsedExpression> &type_expr,
-                                             optional_ptr<Catalog> catalog, const string &schema) {
-	// Standard case: the top-level expression is a TypeExpression
-	if (type_expr->type == ExpressionType::TYPE) {
-		return BindTypeExpression(type_expr, catalog, schema);
-	}
-
-	// If the parsed type is not a TypeExpression, but an arbitrary (constant) expression that returns a type
-	// such as "getvariable" or "make_type" etc. we need to bind and evaluate it here.
-	// As of DuckDB v1.5 this doesnt actually happen, but we keep this path to future proof the code once we add support
-	// for this in the parser.
-
+LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr) {
 	ConstantBinder binder(*this, context, "Type binding");
 	auto copy = type_expr->Copy();
 	auto expr = binder.Bind(copy);
+
+	if (!expr->IsFoldable()) {
+		throw BinderException(*type_expr, "Type expression is not constant");
+	}
 
 	if (expr->return_type != LogicalTypeId::TYPE) {
 		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
 		                      expr->return_type.ToString());
 	}
 
-	if (!expr->IsFoldable()) {
-		throw BinderException(*type_expr, "Type expression is not constant");
+	// Shortcut for constant expressions
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		auto &const_expr = expr->Cast<BoundConstantExpression>();
+		return TypeValue::GetType(const_expr.value);
 	}
 
-	// Now evaluate the type expression
+	// Else, evaluate the type expression
 	auto type_value = ExpressionExecutor::EvaluateScalar(context, *expr);
 	D_ASSERT(type_value.type().id() == LogicalTypeId::TYPE);
 	return TypeValue::GetType(type_value);
 }
 
-void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
+void Binder::BindLogicalType(LogicalType &type) {
 	// Check if we need to bind this type at all
 	if (!TypeVisitor::Contains(type, LogicalTypeId::UNBOUND)) {
 		return;
@@ -567,7 +429,7 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
 		if (ty.id() == LogicalTypeId::UNBOUND) {
 			auto &type_expr = UnboundType::GetTypeExpression(ty);
-			return BindParsedTypeExpression(type_expr, catalog, schema);
+			return BindLogicalTypeInternal(type_expr);
 		}
 
 		return ty;

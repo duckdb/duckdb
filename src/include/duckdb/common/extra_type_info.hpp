@@ -12,9 +12,10 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
-#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
+
+class ParsedExpression;
 
 //! Extra Type Info Type
 enum class ExtraTypeInfoType : uint8_t {

@@ -1,7 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/type_parameter.hpp"
 
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -93,10 +92,12 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeExpressionInternal(duckdb
 		if (typemod_node->type == duckdb_libpgquery::T_PGTypeName) {
 			auto type_node = *PGPointerCast<duckdb_libpgquery::PGTypeName>(typemod_node.get());
 			auto type_expr = TransformTypeExpression(type_node);
+			type_expr->SetAlias(std::move(name_str));
 			type_params.push_back(std::move(type_expr));
 		} else {
 			// Expression
 			auto expr = TransformExpression(*typemod_node);
+			expr->SetAlias(std::move(name_str));
 			type_params.push_back(std::move(expr));
 		}
 	}

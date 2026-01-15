@@ -6,10 +6,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-
-#include <duckdb/parser/expression/type_expression.hpp>
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -268,15 +266,36 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
-	/*
-	serializer.WritePropertyWithDefault<string>(200, "name", name);
-	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog);
-	serializer.WritePropertyWithDefault<string>(202, "schema", schema);
-	// [DELETED] 203 was "user_type_modifiers"
-	serializer.WritePropertyWithDefault<string>(204, "collation", collation);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<TypeParameter>>>(205, "parameters", parameters);
-	*/
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
+	} else {
+		// Try to write this as an old "USER" type, if possible
+		if (expr->type != ExpressionType::TYPE) {
+			throw SerializationException(
+			    "Cannot serialize non-type type expression when targeting serialization version %s",
+			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+		}
+
+		auto &type_expr = expr->Cast<TypeExpression>();
+		serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName());
+		serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog());
+		serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema());
+
+		// Try to write the user type mods too
+		vector<Value> user_type_mods;
+		for (auto &param : type_expr.GetChildren()) {
+			if (param->type != ExpressionType::VALUE_CONSTANT) {
+				throw SerializationException(
+				    "Cannot serialize non-constant type parameter when targeting serialization version %s",
+				    serializer.GetOptions().serialization_compatibility.duckdb_version);
+			}
+
+			auto &const_expr = param->Cast<ConstantExpression>();
+			user_type_mods.push_back(const_expr.value);
+		}
+
+		serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -284,27 +303,24 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", result->expr);
 
-	/*
-	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
-	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog);
-	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema);
+	if (!result->expr) {
+		// This is a legacy "USER" type
+		string name;
+		deserializer.ReadPropertyWithDefault<string>(200, "name", name);
+		string catalog;
+		deserializer.ReadPropertyWithDefault<string>(201, "catalog", catalog);
+		string schema;
+		deserializer.ReadPropertyWithDefault<string>(202, "schema", schema);
 
-	// From the old "user" type
-	auto mods = deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers");
-	if (!mods.empty()) {
-	    // Turn the old-style value type modifiers into TypeParameters
-	    vector<unique_ptr<TypeParameter>> args;
-	    for (auto &mod : mods) {
-	        args.push_back(TypeParameter::EXPRESSION("", make_uniq_base<ParsedExpression, ConstantExpression>(mod)));
-	    }
+		vector<unique_ptr<ParsedExpression>> user_type_mods;
+		auto mods = deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers");
+		for (auto &mod : mods) {
+			user_type_mods.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(mod));
+		}
 
-	    result->parameters = std::move(args);
-	    return std::move(result);
+		result->expr = make_uniq<TypeExpression>(catalog, schema, name, std::move(user_type_mods));
 	}
 
-	deserializer.ReadPropertyWithDefault<string>(204, "collation", result->collation);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TypeParameter>>>(205, "parameters", result->parameters);
-	*/
 	return std::move(result);
 }
 

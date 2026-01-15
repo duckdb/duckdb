@@ -29,6 +29,9 @@ public:
 	bool IsNamed(const char *name_to_check) const {
 		return StringUtil::CIEquals(name, name_to_check);
 	}
+	bool IsNotNull() const {
+		return !value.IsNull();
+	}
 	const LogicalType &GetType() const {
 		return value.type();
 	}
@@ -45,7 +48,7 @@ struct BindLogicalTypeInput {
 };
 
 //! The type to bind type modifiers to a type
-typedef LogicalType (*bind_logical_type_function_t)(const BindLogicalTypeInput &input);
+typedef LogicalType (*bind_logical_type_function_t)(BindLogicalTypeInput &input);
 
 struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo();

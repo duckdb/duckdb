@@ -84,7 +84,6 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
-#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
@@ -5068,24 +5067,6 @@ const char* EnumUtil::ToChars<TupleDataValidityType>(TupleDataValidityType value
 template<>
 TupleDataValidityType EnumUtil::FromString<TupleDataValidityType>(const char *value) {
 	return static_cast<TupleDataValidityType>(StringUtil::StringToEnum(GetTupleDataValidityTypeValues(), 2, "TupleDataValidityType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetTypeParameterKindValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TypeParameterKind::EXPRESSION), "EXPRESSION" },
-		{ static_cast<uint32_t>(TypeParameterKind::TYPE), "TYPE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<TypeParameterKind>(TypeParameterKind value) {
-	return StringUtil::EnumToString(GetTypeParameterKindValues(), 2, "TypeParameterKind", static_cast<uint32_t>(value));
-}
-
-template<>
-TypeParameterKind EnumUtil::FromString<TypeParameterKind>(const char *value) {
-	return static_cast<TypeParameterKind>(StringUtil::StringToEnum(GetTypeParameterKindValues(), 2, "TypeParameterKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetUndoFlagsValues() {

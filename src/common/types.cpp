@@ -10,7 +10,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -496,85 +495,6 @@ string LogicalType::ToString() const {
 		} else {
 			return expr->ToString();
 		}
-
-		/*
-		auto &params = UnboundType::GetParameters(*this);
-		string result;
-
-		auto &catalog = UnboundType::GetCatalog(*this);
-		auto &schema = UnboundType::GetSchema(*this);
-		auto &type = UnboundType::GetName(*this);
-
-		if (!catalog.empty()) {
-		    result = KeywordHelper::WriteOptionallyQuoted(catalog, '"');
-		}
-		if (!schema.empty()) {
-		    if (!result.empty()) {
-		        result += ".";
-		    }
-		    result += KeywordHelper::WriteOptionallyQuoted(schema, '"');
-		}
-		if (!result.empty()) {
-		    result += ".";
-		}
-
-		// LIST and ARRAY have special syntax
-		if (result.empty() && StringUtil::CIEquals(type, "LIST") && params.size() == 1) {
-		    return params[0]->ToString() + "[]";
-		}
-		if (result.empty() && StringUtil::CIEquals(type, "ARRAY") && params.size() == 2) {
-		    auto &type_param = params[0];
-		    auto &size_param = params[1];
-		    return type_param->ToString() + "[" + size_param->ToString() + "]";
-		}
-		// So does STRUCT, MAP and UNION
-		if (result.empty() && StringUtil::CIEquals(type, "STRUCT")) {
-		    if (params.empty()) {
-		        return "STRUCT";
-		    }
-		    string struct_result = "STRUCT(";
-		    for (idx_t i = 0; i < params.size(); i++) {
-		        struct_result += params[i]->ToString();
-		        if (i < params.size() - 1) {
-		            struct_result += ", ";
-		        }
-		    }
-		    struct_result += ")";
-		    return struct_result;
-		}
-		if (result.empty() && StringUtil::CIEquals(type, "UNION")) {
-		    if (params.empty()) {
-		        return "UNION";
-		    }
-		    string union_result = "UNION(";
-		    for (idx_t i = 0; i < params.size(); i++) {
-		        union_result += params[i]->ToString();
-		        if (i < params.size() - 1) {
-		            union_result += ", ";
-		        }
-		    }
-		    union_result += ")";
-		    return union_result;
-		}
-
-		if (result.empty() && StringUtil::CIEquals(type, "MAP") && params.size() == 2) {
-		    return "MAP(" + params[0]->ToString() + ", " + params[1]->ToString() + ")";
-		}
-
-		result += KeywordHelper::WriteOptionallyQuoted(type, '"', true, KeywordCategory::KEYWORD_COL_NAME);
-
-		if (!params.empty()) {
-		    result += "(";
-		    for (idx_t i = 0; i < params.size(); i++) {
-		        result += params[i]->ToString();
-		        if (i < params.size() - 1) {
-		            result += ", ";
-		        }
-		    }
-		    result += ")";
-		}
-		return result;
-		*/
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -2095,7 +2015,7 @@ LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
 		auto unbound = list.GetColumn(LogicalIndex(0)).Type();
 		return TryDefaultBind(unbound);
 	} catch (const std::runtime_error &e) {
-		throw InvalidInputException("Could not parse type string '%s' for unbound type", type_str);
+		throw InvalidInputException("Could not parse type string '%s'", type_str);
 	}
 }
 
@@ -2107,7 +2027,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 
 	// Now we try to bind the unbound type to a default type
 	auto &name = type_expr.GetTypeName();
-	auto &args = type_expr.GetTypeArguments();
+	auto &args = type_expr.GetChildren();
 
 	vector<pair<string, Value>> bound_args;
 	for (auto &arg : args) {
@@ -2117,7 +2037,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 			bound_args.emplace_back(arg->GetName(), Value::TYPE(type));
 		} break;
 		case ExpressionType::VALUE_CONSTANT: {
-			auto &const_expr = expr.Cast<ConstantExpression>();
+			auto &const_expr = arg->Cast<ConstantExpression>();
 			bound_args.emplace_back(arg->GetName(), const_expr.value);
 		} break;
 		default:

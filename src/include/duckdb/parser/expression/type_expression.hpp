@@ -21,12 +21,6 @@ public:
 	TypeExpression(string catalog, string schema, string type_name, vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(string type_name, vector<unique_ptr<ParsedExpression>> children);
 
-	string catalog;
-	string schema;
-	string type_name;
-
-	vector<unique_ptr<ParsedExpression>> children;
-
 public:
 	const string &GetTypeName() const {
 		return type_name;
@@ -37,7 +31,10 @@ public:
 	const string &GetCatalog() const {
 		return catalog;
 	}
-	const vector<unique_ptr<ParsedExpression>> &GetTypeArguments() const {
+	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<ParsedExpression>> &GetChildren() {
 		return children;
 	}
 
@@ -56,6 +53,14 @@ public:
 
 private:
 	TypeExpression();
+
+	//! Qualified name parts
+	string catalog;
+	string schema;
+	string type_name;
+
+	//! Children of the type expression (e.g. type parameters)
+	vector<unique_ptr<ParsedExpression>> children;
 };
 
 } // namespace duckdb

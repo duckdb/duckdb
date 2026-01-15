@@ -7,7 +7,6 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 

@@ -1,11 +1,9 @@
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/type_parameter.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/binder.hpp"
-
-#include <duckdb/parser/expression/type_expression.hpp>
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 

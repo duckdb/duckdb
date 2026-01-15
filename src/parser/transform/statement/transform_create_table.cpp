@@ -4,7 +4,6 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/common/type_parameter.hpp"
 
 namespace duckdb {
 
@@ -60,37 +59,30 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	} else if (!cdef.typeName) {
 		// ALTER TABLE tbl ALTER TYPE USING ...
 		target_type = LogicalType::UNKNOWN;
-	} else {
-		target_type = TransformTypeName(*cdef.typeName);
-		D_ASSERT(target_type.id() == LogicalTypeId::UNBOUND);
-	}
-
-	if (cdef.collClause) {
+	} else if (cdef.collClause) {
 		if (cdef.category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");
 		}
-		if (target_type.id() != LogicalTypeId::UNBOUND) {
+
+		auto typename_expr = TransformTypeExpressionInternal(*cdef.typeName);
+		if (typename_expr->type != ExpressionType::TYPE) {
+			throw ParserException("Only type names can have collations!");
+		}
+
+		auto &type_expr = typename_expr->Cast<TypeExpression>();
+		if (!StringUtil::CIEquals(type_expr.GetTypeName(), "VARCHAR")) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
 
-		// Copy the unbound type and its parameters, and add the collation
-		// auto &name = UnboundType::GetName(target_type);
-		// auto &catalog = UnboundType::GetCatalog(target_type);
-		// auto &schema = UnboundType::GetSchema(target_type);
-		// auto &args = UnboundType::GetParameters(target_type);
-
-		/*
-		vector<unique_ptr<TypeParameter>> args_copy;
-		args_copy.reserve(args.size());
-		for (auto &arg : args) {
-		    args_copy.push_back(arg->Copy());
-		}
-		*/
-
+		// Push back collation as a parameter of the type expression
 		auto collation = TransformCollation(cdef.collClause);
+		auto collation_expr = make_uniq<ConstantExpression>(Value(collation));
+		collation_expr->SetAlias("collation");
+		type_expr.GetChildren().push_back(std::move(collation_expr));
 
-		// TODO: Add collation
-		// target_type = LogicalType::UNBOUND(catalog, schema, name, std::move(args_copy), collation);
+		target_type = LogicalType::UNBOUND(std::move(typename_expr));
+	} else {
+		target_type = TransformTypeName(*cdef.typeName);
 	}
 
 	return ColumnDefinition(name, target_type);

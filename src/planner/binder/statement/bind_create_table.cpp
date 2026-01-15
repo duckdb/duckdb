@@ -602,6 +602,10 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		storage_manager = StorageManager::Get(catalog);
 	}
 
+	// Bind all types by first looking into the same catalog/schema as the table
+	auto type_binder = Binder::CreateBinder(context, *this);
+	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
+
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
 		// construct the result object
@@ -641,7 +645,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// Bind all types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
+			type_binder->BindLogicalType(column.TypeMutable());
 		}
 
 	} else {
@@ -662,7 +666,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// Bind all physical column types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
+			type_binder->BindLogicalType(column.TypeMutable());
 		}
 
 		auto &config = DBConfig::Get(catalog.GetAttached());

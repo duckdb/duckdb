@@ -296,7 +296,7 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 //===--------------------------------------------------------------------===//
 
 struct BoundedType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 1) {
@@ -469,7 +469,7 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 // to verify that the range is valid
 
 struct MinMaxType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 2) {

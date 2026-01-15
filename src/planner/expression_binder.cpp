@@ -79,6 +79,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<ConjunctionExpression>(), depth);
 	case ExpressionClass::CONSTANT:
 		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
+	case ExpressionClass::TYPE:
+		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
 		if (IsUnnestFunction(function.function_name)) {

@@ -236,7 +236,6 @@
     "class": "UnboundTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "UNBOUND_TYPE_INFO",
-    "includes": [ "duckdb/common/type_parameter.hpp"],
     "custom_implementation": true
   }
 ]

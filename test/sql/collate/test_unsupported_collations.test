@@ -12,7 +12,7 @@ Catalog Error: Collation with name blabla does not exist!
 statement error
 CREATE TABLE collate_test(s INTEGER COLLATE blabla)
 ----
-Binder Error: Only VARCHAR types can have collations
+Parser Error: Only VARCHAR columns can have collations!
 
 # we can combine multiple of the same collation
 statement ok

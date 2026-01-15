@@ -288,8 +288,8 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
-	                     const string &schema = INVALID_SCHEMA);
+
+	void BindLogicalType(LogicalType &type);
 
 	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
@@ -320,6 +320,8 @@ public:
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
+	void SetSearchPath(Catalog &catalog, const string &schema);
 
 private:
 	//! The parent binder (if any)
@@ -505,10 +507,7 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
 
-	LogicalType BindTypeExpression(const unique_ptr<ParsedExpression> &type_expr, optional_ptr<Catalog> catalog,
-	                               const string &schema);
-	LogicalType BindParsedTypeExpression(const unique_ptr<ParsedExpression> &type_expr, optional_ptr<Catalog> catalog,
-	                                     const string &schema);
+	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 

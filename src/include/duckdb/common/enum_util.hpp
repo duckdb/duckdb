@@ -454,8 +454,6 @@ enum class TupleDataPinProperties : uint8_t;
 
 enum class TupleDataValidityType : uint8_t;
 
-enum class TypeParameterKind : uint8_t;
-
 enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
@@ -1123,9 +1121,6 @@ const char* EnumUtil::ToChars<TupleDataPinProperties>(TupleDataPinProperties val
 
 template<>
 const char* EnumUtil::ToChars<TupleDataValidityType>(TupleDataValidityType value);
-
-template<>
-const char* EnumUtil::ToChars<TypeParameterKind>(TypeParameterKind value);
 
 template<>
 const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value);
@@ -1811,9 +1806,6 @@ TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *
 
 template<>
 TupleDataValidityType EnumUtil::FromString<TupleDataValidityType>(const char *value);
-
-template<>
-TypeParameterKind EnumUtil::FromString<TypeParameterKind>(const char *value);
 
 template<>
 UndoFlags EnumUtil::FromString<UndoFlags>(const char *value);

@@ -15,7 +15,7 @@ namespace {
 //----------------------------------------------------------------------------------------------------------------------
 // DECIMAL Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
+LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 	auto &modifiers = input.modifiers;
 
 	uint8_t width = 18;
@@ -63,7 +63,7 @@ LogicalType BindDecimalType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // TIMESTAMP Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindTimestampType(const BindLogicalTypeInput &input) {
+LogicalType BindTimestampType(BindLogicalTypeInput &input) {
 	auto &modifiers = input.modifiers;
 
 	if (modifiers.empty()) {
@@ -103,19 +103,39 @@ LogicalType BindTimestampType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // VARCHAR Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindVarcharType(const BindLogicalTypeInput &input) {
+LogicalType BindVarcharType(BindLogicalTypeInput &input) {
 	// Varchar type can have a single modifier indicating the length, but we ignore it for now
 	auto &modifiers = input.modifiers;
+
+	if (!modifiers.empty() && modifiers.size() <= 2) {
+		for (auto &mod : modifiers) {
+			if (mod.IsNamed("collation") && mod.GetType() == LogicalType::VARCHAR && mod.IsNotNull()) {
+				// Ignore all other modifiers and return collation type
+				auto collation = StringValue::Get(mod.GetValue());
+
+				if (!input.context) {
+					throw BinderException("Cannot bind varchar with collation without a connection");
+				}
+
+				// Ensure this is a valid collation
+				ExpressionBinder::TestCollation(*input.context, collation);
+
+				return LogicalType::VARCHAR_COLLATION(collation);
+			}
+		}
+	}
+
 	if (modifiers.size() > 1) {
 		throw BinderException("VARCHAR type takes at most one type modifier");
 	}
+
 	return LogicalType::VARCHAR;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 // BIT Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindBitType(const BindLogicalTypeInput &input) {
+LogicalType BindBitType(BindLogicalTypeInput &input) {
 	// BIT type can have a single modifier indicating the length, but we ignore it for now
 	auto &args = input.modifiers;
 	if (args.size() > 1) {
@@ -127,7 +147,7 @@ LogicalType BindBitType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // INTERVAL Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindIntervalType(const BindLogicalTypeInput &input) {
+LogicalType BindIntervalType(BindLogicalTypeInput &input) {
 	// Interval type can have a single modifier indicating the leading field, but we ignore it for now
 	auto &modifiers = input.modifiers;
 	if (modifiers.size() > 1) {
@@ -139,7 +159,7 @@ LogicalType BindIntervalType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // ENUM Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindEnumType(const BindLogicalTypeInput &input) {
+LogicalType BindEnumType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.empty()) {
@@ -173,7 +193,7 @@ LogicalType BindEnumType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // LIST Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindListType(const BindLogicalTypeInput &input) {
+LogicalType BindListType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 	if (arguments.size() != 1) {
 		throw BinderException("LIST type requires exactly one type modifier");
@@ -193,7 +213,7 @@ LogicalType BindListType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // ARRAY Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindArrayType(const BindLogicalTypeInput &input) {
+LogicalType BindArrayType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 	if (arguments.size() != 2) {
 		throw BinderException("ARRAY type requires exactly two type modifiers");
@@ -233,7 +253,7 @@ LogicalType BindArrayType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // STRUCT Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindStructType(const BindLogicalTypeInput &input) {
+LogicalType BindStructType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.empty()) {
@@ -293,7 +313,7 @@ LogicalType BindStructType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // MAP Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindMapType(const BindLogicalTypeInput &input) {
+LogicalType BindMapType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.size() != 2) {
@@ -322,7 +342,7 @@ LogicalType BindMapType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // UNION Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindUnionType(const BindLogicalTypeInput &input) {
+LogicalType BindUnionType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.empty()) {
@@ -364,7 +384,7 @@ LogicalType BindUnionType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // VARIANT Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindVariantType(const BindLogicalTypeInput &input) {
+LogicalType BindVariantType(BindLogicalTypeInput &input) {
 	// We need this function to make sure we always create a VARIANT type with ExtraTypeInfo
 	auto &arguments = input.modifiers;
 
@@ -377,7 +397,7 @@ LogicalType BindVariantType(const BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // GEOMETRY Type
 //----------------------------------------------------------------------------------------------------------------------
-LogicalType BindGeometryType(const BindLogicalTypeInput &input) {
+LogicalType BindGeometryType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
 
 	if (arguments.empty()) {

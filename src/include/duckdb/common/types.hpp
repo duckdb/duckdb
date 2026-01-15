@@ -22,7 +22,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
-class TypeParameter;
+class ParsedExpression;
 class CoordinateReferenceSystem;
 
 struct string_t; // NOLINT: mimic std casing
