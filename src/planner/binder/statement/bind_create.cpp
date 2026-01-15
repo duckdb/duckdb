@@ -45,6 +45,7 @@
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 

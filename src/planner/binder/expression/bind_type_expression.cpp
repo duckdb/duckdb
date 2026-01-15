@@ -1,22 +1,10 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_lambda_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 namespace duckdb {
 

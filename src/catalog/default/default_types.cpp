@@ -7,6 +7,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
