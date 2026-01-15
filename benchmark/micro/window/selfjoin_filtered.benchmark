@@ -6,8 +6,11 @@ name Window Self-Join, Filtered
 group micro
 subgroup window
 
+require httpfs
+
 load
-CREATE TABLE services AS FROM 'data/micro/window/services.parquet';
+CREATE TABLE services AS 
+	FROM 'http://blobs.duckdb.org/data/train-services-window-self-join-benchmark.parquet';
 
 run
 FROM services 
