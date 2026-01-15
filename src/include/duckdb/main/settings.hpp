@@ -874,6 +874,16 @@ struct ForceVariantShredding {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct GeometryMinimumShreddingSize {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "geometry_minimum_shredding_size";
+	static constexpr const char *Description = "Minimum size of a rowgroup to enable GEOMETRY shredding, or set to -1 "
+	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
+	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *DefaultValue = "30000";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+};
+
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";
