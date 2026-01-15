@@ -27,7 +27,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	}
 
-	info->path = list_pr.Child<ListParseResult>(4).Child<StringLiteralParseResult>(0).result;
+	info->path = transformer.Transform<string>(list_pr.Child<ListParseResult>(4));
 	transformer.TransformOptional<string>(list_pr, 5, info->name);
 	vector<GenericCopyOption> copy_options;
 	transformer.TransformOptional<vector<GenericCopyOption>>(list_pr, 6, copy_options);
@@ -66,10 +66,7 @@ string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer,
 vector<GenericCopyOption> PEGTransformerFactory::TransformAttachOptions(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto &parens = list_pr.Child<ListParseResult>(0);
-	auto &generic_copy_option_list = parens.Child<ListParseResult>(1);
-
-	return transformer.Transform<vector<GenericCopyOption>>(generic_copy_option_list);
+	return transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ListParseResult>(0));
 }
 
 vector<GenericCopyOption>
@@ -77,16 +74,10 @@ PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transforme
                                                       optional_ptr<ParseResult> parse_result) {
 	vector<GenericCopyOption> result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto &list = list_pr.Child<ListParseResult>(0);
-	auto &first_element = list.Child<ListParseResult>(0);
-	result.push_back(transformer.Transform<GenericCopyOption>(first_element));
-	auto &extra_elements = list.Child<OptionalParseResult>(1);
-	if (extra_elements.HasResult()) {
-		auto &repeat_pr = extra_elements.optional_result->Cast<RepeatParseResult>();
-		for (auto &element : repeat_pr.children) {
-			auto &child = element->Cast<ListParseResult>();
-			result.push_back(transformer.Transform<GenericCopyOption>(child.Child<ListParseResult>(1)));
-		}
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto option_list = ExtractParseResultsFromList(extract_parens);
+	for (auto &option : option_list) {
+		result.push_back(transformer.Transform<GenericCopyOption>(option));
 	}
 	return result;
 }
@@ -118,12 +109,20 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 			}
 		} else if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 			copy_option.expression = std::move(expression);
+		} else if (expression->GetExpressionType() == ExpressionType::STAR) {
+			copy_option.children.push_back(Value("*"));
 		} else {
 			throw NotImplementedException("Unrecognized expression type %s",
 			                              ExpressionTypeToString(expression->GetExpressionType()));
 		}
 	}
 	return copy_option;
+}
+
+string PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.Child<StringLiteralParseResult>(0));
 }
 
 } // namespace duckdb

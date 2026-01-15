@@ -263,7 +263,10 @@ void Parser::ParseQuery(const string &query) {
 					}
 					bool is_supported = false;
 					switch (statement->type) {
+					case StatementType::ANALYZE_STATEMENT:
+					case StatementType::VACUUM_STATEMENT:
 					case StatementType::CALL_STATEMENT:
+					case StatementType::MERGE_INTO_STATEMENT:
 					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
 					case StatementType::LOAD_STATEMENT:
@@ -273,23 +276,11 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::DROP_STATEMENT:
 					case StatementType::ALTER_STATEMENT:
 					case StatementType::PRAGMA_STATEMENT:
+					case StatementType::INSERT_STATEMENT:
+					case StatementType::UPDATE_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
-						is_supported = true;
-						break;
 					case StatementType::CREATE_STATEMENT: {
-						auto &create_statement = statement->Cast<CreateStatement>();
-						switch (create_statement.info->type) {
-						case CatalogType::INDEX_ENTRY:
-						case CatalogType::MACRO_ENTRY:
-						case CatalogType::SCHEMA_ENTRY:
-						case CatalogType::SECRET_ENTRY:
-						case CatalogType::SEQUENCE_ENTRY:
-						case CatalogType::TYPE_ENTRY:
-							is_supported = true;
-							break;
-						default:
-							is_supported = false;
-						}
+						is_supported = true;
 						break;
 					}
 					default:

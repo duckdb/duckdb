@@ -3,10 +3,10 @@ from pathlib import Path
 import sys
 import argparse
 
-GRAMMAR_DIR = Path("../extension/autocomplete/grammar/statements")
-TRANSFORMER_DIR = Path("../extension/autocomplete/transformer")
-FACTORY_REG_FILE = Path("../extension/autocomplete/transformer/peg_transformer_factory.cpp")
-FACTORY_HPP_FILE = Path("../extension/autocomplete/include/transformer/peg_transformer.hpp")
+GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
+TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
+FACTORY_REG_FILE = Path("extension/autocomplete/transformer/peg_transformer_factory.cpp")
+FACTORY_HPP_FILE = Path("extension/autocomplete/include/transformer/peg_transformer.hpp")
 
 # Matches: RuleName <- ...
 GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
@@ -23,11 +23,46 @@ REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)
 EXCLUDED_RULES = {
     "FunctionType",
     "IfExists",
+    "Database",
     "AbortOrRollback",
     "CommitOrEnd",
     "StartOrBegin",
     "Transaction",
     "VariableAssign",
+    "MacroOrFunction",
+    "SettingScope",
+    "ColLabel",
+    "MacroOrFunction",
+    "GroupingOrGroupingId",
+    "DefaultValues",
+    "RowOrRows",
+    "Recursive",
+    "StarSymbol",
+    "IfNotExists",
+    "PlainIdentifier",
+    "QuotedIdentifier",
+    "CreateTableColumnElement",
+    "OrReplace",
+    "ReservedIdentifier",
+    "CatalogName",
+    "SchemaName",
+    "ReservedSchemaName",
+    "ReservedIdentifier",
+    "TableName",
+    "ReservedTableName",
+    "ColumnName",
+    "ReservedColumnName",
+    "FunctionName",
+    "ReservedFunctionName",
+    "TableFunctionName",
+    "TypeName",
+    "PragmaName",
+    "SettingName",
+    "CopyOptionName",
+    "AtTimeZoneOperator",
+    "Generated",
+    "ColumnConstraint",
+    "AlwaysOrByDefault",
 }
 
 

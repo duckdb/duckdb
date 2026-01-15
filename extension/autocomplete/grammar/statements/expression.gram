@@ -24,9 +24,14 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
 CastOrTryCast <- 'CAST' / 'TRY_CAST'
 
 StarExpression <- (ColId '.')* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE' (Parens(List(ExcludeName)) / ExcludeName)
+ExcludeList <- 'EXCLUDE' ExcludeNameList / ExcludeNameSingle
+ExcludeNameList <- Parens(List(ExcludeName))
+ExcludeNameSingle <- ExcludeName
 ExcludeName <- DottedIdentifier / ColIdOrString
-ReplaceList <- 'REPLACE' (Parens(List(ReplaceEntry)) / ReplaceEntry)
+ReplaceList <- 'REPLACE' ReplaceEntries
+ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
+ReplaceEntrySingle <- ReplaceEntry
+ReplaceEntryList <- Parens(List(ReplaceEntry))
 ReplaceEntry <- Expression 'AS' ColumnReference
 RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
 RenameEntry <- ColumnReference 'AS' Identifier
@@ -35,15 +40,25 @@ CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
-IntervalLiteral <- 'INTERVAL' IntervalParameter IntervalUnit?
-IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
+IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
+IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression
 IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
-FrameExtent <- ('BETWEEN' FrameBound 'AND' FrameBound) / FrameBound
-FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT' 'ROW') / (Expression 'PRECEDING') / (Expression 'FOLLOWING')
+FrameExtent <- BetweenFrameExtent / SingleFrameExtent
+SingleFrameExtent <- FrameBound
+BetweenFrameExtent <- 'BETWEEN' FrameBound 'AND' FrameBound
+FrameBound <- FrameUnbounded / FrameCurrentRow / FrameExpression
+FrameUnbounded <- 'UNBOUNDED' PrecedingOrFollowing
+FrameExpression <- Expression PrecedingOrFollowing
+FrameCurrentRow <- 'CURRENT' 'ROW'
+PrecedingOrFollowing <- 'PRECEDING' / 'FOLLOWING'
 WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
-WindowExcludeElement <- ('CURRENT' 'ROW') / 'GROUP' / 'TIES' / ('NO' 'OTHERS')
+WindowExcludeElement <- ExcludeCurrentRow / ExcludeGroup / ExcludeTies / ExcludeNoOthers
+ExcludeCurrentRow <- 'CURRENT' 'ROW'
+ExcludeGroup <- 'GROUP'
+ExcludeTies <- 'TIES'
+ExcludeNoOthers <- 'NO' 'OTHERS'
 OverClause <- 'OVER' WindowFrame
 WindowFrame <- WindowFrameDefinition / Identifier / ParensIdentifier
 ParensIdentifier <- Parens(Identifier)
@@ -71,7 +86,7 @@ ColLabelParameter <- '$' ColLabel
 PositionalExpression <- '#' NumberLiteral
 DefaultExpression <- 'DEFAULT'
 
-ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'
+ListComprehensionExpression <- '[' Expression 'FOR' List(ColIdOrString) 'IN' Expression ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF' Expression
 
 ParensExpression <- Parens(Expression)
@@ -137,7 +152,7 @@ OperatorGreaterThanEquals <- '>='
 # LEVEL 7
 BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
-LikeClause <- LikeVariations Expression EscapeClause?
+LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
 EscapeClause <- 'ESCAPE' Expression
 
 LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
@@ -150,7 +165,9 @@ NotLikeOp      <- '!~~'
 NotSimilarToOp <- '!~'
 
 InClause <- 'IN' InExpression
-InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
+InExpression <- InExpressionList / InSelectStatement / OtherOperatorExpression
+InExpressionList <- Parens(List(Expression))
+InSelectStatement <- Parens(SelectStatementInternal)
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
@@ -191,7 +208,8 @@ BaseExpression <- SingleExpression Indirection*
 
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
-DotOperator <- '.' (FunctionExpression / ColLabel)
+DotOperator <- '.' (MethodExpression / ColLabel)
+MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
@@ -199,16 +217,19 @@ StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
 
-SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
+TryExpression <- 'TRY' Parens(Expression)
 ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
-ExtractExpression <- 'EXTRACT' Parens(Expression 'FROM' Expression)
+ExtractExpression <- 'EXTRACT' Parens(ExtractArgument 'FROM' Expression)
 LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF' Parens(Expression ',' Expression)
 PositionExpression <- 'POSITION' Parens(Expression)
 RowExpression <- 'ROW' Parens(List(Expression))
-SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
+SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
+SubstringArguments <- SubstringParameters / SubstringExpressionList
+SubstringExpressionList <- List(Expression)
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
@@ -216,3 +237,8 @@ TrimBoth <- 'BOTH'
 TrimLeading <- 'LEADING'
 TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
+
+ExtractArgument <-
+    YearKeyword / MonthKeyword / DayKeyword / HourKeyword / MinuteKeyword / SecondKeyword /
+    MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
+    CenturyKeyword / MillenniumKeyword / Identifier / StringLiteral

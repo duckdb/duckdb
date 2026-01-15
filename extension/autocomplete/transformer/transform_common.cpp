@@ -86,7 +86,15 @@ int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &tran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto opt_array_size = list_pr.Child<OptionalParseResult>(1);
 	if (opt_array_size.HasResult()) {
-		return std::stoi(opt_array_size.optional_result->Cast<NumberParseResult>().number);
+		auto number = transformer.Transform<unique_ptr<ParsedExpression>>(opt_array_size.optional_result);
+		if (number->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			auto &const_number = number->Cast<ConstantExpression>();
+			if (!const_number.value.type().IsIntegral()) {
+				throw BinderException("Expected an integer as array bound instead of %s",
+				                      const_number.value.ToString());
+			}
+			return const_number.value.GetValue<int64_t>();
+		}
 	}
 	return -1;
 }
@@ -234,41 +242,48 @@ PEGTransformerFactory::TransformTypeModifiers(PEGTransformer &transformer, optio
 LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transformer,
                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto opt_modifiers = list_pr.Child<OptionalParseResult>(1);
+	vector<Value> modifiers;
+	if (opt_modifiers.HasResult()) {
+		auto modifier_expressions =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
+		for (const auto &modifier : modifier_expressions) {
+			if (modifier->GetExpressionClass() != ExpressionClass::CONSTANT) {
+				throw ParserException("Expected a constant as type modifier");
+			}
+			modifiers.push_back(modifier->Cast<ConstantExpression>().value);
+		}
+	}
 	auto qualified_type_or_character = list_pr.Child<ListParseResult>(0);
 	auto type_or_character_pr = qualified_type_or_character.Child<ChoiceParseResult>(0).result;
 	LogicalType result;
 	if (type_or_character_pr->name == "QualifiedTypeName") {
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
+		if (modifiers.size() > 9) {
+			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", qualified_type_name.name);
+		}
+		if (qualified_type_name.schema.empty()) {
+			qualified_type_name.schema = qualified_type_name.catalog;
+			qualified_type_name.catalog = INVALID_CATALOG;
+		}
 		if (result.id() == LogicalTypeId::USER) {
-			vector<Value> modifiers;
-			if (qualified_type_name.schema.empty()) {
-				qualified_type_name.schema = qualified_type_name.catalog;
-				qualified_type_name.catalog = INVALID_CATALOG;
-			}
 			result = LogicalType::USER(qualified_type_name.catalog, qualified_type_name.schema,
 			                           qualified_type_name.name, std::move(modifiers));
+		} else if (result.id() == LogicalTypeId::ENUM) {
+			Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(modifiers.size()));
+			auto string_data = FlatVector::GetData<string_t>(enum_vector);
+			idx_t pos = 0;
+			for (auto modifier : modifiers) {
+				string_data[pos++] = StringVector::AddString(enum_vector, modifier.ToString());
+			}
+			return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(modifiers.size()));
 		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);
 	} else {
 		throw InternalException("Unexpected rule %s encountered in SimpleType", type_or_character_pr->name);
 	}
-	auto opt_modifiers = list_pr.Child<OptionalParseResult>(1);
-	vector<unique_ptr<ParsedExpression>> modifiers;
-	if (opt_modifiers.HasResult()) {
-		modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
-		for (const auto &modifier : modifiers) {
-			if (modifier->GetExpressionClass() == ExpressionClass::CONSTANT) {
-				continue;
-			}
-			throw ParserException("Expected a constant as type modifier");
-		}
-		if (modifiers.size() > 9) {
-			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", result.GetAlias());
-		}
-	}
-	// TODO(Dtenwolde) add modifiers
 	return result;
 }
 
@@ -319,10 +334,38 @@ LogicalType PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
 	return LogicalType::STRUCT(colid_list);
 }
 
+LogicalType PEGTransformerFactory::TransformGeometryType(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto crs_opt = list_pr.Child<OptionalParseResult>(1);
+	if (crs_opt.HasResult()) {
+		auto extract_parens = ExtractResultFromParens(crs_opt.optional_result);
+		auto crs = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+		if (!(crs->GetExpressionClass() == ExpressionClass::CONSTANT)) {
+			throw ParserException("Geometry CRS expected a constant expression");
+		}
+		auto &const_crs = crs->Cast<ConstantExpression>();
+		return LogicalType::GEOMETRY(const_crs.value.GetValue<string>());
+	}
+	return LogicalType::GEOMETRY();
+}
+
+LogicalType PEGTransformerFactory::TransformVariantType(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	return LogicalType::VARIANT();
+}
+
 LogicalType PEGTransformerFactory::TransformUnionType(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto colid_list = transformer.Transform<child_list_t<LogicalType>>(list_pr.Child<ListParseResult>(1));
+	case_insensitive_string_set_t union_names;
+	for (auto &colid : colid_list) {
+		if (union_names.find(colid.first) != union_names.end()) {
+			throw ParserException("Duplicate union type tag name \"%s\"", colid.first);
+		}
+		union_names.insert(colid.first);
+	}
 	return LogicalType::UNION(colid_list);
 }
 
@@ -385,6 +428,52 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
 		throw ParserException("Interval TO is not supported");
 	}
 	return transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+}
+
+bool PEGTransformerFactory::TryNegateValue(Value &val) {
+	switch (val.type().id()) {
+	case LogicalTypeId::INTEGER:
+		if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
+			val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
+			return true;
+		}
+		val = Value::INTEGER(-val.GetValue<int32_t>());
+		return true;
+
+	case LogicalTypeId::BIGINT:
+		if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
+			val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
+			return true;
+		}
+		val = Value::BIGINT(-val.GetValue<int64_t>());
+		return true;
+
+	case LogicalTypeId::HUGEINT:
+		val = Value::HUGEINT(-val.GetValue<hugeint_t>());
+		return true;
+
+	case LogicalTypeId::UHUGEINT: {
+		auto uval = val.GetValue<uhugeint_t>();
+		uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
+
+		if (uval == abs_min_hugeint) {
+			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+			return true;
+		}
+		if (uval < abs_min_hugeint) {
+			val = Value::HUGEINT(-((hugeint_t)uval));
+			return true;
+		}
+
+		return false;
+	}
+
+	case LogicalTypeId::DOUBLE:
+		val = Value::DOUBLE(-val.GetValue<double>());
+		return true;
+	default:
+		return false;
+	}
 }
 
 // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
