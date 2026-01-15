@@ -256,4 +256,12 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 
 	// If we allocate one more page, it will fail.
 	REQUIRE_THROWS(buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, /*can_destroy=*/true));
+
+	// Check non-evictable entries are still there untouched, and overall memory usage is equal to memory limit.
+	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
+		auto obj = cache.GetObject(StringUtil::Format("non-evictable-obj%llu", idx));
+		REQUIRE(obj != nullptr);
+	}
+	const auto final_memory_usage = buffer_manager.GetUsedMemory();
+	REQUIRE(final_memory_usage == total_memory_limit);
 }
