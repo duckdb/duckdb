@@ -618,19 +618,20 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// both sides have correlation
 		// turn into an inner join
+		// correctly use left child's delim_offset so execute left child as the last one
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		plan->children[0] =
-		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
-		auto left_binding = this->base_binding;
 		plan->children[1] =
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
+		auto right_binding = this->base_binding;
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
 			cond.left = make_uniq<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-			cond.right = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			cond.right = make_uniq<BoundColumnRefExpression>(
+			    correlated_columns[i].type, ColumnBinding(right_binding.table_index, right_binding.column_index + i));
 			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			join->conditions.push_back(std::move(cond));
 		}
