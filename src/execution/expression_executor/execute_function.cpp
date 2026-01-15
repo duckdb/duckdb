@@ -120,7 +120,6 @@ void ExecuteFunctionState::ResetDictionaryStates() {
 
 	// Clear the cached dictionary information
 	current_input_dictionary_id.clear();
-	output_dictionary_id.clear();
 	output_dictionary.reset();
 
 	for (const auto &child_state : child_states) {

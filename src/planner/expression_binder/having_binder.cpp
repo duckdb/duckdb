@@ -92,8 +92,4 @@ BindResult HavingBinder::BindWindow(WindowExpression &expr, idx_t depth) {
 	throw BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!");
 }
 
-bool HavingBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
-	return column_alias_binder.QualifyColumnAlias(colref);
-}
-
 } // namespace duckdb
