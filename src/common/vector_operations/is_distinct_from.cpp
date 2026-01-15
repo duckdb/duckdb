@@ -913,22 +913,16 @@ idx_t DistinctSelectVariant(Vector &left, Vector &right, idx_t count, const Sele
 			}
 		} else {
 			// Both non-NULL, convert to Values and use appropriate Value operation
-			auto left_structured_type = VariantUtils::GetTypeOfValue(left_variant, i, 0);
-			auto right_structured_type = VariantUtils::GetTypeOfValue(right_variant, i, 0);
+			auto left_val = VariantUtils::ConvertVariantToValue(left_variant, i, 0);
+			auto right_val = VariantUtils::ConvertVariantToValue(right_variant, i, 0);
 
 			LogicalType max_logical_type;
-			auto res = LogicalType::TryGetMaxLogicalTypeUnchecked(left_structured_type, right_structured_type,
-			                                                      max_logical_type);
+			auto res = LogicalType::TryGetMaxLogicalTypeUnchecked(left_val.type(), right_val.type(), max_logical_type);
 			if (!res) {
-				Value left_val = left.GetValue(i);
-				Value right_val = right.GetValue(i);
 				throw InvalidInputException(
 				    "Can't compare values of type %s (%s) and type %s (%s) - an explicit cast is required",
-				    left_structured_type.ToString(), left_val.ToString(), right_structured_type.ToString(),
-				    right_val.ToString());
+				    left_val.type().ToString(), left_val.ToString(), right_val.type().ToString(), right_val.ToString());
 			}
-			Value left_val = left.GetValue(i);
-			Value right_val = right.GetValue(i);
 
 			if (std::is_same<OP, duckdb::DistinctFrom>::value) {
 				comparison_result = ValueOperations::DistinctFrom(left_val, right_val);
