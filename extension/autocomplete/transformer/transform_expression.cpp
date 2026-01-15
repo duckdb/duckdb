@@ -1861,6 +1861,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 	    transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.Child<ListParseResult>(2)));
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		result = unique_ptr_cast<ParsedExpression, StarExpression>(std::move(expr));
+	} else if (expr->GetExpressionType() == ExpressionType::LAMBDA) {
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(make_uniq<StarExpression>());
+		children.push_back(std::move(expr));
+		auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(children));
+		result->expr = std::move(list_filter);
 	} else {
 		result->expr = std::move(expr);
 	}
