@@ -50,7 +50,8 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                             const BaseStatistics &old_stats) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -62,6 +63,8 @@ public:
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(shared_ptr<ColumnData> child_column_p);
+
+	const BaseStatistics &GetChildStats(const ColumnData &child) const override;
 
 protected:
 	//! The child-column of the list

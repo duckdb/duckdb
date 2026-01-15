@@ -104,6 +104,20 @@ index c2e2972..4dbb737 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/storage/ducklake_autoload_helper.cpp b/src/storage/ducklake_autoload_helper.cpp
+index 3d8396f..7237e72 100644
+--- a/src/storage/ducklake_autoload_helper.cpp
++++ b/src/storage/ducklake_autoload_helper.cpp
+@@ -27,8 +27,7 @@ void DuckLakeInitializer::CheckAndAutoloadedRequiredExtension(const string &patt
+ 
+ 	string required_extension = LookupExtensionForPattern(pattern);
+ 	if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
+-		auto &dbconfig = DBConfig::GetConfig(context);
+-		if (!ExtensionHelper::CanAutoloadExtension(required_extension) || !dbconfig.options.autoload_known_extensions) {
++		if (!ExtensionHelper::CanAutoloadExtension(required_extension) || !Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
+ 			auto error_message =
+ 			    "Data path " + pattern + " requires the extension " + required_extension + " to be loaded";
+ 			error_message =
 diff --git a/src/storage/ducklake_delete.cpp b/src/storage/ducklake_delete.cpp
 index 024a1c2..69f6466 100644
 --- a/src/storage/ducklake_delete.cpp
@@ -118,7 +132,7 @@ index 024a1c2..69f6466 100644
  	auto &global_state = sink_state->Cast<DuckLakeDeleteGlobalState>();
  	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_deleted_count));
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
-index d14f968..d15212a 100644
+index d14f968..354ed70 100644
 --- a/src/storage/ducklake_insert.cpp
 +++ b/src/storage/ducklake_insert.cpp
 @@ -205,7 +205,7 @@ SinkResultType DuckLakeInsert::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -130,6 +144,15 @@ index d14f968..d15212a 100644
                                           OperatorSourceInput &input) const {
  	auto &global_state = sink_state->Cast<DuckLakeInsertGlobalState>();
  	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_insert_count));
+@@ -250,7 +250,7 @@ CopyFunctionCatalogEntry &DuckLakeFunctions::GetCopyFunction(ClientContext &cont
+ 	// name), but that do not offer enough control
+ 	auto &db = *context.db;
+ 	string extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_COPY_FUNCTIONS);
+-	if (!extension_name.empty() && db.config.options.autoload_known_extensions &&
++	if (!extension_name.empty() && Settings::Get<AutoloadKnownExtensionsSetting>(context) &&
+ 	    ExtensionHelper::CanAutoloadExtension(extension_name)) {
+ 		// This will either succeed or throw
+ 		ExtensionHelper::AutoLoadExtension(db, extension_name);
 diff --git a/src/storage/ducklake_merge_into.cpp b/src/storage/ducklake_merge_into.cpp
 index 51ffef0..e55ffd0 100644
 --- a/src/storage/ducklake_merge_into.cpp
@@ -193,6 +216,19 @@ index 7ebb3ed..5fe0a8e 100644
  		result.push_back(std::move(info));
  	}
  	return result;
+diff --git a/src/storage/ducklake_transaction_manager.cpp b/src/storage/ducklake_transaction_manager.cpp
+index 4ebc45f..d8ffb3d 100644
+--- a/src/storage/ducklake_transaction_manager.cpp
++++ b/src/storage/ducklake_transaction_manager.cpp
+@@ -11,7 +11,7 @@ DuckLakeTransactionManager::DuckLakeTransactionManager(AttachedDatabase &db_p, D
+ Transaction &DuckLakeTransactionManager::StartTransaction(ClientContext &context) {
+ 	auto transaction = make_shared_ptr<DuckLakeTransaction>(ducklake_catalog, *this, context);
+ 	transaction->Start();
+-	if (DBConfig::GetSetting<ImmediateTransactionModeSetting>(context) && get_snapshot) {
++	if (Settings::Get<ImmediateTransactionModeSetting>(context) && get_snapshot) {
+ 		get_snapshot = false;
+ 		// no snapshot loaded yet for this transaction - load it
+ 		transaction->GetSnapshot();
 diff --git a/src/storage/ducklake_update.cpp b/src/storage/ducklake_update.cpp
 index f0bd68e..74d645f 100644
 --- a/src/storage/ducklake_update.cpp

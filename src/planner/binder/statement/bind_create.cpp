@@ -167,7 +167,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
 
-	bool should_create_dependencies = DBConfig::GetSetting<EnableViewDependenciesSetting>(context);
+	bool should_create_dependencies = Settings::Get<EnableViewDependenciesSetting>(context);
 	if (should_create_dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
@@ -331,7 +331,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
-		const auto should_create_dependencies = DBConfig::GetSetting<EnableMacroDependenciesSetting>(context);
+		const auto should_create_dependencies = Settings::Get<EnableMacroDependenciesSetting>(context);
 		const auto binder_callback = [&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
 				// Don't register any cross-catalog dependencies
