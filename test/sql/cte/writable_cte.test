@@ -435,6 +435,68 @@ SELECT * FROM upd;
 2	even
 
 # =============================================================================
+# Nested CTEs inside DML CTE (WITH before DML - standard PostgreSQL syntax)
+# =============================================================================
+
+statement ok
+CREATE TABLE t_nested_cte (id INTEGER);
+
+# This is the standard PostgreSQL syntax: WITH clause before the DML statement
+query I
+WITH dml_cte AS (
+  WITH inner_cte AS (SELECT 1 AS id)
+  INSERT INTO t_nested_cte
+  SELECT id FROM inner_cte
+  RETURNING id
+)
+SELECT * FROM dml_cte;
+----
+1
+
+# Verify data was inserted
+query I
+SELECT * FROM t_nested_cte;
+----
+1
+
+# Test UPDATE with nested CTE (WITH before UPDATE)
+statement ok
+TRUNCATE t_nested_cte;
+
+statement ok
+INSERT INTO t_nested_cte VALUES (1);
+
+query I
+WITH dml_cte AS (
+  WITH multiplier AS (SELECT 10 AS mult)
+  UPDATE t_nested_cte SET id = id * (SELECT mult FROM multiplier)
+  RETURNING id
+)
+SELECT * FROM dml_cte;
+----
+10
+
+# Test DELETE with nested CTE (WITH before DELETE)
+query I
+WITH dml_cte AS (
+  WITH threshold AS (SELECT 5 AS val)
+  DELETE FROM t_nested_cte WHERE id > (SELECT val FROM threshold)
+  RETURNING id
+)
+SELECT * FROM dml_cte;
+----
+10
+
+# Verify table is now empty
+query I
+SELECT COUNT(*) FROM t_nested_cte;
+----
+0
+
+statement ok
+DROP TABLE t_nested_cte;
+
+# =============================================================================
 # Clean up
 # =============================================================================
 

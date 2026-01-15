@@ -117,7 +117,10 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			}
 			// Wrap the DML statement in a SelectStatement via StatementNode
 			info->query = make_uniq<SelectStatement>();
+			// Copy inner CTEs before moving the statement (for WITH ... INSERT ... syntax)
+			auto inner_ctes = insert->cte_map.Copy();
 			info->query->node = make_uniq<StatementNode>(std::move(insert));
+			info->query->node->cte_map = std::move(inner_ctes);
 			is_dml_cte = true;
 			break;
 		}
@@ -134,7 +137,10 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			}
 			// Wrap the DML statement in a SelectStatement via StatementNode
 			info->query = make_uniq<SelectStatement>();
+			// Copy inner CTEs before moving the statement (for WITH ... UPDATE ... syntax)
+			auto inner_ctes = update->cte_map.Copy();
 			info->query->node = make_uniq<StatementNode>(std::move(update));
+			info->query->node->cte_map = std::move(inner_ctes);
 			is_dml_cte = true;
 			break;
 		}
@@ -151,7 +157,10 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			}
 			// Wrap the DML statement in a SelectStatement via StatementNode
 			info->query = make_uniq<SelectStatement>();
+			// Copy inner CTEs before moving the statement (for WITH ... DELETE ... syntax)
+			auto inner_ctes = del->cte_map.Copy();
 			info->query->node = make_uniq<StatementNode>(std::move(del));
+			info->query->node->cte_map = std::move(inner_ctes);
 			is_dml_cte = true;
 			break;
 		}
