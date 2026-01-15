@@ -27,12 +27,13 @@ void OpenerFileSystem::VerifyCanAccessFileInternal(const string &path, FileType 
 }
 
 void OpenerFileSystem::VerifyCanWriteFile(const string &path) {
-
+	// Goal here is checkign whether path is NOT within the current extension folder, we check in a somewhat inefficient
+	// way by converting both path to be checked AND extension path to absolute paths, normalizing, and then checking
+	// for a match
 	auto opener = GetOpener();
 	if (!opener) {
 		return;
 	}
-
 	auto db = opener->TryGetDatabase();
 	if (!db) {
 		return;
@@ -52,7 +53,6 @@ void OpenerFileSystem::VerifyCanWriteFile(const string &path) {
 	if (extension_folder[0] != '/') {
 		extension_folder = config.SanitizeAllowedPath(GetWorkingDirectory() + '/' + extension_folder);
 	}
-
 	// Now extension folder is absolute
 
 	string absolute_path = "";
