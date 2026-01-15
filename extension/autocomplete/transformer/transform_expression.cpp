@@ -837,11 +837,19 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
 		auto &operator_expr = between_in_like_expr->Cast<OperatorExpression>();
 		operator_expr.children.insert(operator_expr.children.begin(), std::move(expr));
-		expr = std::move(between_in_like_expr);
+		if (has_not) {
+			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_in_like_expr));
+		} else {
+			expr = std::move(between_in_like_expr);
+		}
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subquery_expr = between_in_like_expr->Cast<SubqueryExpression>();
 		subquery_expr.child = std::move(expr);
-		expr = std::move(between_in_like_expr);
+		if (has_not) {
+			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_in_like_expr));
+		} else {
+			expr = std::move(between_in_like_expr);
+		}
 	}
 	return expr;
 }
@@ -852,13 +860,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeOp(PEG
 	auto not_expr = list_pr.Child<OptionalParseResult>(0);
 	auto inner_list = list_pr.Child<ListParseResult>(1);
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list.Child<ChoiceParseResult>(0).result);
-	if (!not_expr.HasResult()) {
-		return expr;
-	}
-	// Don't handle the OPERATOR_NOT here for functions such as contains and like since those are special cases
-	if (expr->GetExpressionType() == ExpressionType::COMPARE_IN) {
-		expr->type = ExpressionType::COMPARE_NOT_IN;
-	}
 	return expr;
 }
 
