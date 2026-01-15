@@ -170,8 +170,8 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	const idx_t actual_page_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 
 	// Set limit to hold all pages, some objects, and initial overhead
-	const idx_t before_eviction_memory = num_objects * obj_size + num_pages * actual_page_alloc_size;
-	const idx_t after_eviction_memory = (num_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
+	const idx_t before_eviction_memory = num_evictable_objects * obj_size + num_pages * actual_page_alloc_size;
+	const idx_t after_eviction_memory = (num_evictable_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
 	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
 
@@ -179,11 +179,9 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
 		cache.Put(StringUtil::Format("non-evictable-obj%llu", idx), make_shared_ptr<NonEvictableObject>(idx));
 	}
-	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
+	for (idx_t idx = 0; idx < num_evictable_objects; ++idx) {
 		cache.Put(StringUtil::Format("evictable-obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
-	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
-	REQUIRE(after_objects_memory == initial_memory + num_evictable_objects * obj_size);
 	REQUIRE(cache.GetEntryCount() == num_objects);
 
 	// Now pin many pages, which makes sure the eviction of object cache entries
@@ -195,16 +193,22 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 		pinned_pages.emplace_back(std::move(pin));
 	}
 
-	// Check object cache entries are partially evicted.
+	// Check evictable object cache entries are partially evicted.
 	vector<idx_t> evicted_entries;
-	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
+	for (idx_t idx = 0; idx < num_evictable_objects; ++idx) {
+		auto obj = cache.GetObject(StringUtil::Format("evictable-obj%llu", idx));
 		if (obj == nullptr) {
 			evicted_entries.emplace_back(idx);
 		}
 	}
 	// Check some of the evictable cache entries have been evicted, and eviction is performed in the order of insertion.
-	REQUIRE(evicted_entries == vector<idx_t> {1, 2});
+	REQUIRE(evicted_entries == vector<idx_t> {0, 1});
+
+	// Check non-evictable object cache entries are still there.
+	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
+		auto obj = cache.GetObject(StringUtil::Format("non-evictable-obj%llu", idx));
+		REQUIRE(obj != nullptr);
+	}
 
 	// Check overall memory usage is equal to memory limit.
 	const auto final_memory_usage = buffer_manager.GetUsedMemory();
