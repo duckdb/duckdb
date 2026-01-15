@@ -142,6 +142,11 @@ public:
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports sztd
 	auto &storage = col_data.GetStorageManager();
+	auto &block_manager = col_data.GetBlockManager();
+	if (block_manager.InMemory()) {
+		//! Can't use ZSTD in in-memory environment
+		return nullptr;
+	}
 	if (storage.GetStorageVersion() < 4) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
