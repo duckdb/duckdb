@@ -919,6 +919,22 @@ Value Value::BIGNUM(const string &data) {
 	return result;
 }
 
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
+	Value result;
+	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
+	Value result;
+	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
@@ -1611,6 +1627,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:

@@ -11,86 +11,86 @@ statement ok
 CALL dbgen(sf=0);
 
 query II
-FROM sql_auto_complete('SELECT l_ord') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_ord') LIMIT 1;
 ----
 l_orderkey	7
 
 # arithmetic
 query II
-FROM sql_auto_complete('SELECT 1 + l_ord') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT 1 + l_ord') LIMIT 1;
 ----
 l_orderkey	11
 
 # function calls
 query II
-FROM sql_auto_complete('SELECT min(l_ord') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT min(l_ord') LIMIT 1;
 ----
 l_orderkey	11
 
 query II
-FROM sql_auto_complete('SELECT min(42, l_ord') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT min(42, l_ord') LIMIT 1;
 ----
 l_orderkey	15
 
 # like
 query II
-FROM sql_auto_complete('SELECT ''test_string'' LIKE l_c') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT ''test_string'' LIKE l_c') LIMIT 1;
 ----
 l_comment	26
 
 query II
-FROM sql_auto_complete('SELECT l_orderkey FROM lin') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_orderkey FROM lin') LIMIT 1;
 ----
 lineitem	23
 
 query II
-FROM sql_auto_complete('SELECT l_orderkey FROM lineitem, ord') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_orderkey FROM lineitem, ord') LIMIT 1;
 ----
 orders	33
 
 query II
-FROM sql_auto_complete('SELECT l_orderkey FROM lineitem JOIN ord') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_orderkey FROM lineitem JOIN ord') LIMIT 1;
 ----
 orders	37
 
 query II
-FROM sql_auto_complete('SELECT (SELECT SUM(l_orderkey) FROM lineit') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT (SELECT SUM(l_orderkey) FROM lineit') LIMIT 1;
 ----
 lineitem	36
 
 query II
-FROM sql_auto_complete('SELECT * FROM (FROM lineit') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM (FROM lineit') LIMIT 1;
 ----
 lineitem	20
 
 query II
-FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
 ----
 lineitem	12
 
 query II
-FROM sql_auto_complete('DROP TABLE lin') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE lin') LIMIT 1;
 ----
 lineitem	11
 
 query II
-FROM sql_auto_complete('COPY lin') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('COPY lin') LIMIT 1;
 ----
 lineitem	5
 
 query II
-FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
 ----
 nation	11
 
-query II
-SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_su') LIMIT 1;
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_su') LIMIT 1;
 ----
-ps_suppkey	44
+ps_suppkey	44	column
 
 # more complex queries
 query II
-FROM sql_auto_complete($$
+SELECT suggestion, suggestion_start FROM sql_auto_complete($$
 SELECT
     nation,
     o_year,
@@ -118,7 +118,7 @@ FROM (
 n_nationkey	552
 
 query II
-FROM sql_auto_complete($$
+SELECT suggestion, suggestion_start FROM sql_auto_complete($$
 SELECT
     l_returnflag,
     l_linestatus,
@@ -140,7 +140,7 @@ GROUP BY
 l_returnflag	470
 
 query II
-FROM sql_auto_complete($$
+SELECT suggestion, suggestion_start FROM sql_auto_complete($$
 SELECT
     nation,
     o_year,

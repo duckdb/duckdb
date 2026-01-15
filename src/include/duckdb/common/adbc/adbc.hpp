@@ -18,10 +18,18 @@ namespace duckdb_adbc {
 
 class AppenderWrapper {
 public:
-	AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
-		if (duckdb_appender_create(conn, schema, table, &appender) != DuckDBSuccess) {
-			appender = nullptr;
+	AppenderWrapper(duckdb_connection conn, const char *catalog, const char *schema, const char *table)
+	    : appender(nullptr) {
+		// Note: duckdb_appender_create_ext allocates an internal wrapper even on failure.
+		// If creation fails, make sure to destroy it to avoid leaking.
+		auto created = duckdb_appender(nullptr);
+		if (duckdb_appender_create_ext(conn, catalog, schema, table, &created) != DuckDBSuccess) {
+			if (created) {
+				duckdb_appender_destroy(&created);
+			}
+			return;
 		}
+		appender = created;
 	}
 	~AppenderWrapper() {
 		if (appender) {

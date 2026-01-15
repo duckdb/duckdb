@@ -23,6 +23,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
@@ -32,6 +33,7 @@
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -75,7 +77,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	if (db_manager) {
-		db_manager->ResetDatabases(scheduler);
+		db_manager->ResetDatabases();
 	}
 	// destroy child elements
 	connection_manager.reset();
@@ -87,13 +89,12 @@ DatabaseInstance::~DatabaseInstance() {
 	log_manager.reset();
 
 	external_file_cache.reset();
+	result_set_manager.reset();
 
 	buffer_manager.reset();
 
 	// flush allocations and disable the background thread
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	config.block_allocator->FlushAll();
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
@@ -199,10 +200,8 @@ void DatabaseInstance::CreateMainDatabase() {
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
-	initial_database->SetInitialDatabase();
-	initial_database->Initialize(*con.context);
-	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
+	options.is_main_database = true;
+	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();
 }
 
@@ -221,7 +220,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 	// copy the map, to protect against modifications during
 	auto unrecognized_options_copy = config.options.unrecognized_options;
 
-	if (config.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(*this)) {
 		if (unrecognized_options_copy.empty()) {
 			// Nothing to do
 			return;
@@ -244,14 +243,14 @@ void DatabaseInstance::LoadExtensionSettings() {
 				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
 				    extension_name);
 			}
-			auto it = config.extension_parameters.find(name);
-			if (it == config.extension_parameters.end()) {
+			ExtensionOption extension_option;
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
 			}
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
+			PhysicalSet::SetExtensionVariable(context, extension_option, name, SetScope::GLOBAL, value);
 			extension_options.push_back(name);
 		}
 
@@ -288,7 +287,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
-	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
+	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
+	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
@@ -323,7 +324,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.options.maximum_threads, config.options.external_threads);
+	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	scheduler->RelaunchThreads();
 }
 
@@ -384,6 +385,10 @@ ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
 }
 
+ResultSetManager &DatabaseInstance::GetResultSetManager() {
+	return *result_set_manager;
+}
+
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
 	return *connection_manager;
 }
@@ -410,8 +415,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+	config.user_settings = new_config.user_settings;
 
-	if (config.options.duckdb_api.empty()) {
+	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
 	}
 
@@ -428,13 +434,12 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
-	config.extension_parameters = new_config.extension_parameters;
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
-	if (database_path && !config.options.enable_external_access) {
+	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));
 		if (!config.options.temporary_directory.empty()) {
@@ -457,6 +462,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
 	}
+	auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
+	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
+	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
+	                                                   config.options.block_allocator_size);
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
 	config.error_manager = std::move(new_config.error_manager);
@@ -469,7 +478,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
+		config.buffer_pool = make_shared_ptr<BufferPool>(*config.block_allocator, config.options.maximum_memory,
 		                                                 config.options.buffer_manager_track_eviction_timestamps,
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}

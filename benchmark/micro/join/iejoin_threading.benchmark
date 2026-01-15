@@ -1,0 +1,26 @@
+# name: benchmark/micro/join/iejoin_threading.benchmark
+# description: Performance of IEJoin with 100% selective interval join.
+# group: [join]
+
+name IEJoin with 100% selectivity
+group join
+
+argument sf 10000000
+
+load
+create or replace table tleft as
+	select 
+		i as k100,
+		'2024-01-01'::TIMESTAMP + INTERVAL (i) seconds as b100,
+		b100 + INTERVAL 1 second as e100,
+	from range(${sf}) as tbl(i);
+
+run
+select count(*)
+from (
+	select lhs.k100, rhs.k100,
+	from tleft lhs
+	inner join tleft rhs
+		on lhs.b100 < rhs.e100
+		and rhs.b100 < lhs.e100
+) 

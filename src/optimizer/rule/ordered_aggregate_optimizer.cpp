@@ -24,7 +24,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 		// no ORDER BYs defined
 		return nullptr;
 	}
-	if (aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+	if (aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
 		// not an order dependent aggregate but we have an ORDER BY clause - remove it
 		aggr.order_bys.reset();
 		changes_made = true;

@@ -17,7 +17,6 @@
 namespace duckdb {
 
 static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const vector<LogicalType> &child_types) {
-
 	idx_t param_count;
 	switch (window_type) {
 	case ExpressionType::WINDOW_RANK:
@@ -115,7 +114,6 @@ static bool IsFillType(const LogicalType &type) {
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
-
 	vector<unique_ptr<Expression>> children;
 
 	D_ASSERT(order_expr.get());

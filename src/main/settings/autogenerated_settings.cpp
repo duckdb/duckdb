@@ -35,91 +35,10 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Allocator Background Threads
+// Allow Parser Override Extension
 //===----------------------------------------------------------------------===//
-void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allocator_background_threads = input.GetValue<bool>();
-}
-
-void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allocator_background_threads = DBConfigOptions().allocator_background_threads;
-}
-
-Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allocator_background_threads);
-}
-
-//===----------------------------------------------------------------------===//
-// Allow Community Extensions
-//===----------------------------------------------------------------------===//
-void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allow_community_extensions = input.GetValue<bool>();
-}
-
-void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allow_community_extensions = DBConfigOptions().allow_community_extensions;
-}
-
-Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_community_extensions);
-}
-
-//===----------------------------------------------------------------------===//
-// Allow Unredacted Secrets
-//===----------------------------------------------------------------------===//
-void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allow_unredacted_secrets = input.GetValue<bool>();
-}
-
-void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allow_unredacted_secrets = DBConfigOptions().allow_unredacted_secrets;
-}
-
-Value AllowUnredactedSecretsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_unredacted_secrets);
-}
-
-//===----------------------------------------------------------------------===//
-// Allow Unsigned Extensions
-//===----------------------------------------------------------------------===//
-void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.allow_unsigned_extensions = input.GetValue<bool>();
-}
-
-void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.allow_unsigned_extensions = DBConfigOptions().allow_unsigned_extensions;
-}
-
-Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.allow_unsigned_extensions);
+void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<AllowParserOverride>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -130,74 +49,10 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
-// Autoinstall Extension Repository
-//===----------------------------------------------------------------------===//
-void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_extension_repo = input.GetValue<string>();
-}
-
-void AutoinstallExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_extension_repo = DBConfigOptions().autoinstall_extension_repo;
-}
-
-Value AutoinstallExtensionRepositorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.autoinstall_extension_repo);
-}
-
-//===----------------------------------------------------------------------===//
-// Autoinstall Known Extensions
-//===----------------------------------------------------------------------===//
-void AutoinstallKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_known_extensions = input.GetValue<bool>();
-}
-
-void AutoinstallKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoinstall_known_extensions = DBConfigOptions().autoinstall_known_extensions;
-}
-
-Value AutoinstallKnownExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.autoinstall_known_extensions);
-}
-
-//===----------------------------------------------------------------------===//
-// Autoload Known Extensions
-//===----------------------------------------------------------------------===//
-void AutoloadKnownExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoload_known_extensions = input.GetValue<bool>();
-}
-
-void AutoloadKnownExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.autoload_known_extensions = DBConfigOptions().autoload_known_extensions;
-}
-
-Value AutoloadKnownExtensionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.autoload_known_extensions);
-}
-
-//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.checkpoint_wal_size = DBConfigOptions().checkpoint_wal_size;
-}
-
-//===----------------------------------------------------------------------===//
-// Custom Extension Repository
-//===----------------------------------------------------------------------===//
-void CustomExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.custom_extension_repo = input.GetValue<string>();
-}
-
-void CustomExtensionRepositorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.custom_extension_repo = DBConfigOptions().custom_extension_repo;
-}
-
-Value CustomExtensionRepositorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.custom_extension_repo);
 }
 
 //===----------------------------------------------------------------------===//
@@ -233,6 +88,13 @@ Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Physical Table Scan Execution Strategy
+//===----------------------------------------------------------------------===//
+void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Verify Vector
 //===----------------------------------------------------------------------===//
 void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -244,66 +106,6 @@ void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Disable Database Invalidation
-//===----------------------------------------------------------------------===//
-void DisableDatabaseInvalidationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.disable_database_invalidation = input.GetValue<bool>();
-}
-
-void DisableDatabaseInvalidationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.disable_database_invalidation = DBConfigOptions().disable_database_invalidation;
-}
-
-Value DisableDatabaseInvalidationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.disable_database_invalidation);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable External Access
-//===----------------------------------------------------------------------===//
-void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.enable_external_access = input.GetValue<bool>();
-}
-
-void EnableExternalAccessSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.enable_external_access = DBConfigOptions().enable_external_access;
-}
-
-Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.enable_external_access);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable H T T P Metadata Cache
-//===----------------------------------------------------------------------===//
-void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_metadata_cache_enable = input.GetValue<bool>();
-}
-
-void EnableHTTPMetadataCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_metadata_cache_enable = DBConfigOptions().http_metadata_cache_enable;
-}
-
-Value EnableHTTPMetadataCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.http_metadata_cache_enable);
 }
 
 //===----------------------------------------------------------------------===//
@@ -330,218 +132,45 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Errors As J S O N
-//===----------------------------------------------------------------------===//
-void ErrorsAsJSONSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.errors_as_json = input.GetValue<bool>();
-}
-
-void ErrorsAsJSONSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
-}
-
-Value ErrorsAsJSONSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.errors_as_json);
-}
-
-//===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
-void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.explain_output_type = EnumUtil::FromString<ExplainOutputType>(str_input);
-}
-
-void ExplainOutputSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
-}
-
-Value ExplainOutputSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.explain_output_type)));
+void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<ExplainOutputType>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
-// Extension Directory
+// Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
-void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.extension_directory = input.GetValue<string>();
-}
-
-void ExtensionDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.extension_directory = DBConfigOptions().extension_directory;
-}
-
-Value ExtensionDirectorySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.extension_directory);
+void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
-// External Threads
+// Lambda Syntax
 //===----------------------------------------------------------------------===//
-void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!OnGlobalSet(db, config, input)) {
-		return;
-	}
-	config.options.external_threads = input.GetValue<idx_t>();
-}
-
-void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!OnGlobalReset(db, config)) {
-		return;
-	}
-	config.options.external_threads = DBConfigOptions().external_threads;
-}
-
-Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.external_threads);
-}
-
-//===----------------------------------------------------------------------===//
-// Home Directory
-//===----------------------------------------------------------------------===//
-void HomeDirectorySetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).home_directory = ClientConfig().home_directory;
-}
-
-Value HomeDirectorySetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.home_directory);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Proxy
-//===----------------------------------------------------------------------===//
-void HTTPProxySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_proxy = input.GetValue<string>();
-}
-
-void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy = DBConfigOptions().http_proxy;
-}
-
-Value HTTPProxySetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Proxy Password
-//===----------------------------------------------------------------------===//
-void HTTPProxyPasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_proxy_password = input.GetValue<string>();
-}
-
-void HTTPProxyPasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy_password = DBConfigOptions().http_proxy_password;
-}
-
-Value HTTPProxyPasswordSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy_password);
-}
-
-//===----------------------------------------------------------------------===//
-// H T T P Proxy Username
-//===----------------------------------------------------------------------===//
-void HTTPProxyUsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.http_proxy_username = input.GetValue<string>();
-}
-
-void HTTPProxyUsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy_username = DBConfigOptions().http_proxy_username;
-}
-
-Value HTTPProxyUsernameSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.http_proxy_username);
-}
-
-//===----------------------------------------------------------------------===//
-// Lock Configuration
-//===----------------------------------------------------------------------===//
-void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.lock_configuration = input.GetValue<bool>();
-}
-
-void LockConfigurationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.lock_configuration = DBConfigOptions().lock_configuration;
-}
-
-Value LockConfigurationSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.lock_configuration);
-}
-
-//===----------------------------------------------------------------------===//
-// Max Expression Depth
-//===----------------------------------------------------------------------===//
-void MaxExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.max_expression_depth = input.GetValue<idx_t>();
-}
-
-void MaxExpressionDepthSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).max_expression_depth = ClientConfig().max_expression_depth;
-}
-
-Value MaxExpressionDepthSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::UBIGINT(config.max_expression_depth);
+void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<LambdaSyntax>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
-void PinThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto str_input = StringUtil::Upper(input.GetValue<string>());
-	config.options.pin_threads = EnumUtil::FromString<ThreadPinMode>(str_input);
-}
-
-void PinThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.pin_threads = DBConfigOptions().pin_threads;
-}
-
-Value PinThreadsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.pin_threads)));
+void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<ThreadPinMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
-// Scheduler Process Partial
+// Storage Block Prefetch
 //===----------------------------------------------------------------------===//
-void SchedulerProcessPartialSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.scheduler_process_partial = input.GetValue<bool>();
-}
-
-void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.scheduler_process_partial = DBConfigOptions().scheduler_process_partial;
-}
-
-Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.scheduler_process_partial);
+void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
-// Zstd Min String Length
+// Validate External File Cache
 //===----------------------------------------------------------------------===//
-void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.zstd_min_string_length = input.GetValue<idx_t>();
-}
-
-void ZstdMinStringLengthSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.zstd_min_string_length = DBConfigOptions().zstd_min_string_length;
-}
-
-Value ZstdMinStringLengthSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.zstd_min_string_length);
+void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CacheValidationMode>(StringValue::Get(parameter));
 }
 
 } // namespace duckdb

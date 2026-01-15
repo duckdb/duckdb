@@ -17,7 +17,7 @@ ScalarFunction VectorTypeFun::GetFunction() {
 	                                      {LogicalType::ANY},   // argument list
 	                                      LogicalType::VARCHAR, // return type
 	                                      VectorTypeFunction);
-	vector_type_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	vector_type_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return vector_type_fun;
 }
 

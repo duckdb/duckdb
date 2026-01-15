@@ -33,13 +33,27 @@ enum class IndexAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1, INSER
 
 class IndexAppendInfo {
 public:
-	IndexAppendInfo() : append_mode(IndexAppendMode::DEFAULT), delete_index(nullptr) {};
-	IndexAppendInfo(const IndexAppendMode append_mode, const optional_ptr<BoundIndex> delete_index)
-	    : append_mode(append_mode), delete_index(delete_index) {};
+	IndexAppendInfo() : append_mode(IndexAppendMode::DEFAULT) {
+	}
+	IndexAppendInfo(const IndexAppendMode append_mode, optional_ptr<BoundIndex> delete_index)
+	    : append_mode(append_mode) {
+		if (delete_index) {
+			delete_indexes.push_back(*delete_index);
+		}
+	}
 
 public:
 	IndexAppendMode append_mode;
-	optional_ptr<BoundIndex> delete_index;
+	vector<reference<BoundIndex>> delete_indexes;
+};
+
+enum class DeltaIndexType {
+	NONE,
+	LOCAL_APPEND,
+	LOCAL_DELETE,
+	ADDED_DURING_CHECKPOINT,
+	REMOVED_DURING_CHECKPOINT,
+	DELETED_ROWS_IN_USE
 };
 
 //! The index is an abstract base class that serves as the basis for indexes
@@ -72,6 +86,9 @@ public:
 	//! Those column_ids store the physical table indexes of the Index,
 	//! and we use them when binding the unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
+
+	//! Whether or not this is a delta index - and if it is, which type it is
+	DeltaIndexType delta_index_type = DeltaIndexType::NONE;
 
 public:
 	bool IsBound() const override {
@@ -108,8 +125,18 @@ public:
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
 	//! Deletes all data from the index
 	void CommitDrop() override;
-	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
-	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
+	//! Returns the amount of rows successfully deleted from the index.
+	//! If either deleted_sel or non_deleted_sel are provided the exact rows that were (not) deleted are written there
+	virtual idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+	                        optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                        optional_ptr<SelectionVector> non_deleted_sel = nullptr);
+	//! Obtains a lock and calls TryDelete while holding that lock
+	idx_t TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                optional_ptr<SelectionVector> non_deleted_sel = nullptr);
+	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
+	//! Throws an error if not all rows are deleted
+	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers);
 	//! Obtains a lock and calls Delete while holding that lock
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
@@ -130,15 +157,26 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock.
 	void Vacuum();
 
+	//! Whether or not the index supports the creation of delta indexes
+	virtual bool SupportsDeltaIndexes() const;
+	//! Creates a delta index - an empty copy of the index with the same schema, etc
+	//! This will only be called if SupportsDeltaIndexes returns true
+	virtual unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const;
+
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
 	virtual idx_t GetInMemorySize(IndexLock &state) = 0;
 	//! Returns the in-memory usage of the index
 	idx_t GetInMemorySize();
 
 	//! Returns the string representation of an index, or only traverses and verifies the index.
-	virtual string VerifyAndToString(IndexLock &l, const bool only_verify) = 0;
+	virtual void Verify(IndexLock &l) = 0;
 	//! Obtains a lock and calls VerifyAndToString.
-	string VerifyAndToString(const bool only_verify);
+	void Verify();
+
+	//! Returns the string representation of an index.
+	virtual string ToString(IndexLock &l, bool display_ascii = false) = 0;
+	//! Obtains a lock and calls ToString.
+	string ToString(bool display_ascii = false);
 
 	//! Ensures that the node allocation counts match the node counts.
 	virtual void VerifyAllocations(IndexLock &l) = 0;

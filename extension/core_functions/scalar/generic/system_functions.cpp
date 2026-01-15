@@ -108,19 +108,19 @@ void VersionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 
 ScalarFunction CurrentQueryFun::GetFunction() {
 	ScalarFunction current_query({}, LogicalType::VARCHAR, CurrentQueryFunction);
-	current_query.stability = FunctionStability::VOLATILE;
+	current_query.SetStability(FunctionStability::VOLATILE);
 	return current_query;
 }
 
 ScalarFunction CurrentSchemaFun::GetFunction() {
 	ScalarFunction current_schema({}, LogicalType::VARCHAR, CurrentSchemaFunction);
-	current_schema.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	current_schema.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return current_schema;
 }
 
 ScalarFunction CurrentDatabaseFun::GetFunction() {
 	ScalarFunction current_database({}, LogicalType::VARCHAR, CurrentDatabaseFunction);
-	current_database.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	current_database.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return current_database;
 }
 
@@ -128,20 +128,20 @@ ScalarFunction CurrentSchemasFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunction current_schemas({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
 	                               CurrentSchemasBind);
-	current_schemas.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	current_schemas.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return current_schemas;
 }
 
 ScalarFunction InSearchPathFun::GetFunction() {
 	ScalarFunction in_search_path({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                              InSearchPathFunction);
-	in_search_path.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	in_search_path.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return in_search_path;
 }
 
 ScalarFunction CurrentTransactionIdFun::GetFunction() {
 	ScalarFunction txid_current({}, LogicalType::UBIGINT, TransactionIdCurrent);
-	txid_current.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	txid_current.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return txid_current;
 }
 

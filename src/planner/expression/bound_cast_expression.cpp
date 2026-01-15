@@ -127,6 +127,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.id() == LogicalTypeId::DOUBLE || target_type.id() == LogicalTypeId::DOUBLE) {
 		return false;
 	}
+	if (source_type.id() == LogicalTypeId::VARIANT || target_type.id() == LogicalTypeId::VARIANT) {
+		return false;
+	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint8_t source_width, target_width;
 		uint8_t source_scale, target_scale;
@@ -180,6 +183,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		switch (source_type.id()) {
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_NS:
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:

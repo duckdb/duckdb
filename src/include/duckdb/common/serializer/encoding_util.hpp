@@ -14,7 +14,6 @@
 namespace duckdb {
 
 struct EncodingUtil {
-
 	// Encode unsigned integer, returns the number of bytes written
 	template <class T>
 	static idx_t EncodeUnsignedLEB128(data_ptr_t target, T value) {

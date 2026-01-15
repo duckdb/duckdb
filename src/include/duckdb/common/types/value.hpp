@@ -201,6 +201,9 @@ public:
 	DUCKDB_API static Value BIGNUM(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIGNUM(const string &data);
 
+	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
+
 	//! Creates an aggregate state
 	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 

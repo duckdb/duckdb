@@ -41,7 +41,8 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+	                                 OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -70,10 +71,6 @@ public:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-
-private:
-	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state) const;
 };
 
 } // namespace duckdb

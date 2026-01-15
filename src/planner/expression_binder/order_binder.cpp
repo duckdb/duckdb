@@ -61,7 +61,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			// ORDER BY <constant> has no effect
 			// this is disabled by default (matching Postgres) - but we can control this with a setting
 			auto order_by_non_integer_literal =
-			    DBConfig::GetSetting<OrderByNonIntegerLiteralSetting>(binders[0].get().context);
+			    Settings::Get<OrderByNonIntegerLiteralSetting>(binders[0].get().context);
 			if (!order_by_non_integer_literal) {
 				throw BinderException(expr,
 				                      "%s non-integer literal has no effect.\n* SET "
@@ -76,12 +76,13 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 	}
 	case ExpressionClass::COLUMN_REF: {
 		auto &colref = expr.Cast<ColumnRefExpression>();
-		// if there is an explicit table name we can't bind to an alias
-		if (colref.IsQualified()) {
+		if (!ExpressionBinder::IsPotentialAlias(colref)) {
 			break;
 		}
+
+		string alias_name = colref.column_names.back();
 		// check the alias list
-		auto entry = bind_state.alias_map.find(colref.column_names[0]);
+		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry == bind_state.alias_map.end()) {
 			break;
 		}

@@ -15,7 +15,7 @@ static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
 static constexpr uint8_t SORTED_STRINGS_SHIFT = 4;
 static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
-static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 5;
+static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 6;
 
 static constexpr uint8_t BASIC_TYPE_MASK = 0x3;
 static constexpr uint8_t VALUE_HEADER_SHIFT = 2;
@@ -74,8 +74,8 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	const_data_ptr_t ptr = reinterpret_cast<const_data_ptr_t>(metadata_data + sizeof(uint8_t));
 	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 
-	offsets = ptr;
-	bytes = offsets + ((dictionary_size + 1) * header.offset_size);
+	auto offsets = ptr;
+	auto bytes = offsets + ((dictionary_size + 1) * header.offset_size);
 	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
@@ -140,8 +140,7 @@ hugeint_t DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	return result;
 }
 
-VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &metadata,
-                                                       const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
@@ -267,8 +266,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 	}
 }
 
-VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantMetadata &metadata,
-                                                     const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantValueMetadata &value_metadata,
                                                      const_data_ptr_t data) {
 	D_ASSERT(value_metadata.string_size < 64);
 	auto string_data = reinterpret_cast<const char *>(data);
@@ -348,10 +346,10 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 	data++;
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		return PrimitiveTypeDecode(variant_metadata, value_metadata, data);
+		return PrimitiveTypeDecode(value_metadata, data);
 	}
 	case VariantBasicType::SHORT_STRING: {
-		return ShortStringDecode(variant_metadata, value_metadata, data);
+		return ShortStringDecode(value_metadata, data);
 	}
 	case VariantBasicType::OBJECT: {
 		return ObjectDecode(variant_metadata, value_metadata, data);

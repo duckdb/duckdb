@@ -10,6 +10,8 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "tokenizer.hpp"
+#include "parser/peg_parser.hpp"
+#include "transformer/parse_result.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE
 #include <fstream>
 #else
@@ -17,7 +19,6 @@
 #endif
 
 namespace duckdb {
-struct PEGParser;
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
@@ -53,18 +54,27 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		auto &token = state.tokens[state.token_index];
-		if (StringUtil::CIEquals(keyword, token.text)) {
-			// move to the next token
-			state.token_index++;
-			return MatchResultType::SUCCESS;
-		} else {
+		if (!MatchKeyword(state)) {
 			return MatchResultType::FAIL;
 		}
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchKeyword(state)) {
+			return nullptr;
+		}
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text));
+		result->name = name;
+		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateType::KEYWORD);
+		AutoCompleteCandidate candidate(keyword, SuggestionState::SUGGEST_KEYWORD, score_bonus, CandidateType::KEYWORD);
 		candidate.extra_char = extra_char;
 		state.AddSuggestion(MatcherSuggestion(std::move(candidate)));
 		return SuggestionType::MANDATORY;
@@ -72,6 +82,20 @@ public:
 
 	string ToString() const override {
 		return "'" + keyword + "'";
+	}
+
+private:
+	bool MatchKeyword(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
+		auto &token = state.tokens[state.token_index];
+		if (StringUtil::CIEquals(keyword, token.text)) {
+			// move to the next token
+			state.token_index++;
+			return true;
+		}
+		return false;
 	}
 
 private:
@@ -122,6 +146,22 @@ public:
 		return MatchResultType::SUCCESS;
 	}
 
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		MatchState list_state(state);
+		vector<optional_ptr<ParseResult>> results;
+
+		for (const auto &child_matcher : matchers) {
+			auto child_result = child_matcher.get().MatchParseResult(list_state);
+			if (!child_result) {
+				return nullptr;
+			}
+			results.push_back(child_result);
+		}
+		state.token_index = list_state.token_index;
+		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
+		return state.allocator.Allocate(make_uniq<ListParseResult>(std::move(results), name));
+	}
+
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		for (auto &matcher : matchers) {
 			auto suggestion_result = matcher.get().AddSuggestion(state);
@@ -160,13 +200,25 @@ public:
 	MatchResultType Match(MatchState &state) const override {
 		MatchState child_state(state);
 		auto child_match = matcher.Match(child_state);
-		if (child_match != MatchResultType::SUCCESS) {
+		if (child_match == MatchResultType::FAIL) {
 			// did not succeed in matching - go back up (but return success anyway)
 			return MatchResultType::SUCCESS;
 		}
 		// propagate the child state upwards
 		state.token_index = child_state.token_index;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		MatchState child_state(state);
+		auto child_match = matcher.MatchParseResult(child_state);
+		if (child_match == nullptr) {
+			// did not succeed in matching - go back up (simply return a nullptr)
+			return state.allocator.Allocate(make_uniq<OptionalParseResult>());
+		}
+		// propagate the child state upwards
+		state.token_index = child_state.token_index;
+		return state.allocator.Allocate(make_uniq<OptionalParseResult>(child_match));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -203,6 +255,20 @@ public:
 			}
 		}
 		return MatchResultType::FAIL;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		for (idx_t i = 0; i < matchers.size(); i++) {
+			MatchState choice_state(state);
+			auto child_result = matchers[i].get().MatchParseResult(choice_state);
+			if (child_result != nullptr) {
+				// we matched this child - propagate upwards
+				state.token_index = choice_state.token_index;
+				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i));
+				return result;
+			}
+		}
+		return nullptr;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -266,6 +332,41 @@ public:
 		}
 	}
 
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		MatchState repeat_state(state);
+		vector<optional_ptr<ParseResult>> results;
+
+		// First, we MUST match the element at least once.
+		auto first_result = element.MatchParseResult(repeat_state);
+		if (!first_result) {
+			// The first match failed, so the whole repeat fails.
+			return nullptr;
+		}
+		results.push_back(first_result);
+
+		// After the first success, the overall result is a success.
+		// Now, we continue matching the element as many times as possible.
+		while (true) {
+			// Propagate the new state upwards.
+			state.token_index = repeat_state.token_index;
+
+			// Check if there are any tokens left.
+			if (repeat_state.token_index >= state.tokens.size()) {
+				break;
+			}
+
+			// Try to match the element again.
+			auto next_result = element.MatchParseResult(repeat_state);
+			if (!next_result) {
+				break;
+			}
+			results.push_back(next_result);
+		}
+
+		// Return all collected results in a RepeatParseResult.
+		return state.allocator.Allocate(make_uniq<RepeatParseResult>(std::move(results)));
+	}
+
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		element.AddSuggestion(state);
 		return SuggestionType::MANDATORY;
@@ -287,6 +388,13 @@ public:
 	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
 
+	bool IsQuoted(const string &text) const {
+		if (text.front() == '"' && text.back() == '"') {
+			return true;
+		}
+		return false;
+	}
+
 	bool IsIdentifier(const string &text) const {
 		if (text.empty()) {
 			return false;
@@ -294,49 +402,31 @@ public:
 		if (text.front() == '\'' && text.back() == '\'' && SupportsStringLiteral()) {
 			return true;
 		}
-		if (text.front() == '"' && text.back() == '"') {
+		if (IsQuoted(text)) {
 			return true;
 		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// variable matchers match anything except for reserved keywords
-		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = KeywordHelper::Instance();
-		switch (suggestion_type) {
-		case SuggestionState::SUGGEST_TYPE_NAME:
-			if (keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
-				return MatchResultType::FAIL;
-			}
-			break;
-		default: {
-			const auto banned_category = GetBannedCategory();
-			const auto allowed_override_category = banned_category == KeywordCategory::KEYWORD_COL_NAME
-			                                           ? KeywordCategory::KEYWORD_TYPE_FUNC
-			                                           : KeywordCategory::KEYWORD_COL_NAME;
-
-			const bool is_reserved = keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_RESERVED);
-			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
-			const bool has_banned_flag = is_reserved || has_extra_banned_category;
-
-			const bool is_unreserved =
-			    keyword_helper.KeywordCategoryType(token_text, KeywordCategory::KEYWORD_UNRESERVED);
-			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
-			const bool has_allowed_flag = is_unreserved || has_override_flag;
-
-			if (has_banned_flag && !has_allowed_flag) {
-				return MatchResultType::FAIL;
-			}
-			break;
-		}
-		}
-		if (!IsIdentifier(token_text)) {
+		if (!MatchIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchIdentifier(state)) {
+			return nullptr;
+		}
+		if (IsQuoted(token_text)) {
+			token_text = token_text.substr(1, token_text.size() - 2);
+		}
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
 
 	bool SupportsStringLiteral() const {
@@ -349,13 +439,13 @@ public:
 		}
 	}
 
-	KeywordCategory GetBannedCategory() const {
+	PEGKeywordCategory GetBannedCategory() const {
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-			return KeywordCategory::KEYWORD_COL_NAME;
+			return PEGKeywordCategory::KEYWORD_COL_NAME;
 		default:
-			return KeywordCategory::KEYWORD_TYPE_FUNC;
+			return PEGKeywordCategory::KEYWORD_TYPE_FUNC;
 		}
 	}
 
@@ -395,6 +485,47 @@ public:
 		}
 	}
 
+private:
+	bool MatchIdentifier(MatchState &state) const {
+		// variable matchers match anything except for reserved keywords
+		auto &token_text = state.tokens[state.token_index].text;
+		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		switch (suggestion_type) {
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
+			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+				return false;
+			}
+			break;
+		default: {
+			const auto banned_category = GetBannedCategory();
+			const auto allowed_override_category = banned_category == PEGKeywordCategory::KEYWORD_COL_NAME
+			                                           ? PEGKeywordCategory::KEYWORD_TYPE_FUNC
+			                                           : PEGKeywordCategory::KEYWORD_COL_NAME;
+
+			const bool is_reserved =
+			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED);
+			const bool has_extra_banned_category = keyword_helper.KeywordCategoryType(token_text, banned_category);
+			const bool has_banned_flag = is_reserved || has_extra_banned_category;
+
+			const bool is_unreserved =
+			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED);
+			const bool has_override_flag = keyword_helper.KeywordCategoryType(token_text, allowed_override_category);
+			const bool has_allowed_flag = is_unreserved || has_override_flag;
+
+			if (has_banned_flag && !has_allowed_flag) {
+				return false;
+			}
+			break;
+		}
+		}
+		if (!IsIdentifier(token_text)) {
+			return false;
+		}
+		state.token_index++;
+		return true;
+	}
+
 	SuggestionState suggestion_type;
 };
 
@@ -407,13 +538,31 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// reserved variable matchers match anything
-		auto &token_text = state.tokens[state.token_index].text;
-		if (!IsIdentifier(token_text)) {
+		if (!MatchReservedIdentifier(state)) {
 			return MatchResultType::FAIL;
 		}
-		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchReservedIdentifier(state)) {
+			return nullptr;
+		}
+		if (IsQuoted(token_text)) {
+			token_text = token_text.substr(1, token_text.size() - 2);
+		}
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+	}
+
+private:
+	bool MatchReservedIdentifier(MatchState &state) const {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!IsIdentifier(token_text)) {
+			return false;
+		}
+		state.token_index++;
+		return true;
 	}
 };
 
@@ -423,16 +572,30 @@ public:
 
 public:
 	explicit StringLiteralMatcher() : Matcher(TYPE) {
+		name = "StringLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
-		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
-			state.token_index++;
-			return MatchResultType::SUCCESS;
+		if (!MatchStringLiteral(state)) {
+			return MatchResultType::FAIL;
 		}
-		return MatchResultType::FAIL;
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchStringLiteral(state)) {
+			return nullptr;
+		}
+		string stripped_string = token_text.substr(1, token_text.length() - 2);
+
+		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string));
+		result->name = name;
+		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -442,6 +605,16 @@ public:
 	string ToString() const override {
 		return "STRING_LITERAL";
 	}
+
+private:
+	static bool MatchStringLiteral(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
+			state.token_index++;
+			return true;
+		}
+		return false;
+	}
 };
 
 class NumberLiteralMatcher : public Matcher {
@@ -450,21 +623,28 @@ public:
 
 public:
 	explicit NumberLiteralMatcher() : Matcher(TYPE) {
+		name = "NumberLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
 		// variable matchers match anything except for reserved keywords
-		auto &token_text = state.tokens[state.token_index].text;
-		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+		if (!MatchNumberLiteral(state)) {
 			return MatchResultType::FAIL;
 		}
-		for (idx_t i = 1; i < token_text.size(); i++) {
-			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
-				return MatchResultType::FAIL;
-			}
-		}
-		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchNumberLiteral(state)) {
+			return nullptr;
+		}
+		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text));
+		result->name = name;
+		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -473,6 +653,31 @@ public:
 
 	string ToString() const override {
 		return "NUMBER_LITERAL";
+	}
+
+private:
+	static bool MatchNumberLiteral(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+			return false;
+		}
+		bool scientific_notation = false;
+		for (idx_t i = 1; i < token_text.size(); i++) {
+			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
+				if (scientific_notation) {
+					throw ParserException("Already found scientific notation");
+				}
+				scientific_notation = true;
+			}
+			if (scientific_notation && (token_text[i] == '+' || token_text[i] == '-')) {
+				continue;
+			}
+			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
+				return false;
+			}
+		}
+		state.token_index++;
+		return true;
 	}
 };
 
@@ -485,6 +690,33 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
+		if (!MatchOperator(state)) {
+			return MatchResultType::FAIL;
+		}
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchOperator(state)) {
+			return nullptr;
+		}
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "OPERATOR";
+	}
+
+private:
+	static bool MatchOperator(MatchState &state) {
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
 			switch (c) {
@@ -504,11 +736,39 @@ public:
 			case '|':
 				break;
 			default:
-				return MatchResultType::FAIL;
+				return false;
 			}
 		}
 		state.token_index++;
+		return true;
+	}
+};
+
+class ArithmeticOperatorMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
+
+public:
+	explicit ArithmeticOperatorMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		if (!MatchArithmeticOperator(state)) {
+			return MatchResultType::FAIL;
+		}
 		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchArithmeticOperator(state)) {
+			return nullptr;
+		}
+		Printer::Print("Found arithmetic operator!!!");
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -516,7 +776,26 @@ public:
 	}
 
 	string ToString() const override {
-		return "OPERATOR";
+		return "ARITHMETICOPERATOR";
+	}
+
+private:
+	static bool MatchArithmeticOperator(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		for (auto &c : token_text) {
+			switch (c) {
+			case '*':
+			case '/':
+			case '+':
+			case '-':
+			case '%':
+				break;
+			default:
+				return false;
+			}
+		}
+		state.token_index++;
+		return true;
 	}
 };
 
@@ -524,6 +803,12 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
 	matchers.push_back(std::move(matcher));
 	return result;
+}
+
+optional_ptr<ParseResult> ParseResultAllocator::Allocate(unique_ptr<ParseResult> parse_result) {
+	auto result_ptr = parse_result.get();
+	parse_results.push_back(std::move(parse_result));
+	return optional_ptr<ParseResult>(result_ptr);
 }
 
 //! Class for building matchers
@@ -554,10 +839,12 @@ private:
 	Matcher &StringLiteral() const;
 	Matcher &NumberLiteral() const;
 	Matcher &Operator() const;
+	Matcher &ArithmeticOperator() const;
 	Matcher &ScalarFunctionName() const;
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &CopyOptionName() const;
 	Matcher &ReservedSchemaName() const;
 	Matcher &ReservedTableName() const;
 	Matcher &ReservedColumnName() const;
@@ -662,6 +949,10 @@ Matcher &MatcherFactory::SettingName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
 }
 
+Matcher &MatcherFactory::CopyOptionName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
+}
+
 Matcher &MatcherFactory::NumberLiteral() const {
 	return allocator.Allocate(make_uniq<NumberLiteralMatcher>());
 }
@@ -674,256 +965,8 @@ Matcher &MatcherFactory::Operator() const {
 	return allocator.Allocate(make_uniq<OperatorMatcher>());
 }
 
-enum class PEGRuleType {
-	LITERAL,   // literal rule ('Keyword'i)
-	REFERENCE, // reference to another rule (Rule)
-	OPTIONAL,  // optional rule (Rule?)
-	OR,        // or rule (Rule1 / Rule2)
-	REPEAT     // repeat rule (Rule1*
-};
-
-enum class PEGTokenType {
-	LITERAL,       // literal token ('Keyword'i)
-	REFERENCE,     // reference token (Rule)
-	OPERATOR,      // operator token (/ or )
-	FUNCTION_CALL, // start of function call (i.e. Function(...))
-	REGEX          // regular expression ([ \t\n\r] or <[a-z_]i[a-z0-9_]i>)
-};
-
-struct PEGToken {
-	PEGTokenType type;
-	string_t text;
-};
-
-struct PEGRule {
-	string_map_t<idx_t> parameters;
-	vector<PEGToken> tokens;
-
-	void Clear() {
-		parameters.clear();
-		tokens.clear();
-	}
-};
-
-struct PEGParser {
-public:
-	void ParseRules(const char *grammar);
-
-	void AddRule(string_t rule_name, PEGRule rule) {
-		auto entry = rules.find(rule_name);
-		if (entry != rules.end()) {
-			throw InternalException("Failed to parse grammar - duplicate rule name %s", rule_name.GetString());
-		}
-		rules.insert(make_pair(rule_name, std::move(rule)));
-	}
-
-	string_map_t<PEGRule> rules;
-};
-
-enum class PEGParseState {
-	RULE_NAME,      // Rule name
-	RULE_SEPARATOR, // look for <-
-	RULE_DEFINITION // part of rule definition
-};
-
-bool IsPEGOperator(char c) {
-	switch (c) {
-	case '/':
-	case '?':
-	case '(':
-	case ')':
-	case '*':
-	case '!':
-		return true;
-	default:
-		return false;
-	}
-}
-
-void PEGParser::ParseRules(const char *grammar) {
-	string_t rule_name;
-	PEGRule rule;
-	PEGParseState parse_state = PEGParseState::RULE_NAME;
-	idx_t bracket_count = 0;
-	bool in_or_clause = false;
-	// look for the rules
-	idx_t c = 0;
-	while (grammar[c]) {
-		if (grammar[c] == '#') {
-			// comment - ignore until EOL
-			while (grammar[c] && !StringUtil::CharacterIsNewline(grammar[c])) {
-				c++;
-			}
-			continue;
-		}
-		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) &&
-		    bracket_count == 0 && !in_or_clause && !rule.tokens.empty()) {
-			// if we see a newline while we are parsing a rule definition we can complete the rule
-			AddRule(rule_name, std::move(rule));
-			rule_name = string_t();
-			rule.Clear();
-			// look for the subsequent rule
-			parse_state = PEGParseState::RULE_NAME;
-			c++;
-			continue;
-		}
-		if (StringUtil::CharacterIsSpace(grammar[c])) {
-			// skip whitespace
-			c++;
-			continue;
-		}
-		switch (parse_state) {
-		case PEGParseState::RULE_NAME: {
-			// look for alpha-numerics
-			idx_t start_pos = c;
-			if (grammar[c] == '%') {
-				// rules can start with % (%whitespace)
-				c++;
-			}
-			while (grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
-				c++;
-			}
-			if (c == start_pos) {
-				throw InternalException("Failed to parse grammar - expected an alpha-numeric rule name (pos %d)", c);
-			}
-			rule_name = string_t(grammar + start_pos, c - start_pos);
-			rule.Clear();
-			parse_state = PEGParseState::RULE_SEPARATOR;
-			break;
-		}
-		case PEGParseState::RULE_SEPARATOR: {
-			if (grammar[c] == '(') {
-				if (!rule.parameters.empty()) {
-					throw InternalException("Failed to parse grammar - multiple parameters at position %d", c);
-				}
-				// parameter
-				c++;
-				idx_t parameter_start = c;
-				while (grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
-					c++;
-				}
-				if (parameter_start == c) {
-					throw InternalException("Failed to parse grammar - expected a parameter at position %d", c);
-				}
-				rule.parameters.insert(
-				    make_pair(string_t(grammar + parameter_start, c - parameter_start), rule.parameters.size()));
-				if (grammar[c] != ')') {
-					throw InternalException("Failed to parse grammar - expected closing bracket at position %d", c);
-				}
-				c++;
-			} else {
-				if (grammar[c] != '<' || grammar[c + 1] != '-') {
-					throw InternalException("Failed to parse grammar - expected a rule definition (<-) (pos %d)", c);
-				}
-				c += 2;
-				parse_state = PEGParseState::RULE_DEFINITION;
-			}
-			break;
-		}
-		case PEGParseState::RULE_DEFINITION: {
-			// we parse either:
-			// (1) a literal ('Keyword'i)
-			// (2) a rule reference (Rule)
-			// (3) an operator ( '(' '/' '?' '*' ')')
-			in_or_clause = false;
-			if (grammar[c] == '\'') {
-				// parse literal
-				c++;
-				idx_t literal_start = c;
-				while (grammar[c] && grammar[c] != '\'') {
-					if (grammar[c] == '\\') {
-						// escape
-						c++;
-					}
-					c++;
-				}
-				if (!grammar[c]) {
-					throw InternalException("Failed to parse grammar - did not find closing ' (pos %d)", c);
-				}
-				PEGToken token;
-				token.text = string_t(grammar + literal_start, c - literal_start);
-				token.type = PEGTokenType::LITERAL;
-				rule.tokens.push_back(token);
-				c++;
-				if (grammar[c] == 'i') {
-					// skip optional case insensitive marker
-					// note: all keywords we parse are case insensitive so we just ignore this marker
-					c++;
-				}
-			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
-				// alphanumeric character - this is a rule reference
-				idx_t rule_start = c;
-				while (grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
-					c++;
-				}
-				PEGToken token;
-				token.text = string_t(grammar + rule_start, c - rule_start);
-				if (grammar[c] == '(') {
-					// this is a function call
-					c++;
-					bracket_count++;
-					token.type = PEGTokenType::FUNCTION_CALL;
-				} else {
-					token.type = PEGTokenType::REFERENCE;
-				}
-				rule.tokens.push_back(token);
-			} else if (grammar[c] == '[' || grammar[c] == '<') {
-				// regular expression- [^"] or <...>
-				idx_t rule_start = c;
-				char final_char = grammar[c] == '[' ? ']' : '>';
-				while (grammar[c] && grammar[c] != final_char) {
-					if (grammar[c] == '\\') {
-						// handle escapes
-						c++;
-					}
-					if (grammar[c]) {
-						c++;
-					}
-				}
-				c++;
-				PEGToken token;
-				token.text = string_t(grammar + rule_start, c - rule_start);
-				token.type = PEGTokenType::REGEX;
-				rule.tokens.push_back(token);
-			} else if (IsPEGOperator(grammar[c])) {
-				if (grammar[c] == '(') {
-					bracket_count++;
-				} else if (grammar[c] == ')') {
-					if (bracket_count == 0) {
-						throw InternalException("Failed to parse grammar - unclosed bracket at position %d in rule %s",
-						                        c, rule_name.GetString());
-					}
-					bracket_count--;
-				} else if (grammar[c] == '/') {
-					in_or_clause = true;
-				}
-				// operator - operators are always length 1
-				PEGToken token;
-				token.text = string_t(grammar + c, 1);
-				token.type = PEGTokenType::OPERATOR;
-				rule.tokens.push_back(token);
-				c++;
-			} else {
-				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name.GetString(),
-				                        string(1, grammar[c]));
-			}
-		}
-		default:
-			break;
-		}
-		if (!grammar[c]) {
-			break;
-		}
-	}
-	if (parse_state == PEGParseState::RULE_SEPARATOR) {
-		throw InternalException("Failed to parse grammar - rule %s does not have a definition", rule_name.GetString());
-	}
-	if (parse_state == PEGParseState::RULE_DEFINITION) {
-		if (rule.tokens.empty()) {
-			throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
-		}
-		AddRule(rule_name, std::move(rule));
-	}
+Matcher &MatcherFactory::ArithmeticOperator() const {
+	return allocator.Allocate(make_uniq<ArithmeticOperatorMatcher>());
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
@@ -1027,7 +1070,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		}
 	}
 	// look up the rule
-	auto entry = parser.rules.find(rule_name);
+	auto entry = parser.rules.find(rule_name.GetString());
 	if (entry == parser.rules.end()) {
 		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
 	}
@@ -1098,27 +1141,46 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				list_matcher.matchers.push_back(replaced_matcher);
 				break;
 			}
-			case '/': {
-				// OR operator - this signifies a choice between the last rule and the next rule
+			case '+': {
+				// Similar to '*' except it's not optional and just repeat (match at least once)
 				auto &last_matcher = list.GetLastRootMatcher().matcher;
 				if (last_matcher.Type() != MatcherType::LIST) {
-					throw InternalException("OR expected a list matcher");
+					throw InternalException("Repeat expected a list matcher");
 				}
 				auto &list_matcher = last_matcher.Cast<ListMatcher>();
 				if (list_matcher.matchers.empty()) {
-					throw InternalException("OR rule found as first token");
+					throw InternalException("Repeat rule found as first token");
 				}
 				auto &final_matcher = list_matcher.matchers.back();
-				vector<reference<Matcher>> choice_matchers;
-				choice_matchers.push_back(final_matcher);
-				auto &choice_matcher = Choice(choice_matchers);
-
-				// the choice matcher gets added to the list matcher (instead of the previous matcher)
+				final_matcher = Repeat(final_matcher.get());
 				list_matcher.matchers.pop_back();
-				list_matcher.matchers.push_back(choice_matcher);
-				// then it gets pushed onto the stack of matchers
-				// the next rule will then get pushed onto the choice matcher
-				list.AddRootMatcher(choice_matcher);
+				list_matcher.matchers.push_back(final_matcher);
+				break;
+			}
+			case '/': {
+				// OR operator - this signifies a choice between the last rule and the next rule
+				auto &last_root_matcher = list.GetLastRootMatcher().matcher;
+				if (last_root_matcher.Type() != MatcherType::LIST) {
+					throw InternalException("OR expected a list matcher");
+				}
+				auto &list_matcher = last_root_matcher.Cast<ListMatcher>();
+				if (list_matcher.matchers.empty()) {
+					throw InternalException("OR rule found as first token");
+				}
+				auto &previous_matcher = list_matcher.matchers.back();
+
+				if (previous_matcher.get().Type() == MatcherType::CHOICE) {
+					list.AddRootMatcher(previous_matcher);
+				} else {
+					vector<reference<Matcher>> choice_options;
+					choice_options.push_back(previous_matcher);
+					auto &new_choice_matcher = Choice(choice_options);
+
+					list_matcher.matchers.pop_back();
+					list_matcher.matchers.push_back(new_choice_matcher);
+
+					list.AddRootMatcher(new_choice_matcher);
+				}
 				break;
 			}
 			case '(': {
@@ -1177,19 +1239,26 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	// rule overrides
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("ReservedIdentifier", ReservedVariable());
-	AddRuleOverride("TypeName", TypeName());
-	AddRuleOverride("TableName", TableName());
-	AddRuleOverride("ReservedTableName", ReservedTableName());
+
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
+	AddRuleOverride("TableName", TableName());
+	AddRuleOverride("ReservedTableName", ReservedTableName());
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("ReservedColumnName", ReservedColumnName());
-	AddRuleOverride("TableFunctionName", TableFunctionName());
+	AddRuleOverride("IndexName", Variable());
+	AddRuleOverride("SequenceName", Variable());
+
 	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
+	AddRuleOverride("TableFunctionName", TableFunctionName());
+
+	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
+	AddRuleOverride("CopyOptionName", CopyOptionName());
+
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());

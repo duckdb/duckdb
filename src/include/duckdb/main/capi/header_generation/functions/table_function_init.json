@@ -1,6 +1,7 @@
 {
     "group": "table_function_init",
     "deprecated": false,
+    "description": "Functions to implement the init-phase of a table function. The init-phase happens once for each thread and initializes thread-local information prior to execution.",
     "entries": [
         {
             "name": "duckdb_init_get_extra_info",

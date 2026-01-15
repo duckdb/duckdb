@@ -392,6 +392,34 @@
     ]
   },
   {
+    "class": "AlterDatabaseInfo",
+    "base": "AlterInfo",
+    "enum": "ALTER_DATABASE",
+    "class_type": "alter_database_type",
+    "includes": [
+      "duckdb/parser/parsed_data/alter_database_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 300,
+        "name": "alter_database_type",
+        "type": "AlterDatabaseType"
+      }
+    ]
+  },
+  {
+    "class": "RenameDatabaseInfo",
+    "base": "AlterDatabaseInfo",
+    "enum": "RENAME_DATABASE",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "AttachInfo",
     "base": "ParseInfo",
     "enum": "ATTACH_INFO",

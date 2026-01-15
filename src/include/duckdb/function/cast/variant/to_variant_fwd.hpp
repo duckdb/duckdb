@@ -14,6 +14,8 @@
 namespace duckdb {
 namespace variant {
 
+void InitializeOffsets(DataChunk &offsets, idx_t count);
+
 struct OffsetData {
 public:
 	static uint32_t *GetKeys(DataChunk &offsets) {
@@ -110,7 +112,6 @@ template <bool WRITE_DATA>
 void WriteVariantMetadata(ToVariantGlobalResultData &result, idx_t result_index, uint32_t *values_offsets,
                           uint32_t blob_offset, optional_ptr<const SelectionVector> value_index_selvec, idx_t i,
                           VariantLogicalType type_id) {
-
 	auto &values_offset_data = values_offsets[result_index];
 	if (WRITE_DATA) {
 		auto &variant = result.variant;

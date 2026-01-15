@@ -49,8 +49,8 @@ TEST_CASE("Test iterating over results", "[api]") {
 	idx_t row_count = 0;
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
-		REQUIRE(row.GetValue<int>(0) == i_values[row.row]);
-		REQUIRE(row.GetValue<string>(1) == j_values[row.row]);
+		REQUIRE(row.GetValue<int>(0) == i_values[row_count]);
+		REQUIRE(row.GetValue<string>(1) == j_values[row_count]);
 		row_count++;
 	}
 	REQUIRE(row_count == 2);
@@ -196,7 +196,7 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 
 TEST_CASE("Issue #9417", "[api][.]") {
 	DBConfig config;
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 
 	DuckDB db(TestCreatePath("issue_replication.db"), &config);
 	Connection con(db);

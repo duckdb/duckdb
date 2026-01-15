@@ -88,6 +88,7 @@ public:
 	static bool TestMemoryLeaks();
 	static bool TestRunStorageFuzzer();
 
+	static void LoadBaseConfig(const Value &input);
 	static void ParseConnectScript(const Value &input);
 	static void CheckSortStyle(const Value &input);
 	static bool TryParseSortStyle(const string &sort_style, SortStyle &result);

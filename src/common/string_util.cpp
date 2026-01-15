@@ -10,6 +10,8 @@
 #include "duckdb/original/std/sstream.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -34,6 +36,27 @@ string StringUtil::GenerateRandomName(idx_t length) {
 	return ss.str();
 }
 
+bool StringUtil::Equals(const string_t &s1, const char *s2) {
+	auto s1_data = s1.GetData();
+	for (idx_t i = 0; i < s1.GetSize(); i++) {
+		if (s1_data[i] != s2[i]) {
+			return false;
+		}
+		if (s2[i] == '\0') {
+			return false;
+		}
+	}
+	if (s2[s1.GetSize()] != '\0') {
+		// not equal
+		return false;
+	}
+	return true;
+}
+
+bool StringUtil::Equals(const char *s1, const string_t &s2) {
+	return StringUtil::Equals(s2, s1);
+}
+
 bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return Find(haystack, needle).IsValid();
 }
@@ -52,6 +75,14 @@ bool StringUtil::Contains(const string &haystack, const char &needle_char) {
 
 idx_t StringUtil::ToUnsigned(const string &str) {
 	return std::stoull(str);
+}
+
+int64_t StringUtil::ToSigned(const string &str) {
+	return std::stoll(str);
+}
+
+double StringUtil::ToDouble(const string &str) {
+	return std::stod(str);
 }
 
 void StringUtil::LTrim(string &str) {
@@ -244,6 +275,89 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 	return to_string(array[0]) + (bytes == 1 ? " byte" : " bytes");
 }
 
+string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
+	// split based on the number/non-number
+	idx_t idx = 0;
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	idx_t num_start = idx;
+	while ((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' ||
+	       arg[idx] == '-') {
+		idx++;
+	}
+	if (idx == num_start) {
+		return "Memory must have a number (e.g. 1GB)";
+	}
+	string number = arg.substr(num_start, idx - num_start);
+
+	// try to parse the number
+	double limit;
+	bool success = TryCast::Operation<string_t, double>(string_t(number), limit);
+	if (!success) {
+		return StringUtil::Format("Invalid memory limit: '%s'", number);
+	}
+
+	// now parse the memory limit unit (e.g. bytes, gb, etc)
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	idx_t start = idx;
+	while (idx < arg.size() && !StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+
+	if (limit < 0) {
+		return "Memory cannot be negative";
+	}
+
+	string unit = StringUtil::Lower(arg.substr(start, idx - start));
+	idx_t multiplier;
+	if (unit == "byte" || unit == "bytes" || unit == "b") {
+		multiplier = 1;
+	} else if (unit == "kilobyte" || unit == "kilobytes" || unit == "kb" || unit == "k") {
+		multiplier = 1000LL;
+	} else if (unit == "megabyte" || unit == "megabytes" || unit == "mb" || unit == "m") {
+		multiplier = 1000LL * 1000LL;
+	} else if (unit == "gigabyte" || unit == "gigabytes" || unit == "gb" || unit == "g") {
+		multiplier = 1000LL * 1000LL * 1000LL;
+	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
+		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
+	} else {
+		return StringUtil::Format("Unknown unit for memory: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                          "MiB, GiB, TiB for 1024^i units)",
+		                          unit);
+	}
+
+	// Make sure the result is not greater than `idx_t` max value
+	constexpr double max_value = static_cast<double>(NumericLimits<idx_t>::Maximum());
+	const double double_multiplier = static_cast<double>(multiplier);
+
+	if (limit > (max_value / double_multiplier)) {
+		return "Memory value out of range: value is too large";
+	}
+
+	result = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return string();
+}
+
+idx_t StringUtil::ParseFormattedBytes(const string &arg) {
+	idx_t result;
+	const string error = TryParseFormattedBytes(arg, result);
+	if (!error.empty()) {
+		throw InvalidInputException(error);
+	}
+	return result;
+}
+
 string StringUtil::Upper(const string &str) {
 	string copy(str);
 	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
@@ -287,9 +401,13 @@ bool StringUtil::IsUpper(const string &str) {
 
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
+	return StringUtil::CIHash(str.c_str(), str.size());
+}
+
+uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
-	for (auto c : str) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
+	for (idx_t i = 0; i < size; i++) {
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -396,7 +514,10 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
-		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
+		if (a.second != b.second) {
+			return a.second > b.second;
+		}
+		return StringUtil::CILessThan(a.first, b.first);
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
@@ -734,7 +855,6 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 }
 
 string StringUtil::GetFileName(const string &file_path) {
-
 	idx_t pos = file_path.find_last_of("/\\");
 	if (pos == string::npos) {
 		return file_path;

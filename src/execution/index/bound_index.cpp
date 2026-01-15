@@ -20,7 +20,6 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
       index_constraint_type(index_constraint_type) {
-
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
@@ -65,10 +64,30 @@ void BoundIndex::CommitDrop() {
 	CommitDrop(index_lock);
 }
 
+idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
+                            optional_ptr<SelectionVector> non_deleted_sel) {
+	IndexLock state;
+	InitializeLock(state);
+	return TryDelete(state, entries, row_identifiers, deleted_sel, non_deleted_sel);
+}
+
+idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+                            optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
+	throw InternalException("TryDelete not implemented");
+}
+
 void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	Delete(state, entries, row_identifiers);
+}
+
+void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
+	auto deleted_rows = TryDelete(state, entries, row_identifiers);
+	if (deleted_rows != entries.size()) {
+		throw InvalidInputException("Failed to delete all rows from index. Only deleted %d out of %d rows.\nChunk: %s",
+		                            deleted_rows, entries.size(), entries.ToString());
+	}
 }
 
 ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
@@ -81,10 +100,16 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 	return MergeIndexes(state, other_index);
 }
 
-string BoundIndex::VerifyAndToString(const bool only_verify) {
+void BoundIndex::Verify() {
 	IndexLock l;
 	InitializeLock(l);
-	return VerifyAndToString(l, only_verify);
+	Verify(l);
+}
+
+string BoundIndex::ToString(bool display_ascii) {
+	IndexLock l;
+	InitializeLock(l);
+	return ToString(l, display_ascii);
 }
 
 void BoundIndex::VerifyAllocations() {
@@ -135,6 +160,14 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 		}
 	}
 	return false;
+}
+
+bool BoundIndex::SupportsDeltaIndexes() const {
+	return false;
+}
+
+unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
+	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
 }
 
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {

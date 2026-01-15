@@ -318,6 +318,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	result.emplace_back(list_of_fixed_array_of_int_type, "list_of_fixed_int_array",
 	                    list_of_fixed_array_of_int_min_value, list_of_fixed_array_of_int_max_value);
 
+	result.emplace_back(LogicalType::TIME_NS, "time_ns");
+
 	return result;
 }
 
@@ -332,10 +334,16 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	bool use_large_bignum = false;
 	auto entry = input.named_parameters.find("use_large_enum");
 	if (entry != input.named_parameters.end()) {
+		if (entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for use_large_enum");
+		}
 		use_large_enum = BooleanValue::Get(entry->second);
 	}
 	entry = input.named_parameters.find("use_large_bignum");
 	if (entry != input.named_parameters.end()) {
+		if (entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for use_large_bignum");
+		}
 		use_large_bignum = BooleanValue::Get(entry->second);
 	}
 	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum, use_large_bignum);

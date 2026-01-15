@@ -22,7 +22,7 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 }
 
 ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+                                     PendingQueryParameters query_parameters) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
@@ -31,6 +31,10 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 #else
 	bool run_slow_verifiers = false;
 #endif
+
+	auto parameters = query_parameters.parameters;
+	query_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	query_parameters.query_parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
 	// Copy() of statements and expressions
@@ -49,6 +53,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt, parameters));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt, parameters));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt, parameters));
+		statement_verifiers.emplace_back(
+		    StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt, parameters));
 
 		// FIXME: Prepared parameter verifier is broken for queries with parameters
 		if (!parameters || parameters->empty()) {
@@ -61,14 +67,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		statement_verifiers.emplace_back(
 		    StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt, parameters));
 	}
-
-	// For the DEBUG_ASYNC build we enable this extra verifier
-#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (config.query_verification_enabled) {
-		statement_verifiers.emplace_back(
-		    StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt, parameters));
-	}
-#endif
 
 	// Verify external always needs to be explicitly enabled and is never part of default verifier set
 	if (config.verify_external) {
@@ -98,7 +96,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	bool any_failed = original->Run(*this, query,
 	                                [&](const string &q, unique_ptr<SQLStatement> s,
 	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-		                                return RunStatementInternal(lock, q, std::move(s), false, params, false);
+		                                return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 	                                });
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
@@ -109,7 +107,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		bool failed = verifier->Run(*this, query,
 		                            [&](const string &q, unique_ptr<SQLStatement> s,
 		                                optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			                            return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			                            return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		                            });
 		any_failed = any_failed || failed;
 	}
@@ -120,7 +118,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, query,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		    });
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
@@ -155,7 +153,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, explain_q,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		    });
 
 		if (explain_failed) { // LCOV_EXCL_START
@@ -173,7 +171,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		// test with a random width
 		config.max_width = random.NextRandomInteger() % 500;
 		BoxRenderer renderer(config);
-		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+		auto pinned_result_set = original->materialized_result->Pin();
+		renderer.ToString(*this, original->materialized_result->names, pinned_result_set->collection);
 #endif
 	}
 

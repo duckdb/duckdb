@@ -1,0 +1,100 @@
+# name: test/sql/pivot/test_pivot_duplicate_aggregates.test
+# description: Test PIVOT with duplicate aggregate expressions
+# group: [pivot]
+
+# Test duplicate aggregates with 21+ values (original bug - issue #20187)
+# This used to throw: "Pivot aggregate count mismatch (expected 2, found 1)"
+statement ok
+PIVOT (FROM range(21)) ON range USING sum(range), sum(range);
+
+# Should have 42 columns (21 pivot values × 2 aggregates)
+query I
+SELECT COUNT(*) FROM (PIVOT (FROM range(21)) ON range USING sum(range), sum(range));
+----
+1
+
+# Test with range(20)
+statement ok
+PIVOT (FROM range(20)) ON range USING sum(range), sum(range);
+
+# Test with smaller range
+statement ok
+PIVOT (FROM range(10)) ON range USING sum(range), sum(range);
+
+# Test with three duplicate aggregates
+statement ok
+PIVOT (FROM range(10)) ON range USING sum(range), sum(range), sum(range);
+
+# Verify three duplicates create 3x columns (30 columns = 10 values × 3 aggregates)
+query I
+SELECT COUNT(*) FROM (PIVOT (FROM range(10)) ON range USING sum(range), sum(range), sum(range));
+----
+1
+
+# Test mix of duplicate and unique aggregates
+statement ok
+PIVOT (FROM range(21)) ON range USING sum(range), max(range), sum(range);
+
+# should have 63 columns (21 values × 3 aggregates)
+query I
+SELECT COUNT(*) FROM (PIVOT (FROM range(21)) ON range USING sum(range), max(range), sum(range));
+----
+1
+
+# Test with complex expressions
+statement ok
+PIVOT (FROM range(20)) ON range USING sum(range), sum(range);
+
+# Test different aggregate functions
+statement ok
+PIVOT (FROM range(21)) ON range USING avg(range), avg(range);
+
+statement ok
+PIVOT (FROM range(21)) ON range USING count(range), count(range);
+
+# Test with actual data to verify correctness
+query IIIIII
+SELECT * FROM (
+  PIVOT (FROM range(3)) ON range USING sum(range), sum(range)
+);
+----
+0	0	1	1	2	2
+
+# Test that values are correct
+query II
+SELECT "0_sum(""range"")", "0_sum(""range"")_1" FROM (
+  PIVOT (FROM range(21)) ON range USING sum(range), sum(range)
+);
+----
+0	0
+
+query II
+SELECT "5_sum(""range"")", "5_sum(""range"")_1" FROM (
+  PIVOT (FROM range(21)) ON range USING sum(range), sum(range)
+);
+----
+5	5
+
+# Test with mixed aggregates to ensure correct mapping
+query III
+SELECT "0_sum(""range"")", "0_max(""range"")", "0_sum(""range"")_1" FROM (
+  PIVOT (FROM range(21)) ON range USING sum(range), max(range), sum(range)
+);
+----
+0	0	0
+
+query III
+SELECT "5_sum(""range"")", "5_max(""range"")", "5_sum(""range"")_1" FROM (
+  PIVOT (FROM range(21)) ON range USING sum(range), max(range), sum(range)
+);
+----
+5	5	5
+
+# Test with string aggregates
+statement ok
+PIVOT (
+  SELECT range, range::VARCHAR as str_range
+  FROM range(21)
+)
+ON range
+USING max(str_range), max(str_range);

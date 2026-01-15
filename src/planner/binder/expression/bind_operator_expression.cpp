@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/try_operator_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -92,16 +93,25 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
-	if (op.GetExpressionType() == ExpressionType::GROUPING_FUNCTION) {
+	auto operator_type = op.GetExpressionType();
+	if (operator_type == ExpressionType::GROUPING_FUNCTION) {
 		return BindGroupingFunction(op, depth);
 	}
 
 	// Bind the children of the operator expression. We already create bound expressions.
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
-	for (idx_t i = 0; i < op.children.size(); i++) {
-		BindChild(op.children[i], depth, error);
+	if (operator_type == ExpressionType::OPERATOR_TRY) {
+		D_ASSERT(op.children.size() == 1);
+		//! This binder is used to throw when the child expression is of a type that is not allowed.
+		TryOperatorBinder try_operator_binder(binder, context);
+		try_operator_binder.BindChild(op.children[0], depth, error);
+	} else {
+		for (idx_t i = 0; i < op.children.size(); i++) {
+			BindChild(op.children[i], depth, error);
+		}
 	}
+
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}

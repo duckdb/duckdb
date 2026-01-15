@@ -48,11 +48,18 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
-	explicit CopyToFunctionGlobalState(ClientContext &context)
-	    : initialized(false), rows_copied(0), last_file_offset(0),
+	explicit CopyToFunctionGlobalState(ClientContext &context_p)
+	    : context(context_p), finalized(false), initialized(false), rows_copied(0), last_file_offset(0),
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
-		max_open_files = DBConfig::GetSetting<PartitionedWriteMaxOpenFilesSetting>(context);
+		max_open_files = Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context);
 	}
+	~CopyToFunctionGlobalState() override;
+
+	ClientContext &context;
+	//! Whether the copy was successfully finalized
+	bool finalized;
+	//! The list of files created by this operator
+	vector<string> created_files;
 
 	StorageLock lock;
 	atomic<bool> initialized;
@@ -79,6 +86,7 @@ public:
 			return;
 		}
 		// initialize writing to the file
+		created_files.push_back(op.file_path);
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*global_state, op);
@@ -198,6 +206,7 @@ public:
 				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 			}
 		}
+		created_files.push_back(full_path);
 		optional_ptr<CopyToFileInfo> written_file_info;
 		if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
 			written_file_info = AddFile(*global_lock, full_path, op.return_type);
@@ -244,6 +253,17 @@ private:
 	idx_t global_offset = 0;
 };
 
+CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
+	if (!initialized || finalized || created_files.empty()) {
+		return;
+	}
+	// If we reach here, the query failed before Finalize was called
+	auto &fs = FileSystem::GetFileSystem(context);
+	for (auto &file : created_files) {
+		fs.TryRemoveFile(file);
+	}
+}
+
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string trimmed_path = file_path;
@@ -255,7 +275,7 @@ class CopyToFunctionLocalState : public LocalSinkState {
 public:
 	explicit CopyToFunctionLocalState(ClientContext &context, unique_ptr<LocalFunctionData> local_state)
 	    : local_state(std::move(local_state)) {
-		partitioned_write_flush_threshold = DBConfig::GetSetting<PartitionedWriteFlushThresholdSetting>(context);
+		partitioned_write_flush_threshold = Settings::Get<PartitionedWriteFlushThresholdSetting>(context);
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -356,6 +376,7 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
+	g.created_files.push_back(output_path);
 	optional_ptr<CopyToFileInfo> written_file_info;
 	if (return_type != CopyFunctionReturnType::CHANGED_ROWS) {
 		written_file_info = g.AddFile(global_lock, output_path, return_type);
@@ -389,11 +410,6 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
 		return;
 	}
-	if (fs.IsRemoteFile(file_path) && overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-		// we can only remove files for local file systems currently
-		// as remote file systems (e.g. S3) do not support RemoveFile
-		throw NotImplementedException("OVERWRITE is not supported for remote file systems");
-	}
 	vector<string> file_list;
 	vector<string> directory_list;
 	directory_list.push_back(file_path);
@@ -412,9 +428,7 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 		return;
 	}
 	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-		for (auto &file : file_list) {
-			fs.RemoveFile(file);
-		}
+		fs.RemoveFiles(file_list);
 	} else {
 		throw IOException("Directory \"%s\" is not empty! Enable OVERWRITE option to overwrite files", file_path);
 	}
@@ -470,7 +484,6 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = GetNonTmpFile(context, tmp_file_path);
-	fs.TryRemoveFile(file_path);
 	fs.MoveFile(tmp_file_path, file_path);
 }
 
@@ -640,7 +653,10 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               OperatorSinkFinalizeInput &input) const {
-	return FinalizeInternal(context, input.global_state);
+	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
+	auto result = FinalizeInternal(context, input.global_state);
+	gstate.finalized = true;
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -704,8 +720,8 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyT
 	chunk.SetValue(5, row_idx, info.partition_keys);
 }
 
-SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
-                                             OperatorSourceInput &input) const {
+SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                     OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		auto &source_state = input.global_state.Cast<CopyToFileGlobalSourceState>();

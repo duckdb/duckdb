@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -297,7 +298,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
-			table_binding->types[i.index] = col.Type();
+			table_binding->SetColumnType(i.index, col.Type());
 		}
 		bound_indices.insert(i);
 	}
@@ -681,7 +682,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

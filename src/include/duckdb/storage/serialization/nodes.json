@@ -41,7 +41,8 @@
       {
         "id": 102,
         "name": "materialized",
-        "type": "CTEMaterialize"
+        "type": "CTEMaterialize",
+        "serialize_property": "GetMaterializedForSerialization(serializer)"
       },
       {
         "id": 103,
@@ -1083,6 +1084,30 @@
         "id": 2,
         "name": "child_indexes",
         "type": "vector<ColumnIndex>"
+      },
+      {
+        "id": 3,
+        "name": "index_type",
+        "type": "ColumnIndexType",
+        "default": "ColumnIndexType::FULL_READ"
+      },
+      {
+        "id": 4,
+        "name": "type",
+        "type": "LogicalType",
+        "default": "LogicalType::INVALID"
+      },
+      {
+        "id": 5,
+        "name": "field",
+        "type": "string",
+        "default": "\"\""
+      },
+      {
+        "id": 6,
+        "name": "has_index",
+        "type": "bool",
+        "default": "true"
       }
     ],
     "pointer_type": "none"

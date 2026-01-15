@@ -27,6 +27,11 @@ bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const 
 }
 
 FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) const {
+	if (stats.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
+		// Delegate to GeometryStats for geometry types
+		return GeometryStats::CheckZonemap(stats, expr);
+	}
+
 	// we cannot prune based on arbitrary expressions currently
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }

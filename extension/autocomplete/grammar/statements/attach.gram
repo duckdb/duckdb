@@ -1,6 +1,6 @@
-AttachStatement <- 'ATTACH'i OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
+AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
-Database <- 'DATABASE'i
+Database <- 'DATABASE'
 DatabasePath <- StringLiteral
-AttachAlias <- 'AS'i ColId
+AttachAlias <- 'AS' ColId
 AttachOptions <- Parens(GenericCopyOptionList)

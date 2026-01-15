@@ -65,9 +65,6 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	auto result = Relation::Bind(binder);
 	auto &replacements = binder.GetReplacementScans();
 	if (first_bind) {
-		auto &query_node = *select_stmt->node;
-		auto &cte_map = query_node.cte_map;
-		vector<unique_ptr<CTENode>> materialized_ctes;
 		for (auto &kv : replacements) {
 			auto &name = kv.first;
 			auto &tableref = kv.second;
@@ -87,29 +84,16 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 			auto cte_info = make_uniq<CommonTableExpressionInfo>();
 			cte_info->query = std::move(select);
 
+			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt), "query_relation");
+			auto top_level_select = make_uniq<SelectStatement>();
+			auto top_level_select_node = make_uniq<SelectNode>();
+			top_level_select_node->select_list.push_back(make_uniq<StarExpression>());
+			top_level_select_node->from_table = std::move(subquery);
+			auto &cte_map = top_level_select_node->cte_map;
+			top_level_select->node = std::move(top_level_select_node);
 			cte_map.map[name] = std::move(cte_info);
-
-			// We can not rely on CTE inlining anymore, so we need to add a materialized CTE node
-			// to the query node to ensure that the CTE exists
-			auto &cte_entry = cte_map.map[name];
-			auto mat_cte = make_uniq<CTENode>();
-			mat_cte->ctename = name;
-			mat_cte->query = cte_entry->query->node->Copy();
-			mat_cte->aliases = cte_entry->aliases;
-			mat_cte->materialized = cte_entry->materialized;
-			materialized_ctes.push_back(std::move(mat_cte));
+			select_stmt = std::move(top_level_select);
 		}
-
-		auto root = std::move(select_stmt->node);
-		while (!materialized_ctes.empty()) {
-			unique_ptr<CTENode> node_result;
-			node_result = std::move(materialized_ctes.back());
-			node_result->cte_map = root->cte_map.Copy();
-			node_result->child = std::move(root);
-			root = std::move(node_result);
-			materialized_ctes.pop_back();
-		}
-		select_stmt->node = std::move(root);
 	}
 	replacements.clear();
 	binder.SetBindingMode(saved_binding_mode);

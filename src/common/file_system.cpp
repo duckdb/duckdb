@@ -30,10 +30,7 @@
 #include <unistd.h>
 
 #ifdef __MVS__
-#define _XOPEN_SOURCE_EXTENDED 1
 #include <sys/resource.h>
-// enjoy - https://reviews.llvm.org/D92110
-#define PATH_MAX _XOPEN_PATH_MAX
 #endif
 
 #else
@@ -231,7 +228,7 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 
 string FileSystem::NormalizeAbsolutePath(const string &path) {
 	D_ASSERT(IsPathAbsolute(path));
-	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
+	auto result = FileSystem::ConvertSeparators(path);
 	if (StartsWithSingleBackslash(result)) {
 		// Path starts with a single backslash or forward slash
 		// prepend drive letter
@@ -453,6 +450,10 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
+FileMetadata FileSystem::Stats(FileHandle &handle) {
+	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
@@ -574,6 +575,12 @@ bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> 
 	return false;
 }
 
+void FileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	for (const auto &filename : filenames) {
+		TryRemoveFile(filename, opener);
+	}
+}
+
 void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
@@ -617,6 +624,10 @@ void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
 }
 
 bool FileSystem::SubSystemIsDisabled(const string &name) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
+}
+
+bool FileSystem::IsDisabledForPath(const string &path) {
 	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
 }
 
@@ -694,7 +705,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -710,7 +721,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -722,7 +733,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -730,7 +741,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -806,6 +817,10 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+FileMetadata FileHandle::Stats() {
+	return file_system.Stats(*this);
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {

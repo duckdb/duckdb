@@ -520,8 +520,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 		return true;
 	}
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (!dbconfig.options.autoload_known_extensions) {
+	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 	try {
@@ -537,8 +536,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name =
 		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -594,8 +592,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(db);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
 		if (IsAutoloadableFunction(type)) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
@@ -640,7 +637,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// the setting is not in an extension
 	// get a list of all options
 	vector<string> potential_names = DBConfig::GetOptionNames();
-	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
+	for (auto &entry : DBConfig::GetConfig(context).GetExtensionSettings()) {
 		potential_names.push_back(entry.first);
 	}
 	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
@@ -651,7 +648,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
-	auto max_schema_count = DBConfig::GetSetting<CatalogErrorMaxSchemasSetting>(context);
+	auto max_schema_count = Settings::Get<CatalogErrorMaxSchemasSetting>(context);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
@@ -909,6 +906,22 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
 	}
+
+	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
+	// Throw an error about the schema instead of the table
+	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		string schema_name = lookups[0].schema;
+		if (!IsInvalidSchema(schema_name)) {
+			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
+			string relation_name = schema_name + "." + lookup_info.GetEntryName();
+			auto except =
+			    CatalogException(schema_lookup.GetErrorContext(),
+			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
+			                     relation_name, schema_name);
+			return {nullptr, nullptr, ErrorData(except)};
+		}
+	}
+
 	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
 	// otherwise.
 	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
@@ -1135,6 +1148,9 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto &database : databases) {
+		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
+		}
 		auto &catalog = database->GetCatalog();
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());

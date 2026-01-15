@@ -8,8 +8,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateFunction::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.CreateFunction(context.client, *info);
 

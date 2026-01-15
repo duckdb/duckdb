@@ -26,9 +26,9 @@ ScalarFunction MapFromEntriesFun::GetFunction() {
 	auto row_type = LogicalType::STRUCT({{"", key_type}, {"", val_type}});
 
 	ScalarFunction fun({LogicalType::LIST(row_type)}, map_type, MapFromEntriesFunction);
-	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
-	BaseScalarFunction::SetReturnsError(fun);
+	fun.SetFallible();
 	return fun;
 }
 

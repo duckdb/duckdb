@@ -1,0 +1,100 @@
+# name: test/sql/types/struct/unnest_column_names.test
+# description: Test the retantion of column names when doing recursive unnest
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb': 84}}], recursive := true, keep_parent_names := true);
+----
+42	84
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb':  84}}], recursive := true, keep_parent_names := true))
+----
+a.aa	INTEGER
+b.bb	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a':{ 'aa': {'aaa': 42}}, 'b':{'bb':  84}}], recursive := true, keep_parent_names := true));
+----
+a.aa.aaa	INTEGER
+b.bb	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, keep_parent_names := true));
+----
+a	INTEGER
+b.bb.bbb	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, keep_parent_names := false));
+----
+a	INTEGER
+bbb	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, max_depth := 3, keep_parent_names := true));
+----
+a	INTEGER
+b.bb	STRUCT(bbb INTEGER)
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, max_depth := 2, keep_parent_names := true));
+----
+a	INTEGER
+b	STRUCT(bb STRUCT(bbb INTEGER))
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], max_depth := 3));
+----
+a	INTEGER
+bb	STRUCT(bbb INTEGER)
+
+# Tests unnamed structs
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42)), recursive := true, keep_parent_names := true));
+----
+element1	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42)), recursive := true));
+----
+element1	INTEGER
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42))));
+----
+element1	STRUCT(INTEGER)
+
+# Check empty names
+
+statement error
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'': {'': 12}}}], max_depth := 3));
+----
+<REGEX>:.*Binder Error.*Need named argument for struct pack.*
+
+statement error
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'': {'': 12}}], recursive := true, keep_parent_names := true));
+----
+<REGEX>:.*Binder Error.*Need named argument for struct pack.*
+
+# Test empty structs or lists
+
+statement error
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{}], recursive := true, keep_parent_names := true));
+----
+Parser Error: syntax error
+
+statement error
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([]), recursive := true, keep_parent_names := true));
+----
+Parser Error: syntax error
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42), 41), keep_parent_names := true, recursive := true));
+----
+element1	INTEGER
+element2	INTEGER

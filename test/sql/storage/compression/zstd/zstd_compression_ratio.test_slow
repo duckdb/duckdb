@@ -10,10 +10,7 @@ SET storage_compatibility_version='v1.2.0'
 load __TEST_DIR__/test_zstd_compression_ratio.db
 
 statement ok
-set enable_logging=true;
-
-statement ok
-set logging_level='info';
+CALL enable_logging(level='trace')
 
 statement ok
 PRAGMA force_compression='zstd'
@@ -42,7 +39,7 @@ checkpoint
 query I
 SELECT message FROM duckdb_logs where message.starts_with('ColumnDataCheckpointer FinalAnalyze') and message.contains('test_compressed') and message.contains('VARCHAR') order by timestamp;
 ----
-ColumnDataCheckpointer FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 230801376
+<REGEX>:.*ZSTD.*230801376
 
 statement ok
 PRAGMA force_compression='uncompressed'
@@ -67,7 +64,7 @@ checkpoint
 query I
 SELECT message FROM duckdb_logs where message.starts_with('ColumnDataCheckpointer FinalAnalyze') and message.contains('test_uncompressed') and message.contains('VARCHAR') order by timestamp;
 ----
-ColumnDataCheckpointer FinalAnalyze(COMPRESSION_UNCOMPRESSED) result for main.test_uncompressed.0(VARCHAR): 462400000
+<REGEX>:.*UNCOMPRESSED.*462400000.*
 
 query I
 SELECT compression FROM pragma_storage_info('test_compressed') WHERE segment_type != 'VALIDITY' AND compression != 'ZSTD';

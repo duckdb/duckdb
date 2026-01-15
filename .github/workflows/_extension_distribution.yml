@@ -40,7 +40,7 @@ on:
 jobs:
   build:
     name: Build
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
@@ -56,7 +56,7 @@ jobs:
 
       # CI tools is pinned to main
       override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: v1.4-andium
+      ci_tools_version: main
 
       exclude_archs: ${{ inputs.exclude_archs }}
       opt_in_archs: ${{ inputs.opt_in_archs }}

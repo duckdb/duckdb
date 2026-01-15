@@ -1,3 +1,8 @@
+#pragma once
+
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/weak_ptr_ipp.hpp"
+
 namespace duckdb {
 
 template <class T>

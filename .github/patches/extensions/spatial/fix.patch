@@ -1,0 +1,100 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index cc81600..7ea5de9 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -290,8 +290,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void RTreeIndex::Vacuum(IndexLock &state) {
+ }
+ 
+-string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("RTreeIndex::VerifyAndToString() not implemented");
++void RTreeIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("RTreeIndex::Verify() not implemented");
++}
++
++string RTreeIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("RTreeIndex::ToString() not implemented");
+ }
+ 
+ void RTreeIndex::VerifyAllocations(IndexLock &state) {
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index 202a6c7..243a476 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -61,8 +61,13 @@ public:
+ 	//! Traverses an RTreeIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the RTreeIndex, or only traverses and verifies the index
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
+ 
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index f24f049..fefd285 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -9,6 +9,7 @@
+ 
+ // DuckDB
+ #include "duckdb/main/database.hpp"
++#include "duckdb/main/settings.hpp"
+ #include "duckdb/common/enums/file_glob_options.hpp"
+ #include "duckdb/common/multi_file/multi_file_reader.hpp"
+ #include "duckdb/function/table/arrow.hpp"
+@@ -237,7 +238,7 @@ public:
+ 			}
+ 
+ 			// Fall back to GDAL instead (if external access is enabled)
+-			if (!context.db->config.options.enable_external_access) {
++			if (!Settings::Get<EnableExternalAccessSetting>(context)) {
+ 				if (bSetError) {
+ 					VSIError(VSIE_FileError, "Failed to open file %s with GDAL: External access is disabled",
+ 					         file_name);
+@@ -444,7 +445,7 @@ void GDALClientContextState::QueryEnd() {
+ string GDALClientContextState::GetPrefix(const string &value) const {
+ 	// If the user explicitly asked for a VSI prefix, we don't add our own
+ 	if (StringUtil::StartsWith(value, "/vsi")) {
+-		if (!context.db->config.options.enable_external_access) {
++		if (!Settings::Get<EnableExternalAccessSetting>(context)) {
+ 			throw PermissionException("Cannot open file '%s' with VSI prefix: External access is disabled", value);
+ 		}
+ 		return value;
+@@ -963,12 +964,12 @@ struct ST_Read : ArrowTableFunction {
+ 			state.all_columns.Reset();
+ 			state.all_columns.SetCardinality(output_size);
+ 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), state.all_columns,
+-			                                  gstate.lines_read - output_size, false);
++			                                   false);
+ 			output.ReferenceColumns(state.all_columns, gstate.projection_ids);
+ 		} else {
+ 			output.SetCardinality(output_size);
+ 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), output,
+-			                                  gstate.lines_read - output_size, false);
++			                                   false);
+ 		}
+ 
+ 		if (!data.keep_wkb) {
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 96d04f1..468dcaf 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -9342,6 +9342,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
+ 	static constexpr auto ORDINATE = VertexOrdinate::M;
+ };
+ 
++constexpr const char * ST_M::NAME;
++constexpr const char * ST_X::NAME;
++constexpr const char * ST_Y::NAME;
++constexpr const char * ST_Z::NAME;
++
+ } // namespace
+ 
+ // Helper to access the constant distance from the bind data

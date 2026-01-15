@@ -1,0 +1,18 @@
+# name: test/sql/peg_parser/transformer/transaction_statement.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+set allow_parser_override_extension=strict;
+
+statement ok
+BEGIN TRANSACTION READ ONLY;

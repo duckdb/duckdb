@@ -20,9 +20,9 @@ public:
 
 public:
 	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<LogicalType> types, vector<string> colnames,
-	              CTEMaterialize materialized_cte, bool is_recurring = false)
+	              bool is_recurring = false)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index),
-	      correlated_columns(0), materialized_cte(materialized_cte), is_recurring(is_recurring) {
+	      correlated_columns(0), is_recurring(is_recurring) {
 		D_ASSERT(!types.empty());
 		chunk_types = std::move(types);
 		bound_columns = std::move(colnames);
@@ -37,8 +37,6 @@ public:
 	vector<LogicalType> chunk_types;
 	//! Number of correlated columns
 	idx_t correlated_columns;
-	//! Does this operator read a materialized CTE?
-	CTEMaterialize materialized_cte;
 	//! Does this operator read the recurring CTE table
 	bool is_recurring = false;
 

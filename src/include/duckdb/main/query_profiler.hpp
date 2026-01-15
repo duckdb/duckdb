@@ -10,8 +10,11 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -21,10 +24,8 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/profiling_node.hpp"
-
-#include <stack>
+#include "duckdb/main/profiling_utils.hpp"
 
 namespace duckdb {
 
@@ -33,6 +34,7 @@ class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
+struct ActiveTimer;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
@@ -47,30 +49,39 @@ struct OperatorInformation {
 	idx_t result_set_size = 0;
 	idx_t system_peak_buffer_manager_memory = 0;
 	idx_t system_peak_temp_directory_size = 0;
+	idx_t rows_scanned = 0;
 
 	InsertionOrderPreservingMap<string> extra_info;
 
-	void AddTime(double n_time) {
-		time += n_time;
-	}
-
-	void AddReturnedElements(idx_t n_elements) {
-		elements_returned += n_elements;
-	}
-
-	void AddResultSetSize(idx_t n_result_set_size) {
-		result_set_size += n_result_set_size;
-	}
-
-	void UpdateSystemPeakBufferManagerMemory(idx_t used_memory) {
-		if (used_memory > system_peak_buffer_manager_memory) {
-			system_peak_buffer_manager_memory = used_memory;
+	template <typename T>
+	void AddMetric(MetricType type, T metric) {
+		switch (type) {
+		case MetricType::OPERATOR_TIMING:
+			time += metric;
+			break;
+		case MetricType::OPERATOR_CARDINALITY:
+			elements_returned += LossyNumericCast<idx_t>(metric);
+			break;
+		case MetricType::RESULT_SET_SIZE:
+			result_set_size += LossyNumericCast<idx_t>(metric);
+			break;
+		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
+			if (metric > system_peak_buffer_manager_memory) {
+				system_peak_buffer_manager_memory += LossyNumericCast<idx_t>(metric);
+			}
+			break;
 		}
-	}
-
-	void UpdateSystemPeakTempDirectorySize(idx_t used_swap) {
-		if (used_swap > system_peak_temp_directory_size) {
-			system_peak_temp_directory_size = used_swap;
+		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
+			if (metric > system_peak_temp_directory_size) {
+				system_peak_temp_directory_size = LossyNumericCast<idx_t>(metric);
+			}
+			break;
+		}
+		case MetricType::OPERATOR_ROWS_SCANNED:
+			rows_scanned = LossyNumericCast<idx_t>(metric);
+			break;
+		default:
+			throw InternalException("OperatorProfiler: Unknown metric type");
 		}
 	}
 };
@@ -94,7 +105,6 @@ public:
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
-	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
 
 public:
 	ClientContext &context;
@@ -113,22 +123,6 @@ private:
 	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
 };
 
-//! Top level query metrics.
-struct QueryMetrics {
-	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
-
-	ProfilingInfo query_global_info;
-
-	//! The SQL string of the query
-	string query;
-	//! The timer used to time the excution time of the entire query
-	Profiler latency;
-	//! The total bytes read by the file system
-	atomic<idx_t> total_bytes_read;
-	//! The total bytes written by the file system
-	atomic<idx_t> total_bytes_written;
-};
-
 //! QueryProfiler collects the profiling metrics of a query.
 class QueryProfiler {
 public:
@@ -138,9 +132,6 @@ public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	//! Propagate save_location, enabled, detailed_enabled and automatic_print_format.
-	void Propagate(QueryProfiler &qp);
-
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
 	DUCKDB_API ProfilerPrintFormat GetPrintFormat(ExplainFormat format = ExplainFormat::DEFAULT) const;
@@ -154,19 +145,20 @@ public:
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
 
-	//! Adds nr_bytes bytes to the total bytes read.
-	DUCKDB_API void AddBytesRead(const idx_t nr_bytes);
-	//! Adds nr_bytes bytes to the total bytes written.
-	DUCKDB_API void AddBytesWritten(const idx_t nr_bytes);
+	//! Adds amount to a specific metric type.
+	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
+
+	//! Start/End a timer for a specific metric type.
+	DUCKDB_API ActiveTimer StartTimer(MetricType type);
 
 	DUCKDB_API void StartExplainAnalyze();
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
-	DUCKDB_API void SetInfo(const double &blocked_thread_time);
+	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
 
-	DUCKDB_API void StartPhase(MetricsType phase_metric);
+	DUCKDB_API void StartPhase(MetricType phase_metric);
 	DUCKDB_API void EndPhase();
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
@@ -180,12 +172,15 @@ public:
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
 
-	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
+	// Sanitize a Value::MAP
+	static Value JSONSanitize(const Value &input);
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
 	DUCKDB_API void ToLog() const;
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
+	DUCKDB_API idx_t GetBytesRead() const;
+	DUCKDB_API idx_t GetBytesWritten() const;
 
 	idx_t OperatorSize() {
 		return tree_map.size();
@@ -242,11 +237,11 @@ private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	using PhaseTimingStorage = unordered_map<MetricsType, double, MetricsTypeHashFunction>;
+	using PhaseTimingStorage = unordered_map<MetricType, double, MetricTypeHashFunction>;
 	PhaseTimingStorage phase_timings;
 	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
-	vector<MetricsType> phase_stack;
+	vector<MetricType> phase_stack;
 
 private:
 	void MoveOptimizerPhasesToRoot();

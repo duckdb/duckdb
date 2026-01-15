@@ -18,7 +18,6 @@
         "test/sql/attach/attach_show_all_tables.test",
         "test/sql/attach/attach_table_info.test",
         "test/sql/attach/attach_views.test",
-        "test/sql/attach/show_databases.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_set_search_path.test",
         "test/sql/catalog/test_temporary.test",
@@ -30,13 +29,21 @@
         "test/sql/show_select/test_describe_all.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
         "test/sql/table_function/duckdb_databases.test",
-        "test/sql/tpch/dbgen_error.test"
+        "test/sql/tpch/dbgen_error.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
       ]
     },
     {
       "reason": "ALP is disabled for non-default block sizes.",
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
+      ]
+    },
+    {
+      "reason": "Expects db with name 'memory'",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test"
       ]
     }
   ]

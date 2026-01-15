@@ -1,14 +1,18 @@
-CreateStatement <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt)
-OrReplace <- 'OR'i 'REPLACE'i
-Temporary <- 'TEMP'i / 'TEMPORARY'i / 'PERSISTENT'i
+CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
+CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt
+OrReplace <- 'OR' 'REPLACE'
+Temporary <- Persistent / TempPersistent / TemporaryPersistent
+Persistent <- 'PERSISTENT'
+TempPersistent <- 'TEMP'
+TemporaryPersistent <- 'TEMPORARY'
 
-CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
+CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? 'AS'i SelectStatement WithData?
-WithData <- 'WITH'i 'NO'i? 'DATA'i
+CreateTableAs <- IdentifierList? 'AS' SelectStatementInternal WithData?
+WithData <- 'WITH' 'NO'? 'DATA'
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
-IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
+IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
 CatalogReservedSchemaIdentifier <- CatalogQualification ReservedSchemaQualification ReservedIdentifierOrStringLiteral
@@ -25,26 +29,26 @@ CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
 ColumnDefinition <- DottedIdentifier TypeOrGenerated ColumnConstraint*
 TypeOrGenerated <- Type? GeneratedColumn?
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
-NotNullConstraint <- 'NOT'i? 'NULL'i
-UniqueConstraint <- 'UNIQUE'i
-PrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i
-DefaultValue <- 'DEFAULT'i Expression
-CheckConstraint <- 'CHECK'i Parens(Expression)
-ForeignKeyConstraint <- 'REFERENCES'i BaseTableName Parens(ColumnList)? KeyActions?
-ColumnCollation <- 'COLLATE'i Expression
-ColumnCompression <- 'USING'i 'COMPRESSION'i ColIdOrString
+NotNullConstraint <- 'NOT'? 'NULL'
+UniqueConstraint <- 'UNIQUE'
+PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
+DefaultValue <- 'DEFAULT' Expression
+CheckConstraint <- 'CHECK' Parens(Expression)
+ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions?
+ColumnCollation <- 'COLLATE' Expression
+ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
 
 KeyActions <- UpdateAction? DeleteAction?
 UpdateAction <- 'ON' 'UPDATE' KeyAction
 DeleteAction <- 'ON' 'DELETE' KeyAction
-KeyAction <- ('NO'i 'ACTION'i) / 'RESTRICT'i / 'CASCADE'i / ('SET'i 'NULL'i) / ('SET'i 'DEFAULT'i)
+KeyAction <- ('NO' 'ACTION') / 'RESTRICT' / 'CASCADE' / ('SET' 'NULL') / ('SET' 'DEFAULT')
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
-ConstraintNameClause <- 'CONSTRAINT'i Identifier
-TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
-TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
-TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
+ConstraintNameClause <- 'CONSTRAINT' Identifier
+TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
+TopUniqueConstraint <- 'UNIQUE' ColumnIdList
+TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
 ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
@@ -59,10 +63,11 @@ TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifi
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
 ColLabelOrString <- ColLabel / StringLiteral
-GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
+GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
-Generated <- 'GENERATED'i AlwaysOrByDefault?
-AlwaysOrByDefault <- 'ALWAYS'i / ('BY'i 'DEFAULT'i)
-GeneratedColumnType <- 'VIRTUAL'i / 'STORED'i
+Generated <- 'GENERATED' AlwaysOrByDefault?
+AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
+GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 
-CommitAction <- 'ON'i 'COMMIT'i 'PRESERVE'i 'ROWS'i
+CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
+PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'

@@ -31,6 +31,9 @@
 
 namespace duckdb {
 
+constexpr idx_t ArrayType::MAX_ARRAY_SIZE;
+const idx_t UnionType::MAX_UNION_MEMBERS;
+
 LogicalType::LogicalType() : LogicalType(LogicalTypeId::INVALID) {
 }
 
@@ -158,6 +161,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
+		return PhysicalType::VARCHAR;
+	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
@@ -523,6 +528,14 @@ string LogicalType::ToString() const {
 		}
 		return TemplateType::GetName(*this);
 	}
+	case LogicalTypeId::GEOMETRY: {
+		if (!type_info_ || !GeoType::HasCRS(*this)) {
+			return "GEOMETRY";
+		}
+		auto &crs = GeoType::GetCRS(*this);
+		auto crs_name = KeywordHelper::WriteQuoted(crs.GetDisplayName(), '\'');
+		return StringUtil::Format("GEOMETRY(%s)", crs_name);
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -725,6 +738,7 @@ bool LogicalType::IsTemporal() const {
 	switch (id_) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -806,6 +820,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(*this);
@@ -1263,7 +1278,7 @@ struct ForceGetTypeOperation {
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
-	if (DBConfig::GetSetting<OldImplicitCastingSetting>(context)) {
+	if (Settings::Get<OldImplicitCastingSetting>(context)) {
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
@@ -1344,6 +1359,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 102;
 	case LogicalTypeId::BIGNUM:
 		return 103;
+	case LogicalTypeId::GEOMETRY:
+		return 104;
 	// nested types
 	case LogicalTypeId::STRUCT:
 		return 125;
@@ -2012,6 +2029,54 @@ LogicalType LogicalType::VARIANT() {
 
 	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::VARIANT, std::move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Spatial Types
+//===--------------------------------------------------------------------===//
+
+LogicalType LogicalType::GEOMETRY() {
+	return LogicalType(LogicalTypeId::GEOMETRY);
+}
+
+LogicalType LogicalType::GEOMETRY(const string &crs) {
+	if (crs.empty()) {
+		return LogicalType::GEOMETRY();
+	}
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	info->crs = CoordinateReferenceSystem(crs);
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+}
+
+LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
+	auto info = make_shared_ptr<GeoTypeInfo>();
+	info->crs = crs;
+	return LogicalType(LogicalTypeId::GEOMETRY, std::move(info));
+}
+
+bool GeoType::HasCRS(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return false;
+	}
+	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
+	const auto &geo_info = info->Cast<GeoTypeInfo>();
+
+	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
+}
+
+const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		throw InternalException("Geometry type has no CRS information");
+	}
+	D_ASSERT(info);
+	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
+	auto &geo_info = info->Cast<GeoTypeInfo>();
+
+	return geo_info.crs;
 }
 
 //===--------------------------------------------------------------------===//

@@ -4,8 +4,14 @@
 
 require vector_size 2048
 
+require block_size 262144
+
+require no_alternative_verify
+
+# 256 KiB is the lowest that we can go, which is a single page
+# we take 300KiB to be slightly more lenient
 statement ok
-SET memory_limit='10kb';
+SET memory_limit='300KiB';
 
 # this works
 statement ok

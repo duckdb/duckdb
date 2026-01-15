@@ -14,9 +14,9 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/common/printer.hpp"
 
 #include <complex>
-#include <iostream>
 
 namespace duckdb {
 
@@ -252,8 +252,9 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 }
 
 void StdOutLogStorage::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t write_size) {
-	std::cout.write(const_char_ptr_cast(buffer), NumericCast<int64_t>(write_size));
-	std::cout.flush();
+	string data(const_char_ptr_cast(buffer), NumericCast<size_t>(write_size));
+	Printer::RawPrint(OutputStream::STREAM_STDOUT, data);
+	Printer::Flush(OutputStream::STREAM_STDOUT);
 }
 
 StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, false, 1) {
@@ -593,7 +594,6 @@ BufferingLogStorage::~BufferingLogStorage() {
 }
 
 static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggingContext &context, idx_t &col) {
-
 	auto size = chunk.size();
 
 	auto context_id_data = FlatVector::GetData<idx_t>(chunk.data[col++]);

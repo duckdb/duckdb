@@ -17,7 +17,6 @@ struct SizeModifiers {
 };
 
 static SizeModifiers GetSizeModifiers(duckdb_libpgquery::PGTypeName &type_name, LogicalTypeId base_type) {
-
 	SizeModifiers result;
 
 	if (base_type == LogicalTypeId::DECIMAL) {
@@ -117,6 +116,23 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		}
 		return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(type_name.typmods->length));
 	}
+	if (base_type == LogicalTypeId::GEOMETRY) {
+		if (!type_name.typmods || type_name.typmods->length == 0) {
+			return LogicalType::GEOMETRY();
+		}
+		// Expect a single type modifier with the CRS definition
+		if (type_name.typmods->length != 1) {
+			throw ParserException(
+			    "GEOMETRY type takes a single optional type modifier with a coordinate system definition");
+		}
+		auto crs_node = PGPointerCast<duckdb_libpgquery::PGAConst>(type_name.typmods->head->data.ptr_value);
+		if (crs_node->type != duckdb_libpgquery::T_PGAConst || crs_node->val.type != duckdb_libpgquery::T_PGString) {
+			throw ParserException(
+			    "GEOMETRY type modifier must be a string with a coordinate system definition definition");
+		}
+		return LogicalType::GEOMETRY(crs_node->val.val.str);
+	}
+
 	if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");

@@ -7,6 +7,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -46,11 +48,11 @@ void ExpressionBinder::InitializeStackCheck() {
 
 StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
 	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
-	auto &options = ClientConfig::GetConfig(context);
-	if (stack_depth + extra_stack >= options.max_expression_depth) {
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(context);
+	if (stack_depth + extra_stack >= max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
-		                      options.max_expression_depth);
+		                      max_expression_depth);
 	}
 	return StackChecker<ExpressionBinder>(*this, extra_stack);
 }
@@ -69,7 +71,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::COLLATE:
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression, expr);
 	case ExpressionClass::LAMBDA_REF:
 		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
@@ -364,6 +366,16 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 		// already bound, don't bind it again
 		return ErrorData();
 	}
+	if (expression.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &w = expression.Cast<WindowExpression>();
+		if (w.HasBoundedParts()) {
+			BindResult result =
+			    BindResult(BinderException::Unsupported(*expr, "window expression is not supported here"));
+			if (result.HasError()) {
+				return std::move(result.error);
+			}
+		}
+	}
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
@@ -397,7 +409,14 @@ bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
-bool ExpressionBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
+	// traditional alias (unqualified), or qualified with table name "alias"
+	if (!colref.IsQualified()) {
+		return true;
+	}
+	if (colref.column_names.size() == 2) {
+		return StringUtil::CIEquals(colref.GetTableName(), "alias");
+	}
 	return false;
 }
 

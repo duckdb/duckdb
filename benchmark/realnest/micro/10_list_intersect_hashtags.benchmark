@@ -1,0 +1,22 @@
+# name: benchmark/realnest/micro/10_list_intersect_hashtags.benchmark
+# description: list_intersect to get common hashtags
+# group: [micro]
+
+name list_intersect_hashtags
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+WITH A AS (
+    SELECT rowid, data.text AS text, list_transform(data.entities.hashtags, x -> x.tag) AS hashtag_list from twitter)
+SELECT left_.text, right_.text, len(list_intersect(left_.hashtag_list, right_.hashtag_list)) AS common_hashtags
+FROM A left_, A right_
+    WHERE common_hashtags > 0 AND left_.rowid < right_.rowid
+    ORDER BY common_hashtags DESC;

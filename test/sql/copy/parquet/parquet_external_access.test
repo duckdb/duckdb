@@ -15,36 +15,44 @@ SET enable_external_access=false;
 statement error
 SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # or their metadata
 statement error
 SELECT * FROM parquet_metadata('{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 statement error
 SELECT * FROM parquet_schema('{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # also not in a list
 statement error
 SELECT * FROM parquet_scan(['{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet', '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'])
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # neither can we glob
 statement error
 SELECT * FROM glob('{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # or copy to/from...
 statement error
 COPY lineitem FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 statement error
 COPY lineitem TO '{TEMP_DIR}/lineitem.parquet'
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # we also can't just enable external access again
 statement error
 SET enable_external_access=true;
 ----
+<REGEX>:.*Invalid Input Error: Cannot change.*while database is running.*

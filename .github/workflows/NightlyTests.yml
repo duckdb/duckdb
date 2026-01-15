@@ -44,7 +44,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -57,6 +57,8 @@ jobs:
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Build
        shell: bash
@@ -80,17 +82,17 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - uses: ./.github/actions/cleanup_runner
 
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -113,11 +115,9 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - uses: ./.github/actions/cleanup_runner
 
     - uses: actions/setup-python@v5
       with:
@@ -127,6 +127,8 @@ jobs:
       run: brew install ninja
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -146,7 +148,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -157,6 +159,8 @@ jobs:
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -186,7 +190,7 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -197,6 +201,8 @@ jobs:
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -213,7 +219,7 @@ jobs:
      needs: linux-memory-leaks
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -244,7 +250,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -255,6 +261,8 @@ jobs:
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Build
        shell: bash
@@ -274,11 +282,9 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Checkout duckdb-httpfs
         uses: actions/checkout@v4
@@ -301,6 +307,8 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
+      - uses: ./.github/actions/cleanup_runner
+
       - name: Build
         shell: bash
         run: CORE_EXTENSIONS="tpch" make
@@ -321,36 +329,6 @@ jobs:
         run: |
           ./scripts/run_extension_medata_tests.sh
 
-  force-blocking-sink-source:
-    name: Forcing async Sinks/Sources
-    runs-on: ubuntu-24.04
-    needs: linux-memory-leaks
-    env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      FORCE_ASYNC_SINK_SOURCE: 1
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - uses: ./.github/actions/ccache-action
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
-
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
    runs-on: ubuntu-22.04
@@ -365,14 +343,14 @@ jobs:
 
    steps:
      - name: Checkout
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
      - uses: ./.github/actions/cleanup_runner
 
      - name: Checkout tools repo
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
          path: unsafe
@@ -387,6 +365,8 @@ jobs:
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Build
        shell: bash
@@ -439,17 +419,17 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Build
         id: build
@@ -476,7 +456,7 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -487,6 +467,8 @@ jobs:
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
+
+      - uses: ./.github/actions/cleanup_runner
 
       - name: Build
         id: build
@@ -500,6 +482,40 @@ jobs:
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
         run: ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
+
+  force-blocking-sink-source:
+    name: Forcing async Sinks/Sources
+    runs-on: ubuntu-24.04
+    needs: check-draft
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      FORCE_ASYNC_SINK_SOURCE: 1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -526,7 +542,7 @@ jobs:
         git submodule update
         git rm -r submodules/duckdb
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         path: duckdb-wasm/submodules/duckdb
@@ -538,6 +554,8 @@ jobs:
         make patch_duckdb || echo "done"
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Print version
       shell: bash
@@ -585,17 +603,17 @@ jobs:
      DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
 
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
-
-     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
 
      - name: Build
        shell: bash

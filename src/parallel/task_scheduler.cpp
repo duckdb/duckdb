@@ -5,6 +5,8 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
@@ -225,9 +227,9 @@ ProducerToken::~ProducerToken() {
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
       allocator_flush_threshold(db.config.options.allocator_flush_threshold),
-      allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
+      allocator_background_threads(Settings::Get<AllocatorBackgroundThreadsSetting>(db)), requested_thread_count(0),
       current_thread_count(1) {
-	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
+	SetAllocatorBackgroundThreads(allocator_background_threads);
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -270,17 +272,19 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
 
-	auto &config = DBConfig::GetConfig(db);
+	const auto &block_allocator = BlockAllocator::Get(db);
+	const auto &config = DBConfig::GetConfig(db);
+
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		if (!Allocator::SupportsFlush()) {
+		if (!block_allocator.SupportsFlush()) {
 			// allocator can't flush, just start an untimed wait
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
 			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
-			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
-			                       NumericCast<idx_t>(requested_thread_count.load()));
+			block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                            NumericCast<idx_t>(requested_thread_count.load()));
 			auto decay_delay = Allocator::DecayDelay();
 			if (!decay_delay.IsValid()) {
 				// no decay delay specified - just wait
@@ -296,8 +300,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 		}
 		if (queue->Dequeue(task)) {
-			auto process_mode = config.options.scheduler_process_partial ? TaskExecutionMode::PROCESS_PARTIAL
-			                                                             : TaskExecutionMode::PROCESS_ALL;
+			auto process_mode = TaskExecutionMode::PROCESS_ALL;
+			if (Settings::Get<SchedulerProcessPartialSetting>(config)) {
+				process_mode = TaskExecutionMode::PROCESS_PARTIAL;
+			}
 			auto execute_result = task->Execute(process_mode);
 
 			switch (execute_result) {
@@ -322,8 +328,8 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		}
 	}
 	// this thread will exit, flush all of its outstanding allocations
-	if (Allocator::SupportsFlush()) {
-		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
+	if (block_allocator.SupportsFlush()) {
+		block_allocator.ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
 		Allocator::ThreadIdle();
 	}
 #else
@@ -516,7 +522,8 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
 	if (threads.size() == new_thread_count) {
-		current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
+		auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
+		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
 	if (threads.size() > new_thread_count) {
@@ -539,9 +546,10 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 
 		// Whether to pin threads to cores
 		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
-		const auto pin_threads = db.config.options.pin_threads == ThreadPinMode::ON ||
-		                         (db.config.options.pin_threads == ThreadPinMode::AUTO &&
-		                          std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
+		auto pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
+		const auto pin_threads =
+		    pin_thread_mode == ThreadPinMode::ON ||
+		    (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
@@ -562,10 +570,9 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
-	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
+	current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
+	BlockAllocator::Get(db).FlushAll();
 #endif
 }
 

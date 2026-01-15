@@ -392,11 +392,6 @@
         "type": "vector<string>"
       },
       {
-        "id": 204,
-        "name": "materialized_cte",
-        "type": "CTEMaterialize"
-      },
-      {
         "id": 205,
         "name": "is_recurring",
         "type": "bool"
@@ -406,8 +401,7 @@
       "table_index",
       "cte_index",
       "chunk_types",
-      "bound_columns",
-      "materialized_cte"
+      "bound_columns"
     ]
   },
   {

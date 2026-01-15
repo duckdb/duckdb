@@ -55,9 +55,6 @@ public:
 
 	string GetSegmentInfo() const override;
 
-	vector<block_id_t> GetAdditionalBlocks() const override;
-	void Cleanup(BlockManager &manager);
-
 private:
 	mutex block_lock;
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;

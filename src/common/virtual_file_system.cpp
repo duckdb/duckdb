@@ -5,6 +5,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/caching_file_system_wrapper.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,6 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
-
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
@@ -34,14 +34,29 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
-	// open the base file handle in UNCOMPRESSED mode
 
+	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
-	auto file_handle = FindFileSystem(file.path, opener).OpenFile(file, flags, opener);
+
+	auto &internal_filesystem = FindFileSystem(file.path, opener);
+
+	// File handle gets created.
+	unique_ptr<FileHandle> file_handle = nullptr;
+
+	// Handle caching logic.
+	if (flags.GetCachingMode() != CachingMode::NO_CACHING) {
+		auto caching_filesystem =
+		    make_shared_ptr<CachingFileSystemWrapper>(internal_filesystem, opener, flags.GetCachingMode());
+		// caching filesystem's lifecycle is extended inside of caching file handle.
+		file_handle = caching_filesystem->OpenFile(file, flags, opener);
+	} else {
+		file_handle = internal_filesystem.OpenFile(file, flags, opener);
+	}
 	if (!file_handle) {
 		return nullptr;
 	}
 
+	// Evaluate and apply compression option then.
 	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
@@ -88,6 +103,9 @@ string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 }
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
+}
+FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
+	return handle.file_system.Stats(handle);
 }
 
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -136,6 +154,17 @@ bool VirtualFileSystem::TryRemoveFile(const string &filename, optional_ptr<FileO
 	return FindFileSystem(filename).TryRemoveFile(filename, opener);
 }
 
+void VirtualFileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	reference_map_t<FileSystem, vector<string>> files_by_fs;
+	for (const auto &filename : filenames) {
+		auto &fs = FindFileSystem(filename);
+		files_by_fs[fs].push_back(filename);
+	}
+	for (auto &entry : files_by_fs) {
+		entry.first.get().RemoveFiles(entry.second, opener);
+	}
+}
+
 string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path).PathSeparator(path);
 }
@@ -145,6 +174,14 @@ vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *ope
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {
+	// Sub-filesystem number is not expected to be huge, also filesystem registration should be called infrequently.
+	const auto &name = fs->GetName();
+	for (auto sub_system = sub_systems.begin(); sub_system != sub_systems.end(); sub_system++) {
+		if (sub_system->get()->GetName() == name) {
+			throw InvalidInputException("Filesystem with name %s has already been registered, cannot re-register!",
+			                            name);
+		}
+	}
 	sub_systems.push_back(std::move(fs));
 }
 
@@ -218,6 +255,17 @@ bool VirtualFileSystem::SubSystemIsDisabled(const string &name) {
 	return disabled_file_systems.find(name) != disabled_file_systems.end();
 }
 
+bool VirtualFileSystem::IsDisabledForPath(const string &path) {
+	if (disabled_file_systems.empty()) {
+		return false;
+	}
+	auto fs = FindFileSystemInternal(path);
+	if (!fs) {
+		fs = default_fs.get();
+	}
+	return disabled_file_systems.find(fs->GetName()) != disabled_file_systems.end();
+}
+
 FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<FileOpener> opener) {
 	return FindFileSystem(path, FileOpener::TryGetDatabase(opener));
 }
@@ -234,9 +282,8 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path, optional_ptr<D
 			}
 		}
 		if (!required_extension.empty() && db_instance && !db_instance->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(*db_instance);
 			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
-			    !dbconfig.options.autoload_known_extensions) {
+			    !Settings::Get<AutoloadKnownExtensionsSetting>(*db_instance)) {
 				auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
 				error_message =
 				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(*db_instance, error_message, required_extension);

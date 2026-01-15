@@ -19,6 +19,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types.hpp"
 #include "fast_float/fast_float.h"
 #include "duckdb/common/types/bit.hpp"
@@ -1406,7 +1407,6 @@ string_t CastFromBlobToBit::Operation(string_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <>
 string_t CastFromBitToString::Operation(string_t input, Vector &vector) {
-
 	idx_t result_size = Bit::BitLength(input);
 	string_t result = StringVector::EmptyString(vector, result_size);
 	Bit::ToString(input, result.GetDataWriteable());
@@ -1558,6 +1558,14 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict
 	result = BaseUUID::FromBlob(data);
 
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Geometry
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
+	return Geometry::FromString(input, result, result_vector, parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//
