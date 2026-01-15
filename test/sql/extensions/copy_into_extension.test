@@ -1,0 +1,12 @@
+# name: test/sql/extensions/copy_into_extension.test
+# description: Test that writing into extension folder is forbidden
+# group: [extensions]
+
+statement ok
+SET extension_directory = 'folder';
+
+statement error
+COPY (SELECT 42) TO 'folder/a.csv';
+----
+<REGEX>:Permission Error: Cannot access .* - writing to extension directory is disabled by configuration.*
+

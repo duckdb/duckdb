@@ -27,4 +27,4 @@ SET allow_unsigned_extensions=false;
 statement error
 LOAD 'README.md';
 ----
-The file is not a DuckDB extension. The metadata at the end of the file is invalid
+Permission Error: Loading extensions from arbitrary paths is forbidden through configuration, consider

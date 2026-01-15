@@ -30,6 +30,7 @@ public:
 	static constexpr idx_t FILE_FLAGS_NULL_IF_EXISTS = idx_t(1 << 10);
 	static constexpr idx_t FILE_FLAGS_MULTI_CLIENT_ACCESS = idx_t(1 << 11);
 	static constexpr idx_t FILE_FLAGS_DISABLE_LOGGING = idx_t(1 << 12);
+	static constexpr idx_t FILE_FLAGS_ENABLE_EXTENSION_FOLDER = idx_t(1 << 13);
 
 public:
 	FileOpenFlags() = default;
@@ -115,6 +116,9 @@ public:
 	inline bool DisableLogging() const {
 		return flags & FILE_FLAGS_DISABLE_LOGGING;
 	}
+	inline bool EnableInExtensionFolder() const {
+		return flags & FILE_FLAGS_ENABLE_EXTENSION_FOLDER;
+	}
 	inline idx_t GetFlagsInternal() const {
 		return flags;
 	}
@@ -159,6 +163,9 @@ public:
 	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
 	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
+	//! Allow writing into extension folder
+	static constexpr FileOpenFlags FILE_FLAGS_ENABLE_EXTENSION_FOLDER =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
 };
 
 } // namespace duckdb
