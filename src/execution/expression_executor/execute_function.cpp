@@ -117,7 +117,6 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 }
 
 void ExecuteFunctionState::ResetDictionaryStates() {
-
 	// Clear the cached dictionary information
 	current_input_dictionary_id.clear();
 	output_dictionary.reset();
