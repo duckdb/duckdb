@@ -17,12 +17,12 @@ select
     num::varchar || list_reduce([uuid()::varchar for x in range(10)], lambda x, y: concat(x, y)) str
 from range(20_000) t(i) order by num;
 
-# # Because we're running in In-Memory mode, we have explicitly disabled ZSTD
-# # Since the InMemoryBlockManager doesn't support the methods required by ZSTD
-# statement ok
-# force checkpoint;
-#
-# query I
-# select distinct compression = 'Uncompressed' from pragma_storage_info('tbl') where segment_type = 'VARCHAR'
-# ----
-# true
+# Because we're running in In-Memory mode, we have explicitly disabled ZSTD
+# Since the InMemoryBlockManager doesn't support the methods required by ZSTD
+statement ok
+force checkpoint;
+
+query I
+select distinct compression = 'Uncompressed' from pragma_storage_info('tbl') where segment_type = 'VARCHAR'
+----
+true
