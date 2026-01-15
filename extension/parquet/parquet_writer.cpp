@@ -510,25 +510,6 @@ void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData
 	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));
 }
 
-void ParquetWriter::InitializeSchemaElements() {
-	//! Populate the schema elements of the parquet file we're writing
-	lock_guard<mutex> glock(lock);
-	if (!file_meta_data.schema.empty()) {
-		return;
-	}
-	// populate root schema object
-	file_meta_data.schema.resize(1);
-	file_meta_data.schema[0].name = "duckdb_schema";
-	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
-	file_meta_data.schema[0].__isset.num_children = true;
-	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
-	file_meta_data.schema[0].__isset.repetition_type = true;
-
-	for (auto &column_writer : column_writers) {
-		column_writer->FinalizeSchema(file_meta_data.schema);
-	}
-}
-
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result,
                                     unique_ptr<ParquetWriteTransformData> &transform_data) {
 	AnalyzeSchema(raw_buffer, column_writers);
@@ -890,6 +871,42 @@ struct NullStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
+void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
+                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
+	if (!written_stats) {
+		return;
+	}
+
+	// push the stats of this column into the unifier
+	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
+	bool has_nan = false;
+	if (writer_stats) {
+		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
+		has_nan = writer_stats->HasNaN();
+		stats_unifier->has_nan = has_nan;
+	}
+	if (column.meta_data.__isset.statistics) {
+		if (has_nan && writer_stats->HasStats()) {
+			// if we have NaN values we have not written the min/max to the Parquet file
+			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
+			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
+		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
+		} else {
+			stats_unifier->all_min_max_set = false;
+		}
+		if (column.meta_data.statistics.__isset.null_count) {
+			stats_unifier->null_count += column.meta_data.statistics.null_count;
+		} else {
+			stats_unifier->all_nulls_set = false;
+		}
+		if (writer_stats && writer_stats->HasGeoStats()) {
+			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
+		}
+		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
+	}
+}
+
 static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -981,38 +998,28 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 	}
 }
 
-void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
-                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
-	if (!written_stats) {
+void ParquetWriter::InitializeSchemaElements() {
+	//! Populate the schema elements of the parquet file we're writing
+	lock_guard<mutex> glock(lock);
+	if (!file_meta_data.schema.empty()) {
 		return;
 	}
-	// push the stats of this column into the unifier
-	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
-	bool has_nan = false;
-	if (writer_stats) {
-		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
-		has_nan = writer_stats->HasNaN();
-		stats_unifier->has_nan = has_nan;
+	// populate root schema object
+	file_meta_data.schema.resize(1);
+	file_meta_data.schema[0].name = "duckdb_schema";
+	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
+	file_meta_data.schema[0].__isset.num_children = true;
+	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+	file_meta_data.schema[0].__isset.repetition_type = true;
+
+	for (auto &column_writer : column_writers) {
+		column_writer->FinalizeSchema(file_meta_data.schema);
 	}
-	if (column.meta_data.__isset.statistics) {
-		if (has_nan && writer_stats->HasStats()) {
-			// if we have NaN values we have not written the min/max to the Parquet file
-			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
-			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
-		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
-			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
-		} else {
-			stats_unifier->all_min_max_set = false;
+	if (written_stats) {
+		// Lazily create the per-column stats unifiers (because we have to wait until
+		for (auto &column_writer : column_writers) {
+			GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
 		}
-		if (column.meta_data.statistics.__isset.null_count) {
-			stats_unifier->null_count += column.meta_data.statistics.null_count;
-		} else {
-			stats_unifier->all_nulls_set = false;
-		}
-		if (writer_stats && writer_stats->HasGeoStats()) {
-			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
-		}
-		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
 	}
 }
 
@@ -1166,10 +1173,6 @@ void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilt
 void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_stats_p) {
 	written_stats = written_stats_p;
 	stats_accumulator = make_uniq<ParquetStatsAccumulator>();
-	// create the per-column stats unifiers
-	for (auto &column_writer : column_writers) {
-		GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
-	}
 }
 
 } // namespace duckdb
