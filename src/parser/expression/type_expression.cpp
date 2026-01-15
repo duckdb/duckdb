@@ -1,6 +1,9 @@
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/common/exception.hpp"
-
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/types/hash.hpp"
 namespace duckdb {
 
 TypeExpression::TypeExpression(string catalog, string schema, string type_name,
