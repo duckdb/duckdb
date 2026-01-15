@@ -682,6 +682,8 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformEscapeClause(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 	static string TransformLikeVariations(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);

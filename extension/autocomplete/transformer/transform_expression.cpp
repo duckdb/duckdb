@@ -808,13 +808,24 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 	like_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1)));
 	auto escape_opt = list_pr.Child<OptionalParseResult>(2);
 	if (escape_opt.HasResult()) {
-		throw NotImplementedException("Escape is not yet implemented.");
+		if (like_variation == "~~") {
+			like_variation = "like_escape";
+		} else if (like_variation == "~~*") {
+			like_variation = "ilike_escape";
+		}
+		like_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(escape_opt.optional_result));
 	}
 	auto result = make_uniq<FunctionExpression>(like_variation, std::move(like_children));
 	if (like_variation != "regexp_full_match") {
 		result->is_operator = true;
 	}
 	return std::move(result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEscapeClause(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
 }
 
 string PEGTransformerFactory::TransformLikeVariations(PEGTransformer &transformer,

@@ -395,6 +395,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformInSelectStatement);
 	REGISTER_TRANSFORM(TransformBetweenClause);
 	REGISTER_TRANSFORM(TransformLikeClause);
+	REGISTER_TRANSFORM(TransformEscapeClause);
 	REGISTER_TRANSFORM(TransformLikeVariations);
 	REGISTER_TRANSFORM(TransformComparisonExpression);
 	REGISTER_TRANSFORM(TransformComparisonOperator);
