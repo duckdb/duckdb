@@ -56,7 +56,7 @@ BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalTyp
 	if (!input.context) {
 		throw InternalException("Missing context for TIMESTAMPTZ to DATE cast.");
 	}
-	if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+	if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 		throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to DATE without an explicit time zone "
 		                      "has been disabled  - use \"AT TIME ZONE ...\"");
 	}
