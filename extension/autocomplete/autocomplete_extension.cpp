@@ -332,7 +332,7 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 		AutoCompleteCandidate candidate(option_alias.alias, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
-	for (auto &entry : db_config.extension_parameters) {
+	for (auto &entry : db_config.GetExtensionSettings()) {
 		AutoCompleteCandidate candidate(entry.first, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}

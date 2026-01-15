@@ -52,7 +52,9 @@ def extract_declarations(setting) -> str:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.default_scope}_DEFAULT;\n"
         else:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.scope}_ONLY;\n"
-
+        if setting.setting_index is None:
+            raise Exception("Setting index was not set")
+        definition += f"    static constexpr idx_t SettingIndex = {setting.setting_index};\n"
         if setting.on_set:
             definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"
 
@@ -73,6 +75,17 @@ def generate_content(header_file_path):
     end_section = SEPARATOR + source_code[end_index:]
 
     new_content = "".join(extract_declarations(setting) for setting in SettingsList)
+    max_setting_index = (
+        max([setting.setting_index for setting in SettingsList if setting.setting_index is not None]) + 1
+    )
+    new_content += '''
+struct GeneratedSettingInfo {
+	static constexpr idx_t MaxSettingIndex = %s;
+};
+
+''' % (
+        max_setting_index,
+    )
     return start_section + new_content + end_section
 
 
