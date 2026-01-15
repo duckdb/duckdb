@@ -118,10 +118,16 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
 	vector<OpenFileInfo> open_files;
+	open_files.reserve(paths.size());
 	for (auto &path : paths) {
 		open_files.emplace_back(path);
 	}
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input);
+	// Read the force_glob_ordering setting to determine whether to sort glob results
+	Value force_glob_ordering_value = true;
+	context.TryGetCurrentSetting("force_glob_ordering", force_glob_ordering_value);
+	bool force_glob_ordering = force_glob_ordering_value.GetValue<bool>();
+
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input, force_glob_ordering);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
