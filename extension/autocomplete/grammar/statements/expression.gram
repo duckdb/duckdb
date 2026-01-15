@@ -2,7 +2,7 @@ ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableCol
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
 SchemaReservedTableColumnName <- SchemaQualification ReservedTableQualification ReservedColumnName
 TableReservedColumnName <- TableQualification ReservedColumnName
-FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
+FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreOrRespectNulls?) WithinGroupClause? FilterClause? ExportClause? OverClause?
 
 FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionName
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
@@ -12,7 +12,9 @@ DistinctOrAll <- 'DISTINCT' / 'ALL'
 ExportClause <- 'EXPORT_STATE'
 WithinGroupClause <- 'WITHIN' 'GROUP' Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'? Expression)
-IgnoreNulls <- ('IGNORE' 'NULLS') / ('RESPECT' 'NULLS')
+IgnoreOrRespectNulls <- IgnoreNulls / RespectNulls
+IgnoreNulls <- 'IGNORE' 'NULLS'
+RespectNulls <- 'RESPECT' 'NULLS'
 
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / ConstantLiteral
@@ -214,7 +216,7 @@ BaseExpression <- SingleExpression Indirection*
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
 DotOperator <- '.' (MethodExpression / ColLabel)
-MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?)
+MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreOrRespectNulls?)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?

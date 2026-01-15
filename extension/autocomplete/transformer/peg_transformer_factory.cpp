@@ -408,11 +408,13 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformListOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBitwiseExpression);
+	REGISTER_TRANSFORM(TransformBitOperator);
 	REGISTER_TRANSFORM(TransformAdditiveExpression);
 	REGISTER_TRANSFORM(TransformTerm);
 	REGISTER_TRANSFORM(TransformMultiplicativeExpression);
 	REGISTER_TRANSFORM(TransformFactor);
 	REGISTER_TRANSFORM(TransformExponentiationExpression);
+	REGISTER_TRANSFORM(TransformExponentOperator);
 	REGISTER_TRANSFORM(TransformCollateExpression);
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
@@ -427,6 +429,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformAnonymousParameter);
 	REGISTER_TRANSFORM(TransformColLabelParameter);
 	REGISTER_TRANSFORM(TransformNumberedParameter);
+	REGISTER_TRANSFORM(TransformPositionalExpression);
 
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformParensExpression);
@@ -533,6 +536,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformRenameEntryList);
 	REGISTER_TRANSFORM(TransformSingleRenameEntry);
 	REGISTER_TRANSFORM(TransformRenameEntry);
+
+	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
 }
 
 void PEGTransformerFactory::RegisterImport() {
@@ -718,6 +723,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformQualifyClause);
 	REGISTER_TRANSFORM(TransformWindowClause);
 	REGISTER_TRANSFORM(TransformWindowDefinition);
+	REGISTER_TRANSFORM(TransformUsingKey);
 
 	REGISTER_TRANSFORM(TransformSampleClause);
 	REGISTER_TRANSFORM(TransformSampleEntry);
@@ -930,6 +936,9 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<bool>("SubqueryAny", true);
 	RegisterEnum<bool>("SubqueryAll", false);
+
+	RegisterEnum<bool>("IgnoreNulls", true);
+	RegisterEnum<bool>("RespectNulls", false);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

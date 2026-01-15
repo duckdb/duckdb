@@ -1373,6 +1373,17 @@ bool PEGTransformerFactory::TransformMaterialized(PEGTransformer &transformer, o
 	return not_opt.HasResult();
 }
 
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformUsingKey(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto col_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
+	vector<unique_ptr<ParsedExpression>> results;
+	for (auto col : col_list) {
+		results.push_back(make_uniq<ColumnRefExpression>(std::move(col)));
+	}
+	return results;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformHavingClause(PEGTransformer &transformer,
                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

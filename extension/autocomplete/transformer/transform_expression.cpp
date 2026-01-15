@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -171,7 +172,9 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 
 	unique_ptr<ParsedExpression> filter_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, filter_expr);
-	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
+	bool ignore_nulls = false;
+	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
+
 	auto export_opt = list_pr.Child<OptionalParseResult>(4);
 	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0])) {
 		// COUNT(*) gets converted into COUNT()
@@ -282,7 +285,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && ignore_nulls_opt.HasResult()) {
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && ignore_nulls) {
 			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
 		}
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
@@ -319,7 +322,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 				}
 			}
 		}
-		expr->ignore_nulls = ignore_nulls_opt.HasResult();
+		expr->ignore_nulls = ignore_nulls;
 		expr->filter_expr = std::move(filter_expr);
 		expr->arg_orders = std::move(order_modifier->orders);
 		expr->distinct = distinct;
@@ -922,7 +925,26 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitwiseExpression(P
 	if (!bit_operator_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("BitOperator has not yet been implemented");
+	auto bit_repeat = bit_operator_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &bit_expr : bit_repeat.children) {
+		auto &inner_list_pr = bit_expr->Cast<ListParseResult>();
+		auto bit = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
+		vector<unique_ptr<ParsedExpression>> bit_children;
+		bit_children.push_back(std::move(expr));
+		bit_children.push_back(
+		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
+		auto func_expr = make_uniq<FunctionExpression>(std::move(bit), std::move(bit_children));
+		func_expr->is_operator = true;
+		expr = std::move(func_expr);
+	}
+	return expr;
+}
+
+string PEGTransformerFactory::TransformBitOperator(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 // AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
@@ -997,7 +1019,26 @@ PEGTransformerFactory::TransformExponentiationExpression(PEGTransformer &transfo
 	if (!exponent_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("Exponent has not yet been implemented");
+	auto exponent_repeat = exponent_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &exponent_expr : exponent_repeat.children) {
+		auto &inner_list_pr = exponent_expr->Cast<ListParseResult>();
+		auto exponent = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
+		vector<unique_ptr<ParsedExpression>> exponent_children;
+		exponent_children.push_back(std::move(expr));
+		exponent_children.push_back(
+		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
+		auto func_expr = make_uniq<FunctionExpression>(std::move(exponent), std::move(exponent_children));
+		func_expr->is_operator = true;
+		expr = std::move(func_expr);
+	}
+	return expr;
+}
+
+string PEGTransformerFactory::TransformExponentOperator(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 // CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
@@ -1157,7 +1198,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(P
 	auto expr = make_uniq<ParameterExpression>();
 	idx_t known_param_index = DConstants::INVALID_INDEX;
 
-	// 1. Check if we've seen this $name before
 	transformer.GetParam(identifier, known_param_index, PreparedParamType::NAMED);
 
 	if (known_param_index == DConstants::INVALID_INDEX) {
@@ -1169,6 +1209,19 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(P
 	expr->identifier = identifier;
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformPositionalExpression(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto number = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1));
+	auto &const_expr = number->Cast<ConstantExpression>();
+	int32_t index = const_expr.value.GetValue<int32_t>();
+	if (index <= 0) {
+		throw ParserException("Positional index must be greater than 0");
+	}
+	return make_uniq<PositionalReferenceExpression>(NumericCast<idx_t>(index));
 }
 
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
@@ -1329,11 +1382,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 	}
 	vector<OrderByNode> order_by;
 	transformer.TransformOptional<vector<OrderByNode>>(extract_parens, 2, order_by);
-	auto ignore_nulls_opt = extract_parens.Child<OptionalParseResult>(3);
-	if (ignore_nulls_opt.HasResult()) {
-		throw NotImplementedException("Ignore nulls has not yet been implemented");
-	}
-
+	bool ignore_nulls = false;
+	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
 	auto result =
 	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, collabel, std::move(function_children));
 	result->distinct = distinct;
@@ -2302,6 +2352,12 @@ pair<QualifiedColumnName, string> PEGTransformerFactory::TransformRenameEntry(PE
 	auto column_name = transformer.Transform<QualifiedColumnName>(list_pr.GetChild(0));
 	auto alias = list_pr.Child<IdentifierParseResult>(2).identifier;
 	return make_pair(column_name, alias);
+}
+
+bool PEGTransformerFactory::TransformIgnoreOrRespectNulls(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 } // namespace duckdb

@@ -697,6 +697,7 @@ private:
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
+	static string TransformBitOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAdditiveExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static string TransformTerm(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -705,6 +706,7 @@ private:
 	static string TransformFactor(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExponentiationExpression(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
+	static string TransformExponentOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformCollateExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAtTimeZoneExpression(PEGTransformer &transformer,
@@ -731,6 +733,8 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformColLabelParameter(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformPositionalExpression(PEGTransformer &transformer,
+	                                                                  optional_ptr<ParseResult> parse_result);
 
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
@@ -929,6 +933,7 @@ private:
 	                                                                 optional_ptr<ParseResult> parse_result);
 	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+	static bool TransformIgnoreOrRespectNulls(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
@@ -1211,6 +1216,8 @@ private:
 	                                                    optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<CommonTableExpressionInfo>>
 	TransformWithStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformUsingKey(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformHavingClause(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);

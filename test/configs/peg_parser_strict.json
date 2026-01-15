@@ -161,7 +161,8 @@
         "test/sql/copy/csv/multidelimiter/test_abac.test",
         "test/sql/cast/string_to_list_cast.test",
         "test/sql/copy/csv/test_validator.test",
-        "test/sql/copy/csv/pollock/test_quotation_char.test"
+        "test/sql/copy/csv/pollock/test_quotation_char.test",
+        "test/sql/copy/csv/auto/test_csv_auto.test"
       ]
     },
     {
@@ -200,7 +201,8 @@
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
         "test/sql/catalog/table/create_table_parameters.test",
         "test/sql/show_select/test_show_select.test",
-        "test/sql/copy/csv/glob/copy_csv_glob.test"
+        "test/sql/copy/csv/glob/copy_csv_glob.test",
+        "test/sql/cte/recursive_cte_key_variant.test"
       ]
     }
   ]

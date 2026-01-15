@@ -73,6 +73,7 @@ EXCLUDED_RULES = {
     "WithOrdinality",
     "ByName",
     "CollateOperator",
+    "ExportClause",
 }
 
 
