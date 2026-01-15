@@ -1016,7 +1016,6 @@ void ParquetWriter::InitializeSchemaElements() {
 		column_writer->FinalizeSchema(file_meta_data.schema);
 	}
 	if (written_stats) {
-		// Lazily create the per-column stats unifiers (because we have to wait until
 		for (auto &column_writer : column_writers) {
 			GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
 		}
