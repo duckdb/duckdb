@@ -155,9 +155,9 @@ LimitAll <- 'ALL'
 LimitLiteralPercent <- NumberLiteral 'PERCENT'
 LimitExpression <- Expression '%'?
 
-AliasedExpression <- ColIdExpression / ExpressionAsColLabel / ExpressionOptIdentifier
+AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression
-ExpressionAsColLabel <- Expression 'AS' ColLabelOrString
+ExpressionAsCollabel <- Expression 'AS' ColLabelOrString
 ExpressionOptIdentifier <- Expression Identifier?
 
 ValuesClause <- 'VALUES' List(ValuesExpressions)

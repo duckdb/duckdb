@@ -384,7 +384,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIsExpression);
 	REGISTER_TRANSFORM(TransformIsTest);
 	REGISTER_TRANSFORM(TransformIsLiteral);
-	REGISTER_TRANSFORM(TransformIsNotNull);
+	REGISTER_TRANSFORM(TransformNotNull);
 	REGISTER_TRANSFORM(TransformIsNull);
 	REGISTER_TRANSFORM(TransformIsDistinctFromExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);

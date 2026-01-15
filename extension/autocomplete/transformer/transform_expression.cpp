@@ -173,10 +173,12 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	unique_ptr<ParsedExpression> filter_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, filter_expr);
 	bool ignore_nulls = false;
+	bool has_ignore_nulls_result = extract_parens.Child<OptionalParseResult>(3).HasResult();
 	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
 
 	auto export_opt = list_pr.Child<OptionalParseResult>(4);
-	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0])) {
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0]) && !distinct &&
+	    order_modifier->orders.empty()) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
@@ -285,7 +287,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && ignore_nulls) {
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && has_ignore_nulls_result) {
 			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
 		}
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
@@ -332,7 +334,22 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("EXCLUDE is not supported for the window function \"%s\"",
 			                      expr->function_name.c_str());
 		}
+		const auto is_range =
+		    (expr->start == WindowBoundary::EXPR_PRECEDING_RANGE ||
+		     expr->start == WindowBoundary::EXPR_FOLLOWING_RANGE || expr->end == WindowBoundary::EXPR_PRECEDING_RANGE ||
+		     expr->end == WindowBoundary::EXPR_FOLLOWING_RANGE);
+		if (is_range && expr->orders.size() != 1) {
+			throw BinderException("RANGE frames must have only one ORDER BY expression, found %d instead.",
+			                      expr->orders.size());
+		}
+		if (expr->GetExpressionType() == ExpressionType::WINDOW_FILL &&
+		    (expr->arg_orders.size() > 1 || (expr->arg_orders.empty() && expr->orders.size() != 1))) {
+			throw BinderException("FILL functions must have only one ORDER BY expression");
+		}
 		return std::move(expr);
+	}
+	if (has_ignore_nulls_result) {
+		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
 	}
 
 	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema, lowercase_name,
@@ -341,7 +358,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 
 	return std::move(result);
 }
-
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -605,8 +621,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransf
 	return make_uniq<ComparisonExpression>(expr_type, nullptr, make_uniq<ConstantExpression>(literal_value));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNotNull(PEGTransformer &transformer,
-                                                                       optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNotNull(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
 	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, nullptr);
 }
 
@@ -1773,9 +1789,9 @@ WindowBoundaryExpression PEGTransformerFactory::TransformFrameExpression(PEGTran
 	auto is_preceding = transformer.Transform<bool>(list_pr.Child<ListParseResult>(1));
 	if (is_preceding) {
 		// These are placeholders and will be converted to groups/rows/range later
-		result.boundary = WindowBoundary::EXPR_PRECEDING_ROWS;
+		result.boundary = WindowBoundary::EXPR_PRECEDING_RANGE;
 	} else {
-		result.boundary = WindowBoundary::EXPR_FOLLOWING_ROWS;
+		result.boundary = WindowBoundary::EXPR_FOLLOWING_RANGE;
 	}
 	return result;
 }
@@ -2293,6 +2309,9 @@ PEGTransformerFactory::TransformReplaceEntryList(PEGTransformer &transformer, op
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> entry_map;
 	for (auto entry : entry_list) {
 		auto replace_entry = transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(entry);
+		if (entry_map.find(replace_entry.first) != entry_map.end()) {
+			throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first);
+		}
 		entry_map.insert(std::move(replace_entry));
 	}
 	return entry_map;

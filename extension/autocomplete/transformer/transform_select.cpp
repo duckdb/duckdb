@@ -86,7 +86,7 @@ bool PEGTransformerFactory::TransformDistinctOrAll(PEGTransformer &transformer,
                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
-	return StringUtil::CIEquals(choice_pr->Cast<KeywordParseResult>().keyword, "all");
+	return StringUtil::CIEquals(choice_pr->Cast<KeywordParseResult>().keyword, "distinct");
 }
 
 SetOperationType PEGTransformerFactory::TransformSetopType(PEGTransformer &transformer,

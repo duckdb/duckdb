@@ -656,8 +656,8 @@ private:
 	                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformIsLiteral(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformIsNotNull(PEGTransformer &transformer,
-	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformNotNull(PEGTransformer &transformer,
+	                                                     optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformIsNull(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformIsDistinctFromExpression(PEGTransformer &transformer,
