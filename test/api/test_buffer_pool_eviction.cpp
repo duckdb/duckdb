@@ -17,7 +17,8 @@ constexpr const char *EXCEPTION_POSTSCRIPT = "exception postscript";
 
 struct NonEvictableObject : public ObjectCacheEntry {
 	int value;
-	explicit NonEvictableObject(int value_p) : value(value_p) {}
+	explicit NonEvictableObject(int value_p) : value(value_p) {
+	}
 	~NonEvictableObject() override = default;
 	string GetObjectType() override {
 		return ObjectType();
@@ -215,7 +216,8 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	REQUIRE(final_memory_usage == total_memory_limit);
 }
 
-TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and object cache entries non-evictable", "[storage][buffer_pool]") {
+TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and object cache entries non-evictable",
+          "[storage][buffer_pool]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;

@@ -331,7 +331,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 		// Break if all entries cannot be evicted.
 		if (freed_mem == 0) {
 			break;
-		} 
+		}
 
 		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 			success = true;
