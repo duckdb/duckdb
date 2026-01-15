@@ -1173,6 +1173,7 @@ void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilt
 void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_stats_p) {
 	written_stats = written_stats_p;
 	stats_accumulator = make_uniq<ParquetStatsAccumulator>();
+	//! NOTE: the actual accumulators for the writers are created after FinalizeSchema() is called
 }
 
 } // namespace duckdb
