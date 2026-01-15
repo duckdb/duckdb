@@ -135,4 +135,61 @@ idx_t VariantColumnReader::GroupRowsAvailable() {
 	throw InternalException("No projected columns in struct?");
 }
 
+LogicalType VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value) {
+	if (!typed_value.IsNested()) {
+		return typed_value;
+	}
+	auto type_id = typed_value.id();
+	if (type_id == LogicalTypeId::STRUCT) {
+		//! OBJECT (...)
+		auto &object_fields = StructType::GetChildTypes(typed_value);
+		child_list_t<LogicalType> children;
+		for (auto &object_field : object_fields) {
+			auto &name = object_field.first;
+			auto &field = object_field.second;
+			//! <name>: {
+			//! 	value: BLOB,
+			//! 	typed_value: <type>
+			//! }
+			auto &field_children = StructType::GetChildTypes(field);
+			idx_t index = DConstants::INVALID_INDEX;
+			for (idx_t i = 0; i < field_children.size(); i++) {
+				if (field_children[i].first == "typed_value") {
+					index = i;
+					break;
+				}
+			}
+			if (index == DConstants::INVALID_INDEX) {
+				//! This *might* be allowed by the spec, it's hard to reason about..
+				throw InvalidInputException("typed_value OBJECT child malformed, no 'typed_value' found");
+			}
+			children.emplace_back(name, TypedValueLayoutToType(field_children[index].second));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	if (type_id == LogicalTypeId::LIST) {
+		//! ARRAY
+		auto &element = ListType::GetChildType(typed_value);
+		//! element: {
+		//! 	value: BLOB,
+		//! 	typed_value: <type>
+		//! }
+		auto &element_children = StructType::GetChildTypes(element);
+		idx_t index = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < element_children.size(); i++) {
+			if (element_children[i].first == "typed_value") {
+				index = i;
+				break;
+			}
+		}
+		if (index == DConstants::INVALID_INDEX) {
+			//! This *might* be allowed by the spec, it's hard to reason about..
+			throw InvalidInputException("typed_value OBJECT child malformed, no 'typed_value' found");
+		}
+		return LogicalType::LIST(TypedValueLayoutToType(element_children[index].second));
+	}
+	throw InvalidInputException("VARIANT typed value has to be a primitive/struct/list, not %s",
+	                            typed_value.ToString());
+}
+
 } // namespace duckdb

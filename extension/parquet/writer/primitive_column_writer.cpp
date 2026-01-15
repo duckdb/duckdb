@@ -298,6 +298,8 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 			column_chunk.meta_data.__isset.statistics = true;
 			column_chunk.meta_data.statistics.is_max_value_exact = state.stats_state->MaxIsExact();
 			column_chunk.meta_data.statistics.__isset.is_max_value_exact = true;
+		} else {
+			//! If all values are NULL, `has_stats` will be false
 		}
 	}
 	if (HasDictionary(state)) {
