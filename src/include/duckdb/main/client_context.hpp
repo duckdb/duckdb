@@ -201,7 +201,7 @@ public:
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 	//! Returns the value of the current setting set by the user - if the user has set it.
-	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(const string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -310,9 +310,6 @@ private:
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
-
-	SettingLookupResult TryGetCurrentUserSettingInternal(const string &key, Value &result,
-	                                                     optional_ptr<const ConfigurationOption> &option) const;
 
 private:
 	//! Lock on using the ClientContext in parallel
