@@ -19,9 +19,14 @@ public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::STATEMENT_NODE;
 
 public:
+	//! Constructor for non-owning reference (common path)
 	explicit StatementNode(SQLStatement &stmt_p);
+	//! Constructor for owning the statement (for DML in CTEs)
+	explicit StatementNode(unique_ptr<SQLStatement> owned_stmt_p);
 
 	SQLStatement &stmt;
+	//! If set, this StatementNode owns the underlying statement
+	unique_ptr<SQLStatement> owned_statement;
 
 public:
 	//! Convert the query node to a string

@@ -55,6 +55,22 @@ static bool ContainsLimit(const LogicalOperator &op) {
 	return false;
 }
 
+static bool ContainsDMLOperator(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+		return true;
+	default:
+		for (auto &child : op.children) {
+			if (ContainsDMLOperator(*child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -91,13 +107,16 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		auto &cte = op->Cast<LogicalMaterializedCTE>();
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
-		if (ref_count == 0) {
-			// this CTE is not referenced, we can remove it
+		// Check if this CTE contains DML operators (INSERT/UPDATE/DELETE)
+		// DML CTEs must not be removed or inlined as they have side effects
+		bool is_dml_cte = ContainsDMLOperator(*op->children[0]);
+		if (ref_count == 0 && !is_dml_cte) {
+			// this CTE is not referenced and has no side effects, we can remove it
 			op = std::move(op->children[1]);
 			return;
 		}
-		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
-			// This CTE is always materialized, we cannot inline it
+		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS || is_dml_cte) {
+			// This CTE is always materialized or contains DML, we cannot inline it
 			return;
 		}
 		if (ref_count == 1) {

@@ -1,0 +1,201 @@
+# name: test/sql/cte/writable_cte.test
+# description: Test writable CTEs (data-modifying statements in CTEs)
+# group: [cte]
+
+# Note: Verification is not enabled because StatementNode wraps DML statements
+# (INSERT/UPDATE/DELETE) which don't have serialization support yet.
+# This can be added in a follow-up PR that implements SQLStatement serialization.
+
+# =============================================================================
+# Basic INSERT with RETURNING in CTE
+# =============================================================================
+
+statement ok
+CREATE TABLE t1 (id INTEGER, val TEXT);
+
+query II
+WITH inserted AS (INSERT INTO t1 VALUES (1, 'a'), (2, 'b') RETURNING *)
+SELECT * FROM inserted ORDER BY id;
+----
+1	a
+2	b
+
+query II
+SELECT * FROM t1 ORDER BY id;
+----
+1	a
+2	b
+
+# =============================================================================
+# Basic UPDATE with RETURNING in CTE
+# =============================================================================
+
+query II
+WITH updated AS (UPDATE t1 SET val = 'updated_' || val WHERE id = 1 RETURNING *)
+SELECT * FROM updated;
+----
+1	updated_a
+
+query II
+SELECT * FROM t1 ORDER BY id;
+----
+1	updated_a
+2	b
+
+# =============================================================================
+# Basic DELETE with RETURNING in CTE
+# =============================================================================
+
+query II
+WITH deleted AS (DELETE FROM t1 WHERE id = 2 RETURNING *)
+SELECT * FROM deleted;
+----
+2	b
+
+query II
+SELECT * FROM t1;
+----
+1	updated_a
+
+# =============================================================================
+# Chained DML CTEs (INSERT result feeds another INSERT)
+# =============================================================================
+
+statement ok
+CREATE TABLE t2 (id INTEGER, val TEXT);
+
+statement ok
+CREATE TABLE t3 (id INTEGER, val TEXT);
+
+query II
+WITH ins1 AS (INSERT INTO t2 VALUES (10, 'x'), (20, 'y') RETURNING *),
+     ins2 AS (INSERT INTO t3 SELECT * FROM ins1 RETURNING *)
+SELECT * FROM ins2 ORDER BY id;
+----
+10	x
+20	y
+
+query II
+SELECT * FROM t2 ORDER BY id;
+----
+10	x
+20	y
+
+query II
+SELECT * FROM t3 ORDER BY id;
+----
+10	x
+20	y
+
+# =============================================================================
+# Multiple references to DML CTE (should execute only once)
+# =============================================================================
+
+statement ok
+TRUNCATE t2;
+
+query IIII
+WITH ins AS (INSERT INTO t2 VALUES (100, 'test') RETURNING *)
+SELECT a.id, a.val, b.id, b.val FROM ins a, ins b;
+----
+100	test	100	test
+
+# Verify only one row was inserted (DML executed once)
+query II
+SELECT * FROM t2;
+----
+100	test
+
+# =============================================================================
+# Unreferenced DML CTE (should still execute - PostgreSQL behavior)
+# =============================================================================
+
+statement ok
+TRUNCATE t2;
+
+# The DML CTE is defined but not referenced in the main query
+query I
+WITH ins AS (INSERT INTO t2 VALUES (200, 'unreferenced') RETURNING id)
+SELECT 1;
+----
+1
+
+# Verify the insert still happened
+query II
+SELECT * FROM t2;
+----
+200	unreferenced
+
+# =============================================================================
+# Error cases
+# =============================================================================
+
+# Error: Recursive CTE with DML
+statement error
+WITH RECURSIVE cte AS (INSERT INTO t1 VALUES (999, 'error') RETURNING *)
+SELECT * FROM cte;
+----
+Recursive CTEs cannot contain data-modifying statements
+
+# Error: DML without RETURNING clause
+statement error
+WITH cte AS (INSERT INTO t1 VALUES (999, 'error'))
+SELECT * FROM cte;
+----
+INSERT in a CTE must have a RETURNING clause
+
+statement error
+WITH cte AS (UPDATE t1 SET val = 'error')
+SELECT * FROM cte;
+----
+UPDATE in a CTE must have a RETURNING clause
+
+statement error
+WITH cte AS (DELETE FROM t1 WHERE id = 999)
+SELECT * FROM cte;
+----
+DELETE in a CTE must have a RETURNING clause
+
+# =============================================================================
+# Complex queries with DML CTEs
+# =============================================================================
+
+statement ok
+CREATE TABLE audit_log (action TEXT, old_id INTEGER, old_val TEXT);
+
+# Use DELETE RETURNING to feed an INSERT
+statement ok
+INSERT INTO t1 VALUES (5, 'to_delete');
+
+query II
+WITH deleted AS (DELETE FROM t1 WHERE id = 5 RETURNING *)
+INSERT INTO audit_log SELECT 'deleted', id, val FROM deleted RETURNING action, old_id;
+----
+deleted	5
+
+query III
+SELECT * FROM audit_log;
+----
+deleted	5	to_delete
+
+# Verify the row was deleted from t1
+query II
+SELECT * FROM t1;
+----
+1	updated_a
+
+# =============================================================================
+# Clean up
+# =============================================================================
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+DROP TABLE t3;
+
+statement ok
+DROP TABLE audit_log;

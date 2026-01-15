@@ -1,6 +1,8 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/statement_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
+#include "duckdb/planner/table_binding.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -13,6 +15,9 @@ struct BoundCTEData {
 	idx_t setop_index;
 	shared_ptr<Binder> child_binder;
 	shared_ptr<CTEBindState> cte_bind_state;
+	//! Whether this CTE contains a DML statement (INSERT/UPDATE/DELETE)
+	//! DML CTEs must be bound even if unreferenced (PostgreSQL behavior)
+	bool is_dml_cte = false;
 };
 
 BoundStatement Binder::BindNode(QueryNode &node) {
@@ -111,6 +116,10 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 	result.materialized = statement.materialized;
 	result.setop_index = GenerateTableIndex();
 
+	// Check if this CTE contains a DML statement (StatementNode wraps INSERT/UPDATE/DELETE)
+	// DML CTEs must be bound even if unreferenced to ensure side effects occur
+	result.is_dml_cte = statement.query->node->type == QueryNodeType::STATEMENT_NODE;
+
 	// instead of eagerly binding the CTE here we add the CTE bind state to the list of CTE bindings
 	// the CTE is bound lazily - when referenced for the first time we perform the binding
 	result.cte_bind_state = make_shared_ptr<CTEBindState>(*this, *statement.query->node, statement.aliases);
@@ -127,9 +136,16 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
-		// CTE was not bound - just ignore it
-		MoveCorrelatedExpressions(*bound_cte.child_binder);
-		return child;
+		if (bound_cte.is_dml_cte) {
+			// DML CTEs must be bound even if unreferenced (PostgreSQL behavior)
+			// The DML operation must execute for its side effects
+			CTEBinding temp_binding(BindingAlias(bound_cte.ctename), bound_cte.cte_bind_state, bound_cte.setop_index);
+			bound_cte.cte_bind_state->Bind(temp_binding);
+		} else {
+			// Regular CTE was not bound - just ignore it
+			MoveCorrelatedExpressions(*bound_cte.child_binder);
+			return child;
+		}
 	}
 	auto &bind_state = *bound_cte.cte_bind_state;
 	for (auto &c : bind_state.query_binder->correlated_columns) {
