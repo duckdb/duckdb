@@ -312,10 +312,6 @@ void CachingFileSystemWrapper::RegisterSubSystem(FileCompressionType compression
 	underlying_file_system.RegisterSubSystem(compression_type, std::move(fs));
 }
 
-void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {
-	underlying_file_system.UnregisterSubSystem(name);
-}
-
 unique_ptr<FileSystem> CachingFileSystemWrapper::ExtractSubSystem(const string &name) {
 	return underlying_file_system.ExtractSubSystem(name);
 }
