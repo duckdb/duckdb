@@ -1,0 +1,12 @@
+# name: test/sql/extensions/load_arbitrary_path.test
+# description: Test that loading extensions from arbitrary paths is forbidden
+# group: [extensions]
+
+statement ok
+SET allow_unsigned_extensions = false;
+
+statement error
+LOAD 'folder/a.csv';
+----
+Permission Error: Loading extensions from arbitrary paths is forbidden through configuration
+

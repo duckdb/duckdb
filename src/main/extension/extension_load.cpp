@@ -365,6 +365,10 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
 	} else {
+		if (!db.config.options.allow_unsigned_extensions) {
+			throw PermissionException("Loading extensions from arbitrary paths is forbidden through configuration, "
+			                          "consider 'INSTALL <path>; LOAD <name>;'");
+		}
 		direct_load = true;
 		filename = fs.ExpandPath(filename);
 	}
