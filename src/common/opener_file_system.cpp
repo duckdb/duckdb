@@ -26,6 +26,50 @@ void OpenerFileSystem::VerifyCanAccessFileInternal(const string &path, FileType 
 	}
 }
 
+void OpenerFileSystem::VerifyCanWriteFile(const string &path) {
+
+	auto opener = GetOpener();
+	if (!opener) {
+		return;
+	}
+
+	auto db = opener->TryGetDatabase();
+	if (!db) {
+		return;
+	}
+	auto &config = db->config;
+
+	const auto home_directory = GetHomeDirectory();
+
+	string default_extension_folder = home_directory;
+	default_extension_folder = JoinPath(default_extension_folder, ".duckdb");
+	default_extension_folder = JoinPath(default_extension_folder, "extensions");
+
+	string extension_folder =
+	    !config.options.extension_directory.empty() ? config.options.extension_directory : default_extension_folder;
+
+	extension_folder = FileSystem::ExpandPath(extension_folder, nullptr);
+
+	// Now extension folder is absolute
+
+	string absolute_path = "";
+
+	string sanitized_path = config.SanitizeAllowedPath(path);
+
+	if (sanitized_path[0] == '~') {
+		absolute_path = FileSystem::GetHomeDirectory(opener) + sanitized_path.substr(1);
+	} else if (sanitized_path[0] == '/') {
+		absolute_path = sanitized_path;
+	} else {
+		absolute_path = config.SanitizeAllowedPath(GetWorkingDirectory() + '/' + sanitized_path);
+	}
+
+	if (StringUtil::StartsWith(absolute_path, extension_folder)) {
+		throw PermissionException("Cannot access \"%s\" - writing to extension directory is disabled by configuration",
+		                          path);
+	}
+}
+
 void OpenerFileSystem::VerifyCanAccessFile(const string &path) {
 	VerifyCanAccessFileInternal(path, FileType::FILE_TYPE_REGULAR);
 }

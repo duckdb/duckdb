@@ -21,6 +21,7 @@ public:
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
 	void VerifyCanAccessDirectory(const string &path);
 	void VerifyCanAccessFile(const string &path);
+	void VerifyCanWriteFile(const string &path);
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
@@ -156,6 +157,9 @@ protected:
 	                                        optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(file.path);
+		if (flags.OpenForWriting() && !flags.EnableInExtensionFolder()) {
+			VerifyCanWriteFile(file.path);
+		}
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}
 

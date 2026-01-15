@@ -177,14 +177,14 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
                                      idx_t data_size) {
 	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
-	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
 	target_file->Write(query_context, data, data_size);
 	target_file->Close();
 	target_file.reset();
 }
 
 static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
-	auto file_writer = BufferedFileWriter(fs, path);
+	auto file_writer = BufferedFileWriter(fs, path, BufferedFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
 	BinarySerializer::Serialize(metadata, file_writer);
 	file_writer.Sync();
 }
