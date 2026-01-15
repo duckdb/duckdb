@@ -175,16 +175,39 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 }
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
-                                     idx_t data_size) {
-	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
-	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
+                                     idx_t data_size, DBConfig &config) {
+	auto target_file =
+	    fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_APPEND |
+	                          FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
 	target_file->Write(query_context, data, data_size);
+
+	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*target_file);
+
+	if (!config.options.allow_unsigned_extensions) {
+		bool signature_valid;
+		if (parsed_metadata.AppearsValid()) {
+			signature_valid = ExtensionHelper::CheckExtensionSignature(*target_file, parsed_metadata,
+			                                                           config.options.allow_community_extensions);
+		} else {
+			signature_valid = false;
+		}
+
+		if (!signature_valid) {
+			target_file->Close();
+			target_file.reset();
+			fs.TryRemoveFile(path);
+			throw IOException("Attempting to install an extension file that hasn't a valid signature, see "
+			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
+		}
+	}
+
 	target_file->Close();
 	target_file.reset();
 }
 
 static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
-	auto file_writer = BufferedFileWriter(fs, path, BufferedFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
+	auto file_writer = BufferedFileWriter(
+	    fs, path, BufferedFileWriter::DEFAULT_OPEN_FLAGS | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_FOLDER);
 	BinarySerializer::Serialize(metadata, file_writer);
 	file_writer.Sync();
 }
@@ -239,9 +262,9 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
 static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
-                                ExtensionInstallInfo &info) {
+                                ExtensionInstallInfo &info, DBConfig &config) {
 	// Write extension to tmp file
-	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size);
+	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, config);
 
 	// Write metadata to tmp file
 	auto metadata_tmp_path = temp_path + ".info";
@@ -331,7 +354,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 
 	QueryContext query_context(context);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
-	                    extension_decompressed_size, info);
+	                    extension_decompressed_size, info, db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -423,7 +446,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	QueryContext query_context(context);
 	auto fs = FileSystem::CreateLocal();
 	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
-	                    decompressed_body.size(), info);
+	                    decompressed_body.size(), info, db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
