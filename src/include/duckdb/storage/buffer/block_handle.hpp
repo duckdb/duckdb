@@ -8,17 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
 class BlockManager;
 class BufferHandle;
+class BufferManager;
 class BufferPool;
 class DatabaseInstance;
 
@@ -58,12 +57,17 @@ class BlockHandle : public enable_shared_from_this<BlockHandle> {
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer,
-	            DestroyBufferUpon destroy_buffer_upon, idx_t block_size, BufferPoolReservation &&reservation);
+	            DestroyBufferUpon destroy_buffer_upon, idx_t size, BufferPoolReservation &&reservation);
 	~BlockHandle();
 
-	BlockManager &block_manager;
-
 public:
+	BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
+	BlockManager &GetBlockManager() const {
+		return block_manager;
+	}
+
 	block_id_t BlockId() const {
 		return block_id;
 	}
@@ -107,8 +111,18 @@ public:
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
 
-	inline idx_t GetMemoryUsage() const {
+	idx_t GetMemoryUsage() const {
 		return memory_usage;
+	}
+
+	//! Returns the size of the block that is available for usage,
+	//! as determined by the block manager that created the block.
+	idx_t GetBlockSize() const {
+		return block_alloc_size - block_header_size;
+	}
+	//! Returns the block header size including the 8-byte checksum.
+	idx_t GetBlockHeaderSize() const {
+		return block_header_size;
 	}
 
 	bool IsUnloaded() const {
@@ -178,6 +192,16 @@ private:
 	void VerifyMutex(unique_lock<mutex> &l) const;
 
 private:
+	BufferManager &buffer_manager;
+	BlockManager &block_manager;
+	//! The block allocation size, which is determined by the block manager creating the block.
+	//! For non-temporary block managers the block_alloc_size corresponds to the memory_usage.
+	//! If we are pinning/loading an unloaded block, then we know how much memory to reserve.
+	//! This is NOT the actual memory available on a block.
+	idx_t block_alloc_size;
+	//! The size of the block header, including the checksum.
+	idx_t block_header_size;
+
 	//! The block-level lock
 	mutex lock;
 	//! Whether or not the block is loaded/unloaded

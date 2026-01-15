@@ -114,7 +114,12 @@ public:
 	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
 	//! exists another block manager handling the ColumnData, of which this segment is a part.
 	BlockManager &GetBlockManager() const {
-		return block->block_manager;
+		return block->GetBlockManager();
+	}
+
+	//! Returns the size of the block that is available for usage.
+	idx_t GetBlockSize() const {
+		return block->GetBlockSize();
 	}
 
 	idx_t GetBlockOffset() {

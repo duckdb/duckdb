@@ -337,7 +337,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		auto alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockManager().GetBlockSize());
+		auto alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockSize());
 		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -366,17 +366,16 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 
 string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
                                                        int32_t offset) {
-	auto &block_manager = segment.GetBlockManager();
-	auto &buffer_manager = block_manager.buffer_manager;
+	auto &buffer_manager = segment.GetBlockManager().buffer_manager;
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 
 	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(offset < NumericCast<int32_t>(block_manager.GetBlockSize()));
+	D_ASSERT(offset < NumericCast<int32_t>(segment.GetBlockSize()));
 
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = state.GetHandle(block_manager, block);
+		auto block_handle = state.GetHandle(segment.GetBlockManager(), block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
@@ -387,7 +386,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		BufferHandle target_handle;
 		string_t overflow_string;
 		data_ptr_t target_ptr;
-		bool allocate_block = length >= block_manager.GetBlockSize();
+		bool allocate_block = length >= segment.GetBlockSize();
 		if (allocate_block) {
 			// overflow string is bigger than a block - allocate a temporary buffer for it
 			target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, length);
@@ -400,7 +399,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 		// now append the string to the single buffer
 		while (remaining > 0) {
-			idx_t to_write = MinValue<idx_t>(remaining, block_manager.GetBlockSize() - sizeof(block_id_t) -
+			idx_t to_write = MinValue<idx_t>(remaining, segment.GetBlockSize() - sizeof(block_id_t) -
 			                                                UnsafeNumericCast<idx_t>(offset));
 			memcpy(target_ptr, handle.Ptr() + offset, to_write);
 			remaining -= to_write;
@@ -409,7 +408,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 			if (remaining > 0) {
 				// read the next block
 				block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-				block_handle = state.GetHandle(block_manager, next_block);
+				block_handle = state.GetHandle(segment.GetBlockManager(), next_block);
 				handle = buffer_manager.Pin(block_handle);
 				offset = 0;
 			}
