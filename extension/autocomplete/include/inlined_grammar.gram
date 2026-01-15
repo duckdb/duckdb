@@ -765,7 +765,7 @@ BaseWindowName <- Identifier
 WindowPartition <- 'PARTITION' 'BY' List(Expression)
 ListExpression <- ArrayBoundedListExpression / ArrayParensSelect
 ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression
-ArrayParensSelect <- 'ARRAY' Parens(SelectStatement)
+ArrayParensSelect <- 'ARRAY' Parens(SelectStatementInternal)
 BoundedListExpression <- '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField)? '}'
 StructField <- ColIdOrString ':' Expression

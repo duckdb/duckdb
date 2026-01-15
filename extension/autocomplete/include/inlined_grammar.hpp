@@ -745,7 +745,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"WindowPartition <- 'PARTITION' 'BY' List(Expression)\n"
 	"ListExpression <- ArrayBoundedListExpression / ArrayParensSelect\n"
 	"ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression\n"
-	"ArrayParensSelect <- 'ARRAY' Parens(SelectStatement)\n"
+	"ArrayParensSelect <- 'ARRAY' Parens(SelectStatementInternal)\n"
 	"BoundedListExpression <- '[' List(Expression)? ']'\n"
 	"StructExpression <- '{' List(StructField)? '}'\n"
 	"StructField <- ColIdOrString ':' Expression\n"

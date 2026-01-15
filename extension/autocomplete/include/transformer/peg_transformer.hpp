@@ -175,6 +175,7 @@ public:
 	static void WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node);
 	static void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node);
 	static void VerifyColumnRefs(const ParsedExpression &expr);
+	static void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr);
 
 	// Registration methods
 	void RegisterAlter();

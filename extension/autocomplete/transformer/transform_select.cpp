@@ -67,9 +67,9 @@ unique_ptr<SetOperationNode> PEGTransformerFactory::TransformSetopClause(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<SetOperationNode>();
 	result->setop_type = transformer.Transform<SetOperationType>(list_pr.Child<ListParseResult>(0));
-	auto distinct_or_all_opt = list_pr.Child<OptionalParseResult>(1);
-	if (distinct_or_all_opt.HasResult()) {
-		result->setop_all = transformer.Transform<bool>(distinct_or_all_opt.optional_result);
+	auto is_distinct_opt = list_pr.Child<OptionalParseResult>(1);
+	if (is_distinct_opt.HasResult()) {
+		result->setop_all = !transformer.Transform<bool>(is_distinct_opt.optional_result);
 	}
 	auto by_name = list_pr.Child<OptionalParseResult>(2);
 	if (by_name.HasResult()) {

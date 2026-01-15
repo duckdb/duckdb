@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 
@@ -159,6 +160,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1))->Cast<ListParseResult>();
 	bool distinct = false;
 	transformer.TransformOptional<bool>(extract_parens, 0, distinct);
+
 	auto function_arg_opt = extract_parens.Child<OptionalParseResult>(1);
 	vector<unique_ptr<ParsedExpression>> function_children;
 	if (function_arg_opt.HasResult()) {
@@ -187,84 +189,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		lowercase_name = "count_star";
 	}
 
-	if (lowercase_name == "if") {
-		if (function_children.size() != 3) {
-			throw ParserException("Wrong number of arguments to IF.");
-		}
-		auto expr = make_uniq<CaseExpression>();
-		CaseCheck check;
-		check.when_expr = std::move(function_children[0]);
-		check.then_expr = std::move(function_children[1]);
-		expr->case_checks.push_back(std::move(check));
-		expr->else_expr = std::move(function_children[2]);
-		return std::move(expr);
-	} else if (lowercase_name == "unpack") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments to the UNPACK operator");
-		}
-		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-		expr->children = std::move(function_children);
-		return std::move(expr);
-	} else if (lowercase_name == "try") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to TRY expression");
-		}
-		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-		try_expression->children = std::move(function_children);
-		return std::move(try_expression);
-	} else if (lowercase_name == "construct_array") {
-		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-		construct_array->children = std::move(function_children);
-		return std::move(construct_array);
-	} else if (lowercase_name == "position") {
-		if (function_children.size() != 2) {
-			throw ParserException("Wrong number of arguments to __internal_position_operator.");
-		}
-		// swap arguments for POSITION(x IN y)
-		std::swap(function_children[0], function_children[1]);
-		lowercase_name = "position";
-	} else if (lowercase_name == "ifnull") {
-		if (function_children.size() != 2) {
-			throw ParserException("Wrong number of arguments to IFNULL.");
-		}
-
-		//  Two-argument COALESCE
-		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->children.push_back(std::move(function_children[0]));
-		coalesce_op->children.push_back(std::move(function_children[1]));
-		return std::move(coalesce_op);
-	} else if (lowercase_name == "date") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to DATE function");
-		}
-		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
-	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1) {
-		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments to LIST.");
-		}
-		auto arg_expr = function_children[0].get();
-		auto &order_by = order_modifier->orders[0];
-		if (arg_expr->Equals(*order_by.expression)) {
-			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
-			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
-			auto unordered = make_uniq<FunctionExpression>(
-			    qualified_function.catalog, qualified_function.schema, lowercase_name, std::move(function_children),
-			    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
-			lowercase_name = "list_sort";
-			order_modifier.reset();    // NOLINT
-			filter_expr.reset();       // NOLINT
-			function_children.clear(); // NOLINT
-			distinct = false;
-			function_children.emplace_back(std::move(unordered));
-			function_children.emplace_back(std::move(sense));
-			function_children.emplace_back(std::move(nulls));
-		}
-	}
-	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
-	if (within_group_opt.HasResult()) {
-		throw NotImplementedException("Within group has not yet been implemented");
-	}
 	auto over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
@@ -347,6 +271,85 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw BinderException("FILL functions must have only one ORDER BY expression");
 		}
 		return std::move(expr);
+	}
+
+	if (lowercase_name == "if") {
+		if (function_children.size() != 3) {
+			throw ParserException("Wrong number of arguments to IF.");
+		}
+		auto expr = make_uniq<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = std::move(function_children[0]);
+		check.then_expr = std::move(function_children[1]);
+		expr->case_checks.push_back(std::move(check));
+		expr->else_expr = std::move(function_children[2]);
+		return std::move(expr);
+	} else if (lowercase_name == "unpack") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(function_children);
+		return std::move(expr);
+	} else if (lowercase_name == "try") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to TRY expression");
+		}
+		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		try_expression->children = std::move(function_children);
+		return std::move(try_expression);
+	} else if (lowercase_name == "construct_array") {
+		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		construct_array->children = std::move(function_children);
+		return std::move(construct_array);
+	} else if (lowercase_name == "position") {
+		if (function_children.size() != 2) {
+			throw ParserException("Wrong number of arguments to __internal_position_operator.");
+		}
+		// swap arguments for POSITION(x IN y)
+		std::swap(function_children[0], function_children[1]);
+		lowercase_name = "position";
+	} else if (lowercase_name == "ifnull") {
+		if (function_children.size() != 2) {
+			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
+
+		//  Two-argument COALESCE
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->children.push_back(std::move(function_children[0]));
+		coalesce_op->children.push_back(std::move(function_children[1]));
+		return std::move(coalesce_op);
+	} else if (lowercase_name == "date") {
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
+	} else if (lowercase_name == "list" && order_modifier->orders.size() == 1) {
+		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+		if (function_children.size() != 1) {
+			throw ParserException("Wrong number of arguments to LIST.");
+		}
+		auto arg_expr = function_children[0].get();
+		auto &order_by = order_modifier->orders[0];
+		if (arg_expr->Equals(*order_by.expression)) {
+			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
+			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
+			auto unordered = make_uniq<FunctionExpression>(
+			    qualified_function.catalog, qualified_function.schema, lowercase_name, std::move(function_children),
+			    std::move(filter_expr), std::move(order_modifier), distinct, false, export_opt.HasResult());
+			lowercase_name = "list_sort";
+			order_modifier = make_uniq<OrderModifier>(); // NOLINT
+			filter_expr.reset();                         // NOLINT
+			function_children.clear();                   // NOLINT
+			distinct = false;
+			function_children.emplace_back(std::move(unordered));
+			function_children.emplace_back(std::move(sense));
+			function_children.emplace_back(std::move(nulls));
+		}
+	}
+	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
+	if (within_group_opt.HasResult()) {
+		throw NotImplementedException("Within group has not yet been implemented");
 	}
 	if (has_ignore_nulls_result) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
@@ -442,9 +445,105 @@ PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transforme
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(children));
 }
 
+void PEGTransformerFactory::RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+	    *root_expr, [&](ColumnRefExpression &col_ref) {
+		    auto &col_names = col_ref.column_names;
+		    if (col_names.size() > 1) {
+			    col_names = vector<string> {col_names.back()};
+		    }
+	    });
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("TransformArrayBoundedListExpression");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto subquery_expr = make_uniq<SubqueryExpression>();
+	subquery_expr->subquery = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
+	// ARRAY expression
+	// wrap subquery into
+	// "SELECT CASE WHEN ARRAY_AGG(col) IS NULL THEN [] ELSE ARRAY_AGG(col) END FROM (...) tbl"
+	auto select_node = make_uniq<SelectNode>();
+	unique_ptr<ParsedExpression> array_agg_child;
+	optional_ptr<SelectNode> sub_select;
+	if (subquery_expr->subquery->node->type == QueryNodeType::SELECT_NODE) {
+		// easy case - subquery is a SELECT
+		sub_select = subquery_expr->subquery->node->Cast<SelectNode>();
+		if (sub_select->select_list.size() != 1) {
+			throw BinderException(*subquery_expr, "Subquery returns %zu columns - expected 1",
+			                      sub_select->select_list.size());
+		}
+		array_agg_child = make_uniq<PositionalReferenceExpression>(1ULL);
+	} else {
+		// subquery is not a SELECT but a UNION or CTE
+		// we can still support this but it is more challenging since we can't push columns for the ORDER BY
+		auto columns_star = make_uniq<StarExpression>();
+		columns_star->columns = true;
+		array_agg_child = std::move(columns_star);
+	}
+
+	// ARRAY_AGG(COLUMNS(*))
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(array_agg_child));
+	auto aggr = make_uniq<FunctionExpression>("array_agg", std::move(children));
+	// push ORDER BY modifiers into the array_agg
+	for (auto &modifier : subquery_expr->subquery->node->modifiers) {
+		if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+			aggr->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(modifier->Copy());
+			break;
+		}
+	}
+	// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
+	idx_t array_idx = 0;
+	if (aggr->order_bys) {
+		for (auto &order : aggr->order_bys->orders) {
+			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				auto &constant_expr = order.expression->Cast<ConstantExpression>();
+				Value bigint_value;
+				string error;
+				if (constant_expr.value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
+					int64_t order_index = BigIntValue::Get(bigint_value);
+					idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
+					order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
+				}
+			} else if (sub_select) {
+				// if we have a SELECT we can push the ORDER BY clause into the SELECT list and reference it
+				auto alias = "__array_internal_idx_" + to_string(++array_idx);
+				order.expression->alias = alias;
+				sub_select->select_list.push_back(std::move(order.expression));
+				order.expression = make_uniq<ColumnRefExpression>(alias);
+			} else {
+				// otherwise we remove order qualifications
+				RemoveOrderQualificationRecursive(order.expression);
+			}
+		}
+	}
+	// ARRAY_AGG(COLUMNS(*)) IS NULL
+	auto agg_is_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, aggr->Copy());
+	// empty list
+	vector<unique_ptr<ParsedExpression>> list_children;
+	auto empty_list = make_uniq<FunctionExpression>("list_value", std::move(list_children));
+	// CASE
+	auto case_expr = make_uniq<CaseExpression>();
+	CaseCheck check;
+	check.when_expr = std::move(agg_is_null);
+	check.then_expr = std::move(empty_list);
+	case_expr->case_checks.push_back(std::move(check));
+	case_expr->else_expr = std::move(aggr);
+
+	select_node->select_list.push_back(std::move(case_expr));
+
+	// FROM (...) tbl
+	auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->subquery));
+	select_node->from_table = std::move(child_subquery);
+
+	auto new_subquery = make_uniq<SelectStatement>();
+	new_subquery->node = std::move(select_node);
+	subquery_expr->subquery = std::move(new_subquery);
+
+	subquery_expr->subquery_type = SubqueryType::SCALAR;
+	return subquery_expr;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
