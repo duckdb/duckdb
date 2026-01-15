@@ -60,6 +60,7 @@ static bool ContainsDMLOperator(const LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return true;
 	default:
 		for (auto &child : op.children) {

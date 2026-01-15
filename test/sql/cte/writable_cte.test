@@ -127,6 +127,61 @@ SELECT * FROM t2;
 200	unreferenced
 
 # =============================================================================
+# Unreferenced INSERT ... ON CONFLICT CTE (MERGE INTO - should still execute)
+# =============================================================================
+
+statement ok
+CREATE TABLE t_conflict (id INTEGER PRIMARY KEY, val TEXT);
+
+statement ok
+INSERT INTO t_conflict VALUES (1, 'original');
+
+# Unreferenced CTE with INSERT ... ON CONFLICT DO UPDATE (uses LOGICAL_MERGE_INTO)
+query I
+WITH upsert AS (
+    INSERT INTO t_conflict VALUES (1, 'conflict'), (2, 'new')
+    ON CONFLICT (id) DO UPDATE SET val = 'updated'
+    RETURNING id
+)
+SELECT 42;
+----
+42
+
+# Verify the upsert still happened even though the CTE was not referenced
+query IT
+SELECT * FROM t_conflict ORDER BY id;
+----
+1	updated
+2	new
+
+# Test unreferenced INSERT ... ON CONFLICT DO NOTHING
+statement ok
+TRUNCATE t_conflict;
+
+statement ok
+INSERT INTO t_conflict VALUES (1, 'keep');
+
+query I
+WITH upsert AS (
+    INSERT INTO t_conflict VALUES (1, 'ignored'), (3, 'inserted')
+    ON CONFLICT (id) DO NOTHING
+    RETURNING id
+)
+SELECT 99;
+----
+99
+
+# Verify the operation executed
+query IT
+SELECT * FROM t_conflict ORDER BY id;
+----
+1	keep
+3	inserted
+
+statement ok
+DROP TABLE t_conflict;
+
+# =============================================================================
 # Error cases
 # =============================================================================
 
