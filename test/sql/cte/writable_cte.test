@@ -185,6 +185,256 @@ SELECT * FROM t1;
 1	updated_a
 
 # =============================================================================
+# RETURNING specific columns (not just *)
+# =============================================================================
+
+statement ok
+CREATE TABLE t4 (id INTEGER, name TEXT, value DECIMAL(10,2), created_at DATE);
+
+query I
+WITH ins AS (INSERT INTO t4 VALUES (1, 'item1', 99.99, '2024-01-15') RETURNING id)
+SELECT * FROM ins;
+----
+1
+
+query T
+WITH ins AS (INSERT INTO t4 VALUES (2, 'item2', 149.99, '2024-01-16') RETURNING name)
+SELECT * FROM ins;
+----
+item2
+
+query II
+WITH ins AS (INSERT INTO t4 VALUES (3, 'item3', 199.99, '2024-01-17') RETURNING id, name)
+SELECT * FROM ins;
+----
+3	item3
+
+# =============================================================================
+# RETURNING with expressions
+# =============================================================================
+
+query I
+WITH ins AS (INSERT INTO t4 VALUES (4, 'item4', 50.00, '2024-01-18') RETURNING id * 10 AS scaled_id)
+SELECT * FROM ins;
+----
+40
+
+query T
+WITH ins AS (INSERT INTO t4 VALUES (5, 'item5', 75.00, '2024-01-19') RETURNING 'inserted: ' || name AS msg)
+SELECT * FROM ins;
+----
+inserted: item5
+
+query R
+WITH ins AS (INSERT INTO t4 VALUES (6, 'item6', 100.00, '2024-01-20') RETURNING value * 1.1 AS with_tax)
+SELECT * FROM ins;
+----
+110.00
+
+# =============================================================================
+# UPDATE with FROM clause (DML with JOINs)
+# =============================================================================
+
+statement ok
+CREATE TABLE prices (item_id INTEGER, new_price DECIMAL(10,2));
+
+statement ok
+INSERT INTO prices VALUES (1, 89.99), (2, 129.99), (3, 179.99);
+
+query IR
+WITH upd AS (
+    UPDATE t4 SET value = prices.new_price
+    FROM prices
+    WHERE t4.id = prices.item_id
+    RETURNING t4.id, t4.value
+)
+SELECT * FROM upd ORDER BY id;
+----
+1	89.99
+2	129.99
+3	179.99
+
+# Verify the update happened
+query IR
+SELECT id, value FROM t4 WHERE id <= 3 ORDER BY id;
+----
+1	89.99
+2	129.99
+3	179.99
+
+# =============================================================================
+# DELETE with complex WHERE clause using subquery
+# =============================================================================
+
+statement ok
+CREATE TABLE to_delete_ids (id INTEGER);
+
+statement ok
+INSERT INTO to_delete_ids VALUES (4), (5);
+
+query IT
+WITH del AS (
+    DELETE FROM t4
+    WHERE id IN (SELECT id FROM to_delete_ids)
+    RETURNING id, name
+)
+SELECT * FROM del ORDER BY id;
+----
+4	item4
+5	item5
+
+# Verify deletions
+query I
+SELECT COUNT(*) FROM t4 WHERE id IN (4, 5);
+----
+0
+
+# =============================================================================
+# Multiple DML CTEs in sequence
+# =============================================================================
+
+statement ok
+CREATE TABLE inventory (product_id INTEGER, quantity INTEGER);
+
+statement ok
+CREATE TABLE orders (order_id INTEGER, product_id INTEGER, qty INTEGER);
+
+statement ok
+CREATE TABLE shipments (shipment_id INTEGER, order_id INTEGER);
+
+statement ok
+INSERT INTO inventory VALUES (100, 50), (200, 30);
+
+# Chain: INSERT order -> UPDATE inventory -> INSERT shipment
+query III
+WITH new_order AS (
+    INSERT INTO orders VALUES (1, 100, 5) RETURNING *
+),
+inv_update AS (
+    UPDATE inventory SET quantity = quantity - (SELECT qty FROM new_order)
+    WHERE product_id = (SELECT product_id FROM new_order)
+    RETURNING product_id, quantity
+),
+new_shipment AS (
+    INSERT INTO shipments SELECT 1000, order_id FROM new_order RETURNING *
+)
+SELECT
+    (SELECT order_id FROM new_order),
+    (SELECT quantity FROM inv_update),
+    (SELECT shipment_id FROM new_shipment);
+----
+1	45	1000
+
+# Verify all changes
+query III
+SELECT * FROM orders;
+----
+1	100	5
+
+query II
+SELECT * FROM inventory WHERE product_id = 100;
+----
+100	45
+
+query II
+SELECT * FROM shipments;
+----
+1000	1
+
+# =============================================================================
+# DML CTE with aggregation on results
+# =============================================================================
+
+statement ok
+TRUNCATE orders;
+
+query IR
+WITH ins AS (
+    INSERT INTO orders VALUES (10, 100, 2), (11, 100, 3), (12, 200, 5) RETURNING *
+)
+SELECT product_id, SUM(qty) as total_qty FROM ins GROUP BY product_id ORDER BY product_id;
+----
+100	5
+200	5
+
+# =============================================================================
+# DML CTE with window functions
+# =============================================================================
+
+query III
+WITH ins AS (
+    INSERT INTO orders VALUES (20, 100, 1), (21, 100, 2), (22, 200, 3) RETURNING *
+)
+SELECT order_id, qty, SUM(qty) OVER (PARTITION BY product_id ORDER BY order_id) as running_total
+FROM ins ORDER BY order_id;
+----
+20	1	1
+21	2	3
+22	3	3
+
+# =============================================================================
+# INSERT ... SELECT from another DML CTE
+# =============================================================================
+
+statement ok
+CREATE TABLE archive (archived_id INTEGER, archived_name TEXT, archived_at TIMESTAMP);
+
+query II
+WITH to_archive AS (
+    DELETE FROM t4 WHERE id = 6 RETURNING id, name
+),
+archived AS (
+    INSERT INTO archive SELECT id, name, CURRENT_TIMESTAMP FROM to_archive RETURNING archived_id, archived_name
+)
+SELECT * FROM archived;
+----
+6	item6
+
+query I
+SELECT COUNT(*) FROM archive WHERE archived_id = 6;
+----
+1
+
+# =============================================================================
+# Nested subqueries within DML CTE
+# =============================================================================
+
+statement ok
+TRUNCATE t2;
+
+query II
+WITH ins AS (
+    INSERT INTO t2
+    SELECT id, name FROM (
+        SELECT id, name FROM t4 WHERE value > 100 ORDER BY id LIMIT 2
+    ) sub
+    RETURNING *
+)
+SELECT * FROM ins ORDER BY id;
+----
+2	item2
+3	item3
+
+# =============================================================================
+# DML CTE with CASE expression in RETURNING
+# =============================================================================
+
+statement ok
+CREATE TABLE status_log (id INTEGER, status TEXT);
+
+statement ok
+INSERT INTO status_log VALUES (1, 'active'), (2, 'pending'), (3, 'inactive');
+
+query IT
+WITH upd AS (
+    UPDATE status_log SET status = 'processed' WHERE status = 'pending'
+    RETURNING id, CASE WHEN id % 2 = 0 THEN 'even' ELSE 'odd' END as id_type
+)
+SELECT * FROM upd;
+----
+2	even
+
+# =============================================================================
 # Clean up
 # =============================================================================
 
@@ -198,4 +448,28 @@ statement ok
 DROP TABLE t3;
 
 statement ok
+DROP TABLE t4;
+
+statement ok
 DROP TABLE audit_log;
+
+statement ok
+DROP TABLE prices;
+
+statement ok
+DROP TABLE to_delete_ids;
+
+statement ok
+DROP TABLE inventory;
+
+statement ok
+DROP TABLE orders;
+
+statement ok
+DROP TABLE shipments;
+
+statement ok
+DROP TABLE archive;
+
+statement ok
+DROP TABLE status_log;
