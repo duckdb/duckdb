@@ -15,8 +15,8 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
       block_alloc_size(block_manager.GetBlockAllocSize()), block_header_size(block_manager.GetBlockHeaderSize()),
       state(BlockState::BLOCK_UNLOADED), readers(0), block_id(block_id_p), tag(tag), buffer_type(FileBufferType::BLOCK),
       buffer(nullptr), eviction_seq_num(0), destroy_buffer_upon(DestroyBufferUpon::BLOCK),
-      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX) {
+      memory_usage(block_alloc_size), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
+      unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
 }
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,
@@ -26,8 +26,10 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
       block_alloc_size(block_manager.GetBlockAllocSize()), block_header_size(block_manager.GetBlockHeaderSize()),
       state(BlockState::BLOCK_LOADED), readers(0), block_id(block_id_p), tag(tag),
       buffer_type(buffer_p->GetBufferType()), buffer(std::move(buffer_p)), eviction_seq_num(0),
-      destroy_buffer_upon(destroy_buffer_upon_p), memory_usage(size_p), memory_charge(std::move(reservation)),
-      unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
+      destroy_buffer_upon(destroy_buffer_upon_p), memory_usage(size_p),
+      memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
+      eviction_queue_idx(DConstants::INVALID_INDEX) {
+	memory_charge = std::move(reservation); // Moved to constructor body due to tidy check.
 }
 
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions

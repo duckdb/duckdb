@@ -119,6 +119,7 @@ public:
 
 	//! Returns the size of the block that is available for usage.
 	idx_t GetBlockSize() const {
+		D_ASSERT(block->GetBlockSize() == block->GetBlockManager().GetBlockSize());
 		return block->GetBlockSize();
 	}
 
