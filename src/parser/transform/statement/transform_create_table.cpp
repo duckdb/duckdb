@@ -74,20 +74,23 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		}
 
 		// Copy the unbound type and its parameters, and add the collation
-		auto &name = UnboundType::GetName(target_type);
-		auto &catalog = UnboundType::GetCatalog(target_type);
-		auto &schema = UnboundType::GetSchema(target_type);
-		auto &args = UnboundType::GetParameters(target_type);
+		// auto &name = UnboundType::GetName(target_type);
+		// auto &catalog = UnboundType::GetCatalog(target_type);
+		// auto &schema = UnboundType::GetSchema(target_type);
+		// auto &args = UnboundType::GetParameters(target_type);
 
+		/*
 		vector<unique_ptr<TypeParameter>> args_copy;
 		args_copy.reserve(args.size());
 		for (auto &arg : args) {
-			args_copy.push_back(arg->Copy());
+		    args_copy.push_back(arg->Copy());
 		}
+		*/
 
 		auto collation = TransformCollation(cdef.collClause);
 
-		target_type = LogicalType::UNBOUND(catalog, schema, name, std::move(args_copy), collation);
+		// TODO: Add collation
+		// target_type = LogicalType::UNBOUND(catalog, schema, name, std::move(args_copy), collation);
 	}
 
 	return ColumnDefinition(name, target_type);

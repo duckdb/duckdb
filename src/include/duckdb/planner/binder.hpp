@@ -505,7 +505,10 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
 
-	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
+	LogicalType BindTypeExpression(const unique_ptr<ParsedExpression> &type_expr, optional_ptr<Catalog> catalog,
+	                               const string &schema);
+	LogicalType BindParsedTypeExpression(const unique_ptr<ParsedExpression> &type_expr, optional_ptr<Catalog> catalog,
+	                                     const string &schema);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 

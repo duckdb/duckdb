@@ -165,10 +165,11 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				}
 			}
 			if (extra_type_info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
-				auto &colllation = UnboundType::GetCollation(column_type);
-				if (!colllation.empty()) {
-					ss << " COLLATE " + colllation;
-				}
+				// TODO
+				// auto &colllation = UnboundType::GetCollation(column_type);
+				// if (!colllation.empty()) {
+				//	ss << " COLLATE " + colllation;
+				//}
 			}
 		}
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();

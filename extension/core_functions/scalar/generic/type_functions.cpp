@@ -5,6 +5,8 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 
+#include <duckdb/parser/expression/type_expression.hpp>
+
 namespace duckdb {
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -88,23 +90,20 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 		throw BinderException("make_type function first argument must be the type name as VARCHAR");
 	}
 
-	vector<unique_ptr<TypeParameter>> type_args;
+	vector<unique_ptr<ParsedExpression>> type_args;
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto &arg = args[i];
-		if (arg.second.type() == LogicalTypeId::TYPE) {
-			auto type_arg = TypeValue::GetType(arg.second);
-			type_args.push_back(TypeParameter::TYPE(arg.first, std::move(type_arg)));
-		} else {
-			auto expr_arg = make_uniq<ConstantExpression>(arg.second);
-			type_args.push_back(TypeParameter::EXPRESSION(arg.first, std::move(expr_arg)));
-		}
+		auto result = make_uniq<ConstantExpression>(arg.second);
+		result->SetAlias(arg.first);
+
+		type_args.push_back(std::move(result));
 	}
 
 	auto type_name = args.front().second.GetValue<string>();
 	auto qualified_name = QualifiedName::Parse(type_name);
 
-	auto unbound_type =
-	    LogicalType::UNBOUND(qualified_name.catalog, qualified_name.schema, qualified_name.name, std::move(type_args));
+	auto unbound_type = LogicalType::UNBOUND(make_uniq<TypeExpression>(qualified_name.catalog, qualified_name.schema,
+	                                                                   qualified_name.name, std::move(type_args)));
 
 	// Bind the unbound type
 	auto binder = Binder::CreateBinder(input.context);

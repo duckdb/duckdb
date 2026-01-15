@@ -489,6 +489,15 @@ string LogicalType::ToString() const {
 		if (!type_info_) {
 			return "UNBOUND";
 		}
+
+		auto &expr = UnboundType::GetTypeExpression(*this);
+		if (expr->type != ExpressionType::TYPE) {
+			return "(" + expr->ToString() + ")";
+		} else {
+			return expr->ToString();
+		}
+
+		/*
 		auto &params = UnboundType::GetParameters(*this);
 		string result;
 
@@ -497,74 +506,75 @@ string LogicalType::ToString() const {
 		auto &type = UnboundType::GetName(*this);
 
 		if (!catalog.empty()) {
-			result = KeywordHelper::WriteOptionallyQuoted(catalog, '"');
+		    result = KeywordHelper::WriteOptionallyQuoted(catalog, '"');
 		}
 		if (!schema.empty()) {
-			if (!result.empty()) {
-				result += ".";
-			}
-			result += KeywordHelper::WriteOptionallyQuoted(schema, '"');
+		    if (!result.empty()) {
+		        result += ".";
+		    }
+		    result += KeywordHelper::WriteOptionallyQuoted(schema, '"');
 		}
 		if (!result.empty()) {
-			result += ".";
+		    result += ".";
 		}
 
 		// LIST and ARRAY have special syntax
 		if (result.empty() && StringUtil::CIEquals(type, "LIST") && params.size() == 1) {
-			return params[0]->ToString() + "[]";
+		    return params[0]->ToString() + "[]";
 		}
 		if (result.empty() && StringUtil::CIEquals(type, "ARRAY") && params.size() == 2) {
-			auto &type_param = params[0];
-			auto &size_param = params[1];
-			return type_param->ToString() + "[" + size_param->ToString() + "]";
+		    auto &type_param = params[0];
+		    auto &size_param = params[1];
+		    return type_param->ToString() + "[" + size_param->ToString() + "]";
 		}
 		// So does STRUCT, MAP and UNION
 		if (result.empty() && StringUtil::CIEquals(type, "STRUCT")) {
-			if (params.empty()) {
-				return "STRUCT";
-			}
-			string struct_result = "STRUCT(";
-			for (idx_t i = 0; i < params.size(); i++) {
-				struct_result += params[i]->ToString();
-				if (i < params.size() - 1) {
-					struct_result += ", ";
-				}
-			}
-			struct_result += ")";
-			return struct_result;
+		    if (params.empty()) {
+		        return "STRUCT";
+		    }
+		    string struct_result = "STRUCT(";
+		    for (idx_t i = 0; i < params.size(); i++) {
+		        struct_result += params[i]->ToString();
+		        if (i < params.size() - 1) {
+		            struct_result += ", ";
+		        }
+		    }
+		    struct_result += ")";
+		    return struct_result;
 		}
 		if (result.empty() && StringUtil::CIEquals(type, "UNION")) {
-			if (params.empty()) {
-				return "UNION";
-			}
-			string union_result = "UNION(";
-			for (idx_t i = 0; i < params.size(); i++) {
-				union_result += params[i]->ToString();
-				if (i < params.size() - 1) {
-					union_result += ", ";
-				}
-			}
-			union_result += ")";
-			return union_result;
+		    if (params.empty()) {
+		        return "UNION";
+		    }
+		    string union_result = "UNION(";
+		    for (idx_t i = 0; i < params.size(); i++) {
+		        union_result += params[i]->ToString();
+		        if (i < params.size() - 1) {
+		            union_result += ", ";
+		        }
+		    }
+		    union_result += ")";
+		    return union_result;
 		}
 
 		if (result.empty() && StringUtil::CIEquals(type, "MAP") && params.size() == 2) {
-			return "MAP(" + params[0]->ToString() + ", " + params[1]->ToString() + ")";
+		    return "MAP(" + params[0]->ToString() + ", " + params[1]->ToString() + ")";
 		}
 
 		result += KeywordHelper::WriteOptionallyQuoted(type, '"', true, KeywordCategory::KEYWORD_COL_NAME);
 
 		if (!params.empty()) {
-			result += "(";
-			for (idx_t i = 0; i < params.size(); i++) {
-				result += params[i]->ToString();
-				if (i < params.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
+		    result += "(";
+		    for (idx_t i = 0; i < params.size(); i++) {
+		        result += params[i]->ToString();
+		        if (i < params.size() - 1) {
+		            result += ", ";
+		        }
+		    }
+		    result += ")";
 		}
 		return result;
+		*/
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -1789,21 +1799,8 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 // Unbound Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::UNBOUND(const string &name) {
-	auto info = make_shared_ptr<UnboundTypeInfo>(INVALID_CATALOG, INVALID_SCHEMA, name,
-	                                             vector<unique_ptr<TypeParameter>>(), string());
-	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
-}
-
-LogicalType LogicalType::UNBOUND(const string &name, vector<unique_ptr<TypeParameter>> parameters,
-                                 const string &collation) {
-	auto info =
-	    make_shared_ptr<UnboundTypeInfo>(INVALID_CATALOG, INVALID_SCHEMA, name, std::move(parameters), collation);
-	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
-}
-LogicalType LogicalType::UNBOUND(const string &catalog, const string &schema, const string &name,
-                                 vector<unique_ptr<TypeParameter>> parameters, const string &collation) {
-	auto info = make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters), collation);
+LogicalType LogicalType::UNBOUND(unique_ptr<ParsedExpression> expr) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(std::move(expr));
 	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
 }
 
@@ -2082,39 +2079,11 @@ const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 // Unbound Types
 //===--------------------------------------------------------------------===//
 
-const string &UnboundType::GetName(const LogicalType &type) {
+const unique_ptr<ParsedExpression> &UnboundType::GetTypeExpression(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
 	auto info = type.AuxInfo();
 	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
-	return info->Cast<UnboundTypeInfo>().name;
-}
-
-const string &UnboundType::GetCatalog(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
-	auto info = type.AuxInfo();
-	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
-	return info->Cast<UnboundTypeInfo>().catalog;
-}
-
-const string &UnboundType::GetSchema(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
-	auto info = type.AuxInfo();
-	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
-	return info->Cast<UnboundTypeInfo>().schema;
-}
-
-const vector<unique_ptr<TypeParameter>> &UnboundType::GetParameters(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
-	auto info = type.AuxInfo();
-	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
-	return info->Cast<UnboundTypeInfo>().parameters;
-}
-
-const string &UnboundType::GetCollation(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
-	auto info = type.AuxInfo();
-	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
-	return info->Cast<UnboundTypeInfo>().collation;
+	return info->Cast<UnboundTypeInfo>().expr;
 }
 
 LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
@@ -2130,34 +2099,41 @@ LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
 	}
 }
 
+static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
+	if (expr.type != ExpressionType::TYPE) {
+		throw InvalidInputException("Cannot default bind unbound type with non-type expression");
+	}
+	const auto &type_expr = expr.Cast<TypeExpression>();
+
+	// Now we try to bind the unbound type to a default type
+	auto &name = type_expr.GetTypeName();
+	auto &args = type_expr.GetTypeArguments();
+
+	vector<pair<string, Value>> bound_args;
+	for (auto &arg : args) {
+		switch (arg->GetExpressionType()) {
+		case ExpressionType::TYPE: {
+			auto type = TryDefaultBindTypeExpression(*arg);
+			bound_args.emplace_back(arg->GetName(), Value::TYPE(type));
+		} break;
+		case ExpressionType::VALUE_CONSTANT: {
+			auto &const_expr = expr.Cast<ConstantExpression>();
+			bound_args.emplace_back(arg->GetName(), const_expr.value);
+		} break;
+		default:
+			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
+			break;
+		}
+	}
+	return DefaultTypeGenerator::TryDefaultBind(name, bound_args);
+}
+
 LogicalType UnboundType::TryDefaultBind(const LogicalType &unbound_type) {
 	if (!unbound_type.IsUnbound()) {
 		return unbound_type;
 	}
-
-	// Now we try to bind the unbound type to a default type
-	auto &name = UnboundType::GetName(unbound_type);
-	auto &args = UnboundType::GetParameters(unbound_type);
-
-	vector<pair<string, Value>> bound_args;
-	for (auto &arg : args) {
-		if (arg->IsType()) {
-			auto type = TryDefaultBind(arg->GetType());
-			bound_args.emplace_back(arg->GetName(), Value::TYPE(type));
-
-		} else if (arg->IsExpression()) {
-			auto &expr = arg->GetExpression();
-			if (expr->type != ExpressionType::VALUE_CONSTANT) {
-				throw InvalidInputException("Cannot default bind unbound type with non-constant expression parameter");
-			}
-			auto &const_expr = expr->Cast<ConstantExpression>();
-			bound_args.emplace_back(arg->GetName(), const_expr.value);
-		} else {
-			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
-		}
-	}
-
-	return DefaultTypeGenerator::TryDefaultBind(name, bound_args);
+	auto &expr = UnboundType::GetTypeExpression(unbound_type);
+	return TryDefaultBindTypeExpression(*expr);
 }
 
 //===--------------------------------------------------------------------===//

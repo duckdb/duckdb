@@ -9,6 +9,8 @@
 #include "duckdb/common/type_parameter.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
+#include <duckdb/parser/expression/type_expression.hpp>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -265,16 +267,24 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
 //===--------------------------------------------------------------------===//
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
+
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
+	/*
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog);
 	serializer.WritePropertyWithDefault<string>(202, "schema", schema);
 	// [DELETED] 203 was "user_type_modifiers"
 	serializer.WritePropertyWithDefault<string>(204, "collation", collation);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<TypeParameter>>>(205, "parameters", parameters);
+	*/
 }
 
 shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<UnboundTypeInfo>(new UnboundTypeInfo());
+
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", result->expr);
+
+	/*
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog);
 	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema);
@@ -282,18 +292,19 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 	// From the old "user" type
 	auto mods = deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers");
 	if (!mods.empty()) {
-		// Turn the old-style value type modifiers into TypeParameters
-		vector<unique_ptr<TypeParameter>> args;
-		for (auto &mod : mods) {
-			args.push_back(TypeParameter::EXPRESSION("", make_uniq_base<ParsedExpression, ConstantExpression>(mod)));
-		}
+	    // Turn the old-style value type modifiers into TypeParameters
+	    vector<unique_ptr<TypeParameter>> args;
+	    for (auto &mod : mods) {
+	        args.push_back(TypeParameter::EXPRESSION("", make_uniq_base<ParsedExpression, ConstantExpression>(mod)));
+	    }
 
-		result->parameters = std::move(args);
-		return std::move(result);
+	    result->parameters = std::move(args);
+	    return std::move(result);
 	}
 
 	deserializer.ReadPropertyWithDefault<string>(204, "collation", result->collation);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TypeParameter>>>(205, "parameters", result->parameters);
+	*/
 	return std::move(result);
 }
 
@@ -539,43 +550,20 @@ shared_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {
 UnboundTypeInfo::UnboundTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
 }
 
-UnboundTypeInfo::UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
-                                 vector<unique_ptr<TypeParameter>> parameters_p, string collation_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
-      name(std::move(name_p)), collation(std::move(collation_p)), parameters(std::move(parameters_p)) {
+UnboundTypeInfo::UnboundTypeInfo(unique_ptr<ParsedExpression> expr_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), expr(std::move(expr_p)) {
 }
 
 bool UnboundTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<UnboundTypeInfo>();
-	if (name != other.name) {
+	if (!expr->Equals(*other.expr)) {
 		return false;
-	}
-	if (catalog != other.catalog) {
-		return false;
-	}
-	if (schema != other.schema) {
-		return false;
-	}
-	if (collation != other.collation) {
-		return false;
-	}
-	if (parameters.size() != other.parameters.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < parameters.size(); i++) {
-		if (!parameters[i]->Equals(*other.parameters[i])) {
-			return false;
-		}
 	}
 	return true;
 }
 
 shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
-	vector<unique_ptr<TypeParameter>> parameters_copy;
-	for (const auto &param : parameters) {
-		parameters_copy.push_back(param->Copy());
-	}
-	return make_shared_ptr<UnboundTypeInfo>(catalog, schema, name, std::move(parameters_copy), collation);
+	return make_shared_ptr<UnboundTypeInfo>(expr->Copy());
 }
 
 } // namespace duckdb

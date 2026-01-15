@@ -7,10 +7,11 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
-LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName &type_name) {
+unique_ptr<ParsedExpression> Transformer::TransformTypeExpressionInternal(duckdb_libpgquery::PGTypeName &type_name) {
 	// Parse typename/any qualifications
 
 	string unbound_name;
@@ -57,7 +58,7 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 	}
 
 	// Parse type modifiers
-	vector<unique_ptr<TypeParameter>> type_params;
+	vector<unique_ptr<ParsedExpression>> type_params;
 	for (auto typemod = type_name.typmods ? type_name.typmods->head : nullptr; typemod; typemod = typemod->next) {
 		// Type mods are always a list of (name, node) pairs
 
@@ -88,26 +89,35 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		// 1. A constant value
 		// 2. A expression
 		// 3. A type name
+
 		if (typemod_node->type == duckdb_libpgquery::T_PGTypeName) {
-			auto type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(typemod_node.get()));
-			type_params.push_back(TypeParameter::TYPE(std::move(name_str), std::move(type)));
+			auto type_node = *PGPointerCast<duckdb_libpgquery::PGTypeName>(typemod_node.get());
+			auto type_expr = TransformTypeExpression(type_node);
+			type_params.push_back(std::move(type_expr));
 		} else {
 			// Expression
 			auto expr = TransformExpression(*typemod_node);
-			type_params.push_back(TypeParameter::EXPRESSION(std::move(name_str), std::move(expr)));
+			type_params.push_back(std::move(expr));
 		}
 	}
 
-	return LogicalType::UNBOUND(catalog_name, schema_name, unbound_name, std::move(type_params));
+	auto result = make_uniq<TypeExpression>(catalog_name, schema_name, unbound_name, std::move(type_params));
+
+	// Assign query location
+	if (type_name.location >= 0) {
+		result->query_location = NumericCast<idx_t>(type_name.location);
+	}
+
+	return std::move(result);
 }
 
-LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {
+unique_ptr<ParsedExpression> Transformer::TransformTypeExpression(duckdb_libpgquery::PGTypeName &type_name) {
 	if (type_name.type != duckdb_libpgquery::T_PGTypeName) {
 		throw ParserException("Expected a type");
 	}
 	auto stack_checker = StackCheck();
 
-	auto result_type = TransformTypeNameInternal(type_name);
+	auto result = TransformTypeExpressionInternal(type_name);
 
 	if (type_name.arrayBounds) {
 		// For both arrays and lists, the inner type is stored as the first type parameter
@@ -121,16 +131,16 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 				auto int_node = PGPointerCast<duckdb_libpgquery::PGValue>(arg.get());
 				auto size = int_node->val.ival;
 
-				vector<unique_ptr<TypeParameter>> type_params;
-				type_params.push_back(TypeParameter::TYPE("", std::move(result_type)));
+				vector<unique_ptr<ParsedExpression>> type_params;
+				type_params.push_back(std::move(result));
+
 				if (size == -1) {
 					// LIST type
-					result_type = LogicalType::UNBOUND("list", std::move(type_params));
+					result = make_uniq<TypeExpression>("list", std::move(type_params));
 				} else {
 					// ARRAY type
-					type_params.push_back(TypeParameter::EXPRESSION(
-					    "", make_uniq<ConstantExpression>(Value::BIGINT(int_node->val.ival))));
-					result_type = LogicalType::UNBOUND("array", std::move(type_params));
+					type_params.push_back(make_uniq<ConstantExpression>(Value::BIGINT(int_node->val.ival)));
+					result = make_uniq<TypeExpression>("array", std::move(type_params));
 				}
 
 				continue;
@@ -139,7 +149,18 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			throw ParserException("ARRAY bounds must only contain expressions");
 		}
 	}
-	return result_type;
+
+	// Assign query location
+	if (type_name.location >= 0) {
+		result->query_location = NumericCast<idx_t>(type_name.location);
+	}
+
+	return result;
+}
+
+LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {
+	auto type_expr = TransformTypeExpression(type_name);
+	return LogicalType::UNBOUND(std::move(type_expr));
 }
 
 } // namespace duckdb

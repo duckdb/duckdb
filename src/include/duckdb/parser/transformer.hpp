@@ -333,7 +333,8 @@ private:
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);
 
 	//! Transform a Postgres TypeName string into a LogicalType (non-LIST types)
-	LogicalType TransformTypeNameInternal(duckdb_libpgquery::PGTypeName &name);
+	unique_ptr<ParsedExpression> TransformTypeExpressionInternal(duckdb_libpgquery::PGTypeName &name);
+	unique_ptr<ParsedExpression> TransformTypeExpression(duckdb_libpgquery::PGTypeName &name);
 	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
 

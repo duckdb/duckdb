@@ -4,6 +4,7 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/type_parameter.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -246,8 +247,9 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 				qualified_type_name.schema = qualified_type_name.catalog;
 				qualified_type_name.catalog = INVALID_CATALOG;
 			}
-			result = LogicalType::UNBOUND(qualified_type_name.catalog, qualified_type_name.schema,
-			                              qualified_type_name.name, {});
+			result = LogicalType::UNBOUND(
+			    make_uniq<TypeExpression>(qualified_type_name.catalog, qualified_type_name.schema,
+			                              qualified_type_name.name, vector<unique_ptr<ParsedExpression>> {}));
 		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);

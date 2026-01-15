@@ -274,19 +274,9 @@ protected:
 };
 
 struct UnboundTypeInfo : public ExtraTypeInfo {
-	explicit UnboundTypeInfo(string catalog_p, string schema_p, string name_p,
-	                         vector<unique_ptr<TypeParameter>> parameters, const string collation);
+	explicit UnboundTypeInfo(unique_ptr<ParsedExpression> expr_p);
 
-	// The name of the unbound type
-	string catalog;
-	string schema;
-	string name;
-
-	// Optional collation of the unbound type
-	string collation;
-
-	// The type parameters of the unbound type
-	vector<unique_ptr<TypeParameter>> parameters;
+	unique_ptr<ParsedExpression> expr;
 
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
