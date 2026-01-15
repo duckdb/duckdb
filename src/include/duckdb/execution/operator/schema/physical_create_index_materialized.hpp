@@ -33,14 +33,22 @@ public:
 	unique_ptr<CreateIndexInfo> info;
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
+	//! The index type to create.
+	IndexType index_type;
+	//! The bind data for index creation.
+	unique_ptr<IndexBuildBindData> bind_data;
+	//! Alter table information for adding indexes.
+	unique_ptr<AlterTableInfo> alter_table_info;
+
 	//! Whether the pipeline sorts the data prior to index creation
 	const bool sorted;
 
 public:
 	//! Source interface, NOOP for this operator
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override {
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 		return SourceResultType::FINISHED;
 	}
+
 	bool IsSource() const override {
 		return true;
 	}

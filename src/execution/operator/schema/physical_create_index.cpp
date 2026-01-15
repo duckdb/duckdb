@@ -39,7 +39,7 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 }
 
 //---------------------------------------------------------------------------------------------------------------------
-// Sink
+// Global Sink
 //---------------------------------------------------------------------------------------------------------------------
 class CreateIndexGlobalSinkState : public GlobalSinkState {
 public:
@@ -48,13 +48,16 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
 	auto gstate = make_uniq<CreateIndexGlobalSinkState>();
-
 	IndexBuildInitGlobalStateInput global_state_input {bind_data.get(),     context,    table, *info,
 	                                                   unbound_expressions, storage_ids};
-	gstate->gstate = index_type.build_global_init(global_state_input);
 
+	gstate->gstate = index_type.build_global_init(global_state_input);
 	return std::move(gstate);
 }
+
+//-------------------------------------------------------------
+// Local Sink
+//-------------------------------------------------------------
 
 class CreateIndexLocalSinkState : public LocalSinkState {
 public:
@@ -69,12 +72,14 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	IndexBuildInitLocalStateInput local_state_input {bind_data.get(), context.client,      table,
 	                                                 *info,           unbound_expressions, storage_ids};
 	lstate->lstate = index_type.build_local_init(local_state_input);
-
 	lstate->key_chunk.InitializeEmpty(indexed_column_types);
 	lstate->row_chunk.InitializeEmpty({LogicalType::ROW_TYPE});
-
 	return std::move(lstate);
 }
+
+//-------------------------------------------------------------
+// Sink
+//-------------------------------------------------------------
 
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
