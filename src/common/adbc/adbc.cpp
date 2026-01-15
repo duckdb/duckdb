@@ -1914,7 +1914,13 @@ void SetError(struct AdbcError *error, const std::string &message) {
 		buffer.reserve(buffer.size() + message.size() + 1);
 		buffer += '\n';
 		buffer += message;
-		error->release(error);
+		// Release the old message safely - release may be nullptr if error was already released
+		if (error->release) {
+			error->release(error);
+		} else {
+			delete[] error->message;
+			error->message = nullptr;
+		}
 
 		error->message = new char[buffer.size() + 1];
 		buffer.copy(error->message, buffer.size());
