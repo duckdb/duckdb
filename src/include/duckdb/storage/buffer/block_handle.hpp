@@ -115,8 +115,9 @@ public:
 		return memory_usage;
 	}
 
-	//! Returns the size of the block that is available for usage,
-	//! as determined by the block manager that created the block.
+	//! Returns the size of the block that is available for usage, as determined by the block manager that created the
+	//! block. The block_alloc_size can differ from the memory_usage for blocks managed by the temporary block manager,
+	//! thus, this should only be called for persistent blocks.
 	idx_t GetBlockSize() const {
 		return block_alloc_size - block_header_size;
 	}

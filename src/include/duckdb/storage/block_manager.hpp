@@ -121,7 +121,7 @@ public:
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
 
-	//! Returns the block allocation size of this block.
+	//! Returns the block allocation size of this block manager.
 	idx_t GetBlockAllocSize() const {
 		return block_alloc_size.GetIndex();
 	}
@@ -133,7 +133,7 @@ public:
 	inline optional_idx GetOptionalBlockHeaderSize() const {
 		return block_header_size;
 	}
-	//! Returns the block header size including the 8-byte checksum.
+	//! Returns the block header size including the 8-byte checksum of this block manager.
 	idx_t GetBlockHeaderSize() const {
 		if (!block_header_size.IsValid()) {
 			return Storage::DEFAULT_BLOCK_HEADER_SIZE;
