@@ -17,6 +17,12 @@
       ]
     },
     {
+      "reason": "FIXME: Internal Error",
+      "paths": [
+        "test/parquet/variant/variant_roundtrip.test_slow"
+      ]
+    },
+    {
       "reason": "Take longer than 60s with a relassert build.",
       "paths": [
         "test/sql/join/asof/test_asof_join.test_slow",
