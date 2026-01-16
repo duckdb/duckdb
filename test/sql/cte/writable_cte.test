@@ -211,6 +211,22 @@ SELECT * FROM cte;
 ----
 DELETE in a CTE must have a RETURNING clause
 
+# Error: Cannot create view with writable CTE
+statement error
+CREATE VIEW v AS WITH cte AS (INSERT INTO t1 VALUES (999, 'view_test') RETURNING *) SELECT * FROM cte;
+----
+Views cannot contain data-modifying statements in CTEs
+
+statement error
+CREATE VIEW v AS WITH cte AS (UPDATE t1 SET val = 'x' RETURNING *) SELECT * FROM cte;
+----
+Views cannot contain data-modifying statements in CTEs
+
+statement error
+CREATE VIEW v AS WITH cte AS (DELETE FROM t1 RETURNING *) SELECT * FROM cte;
+----
+Views cannot contain data-modifying statements in CTEs
+
 # =============================================================================
 # Complex queries with DML CTEs
 # =============================================================================
