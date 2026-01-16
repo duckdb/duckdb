@@ -258,13 +258,15 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 		if (index.IsBound()) {
 			auto storage_info = index.Cast<BoundIndex>().SerializeToDisk(context, info.options);
 			D_ASSERT(storage_info->IsValid() && !storage_info->name.empty());
+			// Store the bound info to keep it alive, then add a reference to the ordered list
 			result.bound_infos.push_back(std::move(storage_info));
+			result.infos.push_back(*result.bound_infos.back());
 			continue;
 		}
 		// For unbound indexes, just get a reference - no ownership transfer
 		auto &storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
 		D_ASSERT(!storage_info.name.empty());
-		result.unbound_infos.push_back(storage_info);
+		result.infos.push_back(storage_info);
 	}
 	return result;
 }

@@ -45,7 +45,9 @@ struct IndexSerializationInfo {
 };
 
 struct IndexSerializationResult {
-	vector<reference<const IndexStorageInfo>> unbound_infos;
+	//! The ordered list of references to serialize - preserves the iteration order of index_entries
+	vector<reference<const IndexStorageInfo>> infos;
+	//! Storage for bound index infos to keep them alive (unbound infos are referenced from UnboundIndex)
 	vector<unique_ptr<IndexStorageInfo>> bound_infos;
 };
 
