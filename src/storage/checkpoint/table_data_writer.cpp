@@ -169,25 +169,34 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
+	auto index_serialization_result = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
-	if (debug_verify_blocks) {
-		for (auto &index_info : index_storage_infos) {
-			for (auto &allocator : index_info->allocator_infos) {
-				for (auto &block : allocator.block_pointers) {
-					checkpoint_manager.verify_block_usage_count[block.block_id]++;
+	// Collect all index storage infos into a single vector of pointers
+	vector<const IndexStorageInfo *> all_infos;
+	for (auto &info_ref : index_serialization_result.unbound_infos) {
+		all_infos.push_back(&info_ref.get());
+	}
+	for (auto &info_ptr : index_serialization_result.bound_infos) {
+		all_infos.push_back(info_ptr.get());
+
+		if (debug_verify_blocks) {
+			for (auto &index_info : all_infos) {
+				for (auto &allocator : index_info->allocator_infos) {
+					for (auto &block : allocator.block_pointers) {
+						checkpoint_manager.verify_block_usage_count[block.block_id]++;
+					}
 				}
 			}
 		}
+
+		// write empty block pointers for forwards compatibility
+		vector<BlockPointer> compat_block_pointers;
+		serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+
+		serializer.WriteList(104, "index_storage_infos", all_infos.size(), [&](Serializer::List &list, idx_t i) {
+			list.WriteObject([&](Serializer &object) { all_infos[i]->Serialize(object); });
+		});
 	}
-
-	// write empty block pointers for forwards compatibility
-	vector<BlockPointer> compat_block_pointers;
-	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-
-	serializer.WriteList(104, "index_storage_infos", index_storage_infos.size(), [&](Serializer::List &list, idx_t i) {
-		list.WriteObject([&](Serializer &object) { index_storage_infos[i]->Serialize(object); });
-	});
 }
 
 } // namespace duckdb

@@ -8,6 +8,9 @@
 
 namespace duckdb {
 
+BufferedIndexReplays::BufferedIndexReplays() = default;
+BufferedIndexReplays::~BufferedIndexReplays() = default;
+
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, unique_ptr<IndexStorageInfo> storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
     : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
@@ -22,6 +25,8 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, unique_ptr<IndexS
 		}
 	}
 }
+
+UnboundIndex::~UnboundIndex() = default;
 
 void UnboundIndex::CommitDrop() {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
@@ -44,10 +49,10 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 
 	//! First time we are buffering data, canonical column_id mapping is stored.
 	//! This should be a sorted list of all the physical offsets of Indexed columns on this table.
-	if (storage_info->mapped_column_ids.empty()) {
-		storage_info->mapped_column_ids = mapped_column_ids_p;
+	if (mapped_column_ids.empty()) {
+		mapped_column_ids = mapped_column_ids_p;
 	}
-	D_ASSERT(storage_info->mapped_column_ids == mapped_column_ids_p);
+	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
 
 	// combined_chunk has all the indexed columns according to mapped_column_ids ordering, as well as a rowid column.
 	DataChunk combined_chunk;
@@ -59,18 +64,18 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	combined_chunk.SetCardinality(index_column_chunk.size());
 
 	// Initialize buffered replays on the first buffer operation.
-	if (!storage_info->buffered_replays) {
-		storage_info->buffered_replays = make_uniq<BufferedIndexReplays>();
+	if (!buffered_replays) {
+		buffered_replays = make_uniq<BufferedIndexReplays>();
 	}
 
-	auto &buffer = storage_info->buffered_replays->GetBuffer(replay_type);
+	auto &buffer = buffered_replays->GetBuffer(replay_type);
 	if (buffer == nullptr) {
 		buffer = make_uniq<ColumnDataCollection>(allocator, types);
 	}
 	// The starting index of the buffer range is the size of the buffer.
 	const idx_t start = buffer->Count();
 	const idx_t end = start + combined_chunk.size();
-	auto &ranges = storage_info->buffered_replays->ranges;
+	auto &ranges = buffered_replays->ranges;
 
 	if (ranges.empty() || ranges.back().type != replay_type) {
 		// If there are no buffered ranges, or the replay types don't match, append a new range.

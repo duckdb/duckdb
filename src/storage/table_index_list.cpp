@@ -4,6 +4,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
@@ -249,20 +250,21 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<unique_ptr<IndexStorageInfo>> TableIndexList::SerializeToDisk(QueryContext context,
-                                                                     const IndexSerializationInfo &info) {
+IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
-	vector<unique_ptr<IndexStorageInfo>> result;
+	IndexSerializationResult result;
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (index.IsBound()) {
 			auto storage_info = index.Cast<BoundIndex>().SerializeToDisk(context, info.options);
 			D_ASSERT(storage_info->IsValid() && !storage_info->name.empty());
-			result.push_back(std::move(storage_info));
+			result.bound_infos.push_back(std::move(storage_info));
 			continue;
 		}
-		// Indexes should be bound by this point.
-		throw InternalException("cannot serialize unbound index to disk, checkpoint should have been aborted");
+		// For unbound indexes, just get a reference - no ownership transfer
+		auto &storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
+		D_ASSERT(!storage_info.name.empty());
+		result.unbound_infos.push_back(storage_info);
 	}
 	return result;
 }

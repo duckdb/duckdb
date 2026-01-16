@@ -106,7 +106,7 @@
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/execution/index/buffered_index_replays.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
