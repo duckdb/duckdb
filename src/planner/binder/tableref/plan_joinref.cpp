@@ -11,7 +11,6 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
@@ -23,7 +22,12 @@ namespace duckdb {
 //! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.
 //! The logic determines whether a condition that references only the left side can be
 //! pushed down as a filter on the left child operator.
-static bool CanPushToLeftChild(JoinType type) {
+static bool CanPushToLeftChild(JoinType type, JoinRefType ref_type) {
+	// Unsupported arbitrary predicates for some ASOF types
+	if (ref_type == JoinRefType::ASOF && type != JoinType::INNER && type != JoinType::LEFT) {
+		return false;
+	}
+
 	switch (type) {
 	case JoinType::INNER:
 	case JoinType::SEMI:
@@ -42,7 +46,12 @@ static bool CanPushToLeftChild(JoinType type) {
 //! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.
 //! The logic determines whether a condition that references only the right side can be
 //! pushed down as a filter on the right child operator.
-static bool CanPushToRightChild(JoinType type) {
+static bool CanPushToRightChild(JoinType type, JoinRefType ref_type) {
+	// Unsupported arbitrary predicates for some ASOF types
+	if (ref_type == JoinRefType::ASOF && type != JoinType::INNER && type != JoinType::LEFT) {
+		return false;
+	}
+
 	switch (type) {
 	case JoinType::INNER:
 	case JoinType::SEMI:
@@ -180,12 +189,12 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 				continue;
 			}
 		} else if (side == JoinSide::LEFT) {
-			if (CanPushToLeftChild(type)) {
+			if (CanPushToLeftChild(type, ref_type)) {
 				PushFilterToChild(left_child, expr);
 				continue;
 			}
 		} else if (side == JoinSide::RIGHT) {
-			if (CanPushToRightChild(type)) {
+			if (CanPushToRightChild(type, ref_type)) {
 				PushFilterToChild(right_child, expr);
 				continue;
 			}
@@ -236,6 +245,21 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 	// validate ASOF join conditions
 	if (is_asof) {
+		//	We can't support arbitrary predicates with some ASOF joins
+		switch (type) {
+		case JoinType::RIGHT:
+		case JoinType::OUTER:
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			if (!arbitrary_expressions.empty()) {
+				throw NotImplementedException("Unsupported ASOF JOIN type (%s) with arbitrary predicate",
+				                              EnumUtil::ToChars(type));
+			}
+			break;
+		default:
+			break;
+		}
+
 		idx_t asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
 			auto &cond = conditions[c];

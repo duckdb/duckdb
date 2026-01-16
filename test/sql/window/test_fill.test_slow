@@ -1,4 +1,4 @@
-# name: test/sql/window/test_fill.test
+# name: test/sql/window/test_fill.test_slow
 # description: Test Fill function
 # group: [window]
 

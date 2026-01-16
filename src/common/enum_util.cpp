@@ -57,7 +57,6 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
@@ -91,6 +90,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
@@ -107,6 +107,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -132,6 +133,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -171,7 +173,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
+#include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -910,19 +912,20 @@ CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value)
 const StringUtil::EnumStringLiteral *GetCachingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CachingMode::ALWAYS_CACHE), "ALWAYS_CACHE" },
-		{ static_cast<uint32_t>(CachingMode::CACHE_REMOTE_ONLY), "CACHE_REMOTE_ONLY" }
+		{ static_cast<uint32_t>(CachingMode::CACHE_REMOTE_ONLY), "CACHE_REMOTE_ONLY" },
+		{ static_cast<uint32_t>(CachingMode::NO_CACHING), "NO_CACHING" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CachingMode>(CachingMode value) {
-	return StringUtil::EnumToString(GetCachingModeValues(), 2, "CachingMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCachingModeValues(), 3, "CachingMode", static_cast<uint32_t>(value));
 }
 
 template<>
 CachingMode EnumUtil::FromString<CachingMode>(const char *value) {
-	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 2, "CachingMode", value));
+	return static_cast<CachingMode>(StringUtil::StringToEnum(GetCachingModeValues(), 3, "CachingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {
@@ -1207,6 +1210,27 @@ const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value) {
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 	return static_cast<ConstraintType>(StringUtil::StringToEnum(GetConstraintTypeValues(), 5, "ConstraintType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCoordinateReferenceSystemTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::SRID), "SRID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::PROJJSON), "PROJJSON" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CoordinateReferenceSystemType>(CoordinateReferenceSystemType value) {
+	return StringUtil::EnumToString(GetCoordinateReferenceSystemTypeValues(), 5, "CoordinateReferenceSystemType", static_cast<uint32_t>(value));
+}
+
+template<>
+CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType>(const char *value) {
+	return static_cast<CoordinateReferenceSystemType>(StringUtil::StringToEnum(GetCoordinateReferenceSystemTypeValues(), 5, "CoordinateReferenceSystemType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
@@ -3029,7 +3053,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_SUBPLAN), "OPTIMIZER_COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COUNT_WINDOW_ELIMINATION), "OPTIMIZER_COUNT_WINDOW_ELIMINATION" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN), "OPTIMIZER_WINDOW_SELF_JOIN" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
@@ -3195,6 +3219,26 @@ OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value) {
 	return static_cast<OnEntryNotFound>(StringUtil::StringToEnum(GetOnEntryNotFoundValues(), 2, "OnEntryNotFound", value));
 }
 
+const StringUtil::EnumStringLiteral *GetOperatorCachingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OperatorCachingMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(OperatorCachingMode::PARTITIONED), "PARTITIONED" },
+		{ static_cast<uint32_t>(OperatorCachingMode::ORDERED), "ORDERED" },
+		{ static_cast<uint32_t>(OperatorCachingMode::UNORDERED), "UNORDERED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OperatorCachingMode>(OperatorCachingMode value) {
+	return StringUtil::EnumToString(GetOperatorCachingModeValues(), 4, "OperatorCachingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+OperatorCachingMode EnumUtil::FromString<OperatorCachingMode>(const char *value) {
+	return static_cast<OperatorCachingMode>(StringUtil::StringToEnum(GetOperatorCachingModeValues(), 4, "OperatorCachingMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetOperatorFinalResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(OperatorFinalResultType::FINISHED), "FINISHED" },
@@ -3286,7 +3330,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" },
 		{ static_cast<uint32_t>(OptimizerType::COMMON_SUBPLAN), "COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" },
-		{ static_cast<uint32_t>(OptimizerType::COUNT_WINDOW_ELIMINATION), "COUNT_WINDOW_ELIMINATION" }
+		{ static_cast<uint32_t>(OptimizerType::WINDOW_SELF_JOIN), "WINDOW_SELF_JOIN" }
 	};
 	return values;
 }
@@ -3782,6 +3826,27 @@ const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value) {
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value) {
 	return static_cast<ProfilingCoverage>(StringUtil::StringToEnum(GetProfilingCoverageValues(), 2, "ProfilingCoverage", value));
+}
+
+const StringUtil::EnumStringLiteral *GetProfilingParameterNamesValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ProfilingParameterNames::FORMAT), "FORMAT" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::COVERAGE), "COVERAGE" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::SAVE_LOCATION), "SAVE_LOCATION" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::MODE), "MODE" },
+		{ static_cast<uint32_t>(ProfilingParameterNames::METRICS), "METRICS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value) {
+	return StringUtil::EnumToString(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", static_cast<uint32_t>(value));
+}
+
+template<>
+ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value) {
+	return static_cast<ProfilingParameterNames>(StringUtil::StringToEnum(GetProfilingParameterNamesValues(), 5, "ProfilingParameterNames", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPushdownExtractSupportValues() {
@@ -4777,27 +4842,6 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 13, "TableReferenceType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetTableScanTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_REGULAR), "TABLE_SCAN_REGULAR" },
-		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS), "TABLE_SCAN_COMMITTED_ROWS" },
-		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES), "TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES" },
-		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED), "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED" },
-		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS), "TABLE_SCAN_LATEST_COMMITTED_ROWS" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<TableScanType>(TableScanType value) {
-	return StringUtil::EnumToString(GetTableScanTypeValues(), 5, "TableScanType", static_cast<uint32_t>(value));
-}
-
-template<>
-TableScanType EnumUtil::FromString<TableScanType>(const char *value) {
-	return static_cast<TableScanType>(StringUtil::StringToEnum(GetTableScanTypeValues(), 5, "TableScanType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionModeValues() {

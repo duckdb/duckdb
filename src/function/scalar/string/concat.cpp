@@ -305,8 +305,21 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 			all_null = false;
 		}
 	}
-	if (list_concat || all_null) {
+	if (list_concat) {
 		return BindListConcat(context, bound_function, arguments, is_operator);
+	}
+	if (all_null) {
+		if (is_operator) {
+			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
+			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
+		} else if (bound_function.varargs.id() == LogicalTypeId::LIST ||
+		           bound_function.varargs.id() == LogicalTypeId::ARRAY) {
+			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
+			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
+		} else {
+			SetArgumentType(bound_function, LogicalTypeId::VARCHAR, is_operator);
+			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
+		}
 	}
 	auto return_type = all_blob ? LogicalType::BLOB : LogicalType::VARCHAR;
 

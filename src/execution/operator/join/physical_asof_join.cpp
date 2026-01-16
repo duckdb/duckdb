@@ -405,7 +405,7 @@ AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_st
       right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0),
       gotten(0), left_completed(0), right_completed(0) {
 	right_outer.Initialize(right_stats.count);
-};
+}
 
 idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
 	per_thread = per_thread_p;

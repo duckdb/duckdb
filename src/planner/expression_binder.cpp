@@ -365,6 +365,16 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 		// already bound, don't bind it again
 		return ErrorData();
 	}
+	if (expression.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &w = expression.Cast<WindowExpression>();
+		if (w.HasBoundedParts()) {
+			BindResult result =
+			    BindResult(BinderException::Unsupported(*expr, "window expression is not supported here"));
+			if (result.HasError()) {
+				return std::move(result.error);
+			}
+		}
+	}
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {

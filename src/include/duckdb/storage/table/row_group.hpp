@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -17,7 +16,6 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
@@ -140,14 +138,12 @@ public:
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);
-	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
+	void Scan(ScanOptions options, CollectionScanState &state, DataChunk &result);
+	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
 
 	//! Whether or not this RowGroup should be
 	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
-	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
-	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-	                            SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(TransactionData transaction, idx_t row);
@@ -197,7 +193,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats(idx_t row_group_start);
+	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
@@ -234,9 +230,6 @@ private:
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
-
-	template <TableScanType TYPE>
-	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
 	bool HasUnloadedDeletes() const;
 

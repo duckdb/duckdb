@@ -38,7 +38,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
-#include "duckdb/optimizer/count_window_elimination.hpp"
+#include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -47,6 +47,7 @@ namespace duckdb {
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotEliminationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
@@ -89,6 +90,10 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 }
 
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
+	if (context.IsInterrupted()) {
+		throw InterruptException();
+	}
+
 	if (OptimizerDisabled(type)) {
 		// optimizer is marked as disabled: skip
 		return;
@@ -187,7 +192,8 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
-	RunOptimizer(OptimizerType::COUNT_WINDOW_ELIMINATION, [&]() {
+	// Replaces some window computations with self-joins
+	RunOptimizer(OptimizerType::WINDOW_SELF_JOIN, [&]() {
 		WindowSelfJoinOptimizer window_self_join_optimizer(*this);
 		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});

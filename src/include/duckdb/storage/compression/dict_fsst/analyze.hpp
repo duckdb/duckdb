@@ -1,7 +1,6 @@
 #pragma once
 
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {

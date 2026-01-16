@@ -41,6 +41,12 @@
         "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
       ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+        "paths": [
+          "test/geoparquet/with_crs.test"
+        ]
     }
   ]
 }

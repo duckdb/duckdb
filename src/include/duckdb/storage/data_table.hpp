@@ -239,7 +239,7 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 
 	//! Scans the next chunk for the CREATE INDEX operator
-	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
+	bool CreateIndexScan(TableScanState &state, DataChunk &result);
 	//! Returns true, if the index name is unique (i.e., no PK, UNIQUE, FK constraint has the same name)
 	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
 	bool IndexNameIsUnique(const string &name);
