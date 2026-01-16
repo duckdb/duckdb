@@ -29648,13 +29648,13 @@ yyreduce:
 		      filter_expr->argnumber = -1;
 		      filter_expr->location = (yylsp[(8) - (9)]);
           
-          PGNamedArgExpr *apply_expr = makeNode(PGNamedArgExpr);
-		      filter_expr->name = "apply";
-		      filter_expr->arg = (PGExpr *) (yyvsp[(2) - (9)].node);
-		      filter_expr->argnumber = -1;
-		      filter_expr->location = (yylsp[(2) - (9)]);
+          PGNamedArgExpr *result_expr = makeNode(PGNamedArgExpr);
+		      result_expr->name = "result";
+		      result_expr->arg = (PGExpr *) (yyvsp[(2) - (9)].node);
+		      result_expr->argnumber = -1;
+		      result_expr->location = (yylsp[(2) - (9)]);
         
-          PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, apply_expr), (yylsp[(1) - (9)]));
+          PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, result_expr), (yylsp[(1) - (9)]));
 
           PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
           lambda_apply_1->lhs = (yyvsp[(4) - (9)].list);
@@ -29674,7 +29674,7 @@ yyreduce:
           PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), (yylsp[(1) - (9)]));
 
           /* Construct second apply */
-          PGNode *apply_rhs = makeColumnRef("elem", list_make1(makeString("apply")), (yylsp[(1) - (9)]), yyscanner);
+          PGNode *apply_rhs = makeColumnRef("elem", list_make1(makeString("result")), (yylsp[(1) - (9)]), yyscanner);
 
           PGLambdaFunction *lambda_apply_2 = makeNode(PGLambdaFunction);
           lambda_apply_2->lhs = list_make1(makeString("elem"));

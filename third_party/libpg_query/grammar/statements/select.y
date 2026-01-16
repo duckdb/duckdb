@@ -3166,13 +3166,13 @@ list_comprehension:
 		      filter_expr->argnumber = -1;
 		      filter_expr->location = @8;
           
-          PGNamedArgExpr *apply_expr = makeNode(PGNamedArgExpr);
-		      filter_expr->name = "apply";
-		      filter_expr->arg = (PGExpr *) $2;
-		      filter_expr->argnumber = -1;
-		      filter_expr->location = @2;
+          PGNamedArgExpr *result_expr = makeNode(PGNamedArgExpr);
+		      result_expr->name = "result";
+		      result_expr->arg = (PGExpr *) $2;
+		      result_expr->argnumber = -1;
+		      result_expr->location = @2;
         
-          PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, apply_expr), @1);
+          PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, result_expr), @1);
 
           PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
           lambda_apply_1->lhs = $4;
@@ -3192,7 +3192,7 @@ list_comprehension:
           PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), @1);
 
           /* Construct second apply */
-          PGNode *apply_rhs = makeColumnRef("elem", list_make1(makeString("apply")), @1, yyscanner);
+          PGNode *apply_rhs = makeColumnRef("elem", list_make1(makeString("result")), @1, yyscanner);
 
           PGLambdaFunction *lambda_apply_2 = makeNode(PGLambdaFunction);
           lambda_apply_2->lhs = list_make1(makeString("elem"));
