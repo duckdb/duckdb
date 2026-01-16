@@ -253,7 +253,11 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 }
 
 string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template, const string &extension_name) {
-	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
+	string version = ExtensionHelper::GetExtensionMinCompatVersion(extension_name);
+	if (version.empty()) {
+		version = GetVersionDirectoryName();
+	}
+	auto url = StringUtil::Replace(url_template, "${REVISION}", version);
 	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
 	url = StringUtil::Replace(url, "${NAME}", extension_name);
 	return url;

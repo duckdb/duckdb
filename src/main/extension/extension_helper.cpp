@@ -100,32 +100,34 @@ namespace duckdb {
 // Default Extensions
 //===--------------------------------------------------------------------===//
 static const DefaultExtension internal_extensions[] = {
-    {"core_functions", "Core function library", DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED},
-    {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
-    {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
-    {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
-    {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
-    {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
-    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
-    {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
-    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
-    {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
-    {"motherduck", "Enables motherduck integration with the system", false},
-    {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
-    {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false},
-    {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
-    {"inet", "Adds support for IP-related data types and functions", false},
-    {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
-    {"aws", "Provides features that depend on the AWS SDK", false},
-    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
-    {"encodings", "All unicode encodings to UTF-8", false},
-    {"iceberg", "Adds support for Apache Iceberg", false},
-    {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
-    {"delta", "Adds support for Delta Lake", false},
-    {"fts", "Adds support for Full-Text Search Indexes", false},
-    {"ui", "Adds local UI for DuckDB", false},
-    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
-    {nullptr, nullptr, false}};
+    {"core_functions", "Core function library", DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED, nullptr},
+    {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED, nullptr},
+    {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED, nullptr},
+    {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED, nullptr},
+    {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED, nullptr},
+    {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED, nullptr},
+    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED,
+     nullptr},
+    {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED, nullptr},
+    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED, nullptr},
+    {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED, nullptr},
+    {"motherduck", "Enables motherduck integration with the system", false, nullptr},
+    {"mysql_scanner", "Adds support for connecting to a MySQL database", false, nullptr},
+    {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false, nullptr},
+    {"postgres_scanner", "Adds support for connecting to a Postgres database", false, nullptr},
+    {"inet", "Adds support for IP-related data types and functions", false, nullptr},
+    {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false, nullptr},
+    {"aws", "Provides features that depend on the AWS SDK", false, nullptr},
+    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false, nullptr},
+    {"encodings", "All unicode encodings to UTF-8", false, nullptr},
+    {"iceberg", "Adds support for Apache Iceberg", false, nullptr},
+    {"vss", "Adds indexing support to accelerate Vector Similarity Search", false, nullptr},
+    {"delta", "Adds support for Delta Lake", false, nullptr},
+    {"fts", "Adds support for Full-Text Search Indexes", false, nullptr},
+    {"ui", "Adds local UI for DuckDB", false, nullptr},
+    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false, nullptr},
+    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false, "v1.2.0"},
+    {nullptr, nullptr, false, nullptr}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
 	idx_t index;
@@ -137,6 +139,19 @@ idx_t ExtensionHelper::DefaultExtensionCount() {
 DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 	D_ASSERT(index < DefaultExtensionCount());
 	return internal_extensions[index];
+}
+
+string ExtensionHelper::GetExtensionMinCompatVersion(const string &extension_name) {
+	for (const DefaultExtension &default_extension : internal_extensions) {
+		if (strcmp(extension_name.c_str(), default_extension.name) == 0) {
+			if (default_extension.min_compat_version != nullptr) {
+				return std::string(default_extension.min_compat_version);
+			} else {
+				return "";
+			}
+		}
+	}
+	return "";
 }
 
 //===--------------------------------------------------------------------===//
