@@ -334,10 +334,16 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 
 	auto min = StringStats::Min(input);
 	auto max = StringStats::Max(input);
+
+	if (!result.CanHaveNoNull()) {
+		return true;
+	}
+
 	if (min.empty() && max.empty()) {
-		//! All non-shredded values are VARIANT_NULL, set the stats to indicate this
+		//! All non-shredded values are NULL or VARIANT_NULL, set the stats to indicate this
 		NumericStats::SetMin<uint32_t>(result, 0);
 		NumericStats::SetMax<uint32_t>(result, 0);
+		result.SetHasNoNull();
 	}
 	return true;
 }
@@ -408,11 +414,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
 		ListStats::SetChildStats(list_stats, std::move(child_stats));
 		row_group_stats = list_stats.ToUnique();
-
-		// null count is generic
-		if (row_group_stats) {
-			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
-		}
 		return row_group_stats;
 	}
 	// Structs are handled differently (they dont have stats)
@@ -425,11 +426,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
 		}
 		row_group_stats = struct_stats.ToUnique();
-
-		// null count is generic
-		if (row_group_stats) {
-			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
-		}
 		return row_group_stats;
 	} else if (schema.schema_type == ParquetColumnSchemaType::VARIANT) {
 		auto children_count = schema.children.size();
