@@ -110,19 +110,6 @@ public:
 		return block_id;
 	}
 
-	//! Returns the block manager handling this segment. For transient segments, this might be the temporary block
-	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
-	//! exists another block manager handling the ColumnData, of which this segment is a part.
-	BlockManager &GetBlockManager() const {
-		return block->GetBlockManager();
-	}
-
-	//! Returns the size of the block that is available for usage.
-	idx_t GetBlockSize() const {
-		D_ASSERT(block->GetBlockSize() == block->GetBlockManager().GetBlockSize());
-		return block->GetBlockSize();
-	}
-
 	idx_t GetBlockOffset() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;

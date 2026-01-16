@@ -15,8 +15,8 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
       block_alloc_size(block_manager.GetBlockAllocSize()), block_header_size(block_manager.GetBlockHeaderSize()),
       state(BlockState::BLOCK_UNLOADED), readers(0), block_id(block_id_p), tag(tag), buffer_type(FileBufferType::BLOCK),
       buffer(nullptr), eviction_seq_num(0), destroy_buffer_upon(DestroyBufferUpon::BLOCK),
-      memory_usage(block_alloc_size), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
-      unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
+      memory_usage(block_alloc_size), memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
+      eviction_queue_idx(DConstants::INVALID_INDEX) {
 }
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,
@@ -37,8 +37,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	unswizzled = nullptr;
 	D_ASSERT(!buffer || buffer->GetBufferType() == buffer_type);
 	if (buffer && buffer_type != FileBufferType::TINY_BUFFER) {
-		// we kill the latest version in the eviction queue
-		auto &buffer_manager = block_manager.buffer_manager;
+		// Kill the latest version in the eviction queue.
 		buffer_manager.GetBufferPool().IncrementDeadNodes(*this);
 	}
 
@@ -149,8 +148,7 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		buffer = std::move(block);
 	} else {
 		if (MustWriteToTemporaryFile()) {
-			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(QueryContext(), tag, *this,
-			                                                          std::move(reusable_buffer));
+			buffer = buffer_manager.ReadTemporaryBuffer(QueryContext(), tag, *this, std::move(reusable_buffer));
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
@@ -172,7 +170,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 
 	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
-		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
+		buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;
@@ -193,8 +191,7 @@ bool BlockHandle::CanUnload() const {
 		// there are active readers
 		return false;
 	}
-	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() &&
-	    !block_manager.buffer_manager.HasTemporaryDirectory()) {
+	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !buffer_manager.HasTemporaryDirectory()) {
 		// this block cannot be destroyed upon evict/unpin
 		// in order to unload this block we need to write it to a temporary buffer
 		// however, no temporary directory is specified!

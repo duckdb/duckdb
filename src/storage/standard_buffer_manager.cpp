@@ -255,8 +255,8 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 		}
 	}
 
-	// allocate a buffer to hold the data of all of the blocks
-	auto block_alloc_size = handles[0]->GetBlockSize();
+	// Allocate a buffer to hold the data of all blocks.
+	auto block_alloc_size = handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
 	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
 	auto intermediate_buffer = Pin(batch_memory);

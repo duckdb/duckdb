@@ -117,15 +117,19 @@ public:
 		return memory_usage;
 	}
 
+	//! Returns the block allocation size of this block.
+	idx_t GetBlockAllocSize() const {
+		return block_alloc_size;
+	}
+	//! Returns the block header size including the 8-byte checksum.
+	idx_t GetBlockHeaderSize() const {
+		return block_header_size;
+	}
 	//! Returns the size of the block that is available for usage, as determined by the block manager that created the
 	//! block. The block_alloc_size can differ from the memory_usage for blocks managed by the temporary block manager,
 	//! thus, this should only be called for persistent blocks.
 	idx_t GetBlockSize() const {
 		return block_alloc_size - block_header_size;
-	}
-	//! Returns the block header size including the 8-byte checksum.
-	idx_t GetBlockHeaderSize() const {
-		return block_header_size;
 	}
 
 	bool IsUnloaded() const {

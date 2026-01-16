@@ -20,7 +20,6 @@ struct AggregateFilterData;
 class DataChunk;
 class RowLayout;
 class TupleDataLayout;
-class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
 struct UnifiedVectorFormat;
