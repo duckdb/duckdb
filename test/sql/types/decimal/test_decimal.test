@@ -138,30 +138,30 @@ SELECT CAST(1234567890.1235 AS DECIMAL (13, 3));
 statement error
 SELECT '0.1'::DECIMAL(3, 4);
 ----
-<REGEX>:Parser Error.*Scale cannot be bigger than width.*
+<REGEX>:Binder Error.* DECIMAL type scale cannot be greater than width.*
 
 # cannot have string variable as scale
 statement error
 SELECT '0.1'::DECIMAL('hello');
 ----
-<REGEX>:Parser Error.*Expected an integer constant.*
+<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
 
 # ...or negative numbers
 statement error
-SELECT '0.1'::DECIMAL(-17);
+SELECT '0.1'::DECIMAL((-17));
 ----
-<REGEX>:Parser Error.*Negative modifier not supported.*
+<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
 
 # width/scale out of range
 statement error
-SELECT '0.1'::DECIMAL(1000);
+SELECT '0.1'::DECIMAL(40);
 ----
-<REGEX>:Parser Error.*Width must be between.*
+<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
 
 statement error
 SELECT '0.1'::DECIMAL(1, 2, 3);
 ----
-<REGEX>:Parser Error.*A maximum of two modifiers.*
+<REGEX>:Binder Error.*DECIMAL type can take at most two type modifiers, width and scale.*
 
 statement error
 SELECT '1'::INTEGER(1000);

@@ -111,6 +111,11 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	return view_search_path;
 }
 
+void Binder::SetSearchPath(Catalog &catalog, const string &schema) {
+	auto search_path = GetSearchPath(catalog, schema);
+	entry_retriever.SetSearchPath(std::move(search_path));
+}
+
 static vector<LogicalType> ExchangeAllNullTypes(const vector<LogicalType> &types) {
 	vector<LogicalType> result = types;
 	for (auto &type : result) {

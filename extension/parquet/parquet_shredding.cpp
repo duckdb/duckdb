@@ -68,12 +68,12 @@ optional_ptr<const ShreddingType> ShreddingType::GetChild(const string &name) co
 	return it->second;
 }
 
-ShreddingType ShreddingType::GetShreddingTypes(const Value &val) {
+ShreddingType ShreddingType::GetShreddingTypes(const Value &val, ClientContext &context) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("SHREDDING value should be of type VARCHAR, a stringified type to use for the column");
 	}
 	auto type_str = val.GetValue<string>();
-	auto logical_type = TransformStringToLogicalType(type_str);
+	auto logical_type = TransformStringToLogicalType(type_str, context);
 
 	return ConvertShreddingTypeRecursive(logical_type);
 }

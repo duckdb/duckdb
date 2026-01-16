@@ -166,7 +166,7 @@ select m(0::float, 42)
 ----
 -42
 
-# user types should at least bind properly (instead of defaulting to LogicalTypeId::USER)
+# user types should at least bind properly (instead of defaulting to LogicalTypeId::UNBOUND)
 statement ok
 create or replace type cool_string as varchar;
 

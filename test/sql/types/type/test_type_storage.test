@@ -1,0 +1,7 @@
+# name: test/sql/types/type/test_type_storage.test
+# group: [type]
+
+statement error
+CREATE TABLE T  (v TYPE);
+----
+A table cannot be created from a TYPE column yet

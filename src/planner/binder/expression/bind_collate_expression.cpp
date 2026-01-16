@@ -16,7 +16,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 		throw ParameterNotResolvedException();
 	}
 	if (child->return_type.id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("collations are only supported for type varchar");
+		throw BinderException(child->query_location, "collations are only supported for type varchar");
 	}
 	// Validate the collation, but don't use it
 	auto collation_test = make_uniq_base<Expression, BoundConstantExpression>(Value(child->return_type));

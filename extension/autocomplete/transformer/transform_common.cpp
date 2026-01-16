@@ -3,6 +3,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -240,14 +241,14 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 	if (type_or_character_pr->name == "QualifiedTypeName") {
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
-		if (result.id() == LogicalTypeId::USER) {
-			vector<Value> modifiers;
+		if (result.id() == LogicalTypeId::UNBOUND) {
 			if (qualified_type_name.schema.empty()) {
 				qualified_type_name.schema = qualified_type_name.catalog;
 				qualified_type_name.catalog = INVALID_CATALOG;
 			}
-			result = LogicalType::USER(qualified_type_name.catalog, qualified_type_name.schema,
-			                           qualified_type_name.name, std::move(modifiers));
+			result = LogicalType::UNBOUND(
+			    make_uniq<TypeExpression>(qualified_type_name.catalog, qualified_type_name.schema,
+			                              qualified_type_name.name, vector<unique_ptr<ParsedExpression>> {}));
 		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);

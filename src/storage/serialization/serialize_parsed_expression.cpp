@@ -75,6 +75,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 	case ExpressionClass::SUBQUERY:
 		result = SubqueryExpression::Deserialize(deserializer);
 		break;
+	case ExpressionClass::TYPE:
+		result = TypeExpression::Deserialize(deserializer);
+		break;
 	case ExpressionClass::WINDOW:
 		result = WindowExpression::Deserialize(deserializer);
 		break;
@@ -328,6 +331,23 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(201, "subquery", result->subquery);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "child", result->child);
 	deserializer.ReadProperty<ExpressionType>(203, "comparison_type", result->comparison_type);
+	return std::move(result);
+}
+
+void TypeExpression::Serialize(Serializer &serializer) const {
+	ParsedExpression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(202, "type_name", type_name);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
+}
+
+unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
+	deserializer.ReadPropertyWithDefault<string>(200, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<string>(202, "type_name", result->type_name);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", result->children);
 	return std::move(result);
 }
 

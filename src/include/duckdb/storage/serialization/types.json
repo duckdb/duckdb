@@ -162,35 +162,6 @@
     "constructor": ["child_type", "size"]
   },
   {
-    "class": "UserTypeInfo",
-    "base": "ExtraTypeInfo",
-    "enum": "USER_TYPE_INFO",
-    "members": [
-      {
-        "id": 200,
-        "name": "user_type_name",
-        "type": "string"
-      },
-      {
-        "id": 201,
-        "name": "catalog",
-        "type": "string",
-        "default": "string()"
-      },
-      {
-        "id": 202,
-        "name": "schema",
-        "type": "string",
-        "default": "string()"
-      },
-      {
-        "id": 203,
-        "name": "user_type_modifiers",
-        "type": "vector<Value>"
-      }
-    ]
-  },
-  {
     "class": "EnumTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "ENUM_TYPE_INFO",
@@ -260,5 +231,11 @@
         "type": "CoordinateReferenceSystem"
       }
     ]
+  },
+  {
+    "class": "UnboundTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "UNBOUND_TYPE_INFO",
+    "custom_implementation": true
   }
 ]
