@@ -27,7 +27,7 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - CreateBlock!");
 	}
 	block_id_t GetFreeBlockId() override {
-		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockId!");
+		return max_block++;
 	}
 	block_id_t GetFreeBlockIdForCheckpoint() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockIdForCheckpoint!");
@@ -82,5 +82,7 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - FreeBlocks!");
 	}
 	// LCOV_EXCL_STOP
+private:
+	idx_t max_block = 0;
 };
 } // namespace duckdb
