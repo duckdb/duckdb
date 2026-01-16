@@ -139,3 +139,14 @@ QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
     AND count(*) OVER(PARTITION BY date, train_number) = 1;
 ----
 2024-01-02	100
+
+# 11. Case filter clause
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN 
+FROM services 
+WHERE date > '2024-06-30'::DATE
+QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
+    AND count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
