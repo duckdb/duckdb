@@ -3159,18 +3159,49 @@ list_comprehension:
 				}
 				| '[' a_expr FOR name_list IN_P c_expr IF_P a_expr']'
 				{
-					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
-					lambda->lhs = $4;
-					lambda->rhs = $2;
-					lambda->location = @1;
+          /* Construct first apply */
+          PGNamedArgExpr *filter_expr = makeNode(PGNamedArgExpr);
+		      filter_expr->name = makeString("filter");
+		      filter_expr->arg = (PGExpr *) $8;
+		      filter_expr->argnumber = -1;
+		      filter_expr->location = @8;
+          
+          PGNamedArgExpr *apply_expr = makeNode(PGNamedArgExpr);
+		      filter_expr->name = makeString("apply");
+		      filter_expr->arg = (PGExpr *) $2;
+		      filter_expr->argnumber = -1;
+		      filter_expr->location = @2;
+        
+          PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, apply_expr), @1);
 
-					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
-					lambda_filter->lhs = $4;
-					lambda_filter->rhs = $8;
-					lambda_filter->location = @8;
-					PGFuncCall *filter = makeFuncCall(SystemFuncName("list_filter"), list_make2($6, lambda_filter), @1);
-					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter, lambda), @1);
-					$$ = (PGNode *) n;
+          PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
+          lambda->lhs = $4;
+          lambda->rhs = (PGNode *)struct_pack;
+          lambda->location = @1;
+
+          PGFuncCall *apply_func_1 = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda_apply_1), @1);
+
+          /* Construct filter */
+          PGColumnRef *filter_rhs = makeColumnRef(makeString("elem"), list_make1(makeString("filter"), @1, yyscanner));
+
+          PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
+          lambda_filter->lhs = list_make1(makeString("elem"));
+          lambda_filter->rhs = (PGNode *) filter_rhs;
+          lambda_filter->location = @1;
+
+          PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), @1);
+
+          /* Construct second apply */
+          PGColumnRef *apply_rhs = makeColumnRef(makeString("elem"), list_make1(makeString("apply"), @1, yyscanner));
+
+          PGLambdaFunction *lambda_apply_2 = makeNode(PGLambdaFunction);
+          lambda_filter->lhs = list_make1(makeString("elem"));
+          lambda_filter->rhs = (PGNode *) apply_rhs;
+          lambda_filter->location = @1;
+
+          PGFuncCall *apply_func_2 = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter_func, lambda_apply_2, @1);
+
+					$$ = (PGNode *) apply_func_2;
 				}
 			;
 
