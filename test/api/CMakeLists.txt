@@ -36,7 +36,8 @@ set(TEST_API_OBJECTS
     test_threads.cpp
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
-    test_object_cache.cpp)
+    test_object_cache.cpp
+    test_buffer_pool_eviction.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)
