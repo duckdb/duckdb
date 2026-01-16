@@ -178,25 +178,25 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	for (auto &info_ptr : index_serialization_result.bound_infos) {
 		all_infos.push_back(info_ptr.get());
+	}
 
-		if (debug_verify_blocks) {
-			for (auto &index_info : all_infos) {
-				for (auto &allocator : index_info->allocator_infos) {
-					for (auto &block : allocator.block_pointers) {
-						checkpoint_manager.verify_block_usage_count[block.block_id]++;
-					}
+	if (debug_verify_blocks) {
+		for (auto &index_info : all_infos) {
+			for (auto &allocator : index_info->allocator_infos) {
+				for (auto &block : allocator.block_pointers) {
+					checkpoint_manager.verify_block_usage_count[block.block_id]++;
 				}
 			}
 		}
-
-		// write empty block pointers for forwards compatibility
-		vector<BlockPointer> compat_block_pointers;
-		serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-
-		serializer.WriteList(104, "index_storage_infos", all_infos.size(), [&](Serializer::List &list, idx_t i) {
-			list.WriteObject([&](Serializer &object) { all_infos[i]->Serialize(object); });
-		});
 	}
+
+	// write empty block pointers for forwards compatibility
+	vector<BlockPointer> compat_block_pointers;
+	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+
+	serializer.WriteList(104, "index_storage_infos", all_infos.size(), [&](Serializer::List &list, idx_t i) {
+		list.WriteObject([&](Serializer &object) { all_infos[i]->Serialize(object); });
+	});
 }
 
 } // namespace duckdb
