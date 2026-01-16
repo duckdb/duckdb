@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
+static idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	idx_t count = 0;
 	for (auto &binding : lambda_bindings) {
 		count += binding.GetColumnCount();
@@ -20,8 +20,8 @@ idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	return count;
 }
 
-idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
-                          const BoundLambdaRefExpression &bound_lambda_ref_expr) {
+static idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
+                                 const BoundLambdaRefExpression &bound_lambda_ref_expr) {
 	D_ASSERT(bound_lambda_ref_expr.lambda_idx < lambda_bindings.size());
 	idx_t offset = 0;
 	// count the remaining lambda parameters BEFORE the current lambda parameter,
@@ -29,13 +29,13 @@ idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLamb
 	for (idx_t i = bound_lambda_ref_expr.lambda_idx + 1; i < lambda_bindings.size(); i++) {
 		offset += lambda_bindings[i].GetColumnCount();
 	}
-	offset += lambda_bindings[bound_lambda_ref_expr.lambda_idx].GetColumnCount() -
-	          bound_lambda_ref_expr.binding.column_index - 1;
+	offset += bound_lambda_ref_expr.binding.column_index;
 	offset += bound_lambda_expr.parameter_count;
 	return offset;
 }
 
-void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+static void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names,
+                             vector<string> &column_aliases) {
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
 	if (column_ref.IsQualified()) {
 		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
@@ -45,7 +45,7 @@ void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names
 	column_aliases.push_back(column_ref.ToString());
 }
 
-void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+static void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
 	// extract the lambda parameters, which are a single column
 	// reference, or a list of column references (ROW function)
 	string error_message;
@@ -164,7 +164,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		// refers to a lambda parameter inside the current lambda function
 		auto logical_type =
 		    (*bind_lambda_function)(context, function_child_types, bound_lambda_ref.binding.column_index);
-		auto index = bound_lambda_expr.parameter_count - bound_lambda_ref.binding.column_index - 1;
+
+		const auto index = bound_lambda_ref.binding.column_index;
+
 		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
 		return;
 	}

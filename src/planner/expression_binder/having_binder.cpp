@@ -15,6 +15,10 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
+bool HavingBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	return column_alias_binder.DoesColumnAliasExist(colref);
+}
+
 BindResult HavingBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
