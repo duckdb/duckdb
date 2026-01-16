@@ -76,8 +76,9 @@ struct IndexBuildBindData {
 	}
 };
 
-struct IndexBuildGlobalState {
-	DUCKDB_API virtual ~IndexBuildGlobalState() = default;
+//! Global shared state for the whole index build pipeline
+struct IndexBuildState {
+	DUCKDB_API virtual ~IndexBuildState() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -91,8 +92,25 @@ struct IndexBuildGlobalState {
 	}
 };
 
-struct IndexBuildLocalState {
-	DUCKDB_API virtual ~IndexBuildLocalState() = default;
+//! Local sink state (optional)
+struct IndexBuildSinkState {
+	DUCKDB_API virtual ~IndexBuildSinkState() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
+//! Local work state (optional)
+struct IndexBuildWorkState {
+	DUCKDB_API virtual ~IndexBuildWorkState() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -108,24 +126,6 @@ struct IndexBuildLocalState {
 
 class DuckTableEntry;
 
-struct IndexBuildInitLocalStateInput {
-	optional_ptr<IndexBuildBindData> bind_data;
-	ClientContext &context;
-	DuckTableEntry &table;
-	CreateIndexInfo &info;
-	const vector<unique_ptr<Expression>> &expressions;
-	const vector<column_t> storage_ids;
-};
-
-struct IndexBuildInitGlobalStateInput {
-	optional_ptr<IndexBuildBindData> bind_data;
-	ClientContext &context;
-	DuckTableEntry &table;
-	CreateIndexInfo &info;
-	const vector<unique_ptr<Expression>> &expressions;
-	const vector<column_t> storage_ids;
-};
-
 struct IndexBuildBindInput {
 	ClientContext &context;
 	DuckTableEntry &table;
@@ -137,32 +137,59 @@ struct IndexBuildSortInput {
 	optional_ptr<IndexBuildBindData> bind_data;
 };
 
-struct IndexBuildMaterializeInput {
+struct IndexBuildPrepareInput {
 	optional_ptr<IndexBuildBindData> bind_data;
 };
 
-struct IndexBuildCombineInput {
+struct IndexBuildInitStateInput {
 	optional_ptr<IndexBuildBindData> bind_data;
-	IndexBuildGlobalState &global_state;
-	IndexBuildLocalState &local_state;
+	ClientContext &context;
 	DuckTableEntry &table;
 	CreateIndexInfo &info;
+	const vector<unique_ptr<Expression>> &expressions;
+	const vector<column_t> storage_ids;
+};
+
+struct IndexBuildInitSinkInput {
+	optional_ptr<IndexBuildBindData> bind_data;
+	ClientContext &context;
+	DuckTableEntry &table;
+	CreateIndexInfo &info;
+	const vector<unique_ptr<Expression>> &expressions;
+	const vector<column_t> storage_ids;
 };
 
 struct IndexBuildSinkInput {
+	optional_ptr<IndexBuildSinkState> state;
+};
+
+struct IndexBuildSinkCombineInput {
 	optional_ptr<IndexBuildBindData> bind_data;
-	IndexBuildGlobalState &global_state;
-	IndexBuildLocalState &local_state;
+};
+
+struct IndexBuildInitWorkInput {
+	optional_ptr<IndexBuildBindData> bind_data;
+	ClientContext &context;
 	DuckTableEntry &table;
 	CreateIndexInfo &info;
+	const vector<unique_ptr<Expression>> &expressions;
+	const vector<column_t> storage_ids;
+};
+
+struct IndexBuildWorkInput {
+	optional_ptr<IndexBuildWorkState> state;
+};
+
+struct IndexBuildWorkCombineInput {
+	optional_ptr<IndexBuildBindData> bind_data;
 };
 
 struct IndexBuildFinalizeInput {
 	// Explicit constructor to bind the reference
-	IndexBuildFinalizeInput(IndexBuildGlobalState &gstate)
-	    : global_state(gstate) {}
+	IndexBuildFinalizeInput(IndexBuildState &gstate) : global_state(gstate) {
+	}
 
-	IndexBuildGlobalState &global_state;
+	IndexBuildState &global_state;
 	optional_ptr<ColumnDataCollection> collection;
 
 	bool has_count = false;
@@ -172,20 +199,19 @@ struct IndexBuildFinalizeInput {
 
 typedef unique_ptr<IndexBuildBindData> (*index_build_bind_t)(IndexBuildBindInput &input);
 typedef bool (*index_build_sort_t)(IndexBuildSortInput &input);
-typedef bool (*index_build_count_t)(IndexBuildMaterializeInput &input);
-typedef unique_ptr<IndexBuildGlobalState> (*index_build_global_init_t)(IndexBuildInitGlobalStateInput &input);
-typedef unique_ptr<IndexBuildLocalState> (*index_build_local_init_t)(IndexBuildInitLocalStateInput &input);
-typedef void (*index_build_sink_t)(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk);
-typedef void (*index_build_combine_t)(IndexBuildCombineInput &input);
+
+typedef unique_ptr<IndexBuildState> (*index_build_init_t)(IndexBuildInitStateInput &input);
+typedef unique_ptr<IndexBuildSinkState> (*index_build_sink_init_t)(IndexBuildInitSinkInput &input);
+typedef void (*index_build_sink_t)(IndexBuildSinkInput &state, DataChunk &key_chunk, DataChunk &row_chunk);
+typedef void (*index_build_sink_combine_t)(IndexBuildSinkCombineInput &input);
+
+typedef void (*index_build_prepare_t)(IndexBuildPrepareInput &input);
+
+typedef unique_ptr<IndexBuildWorkState> (*index_build_work_init_t)(IndexBuildInitWorkInput &input);
+typedef bool (*index_build_work_t)(IndexBuildWorkInput &input); // TODO: Figure out what makes sense to return here
+typedef void (*index_build_work_combine_t)(IndexBuildWorkCombineInput &input);
 
 typedef unique_ptr<BoundIndex> (*index_build_finalize_t)(IndexBuildFinalizeInput &input);
-typedef unique_ptr<BoundIndex> (*index_build_finalize_count_t)(IndexBuildFinalizeInput &input);
-typedef unique_ptr<BoundIndex> (*index_build_finalize_sort_t)(IndexBuildFinalizeInput &input);
-typedef unique_ptr<BoundIndex> (*index_build_finalize_count_sort_t)(IndexBuildFinalizeInput &input);
-
-typedef TaskExecutionResult (*index_build_exec_task_t)(TaskExecutionMode mode);
-typedef void(*index_build_schedule_event_t)();
-typedef void(*index_build_finish_event_t)();
 
 struct PlanIndexInput {
 	ClientContext &context;
@@ -204,7 +230,7 @@ struct PlanIndexInput {
 typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
 typedef PhysicalOperator &(*index_build_plan_t)(PlanIndexInput &input);
 
-//! A index "type"
+//! An index "type"
 class IndexType {
 public:
 	// The name of the index type
@@ -213,31 +239,32 @@ public:
 	// Callbacks
 	index_build_bind_t build_bind = nullptr;
 	index_build_sort_t build_sort = nullptr;
-	index_build_count_t build_count = nullptr;
-	index_build_global_init_t build_global_init = nullptr;
-	index_build_local_init_t build_local_init = nullptr;
+	index_build_init_t build_init = nullptr;
+
+	//! Sink phase
+	index_build_sink_init_t build_sink_init = nullptr;
 	index_build_sink_t build_sink = nullptr;
-	index_build_combine_t build_combine = nullptr;
+	index_build_sink_combine_t build_sink_combine = nullptr;
 
-	// --- for finalizing the build of the index --- //
+	//! Optional Callbacks
+	// -----------------------------------------------------
+
+	//! Midpoint
+	index_build_prepare_t build_prepare = nullptr;
+
+	//! Work phase
+	index_build_work_init_t build_work_init = nullptr;
+	index_build_work_t build_work = nullptr;
+	index_build_work_combine_t build_work_combine = nullptr;
+	// -----------------------------------------------------
+
+	// Finalize
 	index_build_finalize_t build_finalize = nullptr;
-	// build finalize needs exact count as input
-	index_build_finalize_count_t build_finalize_count = nullptr;
-	// build finalize needs sorted data as input
-	index_build_finalize_sort_t build_finalize_sort = nullptr;
-	// build finalize needs counted + sorted
-	index_build_finalize_count_sort_t build_finalize_count_and_sort = nullptr;
-
-	// --- for parallel construction --- //
-	// creates a task (what is done in a task
-	index_build_exec_task_t build_exec_task = nullptr;
-	// schedules the tasks
-	index_build_schedule_event_t build_schedule_event = nullptr;
 
 	//! Extra information for the index type
 	shared_ptr<IndexTypeInfo> index_info = nullptr;
 
-	index_build_plan_t create_plan = nullptr;          // escape hatch for creating the physical plan
+	index_build_plan_t create_plan = nullptr; // escape hatch for creating the physical plan
 	index_create_function_t create_instance = nullptr;
 
 	// function to create an instance of the index

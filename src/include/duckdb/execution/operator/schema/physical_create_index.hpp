@@ -49,6 +49,9 @@ public:
 	vector<column_t> indexed_columns;
 	vector<column_t> rowid_column;
 
+	//! Final global index
+	unique_ptr<BoundIndex> global_index;
+
 public:
 	//! Source interface, NOP for this operator
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -76,5 +79,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	unique_ptr<IndexBuildSinkState> GetLocalSinkState(IndexBuildInitSinkInput &input);
+	void FinalizeIndexBuild(ClientContext &context, unique_ptr<BoundIndex> bound_index);
 };
 } // namespace duckdb

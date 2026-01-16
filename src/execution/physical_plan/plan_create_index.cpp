@@ -179,23 +179,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
 	// determine we need to materialize the input (exact count)
 	bool materialize = false;
+
 	if (index_type->build_count) {
 		IndexBuildMaterializeInput materialize_input {bind_data.get()};
 		materialize = index_type->build_count(materialize_input);
 	}
 
-	if (materialize) {
-		// if it needs sorting, it will be done in the physical materialized index operator
-		plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data), materialize);
-		return *plan;
-	}
-
-	if (!materialize && need_sort) {
+	if (need_sort) {
 		plan = &AddSort(*this, op, *plan);
 	}
 
-	plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data), false);
-
+	plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data), materialize);
 	return *plan;
 }
 

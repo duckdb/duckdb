@@ -9,6 +9,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 
 namespace duckdb {
 
@@ -41,46 +42,68 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 //---------------------------------------------------------------------------------------------------------------------
 // Global Sink
 //---------------------------------------------------------------------------------------------------------------------
+
+// build init
 class CreateIndexGlobalSinkState : public GlobalSinkState {
 public:
-	unique_ptr<IndexBuildGlobalState> gstate;
+	unique_ptr<IndexBuildState> gstate;
+	unique_ptr<BoundIndex> global_index;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-	auto gstate = make_uniq<CreateIndexGlobalSinkState>();
-	IndexBuildInitGlobalStateInput global_state_input {bind_data.get(),     context,    table, *info,
-	                                                   unbound_expressions, storage_ids};
+	auto g_sink_state = make_uniq<CreateIndexGlobalSinkState>();
+	IndexBuildInitStateInput global_state_input {bind_data.get(),     context,    table, *info,
+	                                             unbound_expressions, storage_ids};
 
-	gstate->gstate = index_type.build_global_init(global_state_input);
-	return std::move(gstate);
+	g_sink_state->gstate = index_type.build_init(global_state_input);
+	return std::move(g_sink_state);
 }
 
 //-------------------------------------------------------------
 // Local Sink
 //-------------------------------------------------------------
 
+// build sink init
 class CreateIndexLocalSinkState : public LocalSinkState {
 public:
-	unique_ptr<IndexBuildLocalState> lstate;
+	unique_ptr<IndexBuildSinkState> lstate;
 	DataChunk key_chunk;
 	DataChunk row_chunk;
 };
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
 	auto lstate = make_uniq<CreateIndexLocalSinkState>();
+	IndexBuildInitSinkInput local_state_input {bind_data.get(), context.client,      table,
+	                                           *info,           unbound_expressions, storage_ids};
 
-	IndexBuildInitLocalStateInput local_state_input {bind_data.get(), context.client,      table,
-	                                                 *info,           unbound_expressions, storage_ids};
-	lstate->lstate = index_type.build_local_init(local_state_input);
+	if (index_type.build_sink_init) {
+		lstate->lstate = index_type.build_sink_init(local_state_input);
+	}
+
 	lstate->key_chunk.InitializeEmpty(indexed_column_types);
 	lstate->row_chunk.InitializeEmpty({LogicalType::ROW_TYPE});
+
 	return std::move(lstate);
 }
+
+// typedef unique_ptr<IndexBuildState> (*index_build_init_t)(IndexBuildInitStateInput &input);
+// typedef unique_ptr<IndexBuildSinkState> (*index_build_sink_init_t)(IndexBuildInitSinkInput &input);
+// typedef void (*index_build_sink_t)(IndexBuildSinkInput &state, DataChunk &key_chunk, DataChunk &row_chunk);
+// typedef void (*index_build_sink_combine_t)(IndexBuildSinkCombineInput &input);
+
+//! Midpoint
+// index_build_prepare_t build_prepare = nullptr;
+//
+// //! Work phase
+// index_build_work_init_t build_work_init = nullptr;
+// index_build_work_t build_work = nullptr;
+// index_build_work_combine_t build_work_combine = nullptr;
 
 //-------------------------------------------------------------
 // Sink
 //-------------------------------------------------------------
 
+// build_sink
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
@@ -104,30 +127,120 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	}
 
 	// Sink into the index
-	IndexBuildSinkInput sink_input {bind_data.get(), *gstate.gstate, *lstate.lstate, table, *info};
+	IndexBuildSinkInput sink_input {lstate.lstate};
 	index_type.build_sink(sink_input, lstate.key_chunk, lstate.row_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
+// build_sink_combine
 SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
 
-	IndexBuildCombineInput combine_input {bind_data.get(), *gstate.gstate, *lstate.lstate, table, *info};
-	index_type.build_combine(combine_input);
+	if (index_type.build_sink_combine) {
+		IndexBuildSinkCombineInput combine_input {bind_data};
+		index_type.build_sink_combine(combine_input);
+	}
 
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+//-------------------------------------------------------------
+// Finalize
+//-------------------------------------------------------------
 
-	// Finalize the index
-	IndexBuildFinalizeInput finalize_input {*gstate.gstate};
-	auto bound_index = index_type.build_finalize(finalize_input);
+class IndexConstructTask final : public ExecutorTask {
+public:
+	IndexConstructTask(shared_ptr<Event> event_p, ClientContext &context, CreateIndexGlobalSinkState &gstate_p,
+	                   size_t thread_id_p, const PhysicalCreateIndex &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), index_op(op_p),
+	      local_scan_state() {
+		if (index_op.index_type.build_work_init) {
+			IndexBuildInitWorkInput work_init_input {
+			    index_op.bind_data,  context, index_op.table, *index_op.info, index_op.unbound_expressions,
+			    index_op.storage_ids};
+			auto bound_index = index_op.index_type.build_work_init(work_init_input);
+		}
+	}
 
+public:
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		// TODO // what to do with this?
+		// I think we should abstract this
+		// if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
+		// 	return TaskExecutionResult::TASK_NOT_FINISHED;
+		// }
+
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	CreateIndexGlobalSinkState &gstate;
+	size_t thread_id;
+
+	DataChunk scan_chunk;
+	ColumnDataLocalScanState local_scan_state;
+	const PhysicalCreateIndex &index_op;
+};
+
+struct IndexConstructionEventInput {
+	IndexConstructionEventInput(const PhysicalCreateIndex &op, CreateIndexGlobalSinkState &gstate, Pipeline &pipeline,
+	                            CreateIndexInfo &info, const vector<column_t> &storage_ids, DuckTableEntry &table)
+	    : op(op), gstate(gstate), pipeline(pipeline), info(info), storage_ids(storage_ids), table(table) {
+	}
+
+	const PhysicalCreateIndex &op;
+	CreateIndexGlobalSinkState &gstate;
+	Pipeline &pipeline;
+	CreateIndexInfo &info;
+	const vector<column_t> &storage_ids;
+	DuckTableEntry &table;
+};
+
+class IndexConstructionEvent : public BasePipelineEvent {
+public:
+	explicit IndexConstructionEvent(const IndexConstructionEventInput &input)
+	    : BasePipelineEvent(input.pipeline), op(input.op), gstate(input.gstate), info(input.info),
+	      storage_ids(input.storage_ids), table(input.table), op_p(input.op) {
+	}
+
+	const PhysicalCreateIndex &op;
+	CreateIndexGlobalSinkState &gstate;
+	CreateIndexInfo &info;
+	const vector<column_t> &storage_ids;
+	DuckTableEntry &table;
+	const PhysicalCreateIndex &op_p;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline->GetClientContext();
+		vector<shared_ptr<Task>> tasks;
+		idx_t num_tasks = 1;
+
+		// We only schedule a single task if there is no work_init callback
+		if (op.index_type.build_work_init) {
+			// Schedule tasks equal to the number of threads
+			auto &ts = TaskScheduler::GetScheduler(context);
+			num_tasks = NumericCast<size_t>(ts.NumberOfThreads());
+		}
+
+		for (size_t tnum = 0; tnum < num_tasks; tnum++) {
+			tasks.push_back(make_uniq<IndexConstructTask>(shared_from_this(), context, gstate, tnum, op));
+		}
+
+		SetTasks(std::move(tasks));
+	}
+
+	void FinishEvent() override {
+		// get the bound index here
+		// do a callback, and then call
+		op.FinalizeIndexBuild(context, op.global_index);
+	}
+};
+
+void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, unique_ptr<BoundIndex> bound_index) {
 	// Vacuum excess memory and verify.
 	bound_index->Vacuum();
 
@@ -154,7 +267,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
 			}
 			// IF NOT EXISTS on existing index. We are done.
-			return SinkFinalizeType::READY;
+			return;
 		}
 
 		auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
@@ -178,6 +291,42 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	// Add the index to the storage.
 	storage.AddIndex(std::move(bound_index));
+}
+
+SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                               OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+
+	//! Work phase
+	// index_build_work_init_t build_work_init = nullptr;
+	// index_build_work_t build_work = nullptr;
+	// index_build_work_combine_t build_work_combine = nullptr;
+
+	// determine if we still need to do some processing before finalizing
+	if (index_type.build_work) {
+		IndexBuildFinalizeInput finalize_input {*gstate.gstate};
+		auto bound_index = index_type.build_finalize(finalize_input);
+
+		// determine how many tasks we need to spawn
+		if (index_type.build_work_init) {
+		}
+
+		// optional_ptr<IndexBuildBindData> bind_data;
+		// ClientContext &context;
+		// DuckTableEntry &table;
+		// CreateIndexInfo &info;
+		// const vector<unique_ptr<Expression>> &expressions;
+		// const vector<column_t> storage_ids;
+		// Create a new event that will construct the index
+		auto index_build_work_input =
+		    IndexBuildInitWorkInput(*this, context, table, index_type.index_info, pipeline, *info, storage_ids, table);
+		auto new_event = make_shared_ptr<IndexConstructionEvent>(index_build_work_input);
+		event.InsertEvent(std::move(new_event));
+	} else {
+		// Finalize the index
+		IndexBuildFinalizeInput finalize_input {*gstate.gstate};
+		auto bound_index = index_type.build_finalize(finalize_input);
+	}
 
 	return SinkFinalizeType::READY;
 }

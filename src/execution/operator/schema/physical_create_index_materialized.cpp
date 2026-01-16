@@ -31,6 +31,7 @@ PhysicalCreateIndexMaterialized::PhysicalCreateIndexMaterialized(
 //-------------------------------------------------------------
 class CreateMaterializedIndexGlobalSinkState final : public GlobalSinkState {
 public:
+	// shared state
 	CreateMaterializedIndexGlobalSinkState(const PhysicalOperator &op_p) : op(op_p) {
 	}
 
@@ -62,17 +63,14 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndexMaterialized::GetGlobalSinkState(
 	// create global state index
 	auto gstate = make_uniq<CreateMaterializedIndexGlobalSinkState>(*this);
 
-	IndexBuildInitGlobalStateInput global_state_input {bind_data.get(),     context,    table, *info,
-	                                                   unbound_expressions, storage_ids};
+	IndexBuildInitWorkerInput global_state_input {bind_data.get(),     context,    table, *info,
+	                                              unbound_expressions, storage_ids};
 
 	gstate->gstate = index_type.build_global_init(global_state_input);
 
 	// Question: what to do with this?
 	vector<LogicalType> data_types = {unbound_expressions[0]->return_type, LogicalType::ROW_TYPE};
-
-	if (needs_count) {
-		gstate->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), data_types);
-	}
+	gstate->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), data_types);
 
 	gstate->context = context.shared_from_this();
 
@@ -92,9 +90,11 @@ public:
 
 unique_ptr<LocalSinkState> PhysicalCreateIndexMaterialized::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<CreateMaterializedIndexLocalState>();
+
 	vector<LogicalType> data_types = {unbound_expressions[0]->return_type, LogicalType::ROW_TYPE};
 	state->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), data_types);
 	state->collection->InitializeAppend(state->append_state);
+
 	return std::move(state);
 }
 
@@ -106,8 +106,14 @@ SinkResultType PhysicalCreateIndexMaterialized::Sink(ExecutionContext &context, 
                                                      OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<CreateMaterializedIndexLocalState>();
 	auto &gstate = input.global_state.Cast<CreateMaterializedIndexGlobalSinkState>();
-	lstate.collection->Append(lstate.append_state, chunk);
-	gstate.loaded_count += chunk.size();
+
+	// maybe change to need materialize
+	if (needs_count) {
+		//
+		lstate.collection->Append(lstate.append_state, chunk);
+		gstate.loaded_count += chunk.size();
+	}
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -137,24 +143,28 @@ SinkCombineResultType PhysicalCreateIndexMaterialized::Combine(ExecutionContext 
 // Finalize
 //-------------------------------------------------------------
 
-class MaterializedIndexConstructTask final : public ExecutorTask {
+class IndexConstructTask final : public ExecutorTask {
 public:
-	MaterializedIndexConstructTask(shared_ptr<Event> event_p, ClientContext &context,
-	                               CreateMaterializedIndexGlobalSinkState &gstate_p, size_t thread_id_p,
-	                               const PhysicalCreateIndexMaterialized &op_p)
-	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), op_materialized(op_p),
-	      local_scan_state() {
-
+	IndexConstructTask(shared_ptr<Event> event_p, ClientContext &context,
+	                   CreateMaterializedIndexGlobalSinkState &gstate_p, size_t thread_id_p,
+	                   const PhysicalCreateIndexMaterialized &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p),
+	      op_materialized(op_p), local_scan_state() {
+		// construct a task?
 		// Question: is this ok
-		if (op_materialized.needs_count) {
-			// Initialize the scan chunk if we need to materialize
-			gstate.collection->InitializeScanChunk(scan_chunk);
-		}
+		// Do
 	}
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		return op_materialized.index_type.build_exec_task(mode);
+		// TODO // what to do with this?
+		// I think we should abstract this
+		// if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
+		// 	return TaskExecutionResult::TASK_NOT_FINISHED;
+		// }
+
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 private:
@@ -184,8 +194,9 @@ struct IndexConstructionEventInput {
 class IndexConstructionEvent : public BasePipelineEvent {
 public:
 	explicit IndexConstructionEvent(const IndexConstructionEventInput &input)
-		: BasePipelineEvent(input.pipeline), op(input.op), gstate(input.gstate),
-		  info(input.info), storage_ids(input.storage_ids), table(input.table), op_p(input.op) {}
+	    : BasePipelineEvent(input.pipeline), op(input.op), gstate(input.gstate), info(input.info),
+	      storage_ids(input.storage_ids), table(input.table), op_p(input.op) {
+	}
 
 	const PhysicalCreateIndexMaterialized &op;
 	CreateMaterializedIndexGlobalSinkState &gstate;
@@ -194,66 +205,30 @@ public:
 	DuckTableEntry &table;
 	const PhysicalCreateIndexMaterialized &op_p;
 
-
 public:
 	void Schedule() override {
-		if (!op.index_type.build_schedule_event) {
-			throw TransactionException("'build_schedule_event' callback is missing");
+		auto &context = pipeline->GetClientContext();
+		vector<shared_ptr<Task>> tasks;
+		idx_t num_tasks = 1;
+
+		// TODO what should this one be
+		if (op.index_type.build_work_init) {
+			// We only schedule 1 task
+			// Schedule tasks equal to the number of threads
+			auto &ts = TaskScheduler::GetScheduler(context);
+			num_tasks = NumericCast<size_t>(ts.NumberOfThreads());
 		}
-		op.index_type.build_schedule_event();
+
+		for (size_t tnum = 0; tnum < num_tasks; tnum++) {
+			tasks.push_back(make_uniq<IndexConstructTask>(shared_from_this(), context, gstate, tnum, op));
+		}
+
+		SetTasks(std::move(tasks));
 	}
 
 	void FinishEvent() override {
-		// Vacuum excess memory and verify.
-		gstate.global_index->Vacuum();
-
-		gstate.global_index->Verify();
-
-		D_ASSERT(!gstate.global_index->ToString(true).empty());
-
-		gstate.global_index->VerifyAllocations();
-
-		auto &storage = table.GetStorage();
-		if (!storage.IsMainTable()) {
-			throw TransactionException(
-				"Transaction conflict: cannot add an index to a table that has been altered or dropped");
-		}
-
-		auto &schema = table.schema;
-		info.column_ids = storage_ids;
-
-		if (!op_p.alter_table_info) {
-			// Ensure that the index does not yet exist in the catalog.
-			auto entry = schema.GetEntry(schema.GetCatalogTransaction(*gstate.context), CatalogType::INDEX_ENTRY, info.index_name);
-			if (entry) {
-				if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-					throw CatalogException("Index with name \"%s\" already exists!", info.index_name);
-				}
-				// IF NOT EXISTS on existing index. We are done.
-				return;
-			}
-
-			auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(*gstate.context), info, table).get();
-			D_ASSERT(index_entry);
-			auto &index = index_entry->Cast<DuckIndexEntry>();
-			index.initial_index_size = gstate.global_index->GetInMemorySize();
-
-		} else {
-			// Ensure that there are no other indexes with that name on this table.
-			auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-			indexes.Scan([&](Index &index) {
-				if (index.GetIndexName() == info.index_name) {
-					throw CatalogException("an index with that name already exists for this table: %s", info.index_name);
-				}
-				return false;
-			});
-
-			auto &catalog = Catalog::GetCatalog(*gstate.context, info.catalog);
-			catalog.Alter(*gstate.context, *op_p.alter_table_info);
-		}
-
-		// Add the index to the storage.
-		storage.AddIndex(std::move(gstate.global_index));
+		// do a callback, and then call
+		op.FinalExecute()
 	}
 };
 
@@ -262,19 +237,18 @@ public:
 
 SinkFinalizeType PhysicalCreateIndexMaterialized::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                            OperatorSinkFinalizeInput &input) const {
-
 	// Get the global collection we've been appending to
 	auto &gstate = input.global_state.Cast<CreateMaterializedIndexGlobalSinkState>();
 
 	// Finalize the index
-	IndexBuildFinalizeInput finalize_input (*gstate.gstate);
+	IndexBuildFinalizeInput finalize_input(*gstate.gstate);
 	auto &collection = gstate.collection;
 
 	// the collection contains the exact count
 	// This does not make sense
 	if (needs_count) {
 		finalize_input.has_count = true;
-		finalize_input.exact_count  = collection->Count();
+		finalize_input.exact_count = collection->Count();
 	}
 
 	// Initialize a parallel scan for the index construction
@@ -286,90 +260,19 @@ SinkFinalizeType PhysicalCreateIndexMaterialized::Finalize(Pipeline &pipeline, E
 		collection->InitializeScan(gstate.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
 
 		// Create a new event that will construct the index
-		auto index_construction_event_input = IndexConstructionEventInput(*this, gstate, pipeline, *info, storage_ids, table);
+		auto index_construction_event_input =
+		    IndexConstructionEventInput(*this, gstate, pipeline, *info, storage_ids, table);
 		auto new_event = make_shared_ptr<IndexConstructionEvent>(index_construction_event_input);
 		event.InsertEvent(std::move(new_event));
 
 	} else {
-		// TODO; move this into a separate function
-		auto &gstate = input.global_state.Cast<CreateMaterializedIndexGlobalSinkState>();
-
-		// build finalize is already created above
-		auto bound_index = index_type.build_finalize(finalize_input);
-
-		// Vacuum excess memory and verify.
-		bound_index->Vacuum();
-
-		bound_index->Verify();
-
-		D_ASSERT(!bound_index->ToString(true).empty());
-
-		bound_index->VerifyAllocations();
-
-		auto &storage = table.GetStorage();
-		if (!storage.IsMainTable()) {
-			throw TransactionException(
-				"Transaction conflict: cannot add an index to a table that has been altered or dropped");
-		}
-
-		auto &schema = table.schema;
-		info->column_ids = storage_ids;
-
-		if (!alter_table_info) {
-			// Ensure that the index does not yet exist in the catalog.
-			auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
-			if (entry) {
-				if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-					throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
-				}
-				// IF NOT EXISTS on existing index. We are done.
-				return SinkFinalizeType::READY;
-			}
-
-			auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
-			D_ASSERT(index_entry);
-			auto &index = index_entry->Cast<DuckIndexEntry>();
-			index.initial_index_size = bound_index->GetInMemorySize();
-
-		} else {
-			// Ensure that there are no other indexes with that name on this table.
-			auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-			indexes.Scan([&](Index &index) {
-				if (index.GetIndexName() == info->index_name) {
-					throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
-				}
-				return false;
-			});
-
-			auto &catalog = Catalog::GetCatalog(context, info->catalog);
-			catalog.Alter(context, *alter_table_info);
-		}
-
-		// Add the index to the storage.
-		storage.AddIndex(std::move(bound_index));
 	}
 
-	return SinkFinalizeType::READY;
+	// Add the index to the storage.
+	storage.AddIndex(std::move(bound_index));
 }
 
-ProgressData PhysicalCreateIndexMaterialized::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
-                                                              ProgressData source_progress) const {
-
-	// Question: should we make this a callback?
-	// The "source_progress" is not relevant for CREATE INDEX statements
-	ProgressData res;
-
-	// auto &gstate = input.global_state.Cast<CreateMaterializedIndexGlobalSinkState>();
-	//
-	// // First half of the progress is appending to the collection
-	// if (!state.is_building) {
-	// 	res.done = state.loaded_count + 0.0;
-	// 	res.total = estimated_cardinality + estimated_cardinality;
-	// } else {
-	// 	res.done = state.loaded_count + state.built_count;
-	// 	res.total = state.loaded_count + state.loaded_count;
-	// }
-	// return res;
+return SinkFinalizeType::READY;
 }
 
 } // namespace duckdb
