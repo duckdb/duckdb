@@ -25,7 +25,7 @@ struct DefaultExtension {
 	const char *name;
 	const char *description;
 	bool statically_loaded;
-	const char *min_compat_version;
+	const char *api_version;
 };
 
 struct ExtensionAlias {
@@ -163,10 +163,10 @@ public:
 	static string GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
 
-	//! For C API default extensions - returns the minimal version of DuckDB (example: 'v1.2.0')
+	//! For C API default extensions - returns the minimal version of C API (example: 'v1.2.0-api')
 	//! that is supported by this extension, to be used in HTTP URL during installation;
 	//! for C++ extensions and unknown extensions - returns an empty string
-	static string GetExtensionMinCompatVersion(const string &extension_name);
+	static string GetExtensionApiVersion(const string &extension_name);
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>

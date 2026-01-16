@@ -126,7 +126,7 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false, nullptr},
     {"ui", "Adds local UI for DuckDB", false, nullptr},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false, nullptr},
-    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false, "v1.2.0"},
+    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false, "v1.2.0-api"},
     {nullptr, nullptr, false, nullptr}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -141,11 +141,11 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 	return internal_extensions[index];
 }
 
-string ExtensionHelper::GetExtensionMinCompatVersion(const string &extension_name) {
+string ExtensionHelper::GetExtensionApiVersion(const string &extension_name) {
 	for (const DefaultExtension &default_extension : internal_extensions) {
 		if (default_extension.name != nullptr && strcmp(extension_name.c_str(), default_extension.name) == 0) {
-			if (default_extension.min_compat_version != nullptr) {
-				return std::string(default_extension.min_compat_version);
+			if (default_extension.api_version != nullptr) {
+				return std::string(default_extension.api_version);
 			} else {
 				return "";
 			}

@@ -253,7 +253,7 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 }
 
 string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template, const string &extension_name) {
-	string version = ExtensionHelper::GetExtensionMinCompatVersion(extension_name);
+	string version = ExtensionHelper::GetExtensionApiVersion(extension_name);
 	if (version.empty()) {
 		version = GetVersionDirectoryName();
 	}
