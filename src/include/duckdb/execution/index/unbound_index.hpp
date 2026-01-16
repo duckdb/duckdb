@@ -94,6 +94,7 @@ public:
 	const CreateIndexInfo &GetCreateInfo() const {
 		return create_info->Cast<CreateIndexInfo>();
 	}
+	//! Return a reference to the owned IndexStorageInfo.
 	const IndexStorageInfo &GetStorageInfo() const {
 		return *storage_info;
 	}
