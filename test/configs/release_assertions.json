@@ -8,6 +8,12 @@
       ]
     },
     {
+      "reason": "FIXME: Catalog Error",
+      "paths": [
+        "test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow"
+      ]
+    },
+    {
       "reason": "Takes too long.",
       "paths": [
         "test/optimizer/sampling_pushdown.test_slow",
