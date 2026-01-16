@@ -18,7 +18,6 @@ class ArenaAllocator;
 struct AggregateObject;
 struct AggregateFilterData;
 class DataChunk;
-class RowLayout;
 class TupleDataLayout;
 struct SelectionVector;
 class StringHeap;

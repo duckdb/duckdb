@@ -49,7 +49,7 @@ bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length)
 } // namespace
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
-    : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db_p)) {
+    : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
