@@ -9,9 +9,12 @@
 namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	auto bound_comparison =
-	    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-	return std::move(bound_comparison);
+	if (cond.IsComparison()) {
+		auto bound_comparison =
+		    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+		return std::move(bound_comparison);
+	}
+	return std::move(cond.left);
 }
 
 unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {

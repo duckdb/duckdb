@@ -122,8 +122,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		// add all comparison conditions
 		auto &comparison_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comparison_join.conditions) {
-			filter_combiner.AddFilter(
-			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+			if (cond.IsComparison()) {
+				filter_combiner.AddFilter(
+				    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+			} else {
+				filter_combiner.AddFilter(cond.GetJoinExpression().Copy());
+			}
 		}
 	}
 	// now check the set of filters
@@ -188,8 +192,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &comparison_join = join.Cast<LogicalComparisonJoin>();
-		if (comparison_join.predicate && AddFilter(comparison_join.predicate->Copy()) == FilterResult::UNSATISFIABLE) {
-			has_unsatisfiable_condition = true;
+		for (auto &cond : comparison_join.conditions) {
+			if (!cond.IsComparison()) {
+				if (AddFilter(cond.left->Copy()) == FilterResult::UNSATISFIABLE) {
+					has_unsatisfiable_condition = true;
+					break;
+				}
+			}
 		}
 	} else if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		auto &any_join = join.Cast<LogicalAnyJoin>();

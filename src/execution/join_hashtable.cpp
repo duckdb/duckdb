@@ -985,6 +985,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	// gather RHS columns from hash table
+	// TODO: these columns are gathered again when building the final result
 	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
 		idx_t col_with_offset = entry.first;
 		idx_t layout_col = entry.second;
@@ -992,26 +993,22 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 		GatherResult(target_vector, match_sel, match_count, layout_col);
 	}
 
-	// execute predicate
-	residual_state->result_chunk.Reset();
-	residual_executor->Execute(residual_state->eval_chunk, residual_state->result_chunk);
+	SelectionVector &selected_sel = residual_state->selected_sel;
+	SelectionVector &remaining_sel = residual_state->remaining_sel;
 
-	// filter based on results
-	Vector &result_vector = residual_state->result_chunk.data[0];
-	result_vector.Flatten(match_count);
-	auto result_data = FlatVector::GetData<bool>(result_vector);
-	auto &result_validity = FlatVector::Validity(result_vector);
+	idx_t new_match_count = residual_executor->SelectExpression(residual_state->eval_chunk, selected_sel, remaining_sel,
+	                                                            nullptr, match_count);
 
-	idx_t new_match_count = 0;
-	idx_t new_no_match_count = 0;
+	for (idx_t i = 0; i < new_match_count; i++) {
+		idx_t dense_idx = selected_sel.get_index(i);
+		match_sel.set_index(i, match_sel.get_index(dense_idx));
+	}
 
-	for (idx_t i = 0; i < match_count; i++) {
-		auto original_idx = match_sel.get_index(i);
-
-		if (result_validity.RowIsValid(i) && result_data[i]) {
-			match_sel.set_index(new_match_count++, original_idx);
-		} else if (no_match_sel) {
-			no_match_sel->set_index(new_no_match_count++, original_idx);
+	if (no_match_sel) {
+		idx_t no_match_count = match_count - new_match_count;
+		for (idx_t i = 0; i < no_match_count; i++) {
+			idx_t dense_idx = remaining_sel.get_index(i);
+			no_match_sel->set_index(i, match_sel.get_index(dense_idx));
 		}
 	}
 

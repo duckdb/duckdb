@@ -31,13 +31,11 @@
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
-                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                                   PhysicalOperator &right, vector<JoinCondition> conds, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   unique_ptr<JoinFilterPushdownInfo> pushdown_info_p,
-                                   unique_ptr<Expression> residual_p)
-    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
-                             estimated_cardinality),
+                                   unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, join_type, estimated_cardinality),
       delim_types(std::move(delim_types)) {
 	filter_pushdown = std::move(pushdown_info_p);
 
@@ -46,6 +44,21 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 
 	auto &lhs_input_types = children[0].get().GetTypes();
 	auto &rhs_input_types = children[1].get().GetTypes();
+
+	vector<JoinCondition> arbitrary_conds;
+	for (auto &cond : conds) {
+		if (cond.IsComparison()) {
+			conditions.push_back(std::move(cond));
+		} else {
+			arbitrary_conds.push_back(std::move(cond));
+		}
+	}
+	ReorderConditions(conditions);
+
+	unique_ptr<Expression> residual_p;
+	if (!arbitrary_conds.empty()) {
+		residual_p = JoinCondition::CreateExpression(std::move(arbitrary_conds));
+	}
 
 	vector<idx_t> probe_cols;
 	vector<idx_t> build_cols;
@@ -98,7 +111,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                                    PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality)
     : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       nullptr, nullptr) {
+                       nullptr) {
 }
 
 void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &predicate, idx_t probe_column_count,
@@ -1762,11 +1775,15 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		    StringUtil::Format("%s %s %s", join_condition.left->GetName(),
 		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
 	}
-	result["Conditions"] = condition_info;
 
 	if (residual_info && residual_info->HasPredicate()) {
-		result["Residual Predicate"] = residual_info->predicate->ToString();
+		if (!condition_info.empty()) {
+			condition_info += "\n";
+		}
+		condition_info += residual_info->predicate->ToString();
 	}
+
+	result["Conditions"] = condition_info;
 
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;

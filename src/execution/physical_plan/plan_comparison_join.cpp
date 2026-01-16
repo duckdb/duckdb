@@ -13,7 +13,6 @@
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
-
 static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset) {
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index += offset; });
@@ -35,6 +34,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	idx_t has_range = 0;
+	bool has_arbitrary_conditions = op.HasArbitraryConditions();
 	bool has_equality = op.HasEquality(has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
@@ -52,18 +52,18 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	// for now, only Hash join supports residual predicates (e.g., predicate=l.val+r.val>100)
-	if (op.predicate) {
+	if (has_arbitrary_conditions) {
 		D_ASSERT(has_equality);
 	}
 
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
 	bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
-	prefer_range_joins = prefer_range_joins && can_iejoin && !op.predicate;
+	prefer_range_joins = prefer_range_joins && can_iejoin && !has_arbitrary_conditions;
 	if (has_equality && !prefer_range_joins) {
 		// pass separately to PhysicalHashJoin
-		auto &join = Make<PhysicalHashJoin>(
-		    op, left, right, std::move(op.conditions), op.join_type, op.left_projection_map, op.right_projection_map,
-		    std::move(op.mark_types), op.estimated_cardinality, std::move(op.filter_pushdown), std::move(op.predicate));
+		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
+		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
 		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
 		return join;
 	}

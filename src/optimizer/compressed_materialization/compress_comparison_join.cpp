@@ -55,17 +55,21 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	column_binding_set_t referenced_bindings;
 
 	// mark predicate expressions as not compressible
-	if (join.predicate) {
-		idx_t has_range = 0;
-		D_ASSERT(join.HasEquality(has_range));
-		GetReferencedBindings(*join.predicate, referenced_bindings);
+	idx_t has_range = 0;
+	join.HasEquality(has_range);
+	if (join.HasArbitraryConditions()) {
+		for (const auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				GetReferencedBindings(*condition.left, referenced_bindings);
+			}
+		}
 	}
 
 	for (const auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// We only try to compress the join condition cols if there's one join condition
 			// Else it gets messy with the stats if one column shows up in multiple conditions
-			if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+			if (condition.IsComparison() && condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
 			    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				// check if either side is referenced in residual predicate
 				auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
@@ -98,8 +102,10 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 				}
 			}
 		}
-		GetReferencedBindings(*condition.left, referenced_bindings);
-		GetReferencedBindings(*condition.right, referenced_bindings);
+		if (condition.IsComparison()) {
+			GetReferencedBindings(*condition.left, referenced_bindings);
+			GetReferencedBindings(*condition.right, referenced_bindings);
+		}
 	}
 
 	if (join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {

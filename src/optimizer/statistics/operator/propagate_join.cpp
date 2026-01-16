@@ -17,6 +17,11 @@ namespace duckdb {
 void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
+		if (!condition.IsComparison()) {
+			PropagateExpression(condition.left);
+			continue;
+		}
+
 		const auto stats_left = PropagateExpression(condition.left);
 		const auto stats_right = PropagateExpression(condition.right);
 		if (stats_left && stats_right) {

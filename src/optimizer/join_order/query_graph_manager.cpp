@@ -341,7 +341,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			// attach to join's predicate field
 			auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
-			comp_join.predicate = std::move(combined);
+			comp_join.conditions.push_back(std::move(combined));
 		} else {
 			// push as filter
 			result_operator = PushFilter(std::move(result_operator), std::move(combined));

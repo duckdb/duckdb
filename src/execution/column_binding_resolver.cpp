@@ -17,33 +17,7 @@ ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(ver
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
-		auto &asof_join = op.Cast<LogicalComparisonJoin>();
-
-		VisitOperator(*asof_join.children[0]);
-		for (auto &cond : asof_join.conditions) {
-			VisitExpression(&cond.left);
-		}
-
-		for (auto &expr : asof_join.duplicate_eliminated_columns) {
-			VisitExpression(&expr);
-		}
-
-		VisitOperator(*asof_join.children[1]);
-		for (auto &cond : asof_join.conditions) {
-			VisitExpression(&cond.right);
-		}
-
-		bindings = op.GetColumnBindings();
-		types = op.types;
-
-		if (asof_join.predicate) {
-			VisitExpression(&asof_join.predicate);
-		}
-
-		return;
-	}
-
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 
@@ -51,7 +25,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto left_bindings = bindings;
 		auto left_types = types;
 		for (auto &cond : comp_join.conditions) {
-			VisitExpression(&cond.left);
+			if (cond.IsComparison()) {
+				VisitExpression(&cond.left);
+			}
 		}
 
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
@@ -62,25 +38,23 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto right_bindings = bindings;
 		auto right_types = types;
 		for (auto &cond : comp_join.conditions) {
-			VisitExpression(&cond.right);
+			if (cond.IsComparison()) {
+				VisitExpression(&cond.right);
+			}
 		}
 
-		// resolve residual predicate
-		if (comp_join.predicate) {
-			// predicate should only exist when we have equality conditions
-			// (otherwise should have been planned as AnyJoin)
-			idx_t has_range;
-			D_ASSERT(comp_join.HasEquality(has_range));
+		// combine bindings to resolve predicate
+		auto combined_bindings = left_bindings;
+		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
+		auto combined_types = left_types;
+		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
 
-			// combine bindings to resolve predicate
-			auto combined_bindings = left_bindings;
-			combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
-			auto combined_types = left_types;
-			combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
-
-			bindings = combined_bindings;
-			types = combined_types;
-			VisitExpression(&comp_join.predicate);
+		bindings = combined_bindings;
+		types = combined_types;
+		for (auto &cond : comp_join.conditions) {
+			if (!cond.IsComparison()) {
+				VisitExpression(&cond.left);
+			}
 		}
 
 		// update to join output bindings

@@ -19,7 +19,6 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID) {
 	// Convert the conditions partitions and sorts
-	D_ASSERT(!op.predicate.get());
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);

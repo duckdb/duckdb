@@ -328,7 +328,6 @@ void LogicalComparisonJoin::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "mark_types", mark_types);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", duplicate_eliminated_columns);
 	serializer.WritePropertyWithDefault<bool>(207, "delim_flipped", delim_flipped, false);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(208, "predicate", predicate);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &deserializer) {
@@ -341,7 +340,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(208, "predicate", result->predicate);
 	return std::move(result);
 }
 

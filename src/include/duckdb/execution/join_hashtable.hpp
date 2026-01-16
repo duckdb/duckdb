@@ -64,16 +64,15 @@ public:
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
 		DataChunk eval_chunk;
-		//! Result chunk for predicate evaluation
-		DataChunk result_chunk;
+		SelectionVector selected_sel;
+		SelectionVector remaining_sel;
 
-		ResidualPredicateProbeState() {
+		ResidualPredicateProbeState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
 		}
 
 		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
 		                const vector<bool> &initialize_columns) {
 			eval_chunk.Initialize(allocator, eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
-			result_chunk.Initialize(allocator, {LogicalType::BOOLEAN});
 		}
 	};
 

@@ -148,8 +148,12 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 
 		// TODO: SEMI/ANTI joins with residual predicates are not supported
-		if ((join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) && join.predicate) {
-			return false;
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			for (auto &cond : join.conditions) {
+				if (!cond.IsComparison()) {
+					return false;
+				}
+			}
 		}
 
 		switch (join.join_type) {
@@ -157,7 +161,8 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		case JoinType::SEMI:
 		case JoinType::ANTI:
 			for (auto &cond : join.conditions) {
-				if (ExpressionContainsColumnRef(*cond.left) && ExpressionContainsColumnRef(*cond.right)) {
+				if (cond.IsComparison() && ExpressionContainsColumnRef(cond.GetLHS()) &&
+				    ExpressionContainsColumnRef(cond.GetRHS())) {
 					return true;
 				}
 			}
@@ -596,9 +601,11 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// the relations from the conditions in the conjunction expression, we can prevent invalid
 				// reordering.
 				for (auto &cond : join.conditions) {
-					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-					                                                       std::move(cond.right));
-					conjunction_expression->children.push_back(std::move(comparison));
+					if (cond.IsComparison()) {
+						auto comparison = make_uniq<BoundComparisonExpression>(
+						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						conjunction_expression->children.push_back(std::move(comparison));
+					}
 				}
 
 				// create the filter info so all required LHS relations are present when reconstructing the
@@ -644,38 +651,28 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			} else {
 				// can extract every inner join condition individually.
 				for (auto &cond : join.conditions) {
-					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-					                                                       std::move(cond.right));
-					if (filter_set.find(*comparison) == filter_set.end()) {
-						filter_set.insert(*comparison);
-						unordered_set<idx_t> bindings;
-						ExtractBindings(*comparison, bindings);
-						auto &set = set_manager.GetJoinRelation(bindings);
-						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set,
-						                                         filters_and_bindings.size(), join.join_type);
-						filters_and_bindings.push_back(std::move(filter_info));
-					}
-				}
+					unique_ptr<Expression> expr;
+					bool is_residual = false;
 
-				if (join.predicate) {
-					// flatten residual predicate into individual conjuncts
-					vector<unique_ptr<Expression>> conjuncts;
-					FlattenConjunction(*join.predicate, conjuncts);
-
-					// add all conjuncts to filters_and_bindings
-					for (auto &conjunct : conjuncts) {
-						filter_set.insert(*conjunct);
-						unordered_set<idx_t> bindings;
-						ExtractBindings(*conjunct, bindings);
-
-						auto &set = set_manager.GetJoinRelation(bindings);
-						auto filter_info = make_uniq<FilterInfo>(std::move(conjunct), set, filters_and_bindings.size(),
-						                                         join.join_type);
-						filter_info->from_residual_predicate = true;
-						filters_and_bindings.push_back(std::move(filter_info));
+					if (cond.IsComparison()) {
+						auto comp_type = cond.GetComparisonType();
+						expr =
+						    make_uniq<BoundComparisonExpression>(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
+					} else {
+						expr = cond.GetJoinExpression().Copy();
+						is_residual = true;
 					}
 
-					join.predicate.reset();
+					if (filter_set.find(*expr) == filter_set.end()) {
+						filter_set.insert(*expr);
+						unordered_set<idx_t> bindings;
+						ExtractBindings(*expr, bindings);
+						auto &set = set_manager.GetJoinRelation(bindings);
+						auto filter_info =
+						    make_uniq<FilterInfo>(std::move(expr), set, filters_and_bindings.size(), join.join_type);
+						filter_info->from_residual_predicate = is_residual;
+						filters_and_bindings.push_back(std::move(filter_info));
+					}
 				}
 			}
 

@@ -7,8 +7,18 @@ namespace duckdb {
 PhysicalComparisonJoin::PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
                                                PhysicalOperatorType type, vector<JoinCondition> conditions_p,
                                                JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalJoin(physical_plan, op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
+    : PhysicalJoin(physical_plan, op, type, join_type, estimated_cardinality) {
+	for (auto &cond : conditions_p) {
+		if (cond.IsComparison()) {
+			conditions.push_back(std::move(cond));
+		}
+	}
 	ReorderConditions(conditions);
+}
+PhysicalComparisonJoin::PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
+                                               PhysicalOperatorType type, JoinType join_type,
+                                               idx_t estimated_cardinality)
+    : PhysicalComparisonJoin(physical_plan, op, type, {}, join_type, estimated_cardinality) {
 }
 
 InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() const {

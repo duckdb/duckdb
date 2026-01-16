@@ -16,7 +16,68 @@ namespace duckdb {
 //! JoinCondition represents a left-right comparison join condition
 struct JoinCondition {
 public:
-	JoinCondition() {
+	JoinCondition(unique_ptr<Expression> lhs, unique_ptr<Expression> rhs, ExpressionType comparison)
+	    : left(std::move(lhs)), right(std::move(rhs)), comparison(comparison) {
+	}
+
+	JoinCondition(unique_ptr<Expression> join_condition)
+	    : left(std::move(join_condition)), comparison(ExpressionType::INVALID) {
+	}
+
+	JoinCondition() : comparison(ExpressionType::INVALID) {
+	}
+
+	bool IsComparison() const {
+		return comparison != ExpressionType::INVALID;
+	}
+
+	Expression &GetLHS() {
+		if (!IsComparison()) {
+			throw InternalException("GetLHS used on a JoinCondition that is not a left/right comparison");
+		}
+		return *left;
+	}
+
+	const Expression &GetLHS() const {
+		if (!IsComparison()) {
+			throw InternalException("GetLHS used on a JoinCondition that is not a left/right comparison");
+		}
+		return *left;
+	}
+
+	Expression &GetRHS() {
+		if (!IsComparison()) {
+			throw InternalException("GetRHS used on a JoinCondition that is not a left/right comparison");
+		}
+		return *right;
+	}
+
+	const Expression &GetRHS() const {
+		if (!IsComparison()) {
+			throw InternalException("GetRHS used on a JoinCondition that is not a left/right comparison");
+		}
+		return *right;
+	}
+
+	ExpressionType GetComparisonType() const {
+		if (!IsComparison()) {
+			throw InternalException("GetComparisonType used on a JoinCondition that is not a left/right comparison");
+		}
+		return comparison;
+	}
+
+	Expression &GetJoinExpression() {
+		if (IsComparison()) {
+			throw InternalException("GetJoinExpression used on a JoinCondition that is a comparison");
+		}
+		return *left;
+	}
+
+	const Expression &GetJoinExpression() const {
+		if (IsComparison()) {
+			throw InternalException("GetJoinExpression used on a JoinCondition that is a comparison");
+		}
+		return *left;
 	}
 
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits

@@ -37,13 +37,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 				return make_uniq<LogicalEmptyResult>(std::move(op));
 			}
 		}
-
-		// also extract residual predicate - will be reconstructed as predicate after pushdown
-		if (comp_join.predicate) {
-			if (AddFilter(std::move(comp_join.predicate)) == FilterResult::UNSATISFIABLE) {
-				return make_uniq<LogicalEmptyResult>(std::move(op));
-			}
-		}
 	}
 	GenerateFilters();
 

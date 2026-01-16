@@ -9,15 +9,28 @@ namespace duckdb {
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
                                                PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> cond, JoinType join_type,
+                                               vector<JoinCondition> conds, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
-                             estimated_cardinality),
-      predicate(std::move(op.predicate)) {
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, join_type,
+                             estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info_p);
 	children.push_back(left);
 	children.push_back(right);
+
+	vector<JoinCondition> arbitrary_conds;
+	for (auto &cond : conds) {
+		if (cond.IsComparison()) {
+			conditions.push_back(std::move(cond));
+		} else {
+			arbitrary_conds.push_back(std::move(cond));
+		}
+	}
+	ReorderConditions(conditions);
+
+	if (!arbitrary_conds.empty()) {
+		predicate = JoinCondition::CreateExpression(std::move(arbitrary_conds));
+	}
 }
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
@@ -122,17 +135,27 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 		return true;
 	}
 	for (auto &cond : conditions) {
+		if (!cond.IsComparison()) {
+			continue;
+		}
 		if (cond.left->return_type.InternalType() == PhysicalType::STRUCT ||
 		    cond.left->return_type.InternalType() == PhysicalType::LIST ||
 		    cond.left->return_type.InternalType() == PhysicalType::ARRAY) {
 			return false;
 		}
 	}
+
 	// To avoid situations like https://github.com/duckdb/duckdb/issues/10046
 	// If there is an equality in the conditions, a hash join is planned
 	// with one condition, we can use mark join logic, otherwise we should use physical blockwise nl join
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-		return conditions.size() == 1;
+		idx_t comparison_count = 0;
+		for (auto &cond : conditions) {
+			if (cond.IsComparison()) {
+				comparison_count++;
+			}
+		}
+		return comparison_count == 1;
 	}
 	return true;
 }
