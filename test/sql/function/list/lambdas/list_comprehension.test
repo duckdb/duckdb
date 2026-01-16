@@ -93,3 +93,7 @@ SELECT [i FOR x, i IN [4, 5, 6] IF x > 5];
 ----
 [3]
 
+query I
+SELECT [x FOR x IN [4, 5, 6] IF x > 5]
+----
+[6]
