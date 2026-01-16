@@ -222,9 +222,34 @@ template <class T, bool LAST, bool SKIP_NULLS>
 void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
                                data_ptr_t state, idx_t count) {
 	auto agg_state = reinterpret_cast<FirstState<T> *>(state);
-	if (LAST || !agg_state->is_set) {
+	if (LAST) {
+		// For LAST, iterate backward within each batch to find the last value
+		// This saves iterating through all elements when we only need the last one
+		D_ASSERT(input_count == 1);
+		UnifiedVectorFormat idata;
+		inputs[0].ToUnifiedFormat(count, idata);
+		auto input_data = UnifiedVectorFormat::GetData<T>(idata);
+
+		for (idx_t i = count; i > 0; i--) {
+			auto idx = idata.sel->get_index(i - 1);
+			bool row_valid = idata.validity.RowIsValid(idx);
+			if (SKIP_NULLS && !row_valid) {
+				continue;
+			}
+			// Found the last value in this batch - update state and exit
+			if (row_valid) {
+				agg_state->is_set = true;
+				agg_state->is_null = false;
+				agg_state->value = input_data[idx];
+			} else {
+				agg_state->is_set = true;
+				agg_state->is_null = true;
+			}
+			return;
+		}
+		// If we get here with SKIP_NULLS, all values were NULL - keep previous state
+	} else if (!agg_state->is_set) {
 		// For FIRST, this skips looping over the input once the aggregate state has been set
-		// FIXME: for LAST we could loop from the back of the Vector instead
 		AggregateFunction::UnaryUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>(inputs, aggregate_input_data,
 		                                                                                  input_count, state, count);
 	}
