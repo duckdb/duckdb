@@ -171,6 +171,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingCoverageSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
+    DUCKDB_LOCAL(QueryMemoryLimitSetting),
     DUCKDB_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_GLOBAL(SchedulerProcessPartialSetting),
     DUCKDB_LOCAL(SchemaSetting),
