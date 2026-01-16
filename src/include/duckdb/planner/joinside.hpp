@@ -20,7 +20,7 @@ public:
 	    : left(std::move(lhs)), right(std::move(rhs)), comparison(comparison) {
 	}
 
-	JoinCondition(unique_ptr<Expression> join_condition)
+	explicit JoinCondition(unique_ptr<Expression> join_condition)
 	    : left(std::move(join_condition)), comparison(ExpressionType::INVALID) {
 	}
 
