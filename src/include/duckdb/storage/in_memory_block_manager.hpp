@@ -11,6 +11,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/common/checksum.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - CreateBlock!");
 	}
 	block_id_t GetFreeBlockId() override {
-		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockId!");
+		return max_block++;
 	}
 	block_id_t GetFreeBlockIdForCheckpoint() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockIdForCheckpoint!");
@@ -63,8 +64,11 @@ public:
 	void Write(FileBuffer &block, block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - Write!");
 	}
+	// We currently do not encrypt in-memory storage
 	void Write(QueryContext context, FileBuffer &block, block_id_t block_id) override {
-		throw InternalException("Cannot perform IO in in-memory database - Write with client context!");
+		D_ASSERT(block_id >= 0);
+		uint64_t checksum = Checksum(block.buffer, block.Size());
+		Store<uint64_t>(checksum, block.InternalBuffer());
 	}
 	void WriteHeader(QueryContext context, DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
@@ -82,5 +86,8 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - FreeBlocks!");
 	}
 	// LCOV_EXCL_STOP
+private:
+	//! The current maximum block id
+	block_id_t max_block = 0;
 };
 } // namespace duckdb
