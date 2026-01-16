@@ -3159,51 +3159,51 @@ list_comprehension:
 				}
 				| '[' a_expr FOR name_list IN_P c_expr IF_P a_expr']'
 				{
-          /* Construct first apply */
-          PGNamedArgExpr *filter_expr = makeNode(PGNamedArgExpr);
-          filter_expr->name = pstrdup("filter");
-          filter_expr->arg = (PGExpr *) $8;
-          filter_expr->argnumber = -1;
-          filter_expr->location = @8;
-          
-          PGNamedArgExpr *result_expr = makeNode(PGNamedArgExpr);
-          result_expr->name = pstrdup("result");
-          result_expr->arg = (PGExpr *) $2;
-          result_expr->argnumber = -1;
-          result_expr->location = @2;
+					/* Construct first apply */
+					PGNamedArgExpr *filter_expr = makeNode(PGNamedArgExpr);
+					filter_expr->name = pstrdup("filter");
+					filter_expr->arg = (PGExpr *) $8;
+					filter_expr->argnumber = -1;
+					filter_expr->location = @8;
 
-          PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, result_expr), @1);
+					PGNamedArgExpr *result_expr = makeNode(PGNamedArgExpr);
+					result_expr->name = pstrdup("result");
+					result_expr->arg = (PGExpr *) $2;
+					result_expr->argnumber = -1;
+					result_expr->location = @2;
 
-          PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
-          lambda_apply_1->lhs = $4;
-          lambda_apply_1->rhs = (PGNode *)struct_pack;
-          lambda_apply_1->location = @1;
+					PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, result_expr), @1);
 
-          PGFuncCall *apply_func_1 = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda_apply_1), @1);
+					PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
+					lambda_apply_1->lhs = $4;
+					lambda_apply_1->rhs = (PGNode *)struct_pack;
+					lambda_apply_1->location = @1;
 
-          /* Construct filter */
-          PGNode *elem_column_ref_filter = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
-          PGNode *filter_column_name = makeStringConst("filter", @1);
-          PGFuncCall *filter_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, filter_column_name), @1);
+					PGFuncCall *apply_func_1 = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda_apply_1), @1);
 
-          PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
-          lambda_filter->lhs = list_make1(makeString("elem"));
-          lambda_filter->rhs = (PGNode *) filter_extract;
-          lambda_filter->location = @1;
+					/* Construct filter */
+					PGNode *elem_column_ref_filter = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
+					PGNode *filter_column_name = makeStringConst("filter", @1);
+					PGFuncCall *filter_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, filter_column_name), @1);
 
-          PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), @1);
+					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
+					lambda_filter->lhs = list_make1(makeString("elem"));
+					lambda_filter->rhs = (PGNode *) filter_extract;
+					lambda_filter->location = @1;
 
-          /* Construct second apply */
-          PGNode *elem_column_ref_result = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
-          PGNode *result_column_name = makeStringConst("result", @1);
-          PGFuncCall *result_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, result_column_name), @1);
+					PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), @1);
 
-          PGLambdaFunction *lambda_apply_2 = makeNode(PGLambdaFunction);
-          lambda_apply_2->lhs = list_make1(makeString("elem"));
-          lambda_apply_2->rhs = (PGNode *) result_extract;
-          lambda_apply_2->location = @1;
+					/* Construct second apply */
+					PGNode *elem_column_ref_result = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
+					PGNode *result_column_name = makeStringConst("result", @1);
+					PGFuncCall *result_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, result_column_name), @1);
 
-          PGFuncCall *apply_func_2 = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter_func, lambda_apply_2), @1);
+					PGLambdaFunction *lambda_apply_2 = makeNode(PGLambdaFunction);
+					lambda_apply_2->lhs = list_make1(makeString("elem"));
+					lambda_apply_2->rhs = (PGNode *) result_extract;
+					lambda_apply_2->location = @1;
+
+					PGFuncCall *apply_func_2 = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter_func, lambda_apply_2), @1);
 
 					$$ = (PGNode *) apply_func_2;
 				}
