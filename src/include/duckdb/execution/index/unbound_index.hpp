@@ -82,7 +82,7 @@ public:
 		return false;
 	}
 	const string &GetIndexType() const override {
-		return GetCreateInfo().index_type;
+		return GetCreateInfo().index_type_name;
 	}
 	const string &GetIndexName() const override {
 		return GetCreateInfo().index_name;

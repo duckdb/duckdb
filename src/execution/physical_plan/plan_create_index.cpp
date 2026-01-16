@@ -179,9 +179,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
 	// determine we need to materialize the input (exact count)
 	bool materialize = false;
-	if (index_type->build_materialize) {
+	if (index_type->build_count) {
 		IndexBuildMaterializeInput materialize_input {bind_data.get()};
-		materialize = index_type->build_materialize(materialize_input);
+		materialize = index_type->build_count(materialize_input);
 	}
 
 	if (materialize) {

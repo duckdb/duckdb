@@ -163,10 +163,11 @@ struct IndexBuildFinalizeInput {
 	    : global_state(gstate) {}
 
 	IndexBuildGlobalState &global_state;
+	optional_ptr<ColumnDataCollection> collection;
 
 	bool has_count = false;
 	bool is_sorted = false;
-	idx_t count = 0;
+	idx_t exact_count = 0;
 };
 
 typedef unique_ptr<IndexBuildBindData> (*index_build_bind_t)(IndexBuildBindInput &input);
@@ -232,8 +233,6 @@ public:
 	index_build_exec_task_t build_exec_task = nullptr;
 	// schedules the tasks
 	index_build_schedule_event_t build_schedule_event = nullptr;
-	// function that determines what happens if events are finished
-	index_build_finish_event_t build_finish_event = nullptr;
 
 	//! Extra information for the index type
 	shared_ptr<IndexTypeInfo> index_info = nullptr;

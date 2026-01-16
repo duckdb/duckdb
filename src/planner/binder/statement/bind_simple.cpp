@@ -45,7 +45,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
 	create_index_info->table = table_info.name;
-	create_index_info->index_type = ART::TYPE_NAME;
+	create_index_info->index_type_name = ART::TYPE_NAME;
 	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
 
 	for (const auto &physical_index : bound_unique.keys) {

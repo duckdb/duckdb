@@ -42,6 +42,8 @@ public:
 
 	//! Whether the pipeline sorts the data prior to index creation
 	const bool sorted;
+	const bool needs_count;
+	const bool in_parallel;
 
 public:
 	//! Source interface, NOOP for this operator

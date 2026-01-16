@@ -62,7 +62,7 @@ public:
 		return std::move(art);
 	}
 
-	IndexType GetIndexType();
+	static IndexType GetIndexTypeInfo();
 
 	//! Root of the tree.
 	Node tree = Node();

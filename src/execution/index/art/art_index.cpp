@@ -169,7 +169,7 @@ unique_ptr<BoundIndex> ARTBuildFinalize(IndexBuildFinalizeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // ART::GetIndexType
 //----------------------------------------------------------------------------------------------------------------------
-IndexType ART::GetIndexType() {
+IndexType ART::GetIndexTypeInfo() {
 	IndexType art_index_type;
 	art_index_type.name = ART::TYPE_NAME;
 	art_index_type.create_instance = ART::Create;
