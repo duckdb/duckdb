@@ -434,7 +434,12 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 		//! Create the VARIANT stats
 		auto &typed_value = schema.children[2];
-		auto logical_type = VariantColumnReader::TypedValueLayoutToType(typed_value.type);
+		LogicalType logical_type;
+		if (!VariantColumnReader::TypedValueLayoutToType(typed_value.type, logical_type)) {
+			//! We couldn't convert the parquet typed_value to a structured type (likely because a nested 'typed_value'
+			//! field is missing)
+			return nullptr;
+		}
 		auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
 			return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
 		});

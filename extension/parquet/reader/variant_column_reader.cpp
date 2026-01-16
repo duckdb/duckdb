@@ -135,9 +135,10 @@ idx_t VariantColumnReader::GroupRowsAvailable() {
 	throw InternalException("No projected columns in struct?");
 }
 
-LogicalType VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value) {
+bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value, LogicalType &output) {
 	if (!typed_value.IsNested()) {
-		return typed_value;
+		output = typed_value;
+		return true;
 	}
 	auto type_id = typed_value.id();
 	if (type_id == LogicalTypeId::STRUCT) {
@@ -160,12 +161,18 @@ LogicalType VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed
 				}
 			}
 			if (index == DConstants::INVALID_INDEX) {
-				//! This *might* be allowed by the spec, it's hard to reason about..
-				throw InvalidInputException("typed_value OBJECT child malformed, no 'typed_value' found");
+				//! FIXME: we might be able to just omit this field from the OBJECT, instead of flat-out failing the
+				//! conversion No 'typed_value' field, so we can't assign a structured type to this field at all
+				return false;
 			}
-			children.emplace_back(name, TypedValueLayoutToType(field_children[index].second));
+			LogicalType child_type;
+			if (!TypedValueLayoutToType(field_children[index].second, child_type)) {
+				return false;
+			}
+			children.emplace_back(name, child_type);
 		}
-		return LogicalType::STRUCT(std::move(children));
+		output = LogicalType::STRUCT(std::move(children));
+		return true;
 	}
 	if (type_id == LogicalTypeId::LIST) {
 		//! ARRAY
@@ -184,9 +191,14 @@ LogicalType VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed
 		}
 		if (index == DConstants::INVALID_INDEX) {
 			//! This *might* be allowed by the spec, it's hard to reason about..
-			throw InvalidInputException("typed_value OBJECT child malformed, no 'typed_value' found");
+			return false;
 		}
-		return LogicalType::LIST(TypedValueLayoutToType(element_children[index].second));
+		LogicalType child_type;
+		if (!TypedValueLayoutToType(element_children[index].second, child_type)) {
+			return false;
+		}
+		output = LogicalType::LIST(child_type);
+		return true;
 	}
 	throw InvalidInputException("VARIANT typed value has to be a primitive/struct/list, not %s",
 	                            typed_value.ToString());
