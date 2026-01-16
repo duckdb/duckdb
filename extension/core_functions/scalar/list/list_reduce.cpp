@@ -41,11 +41,13 @@ struct ReduceExecuteInfo {
 		}
 		left_slice->Slice(left_vector, reduced_row_idx);
 
+		input_types.push_back(left_slice->GetType());
+		input_types.push_back(left_slice->GetType());
+
 		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
-		input_types.push_back(left_slice->GetType());
-		input_types.push_back(left_slice->GetType());
+
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
@@ -133,18 +135,19 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	input_chunk.InitializeEmpty(execute_info.input_types);
 	input_chunk.SetCardinality(reduced_row_idx);
 
-	const idx_t slice_offset = info.has_index ? 1 : 0;
-	if (info.has_index) {
-		input_chunk.data[0].Reference(index_vector);
-	}
+	idx_t vec_offset = 0;
 
 	if (loops == 0 && info.has_initial) {
-		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
-		input_chunk.data[slice_offset + 1].Reference(info.column_infos[0].vector);
+		info.column_infos[vec_offset].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
+		input_chunk.data[vec_offset++].Reference(info.column_infos[0].vector);
 	} else {
-		input_chunk.data[slice_offset + 1].Reference(*execute_info.left_slice);
+		input_chunk.data[vec_offset++].Reference(*execute_info.left_slice);
 	}
-	input_chunk.data[slice_offset].Reference(right_slice);
+	input_chunk.data[vec_offset++].Reference(right_slice);
+
+	if (info.has_index) {
+		input_chunk.data[vec_offset++].Reference(index_vector);
+	}
 
 	// add the other columns
 	// skip the initial value if there is one
@@ -153,12 +156,12 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	for (idx_t i = 0; i < info.column_infos.size() - initial_offset; i++) {
 		if (info.column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectors
-			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[initial_offset + i].vector);
+			input_chunk.data[vec_offset++].Reference(info.column_infos[initial_offset + i].vector);
 		} else {
 			// slice the other vectors
 			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel,
 			                    reduced_row_idx);
-			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
+			input_chunk.data[vec_offset++].Reference(slices.back());
 		}
 	}
 
