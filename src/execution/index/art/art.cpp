@@ -49,7 +49,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false), verify_max_key_len(false) {
+      allocators(allocators_ptr), owns_data(false) {
 	// FIXME: Use the new byte representation function to support nested types.
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
@@ -71,12 +71,6 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		default:
 			throw InvalidTypeException(logical_types[i], "Invalid type for index key.");
 		}
-	}
-
-	if (types.size() > 1) {
-		verify_max_key_len = true;
-	} else if (types[0] == PhysicalType::VARCHAR) {
-		verify_max_key_len = true;
 	}
 
 	// Initialize the allocators.
@@ -393,25 +387,11 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 template <>
 void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	GenerateKeysInternal<false>(allocator, input, keys);
-	if (!verify_max_key_len) {
-		return;
-	}
-	auto max_len = MAX_KEY_LEN * idx_t(prefix_count);
-	for (idx_t i = 0; i < input.size(); i++) {
-		keys[i].VerifyKeyLength(max_len);
-	}
 }
 
 template <>
 void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	GenerateKeysInternal<true>(allocator, input, keys);
-	if (!verify_max_key_len) {
-		return;
-	}
-	auto max_len = MAX_KEY_LEN * idx_t(prefix_count);
-	for (idx_t i = 0; i < input.size(); i++) {
-		keys[i].VerifyKeyLength(max_len);
-	}
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
@@ -705,8 +685,6 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 	auto key = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[0]);
-	auto max_len = MAX_KEY_LEN * prefix_count;
-	key.VerifyKeyLength(max_len);
 
 	lock_guard<mutex> l(lock);
 	if (scan_state.values[1].IsNull()) {
@@ -730,7 +708,6 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	// Two predicates.
 	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
 	auto upper_bound = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[1]);
-	upper_bound.VerifyKeyLength(max_len);
 
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;

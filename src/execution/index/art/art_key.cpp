@@ -16,13 +16,6 @@ ARTKey::ARTKey(ArenaAllocator &allocator, idx_t len) : len(len) {
 	data = allocator.Allocate(len);
 }
 
-void ARTKey::VerifyKeyLength(const idx_t max_len) const {
-	if (len > max_len) {
-		throw InvalidInputException("key size of %d bytes exceeds the maximum size of %d bytes for this ART", len,
-		                            max_len);
-	}
-}
-
 template <>
 ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
 	auto string_data = const_data_ptr_cast(value.GetData());
