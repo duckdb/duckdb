@@ -811,11 +811,12 @@ TEST_CASE("Error Release", "[adbc]") {
 	// Let's release the stream
 	arrow_stream.release(&arrow_stream);
 
-	// Release pointer is null
+	// Per Arrow C Data Interface spec, after release all function pointers are set to NULL
 	REQUIRE(!arrow_stream.release);
-
-	// Can't get data from release stream
-	REQUIRE((arrow_stream.get_next(&arrow_stream, &arrow_array) != 0));
+	REQUIRE(!arrow_stream.get_next);
+	REQUIRE(!arrow_stream.get_schema);
+	REQUIRE(!arrow_stream.get_last_error);
+	REQUIRE(!arrow_stream.private_data);
 
 	// Release ADBC Statement
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
