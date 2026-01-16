@@ -32,8 +32,8 @@ public:
 	uint8_t GetCount(const ART &art) const;
 	uint8_t GetByte(const idx_t pos) const;
 
-	//! Verifies the prefix chain and returns the child node at the end for further verification.
-	static optional_ptr<const Node> Verify(ART &art, const Node &node);
+	//! Traverses and verifies the node and its subtree.
+	static void Verify(ART &art, const Node &node);
 
 	//! Returns the string representation of the node using ToStringOptions.
 	static string ToString(ART &art, const Node &node, const ToStringOptions &options);
