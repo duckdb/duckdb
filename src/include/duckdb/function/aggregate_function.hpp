@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
@@ -283,6 +284,17 @@ public:
 		distinct_dependent = value;
 	}
 
+	void SetStructArgumentPruning(optional_idx arg_index) {
+		// Marks which argument returns the struct that can be pruned based on downstream field usage.
+		struct_argument_pruning = arg_index;
+	}
+	optional_idx GetStructArgumentPruning() const {
+		return struct_argument_pruning;
+	}
+	bool SupportsStructArgumentPruning() const {
+		return struct_argument_pruning.IsValid();
+	}
+
 	//! Additional function info, passed to the bind
 	shared_ptr<AggregateFunctionInfo> function_info;
 
@@ -425,6 +437,10 @@ public:
 	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
 	}
+
+private:
+	//! Optional index of a struct argument that can be pruned based on downstream field references.
+	optional_idx struct_argument_pruning;
 };
 
 } // namespace duckdb
