@@ -3161,17 +3161,17 @@ list_comprehension:
 				{
           /* Construct first apply */
           PGNamedArgExpr *filter_expr = makeNode(PGNamedArgExpr);
-		      filter_expr->name = "filter";
-		      filter_expr->arg = (PGExpr *) $8;
-		      filter_expr->argnumber = -1;
-		      filter_expr->location = @8;
+          filter_expr->name = pstrdup("filter");
+          filter_expr->arg = (PGExpr *) $8;
+          filter_expr->argnumber = -1;
+          filter_expr->location = @8;
           
           PGNamedArgExpr *result_expr = makeNode(PGNamedArgExpr);
-		      result_expr->name = "result";
-		      result_expr->arg = (PGExpr *) $2;
-		      result_expr->argnumber = -1;
-		      result_expr->location = @2;
-        
+          result_expr->name = pstrdup("result");
+          result_expr->arg = (PGExpr *) $2;
+          result_expr->argnumber = -1;
+          result_expr->location = @2;
+
           PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, result_expr), @1);
 
           PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
@@ -3182,7 +3182,7 @@ list_comprehension:
           PGFuncCall *apply_func_1 = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda_apply_1), @1);
 
           /* Construct filter */
-          PGNode *elem_column_ref_filter = makeColumnRef("elem", NIL, @1, yyscanner);
+          PGNode *elem_column_ref_filter = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
           PGNode *filter_column_name = makeStringConst("filter", @1);
           PGFuncCall *filter_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, filter_column_name), @1);
 
@@ -3194,7 +3194,7 @@ list_comprehension:
           PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), @1);
 
           /* Construct second apply */
-          PGNode *elem_column_ref_result = makeColumnRef("elem", NIL, @1, yyscanner);
+          PGNode *elem_column_ref_result = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
           PGNode *result_column_name = makeStringConst("result", @1);
           PGFuncCall *result_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, result_column_name), @1);
 
