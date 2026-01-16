@@ -263,6 +263,8 @@ void Parser::ParseQuery(const string &query) {
 					}
 					bool is_supported = false;
 					switch (statement->type) {
+					case StatementType::ANALYZE_STATEMENT:
+					case StatementType::VACUUM_STATEMENT:
 					case StatementType::CALL_STATEMENT:
 					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
@@ -273,6 +275,8 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::DROP_STATEMENT:
 					case StatementType::ALTER_STATEMENT:
 					case StatementType::PRAGMA_STATEMENT:
+					case StatementType::INSERT_STATEMENT:
+					case StatementType::UPDATE_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
 						is_supported = true;
 						break;
