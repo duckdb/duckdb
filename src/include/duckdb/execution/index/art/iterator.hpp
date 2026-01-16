@@ -65,35 +65,36 @@ private:
 //! Output policy for scanning row IDs only into a set.
 struct RowIdSetOutput {
 	set<row_t> &row_ids;
+	idx_t capacity;
 
-	explicit RowIdSetOutput(set<row_t> &row_ids) : row_ids(row_ids) {
+	RowIdSetOutput(set<row_t> &row_ids, idx_t capacity) : row_ids(row_ids), capacity(capacity) {
 	}
 
-	bool IsFull(idx_t max_count) const {
-#ifdef DEBUG
-		D_ASSERT(row_ids.size() >= 0 && row_ids.size() <= max_count);
-#endif
-		return row_ids.size() >= max_count;
+	bool IsFull() const {
+		D_ASSERT(row_ids.size() >= 0 && row_ids.size() <= capacity);
+		return row_ids.size() >= capacity;
 	}
 	void SetKey(const IteratorKey &, idx_t) {
 		// No-op: we don't need keys for row ID output.
 	}
-	void Emit(row_t rid) {
+	void Add(const row_t rid) {
 		row_ids.insert(rid);
 	}
 };
 
-//! Output policy for scanning keys and row IDs into vectors.
-struct KeyRowIdVectorOutput {
+//! Output policy for scanning keys and row IDs.
+struct KeyRowIdOutput {
 	ArenaAllocator &arena;
 	unsafe_vector<ARTKey> &keys;
 	unsafe_vector<ARTKey> &row_id_keys;
+	idx_t capacity;
 	idx_t count = 0;
 	const_data_ptr_t key_data = nullptr;
 	idx_t key_len = 0;
 
-	KeyRowIdVectorOutput(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys)
-	    : arena(arena), keys(keys), row_id_keys(row_id_keys) {
+	KeyRowIdOutput(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+	               idx_t capacity)
+	    : arena(arena), keys(keys), row_id_keys(row_id_keys), capacity(capacity) {
 	}
 
 	idx_t Count() const {
@@ -103,22 +104,22 @@ struct KeyRowIdVectorOutput {
 		count = 0;
 		arena.Reset();
 	}
-	bool IsFull(idx_t max_count) const {
-#ifdef DEBUG
-		D_ASSERT(count >= 0 && count <= max_count);
-#endif
-		return count >= max_count;
+	bool IsFull() const {
+		D_ASSERT(count >= 0 && count <= capacity);
+		return count >= capacity;
 	}
 	void SetKey(const IteratorKey &current_key, idx_t column_key_len) {
 		key_data = current_key.Data();
 		key_len = column_key_len;
 	}
-	void Emit(row_t rid) {
-		keys[count] = ARTKey::CreateKeyFromBytes(arena, key_data, key_len);
+	void Add(row_t rid) {
+		keys[count] = ARTKey::CreateARTKeyFromBytes(arena, key_data, key_len);
 		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
 		count++;
 	}
 };
+
+enum class ARTScanResult : uint8_t { COMPLETED = 0, PAUSED = 1 };
 
 class Iterator {
 public:
@@ -131,9 +132,9 @@ public:
 
 public:
 	//! Templated scan implementation. Output policy defines how results are emitted.
-	//! Returns true if scan completed, false if stopped due to max_count.
+	//! Returns COMPLETED if scan finished, PAUSED if stopped due to output capacity.
 	template <typename Output>
-	bool Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, bool equal);
+	ARTScanResult Scan(const ARTKey &upper_bound, Output &output, bool equal);
 
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(const Node &node);
@@ -163,13 +164,16 @@ private:
 	bool entered_nested_leaf = false;
 
 	//! State for resuming within a leaf after early return due to max_count.
-	//! For LEAF: cached row IDs and current position.
-	set<row_t> cached_row_ids;
-	set<row_t>::iterator cached_row_ids_it;
-	bool has_cached_row_ids = false;
-	//! For nested leaves: current byte position and whether we've started.
-	uint8_t nested_byte = 0;
-	bool nested_started = false;
+	struct ResumeScanState {
+		//! For LEAF: cached row IDs and current position.
+		set<row_t> cached_row_ids;
+		set<row_t>::iterator cached_row_ids_it;
+		bool has_cached_row_ids = false;
+		//! For nested leaves: current byte position and whether we've started.
+		uint8_t nested_byte = 0;
+		bool nested_started = false;
+	};
+	ResumeScanState resume_state;
 
 private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,

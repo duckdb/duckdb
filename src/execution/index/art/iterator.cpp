@@ -43,14 +43,14 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t
 //===--------------------------------------------------------------------===//
 
 template <typename Output>
-bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, bool equal) {
+ARTScanResult Iterator::Scan(const ARTKey &upper_bound, Output &output, bool equal) {
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
 		if (!upper_bound.Empty()) {
 			if (status == GateStatus::GATE_NOT_SET || entered_nested_leaf) {
 				if (current_key.GreaterThan(upper_bound, equal, nested_depth)) {
-					return true;
+					return ARTScanResult::COMPLETED;
 				}
 			}
 		}
@@ -62,57 +62,57 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 
 		switch (last_leaf.GetType()) {
 		case NType::LEAF_INLINED: {
-			if (output.IsFull(max_count)) {
-				return false;
+			if (output.IsFull()) {
+				return ARTScanResult::PAUSED;
 			}
-			output.Emit(last_leaf.GetRowId());
+			output.Add(last_leaf.GetRowId());
 			break;
 		}
 		case NType::LEAF: {
 			D_ASSERT(nested_depth == 0);
-			if (!has_cached_row_ids) {
-				cached_row_ids.clear();
-				Leaf::DeprecatedGetRowIds(art, last_leaf, cached_row_ids, NumericLimits<idx_t>::Maximum());
-				cached_row_ids_it = cached_row_ids.begin();
-				has_cached_row_ids = true;
+			if (!resume_state.has_cached_row_ids) {
+				resume_state.cached_row_ids.clear();
+				Leaf::DeprecatedGetRowIds(art, last_leaf, resume_state.cached_row_ids, NumericLimits<idx_t>::Maximum());
+				resume_state.cached_row_ids_it = resume_state.cached_row_ids.begin();
+				resume_state.has_cached_row_ids = true;
 			}
 			// Try to output the next entry in the deprecated leaf chain.
-			while (cached_row_ids_it != cached_row_ids.end()) {
-				if (output.IsFull(max_count)) {
-					// If we return false here, then scanning will resume at cached_row_ids_it.
-					return false;
+			while (resume_state.cached_row_ids_it != resume_state.cached_row_ids.end()) {
+				if (output.IsFull()) {
+					// If we pause here, then scanning will resume at cached_row_ids_it.
+					return ARTScanResult::PAUSED;
 				}
-				output.Emit(*cached_row_ids_it);
-				++cached_row_ids_it;
+				output.Add(*resume_state.cached_row_ids_it);
+				++resume_state.cached_row_ids_it;
 			}
-			has_cached_row_ids = false;
+			resume_state.has_cached_row_ids = false;
 			break;
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
 			// If we haven't traversed this leaf yet, set nested_started to true (allows us to pick up iteration again
-			// in case we fill the output with max_count.
-			if (!nested_started) {
-				nested_byte = 0;
-				nested_started = true;
+			// in case we fill the output with capacity.
+			if (!resume_state.nested_started) {
+				resume_state.nested_byte = 0;
+				resume_state.nested_started = true;
 			}
 			// Try to output the next inlined leaf.
-			while (last_leaf.GetNextByte(art, nested_byte)) {
-				if (output.IsFull(max_count)) {
-					// If we return false here, then scanning will resume at nested_byte in the current leaf.
-					return false;
+			while (last_leaf.GetNextByte(art, resume_state.nested_byte)) {
+				if (output.IsFull()) {
+					// If we pause here, then scanning will resume at nested_byte in the current leaf.
+					return ARTScanResult::PAUSED;
 				}
-				row_id[ROW_ID_SIZE - 1] = nested_byte;
+				row_id[ROW_ID_SIZE - 1] = resume_state.nested_byte;
 				ARTKey rid_key(&row_id[0], ROW_ID_SIZE);
-				output.Emit(rid_key.GetRowId());
+				output.Add(rid_key.GetRowId());
 
-				if (nested_byte == NumericLimits<uint8_t>::Maximum()) {
+				if (resume_state.nested_byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
-				nested_byte++;
+				resume_state.nested_byte++;
 			}
-			nested_started = false;
+			resume_state.nested_started = false;
 			break;
 		}
 		default:
@@ -122,12 +122,12 @@ bool Iterator::Scan(const ARTKey &upper_bound, Output &output, idx_t max_count, 
 		entered_nested_leaf = false;
 		has_next = Next();
 	} while (has_next);
-	return true;
+	return ARTScanResult::COMPLETED;
 }
 
 // Explicit template instantiations for the two output policies.
-template bool Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, idx_t, bool);
-template bool Iterator::Scan<KeyRowIdVectorOutput>(const ARTKey &, KeyRowIdVectorOutput &, idx_t, bool);
+template ARTScanResult Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, bool);
+template ARTScanResult Iterator::Scan<KeyRowIdOutput>(const ARTKey &, KeyRowIdOutput &, bool);
 
 void Iterator::FindMinimum(const Node &node) {
 	reference<const Node> ref(node);

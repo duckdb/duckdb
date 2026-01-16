@@ -445,8 +445,8 @@ ARTConflictType ART::Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &r
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
-	RowIdSetOutput output(row_ids_debug);
-	it.Scan(empty_key, output, NumericLimits<idx_t>().Maximum(), false);
+	RowIdSetOutput output(row_ids_debug, NumericLimits<idx_t>().Maximum());
+	it.Scan(empty_key, output, false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif
 
@@ -648,8 +648,8 @@ bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
 	Iterator it(*this);
 	it.FindMinimum(tree);
 	ARTKey empty_key = ARTKey();
-	RowIdSetOutput output(row_ids);
-	return it.Scan(empty_key, output, max_count, false);
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
@@ -661,8 +661,8 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	Iterator it(*this);
 	it.FindMinimum(*leaf);
 	ARTKey empty_key = ARTKey();
-	RowIdSetOutput output(row_ids);
-	return it.Scan(empty_key, output, max_count, false);
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
 bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) {
@@ -680,8 +680,8 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &ro
 
 	// We continue the scan. We do not check the bounds as any value following this value is
 	// greater and satisfies our predicate.
-	RowIdSetOutput output(row_ids);
-	return it.Scan(ARTKey(), output, max_count, false);
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(ARTKey(), output, false) == ARTScanResult::COMPLETED;
 }
 
 bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) {
@@ -699,8 +699,8 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 	}
 
 	// Continue the scan until we reach the upper bound.
-	RowIdSetOutput output(row_ids);
-	return it.Scan(upper_bound, output, max_count, equal);
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(upper_bound, output, equal) == ARTScanResult::COMPLETED;
 }
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
@@ -714,8 +714,8 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	}
 
 	// Continue the scan until we reach the upper bound.
-	RowIdSetOutput output(row_ids);
-	return it.Scan(upper_bound, output, max_count, right_equal);
+	RowIdSetOutput output(row_ids, max_count);
+	return it.Scan(upper_bound, output, right_equal) == ARTScanResult::COMPLETED;
 }
 
 bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
@@ -859,9 +859,9 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete
 	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
 	set<row_t> row_ids;
-	RowIdSetOutput output(row_ids);
-	auto success = it.Scan(empty_key, output, 2, false);
-	if (!success || row_ids.size() != 2) {
+	RowIdSetOutput output(row_ids, 2);
+	auto result = it.Scan(empty_key, output, false);
+	if (result != ARTScanResult::COMPLETED || row_ids.size() != 2) {
 		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
 	}
 
@@ -1229,8 +1229,8 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 	scanner.Scan(handler);
 }
 
-bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
-	auto &other_art = other_index.Cast<ART>();
+bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
+	auto &other_art = source_index.Cast<ART>();
 	if (!other_art.tree.HasMetadata()) {
 		return true;
 	}
@@ -1268,8 +1268,8 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 // FIXME : Make this a more efficient structural tree removal merge
 //		   Right now this is only used in MergeCheckpointDeltas to avoid having to do a table scan.
-void ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
-	auto &source = other_index.Cast<ART>();
+void ART::RemovalMerge(IndexLock &state, BoundIndex &source_index) {
+	auto &source = source_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
 		return;
 	}
@@ -1285,16 +1285,16 @@ void ART::RemovalMerge(IndexLock &state, BoundIndex &other_index) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 	ARTKey empty_key = ARTKey();
 
-	KeyRowIdVectorOutput output(arena, keys, row_id_keys);
-	bool complete;
+	KeyRowIdOutput output(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE);
+	ARTScanResult result;
 	do {
 		output.Reset();
-		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
+		result = it.Scan(empty_key, output, false);
 		if (output.Count() > 0) {
 			scan_count += output.Count();
 			delete_count += DeleteKeys(keys, row_id_keys, output.Count());
 		}
-	} while (!complete);
+	} while (result == ARTScanResult::PAUSED);
 
 	if (delete_count != scan_count) {
 		throw InternalException("Failed to remove all rows while merging checkpoint deltas - "
@@ -1320,11 +1320,11 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
 	unsafe_vector<ARTKey> row_id_keys(STANDARD_VECTOR_SIZE);
 	ARTKey empty_key = ARTKey();
 
-	KeyRowIdVectorOutput output(arena, keys, row_id_keys);
-	bool complete;
+	KeyRowIdOutput output(arena, keys, row_id_keys, STANDARD_VECTOR_SIZE);
+	ARTScanResult result;
 	do {
 		output.Reset();
-		complete = it.Scan(empty_key, output, STANDARD_VECTOR_SIZE, false);
+		result = it.Scan(empty_key, output, false);
 		if (output.Count() > 0) {
 			auto error =
 			    InsertKeys(arena, keys, row_id_keys, output.Count(), DeleteIndexInfo(), IndexAppendMode::DEFAULT);
@@ -1332,7 +1332,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &other_index) {
 				return error;
 			}
 		}
-	} while (!complete);
+	} while (result == ARTScanResult::PAUSED);
 
 	return ErrorData();
 }

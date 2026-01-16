@@ -83,12 +83,12 @@ public:
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
-	void RemovalMerge(IndexLock &state, BoundIndex &other_index);
+	void RemovalMerge(IndexLock &state, BoundIndex &source_index);
 	//! Obtains a lock and calls RemovalMerge while holding that lock.
-	void RemovalMerge(BoundIndex &other_index);
+	void RemovalMerge(BoundIndex &source_index);
 	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
 	//! Returns error data if constraint violation.
-	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existed
+	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existing
 	// MergeIndexes which don't support deprecated leaf chains. Once support for that is added, this simpler insert
 	// merge may be removed.
 	ErrorData InsertMerge(IndexLock &state, BoundIndex &other_index);
@@ -103,7 +103,7 @@ public:
 	//! Insert a chunk.
 	ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
 	//! Insert a chunk and verify constraint violations (generates keys and calls InsertKeys which does the
-	//! verification.
+	//! verification).
 	ErrorData Insert(IndexLock &l, DataChunk &data, Vector &row_ids, IndexAppendInfo &info) override;
 	//! Insert keys and row_ids into ART and verify constraint violations.
 	ErrorData InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
