@@ -44,6 +44,13 @@ struct IndexSerializationInfo {
 	transaction_t checkpoint_id;
 };
 
+// Serializing indexes to disk iterates over both bound and unbound indexes. IndexStorageInfos are already owned
+// by unbound indexes, and they are newly created when a bound index is serialized. We want to get the infos in the
+// same order the indexes are serialized, which we accumulate in the vector of references 'infos'. For UnboundIndex
+// we can just push the reference directly, and it is still owned by UnboundIndex. Since it is newly created for
+// BoundIndex, we need to own it in the return type, so the ownership of the BoundIndex IndexStorageInfo is pushed
+// into bound_infos, and a referene to this storage info is pushed to infos, which maintains the ordering between both
+// bound and unbound IndexStorageInfos.
 struct IndexSerializationResult {
 	//! The ordered list of references to serialize - preserves the iteration order of index_entries
 	vector<reference<const IndexStorageInfo>> infos;
