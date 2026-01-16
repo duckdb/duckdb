@@ -164,11 +164,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 			callback(&expr);
 		}
 		for (auto &cond : join.conditions) {
-			callback(&cond.left);
-			callback(&cond.right);
-		}
-		if (join.predicate) {
-			callback(&join.predicate);
+			if (cond.IsComparison()) {
+				callback(&cond.left);
+				callback(&cond.right);
+			} else {
+				callback(&cond.left);
+			}
 		}
 		break;
 	}

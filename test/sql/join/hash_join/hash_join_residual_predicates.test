@@ -1,0 +1,326 @@
+# name: test/sql/join/hash_join/hash_join_residual_predicates.test
+# description: Test hash join with residual predicates (non-pushdown conditions in ON clause)
+# group: [hash_join]
+
+statement ok
+PRAGMA enable_verification
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0);
+
+statement ok
+set disabled_optimizers to 'build_side_probe_side';
+
+statement ok
+INSERT INTO orders VALUES
+    (1, 100, 'O', 50.00, '1996-01-01', '5-LOW', 'Clerk#000000001', 0, 'pending'),
+    (2, 100, 'F', 150.00, '1996-01-02', '1-URGENT', 'Clerk#000000002', 0, 'completed'),
+    (3, 200, 'F', 200.00, '1996-01-03', '2-HIGH', 'Clerk#000000003', 0, 'completed'),
+    (4, 300, 'O', 80.00, '1996-01-04', '3-MEDIUM', 'Clerk#000000004', 0, 'pending'),
+    (5, 400, 'F', 300.00, '1996-01-05', '4-NOT SPECIFIED', 'Clerk#000000005', 0, 'completed');
+
+statement ok
+INSERT INTO lineitem VALUES
+    (1, 100, 1, 1, 10.00, 100.00, 0.05, 0.02, 'N', 'O', '1996-01-10', '1996-01-15', '1996-01-20', 'DELIVER IN PERSON', 'TRUCK', 'test comment 1'),
+    (2, 100, 2, 1, 20.00, 200.00, 0.05, 0.02, 'N', 'O', '1996-01-11', '1996-01-16', '1996-01-21', 'TAKE BACK RETURN', 'MAIL', 'test comment 2'),
+    (3, 200, 3, 1, 30.00, 300.00, 0.05, 0.02, 'N', 'F', '1996-01-12', '1996-01-17', '1996-01-22', 'DELIVER IN PERSON', 'SHIP', 'test comment 3'),
+    (4, 300, 4, 1, 15.00, 150.00, 0.05, 0.02, 'N', 'O', '1996-01-13', '1996-01-18', '1996-01-23', 'NONE', 'AIR', 'test comment 4'),
+    (5, 500, 5, 1, 25.00, 250.00, 0.05, 0.02, 'N', 'F', '1996-01-14', '1996-01-19', '1996-01-24', 'COLLECT COD', 'RAIL', 'test comment 5');
+
+
+query II
+EXPLAIN SELECT * FROM orders o
+INNER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+INNER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+2	100	150.00	2	100	20.00	200.00
+3	200	200.00	3	200	30.00	300.00
+5	400	300.00	5	500	25.00	250.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+INNER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice < l.l_extendedprice
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: INNER.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+INNER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice < l.l_extendedprice
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+2	100	150.00	2	100	20.00	200.00
+3	200	200.00	3	200	30.00	300.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: LEFT.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+1	100	50.00	NULL	NULL	NULL	NULL
+2	100	150.00	2	100	20.00	200.00
+3	200	200.00	3	200	30.00	300.00
+4	300	80.00	NULL	NULL	NULL	NULL
+5	400	300.00	5	500	25.00	250.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_orderstatus != 'O';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: LEFT.*
+
+query IIIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, o.o_orderstatus, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_orderstatus != 'O';
+----
+1	100	50.00	O	NULL	NULL	NULL	NULL
+2	100	150.00	F	2	100	20.00	200.00
+3	200	200.00	F	3	200	30.00	300.00
+4	300	80.00	O	NULL	NULL	NULL	NULL
+5	400	300.00	F	5	500	25.00	250.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: RIGHT.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+2	100	150.00	2	100	20.00	200.00
+3	200	200.00	3	200	30.00	300.00
+5	400	300.00	5	500	25.00	250.00
+NULL	NULL	NULL	1	100	10.00	100.00
+NULL	NULL	NULL	4	300	15.00	150.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND l.l_shipmode != 'TRUCK';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: RIGHT.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND l.l_shipmode != 'TRUCK';
+----
+2	100	150.00	2	100	20.00	200.00
+3	200	200.00	3	200	30.00	300.00
+4	300	80.00	4	300	15.00	150.00
+5	400	300.00	5	500	25.00	250.00
+NULL	NULL	NULL	1	100	10.00	100.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+FULL OUTER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: FULL.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+FULL OUTER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+1	100	50.00	NULL	NULL	NULL	NULL
+2	100	150.00	2	100	20.00	200.00
+3	200	200.00	3	200	30.00	300.00
+4	300	80.00	NULL	NULL	NULL	NULL
+5	400	300.00	5	500	25.00	250.00
+NULL	NULL	NULL	1	100	10.00	100.00
+NULL	NULL	NULL	4	300	15.00	150.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+FULL OUTER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice > 100 AND l.l_shipmode = 'SHIP';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: FULL.*
+
+query IIIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, l.l_orderkey, l.l_partkey, l.l_quantity, l.l_extendedprice
+FROM orders o
+FULL OUTER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice > 100 AND l.l_shipmode = 'SHIP';
+----
+1	100	50.00	NULL	NULL	NULL	NULL
+2	100	150.00	NULL	NULL	NULL	NULL
+3	200	200.00	3	200	30.00	300.00
+4	300	80.00	NULL	NULL	NULL	NULL
+5	400	300.00	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	1	100	10.00	100.00
+NULL	NULL	NULL	2	100	20.00	200.00
+NULL	NULL	NULL	4	300	15.00	150.00
+NULL	NULL	NULL	5	500	25.00	250.00
+
+query II
+EXPLAIN SELECT * FROM orders o
+SEMI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: SEMI.*
+
+query IIIT rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, o.o_orderstatus
+FROM orders o
+SEMI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+2	100	150.00	F
+3	200	200.00	F
+5	400	300.00	F
+
+query II
+EXPLAIN SELECT * FROM orders o
+ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: ANTI.*
+
+query IIIT rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, o.o_orderstatus
+FROM orders o
+ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250;
+----
+1	100	50.00	O
+4	300	80.00	O
+
+query II
+EXPLAIN SELECT * FROM orders o
+ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_orderstatus != 'O';
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: ANTI.*
+
+query IIIT rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, o.o_orderstatus
+FROM orders o
+ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
+    AND o.o_orderstatus != 'O';
+----
+1	100	50.00	O
+4	300	80.00	O
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_totalprice,
+    (SELECT l.l_shipmode FROM lineitem l
+     WHERE l.l_orderkey = o.o_orderkey
+         AND l.l_orderkey + o.o_totalprice > 250)
+FROM orders o;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: SINGLE.*
+
+query IIT rowsort
+SELECT o.o_orderkey, o.o_totalprice,
+    (SELECT l.l_shipmode FROM lineitem l
+     WHERE l.l_orderkey = o.o_orderkey
+         AND l.l_orderkey + o.o_totalprice > 250)
+FROM orders o;
+----
+1	50.00	NULL
+2	150.00	NULL
+3	200.00	NULL
+4	80.00	NULL
+5	300.00	RAIL
+
+statement ok
+INSERT INTO lineitem VALUES (5, 200, 10, 2, 30.00, 300.00, 0.05, 0.02, 'N', 'F', '1996-01-12', '1996-01-17', '1996-01-22', 'DELIVER IN PERSON', 'SHIP', 'duplicate');
+
+statement error
+SELECT o.o_orderkey, o.o_totalprice,
+    (SELECT l.l_shipmode FROM lineitem l
+     WHERE l.l_orderkey = o.o_orderkey
+         AND l.l_orderkey + o.o_totalprice > 250)
+FROM orders o;
+----
+More than one row returned by a subquery used as an expression - scalar subqueries can only return a single row.
+
+statement ok
+DELETE FROM lineitem WHERE l_comment = 'duplicate';
+
+query II
+EXPLAIN SELECT * FROM orders o
+WHERE o.o_orderkey NOT IN (
+    SELECT l.l_orderkey
+    FROM lineitem l
+    WHERE l.l_orderkey = o.o_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250
+);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: MARK.*
+
+query IIIT rowsort
+SELECT o.o_orderkey, o.o_custkey, o.o_totalprice, o.o_orderstatus
+FROM orders o
+WHERE o.o_orderkey NOT IN (
+    SELECT l.l_orderkey
+    FROM lineitem l
+    WHERE l.l_orderkey = o.o_orderkey
+    AND o.o_totalprice + l.l_extendedprice > 250
+);
+----
+1	100	50.00	O
+4	300	80.00	O
+
+query I
+SELECT COUNT(*) FROM lineitem l
+INNER JOIN orders o ON l.l_orderkey = o.o_orderkey
+    AND l.l_quantity + l.l_extendedprice + l.l_discount > o.o_totalprice;
+----
+4
+
+query I
+SELECT COUNT(*) FROM lineitem l
+INNER JOIN orders o ON l.l_orderkey = o.o_orderkey
+    AND l.l_extendedprice > o.o_totalprice + o.o_custkey + o.o_shippriority;
+----
+0
+
+query I
+SELECT COUNT(*) FROM lineitem l
+INNER JOIN orders o ON l.l_orderkey = o.o_orderkey
+    AND l.l_quantity + l.l_extendedprice > o.o_totalprice
+    AND l.l_quantity + o.o_totalprice > 100;
+----
+2
+
+query I
+SELECT COUNT(*) FROM lineitem l
+INNER JOIN orders o ON l.l_orderkey = o.o_orderkey
+    AND l.l_partkey + l.l_suppkey * 10 + o.o_custkey > 200
+    AND l.l_discount * 100 + (l.l_commitdate::DATE - o.o_orderdate::DATE) > o.o_shippriority + 10;
+----
+5

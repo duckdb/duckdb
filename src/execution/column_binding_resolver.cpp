@@ -19,39 +19,48 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		// special case: comparison join
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		// first get the bindings of the LHS and resolve the LHS expressions
+
 		VisitOperator(*comp_join.children[0]);
+		auto left_bindings = bindings;
+		auto left_types = types;
 		for (auto &cond : comp_join.conditions) {
-			VisitExpression(&cond.left);
+			if (cond.IsComparison()) {
+				VisitExpression(&cond.left);
+			}
 		}
-		// visit the duplicate eliminated columns on the LHS, if any
+
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
 		}
-		// then get the bindings of the RHS and resolve the RHS expressions
+
 		VisitOperator(*comp_join.children[1]);
+		auto right_bindings = bindings;
+		auto right_types = types;
 		for (auto &cond : comp_join.conditions) {
-			VisitExpression(&cond.right);
+			if (cond.IsComparison()) {
+				VisitExpression(&cond.right);
+			}
 		}
-		// finally update the bindings with the result bindings of the join
+
+		// combine bindings to resolve predicate
+		auto combined_bindings = left_bindings;
+		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
+		auto combined_types = left_types;
+		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
+
+		bindings = combined_bindings;
+		types = combined_types;
+		for (auto &cond : comp_join.conditions) {
+			if (!cond.IsComparison()) {
+				VisitExpression(&cond.left);
+			}
+		}
+
+		// update to join output bindings
 		bindings = op.GetColumnBindings();
 		types = op.types;
-		// resolve any mixed predicates
-		// for now, only ASOF supports this.
-		if (comp_join.predicate) {
-			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-			//	If this is a SEMI or ANTI join and we have an arbitrary predicate,
-			//	we need to include the bindings of the RHS
-			if (comp_join.join_type == JoinType::SEMI || comp_join.join_type == JoinType::ANTI) {
-				auto right_bindings = op.children[1]->GetColumnBindings();
-				bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
-				auto &right_types = op.children[1]->types;
-				types.insert(types.end(), right_types.begin(), right_types.end());
-			}
-			VisitExpression(&comp_join.predicate);
-		}
+
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {

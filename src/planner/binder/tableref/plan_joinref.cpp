@@ -22,7 +22,12 @@ namespace duckdb {
 //! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.
 //! The logic determines whether a condition that references only the left side can be
 //! pushed down as a filter on the left child operator.
-static bool CanPushToLeftChild(JoinType type) {
+static bool CanPushToLeftChild(JoinType type, JoinRefType ref_type) {
+	// Unsupported arbitrary predicates for some ASOF types
+	if (ref_type == JoinRefType::ASOF && type != JoinType::INNER && type != JoinType::LEFT) {
+		return false;
+	}
+
 	switch (type) {
 	case JoinType::INNER:
 	case JoinType::SEMI:
@@ -41,7 +46,12 @@ static bool CanPushToLeftChild(JoinType type) {
 //! This is used ONLY for join conditions in the ON clause, not for WHERE clause filters.
 //! The logic determines whether a condition that references only the right side can be
 //! pushed down as a filter on the right child operator.
-static bool CanPushToRightChild(JoinType type) {
+static bool CanPushToRightChild(JoinType type, JoinRefType ref_type) {
+	// Unsupported arbitrary predicates for some ASOF types
+	if (ref_type == JoinRefType::ASOF && type != JoinType::INNER && type != JoinType::LEFT) {
+		return false;
+	}
+
 	switch (type) {
 	case JoinType::INNER:
 	case JoinType::SEMI:
@@ -179,12 +189,12 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 				continue;
 			}
 		} else if (side == JoinSide::LEFT) {
-			if (CanPushToLeftChild(type)) {
+			if (CanPushToLeftChild(type, ref_type)) {
 				PushFilterToChild(left_child, expr);
 				continue;
 			}
 		} else if (side == JoinSide::RIGHT) {
-			if (CanPushToRightChild(type)) {
+			if (CanPushToRightChild(type, ref_type)) {
 				PushFilterToChild(right_child, expr);
 				continue;
 			}
@@ -283,13 +293,8 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		asof_join->children.push_back(std::move(left_child));
 		asof_join->children.push_back(std::move(right_child));
 
-		if (!arbitrary_expressions.empty()) {
-			asof_join->predicate = std::move(arbitrary_expressions[0]);
-			for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
-				asof_join->predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-				                                                             std::move(asof_join->predicate),
-				                                                             std::move(arbitrary_expressions[i]));
-			}
+		for (auto &expr : arbitrary_expressions) {
+			asof_join->conditions.emplace_back(std::move(expr));
 		}
 
 		return std::move(asof_join);
@@ -314,41 +319,37 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		return std::move(any_join);
 	}
 
-	// Case 3: Has join conditions and arbitrary expressions - decide based on join type
+	// Case 3: Has join conditions and arbitrary expressions - check equality
 	if (!arbitrary_expressions.empty()) {
-		// for inner join create comparison join + filter on top
-		if (type == JoinType::INNER) {
+		for (auto &expr : arbitrary_expressions) {
+			conditions.emplace_back(std::move(expr));
+		}
+		bool has_equality = false;
+		for (auto &cond : conditions) {
+			if (cond.IsComparison()) {
+				auto comp_type = cond.GetComparisonType();
+				if (comp_type == ExpressionType::COMPARE_EQUAL ||
+				    comp_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+					has_equality = true;
+					break;
+				}
+			}
+		}
+
+		if (has_equality) {
+			// Has equality - use comparison join (will be converted to Hash Join later)
 			auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 			comp_join->conditions = std::move(conditions);
 			comp_join->children.push_back(std::move(left_child));
 			comp_join->children.push_back(std::move(right_child));
-
-			auto filter = make_uniq<LogicalFilter>();
-			for (auto &expr : arbitrary_expressions) {
-				filter->expressions.push_back(std::move(expr));
-			}
-			filter->children.push_back(std::move(comp_join));
-
-			return std::move(filter);
-		} else {
-			auto any_join = make_uniq<LogicalAnyJoin>(type);
-			any_join->children.push_back(std::move(left_child));
-			any_join->children.push_back(std::move(right_child));
-
-			any_join->condition = JoinCondition::CreateExpression(std::move(conditions[0]));
-			for (idx_t i = 1; i < conditions.size(); i++) {
-				any_join->condition = make_uniq<BoundConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition),
-				    JoinCondition::CreateExpression(std::move(conditions[i])));
-			}
-
-			for (auto &expr : arbitrary_expressions) {
-				any_join->condition = make_uniq<BoundConjunctionExpression>(
-				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(expr));
-			}
-
-			return std::move(any_join);
+			return std::move(comp_join);
 		}
+		// No equality - use any join
+		auto any_join = make_uniq<LogicalAnyJoin>(type);
+		any_join->condition = JoinCondition::CreateExpression(std::move(conditions));
+		any_join->children.push_back(std::move(left_child));
+		any_join->children.push_back(std::move(right_child));
+		return std::move(any_join);
 	}
 
 	// Case 4: Has join conditions but not arbitrary expressions - use comparison join
@@ -468,13 +469,13 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	switch (join->type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		// comparison join
-		// in this join we visit the expressions on the LHS with the LHS as root node
-		// and the expressions on the RHS with the RHS as root node
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
-			PlanSubqueries(comp_join.conditions[i].left, comp_join.children[0]);
-			PlanSubqueries(comp_join.conditions[i].right, comp_join.children[1]);
+			auto &cond = comp_join.conditions[i];
+			if (cond.IsComparison()) {
+				PlanSubqueries(cond.left, comp_join.children[0]);
+				PlanSubqueries(cond.right, comp_join.children[1]);
+			}
 		}
 		break;
 	}

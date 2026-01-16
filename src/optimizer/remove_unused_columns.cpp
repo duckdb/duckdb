@@ -312,10 +312,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			bool found = false;
 			for (auto &unique_cond : unique_conditions) {
-				if (cond.comparison == unique_cond.comparison && cond.left->Equals(*unique_cond.left) &&
-				    cond.right->Equals(*unique_cond.right)) {
-					found = true;
-					break;
+				if (cond.IsComparison() && unique_cond.IsComparison()) {
+					if (cond.comparison == unique_cond.comparison && cond.left->Equals(*unique_cond.left) &&
+					    cond.right->Equals(*unique_cond.right)) {
+						found = true;
+						break;
+					}
+				} else if (!cond.IsComparison() && !unique_cond.IsComparison()) {
+					if (cond.left->Equals(*unique_cond.left)) {
+						found = true;
+						break;
+					}
 				}
 			}
 			if (!found) {

@@ -15,8 +15,26 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
+
+//! Create a combined predicate expression from non-comparison conditions
+static unique_ptr<Expression> CreatePredicateFromConditions(const vector<JoinCondition> &conditions) {
+	unique_ptr<Expression> predicate;
+	for (const auto &cond : conditions) {
+		if (!cond.IsComparison()) {
+			auto expr = cond.left->Copy();
+			if (!predicate) {
+				predicate = std::move(expr);
+			} else {
+				predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(predicate),
+				                                                  std::move(expr));
+			}
+		}
+	}
+	return predicate;
+}
 
 optional_ptr<PhysicalOperator>
 PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe, PhysicalOperator &build) {
@@ -65,23 +83,23 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	}
 
 	// Remap predicate column references.
-	if (op.predicate) {
-		vector<idx_t> swap_projection_map;
+	auto predicate = CreatePredicateFromConditions(op.conditions);
+	if (predicate) {
+		const auto lhs_width = op.children[0]->types.size();
 		const auto rhs_width = op.children[1]->types.size();
-		for (const auto &l : join_op.right_projection_map) {
-			swap_projection_map.emplace_back(l + rhs_width);
-		}
-		for (const auto &r : join_op.left_projection_map) {
-			swap_projection_map.emplace_back(r);
-		}
-		join_op.predicate = op.predicate->Copy();
-		ExpressionIterator::EnumerateExpression(join_op.predicate, [&](Expression &child) {
+
+		ExpressionIterator::EnumerateExpression(predicate, [&](Expression &child) {
 			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-				auto &col_idx = child.Cast<BoundReferenceExpression>().index;
-				const auto new_idx = swap_projection_map[col_idx];
-				col_idx = new_idx;
+				auto &ref = child.Cast<BoundReferenceExpression>();
+				if (ref.index < lhs_width) {
+					ref.index = ref.index + rhs_width;
+				} else {
+					ref.index = ref.index - lhs_width;
+				}
 			}
 		});
+
+		join_op.conditions.emplace_back(std::move(predicate));
 	}
 
 	auto binder = Binder::CreateBinder(context);
@@ -90,6 +108,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	string arg_min_max;
 	for (idx_t i = 0; i < op.conditions.size(); ++i) {
 		const auto &cond = op.conditions[i];
+		if (!cond.IsComparison()) {
+			continue;
+		}
 		JoinCondition nested_cond;
 		nested_cond.left = cond.right->Copy();
 		nested_cond.right = cond.left->Copy();
@@ -272,6 +293,9 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	auto asof_idx = op.conditions.size();
 	for (size_t c = 0; c < op.conditions.size(); ++c) {
 		auto &cond = op.conditions[c];
+		if (!cond.IsComparison()) {
+			continue;
+		}
 		switch (cond.comparison) {
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
@@ -291,7 +315,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	D_ASSERT(asof_idx < op.conditions.size());
 
 	// If there is a non-comparison predicate, we have to use NLJ.
-	const bool has_predicate = op.predicate.get();
+	const bool has_predicate = op.HasArbitraryConditions();
 	const bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
 	if (!force_asof_join || has_predicate) {
 		const idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
