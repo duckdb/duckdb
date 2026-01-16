@@ -264,11 +264,11 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (!state.stats_state) {
 		return;
 	}
-	if (MaxRepeat() == 0) {
-		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
-		column_chunk.meta_data.statistics.__isset.null_count = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
+	auto null_count = MaxRepeat() == 0 ? state.null_count : state.null_count + state.parent_null_count;
+	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
+	column_chunk.meta_data.statistics.__isset.null_count = true;
+	column_chunk.meta_data.__isset.statistics = true;
+
 	// if we have NaN values - don't write the min/max here
 	if (!state.stats_state->HasNaN()) {
 		// set min/max/min_value/max_value
