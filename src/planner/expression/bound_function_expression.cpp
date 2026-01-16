@@ -31,10 +31,10 @@ bool BoundFunctionExpression::IsFoldable() const {
 	if (function.HasBindLambdaCallback()) {
 		// This is a lambda function
 		D_ASSERT(bind_info);
-		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
-		if (lambda_bind_data.lambda_expr) {
-			auto &expr = *lambda_bind_data.lambda_expr;
-			if (expr.IsVolatile()) {
+		auto &lambda_bind_data = bind_info->Cast<LambdaFunctionData>();
+		auto &lambda_expr = lambda_bind_data.GetLambdaExpression();
+		if (lambda_expr) {
+			if (lambda_expr->IsVolatile()) {
 				return false;
 			}
 		}
