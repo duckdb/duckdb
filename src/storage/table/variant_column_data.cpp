@@ -7,6 +7,7 @@
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
@@ -599,7 +600,7 @@ public:
 			//! Or to the existing shredded column data if we didn't decide to reshred
 			auto &shredded_state = child_states[1];
 			D_ASSERT(shredded_state->original_column.type.id() == LogicalTypeId::STRUCT);
-			data.SetVariantShreddedType(shredded_state->original_column.type);
+			data.extra_data = make_uniq<VariantPersistentColumnData>(shredded_state->original_column.type);
 		}
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
@@ -702,27 +703,28 @@ static bool EnableShredding(int64_t minimum_size, idx_t current_size) {
 }
 
 unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &row_group,
-                                                                ColumnCheckpointInfo &checkpoint_info) {
+                                                                ColumnCheckpointInfo &checkpoint_info,
+                                                                const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 
 	auto &table_info = row_group.GetTableInfo();
 	auto &db = table_info.GetDB();
-	auto &config_options = DBConfig::Get(db).options;
+	auto &config = DBConfig::Get(db);
 
 	bool should_shred = true;
 	if (!HasAnyChanges()) {
 		should_shred = false;
 	}
-	if (!EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+	if (!EnableShredding(Settings::Get<VariantMinimumShreddingSizeSetting>(config), row_group.count.load())) {
 		should_shred = false;
 	}
 
 	LogicalType shredded_type;
 	if (should_shred) {
-		if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
-			shredded_type = config_options.force_variant_shredding;
+		if (config.options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
+			shredded_type = config.options.force_variant_shredding;
 		} else {
 			shredded_type = GetShreddedType();
 		}
@@ -735,8 +737,11 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	}
 
 	if (!should_shred) {
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
+		checkpoint_state->child_states.push_back(
+		    sub_columns[0]->Checkpoint(row_group, checkpoint_info, VariantStats::GetUnshreddedStats(old_stats)));
+		if (sub_columns.size() > 1) {
+			checkpoint_state->child_states.push_back(
+			    sub_columns[1]->Checkpoint(row_group, checkpoint_info, VariantStats::GetShreddedStats(old_stats)));
 		}
 		return std::move(checkpoint_state);
 	}
@@ -749,8 +754,10 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	auto &shredded = checkpoint_state->shredded_data[1];
 
 	//! Now checkpoint the shredded data
-	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(
+	    unshredded->Checkpoint(row_group, checkpoint_info, VariantStats::GetUnshreddedStats(column_stats)));
+	checkpoint_state->child_states.push_back(
+	    shredded->Checkpoint(row_group, checkpoint_info, VariantStats::GetShreddedStats(column_stats)));
 
 	return std::move(checkpoint_state);
 }
@@ -784,7 +791,8 @@ bool VariantColumnData::HasAnyChanges() const {
 PersistentColumnData VariantColumnData::Serialize() {
 	PersistentColumnData persistent_data(type);
 	if (IsShredded()) {
-		persistent_data.SetVariantShreddedType(sub_columns[1]->type);
+		// Set the extra data to indicate that this is shredded data
+		persistent_data.extra_data = make_uniq<VariantPersistentColumnData>(sub_columns[1]->type);
 	}
 	persistent_data.child_columns.push_back(validity->Serialize());
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -802,7 +810,10 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 
-		auto &shredded_type = column_data.variant_shredded_type;
+		// TODO:
+		D_ASSERT(column_data.extra_data);
+		auto &variant_extra_data = column_data.extra_data->Cast<VariantPersistentColumnData>();
+		auto &shredded_type = variant_extra_data.logical_type;
 		if (!IsShredded()) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
 			sub_columns.push_back(ColumnData::CreateColumn(block_manager, info, 2, shredded_type, GetDataType(), this));

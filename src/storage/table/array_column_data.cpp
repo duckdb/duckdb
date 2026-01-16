@@ -341,11 +341,13 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(const R
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(const RowGroup &row_group,
-                                                              ColumnCheckpointInfo &checkpoint_info) {
+                                                              ColumnCheckpointInfo &checkpoint_info,
+                                                              const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
-	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
+	checkpoint_state->child_state =
+	    child_column->Checkpoint(row_group, checkpoint_info, ArrayStats::GetChildStats(old_stats));
 	return std::move(checkpoint_state);
 }
 

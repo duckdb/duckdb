@@ -50,6 +50,27 @@ index 12b5e5e..dd25e75 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/postgres_storage.cpp b/src/postgres_storage.cpp
+index cfff746..7963170 100644
+--- a/src/postgres_storage.cpp
++++ b/src/postgres_storage.cpp
+@@ -1,5 +1,5 @@
+ #include "duckdb.hpp"
+-
++#include "duckdb/main/settings.hpp"
+ #include "postgres_storage.hpp"
+ #include "storage/postgres_catalog.hpp"
+ #include "duckdb/parser/parsed_data/attach_info.hpp"
+@@ -10,8 +10,7 @@ namespace duckdb {
+ static unique_ptr<Catalog> PostgresAttach(optional_ptr<StorageExtensionInfo> storage_info, ClientContext &context,
+                                           AttachedDatabase &db, const string &name, AttachInfo &info,
+                                           AttachOptions &attach_options) {
+-	auto &config = DBConfig::GetConfig(context);
+-	if (!config.options.enable_external_access) {
++	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
+ 		throw PermissionException("Attaching Postgres databases is disabled through configuration");
+ 	}
+ 	string attach_path = info.path;
 diff --git a/src/storage/postgres_delete.cpp b/src/storage/postgres_delete.cpp
 index 8e1c014..b50fbc1 100644
 --- a/src/storage/postgres_delete.cpp

@@ -98,6 +98,9 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 		types.WriteProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
 		types.WriteProperty<uint8_t>(104, "types_xyzm", data.types.sets[3]);
 	});
+
+	// Write flags
+	serializer.WritePropertyWithDefault(202, "flags", data.flags.flags);
 }
 
 void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
@@ -122,6 +125,9 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 		types.ReadProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
 		types.ReadProperty<uint8_t>(104, "types_xyzm", data.types.sets[3]);
 	});
+
+	// Read flags
+	deserializer.ReadPropertyWithDefault<uint8_t>(202, "flags", data.flags.flags);
 }
 
 string GeometryStats::ToString(const BaseStatistics &stats) {
@@ -129,10 +135,14 @@ string GeometryStats::ToString(const BaseStatistics &stats) {
 	string result;
 
 	result += "[";
-	result += StringUtil::Format("Extent: [X: [%f, %f], Y: [%f, %f], Z: [%f, %f], M: [%f, %f]", data.extent.x_min,
+	result += StringUtil::Format("Extent: [X: [%f, %f], Y: [%f, %f], Z: [%f, %f], M: [%f, %f]]", data.extent.x_min,
 	                             data.extent.x_max, data.extent.y_min, data.extent.y_max, data.extent.z_min,
 	                             data.extent.z_max, data.extent.m_min, data.extent.m_max);
-	result += StringUtil::Format("], Types: [%s]", StringUtil::Join(data.types.ToString(true), ", "));
+	result += StringUtil::Format(", Types: [%s]", StringUtil::Join(data.types.ToString(true), ", "));
+	result += StringUtil::Format(
+	    ", Flags: [Has Empty Geom: %s, Has No Empty Geom: %s, Has Empty Part: %s, Has No Empty Part: %s]",
+	    data.flags.HasEmptyGeometry() ? "true" : "false", data.flags.HasNonEmptyGeometry() ? "true" : "false",
+	    data.flags.HasEmptyPart() ? "true" : "false", data.flags.HasNonEmptyPart() ? "true" : "false");
 
 	result += "]";
 	return result;
@@ -178,12 +188,20 @@ GeometryTypeSet &GeometryStats::GetTypes(BaseStatistics &stats) {
 	return GetDataUnsafe(stats).types;
 }
 
+GeometryStatsFlags &GeometryStats::GetFlags(BaseStatistics &stats) {
+	return GetDataUnsafe(stats).flags;
+}
+
 const GeometryExtent &GeometryStats::GetExtent(const BaseStatistics &stats) {
 	return GetDataUnsafe(stats).extent;
 }
 
 const GeometryTypeSet &GeometryStats::GetTypes(const BaseStatistics &stats) {
 	return GetDataUnsafe(stats).types;
+}
+
+const GeometryStatsFlags &GeometryStats::GetFlags(const BaseStatistics &stats) {
+	return GetDataUnsafe(stats).flags;
 }
 
 // Expression comparison pruning

@@ -1,0 +1,92 @@
+# name: test/sql/types/geo/geometry_shred.test
+# group: [geo]
+
+load __TEST_DIR__/test_shred_points_attach.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
+create table t1(g GEOMETRY);
+
+statement ok
+INSERT INTO t1 VALUES ('POINT(1 2)'::GEOMETRY);
+
+# Unshredded before checkpointing
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+GEOMETRY
+VALIDITY
+
+# Check stats
+query I rowsort stats_result
+select stats(g) from t1;
+----
+
+statement ok
+CHECKPOINT
+
+# Shredded after checkpointing
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+DOUBLE
+VALIDITY
+
+# Stats should be the same
+query I rowsort stats_result
+select stats(g) from t1;
+----
+
+# Now restart, to ensure persistence
+restart
+
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+DOUBLE
+VALIDITY
+
+# Stats should be the same
+query I rowsort stats_result
+select stats(g) from t1;
+----
+
+query I
+SELECT ST_AsText(g) FROM t1;
+----
+POINT (1 2)
+
+# If we insert a non-point geometry, it should not be shredded
+statement ok
+INSERT INTO t1 VALUES ('LINESTRING(0 0, 1 1)'::GEOMETRY);
+
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+DOUBLE
+GEOMETRY
+VALIDITY
+
+query I rowsort
+select * from t1;
+----
+LINESTRING (0 0, 1 1)
+POINT (1 2)
+
+statement ok
+checkpoint;
+
+# After checkpointing, we should see the old and new segment compacted back into GEOMETRY
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+GEOMETRY
+VALIDITY
