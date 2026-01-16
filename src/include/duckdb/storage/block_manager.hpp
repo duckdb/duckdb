@@ -120,8 +120,9 @@ public:
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
+
 	//! Returns the block allocation size of this block manager.
-	inline idx_t GetBlockAllocSize() const {
+	idx_t GetBlockAllocSize() const {
 		return block_alloc_size.GetIndex();
 	}
 	//! Returns the possibly invalid block allocation size of this block manager.
@@ -132,15 +133,15 @@ public:
 	inline optional_idx GetOptionalBlockHeaderSize() const {
 		return block_header_size;
 	}
-	//! Block header size including the 8-byte checksum
-	inline idx_t GetBlockHeaderSize() const {
+	//! Returns the block header size including the 8-byte checksum of this block manager.
+	idx_t GetBlockHeaderSize() const {
 		if (!block_header_size.IsValid()) {
 			return Storage::DEFAULT_BLOCK_HEADER_SIZE;
 		}
 		return block_header_size.GetIndex();
 	}
-	//! Size of the block available for the user
-	inline idx_t GetBlockSize() const {
+	//! Returns the size of the block that is available for usage.
+	idx_t GetBlockSize() const {
 		return block_alloc_size.GetIndex() - block_header_size.GetIndex();
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
@@ -194,9 +195,9 @@ private:
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
-	//! The size of the block headers (incl. checksum) in this block manager.
+	//! The size of the block headers (including checksum) in this block manager.
 	//! Defaults to DEFAULT_BLOCK_HEADER_SIZE for in-memory block managers.
-	//! Default to default_block_header_size for file-backed block managers.
+	//! Defaults to default_block_header_size for file-backed block managers.
 	optional_idx block_header_size;
 };
 
