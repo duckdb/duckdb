@@ -244,4 +244,26 @@ void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
 	ref.query_location = optional_idx(static_cast<idx_t>(query_location));
 }
 
+void Transformer::TransformTableOptions(case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
+                                        optional_ptr<duckdb_libpgquery::PGList> pg_options) {
+	if (!pg_options) {
+		return;
+	}
+
+	duckdb_libpgquery::PGListCell *cell;
+	for_each_cell(cell, pg_options->head) {
+		auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
+		auto lower_name = StringUtil::Lower(def_elem->defname);
+		if (options.find(lower_name) != options.end()) {
+			throw ParserException("Duplicate table property \"%s\"", lower_name);
+		}
+		if (!def_elem->arg) {
+			options.emplace(lower_name, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
+			continue;
+		}
+		auto expr = TransformExpression(def_elem->arg);
+		options.emplace(lower_name, std::move(expr));
+	}
+}
+
 } // namespace duckdb
