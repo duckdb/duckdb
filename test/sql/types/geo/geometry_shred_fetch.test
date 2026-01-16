@@ -1,0 +1,48 @@
+# name: test/sql/types/geo/geometry_shred_fetch.test
+# group: [geo]
+
+require vector_size 2048
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
+create table t1(g geometry, id integer);
+
+statement ok
+insert into t1 select printf('POINT(%d %d)', i, i)::geometry, i from range(0,3000) as r(i);
+
+statement ok
+CHECKPOINT;
+
+# Create index on id column
+statement ok
+create index idx_id on t1(id);
+
+# Now do a point-lookup
+query II
+select g, id from t1 where id = 1500;
+----
+POINT (1500 1500)	1500
+
+
+statement ok
+pragma verify_fetch_row;
+
+# Now do a point-lookup
+query II rowsort
+select g, id from t1 where id < 10 order by id;
+----
+POINT (0 0)	0
+POINT (1 1)	1
+POINT (2 2)	2
+POINT (3 3)	3
+POINT (4 4)	4
+POINT (5 5)	5
+POINT (6 6)	6
+POINT (7 7)	7
+POINT (8 8)	8
+POINT (9 9)	9

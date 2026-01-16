@@ -178,7 +178,11 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info);
+	//! If this is a nested column, "stats" are the corresponding statistics from the parent column
+	//! Otherwise, "stats" == this->statistics->stats
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                                     const BaseStatistics &stats);
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
 
@@ -247,10 +251,10 @@ protected:
 	unique_ptr<UpdateSegment> updates;
 	//! The lock for the stats
 	mutable mutex stats_lock;
-	//! The stats of the root segment
-	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
+	//! The stats of the root segment
+	unique_ptr<SegmentStatistics> stats;
 
 private:
 	//! Whether or not this column data belongs to a main table or if it is transaction local
@@ -274,6 +278,69 @@ public:
 	}
 };
 
+enum class ExtraPersistentColumnDataType : uint8_t {
+	INVALID = 0,
+	VARIANT = 1,
+	GEOMETRY = 2,
+};
+
+class ExtraPersistentColumnData {
+public:
+	ExtraPersistentColumnDataType GetType() const {
+		return type;
+	}
+
+	virtual ~ExtraPersistentColumnData() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(type == TARGET::TYPE);
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(type == TARGET::TYPE);
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ExtraPersistentColumnData> Deserialize(Deserializer &deserializer);
+
+protected:
+	explicit ExtraPersistentColumnData(ExtraPersistentColumnDataType type_p) : type(type_p) {
+	}
+
+private:
+	ExtraPersistentColumnDataType type;
+};
+
+class VariantPersistentColumnData final : public ExtraPersistentColumnData {
+public:
+	static constexpr auto TYPE = ExtraPersistentColumnDataType::VARIANT;
+	VariantPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
+	}
+	explicit VariantPersistentColumnData(const LogicalType &storage_type)
+	    : ExtraPersistentColumnData(TYPE), logical_type(storage_type) {
+	}
+
+	LogicalType logical_type;
+};
+
+class GeometryPersistentColumnData final : public ExtraPersistentColumnData {
+public:
+	static constexpr auto TYPE = ExtraPersistentColumnDataType::GEOMETRY;
+	GeometryPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
+	}
+	GeometryPersistentColumnData(GeometryType type, VertexType vert)
+	    : ExtraPersistentColumnData(TYPE), geom_type(type), vert_type(vert) {
+	}
+
+	GeometryType geom_type = GeometryType::INVALID;
+	VertexType vert_type = VertexType::XY;
+};
+
 struct PersistentColumnData {
 public:
 	explicit PersistentColumnData(const LogicalType &logical_type);
@@ -292,15 +359,15 @@ public:
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
 	bool HasUpdates() const;
-	void SetVariantShreddedType(const LogicalType &shredded_type);
 
 public:
-	PhysicalType physical_type;
-	LogicalTypeId logical_type_id;
+	LogicalType logical_type;
 	vector<DataPointer> pointers;
 	vector<PersistentColumnData> child_columns;
 	bool has_updates = false;
-	LogicalType variant_shredded_type;
+
+	//! Extra persistent data for specific column types
+	unique_ptr<ExtraPersistentColumnData> extra_data;
 };
 
 struct PersistentRowGroupData {

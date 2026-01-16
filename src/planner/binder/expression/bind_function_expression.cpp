@@ -220,12 +220,22 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// the first child is the list, the second child is the lambda expression
-	constexpr idx_t list_idx = 0;
-	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(function.children[lambda_expr_idx]->GetExpressionClass() == ExpressionClass::LAMBDA);
+	// constexpr idx_t list_ix = 0;
+	idx_t lambda_expr_idx = 0;
+	bool found_lambda = false;
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		if (function.children[i]->GetExpressionClass() == ExpressionClass::LAMBDA) {
+			if (found_lambda) {
+				return BindResult("Only one lambda expression is supported per lambda function!");
+			}
+			lambda_expr_idx = i;
+			found_lambda = true;
+			break;
+		}
+	}
 
+	// Get lambda expr idx
 	vector<LogicalType> function_child_types;
-
 	// bind the list
 	ErrorData error;
 	for (idx_t i = 0; i < function.children.size(); i++) {
@@ -248,14 +258,6 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		function_child_types.push_back(child->return_type);
 	}
 
-	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx]);
-	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::ARRAY &&
-	    list_child->return_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
-		return BindResult("Invalid LIST argument during lambda function binding!");
-	}
-
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[lambda_expr_idx]->Cast<LambdaExpression>();
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function);
@@ -265,11 +267,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.children[lambda_expr_idx]->GetAlias();
-	bind_lambda_result.expression->SetAlias(alias);
-	if (!alias.empty()) {
-		bind_lambda_result.expression->SetAlias(alias);
-	}
+	bind_lambda_result.expression->SetAlias(lambda_expr.GetAlias());
 	function.children[lambda_expr_idx] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
@@ -306,18 +304,22 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
 	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
 	// correctly binding lambdas one level 'out'. Therefore, the current parameter count does not matter here.
-	idx_t offset = 0;
 	if (lambda_bindings) {
+		idx_t offset = 0;
+
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 			auto &binding = (*lambda_bindings)[i - 1];
 			auto &column_names = binding.GetColumnNames();
 			auto &column_types = binding.GetColumnTypes();
 			D_ASSERT(column_names.size() == column_types.size());
 
-			for (idx_t column_idx = column_names.size(); column_idx > 0; column_idx--) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
-				                                                              column_types[column_idx - 1], offset);
-				offset++;
+			// However, the parameters are ordered within the level
+			for (idx_t col_idx = 0; col_idx < column_names.size(); col_idx++) {
+				auto &param_name = column_names[col_idx];
+				auto &param_type = column_types[col_idx];
+
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(param_name, param_type, offset++);
+
 				bound_function_expr.children.push_back(std::move(bound_lambda_param));
 			}
 		}
