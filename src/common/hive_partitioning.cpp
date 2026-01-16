@@ -126,7 +126,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
 	// Handle nulls
-	if (StringUtil::CIEquals(str_val, "NULL")) {
+	if (StringUtil::CIEquals(str_val, "NULL") || str_val == "__HIVE_DEFAULT_PARTITION__") {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
