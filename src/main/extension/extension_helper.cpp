@@ -143,7 +143,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 
 string ExtensionHelper::GetExtensionMinCompatVersion(const string &extension_name) {
 	for (const DefaultExtension &default_extension : internal_extensions) {
-		if (strcmp(extension_name.c_str(), default_extension.name) == 0) {
+		if (default_extension.name != nullptr && strcmp(extension_name.c_str(), default_extension.name) == 0) {
 			if (default_extension.min_compat_version != nullptr) {
 				return std::string(default_extension.min_compat_version);
 			} else {
