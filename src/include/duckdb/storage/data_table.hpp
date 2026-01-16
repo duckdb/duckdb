@@ -257,7 +257,7 @@ public:
 	bool HasIndexes() const;
 	bool HasUniqueIndexes() const;
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
-	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
+	void SetIndexStorageInfo(vector<unique_ptr<IndexStorageInfo>> index_storage_info);
 	void VacuumIndexes();
 	void VerifyIndexBuffers();
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
@@ -276,7 +276,7 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              const IndexStorageInfo &info);
+	              unique_ptr<IndexStorageInfo> info);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
 

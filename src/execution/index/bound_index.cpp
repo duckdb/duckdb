@@ -170,11 +170,12 @@ unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_t
 	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
 }
 
-IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+unique_ptr<IndexStorageInfo> BoundIndex::SerializeToDisk(QueryContext context,
+                                                         const case_insensitive_map_t<Value> &options) {
 	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
 }
 
-IndexStorageInfo BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+unique_ptr<IndexStorageInfo> BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
 	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 

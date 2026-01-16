@@ -169,11 +169,12 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
+	auto index_serialization_result = info.GetIndexes().SerializeToDisk(context, serialization_info);
+	auto &all_infos = index_serialization_result.infos;
 
 	if (debug_verify_blocks) {
-		for (auto &entry : index_storage_infos) {
-			for (auto &allocator : entry.allocator_infos) {
+		for (auto &index_info : all_infos) {
+			for (auto &allocator : index_info.get().allocator_infos) {
 				for (auto &block : allocator.block_pointers) {
 					checkpoint_manager.verify_block_usage_count[block.block_id]++;
 				}
@@ -184,7 +185,10 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+
+	serializer.WriteList(104, "index_storage_infos", all_infos.size(), [&](Serializer::List &list, idx_t i) {
+		list.WriteObject([&](Serializer &object) { all_infos[i].get().Serialize(object); });
+	});
 }
 
 } // namespace duckdb

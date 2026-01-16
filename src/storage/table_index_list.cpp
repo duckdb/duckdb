@@ -4,6 +4,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
@@ -249,24 +250,37 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
-	vector<IndexStorageInfo> infos;
+	IndexSerializationResult result;
+
+	// Pre-allocate space for bound index IndexStorageInfos.
+	idx_t bound_count = 0;
+	for (auto &entry : index_entries) {
+		if (entry->index->IsBound()) {
+			bound_count++;
+		}
+	}
+	result.bound_infos.resize(bound_count);
+
+	idx_t bound_idx = 0;
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
-		if (!index.IsBound()) {
-			auto storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
-			D_ASSERT(!storage_info.name.empty());
-			infos.push_back(storage_info);
+		if (index.IsBound()) {
+			auto storage_info = index.Cast<BoundIndex>().SerializeToDisk(context, info.options);
+			D_ASSERT(storage_info->IsValid() && !storage_info->name.empty());
+			// Store the bound info to keep it alive, then add a reference to the ordered list
+			result.bound_infos[bound_idx] = std::move(storage_info);
+			result.infos.push_back(*result.bound_infos[bound_idx]);
+			bound_idx++;
 			continue;
 		}
-		// serialize the index to disk
-		auto &bound_index = index.Cast<BoundIndex>();
-		auto storage_info = bound_index.SerializeToDisk(context, info.options);
-		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
-		infos.push_back(storage_info);
+		// For unbound indexes, just get a reference - no ownership transfer
+		auto &storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
+		D_ASSERT(!storage_info.name.empty());
+		result.infos.push_back(storage_info);
 	}
-	return infos;
+	return result;
 }
 
 void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id) {

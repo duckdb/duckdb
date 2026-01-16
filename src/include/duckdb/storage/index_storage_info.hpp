@@ -8,12 +8,18 @@
 
 #pragma once
 
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
+
+class Serializer;
+class Deserializer;
 
 //! Information to serialize a FixedSizeAllocator, which holds the index data
 struct FixedSizeAllocatorInfo {
@@ -40,7 +46,7 @@ struct IndexBufferInfo {
 
 //! Index (de)serialization information.
 struct IndexStorageInfo {
-	IndexStorageInfo() {};
+	IndexStorageInfo() = default;
 	explicit IndexStorageInfo(const string &name) : name(name) {};
 
 	//! The name.
@@ -70,7 +76,7 @@ struct IndexStorageInfo {
 	}
 
 	void Serialize(Serializer &serializer) const;
-	static IndexStorageInfo Deserialize(Deserializer &deserializer);
+	static unique_ptr<IndexStorageInfo> Deserialize(Deserializer &deserializer);
 };
 
 //! Additional index information for tables

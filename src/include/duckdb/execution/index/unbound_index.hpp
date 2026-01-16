@@ -39,11 +39,12 @@ struct ReplayRange {
 // So even though the buffered_inserts has all the insert data from [0,12), ranges gives us the intervals for
 // replaying the index operations in the right order.
 struct BufferedIndexReplays {
+	BufferedIndexReplays();
+	~BufferedIndexReplays();
+
 	vector<ReplayRange> ranges;
 	unique_ptr<ColumnDataCollection> buffered_inserts;
 	unique_ptr<ColumnDataCollection> buffered_deletes;
-
-	BufferedIndexReplays() = default;
 
 	unique_ptr<ColumnDataCollection> &GetBuffer(const BufferedIndexReplay replay_type) {
 		if (replay_type == BufferedIndexReplay::INSERT_ENTRY) {
@@ -62,11 +63,10 @@ private:
 	//! The CreateInfo of the index.
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
-	IndexStorageInfo storage_info;
-
+	//! Holds all information necessary to initialize the storage of an index upon binding.
+	unique_ptr<IndexStorageInfo> storage_info;
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
-	BufferedIndexReplays buffered_replays;
-
+	unique_ptr<BufferedIndexReplays> buffered_replays;
 	//! Maps the column IDs in the buffered replays to a physical table offset.
 	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
 	//! physical table index mapped_column_ids[i].
@@ -74,8 +74,9 @@ private:
 	vector<StorageIndex> mapped_column_ids;
 
 public:
-	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
-	             AttachedDatabase &db);
+	UnboundIndex(unique_ptr<CreateInfo> create_info, unique_ptr<IndexStorageInfo> storage_info,
+	             TableIOManager &table_io_manager, AttachedDatabase &db);
+	~UnboundIndex() override;
 
 public:
 	bool IsBound() const override {
@@ -93,8 +94,9 @@ public:
 	const CreateIndexInfo &GetCreateInfo() const {
 		return create_info->Cast<CreateIndexInfo>();
 	}
+	//! Return a reference to the owned IndexStorageInfo.
 	const IndexStorageInfo &GetStorageInfo() const {
-		return storage_info;
+		return *storage_info;
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
@@ -111,11 +113,12 @@ public:
 	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
 	                 BufferedIndexReplay replay_type);
 	bool HasBufferedReplays() const {
-		return buffered_replays.HasBufferedReplays();
+		return buffered_replays != nullptr;
 	}
 
 	BufferedIndexReplays &GetBufferedReplays() {
-		return buffered_replays;
+		D_ASSERT(buffered_replays);
+		return *buffered_replays;
 	}
 
 	const vector<StorageIndex> &GetMappedColumnIds() const {

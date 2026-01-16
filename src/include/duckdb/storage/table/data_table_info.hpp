@@ -39,7 +39,7 @@ public:
 	TableIndexList &GetIndexes() {
 		return indexes;
 	}
-	const vector<IndexStorageInfo> &GetIndexStorageInfo() const {
+	vector<unique_ptr<IndexStorageInfo>> &GetIndexStorageInfo() {
 		return index_storage_infos;
 	}
 	unique_ptr<StorageLockKey> GetSharedLock() {
@@ -66,7 +66,7 @@ private:
 	//! The physical list of indexes of this table
 	TableIndexList indexes;
 	//! Index storage information of the indexes created by this table
-	vector<IndexStorageInfo> index_storage_infos;
+	vector<unique_ptr<IndexStorageInfo>> index_storage_infos;
 	//! Lock held while checkpointing
 	StorageLock checkpoint_lock;
 	//! The last seen checkpoint while doing a concurrent operation, if any

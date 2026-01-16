@@ -83,7 +83,7 @@
         "default": "case_insensitive_map_t<Value>()"
       }
     ],
-    "pointer_type": "none"
+    "pointer_type": "unique_ptr"
   },
   {
     "class": "BlockPointer",
