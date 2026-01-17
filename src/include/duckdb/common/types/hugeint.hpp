@@ -130,9 +130,14 @@ public:
 	static hugeint_t Abs(hugeint_t n);
 	// comparison operators
 	static bool Equals(const hugeint_t &lhs, const hugeint_t &rhs) {
-		bool lower_equals = lhs.lower == rhs.lower;
-		bool upper_equals = lhs.upper == rhs.upper;
-		return lower_equals && upper_equals;
+		/*
+		 * We realize it is tempting to use integer comparison here instead of `memcmp`.
+		 * However, some compilers (looking at you, GCC) will then do random wrong things.
+		 * Bonus round, they will also cause different behavior under Link-Time Optimization.
+		 * Please, do not follow your temptation.
+		 * Instead, you could spend your time investigating if the methods below are also affected.
+		 */
+		return memcmp(&lhs, &rhs, sizeof(hugeint_t)) == 0;
 	}
 
 	static bool NotEquals(const hugeint_t &lhs, const hugeint_t &rhs) {
