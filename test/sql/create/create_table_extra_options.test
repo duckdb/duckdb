@@ -162,3 +162,31 @@ WITH (
 )
 ----
 <REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# single value options are also supported (default to True)
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location',
+  'table_type',
+  'format'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# single value options are also supported (not quoted)
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location,
+  table_type,
+  format
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
