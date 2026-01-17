@@ -431,7 +431,6 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 	return Value::UBIGINT(config.options.external_threads);
 }
 
-//===----------------------------------------------------------------------===//
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::ResetLocal(ClientContext &context) {
@@ -601,6 +600,23 @@ void ZstdMinStringLengthSetting::ResetGlobal(DatabaseInstance *db, DBConfig &con
 Value ZstdMinStringLengthSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::UBIGINT(config.options.zstd_min_string_length);
+}
+
+//===----------------------------------------------------------------------===//
+// Inspect Range Filter
+//===----------------------------------------------------------------------===//
+void InspectRangeFilterSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.inspect_range_filter = input.GetValue<bool>();
+}
+
+void InspectRangeFilterSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).inspect_range_filter = ClientConfig().inspect_range_filter;
+}
+
+Value InspectRangeFilterSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.inspect_range_filter);
 }
 
 } // namespace duckdb

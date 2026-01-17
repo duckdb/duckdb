@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
 
 #include <math.h>
 
@@ -133,7 +134,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics, context);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
@@ -443,28 +444,111 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 	return stats;
 }
 
+// Calculates cardinality for range filter and updates statistics for following filtering of the same column
+template <typename T>
+static idx_t InspectTableFilterForRangeForType(idx_t cardinality, BaseStatistics &stats, const Value min,
+                                               const Value max, const Value filter, ExpressionType comparison_type) {
+	idx_t return_cardinality = cardinality;
+
+	T min_val = min.GetValue<T>();
+	T max_val = max.GetValue<T>();
+	T filter_val = filter.GetValue<T>();
+	double selectivity = 0.0;
+	auto distinct_count = stats.GetDistinctCount();
+
+	bool is_less_than = (comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+	                     comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+	// Filter right on the border, get cardinality same with equal filter.
+	if ((filter == max && comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) ||
+	    (filter == min && comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO)) {
+		if (distinct_count > 0) {
+			return_cardinality = (cardinality + distinct_count - 1) / distinct_count;
+		}
+	} else if (filter <= min) {
+		return_cardinality = is_less_than ? 0 : cardinality;
+	} else if (filter >= max) {
+		return_cardinality = !is_less_than ? 0 : cardinality;
+	} else {
+		// Calculate as range/(max-min)*cardinality
+		if (max_val == min_val) {
+			return_cardinality = 0;
+		} else if (is_less_than) {
+			selectivity = double(filter_val - min_val) / double(max_val - min_val);
+		} else {
+			selectivity = double(max_val - filter_val) / double(max_val - min_val);
+		}
+		auto lower_bound = distinct_count > 0 ? (cardinality + distinct_count - 1) / distinct_count : 1;
+
+		return_cardinality = std::max(lower_bound, idx_t((double(cardinality) * selectivity)));
+
+		// updates statistics for following filtering of the same column
+		stats.ReduceNumericStats<T>(filter, is_less_than);
+	}
+	return return_cardinality;
+}
+
+static idx_t InspectTableFilterForRange(idx_t cardinality, BaseStatistics &base_stats,
+                                        const ConstantFilter &comparison_filter) {
+	idx_t cardinality_after_filters = cardinality;
+	auto min_value = NumericStats::Min(base_stats);
+	auto max_value = NumericStats::Max(base_stats);
+
+	if (!min_value.IsNull() && !max_value.IsNull() && comparison_filter.constant.type() == min_value.type()) {
+		auto filter_value = comparison_filter.constant;
+
+		switch (filter_value.type().InternalType()) {
+		case PhysicalType::INT32: {
+			return InspectTableFilterForRangeForType<int32_t>(cardinality, base_stats, min_value, max_value,
+			                                                  filter_value, comparison_filter.comparison_type);
+		}
+		case PhysicalType::INT64: {
+			return InspectTableFilterForRangeForType<int64_t>(cardinality, base_stats, min_value, max_value,
+			                                                  filter_value, comparison_filter.comparison_type);
+		}
+		case PhysicalType::FLOAT: {
+			return InspectTableFilterForRangeForType<float>(cardinality, base_stats, min_value, max_value, filter_value,
+			                                                comparison_filter.comparison_type);
+		}
+		case PhysicalType::DOUBLE: {
+			return InspectTableFilterForRangeForType<double>(cardinality, base_stats, min_value, max_value,
+			                                                 filter_value, comparison_filter.comparison_type);
+		}
+		default:
+			// For other types, fall back to default selectivity
+			break;
+		}
+	}
+	return cardinality_after_filters;
+}
+
 idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
-                                                   BaseStatistics &base_stats) {
+                                                   BaseStatistics &base_stats, ClientContext &context) {
 	auto cardinality_after_filters = cardinality;
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
-			cardinality_after_filters = MinValue(
-			    cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter, base_stats));
+			cardinality_after_filters =
+			    MinValue(cardinality_after_filters,
+			             InspectTableFilter(cardinality, column_index, *child_filter, base_stats, context));
 		}
 		return cardinality_after_filters;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &comparison_filter = filter.Cast<ConstantFilter>();
-		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
-			return cardinality_after_filters;
-		}
-		auto column_count = base_stats.GetDistinctCount();
-		// column_count = 0 when there is no column count (i.e parquet scans)
-		if (column_count > 0) {
-			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+
+		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
+			auto column_count = base_stats.GetDistinctCount();
+			// column_count = 0 when there is no column count (i.e parquet scans)
+			if (column_count > 0) {
+				// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
+				cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+			}
+		} else if (ClientConfig::GetConfig(context).GetSetting<InspectRangeFilterSetting>(context) &&
+		           (comparison_filter.comparison_type >= ExpressionType::COMPARE_LESSTHAN &&
+		            comparison_filter.comparison_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) &&
+		           NumericStats::HasMinMax(base_stats)) {
+			cardinality_after_filters = InspectTableFilterForRange(cardinality, base_stats, comparison_filter);
 		}
 		return cardinality_after_filters;
 	}

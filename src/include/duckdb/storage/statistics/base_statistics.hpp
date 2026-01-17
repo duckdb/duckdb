@@ -132,6 +132,21 @@ public:
 		NumericStats::Update(stats_union.numeric_data, new_value);
 	}
 
+	template <class T>
+	void ReduceNumericStats(Value new_v, bool is_left) {
+		T new_value = new_v.GetValueUnsafe<T>();
+		D_ASSERT(GetStatsType() == StatisticsType::NUMERIC_STATS);
+		if (new_value <= stats_union.numeric_data.min.GetReferenceUnsafe<T>() ||
+		    new_value >= stats_union.numeric_data.max.GetReferenceUnsafe<T>()) {
+			return;
+		}
+		if (is_left) {
+			stats_union.numeric_data.max.GetReferenceUnsafe<T>() = new_value;
+		} else {
+			stats_union.numeric_data.min.GetReferenceUnsafe<T>() = new_value;
+		}
+	}
+
 private:
 	BaseStatistics();
 	explicit BaseStatistics(LogicalType type);

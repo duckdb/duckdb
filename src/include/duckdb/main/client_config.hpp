@@ -117,6 +117,9 @@ struct ClientConfig {
 	//! (empty = output to the DuckDB logger)
 	string http_logging_output;
 
+	//! Inspect range filter when calculate cardinality
+	bool inspect_range_filter = false;
+
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
