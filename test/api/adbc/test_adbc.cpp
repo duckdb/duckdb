@@ -64,7 +64,12 @@ public:
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
 
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
-		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
+		// Create a separate connection for arrow_scan to avoid deadlock.
+		// When using streaming execution, the original connection's ClientContext is locked
+		// while the stream is being consumed. Using the same connection for arrow_scan would
+		// cause a deadlock because arrow_scan also needs to lock the ClientContext.
+		Connection separate_conn(*cconn->context->db);
+		return ArrowTestHelper::RunArrowComparison(separate_conn, query, arrow_stream);
 	}
 
 	unique_ptr<MaterializedQueryResult> Query(const string &query) {
