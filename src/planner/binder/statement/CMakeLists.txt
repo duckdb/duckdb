@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   bind_attach.cpp
   bind_call.cpp
+  bind_cluster.cpp
   bind_copy.cpp
   bind_copy_database.cpp
   bind_create.cpp
