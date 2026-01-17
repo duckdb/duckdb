@@ -33,6 +33,14 @@ void StoredDatabasePath::OnDetach() {
 //===--------------------------------------------------------------------===//
 AttachOptions::AttachOptions(const DBConfigOptions &options)
     : access_mode(options.access_mode), db_type(options.database_type) {
+	// Copy encryption key if provided
+	if (!options.encryption_key.empty()) {
+		this->options["encryption_key"] = Value(options.encryption_key);
+	}
+	// Copy encryption cipher if provided
+	if (!options.encryption_cipher.empty()) {
+		this->options["encryption_cipher"] = Value(options.encryption_cipher);
+	}
 }
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
