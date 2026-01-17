@@ -1273,7 +1273,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			}
 			// Destroy any previous result before overwriting to avoid leaks
 			duckdb_destroy_result(&stream_wrapper->result);
-			auto res = duckdb_execute_prepared(wrapper->statement, &stream_wrapper->result);
+			auto res = duckdb_execute_prepared_streaming(wrapper->statement, &stream_wrapper->result);
 			if (res != DuckDBSuccess) {
 				auto err = duckdb_result_error(&stream_wrapper->result);
 				SetError(error, err);
@@ -1286,7 +1286,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			stream.get_next(&stream, &arrow_array_wrapper.arrow_array);
 		}
 	} else {
-		auto res = duckdb_execute_prepared(wrapper->statement, &stream_wrapper->result);
+		auto res = duckdb_execute_prepared_streaming(wrapper->statement, &stream_wrapper->result);
 		if (res != DuckDBSuccess) {
 			auto err = duckdb_result_error(&stream_wrapper->result);
 			SetError(error, err);
