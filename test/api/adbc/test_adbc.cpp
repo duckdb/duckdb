@@ -7,6 +7,10 @@
 #include <iostream>
 #include <cstdio>
 #include <fstream>
+#include <cstring>
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 namespace duckdb {
 
@@ -60,7 +64,12 @@ public:
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
 
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
-		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
+		// Create a separate connection for arrow_scan to avoid deadlock.
+		// When using streaming execution, the original connection's ClientContext is locked
+		// while the stream is being consumed. Using the same connection for arrow_scan would
+		// cause a deadlock because arrow_scan also needs to lock the ClientContext.
+		Connection separate_conn(*cconn->context->db);
+		return ArrowTestHelper::RunArrowComparison(separate_conn, query, arrow_stream);
 	}
 
 	unique_ptr<MaterializedQueryResult> Query(const string &query) {
@@ -138,6 +147,152 @@ TEST_CASE("ADBC - non-empty query without actual statements", "[adbc]") {
 	ADBCTestDatabase db;
 
 	REQUIRE(db.QueryAndCheck("--"));
+}
+
+TEST_CASE("ADBC - Cancel connection while consuming stream", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement adbc_statement;
+	ArrowArrayStream stream;
+	stream.release = nullptr;
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT i FROM range(100000000) t(i)", &db.adbc_error)));
+	int64_t rows_affected = 0;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &db.adbc_error)));
+	// The stream must remain valid even after releasing the statement.
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+
+	std::atomic<bool> got_chunk {false};
+	std::atomic<bool> done {false};
+	std::atomic<int> stream_status {0};
+	std::string last_error;
+
+	std::thread consumer([&]() {
+		ArrowArray array;
+		std::memset(&array, 0, sizeof(array));
+		while (true) {
+			int rc = stream.get_next(&stream, &array);
+			if (rc != 0) {
+				auto err = stream.get_last_error(&stream);
+				if (err) {
+					last_error = err;
+				}
+				stream_status.store(rc);
+				break;
+			}
+			if (!array.release) {
+				stream_status.store(0);
+				break;
+			}
+			got_chunk.store(true);
+			array.release(&array);
+			std::memset(&array, 0, sizeof(array));
+		}
+		done.store(true);
+	});
+
+	// Wait until we started consuming at least one chunk.
+	for (int i = 0; i < 200 && !got_chunk.load(); i++) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	REQUIRE(got_chunk.load());
+
+	// Cancel from another thread.
+	REQUIRE(AdbcConnectionCancel(&db.adbc_connection, &db.adbc_error) == ADBC_STATUS_OK);
+
+	// Wait for the consumer to observe the cancellation.
+	for (int i = 0; i < 200 && !done.load(); i++) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	consumer.join();
+
+	REQUIRE(stream_status.load() != 0);
+	REQUIRE(last_error.find("Interrupted!") != std::string::npos);
+
+	if (stream.release) {
+		stream.release(&stream);
+	}
+
+	// After the stream is released, cancel on idle connection still succeeds.
+	REQUIRE(AdbcConnectionCancel(&db.adbc_connection, &db.adbc_error) == ADBC_STATUS_OK);
+
+	// Connection should be reusable after cancel.
+	REQUIRE(db.QueryAndCheck("SELECT 1"));
+}
+
+TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement adbc_statement;
+	ArrowArrayStream stream;
+	stream.release = nullptr;
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT i FROM range(100000000) t(i)", &db.adbc_error)));
+	int64_t rows_affected = 0;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, &rows_affected, &db.adbc_error)));
+
+	std::atomic<bool> got_chunk {false};
+	std::atomic<bool> done {false};
+	std::atomic<int> stream_status {0};
+	std::string last_error;
+
+	std::thread consumer([&]() {
+		ArrowArray array;
+		std::memset(&array, 0, sizeof(array));
+		while (true) {
+			int rc = stream.get_next(&stream, &array);
+			if (rc != 0) {
+				auto err = stream.get_last_error(&stream);
+				if (err) {
+					last_error = err;
+				}
+				stream_status.store(rc);
+				break;
+			}
+			if (!array.release) {
+				stream_status.store(0);
+				break;
+			}
+			got_chunk.store(true);
+			array.release(&array);
+			std::memset(&array, 0, sizeof(array));
+		}
+		done.store(true);
+	});
+
+	for (int i = 0; i < 200 && !got_chunk.load(); i++) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	REQUIRE(got_chunk.load());
+
+	REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_OK);
+
+	for (int i = 0; i < 200 && !done.load(); i++) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	consumer.join();
+
+	REQUIRE(stream_status.load() != 0);
+	REQUIRE(last_error.find("Interrupted!") != std::string::npos);
+
+	if (stream.release) {
+		stream.release(&stream);
+	}
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+
+	// After completion, cancelling again should fail.
+	REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_INVALID_ARGUMENT);
+
+	// Connection should be reusable after cancel.
+	REQUIRE(db.QueryAndCheck("SELECT 1"));
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
@@ -661,11 +816,12 @@ TEST_CASE("Error Release", "[adbc]") {
 	// Let's release the stream
 	arrow_stream.release(&arrow_stream);
 
-	// Release pointer is null
+	// Per Arrow C Data Interface spec, after release all function pointers are set to NULL
 	REQUIRE(!arrow_stream.release);
-
-	// Can't get data from release stream
-	REQUIRE((arrow_stream.get_next(&arrow_stream, &arrow_array) != 0));
+	REQUIRE(!arrow_stream.get_next);
+	REQUIRE(!arrow_stream.get_schema);
+	REQUIRE(!arrow_stream.get_last_error);
+	REQUIRE(!arrow_stream.private_data);
 
 	// Release ADBC Statement
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
