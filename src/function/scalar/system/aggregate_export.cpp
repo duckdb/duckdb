@@ -260,29 +260,42 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
+	auto state_ptrs = FlatVector::GetData<data_ptr_t>(state);
 
-	auto aggregate_state_export_callback = bind_data.aggregate->function.GetAggregateStateExportCallback();
 	auto aggregate_state_type = bind_data.aggregate->function.GetStateType();
-	if (aggregate_state_export_callback != nullptr && aggregate_state_type.id() != LogicalTypeId::INVALID) {
-		// if we opt-in to the export, we also have to know how to import
-		// D_ASSERT(bind_data.aggregate->function.GetAggregateStateImportCallback());
-
+	if (aggregate_state_type.id() == LogicalTypeId::STRUCT) {
 		result.Flatten(count);
-		aggregate_state_export_callback(
-			state,
-			aggr_input_data,
-			result,
-			count,
-			offset
-		);
+
+		auto &children = StructVector::GetEntries(result);
+		auto &struct_fields = StructType::GetChildTypes(aggregate_state_type);
+
+		idx_t offset_in_state = 0;
+		for (idx_t field_idx = 0; field_idx < struct_fields.size(); field_idx++) {
+			auto &field_type = struct_fields[field_idx].second;
+			auto physical = field_type.InternalType();
+			auto field_size = GetTypeIdSize(physical);
+
+			idx_t alignment = MinValue<idx_t>(field_size, 8);
+			offset_in_state = AlignValue(offset_in_state, alignment);
+
+			auto &child_vector = *children[field_idx];
+			child_vector.Flatten(count);
+
+			auto data = FlatVector::GetData(child_vector);
+			for (idx_t row = 0; row < count; row++) {
+				auto src = state_ptrs[row] + offset_in_state;
+				memcpy(data + row * field_size, src, field_size);
+			}
+
+			offset_in_state += field_size;
+		}
 		return;
 	}
 
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 	auto blob_ptr = FlatVector::GetData<string_t>(result);
-	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto data_ptr = addresses_ptr[row_idx];
+		auto data_ptr = state_ptrs[row_idx];
 		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
 	}
 }
