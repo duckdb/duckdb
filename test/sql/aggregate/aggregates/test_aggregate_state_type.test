@@ -90,3 +90,5 @@ true
 # Test with DECIMAL type
 query T
 SELECT typeof(avg(1.2) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DECIMAL(2,1))::DOUBLE, STRUCT(count UBIGINT, "value" DECIMAL(2,1))>';
+----
+true
