@@ -289,7 +289,8 @@ TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
 
 	// After completion, cancelling again should fail.
-	REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_INVALID_ARGUMENT);
+	// Driver manager returns INVALID_STATE when statement->private_driver is nullptr (set by StatementRelease).
+	REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_INVALID_STATE);
 
 	// Connection should be reusable after cancel.
 	REQUIRE(db.QueryAndCheck("SELECT 1"));
