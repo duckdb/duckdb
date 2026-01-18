@@ -88,26 +88,64 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 	D_ASSERT(input.data.size() == 1);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
-	auto aligned_state_size = AlignValue(bind_data.state_size);
 
+	auto &agg_state_info = AggregateStateType::GetStateType(input.data[0].GetType());
+	const bool is_struct_state_layout = agg_state_info.state_type.id() == LogicalTypeId::STRUCT;
+
+	const auto aligned_state_size = AlignValue(bind_data.state_size);
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
 	UnifiedVectorFormat state_data;
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
-	for (idx_t i = 0; i < input.size(); i++) {
-		auto state_idx = state_data.sel->get_index(i);
-		auto state_entry = UnifiedVectorFormat::GetData<string_t>(state_data) + state_idx;
-		auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
 
-		if (state_data.validity.RowIsValid(state_idx)) {
-			D_ASSERT(state_entry->GetSize() == bind_data.state_size);
-			memcpy((void *)target_ptr, state_entry->GetData(), bind_data.state_size);
-		} else {
-			// create a dummy state because finalize does not understand NULLs in its input
-			// we put the NULL back in explicitly below
-			bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
+	if (!is_struct_state_layout) {
+		for (idx_t i = 0; i < input.size(); i++) {
+			auto state_idx = state_data.sel->get_index(i);
+			auto state_entry = UnifiedVectorFormat::GetData<string_t>(state_data) + state_idx;
+			auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
+
+			if (state_data.validity.RowIsValid(state_idx)) {
+				D_ASSERT(state_entry->GetSize() == bind_data.state_size);
+				memcpy((void *)target_ptr, state_entry->GetData(), bind_data.state_size);
+			} else {
+				// create a dummy state because finalize does not understand NULLs in its input
+				// we put the NULL back in explicitly below
+				bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
+			}
+			state_vec_ptr[i] = data_ptr_cast(target_ptr);
 		}
-		state_vec_ptr[i] = data_ptr_cast(target_ptr);
+	} else {
+		input.data[0].Flatten(input.size());
+		auto &children = StructVector::GetEntries(input.data[0]);
+		auto &fields = StructType::GetChildTypes(agg_state_info.state_type);
+
+		for (idx_t i = 0; i < input.size(); i++) {
+			auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
+
+			if (!FlatVector::Validity(input.data[0]).RowIsValid(i)) {
+				bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
+				state_vec_ptr[i] = data_ptr_cast(target_ptr);
+				continue;
+			}
+
+			idx_t offset = 0;
+			for (idx_t f = 0; f < fields.size(); f++) {
+				auto &field_type = fields[f].second;
+				auto physical = field_type.InternalType();
+				auto field_size = GetTypeIdSize(physical);
+
+				const idx_t alignment = MinValue<idx_t>(field_size, 8);
+				offset = AlignValue(offset, alignment);
+
+				auto &child = *children[f];
+				child.Flatten(input.size());
+				auto data = data_ptr_cast(FlatVector::GetData(child));
+
+				memcpy(target_ptr + offset, data + i * field_size, field_size);
+				offset += field_size;
+			}
+			state_vec_ptr[i] = data_ptr_cast(target_ptr);
+		}
 	}
 
 	AggregateInputData aggr_input_data(nullptr, local_state.allocator);
