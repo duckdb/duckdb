@@ -120,7 +120,8 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.4.2", 6},
 	{"v1.4.3", 6},
 	{"v1.5.0", 7},
-	{"latest", 7},
+	{"v1.6.0", 8},
+	{"latest", 8},
 	{nullptr, 0}
 };
 // END OF SERIALIZATION VERSION INFO
