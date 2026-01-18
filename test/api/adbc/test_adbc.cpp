@@ -57,6 +57,9 @@ public:
 		}
 		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+		if (adbc_error.release) {
+			adbc_error.release(&adbc_error);
+		}
 	}
 
 	bool QueryAndCheck(const string &query) {
