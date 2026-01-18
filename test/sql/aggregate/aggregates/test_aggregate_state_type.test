@@ -61,3 +61,38 @@ query T
 SELECT typeof(corr(1.0::DOUBLE, 2.0::DOUBLE) EXPORT_STATE);
 ----
 AGGREGATE_STATE<corr(DOUBLE, DOUBLE)::DOUBLE>
+
+# Test with interval type
+query T
+SELECT typeof(avg(INTERVAL '1 day' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(INTERVAL)::INTERVAL, STRUCT(count UBIGINT, "value" INTERVAL)>';
+----
+true
+
+# Test with TIMESTAMP type
+query T
+SELECT typeof(avg(TIMESTAMP '2020-01-01 00:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP)::TIMESTAMP, STRUCT(count UBIGINT, "value" TIMESTAMP)>';
+----
+true
+
+# Test with TIMESTAMP WITH TIME ZONE type
+query T
+SELECT typeof(avg(TIMESTAMPTZ '2020-01-01 00:00:00+00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP WITH TIME ZONE)::TIMESTAMP WITH TIME ZONE, STRUCT(count UBIGINT, "value" TIMESTAMP WITH TIME ZONE)>';
+----
+true
+
+# Test with TIME type
+query T
+SELECT typeof(avg(TIME '12:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIME)::TIME, STRUCT(count UBIGINT, "value" TIME)>';
+----
+true
+
+# Test with TIME WITH TIME ZONE type
+query T
+SELECT typeof(avg(TIMETZ '12:00:00+00' ) EXPORT_STATE)
+ = 'AGGREGATE_STATE<avg(TIME WITH TIME ZONE)::TIME WITH TIME ZONE, STRUCT(count UBIGINT, "value" TIME WITH TIME ZONE)>';
+----
+true
+
+# Test with DECIMAL type
+query T
+SELECT typeof(avg(1.2) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DECIMAL(2,1))::DOUBLE, STRUCT(count UBIGINT, "value" DECIMAL(2,1))>';
