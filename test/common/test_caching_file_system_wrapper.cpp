@@ -469,4 +469,29 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 	}
 }
 
+// Testing scenario: read end offset exceeds file size, caching filesystem is expected to truncate.
+TEST_CASE("Request over-sized range read", "[file_system][caching]") {
+	const string test_content = "File used for over-sized read testing";
+	TestFileGuard test_file("test_oversized_read.txt", test_content);
+
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
+	auto &vfs = opener_filesystem.GetFileSystem();
+	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
+
+	// Shared variable both all caching modes.
+	string buffer(TEST_BUFFER_SIZE, '\0');
+	const auto &external_file_cache = db_instance.GetExternalFileCache();
+
+	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
+	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
+
+	// Perform read operation and check correctness.
+	auto handle = opener_filesystem.OpenFile(test_file.GetPath(), flags);
+	const idx_t actual_read = handle->Read(QueryContext(), &buffer[0], test_content.length() + 1);
+	REQUIRE(actual_read == test_content.length());
+	REQUIRE(buffer.substr(0, test_content.length()) == test_content);
+}
+
 } // namespace duckdb
