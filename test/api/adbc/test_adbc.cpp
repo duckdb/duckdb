@@ -983,9 +983,13 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	{
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+		// Create a separate connection for arrow_scan to avoid deadlock.
+		// The streaming result from AdbcConnectionGetInfo holds the ClientContext lock,
+		// and using the same connection for arrow_scan would cause a deadlock.
+		Connection separate_conn(*cconn->context->db);
 
 		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
-		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto rel = separate_conn.TableFunction("arrow_scan", params);
 		auto res = rel->Project("info_name")->Execute();
 		REQUIRE(!res->HasError());
 		auto &mat = res->Cast<MaterializedQueryResult>();
@@ -1009,9 +1013,11 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+		// Create a separate connection for arrow_scan to avoid deadlock.
+		Connection separate_conn(*cconn->context->db);
 
 		auto params = ArrowTestHelper::ConstructArrowScan(version_stream);
-		auto rel = cconn->TableFunction("arrow_scan", params);
+		auto rel = separate_conn.TableFunction("arrow_scan", params);
 		auto res = rel->Project("info_name, info_value.int64_value AS adbc_version")->Execute();
 		REQUIRE(!res->HasError());
 		auto &mat = res->Cast<MaterializedQueryResult>();
