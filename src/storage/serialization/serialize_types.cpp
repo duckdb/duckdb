@@ -77,22 +77,16 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
-	                                                         state_type.bound_argument_types);
-	if (serializer.ShouldSerialize(7)) {
-		serializer.WritePropertyWithDefault<LogicalType>(203, "state_type", state_type.state_type,
-		                                                 LogicalTypeId::INVALID);
-	}
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+	serializer.WritePropertyWithDefault<LogicalType>(203, "state_type", state_type.state_type, LogicalTypeId::INVALID);
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
-	                                                          result->state_type.bound_argument_types);
-	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(203, "state_type", result->state_type.state_type,
-	                                                          LogicalTypeId::INVALID);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
+	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(203, "state_type", result->state_type.state_type, LogicalTypeId::INVALID);
 	return std::move(result);
 }
 
