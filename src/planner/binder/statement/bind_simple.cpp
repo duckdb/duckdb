@@ -80,6 +80,10 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 	if (stmt.info->type == AlterType::ALTER_TABLE) {
 		auto &table_info = stmt.info->Cast<AlterTableInfo>();
 		switch (table_info.alter_table_type) {
+		case AlterTableType::ADD_COLUMN: {
+			auto &add_info = table_info.Cast<AddColumnInfo>();
+			binder.BindLogicalType(add_info.new_column.TypeMutable());
+		} break;
 		case AlterTableType::ADD_FIELD: {
 			auto &add_info = table_info.Cast<AddFieldInfo>();
 			binder.BindLogicalType(add_info.new_field.TypeMutable());
