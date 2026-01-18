@@ -78,7 +78,9 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
-	serializer.WriteProperty<LogicalType>(203, "state_type", state_type.state_type);
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<LogicalType>(203, "state_type", state_type.state_type, LogicalTypeId::INVALID);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -86,7 +88,7 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
-	deserializer.ReadProperty<LogicalType>(203, "state_type", result->state_type.state_type);
+	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(203, "state_type", result->state_type.state_type, LogicalTypeId::INVALID);
 	return std::move(result);
 }
 

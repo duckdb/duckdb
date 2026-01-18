@@ -140,6 +140,14 @@
         "name": "bound_argument_types",
         "type": "vector<LogicalType>",
         "property": "state_type.bound_argument_types"
+      },
+      {
+        "id": 203,
+        "name": "state_type",
+        "type": "LogicalType",
+        "property": "state_type.state_type",
+        "default": "LogicalTypeId::INVALID",
+        "version": "v1.5.0"
       }
     ]
   },
