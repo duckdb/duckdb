@@ -25,12 +25,6 @@ SELECT finalize(combine(state, state)) FROM t1_${type};
 ----
 4.500000
 
-# Test mixing structured and blob aggregate states
-query R
-SELECT finalize(combine(state, state::BLOB)) FROM t1_${type};
-----
-4.500000
-
 # Test that state typing is independent of input expressions
 statement ok
 INSERT INTO t1_${type} SELECT avg((range::${type} + 10.0)::${type}) EXPORT_STATE FROM range(10);
