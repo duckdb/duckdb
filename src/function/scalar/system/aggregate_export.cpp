@@ -37,6 +37,72 @@ struct ExportAggregateBindData : public FunctionData {
 	}
 };
 
+struct AggregateStateLayout {
+	AggregateStateLayout(const LogicalType &type, idx_t state_size) : state_size(state_size) {
+		auto &info = AggregateStateType::GetStateType(type);
+		is_struct = info.state_type.id() == LogicalTypeId::STRUCT;
+		if (is_struct) {
+			child_types = &StructType::GetChildTypes(info.state_type);
+		}
+	}
+
+	// Reconstruct a packed binary state from the vector representation
+	void Load(Vector &vec, const UnifiedVectorFormat &state_data, idx_t row, data_ptr_t dest) {
+		if (!is_struct) {
+			auto idx = state_data.sel->get_index(row);
+			auto &blob = UnifiedVectorFormat::GetData<string_t>(state_data)[idx];
+			if (blob.GetSize() != state_size) {
+				throw IOException("Aggregate state size mismatch, expect %llu, got %llu", state_size, blob.GetSize());
+			}
+			memcpy(dest, blob.GetData(), state_size);
+		} else {
+			auto &children = StructVector::GetEntries(vec);
+			D_ASSERT(child_types->size() == children.size());
+			idx_t offset = 0;
+			for (idx_t f = 0; f < child_types->size(); f++) {
+				auto &field_type = (*child_types)[f].second;
+				auto physical = field_type.InternalType();
+				auto field_size = GetTypeIdSize(physical);
+				idx_t alignment = MinValue<idx_t>(field_size, 8);
+				offset = AlignValue(offset, alignment);
+
+				auto &child = *children[f];
+				auto data = data_ptr_cast(FlatVector::GetData(child));
+				memcpy(dest + offset, data + row * field_size, field_size);
+				offset += field_size;
+			}
+		}
+	}
+
+	// Serializes a packed binary state back into a `Vector` format
+	void Store(Vector &result, idx_t row, data_ptr_t src) const {
+		if (!is_struct) {
+			auto result_ptr = FlatVector::GetData<string_t>(result);
+			result_ptr[row] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(src), state_size);
+		} else {
+			auto &children = StructVector::GetEntries(result);
+			D_ASSERT(child_types->size() == children.size());
+			idx_t offset = 0;
+			for (idx_t f = 0; f < child_types->size(); f++) {
+				auto &field_type = (*child_types)[f].second;
+				auto physical = field_type.InternalType();
+				auto field_size = GetTypeIdSize(physical);
+				idx_t alignment = MinValue<idx_t>(field_size, 8);
+				offset = AlignValue(offset, alignment);
+
+				auto &child = *children[f];
+				auto data = data_ptr_cast(FlatVector::GetData(child));
+				memcpy(data + row * field_size, src + offset, field_size);
+				offset += field_size;
+			}
+		}
+	}
+
+	bool is_struct;
+	idx_t state_size;
+	const child_list_t<LogicalType> *child_types = nullptr;
+};
+
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
@@ -89,63 +155,30 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	D_ASSERT(input.data.size() == 1);
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 
-	auto &agg_state_info = AggregateStateType::GetStateType(input.data[0].GetType());
-	const bool is_struct_state_layout = agg_state_info.state_type.id() == LogicalTypeId::STRUCT;
+	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
 
 	const auto aligned_state_size = AlignValue(bind_data.state_size);
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
+	if (layout.is_struct) {
+		input.data[0].Flatten(input.size());
+	}
+
 	UnifiedVectorFormat state_data;
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 
-	if (!is_struct_state_layout) {
-		for (idx_t i = 0; i < input.size(); i++) {
-			auto state_idx = state_data.sel->get_index(i);
-			auto state_entry = UnifiedVectorFormat::GetData<string_t>(state_data) + state_idx;
-			auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto target_ptr = local_state.state_buffer.get() + aligned_state_size * i;
+		auto state_idx = state_data.sel->get_index(i);
 
-			if (state_data.validity.RowIsValid(state_idx)) {
-				D_ASSERT(state_entry->GetSize() == bind_data.state_size);
-				memcpy((void *)target_ptr, state_entry->GetData(), bind_data.state_size);
-			} else {
-				// create a dummy state because finalize does not understand NULLs in its input
-				// we put the NULL back in explicitly below
-				bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
-			}
-			state_vec_ptr[i] = data_ptr_cast(target_ptr);
+		if (state_data.validity.RowIsValid(state_idx)) {
+			layout.Load(input.data[0], state_data, i, target_ptr);
+		} else {
+			// create a dummy state because finalize does not understand NULLs in its input
+			// we put the NULL back in explicitly below
+			bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
 		}
-	} else {
-		input.data[0].Flatten(input.size());
-		auto &children = StructVector::GetEntries(input.data[0]);
-		auto &fields = StructType::GetChildTypes(agg_state_info.state_type);
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
-
-			if (!FlatVector::Validity(input.data[0]).RowIsValid(i)) {
-				bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
-				state_vec_ptr[i] = data_ptr_cast(target_ptr);
-				continue;
-			}
-
-			idx_t offset = 0;
-			for (idx_t f = 0; f < fields.size(); f++) {
-				auto &field_type = fields[f].second;
-				auto physical = field_type.InternalType();
-				auto field_size = GetTypeIdSize(physical);
-
-				const idx_t alignment = MinValue<idx_t>(field_size, 8);
-				offset = AlignValue(offset, alignment);
-
-				auto &child = *children[f];
-				child.Flatten(input.size());
-				auto data = data_ptr_cast(FlatVector::GetData(child));
-
-				memcpy(target_ptr + offset, data + i * field_size, field_size);
-				offset += field_size;
-			}
-			state_vec_ptr[i] = data_ptr_cast(target_ptr);
-		}
+		state_vec_ptr[i] = data_ptr_cast(target_ptr);
 	}
 
 	AggregateInputData aggr_input_data(nullptr, local_state.allocator);
@@ -170,55 +203,50 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 	D_ASSERT(input.data[0].GetType() == result.GetType());
 
+	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
+
 	if (input.data[0].GetType().InternalType() != input.data[1].GetType().InternalType()) {
 		throw IOException("Aggregate state combine type mismatch, expect %s, got %s",
 		                  input.data[0].GetType().ToString(), input.data[1].GetType().ToString());
+	}
+
+	if (layout.is_struct) {
+		input.data[0].Flatten(input.size());
+		input.data[1].Flatten(input.size());
+		result.Flatten(input.size());
 	}
 
 	UnifiedVectorFormat state0_data, state1_data;
 	input.data[0].ToUnifiedFormat(input.size(), state0_data);
 	input.data[1].ToUnifiedFormat(input.size(), state1_data);
 
-	auto result_ptr = FlatVector::GetData<string_t>(result);
-
 	for (idx_t i = 0; i < input.size(); i++) {
-		auto state0_idx = state0_data.sel->get_index(i);
-		auto state1_idx = state1_data.sel->get_index(i);
+		const bool is_null0 = !state0_data.validity.RowIsValid(state0_data.sel->get_index(i));
+		const bool is_null1 = !state1_data.validity.RowIsValid(state1_data.sel->get_index(i));
 
-		auto &state0 = UnifiedVectorFormat::GetData<string_t>(state0_data)[state0_idx];
-		auto &state1 = UnifiedVectorFormat::GetData<string_t>(state1_data)[state1_idx];
-
-		// if both are NULL, we return NULL. If either of them is not, the result is that one
-		if (!state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
+		if (is_null0 && is_null1) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
-		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] =
-			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(state0.GetData()), bind_data.state_size);
-			continue;
-		}
-		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] =
-			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(state1.GetData()), bind_data.state_size);
+
+		if (is_null0 || is_null1) {
+			auto &non_null_vec = is_null0 ? input.data[1] : input.data[0];
+			auto &non_null_state_data = is_null0 ? state1_data : state0_data;
+
+			layout.Load(non_null_vec, non_null_state_data, i, local_state.state_buffer1.get());
+			layout.Store(result, i, local_state.state_buffer1.get());
 			continue;
 		}
 
-		// we actually have to combine
-		if (state0.GetSize() != bind_data.state_size || state1.GetSize() != bind_data.state_size) {
-			throw IOException("Aggregate state size mismatch, expect %llu, got %llu and %llu", bind_data.state_size,
-			                  state0.GetSize(), state1.GetSize());
-		}
-
-		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
-		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
+		// Both are non-NULL, combine them
+		layout.Load(input.data[0], state0_data, i, local_state.state_buffer0.get());
+		layout.Load(input.data[1], state1_data, i, local_state.state_buffer1.get());
 
 		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 		bind_data.aggr.GetStateCombineCallback()(local_state.state_vector0, local_state.state_vector1, aggr_input_data,
 		                                         1);
 
-		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),
-		                                              bind_data.state_size);
+		layout.Store(result, i, local_state.state_buffer1.get());
 	}
 }
 
