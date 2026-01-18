@@ -31,7 +31,8 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	D_ASSERT(LogicalTypeId::STRUCT == child_type.id() ||
+	         (child_type.id() == LogicalTypeId::AGGREGATE_STATE && child_type.InternalType() == PhysicalType::STRUCT));
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
@@ -152,6 +153,11 @@ ScalarFunction GetKeyExtractFunction() {
 	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
+ScalarFunction GetKeyExtractAggregateStateFunction() {
+	return ScalarFunction("struct_extract", {LogicalTypeId::AGGREGATE_STATE, LogicalType::VARCHAR}, LogicalType::ANY,
+	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
+}
+
 ScalarFunction GetIndexExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBindIndex);
@@ -167,6 +173,7 @@ ScalarFunctionSet StructExtractFun::GetFunctions() {
 	ScalarFunctionSet struct_extract_set("struct_extract");
 	struct_extract_set.AddFunction(GetKeyExtractFunction());
 	struct_extract_set.AddFunction(GetIndexExtractFunction());
+	struct_extract_set.AddFunction(GetKeyExtractAggregateStateFunction());
 	return struct_extract_set;
 }
 
