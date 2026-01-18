@@ -79,7 +79,7 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
 	                                                         state_type.bound_argument_types);
-	if (serializer.ShouldSerialize(8)) {
+	if (serializer.ShouldSerialize(7)) {
 		serializer.WriteProperty<LogicalType>(203, "state_type", state_type.state_type);
 	}
 }
