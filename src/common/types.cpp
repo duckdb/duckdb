@@ -1425,6 +1425,33 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
+void LogicalType::Serialize(Serializer &serializer) const {
+	if (id_ != LogicalTypeId::UNBOUND || serializer.ShouldSerialize(7)) {
+		serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
+		serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
+	} else {
+		// This is a UNBOUND type and we are writing to older storage.
+		// 1. try to default-bind into a concrete logical type, and serialize that
+		// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
+		//    write itself as an old-style USER type.
+		try {
+			auto bound_type = UnboundType::TryDefaultBind(*this);
+			bound_type.Serialize(serializer);
+		} catch (...) {
+			// Ignore errors, just try to write as a USER type instead
+			serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
+			serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
+		}
+	}
+}
+
+LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
+	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
+	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+	LogicalType result(id, std::move(type_info));
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//

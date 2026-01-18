@@ -268,34 +268,35 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 
 	if (serializer.ShouldSerialize(7)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
-	} else {
-		// Try to write this as an old "USER" type, if possible
-		if (expr->type != ExpressionType::TYPE) {
+		return;
+	}
+
+	// Try to write this as an old "USER" type, if possible
+	if (expr->type != ExpressionType::TYPE) {
+		throw SerializationException(
+		    "Cannot serialize non-type type expression when targeting serialization version %s",
+		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+	}
+
+	auto &type_expr = expr->Cast<TypeExpression>();
+	serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName());
+	serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog());
+	serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema());
+
+	// Try to write the user type mods too
+	vector<Value> user_type_mods;
+	for (auto &param : type_expr.GetChildren()) {
+		if (param->type != ExpressionType::VALUE_CONSTANT) {
 			throw SerializationException(
-			    "Cannot serialize non-type type expression when targeting serialization version %s",
+			    "Cannot serialize non-constant type parameter when targeting serialization version %s",
 			    serializer.GetOptions().serialization_compatibility.duckdb_version);
 		}
 
-		auto &type_expr = expr->Cast<TypeExpression>();
-		serializer.WritePropertyWithDefault<string>(200, "name", type_expr.GetTypeName());
-		serializer.WritePropertyWithDefault<string>(201, "catalog", type_expr.GetCatalog());
-		serializer.WritePropertyWithDefault<string>(202, "schema", type_expr.GetSchema());
-
-		// Try to write the user type mods too
-		vector<Value> user_type_mods;
-		for (auto &param : type_expr.GetChildren()) {
-			if (param->type != ExpressionType::VALUE_CONSTANT) {
-				throw SerializationException(
-				    "Cannot serialize non-constant type parameter when targeting serialization version %s",
-				    serializer.GetOptions().serialization_compatibility.duckdb_version);
-			}
-
-			auto &const_expr = param->Cast<ConstantExpression>();
-			user_type_mods.push_back(const_expr.value);
-		}
-
-		serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
+		auto &const_expr = param->Cast<ConstantExpression>();
+		user_type_mods.push_back(const_expr.value);
 	}
+
+	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
 }
 
 shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {

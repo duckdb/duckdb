@@ -1,28 +1,5 @@
 [
   {
-    "class": "LogicalType",
-    "includes": [
-      "duckdb/common/types.hpp",
-      "duckdb/common/extra_type_info.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "id",
-        "type": "LogicalTypeId",
-        "serialize_property": "id_"
-      },
-      {
-        "id": 101,
-        "name": "type_info",
-        "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_"
-      }
-    ],
-    "pointer_type": "none",
-    "constructor": ["id", "type_info"]
-  },
-  {
     "class": "CommonTableExpressionInfo",
     "includes": [
       "duckdb/parser/common_table_expression_info.hpp"

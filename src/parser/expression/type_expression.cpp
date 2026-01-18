@@ -74,7 +74,7 @@ string TypeExpression::ToString() const {
 		return "MAP(" + params[0]->ToString() + ", " + params[1]->ToString() + ")";
 	}
 
-	if (result.empty() && StringUtil::CIEquals(type_name, "VARCHAR") && params.size() > 0) {
+	if (result.empty() && StringUtil::CIEquals(type_name, "VARCHAR") && !params.empty()) {
 		if (params.back()->HasAlias() && StringUtil::CIEquals(params.back()->GetAlias(), "collation")) {
 			// Special case for VARCHAR with collation
 			auto collate_expr = params.back()->Cast<ConstantExpression>();

@@ -5,8 +5,6 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -350,18 +348,6 @@ JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left", result.left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right", result.right);
 	deserializer.ReadProperty<ExpressionType>(102, "comparison", result.comparison);
-	return result;
-}
-
-void LogicalType::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
-	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
-}
-
-LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
-	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
-	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
-	LogicalType result(id, std::move(type_info));
 	return result;
 }
 
