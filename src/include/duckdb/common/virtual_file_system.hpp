@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
@@ -59,6 +60,8 @@ public:
 
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
 
+	void RegisterCompressionFilesystem(unique_ptr<FileSystem> fs) override;
+
 	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
 
 	vector<string> ListSubSystems() override;
@@ -90,12 +93,17 @@ private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<DatabaseInstance> database_instance);
 	FileSystem &FindFileSystem(const string &path);
 	optional_ptr<FileSystem> FindFileSystemInternal(const string &path);
+	// Return nullptr if no compression filesystem is found.
+	FileSystem *FindCompressionFileSystem(FileCompressionType compression_type, const string &path);
 
 private:
 	vector<unique_ptr<FileSystem>> sub_systems;
-	map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
 	const unique_ptr<FileSystem> default_fs;
 	unordered_set<string> disabled_file_systems;
+	// Registered duckdb internal compression filesystem.
+	unordered_map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
+	// Registered external compression filesystems (i.e., extensions).
+	vector<unique_ptr<FileSystem>> external_compressed_fs;
 };
 
 } // namespace duckdb

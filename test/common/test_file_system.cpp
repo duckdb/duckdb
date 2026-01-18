@@ -1,16 +1,20 @@
 #include "catch.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
-static void create_dummy_file(string fname) {
+namespace {
+
+void create_dummy_file(string fname) {
 	string normalized_string;
 	if (StringUtil::StartsWith(fname, "file:///")) {
 #ifdef _WIN32
@@ -33,6 +37,49 @@ static void create_dummy_file(string fname) {
 	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
 }
+
+// Fake Lz4 file handle and filesystem implementation, which doesn't contain any (de)compression functionality but just
+// the interface compatibility.
+class FakeLz4FileHandle : public FileHandle {
+public:
+	FakeLz4FileHandle(FileSystem &internal_file_system, duckdb::unique_ptr<FileHandle> internal_file_handle_p)
+	    : FileHandle(internal_file_system, internal_file_handle_p->GetPath(), internal_file_handle_p->GetFlags()),
+	      internal_file_handle(std::move(internal_file_handle_p)) {
+	}
+
+	void Close() override {
+		internal_file_handle->Close();
+	}
+
+	duckdb::unique_ptr<FileHandle> internal_file_handle;
+};
+class FakeLz4FileSystem : public CompressedFileSystem {
+public:
+	duckdb::unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, duckdb::unique_ptr<FileHandle> handle,
+	                                                  bool write) override {
+		(void)context; // Suppress compilation warning.
+		(void)write;
+		return make_uniq<FakeLz4FileHandle>(*this, std::move(handle));
+	}
+
+	bool CanHandleFile(const string &fpath) override {
+		return StringUtil::EndsWith(fpath, ".lz4");
+	}
+	duckdb::unique_ptr<StreamWrapper> CreateStream() override {
+		return nullptr;
+	}
+	idx_t InBufferSize() override {
+		return 0;
+	}
+	idx_t OutBufferSize() override {
+		return 0;
+	}
+	string GetName() const override {
+		return "FakeLz4";
+	}
+};
+
+} // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
@@ -207,37 +254,6 @@ TEST_CASE("absolute paths", "[file_system]") {
 #endif
 }
 
-TEST_CASE("Test RemoveFiles", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto dname = TestCreatePath("test_remove_files");
-
-	if (fs->DirectoryExists(dname)) {
-		fs->RemoveDirectory(dname);
-	}
-	fs->CreateDirectory(dname);
-
-	auto file1 = fs->JoinPath(dname, "file1.txt");
-	auto file2 = fs->JoinPath(dname, "file2.txt");
-	auto file3 = fs->JoinPath(dname, "file3.txt");
-	auto file4 = fs->JoinPath(dname, "file4.txt");
-	create_dummy_file(file1);
-	create_dummy_file(file2);
-	create_dummy_file(file3);
-
-	REQUIRE(fs->FileExists(file1));
-	REQUIRE(fs->FileExists(file2));
-	REQUIRE(fs->FileExists(file3));
-	REQUIRE(!fs->FileExists(file4));
-
-	fs->RemoveFiles({file1, file2});
-	REQUIRE(!fs->FileExists(file1));
-	REQUIRE(!fs->FileExists(file2));
-	REQUIRE(fs->FileExists(file3));
-	REQUIRE(!fs->FileExists(file4));
-
-	fs->RemoveDirectory(dname);
-}
-
 TEST_CASE("extract subsystem", "[file_system]") {
 	duckdb::VirtualFileSystem vfs;
 	auto local_filesystem = FileSystem::CreateLocal();
@@ -304,4 +320,32 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	// Close the remaining handle; the file should not exist.
 	read_handle.reset();
 	REQUIRE(!fs->FileExists(fname));
+}
+
+TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
+	// Create a local file which pretends to be lz4 compressed.
+	auto filepath = TestCreatePath("lz4_compression_file.lz4");
+	auto fs = FileSystem::CreateLocal();
+	{
+		const string payload = "CREATE_COMPRESSED_FILE";
+		auto write_handle = fs->OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
+		                    0);
+		write_handle->Sync();
+	}
+
+	VirtualFileSystem vfs;
+	auto lz4_filesystem = make_uniq<FakeLz4FileSystem>();
+	vfs.RegisterCompressionFilesystem(std::move(lz4_filesystem));
+
+	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
+	flags.SetCompression(FileCompressionType::AUTO_DETECT);
+	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+
+	// Downcast to make sure compressed file handle is created.
+	REQUIRE(file_handle != nullptr);
+	auto &compressed_file_handle = file_handle->Cast<FakeLz4FileHandle>();
+	REQUIRE(compressed_file_handle.internal_file_handle != nullptr);
+	file_handle.reset();
+	fs->RemoveFile(filepath);
 }

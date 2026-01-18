@@ -16,25 +16,50 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner) : default_f
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
-                                                           optional_ptr<FileOpener> opener) {
-	auto compression = flags.Compression();
-	if (compression == FileCompressionType::AUTO_DETECT) {
-		// auto-detect compression settings based on file name
-		auto lower_path = StringUtil::Lower(file.path);
-		if (StringUtil::EndsWith(lower_path, ".tmp")) {
-			// strip .tmp
-			lower_path = lower_path.substr(0, lower_path.length() - 4);
+FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType compression_type, const string &filepath) {
+	if (compression_type == FileCompressionType::UNCOMPRESSED) {
+		return nullptr;
+	}
+
+	// For auto-detection mode, check it's a known pattern for duckdb internal compression.
+	auto lower_path = StringUtil::Lower(filepath);
+	if (StringUtil::EndsWith(lower_path, ".tmp")) {
+		// strip .tmp
+		lower_path = lower_path.substr(0, lower_path.length() - 4);
+	}
+	if (IsFileCompressed(filepath, FileCompressionType::GZIP)) {
+		compression_type = FileCompressionType::GZIP;
+	} else if (IsFileCompressed(filepath, FileCompressionType::ZSTD)) {
+		compression_type = FileCompressionType::ZSTD;
+	}
+
+	// If caller explicitly specifies a duckdb internal compression type to use, or a known pattern is detected, try to fetch it explicitly.
+	if (compression_type != FileCompressionType::AUTO_DETECT) {
+		auto iter = compressed_fs.find(compression_type);
+		if (compression_type == FileCompressionType::ZSTD) {
+			throw NotImplementedException(
+				"Attempting to open a compressed file, but the compression type is not supported.\nConsider "
+				"explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
 		}
-		if (IsFileCompressed(file.path, FileCompressionType::GZIP)) {
-			compression = FileCompressionType::GZIP;
-		} else if (IsFileCompressed(file.path, FileCompressionType::ZSTD)) {
-			compression = FileCompressionType::ZSTD;
-		} else {
-			compression = FileCompressionType::UNCOMPRESSED;
+		throw NotImplementedException(
+			"Attempting to open a compressed file, but the compression type is not supported");
+	}
+
+	// We've checked over all duckdb internal compression types, fallback to try externally registered compression filesystems.
+	for (auto& cur_compressed_fs : external_compressed_fs) {
+		if (cur_compressed_fs->CanHandleFile(filepath)) {
+			return cur_compressed_fs.get();
 		}
 	}
 
+	// No usable compression filesystem is found.
+	return nullptr;
+}
+
+unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+                                                           optional_ptr<FileOpener> opener) {
+    const auto compression = flags.Compression();
+	auto* compression_filesystem = FindCompressionFileSystem(compression, file.path);
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 
@@ -60,18 +85,8 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
-	} else if (compression != FileCompressionType::UNCOMPRESSED) {
-		auto entry = compressed_fs.find(compression);
-		if (entry == compressed_fs.end()) {
-			if (compression == FileCompressionType::ZSTD) {
-				throw NotImplementedException(
-				    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
-				    "explicitly \"INSTALL parquet; LOAD parquet;\" to support this compression scheme");
-			}
-			throw NotImplementedException(
-			    "Attempting to open a compressed file, but the compression type is not supported");
-		}
-		file_handle = entry->second->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+	} else if (compression_filesystem != nullptr) {
+		file_handle = compression_filesystem->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
 	}
 	return file_handle;
 }
@@ -197,6 +212,10 @@ void VirtualFileSystem::UnregisterSubSystem(const string &name) {
 
 void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
 	compressed_fs[compression_type] = std::move(fs);
+}
+
+void VirtualFileSystem::RegisterCompressionFilesystem(unique_ptr<FileSystem> fs) {
+	external_compressed_fs.emplace_back(std::move(fs));
 }
 
 unique_ptr<FileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {
