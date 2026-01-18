@@ -898,6 +898,22 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	auto types = d_converted_schema.GetTypes();
 	auto names = d_converted_schema.GetNames();
 
+	// Buffer all input data before executing any DDL.
+	// This is necessary because the input stream might come from a streaming query result on the same connection.
+	// Executing DDL while a streaming result is active on the same connection can cause conflicts
+	// (especially in resource-constrained environments like CI).
+	// By consuming the entire input stream first, we release any active query state on the connection.
+	duckdb::vector<duckdb::ArrowArrayWrapper> buffered_arrays;
+	{
+		duckdb::ArrowArrayWrapper arr;
+		input->get_next(input, &arr.arrow_array);
+		while (arr.arrow_array.release) {
+			buffered_arrays.push_back(std::move(arr));
+			arr = duckdb::ArrowArrayWrapper();
+			input->get_next(input, &arr.arrow_array);
+		}
+	}
+
 	// Handle different ingestion modes
 	switch (ingestion_mode) {
 	case IngestionMode::CREATE: {
@@ -957,13 +973,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	if (!appender.Valid()) {
 		return ADBC_STATUS_INTERNAL;
 	}
-	duckdb::ArrowArrayWrapper arrow_array_wrapper;
 
 	// Initialize rows_affected counter if requested
 	int64_t affected = 0;
 
-	input->get_next(input, &arrow_array_wrapper.arrow_array);
-	while (arrow_array_wrapper.arrow_array.release) {
+	// Append the buffered data to the table
+	for (auto &arrow_array_wrapper : buffered_arrays) {
 		DataChunkWrapper out_chunk;
 		auto res = duckdb_data_chunk_from_arrow(connection, &arrow_array_wrapper.arrow_array, out_types.Get(),
 		                                        &out_chunk.chunk);
@@ -984,8 +999,6 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 			duckdb_destroy_error_data(&error_data);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
-		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
-		input->get_next(input, &arrow_array_wrapper.arrow_array);
 	}
 	if (rows_affected) {
 		*rows_affected = affected;
