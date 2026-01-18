@@ -123,7 +123,7 @@ public:
 		input_data.release = nullptr;
 	}
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
@@ -439,7 +439,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 	// Create Arrow Result
 	auto &input_data = db.QueryArrow("SELECT 42 as value");
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Case 1: set catalog then temporary
@@ -492,7 +492,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[
 	}
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Case 1: set schema then temporary
@@ -557,7 +557,7 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 	db.CreateTable("my_table", input_data, "my_schema");
 
 	// Validate that we can get its schema
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
@@ -601,7 +601,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 
 	// Create ADBC statement that will create a table called "test"
 	AdbcStatement adbc_stmt;
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_stmt, &adbc_error)));
 	REQUIRE(SUCCESS(
@@ -672,7 +672,7 @@ TEST_CASE("Test Null Error/Database", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	AdbcDatabase adbc_database;
 	// NULL error
@@ -695,7 +695,7 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	AdbcDatabase adbc_database;
 
@@ -721,7 +721,7 @@ TEST_CASE("ADBC - Statement reuse", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	AdbcDatabase adbc_database;
@@ -787,7 +787,7 @@ TEST_CASE("Error Release", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	AdbcDatabase adbc_database;
@@ -892,7 +892,7 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
@@ -930,7 +930,7 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
@@ -1039,7 +1039,7 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	string query = "select ?, ?, ?";
@@ -1128,7 +1128,7 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
@@ -1192,7 +1192,7 @@ TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
 
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Create connection
@@ -1280,7 +1280,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	AdbcConnection adbc_connection_2;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	ArrowArrayStream arrow_stream;
 	ArrowArray arrow_array;
@@ -1510,7 +1510,7 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -1559,7 +1559,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
@@ -1628,7 +1628,7 @@ TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	AdbcStatement adbc_statement;
@@ -1668,7 +1668,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 	ArrowArrayStream arrow_stream;
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	REQUIRE(SUCCESS(AdbcConnectionGetTableTypes(&db.adbc_connection, &arrow_stream, &adbc_error)));
 	db.CreateTable("result", arrow_stream);
@@ -1686,7 +1686,7 @@ TEST_CASE("ADBC - Empty sql (unhappy)", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	string query;
@@ -1730,7 +1730,7 @@ TEST_CASE("Test Segfault Option Set", "[adbc]") {
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
 
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -1770,7 +1770,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, nullptr, nullptr,
@@ -1804,7 +1804,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 
@@ -1867,7 +1867,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create View 'my_view'
 		db.Query("Create view my_view as from my_table;");
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr,
@@ -2067,7 +2067,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create View 'my_view'
 		db.Query("Create view my_view as from my_table;");
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
@@ -2369,7 +2369,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create View 'my_view'
 		db.Query("Create view my_view as from my_table;");
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr,
@@ -2795,7 +2795,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			)
 		)");
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 		REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr,
@@ -2877,7 +2877,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		// Create Table 'my_table' from the Arrow Result
 		db.CreateTable("my_table", input_data);
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 
@@ -2900,7 +2900,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		ADBCTestDatabase db("test_input_quoting");
 		db.CreateTable("test_table", db.QueryArrow("SELECT 42 as value"));
 
-		AdbcError adbc_error;
+		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
 		ArrowArrayStream arrow_stream;
 
@@ -2940,7 +2940,7 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 		return;
 	}
 	ADBCTestDatabase db;
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Test CREATE mode (default)
@@ -3056,7 +3056,7 @@ TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
 		return;
 	}
 	ADBCTestDatabase db;
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 
 	// Create a test table
@@ -3131,7 +3131,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	AdbcError adbc_error;
+	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
 	auto file_exists = [](const char *path) {
 		std::ifstream f(path);
