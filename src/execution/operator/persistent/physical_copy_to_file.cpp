@@ -416,7 +416,12 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 	for (idx_t dir_idx = 0; dir_idx < directory_list.size(); dir_idx++) {
 		auto directory = directory_list[dir_idx];
 		fs.ListFiles(directory, [&](const string &path, bool is_directory) {
-			auto full_path = fs.JoinPath(directory, path);
+			string full_path;
+			if (FileSystem::IsRemoteFile(path) || fs.IsPathAbsolute(path)) {
+				full_path = path;
+			} else {
+				full_path = fs.JoinPath(directory, path);
+			}
 			if (is_directory) {
 				directory_list.emplace_back(std::move(full_path));
 			} else {
