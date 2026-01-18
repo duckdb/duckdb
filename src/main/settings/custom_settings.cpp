@@ -693,7 +693,7 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 		return;
 	}
 	if (input.GetValue<bool>()) {
-		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+		throw InvalidInputException("Cannot enable external access while database is running");
 	}
 	auto &config = info.config;
 	if (info.db && Settings::Get<EnableExternalAccessSetting>(*info.db)) {

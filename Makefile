@@ -298,6 +298,9 @@ endif
 ifneq (${DUCKDB_PREBUILT_LIBRARY}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DPREBUILT_BINARY=${DUCKDB_PREBUILT_LIBRARY}
 endif
+ifdef REDUCE_SYMBOLS
+	CMAKE_VARS:=${CMAKE_VARS} -DREDUCE_SYMBOLS=1
+endif
 
 
 # Optional overrides
@@ -531,6 +534,7 @@ bundle-setup:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/lib*_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
@@ -555,4 +559,5 @@ gather-libs: release
 	mkdir -p libs && \
 	cp src/libduckdb_static.a libs/. && \
 	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/lib*_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.
