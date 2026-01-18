@@ -146,7 +146,8 @@
         "name": "state_type",
         "type": "LogicalType",
         "property": "state_type.state_type",
-        "default": "LogicalTypeId::INVALID"
+        "default": "LogicalTypeId::INVALID",
+        "version": "v1.5.0"
       }
     ]
   },
