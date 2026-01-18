@@ -1072,8 +1072,10 @@ AdbcStatusCode StatementCancel(struct AdbcStatement *statement, struct AdbcError
 	}
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
 	if (!wrapper->connection) {
-		SetError(error, "Statement is not initialized");
-		return ADBC_STATUS_INVALID_STATE;
+		// Statement has been released or is not properly initialized.
+		// Return INVALID_ARGUMENT since the statement object itself is invalid.
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	duckdb_interrupt(wrapper->connection);
 	return ADBC_STATUS_OK;
