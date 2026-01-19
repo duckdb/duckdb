@@ -1645,6 +1645,10 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 	       ">";
 }
 
+const LogicalType &AggregateStateType::GetStateChildType(const LogicalType &type) {
+	return GetStateType(type).state_type;
+}
+
 //===--------------------------------------------------------------------===//
 // Struct Type
 //===--------------------------------------------------------------------===//

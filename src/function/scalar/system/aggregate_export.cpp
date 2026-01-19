@@ -39,10 +39,10 @@ struct ExportAggregateBindData : public FunctionData {
 
 struct AggregateStateLayout {
 	AggregateStateLayout(const LogicalType &type, idx_t state_size) : state_size(state_size) {
-		auto &info = AggregateStateType::GetStateType(type);
-		is_struct = info.state_type.id() == LogicalTypeId::STRUCT;
+		auto nested_type = AggregateStateType::GetStateChildType(type);
+		is_struct = nested_type.id() == LogicalTypeId::STRUCT;
 		if (is_struct) {
-			child_types = &StructType::GetChildTypes(info.state_type);
+			child_types = &StructType::GetChildTypes(nested_type);
 		}
 	}
 
