@@ -18,6 +18,8 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
+// TODO(hjiang): Extensions depend on DataTableInfo, have to include it temporarily.
+#include "duckdb/storage/table/data_table_info.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
