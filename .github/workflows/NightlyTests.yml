@@ -26,6 +26,8 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
+  REDUCE_SYMBOLS: 1
+  PYTHONUNBUFFERED: 1
 
 jobs:
   check-draft:
@@ -59,6 +61,8 @@ jobs:
      - uses: ./.github/actions/ccache-action
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -94,6 +98,8 @@ jobs:
 
     - uses: ./.github/actions/cleanup_runner
 
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -101,7 +107,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -130,6 +136,8 @@ jobs:
 
     - uses: ./.github/actions/cleanup_runner
 
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -137,7 +145,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200 --force-storage
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --force-storage --time_execution
 
   smaller-binary:
     name: Smaller Binary
@@ -161,6 +169,8 @@ jobs:
     - uses: ./.github/actions/ccache-action
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Build
       shell: bash
@@ -204,6 +214,8 @@ jobs:
 
     - uses: ./.github/actions/cleanup_runner
 
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -211,7 +223,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
 
   sqllogic:
      name: Sqllogic tests
@@ -230,6 +242,8 @@ jobs:
          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -263,6 +277,8 @@ jobs:
      - uses: ./.github/actions/ccache-action
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -309,6 +325,8 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         shell: bash
         run: CORE_EXTENSIONS="tpch" make
@@ -327,7 +345,7 @@ jobs:
       - name: Run Extension Medata Tests
         shell: bash
         run: |
-          ./scripts/run_extension_medata_tests.sh
+          ./scripts/run_extension_medata_tests.sh "${{ github.workspace }}/build/release/src/libduckdb_static.a"
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
@@ -367,6 +385,8 @@ jobs:
      - uses: ./.github/actions/ccache-action
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -431,6 +451,8 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         id: build
         shell: bash
@@ -438,6 +460,7 @@ jobs:
           CORE_EXTENSIONS: "json;parquet"
           GEN: ninja
           STANDARD_VECTOR_SIZE: 512
+          DISABLE_SANITIZER: 1
         run: make relassert
 
       - name: All tests with 512 vector size and default block size
@@ -469,6 +492,8 @@ jobs:
       - uses: ./.github/actions/ccache-action
 
       - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         id: build
@@ -509,13 +534,17 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         shell: bash
+        env:
+          DISABLE_SANITIZER: 1
         run: make relassert
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600 --time_execution
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -556,6 +585,8 @@ jobs:
     - uses: ./.github/actions/ccache-action
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Print version
       shell: bash
@@ -599,6 +630,7 @@ jobs:
      GEN: ninja
      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
      HASH_ZERO: 1
+     DISABLE_SANITIZER: 1
      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
      DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
 
@@ -614,6 +646,8 @@ jobs:
      - uses: ./.github/actions/ccache-action
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash

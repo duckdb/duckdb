@@ -192,6 +192,8 @@ enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
+enum class ExtraPersistentColumnDataType : uint8_t;
+
 enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
@@ -730,6 +732,9 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColumnDataType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
@@ -1418,6 +1423,9 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
+
+template<>
+ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType>(const char *value);
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);

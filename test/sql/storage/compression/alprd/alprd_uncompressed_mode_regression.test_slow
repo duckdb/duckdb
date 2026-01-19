@@ -1,0 +1,151 @@
+# name: test/sql/storage/compression/alprd/alprd_uncompressed_mode_regression.test_slow
+# description: Verify that v1.5.0 (with uncompressed mode) never regresses vs v1.4.0 (without it)
+# group: [alprd]
+
+require parquet
+
+#########################################
+# PART 1: Test with v1.4.0 (baseline, no alp_uncompressed_mode available)
+#########################################
+
+load __TEST_DIR__/test_alprd_regression_v1_4_0.db readwrite v1.4.0
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# This parquet file generates numerous ALP exceptions, which, under certain circumstances
+# (depends on default block and vector size), previously resulted in the compressed data being larger than the original.
+# BUT it seems to not affect ALPRD as bad as standard ALP.
+statement ok
+CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
+
+statement ok
+checkpoint;
+
+# Now create a duplicate of this table, compressed with ALP instead
+statement ok
+PRAGMA force_compression='alprd'
+
+statement ok
+CREATE TABLE alprd_v1_4_0 AS SELECT * FROM original_data;
+
+statement ok
+checkpoint
+
+# verify data correctness in v1.4.0
+query I nosort r1
+SELECT * FROM original_data;
+----
+
+query I nosort r1
+SELECT * FROM alprd_v1_4_0;
+----
+
+# Capture v1.4.0 block count
+statement ok
+CREATE TABLE v1_4_0_metrics AS
+SELECT
+    (SELECT COUNT(DISTINCT block_id)
+     FROM pragma_storage_info('original_data')
+     WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS original_data_blocks,
+    (SELECT COUNT(DISTINCT block_id)
+     FROM pragma_storage_info('alprd_v1_4_0')
+     WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS compressed_blocks;
+
+#########################################
+# PART 2: Test with v1.5.0 (new alp_uncompressed_mode available to the compression engine)
+#########################################
+
+load __TEST_DIR__/test_alprd_regression_v1_5_0.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE original_data AS SELECT x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x FROM read_parquet("data/parquet-testing/alp_exceptions.parquet") t(x);
+
+statement ok
+checkpoint;
+
+# Now create a duplicate of this table, compressed with ALP instead
+statement ok
+PRAGMA force_compression='alprd'
+
+statement ok
+CREATE TABLE alprd_v1_5_0 AS SELECT * FROM original_data;
+
+statement ok
+checkpoint
+
+# verify data correctness in v1.5.0
+query I nosort r1
+SELECT * FROM original_data;
+----
+
+query I nosort r1
+SELECT * FROM alprd_v1_5_0;
+----
+
+# Capture v1.5.0 block count
+statement ok
+CREATE TABLE v1_5_0_metrics AS
+SELECT
+    (SELECT COUNT(DISTINCT block_id)
+     FROM pragma_storage_info('original_data')
+     WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS original_data_blocks,
+    (SELECT COUNT(DISTINCT block_id)
+     FROM pragma_storage_info('alprd_v1_5_0')
+     WHERE segment_type = 'DOUBLE' AND block_id <> -1) AS compressed_blocks;
+
+#########################################
+# PART 3: Compare and assert no regression
+#########################################
+
+# Now assert: compression ratio of alp using storage version v1.5.0 must be AT LEAST as good as using v1.4.0
+# Load v1.4.0 metrics for comparison
+statement ok
+ATTACH '__TEST_DIR__/test_alprd_regression_v1_4_0.db' AS v1_4_0_db;
+
+statement ok
+CREATE TYPE regression_result AS UNION (
+    ok BOOL,
+    err STRUCT(
+        v1_4_0_blocks HUGEINT,
+        v1_5_0_blocks HUGEINT,
+        original_data_blocks HUGEINT
+    )
+);
+
+# v1.5.0 should use <= blocks than v1.4.0 (equal or better compression)
+query I
+SELECT
+    CASE
+        WHEN v1_5_0.compressed_blocks <= v1_4_0.compressed_blocks
+            THEN True::regression_result
+        ELSE {
+            'v1_4_0_blocks': v1_4_0.compressed_blocks,
+            'v1_5_0_blocks': v1_5_0.compressed_blocks,
+            'original_data_blocks': v1_4_0.original_data_blocks
+        }::regression_result
+    END
+FROM
+    v1_5_0_metrics v1_5_0,
+    v1_4_0_db.v1_4_0_metrics v1_4_0;
+----
+true
+
+# Additional verification: v1.5.0 should never use MORE blocks than uncompressed
+query I
+SELECT
+    CASE
+        WHEN v1_5_0.compressed_blocks <= v1_5_0.original_data_blocks
+            THEN True::regression_result
+        ELSE {
+            'v1_4_0_blocks': NULL,
+            'v1_5_0_blocks': v1_5_0.compressed_blocks,
+            'original_data_blocks': v1_5_0.original_data_blocks
+        }::regression_result
+    END
+FROM v1_5_0_metrics v1_5_0;
+----
+true
