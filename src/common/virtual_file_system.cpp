@@ -27,9 +27,9 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 		// strip .tmp
 		lower_path = lower_path.substr(0, lower_path.length() - 4);
 	}
-	if (IsFileCompressed(filepath, FileCompressionType::GZIP)) {
+	if (IsFileCompressed(lower_path, FileCompressionType::GZIP)) {
 		compression_type = FileCompressionType::GZIP;
-	} else if (IsFileCompressed(filepath, FileCompressionType::ZSTD)) {
+	} else if (IsFileCompressed(lower_path, FileCompressionType::ZSTD)) {
 		compression_type = FileCompressionType::ZSTD;
 	}
 
@@ -37,6 +37,9 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 	// fetch it explicitly.
 	if (compression_type != FileCompressionType::AUTO_DETECT) {
 		auto iter = compressed_fs.find(compression_type);
+		if (iter != compressed_fs.end()) {
+			return iter->second.get();
+		}
 		if (compression_type == FileCompressionType::ZSTD) {
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported.\nConsider "
