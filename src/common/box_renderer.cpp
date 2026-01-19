@@ -205,7 +205,7 @@ private:
 	void RenderValue(BaseResultRenderer &ss, const string &value, idx_t column_width, ResultRenderType render_mode,
 	                 const vector<HighlightingAnnotation> &annotations,
 	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE,
-	                 optional_idx render_width = optional_idx());
+	                 optional_idx render_width = optional_idx(), const char *vertical = nullptr);
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
 	void ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count, const LogicalType &original_type,
@@ -263,9 +263,10 @@ void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered
 		footer.row_count_str = "? rows";
 	}
 	if (config.large_number_rendering == LargeNumberRendering::FOOTER && !has_limited_rows) {
-		footer.readable_rows_str = TryFormatLargeNumber(to_string(row_count));
-		if (!footer.readable_rows_str.empty()) {
-			footer.readable_rows_str += " rows";
+		string readable_str = TryFormatLargeNumber(to_string(row_count));
+		if (!readable_str.empty()) {
+			footer.readable_rows_str = to_string(row_count) + " total";
+			footer.row_count_str = readable_str + " rows";
 		}
 	}
 	footer.has_hidden_rows = rendered_rows < row_count;
@@ -412,7 +413,8 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 void BoxRendererImplementation::RenderValue(BaseResultRenderer &ss, const string &value, idx_t column_width,
                                             ResultRenderType render_mode,
                                             const vector<HighlightingAnnotation> &annotations,
-                                            ValueRenderAlignment alignment, optional_idx render_width_input) {
+                                            ValueRenderAlignment alignment, optional_idx render_width_input,
+                                            const char *vertical) {
 	idx_t render_width;
 	if (render_width_input.IsValid()) {
 		render_width = render_width_input.GetIndex();
@@ -457,7 +459,7 @@ void BoxRendererImplementation::RenderValue(BaseResultRenderer &ss, const string
 	default:
 		throw InternalException("Unrecognized value renderer alignment");
 	}
-	ss << config.VERTICAL;
+	ss << (vertical ? vertical : config.VERTICAL);
 	ss << string(lpadding, ' ');
 	if (!annotations.empty()) {
 		// if we have annotations split up the rendering between annotations
@@ -2196,10 +2198,10 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 	if (has_hidden_rows && padding >= shown_size) {
 		// we have space - render it here
 		extra_render_str = " (";
-		if (!readable_rows_str.empty()) {
-			extra_render_str += readable_rows_str + ", ";
-		}
 		extra_render_str += shown_str;
+		if (!readable_rows_str.empty()) {
+			extra_render_str += ", " + readable_rows_str;
+		}
 		extra_render_str += ")";
 		D_ASSERT(extra_render_str.size() == shown_size);
 		padding -= shown_size;
@@ -2232,13 +2234,10 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		idx_t combined_shown_length = readable_rows_str.size() + shown_str.size() + 4;
 		if (!readable_rows_str.empty() && !shown_str.empty() && combined_shown_length <= total_render_length) {
 			// we can! merge them
-			ss << config.VERTICAL;
-			ss << " ";
-			ss.Render(ResultRenderType::FOOTER, readable_rows_str);
-			ss << string(total_render_length - combined_shown_length, ' ');
+			ss << "  ";
 			ss.Render(ResultRenderType::FOOTER, shown_str);
-			ss << " ";
-			ss << config.VERTICAL;
+			ss << string(total_render_length - combined_shown_length, ' ');
+			ss.Render(ResultRenderType::FOOTER, readable_rows_str);
 			ss << '\n';
 			readable_rows_str = string();
 			shown_str = string();
@@ -2246,14 +2245,14 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		ValueRenderAlignment alignment =
 		    render_rows_and_columns ? ValueRenderAlignment::LEFT : ValueRenderAlignment::MIDDLE;
 		vector<HighlightingAnnotation> annotations;
-		if (!readable_rows_str.empty()) {
-			RenderValue(ss, "(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::FOOTER,
-			            annotations, alignment);
-			ss << '\n';
-		}
 		if (!shown_str.empty()) {
 			RenderValue(ss, "(" + shown_str + ")", total_render_length - 4, ResultRenderType::FOOTER, annotations,
-			            alignment);
+			            alignment, optional_idx(), " ");
+			ss << '\n';
+		}
+		if (!readable_rows_str.empty()) {
+			RenderValue(ss, "(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::FOOTER,
+			            annotations, alignment, optional_idx(), " ");
 			ss << '\n';
 		}
 	}
