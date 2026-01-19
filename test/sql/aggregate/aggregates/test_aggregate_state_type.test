@@ -11,11 +11,20 @@ SELECT typeof(avg(1.0::${type}) EXPORT_STATE) = 'AGGREGATE_STATE<avg(${type})::D
 true
 
 # Works in a table
+# (Forward compatability tests are covered because of this statement) 
 statement ok
 CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM range(10);
 
-query I
-SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
+# The first case is for tests with older storage versions that do not support structured aggregate states (wal_verification, etc.)
+# The second case is for storage versions that do support.
+query T
+SELECT 
+  CASE WHEN current_setting('storage_compatibility_version') NOT IN ('latest') 
+                        AND current_setting('storage_compatibility_version') < 'v1.5.0'
+  THEN column_type = 'AGGREGATE_STATE<avg(${type})::DOUBLE>'
+  ELSE column_type = 'AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>'
+  END
+FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
 ----
 true
 
