@@ -528,6 +528,7 @@ struct ArrayType {
 struct AggregateStateType {
 	DUCKDB_API static const string GetTypeName(const LogicalType &type);
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
+	DUCKDB_API static const LogicalType &GetStateChildType(const LogicalType &type);
 };
 
 struct AnyType {
