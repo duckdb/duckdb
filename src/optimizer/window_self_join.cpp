@@ -4,6 +4,8 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -20,12 +22,14 @@ public:
 	static bool CanRebind(const LogicalOperator &op) {
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_GET:
+		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			if (!op.children.empty()) {
-				return CanRebind(*op.children[0]);
+		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+			if (op.children.empty()) {
+				return true;
 			}
-			return true;
+			return CanRebind(*op.children[0]);
 		default:
 			break;
 		}
@@ -61,6 +65,19 @@ public:
 			agg.aggregate_index = new_agg_idx;
 			agg.group_index = new_grp_idx;
 		}
+		if (op.type == LogicalOperatorType::LOGICAL_EXPRESSION_GET) {
+			auto &get = op.Cast<LogicalExpressionGet>();
+			auto new_idx = optimizer.binder.GenerateTableIndex();
+			table_map[get.table_index] = new_idx;
+			get.table_index = new_idx;
+		}
+		if (op.type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+			auto &dummy = op.Cast<LogicalDummyScan>();
+			auto new_idx = optimizer.binder.GenerateTableIndex();
+			table_map[dummy.table_index] = new_idx;
+			dummy.table_index = new_idx;
+		}
+
 		// TODO: Handle other operators defining tables if needed
 		// But Get/Projection/Aggregate are most common in subplans.
 
@@ -132,7 +149,8 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::Optimize(unique_ptr<Logical
 	return op;
 }
 
-bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr) const {
+bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
+                                          const BoundWindowExpression &w_expr0) const {
 	if (w_expr.type != ExpressionType::WINDOW_AGGREGATE) {
 		return false;
 	}
@@ -143,6 +161,9 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr) c
 		return false;
 	}
 	if (w_expr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		return false;
+	}
+	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
 	}
 	return true;
@@ -160,14 +181,14 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			return op;
 		}
 
-		if (window.expressions.size() != 1) {
-			return op;
+		auto &w_expr0 = window.expressions[0]->Cast<BoundWindowExpression>();
+		for (auto &expr : window.expressions) {
+			auto &w_expr = expr->Cast<BoundWindowExpression>();
+			if (!CanOptimize(w_expr, w_expr0)) {
+				return op;
+			}
 		}
-
-		auto &w_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-		if (!CanOptimize(w_expr)) {
-			return op;
-		}
+		auto &partitions = w_expr0.partitions;
 
 		// --- Transformation ---
 
@@ -185,13 +206,16 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		vector<unique_ptr<Expression>> aggregates;
 
 		// Create Aggregate Operator
-		for (auto &part : w_expr.partitions) {
+		for (auto &part : partitions) {
 			auto part_copy = part->Copy();
 			rebinder.VisitExpression(&part_copy); // Update bindings
 			groups.push_back(std::move(part_copy));
 		}
 
-		aggregates.emplace_back(rebinder.TranslateAggregate(w_expr));
+		for (auto &expr : window.expressions) {
+			auto &w_expr = expr->Cast<BoundWindowExpression>();
+			aggregates.emplace_back(rebinder.TranslateAggregate(w_expr));
+		}
 
 		// args: group_index, aggregate_index, ...
 		auto agg_op = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
@@ -207,12 +231,11 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		// Inner Join on the partition keys
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 
-		for (size_t i = 0; i < w_expr.partitions.size(); ++i) {
+		for (size_t i = 0; i < partitions.size(); ++i) {
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-			cond.left = w_expr.partitions[i]->Copy();
-			cond.right =
-			    make_uniq<BoundColumnRefExpression>(w_expr.partitions[i]->return_type, ColumnBinding(group_index, i));
+			cond.left = partitions[i]->Copy();
+			cond.right = make_uniq<BoundColumnRefExpression>(partitions[i]->return_type, ColumnBinding(group_index, i));
 			join->conditions.push_back(std::move(cond));
 		}
 
@@ -220,13 +243,14 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		join->children.push_back(std::move(agg_op));
 		join->ResolveOperatorTypes();
 
-		// Replace Count binding
-		// Old window column: (window.window_index, 0)
-		// New constant column: (aggregate_index, 0)
-		ColumnBinding old_binding(window.window_index, 0);
-		ColumnBinding new_binding(aggregate_index, 0);
-
-		replacer.replacement_bindings.emplace_back(old_binding, new_binding);
+		// Replace aggregate bindings
+		// Old window column: (window.window_index, x)
+		// New constant column: (aggregate_index, x)
+		for (idx_t column_index = 0; column_index < window.expressions.size(); ++column_index) {
+			ColumnBinding old_binding(window.window_index, column_index);
+			ColumnBinding new_binding(aggregate_index, column_index);
+			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
+		}
 
 		return std::move(join);
 	} else if (!op->children.empty()) {

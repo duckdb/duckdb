@@ -51,6 +51,16 @@ CONSTANT: 9, DELTA_FOR: 1
 statement ok
 PRAGMA force_bitpacking_mode = 'delta_for'
 
+statement error
+SET SESSION force_bitpacking_mode = 'delta_for'
+----
+cannot be set as a session variable
+
+statement error
+RESET SESSION force_bitpacking_mode
+----
+cannot be set as a session variable
+
 statement ok
 CREATE OR REPLACE TABLE test_bp (a INTEGER)
 

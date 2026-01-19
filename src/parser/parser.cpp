@@ -229,7 +229,6 @@ void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
-	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -245,7 +244,7 @@ void Parser::ParseQuery(const string &query) {
 				if (!ext.parser_override) {
 					continue;
 				}
-				if (StringUtil::CIEquals(parser_override_option, "default")) {
+				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
 					continue;
 				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
@@ -253,10 +252,10 @@ void Parser::ParseQuery(const string &query) {
 					statements = std::move(result.statements);
 					return;
 				}
-				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
 					ThrowParserOverrideError(result);
 				}
-				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
+				if (options.parser_override_setting == AllowParserOverride::STRICT_WHEN_SUPPORTED) {
 					auto statement = GetStatement(query);
 					if (!statement) {
 						break;
@@ -299,7 +298,7 @@ void Parser::ParseQuery(const string &query) {
 					if (is_supported) {
 						ThrowParserOverrideError(result);
 					}
-				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK_OVERRIDE) {
 					continue;
 				}
 			}

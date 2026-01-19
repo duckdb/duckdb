@@ -694,7 +694,7 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
 	DBConfig config;
-	config.options.enable_external_access = false;
+	config.SetOptionByName("enable_external_access", false);
 	auto path = TestCreatePath("external_access_test");
 	DuckDB db(path, &config);
 	Connection con(db);

@@ -220,7 +220,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 	// copy the map, to protect against modifications during
 	auto unrecognized_options_copy = config.options.unrecognized_options;
 
-	if (config.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(*this)) {
 		if (unrecognized_options_copy.empty()) {
 			// Nothing to do
 			return;
@@ -287,7 +287,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
-	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
+	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
@@ -323,7 +324,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.options.maximum_threads, config.options.external_threads);
+	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	scheduler->RelaunchThreads();
 }
 
@@ -415,7 +416,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 
-	if (config.options.duckdb_api.empty()) {
+	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
 	}
 
@@ -438,7 +439,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
-	if (database_path && !config.options.enable_external_access) {
+	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));
 		if (!config.options.temporary_directory.empty()) {
@@ -461,7 +462,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
 	}
-	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, config.options.default_block_alloc_size,
+	auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
+	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
 	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
 	                                                   config.options.block_allocator_size);
 	config.replacement_scans = std::move(new_config.replacement_scans);
