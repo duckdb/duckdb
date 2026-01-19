@@ -35,12 +35,13 @@ public:
 	void Register(ParserExtension extension);
 	void Register(OptimizerExtension extension);
 	void Register(shared_ptr<OperatorExtension> extension);
-	void Register(shared_ptr<StorageExtension> extension);
+	void Register(const string &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
+	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	bool HasParserExtensions() const;
 
 private:

@@ -54,8 +54,11 @@ void ExtensionCallbackManager::Register(shared_ptr<OperatorExtension> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
-void ExtensionCallbackManager::Register(shared_ptr<StorageExtension> extension) {
-	throw InternalException("eek");
+void ExtensionCallbackManager::Register(const string &name, shared_ptr<StorageExtension> extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->storage_extensions[name] = std::move(extension);
+	callback_registry.atomic_store(new_registry);
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension) {
@@ -90,6 +93,15 @@ ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::Parse
 	return ExtensionCallbackIteratorHelper<ParserExtension>(parser_extensions, std::move(registry));
 }
 
+optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
+	auto registry = callback_registry.atomic_load();
+	auto entry = registry->storage_extensions.find(name);
+	if (entry == registry->storage_extensions.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
 bool ExtensionCallbackManager::HasParserExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	return !registry->parser_extensions.empty();
@@ -105,6 +117,15 @@ void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
 
 void OperatorExtension::Register(DBConfig &config, shared_ptr<OperatorExtension> extension) {
 	config.GetCallbackManager().Register(std::move(extension));
+}
+
+optional_ptr<StorageExtension> StorageExtension::Find(const DBConfig &config, const string &extension_name) {
+	return config.GetCallbackManager().FindStorageExtension(extension_name);
+}
+
+void StorageExtension::Register(DBConfig &config, const string &extension_name,
+                                shared_ptr<StorageExtension> extension) {
+	config.GetCallbackManager().Register(extension_name, std::move(extension));
 }
 
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;

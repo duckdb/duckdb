@@ -206,8 +206,6 @@ public:
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! Database configuration variables as controlled by SET
 	GlobalUserSettings user_settings;
-	//! Extensions made to storage
-	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 
