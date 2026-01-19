@@ -1,17 +1,3 @@
-diff --git a/duckdb b/duckdb
-index 5652f26..10f8766 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 5652f26b769d3ac2c2f2f8a29c03ae72e97cf40f
-+Subproject commit 10f8766267b8805f5d96b7ad1a7d54332d2b6ffe
-diff --git a/extension-ci-tools b/extension-ci-tools
-index 5b5b634..036f104 160000
---- a/extension-ci-tools
-+++ b/extension-ci-tools
-@@ -1 +1 @@
--Subproject commit 5b5b634239188e4b2971feff09e35f2fd76da40e
-+Subproject commit 036f1047a6482a163d88c2a79a91db633f5aa9d8
 diff --git a/src/common/ducklake_types.cpp b/src/common/ducklake_types.cpp
 index 6749529..9a87e04 100644
 --- a/src/common/ducklake_types.cpp
