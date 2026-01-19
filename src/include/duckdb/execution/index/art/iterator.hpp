@@ -65,16 +65,16 @@ private:
 //! Output policy for scanning row IDs only into a set.
 struct RowIdSetOutput {
 	set<row_t> &row_ids;
-	idx_t capacity;
+	const idx_t capacity;
 
-	RowIdSetOutput(set<row_t> &row_ids, idx_t capacity) : row_ids(row_ids), capacity(capacity) {
+	RowIdSetOutput(set<row_t> &row_ids, const idx_t capacity) : row_ids(row_ids), capacity(capacity) {
 	}
 
 	bool IsFull() const {
 		D_ASSERT(row_ids.size() >= 0 && row_ids.size() <= capacity);
 		return row_ids.size() >= capacity;
 	}
-	void SetKey(const IteratorKey &, idx_t) {
+	void SetKey(const IteratorKey &, const idx_t) {
 		// No-op: we don't need keys for row ID output.
 	}
 	void Add(const row_t rid) {
@@ -87,13 +87,13 @@ struct KeyRowIdOutput {
 	ArenaAllocator &arena;
 	unsafe_vector<ARTKey> &keys;
 	unsafe_vector<ARTKey> &row_id_keys;
-	idx_t capacity;
+	const idx_t capacity;
 	idx_t count = 0;
 	const_data_ptr_t key_data = nullptr;
 	idx_t key_len = 0;
 
 	KeyRowIdOutput(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
-	               idx_t capacity)
+	               const idx_t capacity)
 	    : arena(arena), keys(keys), row_id_keys(row_id_keys), capacity(capacity) {
 	}
 
@@ -108,11 +108,11 @@ struct KeyRowIdOutput {
 		D_ASSERT(count >= 0 && count <= capacity);
 		return count >= capacity;
 	}
-	void SetKey(const IteratorKey &current_key, idx_t column_key_len) {
+	void SetKey(const IteratorKey &current_key, const idx_t column_key_len) {
 		key_data = current_key.Data();
 		key_len = column_key_len;
 	}
-	void Add(row_t rid) {
+	void Add(const row_t rid) {
 		keys[count] = ARTKey::CreateARTKeyFromBytes(arena, key_data, key_len);
 		row_id_keys[count] = ARTKey::CreateARTKey<row_t>(arena, rid);
 		count++;
@@ -165,7 +165,8 @@ private:
 	//! True, if we entered a nested leaf to retrieve the next node.
 	bool entered_nested_leaf = false;
 
-	//! State for resuming within a leaf after early return due to max_count.
+	//! State for resuming a scan after early return due to the Output policy capacity (see note for the ARTScanResult
+	//! enum).
 	struct ResumeScanState {
 		//! For LEAF: cached row IDs and current position.
 		set<row_t> cached_row_ids;
