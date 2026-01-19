@@ -28,6 +28,10 @@ const ExtensionCallbackManager &ExtensionCallbackManager::Get(const ClientContex
 	return DBConfig::GetConfig(context).GetCallbackManager();
 }
 
+ExtensionCallbackManager &ExtensionCallbackManager::Get(DatabaseInstance &db) {
+	return DBConfig::GetConfig(db).GetCallbackManager();
+}
+
 ExtensionCallbackManager::ExtensionCallbackManager() : callback_registry(make_shared_ptr<ExtensionCallbackRegistry>()) {
 }
 ExtensionCallbackManager::~ExtensionCallbackManager() {
@@ -62,7 +66,10 @@ void ExtensionCallbackManager::Register(const string &name, shared_ptr<StorageEx
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension) {
-	throw InternalException("eek");
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->extension_callbacks.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
 }
 
 template <class T>
@@ -93,6 +100,12 @@ ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::Parse
 	return ExtensionCallbackIteratorHelper<ParserExtension>(parser_extensions, std::move(registry));
 }
 
+ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbackManager::ExtensionCallbacks() const {
+	auto registry = callback_registry.atomic_load();
+	auto &extension_callbacks = registry->extension_callbacks;
+	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
+}
+
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
 	auto registry = callback_registry.atomic_load();
 	auto entry = registry->storage_extensions.find(name);
@@ -121,6 +134,10 @@ void OperatorExtension::Register(DBConfig &config, shared_ptr<OperatorExtension>
 
 optional_ptr<StorageExtension> StorageExtension::Find(const DBConfig &config, const string &extension_name) {
 	return config.GetCallbackManager().FindStorageExtension(extension_name);
+}
+
+void ExtensionCallback::Register(DBConfig &config, shared_ptr<ExtensionCallback> extension) {
+	config.GetCallbackManager().Register(std::move(extension));
 }
 
 void StorageExtension::Register(DBConfig &config, const string &extension_name,
