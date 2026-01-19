@@ -282,11 +282,11 @@ string StorageManager::GetWALPath(const string &suffix) {
 }
 
 string StorageManager::GetCheckpointWALPath() {
-	return GetWALPath(".checkpoint.wal");
+	return GetWALPath(".wal.checkpoint");
 }
 
 string StorageManager::GetRecoveryWALPath() {
-	return GetWALPath(".recovery.wal");
+	return GetWALPath(".wal.recovery");
 }
 
 bool StorageManager::InMemory() const {
