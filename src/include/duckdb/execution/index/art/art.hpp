@@ -46,8 +46,6 @@ public:
 	static constexpr uint8_t ALLOCATOR_COUNT = 9;
 	//! FixedSizeAllocator count of deprecated ARTs.
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
-	//! Keys must not exceed MAX_KEY_LEN * prefix_count.
-	static constexpr idx_t MAX_KEY_LEN = 8192;
 
 public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
@@ -71,8 +69,6 @@ public:
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
 	bool owns_data;
-	//! True, if keys need a key length verification pass.
-	bool verify_max_key_len;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
