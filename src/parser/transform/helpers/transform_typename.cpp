@@ -97,6 +97,12 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeExpressionInternal(duckdb
 		} else {
 			// Expression
 			auto expr = TransformExpression(*typemod_node);
+
+			// TODO: Allow arbitrary expressions in the future
+			if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+				throw ParserException("Expected a constant as type modifier");
+			}
+
 			expr->SetAlias(std::move(name_str));
 			type_params.push_back(std::move(expr));
 		}

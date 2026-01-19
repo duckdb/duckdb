@@ -315,28 +315,6 @@
     "pointer_type": "none"
   },
   {
-    "class": "PivotColumnEntry",
-    "members": [
-      {
-        "id": 100,
-        "name": "values",
-        "type": "vector<Value>"
-      },
-      {
-        "id": 101,
-        "name": "star_expr",
-        "type": "ParsedExpression*",
-        "property": "expr"
-      },
-      {
-        "id": 102,
-        "name": "alias",
-        "type": "string"
-      }
-    ],
-    "pointer_type": "none"
-  },
-  {
     "class": "BoundPivotInfo",
     "includes": [
       "duckdb/planner/tableref/bound_pivotref.hpp"

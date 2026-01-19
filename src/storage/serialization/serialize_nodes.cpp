@@ -415,20 +415,6 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-}
-
-PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
-	PivotColumnEntry result;
-	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
-	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
-	return result;
-}
-
 void QualifiedColumnName::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "catalog", catalog);
 	serializer.WritePropertyWithDefault<string>(101, "schema", schema);

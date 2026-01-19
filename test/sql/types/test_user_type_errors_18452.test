@@ -25,4 +25,4 @@ Catalog Error: Type with name XX does not exist!
 statement error
 CREATE TYPE ll AS XX(a,2,3,4,5,6,7,8,9);
 ----
-Catalog Error: Type with name XX does not exist!
+Parser Error: Expected a constant as type modifier

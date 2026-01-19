@@ -265,9 +265,6 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 			}
 			throw ParserException("Expected a constant as type modifier");
 		}
-		if (modifiers.size() > 9) {
-			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", result.GetAlias());
-		}
 	}
 	// TODO(Dtenwolde) add modifiers
 	return result;

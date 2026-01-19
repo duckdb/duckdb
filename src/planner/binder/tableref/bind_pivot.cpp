@@ -508,14 +508,14 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	return result_statement;
 }
 
-static void BindPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, Binder &binder) {
+static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (colref.IsQualified()) {
 			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
 		}
-		entry.values.emplace_back(colref.GetColumnName());
+		values.emplace_back(colref.GetColumnName());
 	} break;
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
@@ -523,7 +523,7 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry
 			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
 		}
 		for (auto &child : function.children) {
-			BindPivotInList(child, entry, binder);
+			BindPivotInList(child, values, binder);
 		}
 	} break;
 	default: {
@@ -534,7 +534,7 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry
 			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
 		}
 		auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
-		entry.values.push_back(folded_value);
+		values.push_back(folded_value);
 	} break;
 	}
 }
@@ -572,7 +572,11 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 
 		for (auto &pivot_entry : pivot_column.entries) {
 			// bind the expressions in the IN list
-			BindPivotInList(pivot_entry.expr, pivot_entry, *this);
+			if (!pivot_entry.values.empty()) {
+				continue;
+			}
+
+			BindPivotInList(pivot_entry.expr, pivot_entry.values, *this);
 
 			// check that we have the expected number of values
 			const auto expected_size = pivot_column.pivot_expressions.size();
@@ -698,7 +702,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	// Try to bind the entry expression as values
 	try {
 		auto expr_copy = entry.expr->Copy();
-		BindPivotInList(expr_copy, entry, child_binder);
+		BindPivotInList(expr_copy, entry.values, child_binder);
 		// successfully bound as values - clear the expression
 		entry.expr = nullptr;
 	} catch (...) {
