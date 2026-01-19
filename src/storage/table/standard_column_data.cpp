@@ -132,6 +132,9 @@ void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &st
 }
 
 void StandardColumnData::RevertAppend(row_t new_count) {
+	const lock_guard<mutex> standard_guard(update_lock);
+	const lock_guard<mutex> validity_guard(validity->update_lock);
+
 	ColumnData::RevertAppend(new_count);
 	validity->RevertAppend(new_count);
 }
