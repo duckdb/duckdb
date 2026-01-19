@@ -387,7 +387,13 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	// Temporary ingestion ignores schema.
 	db.CreateTable("my_table", input_data, "my_schema", true);
 
-	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+	// Note: QueryAndCheck uses a separate connection, but temporary tables are connection-specific.
+	// Use Query instead to verify on the same connection.
+	{
+		auto res = db.Query("SELECT * FROM my_table");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->GetValue(0, 0).ToString() == "42");
+	}
 	{
 		auto res = db.Query("SELECT * FROM my_schema.my_table");
 		REQUIRE(res->HasError());
@@ -458,7 +464,12 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
 	}
-	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+	// Note: QueryAndCheck uses a separate connection, but temporary tables are connection-specific.
+	{
+		auto res = db.Query("SELECT * FROM my_table");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->GetValue(0, 0).ToString() == "42");
+	}
 	// Release input stream (BindStream may transfer ownership on success).
 	if (input_data.release) {
 		input_data.release(&input_data);
@@ -511,7 +522,12 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[
 		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
-		REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+		// Note: QueryAndCheck uses a separate connection, but temporary tables are connection-specific.
+		{
+			auto res = db.Query("SELECT * FROM my_table");
+			REQUIRE(!res->HasError());
+			REQUIRE(res->GetValue(0, 0).ToString() == "42");
+		}
 		{
 			auto res = db.Query("SELECT * FROM my_schema.my_table");
 			REQUIRE(res->HasError());
