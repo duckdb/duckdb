@@ -118,10 +118,10 @@ public:
 	idx_t GetQueryMaxMemory() const override {
 		idx_t global_budget = buffer_manager.GetQueryMaxMemory();
 		const auto &config = ClientConfig::GetConfig(context);
-		if (!config.query_memory_limit.IsValid()) {
+		if (!config.operator_memory_limit.IsValid()) {
 			return global_budget;
 		}
-		return MinValue(global_budget, config.query_memory_limit.GetIndex());
+		return MinValue(global_budget, config.operator_memory_limit.GetIndex());
 	}
 
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) override {

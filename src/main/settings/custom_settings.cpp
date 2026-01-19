@@ -1268,6 +1268,31 @@ Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Operator Memory Limit
+//===----------------------------------------------------------------------===//
+void OperatorMemoryLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (input.IsNull()) {
+		config.operator_memory_limit.SetInvalid();
+	} else {
+		config.operator_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void OperatorMemoryLimitSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.operator_memory_limit.SetInvalid();
+}
+
+Value OperatorMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.operator_memory_limit.IsValid()) {
+		return Value();
+	}
+	return Value(StringUtil::BytesToHumanReadableString(config.operator_memory_limit.GetIndex()));
+}
+
+//===----------------------------------------------------------------------===//
 // Ordered Aggregate Threshold
 //===----------------------------------------------------------------------===//
 void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -1508,31 +1533,6 @@ void StreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
 Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
-}
-
-//===----------------------------------------------------------------------===//
-// Query Memory Limit
-//===----------------------------------------------------------------------===//
-void QueryMemoryLimitSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (input.IsNull()) {
-		config.query_memory_limit.SetInvalid();
-	} else {
-		config.query_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
-	}
-}
-
-void QueryMemoryLimitSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.query_memory_limit.SetInvalid();
-}
-
-Value QueryMemoryLimitSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (!config.query_memory_limit.IsValid()) {
-		return Value();
-	}
-	return Value(StringUtil::BytesToHumanReadableString(config.query_memory_limit.GetIndex()));
 }
 
 //===----------------------------------------------------------------------===//
