@@ -252,9 +252,11 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 
 IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
+
+	// See note in table_index_list.hpp concerning this return type, which also describes how this function works.
 	IndexSerializationResult result;
 
-	// Pre-allocate space for bound index IndexStorageInfos.
+	// Pre-allocate space for bound index IndexStorageInfos (to prevent undefined behavior below).
 	idx_t bound_count = 0;
 	for (auto &entry : index_entries) {
 		if (entry->index->IsBound()) {
@@ -271,14 +273,14 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 			D_ASSERT(storage_info->IsValid() && !storage_info->name.empty());
 			// Store the bound info to keep it alive, then add a reference to the ordered list
 			result.bound_infos[bound_idx] = std::move(storage_info);
-			result.infos.push_back(*result.bound_infos[bound_idx]);
+			result.ordered_infos.push_back(*result.bound_infos[bound_idx]);
 			bound_idx++;
 			continue;
 		}
 		// For unbound indexes, just get a reference - no ownership transfer
 		auto &storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
 		D_ASSERT(!storage_info.name.empty());
-		result.infos.push_back(storage_info);
+		result.ordered_infos.push_back(storage_info);
 	}
 	return result;
 }

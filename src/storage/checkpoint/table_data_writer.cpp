@@ -170,7 +170,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
 	auto index_serialization_result = info.GetIndexes().SerializeToDisk(context, serialization_info);
-	auto &all_infos = index_serialization_result.infos;
+	auto &all_infos = index_serialization_result.ordered_infos;
 
 	if (debug_verify_blocks) {
 		for (auto &index_info : all_infos) {
