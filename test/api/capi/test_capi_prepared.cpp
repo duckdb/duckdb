@@ -1,4 +1,7 @@
 #include "capi_tester.hpp"
+#include <atomic>
+#include <random>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -670,6 +673,56 @@ TEST_CASE("Test STRING LITERAL parameter type", "[capi]") {
 	REQUIRE(duckdb_bind_varchar(stmt, 1, "a") == DuckDBSuccess);
 	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_STRING_LITERAL);
 	duckdb_destroy_prepare(&stmt);
+
+	duckdb_disconnect(&conn);
+	duckdb_close(&db);
+}
+
+TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[capi]") {
+	// This test is a minimal reproducible example for the race condition described in #7187 (internal).
+	duckdb_database db;
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+
+	duckdb_connection conn;
+	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
+
+	std::atomic<int> failures {0};
+	std::atomic<int> completed {0};
+
+	constexpr int NUM_THREADS = 4;
+	constexpr int ITERATIONS = 1000;
+
+	duckdb::vector<std::thread> threads;
+	for (int t = 0; t < NUM_THREADS; t++) {
+		threads.emplace_back([ITERATIONS, &conn, &failures, &completed]() {
+			for (int i = 0; i < ITERATIONS; i++) {
+				duckdb_prepared_statement stmt = nullptr;
+				if (duckdb_prepare(conn, "SELECT 1", &stmt) != DuckDBSuccess) {
+					++failures;
+					continue;
+				}
+
+				duckdb_result result;
+				if (duckdb_execute_prepared(stmt, &result) != DuckDBSuccess) {
+					++failures;
+					duckdb_destroy_prepare(&stmt);
+					continue;
+				}
+
+				duckdb_destroy_result(&result);
+				duckdb_destroy_prepare(&stmt);
+				++completed;
+			}
+		});
+	}
+
+	for (auto &t : threads) {
+		t.join();
+	}
+
+	// All executions should succeed
+	REQUIRE(failures == 0);
+	REQUIRE(completed == NUM_THREADS * ITERATIONS);
 
 	duckdb_disconnect(&conn);
 	duckdb_close(&db);
