@@ -9,19 +9,29 @@
 #pragma once
 
 #include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
-class DatabaseInstance;
+class AttachedDatabase;
+class BlockManager;
+class CatalogEntry;
+class CatalogTransaction;
 class ClientContext;
 class ColumnSegment;
+class DatabaseInstance;
+class Deserializer;
+class IndexCatalogEntry;
+class MetadataManager;
 class MetadataReader;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
+class Serializer;
+class ScalarMacroCatalogEntry;
+class TableMacroCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
+struct BoundCreateTableInfo;
 
 class CheckpointWriter {
 public:
@@ -88,10 +98,6 @@ public:
 	//! The database
 	SingleFileStorageManager &storage;
 };
-
-//! CheckpointWriter is responsible for checkpointing the database
-class SingleFileRowGroupWriter;
-class SingleFileTableDataWriter;
 
 class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileRowGroupWriter;

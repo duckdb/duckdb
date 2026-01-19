@@ -10,7 +10,6 @@
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/open_file_info.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
 

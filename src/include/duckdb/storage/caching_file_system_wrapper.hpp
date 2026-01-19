@@ -19,10 +19,7 @@ namespace duckdb {
 
 // Forward declaration.
 class DatabaseInstance;
-class ClientContext;
-class QueryContext;
 class CachingFileSystemWrapper;
-struct CachingFileHandle;
 
 //! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API.
 class CachingFileHandleWrapper : public FileHandle {

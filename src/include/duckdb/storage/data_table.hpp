@@ -8,31 +8,32 @@
 
 #pragma once
 
-#include "duckdb/common/enums/index_constraint_type.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/statistics/column_statistics.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
 class BoundForeignKeyConstraint;
+class AttachedDatabase;
 class ClientContext;
+class ColumnList;
 class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
+class DataChunk;
+class DistinctStatistics;
 class DuckTransaction;
+class Expression;
+class Index;
+class OptimisticDataWriter;
 class RowGroup;
+class RowGroupCollection;
+class Serializer;
 class StorageManager;
 class TableCatalogEntry;
 class TableIOManager;
+class Vector;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
@@ -42,7 +43,16 @@ struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
 enum class VerifyExistenceType : uint8_t;
+enum class ForeignKeyType : uint8_t;
+enum class IndexAppendMode : uint8_t;
+enum class IndexConstraintType : uint8_t;
+enum class IndexRemovalType;
 struct OptimisticWriteCollection;
+struct ColumnFetchState;
+struct DataTableInfo;
+struct LocalAppendState;
+struct ParallelTableScanState;
+struct TableAppendState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped

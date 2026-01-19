@@ -1,17 +1,16 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache_util.hpp"
 
 namespace duckdb {
+
+class DatabaseInstance;
 
 namespace {
 

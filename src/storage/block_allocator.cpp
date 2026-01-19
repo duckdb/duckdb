@@ -3,7 +3,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parallel/concurrentqueue.hpp"
+#include "concurrentqueue.h"
 #include "duckdb/common/types/uuid.hpp"
 
 #if defined(_WIN32)

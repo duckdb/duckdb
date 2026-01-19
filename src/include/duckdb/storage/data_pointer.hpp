@@ -11,14 +11,19 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/enums/compression_type.hpp"
+#include <memory>
+#include <stdint.h>
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
 class Serializer;
 class Deserializer;
-class QueryContext;
+enum class CompressionType : uint8_t;
 
 struct ColumnSegmentState {
 	virtual ~ColumnSegmentState() {

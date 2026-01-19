@@ -8,16 +8,27 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include <atomic>
+#include <map>
+#include <mutex>
+#include <string>
+#include <unordered_map>
 
 namespace duckdb {
+
+using std::atomic;
+using std::map;
+using std::unordered_map;
 
 class ClientContext;
 class DatabaseInstance;

@@ -8,25 +8,23 @@
 
 #pragma once
 
-#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
-class ClientContext;
-class QueryContext;
 class BufferHandle;
-class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
 class CachingFileSystem;
+class DatabaseInstance;
+class StorageLockKey;
+class optional_idx;
+enum class CacheValidationMode : uint8_t;
 
 struct CachingFileHandle {
 public:
