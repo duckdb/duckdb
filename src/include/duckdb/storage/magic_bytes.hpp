@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/string.hpp"
-#include <stdint.h>
-#include <string>
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 class FileSystem;

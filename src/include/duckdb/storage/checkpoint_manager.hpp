@@ -9,10 +9,11 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
+
+// Forward declaration.
 class AttachedDatabase;
 class BlockManager;
 class CatalogEntry;

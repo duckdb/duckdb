@@ -10,6 +10,7 @@
 
 namespace duckdb {
 
+// Forward declaration.
 class DatabaseInstance;
 
 namespace {

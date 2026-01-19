@@ -9,14 +9,12 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include <atomic>
 
 namespace duckdb {
-
-using std::atomic;
 
 class BlockManager;
 class BufferPool;

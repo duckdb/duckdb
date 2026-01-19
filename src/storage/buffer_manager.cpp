@@ -7,6 +7,7 @@
 
 namespace duckdb {
 
+// Forward declaration.
 class BlockManager;
 
 // Static functions.

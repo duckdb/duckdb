@@ -8,17 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/typedefs.hpp"
-#include <atomic>
-#include <stdint.h>
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
-
-using std::atomic;
 
 class Allocator;
 class AttachedDatabase;

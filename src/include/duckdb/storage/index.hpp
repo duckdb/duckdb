@@ -13,14 +13,12 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
-#include <string>
-#include <unordered_set>
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
 class AttachedDatabase;
 class TableIOManager;
-using std::unordered_set;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {

@@ -3,6 +3,7 @@
 
 namespace duckdb {
 
+// Forward declaration.
 class BlockManager;
 
 Block::Block(BlockAllocator &allocator, const block_id_t id, const idx_t block_size, const idx_t block_header_size)
