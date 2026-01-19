@@ -764,6 +764,10 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
+ExtensionCallbackManager &DBConfig::GetCallbackManager() {
+	return *callback_manager;
+}
+
 string DBConfig::SanitizeAllowedPath(const string &path) const {
 	auto path_sep = file_system->PathSeparator(path);
 	if (path_sep != "/") {
