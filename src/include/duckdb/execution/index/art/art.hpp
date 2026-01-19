@@ -91,9 +91,9 @@ public:
 	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existing
 	// MergeIndexes which don't support deprecated leaf chains. Once support for that is added, this simpler insert
 	// merge may be removed.
-	ErrorData InsertMerge(IndexLock &state, BoundIndex &other_index);
+	ErrorData InsertMerge(IndexLock &state, BoundIndex &source_index);
 	//! Obtains a lock and calls InsertMerge while holding that lock.
-	ErrorData InsertMerge(BoundIndex &other_index);
+	ErrorData InsertMerge(BoundIndex &source_index);
 
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
