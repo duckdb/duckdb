@@ -11,23 +11,13 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
-#include "duckdb/execution/operator/schema/physical_create_index_materialized.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-
-#include <duckdb/execution/operator/schema/physical_create_index_materialized.hpp>
 
 namespace duckdb {
 
 static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev,
-                                        const IndexType &index_type, unique_ptr<IndexBuildBindData> bind_data,
-                                        bool materialize) {
+                                        const IndexType &index_type, unique_ptr<IndexBuildBindData> bind_data) {
 	PhysicalOperator &cindex = [&]() -> PhysicalOperator & {
-		if (materialize) {
-			return plan.Make<PhysicalCreateIndexMaterialized>(op.types, op.table, op.info->column_ids,
-			                                                  std::move(op.info), std::move(op.unbound_expressions),
-			                                                  op.estimated_cardinality);
-		}
-
 		return plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
 		                                      std::move(op.unbound_expressions), op.estimated_cardinality, index_type,
 		                                      std::move(bind_data), std::move(op.alter_table_info));
@@ -177,19 +167,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 		plan = &AddFilter(*this, op, *plan);
 	}
 
-	// determine we need to materialize the input (exact count)
-	bool materialize = false;
-
-	if (index_type->build_count) {
-		IndexBuildMaterializeInput materialize_input {bind_data.get()};
-		materialize = index_type->build_count(materialize_input);
-	}
-
 	if (need_sort) {
 		plan = &AddSort(*this, op, *plan);
 	}
 
-	plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data), materialize);
+	plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data));
 	return *plan;
 }
 
