@@ -87,7 +87,7 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
-      db(db), type(type) {
+      db(db), type(type), close_lock(make_shared_ptr<mutex>()) {
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
@@ -104,7 +104,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
                                    AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      attach_options(options.options) {
+      close_lock(make_shared_ptr<mutex>()), attach_options(options.options) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -124,7 +124,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
                                    ClientContext &context, string name_p, AttachInfo &info, AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
-      storage_extension(&storage_extension_p), attach_options(options.options) {
+      storage_extension(&storage_extension_p), close_lock(make_shared_ptr<mutex>()), attach_options(options.options) {
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
 	} else {
@@ -199,11 +199,10 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 }
 
 void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_db) {
-	{
-		lock_guard<mutex> guard(attached_db->close_lock);
-		if (attached_db.use_count() == 1) {
-			attached_db->Close(DatabaseCloseAction::CHECKPOINT);
-		}
+	auto close_lock = attached_db->close_lock;
+	lock_guard<mutex> guard(*close_lock);
+	if (attached_db.use_count() == 1) {
+		attached_db->Close(DatabaseCloseAction::CHECKPOINT);
 	}
 	attached_db.reset();
 }

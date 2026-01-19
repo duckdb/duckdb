@@ -131,6 +131,9 @@ public:
 	bool IsEncrypted() const {
 		return storage_options.encryption;
 	}
+	uint8_t GetEncryptionVersion() const {
+		return storage_options.encryption_version;
+	}
 
 protected:
 	virtual void LoadDatabase(QueryContext context) = 0;
