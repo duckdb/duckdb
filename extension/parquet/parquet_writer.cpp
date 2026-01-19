@@ -1016,7 +1016,10 @@ void ParquetWriter::InitializeSchemaElements() {
 		column_writer->FinalizeSchema(file_meta_data.schema);
 	}
 	if (written_stats) {
+		auto &file_stats = *written_stats;
 		for (auto &column_writer : column_writers) {
+			auto &name = column_writer->Schema().name;
+			file_stats.column_types.emplace(name, column_writer->InternalType());
 			GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
 		}
 	}

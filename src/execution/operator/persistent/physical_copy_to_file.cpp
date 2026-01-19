@@ -718,6 +718,17 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyT
 
 	// partition_keys map(varchar, varchar)
 	chunk.SetValue(5, row_idx, info.partition_keys);
+
+	{
+		vector<Value> keys;
+		vector<Value> values;
+		for (auto &entry : file_stats.column_types) {
+			keys.emplace_back(Value(entry.first));
+			values.emplace_back(Value(entry.second.ToString()));
+		}
+		chunk.SetValue(6, row_idx,
+		               Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values)));
+	}
 }
 
 SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,

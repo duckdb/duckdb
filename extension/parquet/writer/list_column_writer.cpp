@@ -13,6 +13,10 @@ unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parq
 	return std::move(result);
 }
 
+LogicalType ListColumnWriter::InternalType() const {
+	return LogicalType::LIST(GetChildWriter().InternalType());
+}
+
 bool ListColumnWriter::HasAnalyze() {
 	return GetChildWriter().HasAnalyze();
 }
@@ -142,6 +146,11 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 }
 
 ColumnWriter &ListColumnWriter::GetChildWriter() {
+	D_ASSERT(child_writers.size() == 1);
+	return *child_writers[0];
+}
+
+const ColumnWriter &ListColumnWriter::GetChildWriter() const {
 	D_ASSERT(child_writers.size() == 1);
 	return *child_writers[0];
 }

@@ -29,6 +29,14 @@ unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_pa
 	return std::move(result);
 }
 
+LogicalType StructColumnWriter::InternalType() const {
+	child_list_t<LogicalType> child_types;
+	for (auto &child_writer : child_writers) {
+		child_types.emplace_back(child_writer->Schema().name, child_writer->InternalType());
+	}
+	return LogicalType::STRUCT(child_types);
+}
+
 bool StructColumnWriter::HasAnalyze() {
 	for (auto &child_writer : child_writers) {
 		if (child_writer->HasAnalyze()) {

@@ -34,6 +34,7 @@ public:
 	~ListColumnWriter() override = default;
 
 public:
+	LogicalType InternalType() const override;
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
@@ -48,6 +49,7 @@ public:
 
 protected:
 	ColumnWriter &GetChildWriter();
+	const ColumnWriter &GetChildWriter() const;
 };
 
 } // namespace duckdb

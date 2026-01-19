@@ -2,6 +2,11 @@
 
 namespace duckdb {
 
+LogicalType ArrayColumnWriter::InternalType() const {
+	auto array_size = ArrayType::GetSize(Type());
+	return LogicalType::ARRAY(GetChildWriter().InternalType(), array_size);
+}
+
 void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto &array_child = ArrayVector::GetEntry(vector);

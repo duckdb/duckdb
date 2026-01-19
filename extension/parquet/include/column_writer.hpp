@@ -96,6 +96,9 @@ public:
 	const LogicalType &Type() const {
 		return column_schema.type;
 	}
+	virtual LogicalType InternalType() const {
+		return column_schema.type;
+	}
 	const ParquetColumnSchema &Schema() const {
 		return column_schema;
 	}
