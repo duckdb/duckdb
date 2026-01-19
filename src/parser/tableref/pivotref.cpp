@@ -2,10 +2,14 @@
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/limits.hpp"
 
-#include <duckdb/common/exception/conversion_exception.hpp>
-#include <duckdb/parser/expression/cast_expression.hpp>
-#include <duckdb/parser/expression/constant_expression.hpp>
-#include <duckdb/parser/expression/function_expression.hpp>
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
