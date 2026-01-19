@@ -768,6 +768,11 @@
         "id": 203,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 204,
+        "name": "return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": [
