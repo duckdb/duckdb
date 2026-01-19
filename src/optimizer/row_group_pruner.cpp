@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 

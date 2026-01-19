@@ -145,8 +145,9 @@ void StorageExtension::Register(DBConfig &config, const string &extension_name,
 	config.GetCallbackManager().Register(extension_name, std::move(extension));
 }
 
+template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
-template class ExtensionCallbackIteratorHelper<ParserExtension>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
+template class ExtensionCallbackIteratorHelper<ParserExtension>;
 
 } // namespace duckdb

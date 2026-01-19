@@ -9,17 +9,20 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
-struct ExtensionCallbackRegistry;
-class ParserExtension;
-class OptimizerExtension;
-class OperatorExtension;
-class StorageExtension;
-class ExtensionCallback;
+
 class ClientContext;
+class DatabaseInstance;
+class ExtensionCallback;
+class OperatorExtension;
+class OptimizerExtension;
+class ParserExtension;
+class StorageExtension;
+struct ExtensionCallbackRegistry;
 
 template <class T>
 class ExtensionCallbackIteratorHelper;

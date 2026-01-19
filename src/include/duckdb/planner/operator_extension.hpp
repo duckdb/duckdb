@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+struct DBConfig;
+
 //! The OperatorExtensionInfo holds static information relevant to the operator extension
 struct OperatorExtensionInfo {
 	virtual ~OperatorExtensionInfo() {
