@@ -859,7 +859,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
-	      left_executor(client), right_executor(client), left_matches(nullptr), right_matches(nullptr)
+	      left_executor(client), right_executor(client), pred_executor(client), left_matches(nullptr),
+	      right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -880,6 +881,11 @@ public:
 
 		left_scan_state = left_table.CreateScanState(client);
 		right_scan_state = right_table.CreateScanState(client);
+
+		if (op.predicate) {
+			pred_executor.AddExpression(*op.predicate);
+			pred_matches.Initialize();
+		}
 
 		if (op.conditions.size() < 3) {
 			return;
@@ -979,6 +985,10 @@ public:
 	DataChunk right_keys;
 
 	DataChunk unprojected;
+
+	//! Arbitrary expressions
+	ExpressionExecutor pred_executor;
+	SelectionVector pred_matches;
 
 	// Outer joins
 	vector<idx_t> outer_sel;
@@ -1243,6 +1253,13 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 			}
 		}
 		chunk.SetCardinality(result_count);
+
+		//	Apply any arbitrary predicate
+		if (op.predicate) {
+			result_count = pred_executor.SelectExpression(chunk, pred_matches);
+			chunk.Slice(pred_matches, result_count);
+			sel = &pred_matches;
+		}
 
 		//	We need all of the data to compute other predicates,
 		//	but we only return what is in the projection map
