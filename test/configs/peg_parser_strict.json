@@ -23,7 +23,8 @@
         "test/sqlserver/sqlserver_cte.test",
         "test/optimizer/compare_blob.test",
         "test/sql/copy/csv/test_copy.test",
-        "test/sql/copy/csv/unquoted_escape/mixed.test"
+        "test/sql/copy/csv/unquoted_escape/mixed.test",
+        "test/issues/general/test_15483.test"
       ]
     },
     {

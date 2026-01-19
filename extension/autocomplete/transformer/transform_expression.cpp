@@ -13,6 +13,7 @@
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 namespace duckdb {
 
@@ -1007,21 +1008,53 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 		auto other_operator_choice = other_operator_pr.Child<ChoiceParseResult>(0).result;
 		if (StringUtil::CIEquals(other_operator_choice->name, "AnyAllOperator")) {
 			auto any_all = transformer.Transform<pair<ExpressionType, bool>>(other_operator_choice);
+			auto expression_type = any_all.first;
 			auto is_any = any_all.second;
-			auto comparison_type = is_any ? any_all.first : NegateComparisonExpression(any_all.first);
-
 			auto subquery_expr = make_uniq<SubqueryExpression>();
-			subquery_expr->subquery_type = SubqueryType::ANY;
-			subquery_expr->comparison_type = comparison_type;
-			if (right_expr->GetExpressionClass() != ExpressionClass::SUBQUERY) {
-				throw NotImplementedException("ANY/ALL expected a subquery");
-			}
-			auto &right_expr_subquery = right_expr->Cast<SubqueryExpression>();
-			subquery_expr->subquery = std::move(right_expr_subquery.subquery);
-			subquery_expr->child = std::move(expr);
-			expr = std::move(subquery_expr);
-			if (!is_any) {
-				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(expr));
+			if (right_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+				subquery_expr->subquery_type = SubqueryType::ANY;
+				subquery_expr->comparison_type = expression_type;
+				if (right_expr->GetExpressionClass() != ExpressionClass::SUBQUERY) {
+					throw NotImplementedException("ANY/ALL expected a subquery");
+				}
+				auto &right_expr_subquery = right_expr->Cast<SubqueryExpression>();
+				subquery_expr->subquery = std::move(right_expr_subquery.subquery);
+				subquery_expr->child = std::move(expr);
+				if (!is_any) {
+					// ALL sublink is equivalent to NOT(ANY) with inverted comparison
+					// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
+					// first invert the comparison type
+					subquery_expr->comparison_type = NegateComparisonExpression(subquery_expr->comparison_type);
+					return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(subquery_expr));
+				}
+				expr = std::move(subquery_expr);
+			} else {
+				// left=ANY(right)
+				// we turn this into left=ANY((SELECT UNNEST(right)))
+				auto select_statement = make_uniq<SelectStatement>();
+				auto select_node = make_uniq<SelectNode>();
+				vector<unique_ptr<ParsedExpression>> children;
+				children.push_back(std::move(right_expr));
+
+				select_node->select_list.push_back(make_uniq<FunctionExpression>("UNNEST", std::move(children)));
+				select_node->from_table = make_uniq<EmptyTableRef>();
+				select_statement->node = std::move(select_node);
+				subquery_expr->subquery = std::move(select_statement);
+				subquery_expr->subquery_type = SubqueryType::ANY;
+				subquery_expr->child = std::move(expr);
+				subquery_expr->comparison_type = expression_type;
+				if (subquery_expr->comparison_type == ExpressionType::INVALID) {
+					throw ParserException("Unsupported comparison \"%s\" for ANY/ALL subquery",
+					                      ExpressionTypeToString(expression_type));
+				}
+				if (!is_any) {
+					// ALL sublink is equivalent to NOT(ANY) with inverted comparison
+					// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
+					// first invert the comparison type
+					subquery_expr->comparison_type = NegateComparisonExpression(subquery_expr->comparison_type);
+					return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(subquery_expr));
+				}
+				return std::move(subquery_expr);
 			}
 		} else {
 			auto other_operator = transformer.Transform<string>(other_operator_pr);
