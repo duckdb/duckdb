@@ -219,15 +219,14 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, bool invert) {
 	auto &comparison = condition->Cast<BoundComparisonExpression>();
-	JoinCondition cond;
-	cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-	cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-	cond.comparison = condition->GetExpressionType();
+	auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+	auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+	auto comp_type = condition->GetExpressionType();
 	if (invert) {
 		// reverse comparison expression if we reverse the order of the children
-		cond.comparison = FlipComparisonExpression(cond.comparison);
+		comp_type = FlipComparisonExpression(comp_type);
 	}
-	return cond;
+	return JoinCondition(std::move(left), std::move(right), comp_type);
 }
 
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
@@ -341,7 +340,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			// attach to join's predicate field
 			auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
-			comp_join.conditions.emplace_back(std::move(combined));
+			comp_join.conditions.emplace_back(JoinCondition(std::move(combined)));
 		} else {
 			// push as filter
 			result_operator = PushFilter(std::move(result_operator), std::move(combined));
@@ -391,17 +390,17 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					continue;
 				}
 				// create the join condition
-				JoinCondition cond;
 				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = filter->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
-				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-				cond.comparison = comparison.GetExpressionType();
+				auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+				auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+				auto comp_type = comparison.GetExpressionType();
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = FlipComparisonExpression(comparison.GetExpressionType());
+					comp_type = FlipComparisonExpression(comp_type);
 				}
+				JoinCondition cond(std::move(left), std::move(right), comp_type);
 				// now find the join to push it into
 				auto node = result_operator.get();
 				if (node->type == LogicalOperatorType::LOGICAL_FILTER) {

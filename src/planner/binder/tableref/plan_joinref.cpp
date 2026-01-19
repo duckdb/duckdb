@@ -158,29 +158,28 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
-		JoinCondition condition;
-		condition.comparison = expr.GetExpressionType();
+		auto comp_type = expr.GetExpressionType();
 		auto left = std::move(comparison.left);
 		auto right = std::move(comparison.right);
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
-			condition.comparison = FlipComparisonExpression(expr.GetExpressionType());
+			comp_type = FlipComparisonExpression(comp_type);
 		}
-		condition.left = std::move(left);
-		condition.right = std::move(right);
-		conditions.push_back(std::move(condition));
+		conditions.push_back(JoinCondition(std::move(left), std::move(right), comp_type));
 		return true;
 	}
 	return false;
 }
 
 //! Extract join conditions, pushing single-side filters to children when it's safe
-void LogicalComparisonJoin::ExtractJoinConditions(
-    ClientContext &context, JoinType type, JoinRefType ref_type, unique_ptr<LogicalOperator> &left_child,
-    unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
-    const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
-    vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
+void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
+                                                  unique_ptr<LogicalOperator> &left_child,
+                                                  unique_ptr<LogicalOperator> &right_child,
+                                                  const unordered_set<idx_t> &left_bindings,
+                                                  const unordered_set<idx_t> &right_bindings,
+                                                  vector<unique_ptr<Expression>> &expressions,
+                                                  vector<JoinCondition> &conditions) {
 	for (auto &expr : expressions) {
 		auto side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 
@@ -205,7 +204,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 			}
 		}
 
-		arbitrary_expressions.push_back(std::move(expr));
+		conditions.emplace_back(std::move(expr));
 	}
 }
 
@@ -213,35 +212,42 @@ void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinTy
                                                   unique_ptr<LogicalOperator> &left_child,
                                                   unique_ptr<LogicalOperator> &right_child,
                                                   vector<unique_ptr<Expression>> &expressions,
-                                                  vector<JoinCondition> &conditions,
-                                                  vector<unique_ptr<Expression>> &arbitrary_expressions) {
+                                                  vector<JoinCondition> &conditions) {
 	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
 	return ExtractJoinConditions(context, type, ref_type, left_child, right_child, left_bindings, right_bindings,
-	                             expressions, conditions, arbitrary_expressions);
+	                             expressions, conditions);
 }
 
 void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
                                                   unique_ptr<LogicalOperator> &left_child,
                                                   unique_ptr<LogicalOperator> &right_child,
-                                                  unique_ptr<Expression> condition, vector<JoinCondition> &conditions,
-                                                  vector<unique_ptr<Expression>> &arbitrary_expressions) {
+                                                  unique_ptr<Expression> condition, vector<JoinCondition> &conditions) {
 	// split the expressions by the AND clause
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(std::move(condition));
 	LogicalFilter::SplitPredicates(expressions);
-	return ExtractJoinConditions(context, type, ref_type, left_child, right_child, expressions, conditions,
-	                             arbitrary_expressions);
+	return ExtractJoinConditions(context, type, ref_type, left_child, right_child, expressions, conditions);
 }
 
 //! Create the join operator based on conditions and join type
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, JoinRefType ref_type,
                                                               unique_ptr<LogicalOperator> left_child,
                                                               unique_ptr<LogicalOperator> right_child,
-                                                              vector<JoinCondition> conditions,
-                                                              vector<unique_ptr<Expression>> arbitrary_expressions) {
+                                                              vector<JoinCondition> conditions) {
 	const bool is_asof = ref_type == JoinRefType::ASOF;
+
+	// separate comparison and non-comparison conditions for validation
+	vector<JoinCondition> comparison_conditions;
+	vector<JoinCondition> non_comparison_conditions;
+	for (auto &cond : conditions) {
+		if (cond.IsComparison()) {
+			comparison_conditions.push_back(std::move(cond));
+		} else {
+			non_comparison_conditions.push_back(std::move(cond));
+		}
+	}
 
 	// validate ASOF join conditions
 	if (is_asof) {
@@ -251,7 +257,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		case JoinType::OUTER:
 		case JoinType::SEMI:
 		case JoinType::ANTI:
-			if (!arbitrary_expressions.empty()) {
+			if (!non_comparison_conditions.empty()) {
 				throw NotImplementedException("Unsupported ASOF JOIN type (%s) with arbitrary predicate",
 				                              EnumUtil::ToChars(type));
 			}
@@ -260,10 +266,10 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 			break;
 		}
 
-		idx_t asof_idx = conditions.size();
-		for (size_t c = 0; c < conditions.size(); ++c) {
-			auto &cond = conditions[c];
-			switch (cond.comparison) {
+		idx_t asof_idx = comparison_conditions.size();
+		for (size_t c = 0; c < comparison_conditions.size(); ++c) {
+			auto &cond = comparison_conditions[c];
+			switch (cond.GetComparisonType()) {
 			case ExpressionType::COMPARE_EQUAL:
 			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 				break;
@@ -271,7 +277,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 			case ExpressionType::COMPARE_GREATERTHAN:
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			case ExpressionType::COMPARE_LESSTHAN:
-				if (asof_idx < conditions.size()) {
+				if (asof_idx < comparison_conditions.size()) {
 					throw BinderException("Multiple ASOF JOIN inequalities");
 				}
 				asof_idx = c;
@@ -280,81 +286,67 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 				throw BinderException("Invalid ASOF JOIN comparison");
 			}
 		}
-		if (asof_idx >= conditions.size()) {
+		if (asof_idx >= comparison_conditions.size()) {
 			throw BinderException("Missing ASOF JOIN inequality");
 		}
 	}
 
+	// Reconstruct full conditions vector
+	vector<JoinCondition> all_conditions;
+	for (auto &cond : comparison_conditions) {
+		all_conditions.push_back(std::move(cond));
+	}
+	for (auto &cond : non_comparison_conditions) {
+		all_conditions.push_back(std::move(cond));
+	}
+
 	// what type of join to create now?
-	// Case 1: ASOF join - use comparison join
+	// Case 1: ASOF join - use comparison join (all conditions already in vector)
 	if (is_asof) {
 		auto asof_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_ASOF_JOIN);
-		asof_join->conditions = std::move(conditions);
+		asof_join->conditions = std::move(all_conditions);
 		asof_join->children.push_back(std::move(left_child));
 		asof_join->children.push_back(std::move(right_child));
-
-		for (auto &expr : arbitrary_expressions) {
-			asof_join->conditions.emplace_back(std::move(expr));
-		}
-
 		return std::move(asof_join);
 	}
 
-	// Case 2: No join conditions - use any join
-	if (conditions.empty()) {
-		if (arbitrary_expressions.empty()) {
-			arbitrary_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+	// Case 2: No comparison conditions - use any join
+	if (comparison_conditions.empty()) {
+		if (all_conditions.empty()) {
+			all_conditions.emplace_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
 
 		auto any_join = make_uniq<LogicalAnyJoin>(type);
 		any_join->children.push_back(std::move(left_child));
 		any_join->children.push_back(std::move(right_child));
-
-		any_join->condition = std::move(arbitrary_expressions[0]);
-		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_uniq<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
-		}
-
+		any_join->condition = JoinCondition::CreateExpression(std::move(all_conditions));
 		return std::move(any_join);
 	}
 
-	// Case 3: Has join conditions and arbitrary expressions - check equality
-	if (!arbitrary_expressions.empty()) {
-		for (auto &expr : arbitrary_expressions) {
-			conditions.emplace_back(std::move(expr));
-		}
-		bool has_equality = false;
-		for (auto &cond : conditions) {
-			if (cond.IsComparison()) {
-				auto comp_type = cond.GetComparisonType();
-				if (comp_type == ExpressionType::COMPARE_EQUAL ||
-				    comp_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-					has_equality = true;
-					break;
-				}
+	// Case 3: Has comparison conditions - check if has equality for optimization
+	bool has_equality = false;
+	for (auto &cond : all_conditions) {
+		if (cond.IsComparison()) {
+			auto comp_type = cond.GetComparisonType();
+			if (comp_type == ExpressionType::COMPARE_EQUAL || comp_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				has_equality = true;
+				break;
 			}
 		}
+	}
 
-		if (has_equality) {
-			// Has equality - use comparison join (will be converted to Hash Join later)
-			auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-			comp_join->conditions = std::move(conditions);
-			comp_join->children.push_back(std::move(left_child));
-			comp_join->children.push_back(std::move(right_child));
-			return std::move(comp_join);
-		}
-		// No equality - use any join
+	if (!has_equality && !non_comparison_conditions.empty()) {
+		// No equality and has non-comparison - use any join
 		auto any_join = make_uniq<LogicalAnyJoin>(type);
-		any_join->condition = JoinCondition::CreateExpression(std::move(conditions));
+		any_join->condition = JoinCondition::CreateExpression(std::move(all_conditions));
 		any_join->children.push_back(std::move(left_child));
 		any_join->children.push_back(std::move(right_child));
 		return std::move(any_join);
 	}
 
-	// Case 4: Has join conditions but not arbitrary expressions - use comparison join
+	// Case 4: Use comparison join (hash join path)
 	auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-	comp_join->conditions = std::move(conditions);
+	comp_join->conditions = std::move(all_conditions);
 	comp_join->children.push_back(std::move(left_child));
 	comp_join->children.push_back(std::move(right_child));
 
@@ -378,11 +370,10 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
                                                               unique_ptr<LogicalOperator> right_child,
                                                               unique_ptr<Expression> condition) {
 	vector<JoinCondition> conditions;
-	vector<unique_ptr<Expression>> arbitrary_expressions;
 	LogicalComparisonJoin::ExtractJoinConditions(context, type, reftype, left_child, right_child, std::move(condition),
-	                                             conditions, arbitrary_expressions);
+	                                             conditions);
 	return LogicalComparisonJoin::CreateJoin(type, reftype, std::move(left_child), std::move(right_child),
-	                                         std::move(conditions), std::move(arbitrary_expressions));
+	                                         std::move(conditions));
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
@@ -473,8 +464,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
 			auto &cond = comp_join.conditions[i];
 			if (cond.IsComparison()) {
-				PlanSubqueries(cond.left, comp_join.children[0]);
-				PlanSubqueries(cond.right, comp_join.children[1]);
+				PlanSubqueries(cond.LeftReference(), comp_join.children[0]);
+				PlanSubqueries(cond.RightReference(), comp_join.children[1]);
 			}
 		}
 		break;

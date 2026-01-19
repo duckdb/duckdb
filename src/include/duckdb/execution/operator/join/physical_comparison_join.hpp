@@ -22,10 +22,10 @@ class PhysicalComparisonJoin : public PhysicalJoin {
 public:
 	PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperatorType type,
 	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
-	PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperatorType type,
-	                       JoinType join_type, idx_t estimated_cardinality);
 
 	vector<JoinCondition> conditions;
+	//! Non-comparison predicate for additional filtering (can be nullptr)
+	unique_ptr<Expression> predicate;
 	//! Scans where we should push generated filters into (if any)
 	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
 

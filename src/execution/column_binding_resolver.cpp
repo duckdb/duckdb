@@ -26,7 +26,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto left_types = types;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.IsComparison()) {
-				VisitExpression(&cond.left);
+				VisitExpression(&cond.LeftReference());
 			}
 		}
 
@@ -39,7 +39,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto right_types = types;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.IsComparison()) {
-				VisitExpression(&cond.right);
+				VisitExpression(&cond.RightReference());
 			}
 		}
 
@@ -53,7 +53,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		types = combined_types;
 		for (auto &cond : comp_join.conditions) {
 			if (!cond.IsComparison()) {
-				VisitExpression(&cond.left);
+				VisitExpression(&cond.JoinExpressionReference());
 			}
 		}
 
@@ -69,7 +69,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &delim_side = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
 		VisitOperator(delim_side);
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.right : cond.left;
+			auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
 			VisitExpression(&expr);
 		}
 		// visit the duplicate eliminated columns
@@ -80,7 +80,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &other_side = comp_join.delim_flipped ? *comp_join.children[0] : *comp_join.children[1];
 		VisitOperator(other_side);
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.left : cond.right;
+			auto &expr = comp_join.delim_flipped ? cond.LeftReference() : cond.RightReference();
 			VisitExpression(&expr);
 		}
 		// finally update the bindings with the result bindings of the join

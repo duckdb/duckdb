@@ -31,6 +31,13 @@ public:
 		return comparison != ExpressionType::INVALID;
 	}
 
+	JoinCondition Copy() const {
+		if (IsComparison()) {
+			return JoinCondition(left->Copy(), right->Copy(), comparison);
+		}
+		return JoinCondition(left->Copy());
+	}
+
 	Expression &GetLHS() {
 		if (!IsComparison()) {
 			throw InternalException("GetLHS used on a JoinCondition that is not a left/right comparison");
@@ -66,6 +73,27 @@ public:
 		return comparison;
 	}
 
+	void Swap() {
+		if (!IsComparison()) {
+			throw InternalException("Swap used on a JoinCondition that is not a left/right comparison");
+		}
+		std::swap(left, right);
+	}
+
+	unique_ptr<Expression> &LeftReference() {
+		if (!IsComparison()) {
+			throw InternalException("LeftReference used on a JoinCondition that is not a left/right comparison");
+		}
+		return left;
+	}
+
+	unique_ptr<Expression> &RightReference() {
+		if (!IsComparison()) {
+			throw InternalException("RightReference used on a JoinCondition that is not a left/right comparison");
+		}
+		return right;
+	}
+
 	Expression &GetJoinExpression() {
 		if (IsComparison()) {
 			throw InternalException("GetJoinExpression used on a JoinCondition that is a comparison");
@@ -80,6 +108,20 @@ public:
 		return *left;
 	}
 
+	unique_ptr<Expression> &JoinExpressionReference() {
+		if (IsComparison()) {
+			throw InternalException("JoinExpressionReference used on a JoinCondition that is a comparison");
+		}
+		return left;
+	}
+
+	const unique_ptr<Expression> &JoinExpressionReference() const {
+		if (IsComparison()) {
+			throw InternalException("JoinExpressionReference used on a JoinCondition that is a comparison");
+		}
+		return left;
+	}
+
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits
 	//! the left/right expressions
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
@@ -88,7 +130,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static JoinCondition Deserialize(Deserializer &deserializer);
 
-public:
+private:
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
 	ExpressionType comparison;

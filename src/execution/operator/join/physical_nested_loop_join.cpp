@@ -12,25 +12,11 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
                                                vector<JoinCondition> conds, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, join_type,
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(conds), join_type,
                              estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info_p);
 	children.push_back(left);
 	children.push_back(right);
-
-	vector<JoinCondition> arbitrary_conds;
-	for (auto &cond : conds) {
-		if (cond.IsComparison()) {
-			conditions.push_back(std::move(cond));
-		} else {
-			arbitrary_conds.push_back(std::move(cond));
-		}
-	}
-	ReorderConditions(conditions);
-
-	if (!arbitrary_conds.empty()) {
-		predicate = JoinCondition::CreateExpression(std::move(arbitrary_conds));
-	}
 }
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
@@ -138,9 +124,9 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 		if (!cond.IsComparison()) {
 			continue;
 		}
-		if (cond.left->return_type.InternalType() == PhysicalType::STRUCT ||
-		    cond.left->return_type.InternalType() == PhysicalType::LIST ||
-		    cond.left->return_type.InternalType() == PhysicalType::ARRAY) {
+		if (cond.GetLHS().return_type.InternalType() == PhysicalType::STRUCT ||
+		    cond.GetLHS().return_type.InternalType() == PhysicalType::LIST ||
+		    cond.GetLHS().return_type.InternalType() == PhysicalType::ARRAY) {
 			return false;
 		}
 	}
@@ -197,8 +183,8 @@ public:
 	    : rhs_executor(context) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : op.conditions) {
-			rhs_executor.AddExpression(*cond.right);
-			condition_types.push_back(cond.right->return_type);
+			rhs_executor.AddExpression(cond.GetRHS());
+			condition_types.push_back(cond.GetRHS().return_type);
 		}
 		right_condition.Initialize(Allocator::Get(context), condition_types);
 
@@ -217,8 +203,8 @@ public:
 
 vector<LogicalType> PhysicalNestedLoopJoin::GetJoinTypes() const {
 	vector<LogicalType> result;
-	for (auto &op : conditions) {
-		result.push_back(op.right->return_type);
+	for (auto &cond : conditions) {
+		result.push_back(cond.GetRHS().return_type);
 	}
 	return result;
 }
@@ -299,8 +285,8 @@ public:
 	      left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
-			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type);
+			lhs_executor.AddExpression(cond.GetLHS());
+			condition_types.push_back(cond.GetLHS().return_type);
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);

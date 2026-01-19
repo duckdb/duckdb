@@ -59,10 +59,14 @@ static void FlipChildren(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		join.join_type = InverseJoinType(join.join_type);
-		for (auto &cond : join.conditions) {
+		for (idx_t i = 0; i < join.conditions.size(); i++) {
+			auto &cond = join.conditions[i];
 			if (cond.IsComparison()) {
-				std::swap(cond.left, cond.right);
-				cond.comparison = FlipComparisonExpression(cond.comparison);
+				auto left_expr = cond.RightReference()->Copy();
+				auto right_expr = cond.LeftReference()->Copy();
+				auto flipped_comparison = FlipComparisonExpression(cond.GetComparisonType());
+
+				join.conditions[i] = JoinCondition(std::move(left_expr), std::move(right_expr), flipped_comparison);
 			}
 		}
 		std::swap(join.left_projection_map, join.right_projection_map);

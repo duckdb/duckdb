@@ -123,8 +123,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		auto &comparison_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comparison_join.conditions) {
 			if (cond.IsComparison()) {
-				filter_combiner.AddFilter(
-				    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+				filter_combiner.AddFilter(make_uniq<BoundComparisonExpression>(
+				    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy()));
 			} else {
 				filter_combiner.AddFilter(cond.GetJoinExpression().Copy());
 			}
@@ -194,7 +194,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		auto &comparison_join = join.Cast<LogicalComparisonJoin>();
 		for (auto &cond : comparison_join.conditions) {
 			if (!cond.IsComparison()) {
-				if (AddFilter(cond.left->Copy()) == FilterResult::UNSATISFIABLE) {
+				if (AddFilter(cond.GetJoinExpression().Copy()) == FilterResult::UNSATISFIABLE) {
 					has_unsatisfiable_condition = true;
 					break;
 				}

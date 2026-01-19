@@ -19,11 +19,11 @@ InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() cons
 		}
 		auto &condition = conditions[i];
 		if (condition.IsComparison()) {
-			auto expr = make_uniq<BoundComparisonExpression>(condition.comparison, condition.left->Copy(),
-			                                                 condition.right->Copy());
+			auto expr = make_uniq<BoundComparisonExpression>(condition.GetComparisonType(), condition.GetLHS().Copy(),
+			                                                 condition.GetRHS().Copy());
 			conditions_info += expr->ToString();
 		} else {
-			conditions_info += condition.left->ToString();
+			conditions_info += condition.GetJoinExpression().ToString();
 		}
 	}
 	result["Conditions"] = conditions_info;
@@ -37,7 +37,7 @@ bool LogicalComparisonJoin::HasEquality(idx_t &range_count) const {
 	for (size_t c = 0; c < conditions.size(); ++c) {
 		auto &cond = conditions[c];
 		if (cond.IsComparison()) {
-			switch (cond.comparison) {
+			switch (cond.GetComparisonType()) {
 			case ExpressionType::COMPARE_EQUAL:
 			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 				result = true;

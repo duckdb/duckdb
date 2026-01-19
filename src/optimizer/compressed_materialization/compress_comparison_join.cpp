@@ -60,7 +60,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	if (join.HasArbitraryConditions()) {
 		for (const auto &condition : join.conditions) {
 			if (!condition.IsComparison()) {
-				GetReferencedBindings(*condition.left, referenced_bindings);
+				GetReferencedBindings(condition.GetJoinExpression(), referenced_bindings);
 			}
 		}
 	}
@@ -69,11 +69,12 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// We only try to compress the join condition cols if there's one join condition
 			// Else it gets messy with the stats if one column shows up in multiple conditions
-			if (condition.IsComparison() && condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
-			    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			if (condition.IsComparison() &&
+			    condition.GetLHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+			    condition.GetRHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				// check if either side is referenced in residual predicate
-				auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
-				auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
+				auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
+				auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
 				bool lhs_referenced = referenced_bindings.count(lhs_colref.binding) > 0;
 				bool rhs_referenced = referenced_bindings.count(rhs_colref.binding) > 0;
 
@@ -89,9 +90,9 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 						merged_stats.Merge(*rhs_it->second);
 
 						// If one can be compressed, both can (same stats)
-						auto compress_expr = GetCompressExpression(condition.left->Copy(), merged_stats);
+						auto compress_expr = GetCompressExpression(condition.GetLHS().Copy(), merged_stats);
 						if (compress_expr) {
-							D_ASSERT(GetCompressExpression(condition.right->Copy(), merged_stats));
+							D_ASSERT(GetCompressExpression(condition.GetRHS().Copy(), merged_stats));
 							// This will be compressed generically, but we have to merge the stats
 							lhs_it->second->Merge(merged_stats);
 							rhs_it->second->Merge(merged_stats);
@@ -103,8 +104,8 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 			}
 		}
 		if (condition.IsComparison()) {
-			GetReferencedBindings(*condition.left, referenced_bindings);
-			GetReferencedBindings(*condition.right, referenced_bindings);
+			GetReferencedBindings(condition.GetLHS(), referenced_bindings);
+			GetReferencedBindings(condition.GetRHS(), referenced_bindings);
 		}
 	}
 
@@ -151,16 +152,16 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 
 	for (idx_t condition_idx = 0; condition_idx < compressed_join.conditions.size(); condition_idx++) {
 		auto &condition = compressed_join.conditions[condition_idx];
-		if (condition.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
-		    condition.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		if (!condition.IsComparison() || condition.GetLHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+		    condition.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue; // We definitely didn't compress these, nothing changed
 		}
 		if (condition_idx * 2 >= compressed_join.join_stats.size()) {
 			break;
 		}
 
-		auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
-		auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
+		auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
+		auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
 		auto &lhs_join_stats = compressed_join.join_stats[condition_idx * 2];
 		auto &rhs_join_stats = compressed_join.join_stats[condition_idx * 2 + 1];
 		auto lhs_it = statistics_map.find(lhs_colref.binding);

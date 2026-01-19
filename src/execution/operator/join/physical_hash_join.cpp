@@ -35,7 +35,8 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, join_type, estimated_cardinality),
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(conds), join_type,
+                             estimated_cardinality),
       delim_types(std::move(delim_types)) {
 	filter_pushdown = std::move(pushdown_info_p);
 
@@ -45,33 +46,17 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	auto &lhs_input_types = children[0].get().GetTypes();
 	auto &rhs_input_types = children[1].get().GetTypes();
 
-	vector<JoinCondition> arbitrary_conds;
-	for (auto &cond : conds) {
-		if (cond.IsComparison()) {
-			conditions.push_back(std::move(cond));
-		} else {
-			arbitrary_conds.push_back(std::move(cond));
-		}
-	}
-	ReorderConditions(conditions);
-
-	unique_ptr<Expression> residual_p;
-	if (!arbitrary_conds.empty()) {
-		residual_p = JoinCondition::CreateExpression(std::move(arbitrary_conds));
+	for (auto &condition : conditions) {
+		D_ASSERT(condition.IsComparison());
+		condition_types.push_back(condition.GetLHS().return_type);
 	}
 
 	vector<idx_t> probe_cols;
 	vector<idx_t> build_cols;
-	if (residual_p) {
-		ExtractResidualPredicateColumns(residual_p, lhs_input_types.size(), probe_cols, build_cols);
 
-		// create info struct
-		residual_info = make_uniq<ResidualPredicateInfo>(std::move(residual_p));
-	}
-
-	// build condition types
-	for (auto &condition : conditions) {
-		condition_types.push_back(condition.left->return_type);
+	if (predicate) {
+		ExtractResidualPredicateColumns(predicate, lhs_input_types.size(), probe_cols, build_cols);
+		residual_info = make_uniq<ResidualPredicateInfo>();
 	}
 
 	// build lhs_output_columns
@@ -141,7 +126,7 @@ void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &p
 
 void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types,
                                                    const vector<idx_t> &probe_cols) {
-	D_ASSERT(residual_info && residual_info->HasPredicate());
+	D_ASSERT(residual_info);
 	// build lhs_probe_columns (output + predicate columns)
 	unordered_set<idx_t> required_probe_cols;
 	for (auto col : lhs_output_columns.col_idxs) {
@@ -186,12 +171,14 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
 	unordered_map<idx_t, idx_t> build_input_to_layout;
 
-	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
-		auto &condition = conditions[cond_idx];
-		if (condition.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto build_input_idx = condition.right->Cast<BoundReferenceExpression>().index;
+	// Only consider comparison conditions for the hash join conditions
+	idx_t cond_idx = 0;
+	for (auto &condition : conditions) {
+		if (condition.GetRHS().GetExpressionClass() == ExpressionClass::BOUND_REF) {
+			auto build_input_idx = condition.GetRHS().Cast<BoundReferenceExpression>().index;
 			build_columns_in_conditions.emplace(build_input_idx, cond_idx);
 		}
+		cond_idx++;
 	}
 
 	// handle SEMI/ANTI/MARK joins
@@ -199,7 +186,7 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 		MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_cols, build_columns_in_conditions,
 		                        build_input_to_layout);
 
-		if (residual_info && residual_info->HasPredicate()) {
+		if (residual_info) {
 			residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
 		}
 		return;
@@ -242,7 +229,7 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 		rhs_output_columns.col_types.push_back(rhs_col_type);
 	}
 
-	if (residual_info && residual_info->HasPredicate()) {
+	if (residual_info) {
 		residual_info->build_input_to_layout_map = std::move(build_input_to_layout);
 	}
 }
@@ -252,7 +239,7 @@ void PhysicalHashJoin::MapResidualBuildColumns(const vector<LogicalType> &lhs_in
                                                const vector<idx_t> &build_cols,
                                                const unordered_map<idx_t, idx_t> &build_columns_in_conditions,
                                                unordered_map<idx_t, idx_t> &build_input_to_layout) {
-	if (!residual_info || !residual_info->HasPredicate()) {
+	if (!residual_info) {
 		return;
 	}
 
@@ -387,7 +374,7 @@ public:
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
-			join_key_executor.AddExpression(*cond.right);
+			join_key_executor.AddExpression(cond.GetRHS());
 		}
 		join_keys.Initialize(allocator, op.condition_types);
 
@@ -422,7 +409,7 @@ public:
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
 	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
 	                                       rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
-	                                       lhs_output_in_probe);
+	                                       predicate ? predicate.get() : nullptr, lhs_output_in_probe);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -942,8 +929,8 @@ void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &inf
                                              const PhysicalOperator &op, idx_t filter_col_idx) const {
 	// If the nulls are equal, we let nulls pass. If not, we filter them
 	auto filters_null_values = !ht.NullValuesAreEqual(0);
-	const auto key_name = ht.conditions[0].right->ToString();
-	const auto key_type = ht.conditions[0].left->return_type;
+	const auto key_name = ht.conditions[0].GetRHS().ToString();
+	const auto key_type = ht.conditions[0].GetLHS().return_type;
 	auto bf_filter = make_uniq<BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
 	ht.SetBuildBloomFilter(true);
 
@@ -975,7 +962,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
-		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
+		const auto cmp = op.conditions[join_condition[filter_idx]].GetComparisonType();
 		for (auto &info : probe_info) {
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
@@ -1130,9 +1117,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
 		min = filter_min_max->data[0].GetValue(0);
 		max = filter_min_max->data[1].GetValue(0);
-	} else if (TypeIsIntegral(conditions[0].right->return_type.InternalType())) {
-		min = Value::MinimumValue(conditions[0].right->return_type);
-		max = Value::MaximumValue(conditions[0].right->return_type);
+	} else if (TypeIsIntegral(conditions[0].GetRHS().return_type.InternalType())) {
+		min = Value::MinimumValue(conditions[0].GetRHS().return_type);
+		max = Value::MaximumValue(conditions[0].GetRHS().return_type);
 	}
 
 	// check for possible perfect hash table
@@ -1202,7 +1189,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
 		for (auto &cond : conditions) {
-			state->probe_executor.AddExpression(*cond.left);
+			state->probe_executor.AddExpression(cond.GetLHS());
 		}
 		TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 	}
@@ -1577,7 +1564,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, c
 	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
 	for (auto &cond : op.conditions) {
-		lhs_join_key_executor.AddExpression(*cond.left);
+		lhs_join_key_executor.AddExpression(cond.GetLHS());
 	}
 }
 
@@ -1771,16 +1758,16 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 		if (i > 0) {
 			condition_info += "\n";
 		}
-		condition_info +=
-		    StringUtil::Format("%s %s %s", join_condition.left->GetName(),
-		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
+		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName(),
+		                                     ExpressionTypeToOperator(join_condition.GetComparisonType()),
+		                                     join_condition.GetRHS().GetName());
 	}
 
-	if (residual_info && residual_info->HasPredicate()) {
+	if (predicate) {
 		if (!condition_info.empty()) {
 			condition_info += "\n";
 		}
-		condition_info += residual_info->predicate->ToString();
+		condition_info += predicate->ToString();
 	}
 
 	result["Conditions"] = condition_info;

@@ -65,7 +65,7 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max) {
 	// TODO: Add support for residual predicates
-	if (op.residual_info && op.residual_info->HasPredicate()) {
+	if (op.predicate) {
 		return false;
 	}
 
@@ -74,9 +74,10 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 	}
 
 	// We only do this optimization for inner joins with one integer equality condition
-	const auto key_type = op.conditions[0].left->return_type;
+	const auto key_type = op.conditions[0].GetLHS().return_type;
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
-	    op.conditions[0].comparison != ExpressionType::COMPARE_EQUAL || !TypeIsInteger(key_type.InternalType())) {
+	    op.conditions[0].GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
+	    !TypeIsInteger(key_type.InternalType())) {
 		return false;
 	}
 
@@ -252,7 +253,7 @@ public:
 	PerfectHashJoinState(ClientContext &context, const PhysicalHashJoin &join) : probe_executor(context) {
 		join_keys.Initialize(Allocator::Get(context), join.condition_types);
 		for (auto &cond : join.conditions) {
-			probe_executor.AddExpression(*cond.left);
+			probe_executor.AddExpression(cond.GetLHS());
 		}
 		build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 		probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);

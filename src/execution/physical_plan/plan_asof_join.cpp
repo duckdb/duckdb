@@ -24,7 +24,7 @@ static unique_ptr<Expression> CreatePredicateFromConditions(const vector<JoinCon
 	unique_ptr<Expression> predicate;
 	for (const auto &cond : conditions) {
 		if (!cond.IsComparison()) {
-			auto expr = cond.left->Copy();
+			auto expr = cond.GetJoinExpression().Copy();
 			if (!predicate) {
 				predicate = std::move(expr);
 			} else {
@@ -111,15 +111,15 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		if (!cond.IsComparison()) {
 			continue;
 		}
-		JoinCondition nested_cond;
-		nested_cond.left = cond.right->Copy();
-		nested_cond.right = cond.left->Copy();
-		if (!nested_cond.left || !nested_cond.right) {
+		auto left_expr = cond.GetRHS().Copy();
+		auto right_expr = cond.GetLHS().Copy();
+		if (!left_expr || !right_expr) {
 			return nullptr;
 		}
-		nested_cond.comparison = FlipComparisonExpression(cond.comparison);
+		auto comparison = FlipComparisonExpression(cond.GetComparisonType());
+		JoinCondition nested_cond(std::move(left_expr), std::move(right_expr), comparison);
 		join_op.conditions.emplace_back(std::move(nested_cond));
-		switch (cond.comparison) {
+		switch (cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
@@ -179,7 +179,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		comp_list.emplace_back(make_uniq<BoundReferenceExpression>(col_type, col_idx));
 	}
 	vector<LogicalType> comp_types = join_op.types;
-	auto comp_expr = op.conditions[asof_idx].right->Copy();
+	auto comp_expr = op.conditions[asof_idx].GetRHS().Copy();
 	comp_types.emplace_back(comp_expr->return_type);
 	comp_list.emplace_back(std::move(comp_expr));
 
@@ -296,7 +296,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 		if (!cond.IsComparison()) {
 			continue;
 		}
-		switch (cond.comparison) {
+		switch (cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			equi_indexes.emplace_back(c);
@@ -341,16 +341,16 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	//	Debug implementation: IEJoin of Window
 	//	LEAD(asof_column, 1, infinity) OVER (PARTITION BY equi_column... ORDER BY asof_column) AS asof_end
 	auto &asof_comp = op.conditions[asof_idx];
-	auto &asof_column = asof_comp.right;
+	auto &asof_column = asof_comp.RightReference();
 	auto asof_type = asof_column->return_type;
 	auto asof_end = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_LEAD, asof_type, nullptr, nullptr);
 	asof_end->children.emplace_back(asof_column->Copy());
 	// TODO: If infinities are not supported for a type, fake them by looking at LHS statistics?
 	asof_end->offset_expr = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
 	for (auto equi_idx : equi_indexes) {
-		asof_end->partitions.emplace_back(op.conditions[equi_idx].right->Copy());
+		asof_end->partitions.emplace_back(op.conditions[equi_idx].GetRHS().Copy());
 	}
-	switch (asof_comp.comparison) {
+	switch (asof_comp.GetComparisonType()) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
 		asof_end->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
@@ -378,25 +378,26 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	window.children.emplace_back(right);
 
 	// IEJoin(left, window, conditions || asof_comp ~op asof_end)
-	JoinCondition asof_upper;
-	asof_upper.left = asof_comp.left->Copy();
-	asof_upper.right = make_uniq<BoundReferenceExpression>(asof_type, window_types.size() - 1);
-	switch (asof_comp.comparison) {
+	auto left_expr = asof_comp.GetLHS().Copy();
+	auto right_expr = make_uniq<BoundReferenceExpression>(asof_type, window_types.size() - 1);
+	ExpressionType comparison;
+	switch (asof_comp.GetComparisonType()) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		asof_upper.comparison = ExpressionType::COMPARE_LESSTHAN;
+		comparison = ExpressionType::COMPARE_LESSTHAN;
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		asof_upper.comparison = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		comparison = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		asof_upper.comparison = ExpressionType::COMPARE_GREATERTHAN;
+		comparison = ExpressionType::COMPARE_GREATERTHAN;
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		asof_upper.comparison = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		comparison = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 		break;
 	default:
 		throw InternalException("Invalid ASOF JOIN comparison for IEJoin");
 	}
+	JoinCondition asof_upper(std::move(left_expr), std::move(right_expr), comparison);
 
 	op.conditions.emplace_back(std::move(asof_upper));
 	return Make<PhysicalIEJoin>(op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);

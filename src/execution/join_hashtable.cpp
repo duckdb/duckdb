@@ -37,36 +37,37 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
                              const vector<idx_t> &output_columns_p, unique_ptr<ResidualPredicateInfo> residual_p,
-                             const vector<idx_t> &output_in_probe)
+                             Expression *predicate_ptr, const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      radix_bits(INITIAL_RADIX_BITS) {
+      radix_bits(INITIAL_RADIX_BITS), residual_predicate(predicate_ptr) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
 
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
-		D_ASSERT(condition.left->return_type == condition.right->return_type);
-		auto type = condition.left->return_type;
-		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
-		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		D_ASSERT(condition.IsComparison());
+		D_ASSERT(condition.GetLHS().return_type == condition.GetRHS().return_type);
+		auto type = condition.GetLHS().return_type;
+		if (condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// ensure that all equality conditions are at the front,
 			// and that all other conditions are at the back
 			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
-			equality_predicates.push_back(condition.comparison);
+			equality_predicates.push_back(condition.GetComparisonType());
 			equality_predicate_columns.push_back(i);
 
 		} else {
 			// all non-equality conditions are at the back
-			non_equality_predicates.push_back(condition.comparison);
+			non_equality_predicates.push_back(condition.GetComparisonType());
 			non_equality_predicate_columns.push_back(i);
 		}
 
-		null_values_are_equal.push_back(condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
-		                                condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+		null_values_are_equal.push_back(condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		                                condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
 		condition_types.push_back(type);
 	}
@@ -851,9 +852,9 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
       found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
       is_null(true), rhs_pointers(LogicalType::POINTER), lhs_sel_vector(STANDARD_VECTOR_SIZE), last_match_count(0),
       last_sel_vector(STANDARD_VECTOR_SIZE) {
-	if (ht.residual_info && ht.residual_info->HasPredicate()) {
+	if (ht.residual_predicate) {
 		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
-		residual_executor->AddExpression(*ht.residual_info->predicate);
+		residual_executor->AddExpression(*ht.residual_predicate);
 
 		// initialize residual state
 		residual_state = make_uniq<ResidualPredicateProbeState>();
@@ -958,7 +959,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 		result_count = this->count;
 	}
 
-	if (ht.residual_info && ht.residual_info->HasPredicate() && result_count > 0) {
+	if (ht.residual_predicate && ht.residual_info && result_count > 0) {
 		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel);
 	}
 

@@ -794,13 +794,13 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			// However, we allow replacing references to join columns as they are equal to the other side by condition.
 			column_binding_map_t<ColumnBinding> replaceable_bindings;
 			for (auto &condition : join.conditions) {
-				if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
+				if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
 					return false;
 				}
-				VisitExpression(&condition.left);
+				VisitExpression(&condition.LeftReference());
 				auto left_binding = column_references.begin()->first;
 				column_references.clear();
-				VisitExpression(&condition.right);
+				VisitExpression(&condition.RightReference());
 				auto right_binding = column_references.begin()->first;
 				column_references.clear();
 
@@ -1019,12 +1019,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
-		JoinCondition condition;
-		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
+		auto left_expr = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
 		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		auto right_expr = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
+		JoinCondition condition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}
 

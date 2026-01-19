@@ -19,13 +19,13 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
 	for (auto &join_cond : conditions) {
-		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);
-		join_key_types.push_back(join_cond.left->return_type);
+		D_ASSERT(join_cond.GetLHS().return_type == join_cond.GetRHS().return_type);
+		join_key_types.push_back(join_cond.GetLHS().return_type);
 
 		// Convert the conditions to sort orders
-		auto left_expr = join_cond.left->Copy();
-		auto right_expr = join_cond.right->Copy();
-		switch (join_cond.comparison) {
+		auto left_expr = join_cond.GetLHS().Copy();
+		auto right_expr = join_cond.GetRHS().Copy();
+		switch (join_cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
@@ -404,7 +404,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	// perform the actual join
 	bool found_match[STANDARD_VECTOR_SIZE];
 	memset(found_match, 0, sizeof(found_match));
-	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].comparison);
+	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].GetComparisonType());
 
 	// use the sorted payload
 	const auto lhs_not_null = lhs_table.count - lhs_table.has_null;
@@ -599,7 +599,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		rhs_table.Repin(rhs_iterator);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
-		                                            conditions[0].comparison, state.prev_left_index);
+		                                            conditions[0].GetComparisonType(), state.prev_left_index);
 		if (result_count == 0) {
 			// exhausted this chunk on the right side
 			// move to the next right chunk
@@ -645,8 +645,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 						left.Slice(*sel, tail_count);
 						right.Slice(*sel, tail_count);
 					}
-					tail_count =
-					    SelectJoinTail(conditions[cmp_idx].comparison, left, right, sel, tail_count, &state.sel);
+					tail_count = SelectJoinTail(conditions[cmp_idx].GetComparisonType(), left, right, sel, tail_count,
+					                            &state.sel);
 					sel = &state.sel;
 				}
 

@@ -10,11 +10,11 @@ namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	if (cond.IsComparison()) {
-		auto bound_comparison =
-		    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+		auto bound_comparison = make_uniq<BoundComparisonExpression>(
+		    cond.GetComparisonType(), std::move(cond.LeftReference()), std::move(cond.RightReference()));
 		return std::move(bound_comparison);
 	}
-	return std::move(cond.left);
+	return std::move(cond.JoinExpressionReference());
 }
 
 unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {

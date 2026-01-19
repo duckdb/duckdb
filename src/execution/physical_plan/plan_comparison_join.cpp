@@ -99,7 +99,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	for (auto &cond : op.conditions) {
-		RewriteJoinCondition(cond.right, left.types.size());
+		RewriteJoinCondition(cond.RightReference(), left.types.size());
 	}
 	auto condition = JoinCondition::CreateExpression(std::move(op.conditions));
 	return Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(condition), op.join_type, op.estimated_cardinality);

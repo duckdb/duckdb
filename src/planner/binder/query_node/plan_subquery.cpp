@@ -184,30 +184,25 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			FunctionBinder function_binder(binder);
 			auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
 
-			JoinCondition cond;
-			cond.left = std::move(expr.children[0]);
-			cond.right = std::move(struct_expr);
-			cond.comparison = expr.comparison_type;
+			JoinCondition cond(std::move(expr.children[0]), std::move(struct_expr), expr.comparison_type);
 
 			// push collations
-			ExpressionBinder::PushCollation(binder.context, cond.left, cond.left->return_type);
-			ExpressionBinder::PushCollation(binder.context, cond.right, cond.right->return_type);
+			ExpressionBinder::PushCollation(binder.context, cond.LeftReference(), cond.GetLHS().return_type);
+			ExpressionBinder::PushCollation(binder.context, cond.RightReference(), cond.GetRHS().return_type);
 
 			join->conditions.push_back(std::move(cond));
 		} else {
 			// Standard case: compare each child separately
 			for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
-				JoinCondition cond;
-				cond.left = std::move(expr.children[child_idx]);
 				auto &child_type = expr.child_types[child_idx];
 				auto &compare_type = expr.child_targets[child_idx];
-				cond.right = BoundCastExpression::AddDefaultCastToType(
+				auto right_expr = BoundCastExpression::AddDefaultCastToType(
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), compare_type);
-				cond.comparison = expr.comparison_type;
+				JoinCondition cond(std::move(expr.children[child_idx]), std::move(right_expr), expr.comparison_type);
 
 				// push collations
-				ExpressionBinder::PushCollation(binder.context, cond.left, compare_type);
-				ExpressionBinder::PushCollation(binder.context, cond.right, compare_type);
+				ExpressionBinder::PushCollation(binder.context, cond.LeftReference(), compare_type);
+				ExpressionBinder::PushCollation(binder.context, cond.RightReference(), compare_type);
 
 				join->conditions.push_back(std::move(cond));
 			}
@@ -444,14 +439,23 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
 	vector<JoinCondition> conditions;
-	vector<unique_ptr<Expression>> arbitrary_expressions;
 	if (condition) {
 		if (condition->HasSubquery()) {
 			throw BinderException(*condition, "Subqueries are not supported in LATERAL join conditions");
 		}
 		// extract join conditions, if there are any
 		LogicalComparisonJoin::ExtractJoinConditions(context, join_type, JoinRefType::REGULAR, left, right,
-		                                             std::move(condition), conditions, arbitrary_expressions);
+		                                             std::move(condition), conditions);
+	}
+
+	vector<JoinCondition> comparison_conditions;
+	vector<unique_ptr<Expression>> non_comparison_conditions;
+	for (auto &cond : conditions) {
+		if (cond.IsComparison()) {
+			comparison_conditions.push_back(std::move(cond));
+		} else {
+			non_comparison_conditions.push_back(JoinCondition::CreateExpression(std::move(cond)));
+		}
 	}
 
 	auto perform_delim = PerformDuplicateElimination(*this, correlated);
@@ -462,8 +466,8 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	delim_join->any_join = false;
 	delim_join->propagate_null_values = join_type != JoinType::INNER;
 	delim_join->is_lateral_join = true;
-	delim_join->arbitrary_expressions = std::move(arbitrary_expressions);
-	delim_join->conditions = std::move(conditions);
+	delim_join->arbitrary_expressions = std::move(non_comparison_conditions);
+	delim_join->conditions = std::move(comparison_conditions);
 	delim_join->AddChild(std::move(right));
 	return std::move(delim_join);
 }
