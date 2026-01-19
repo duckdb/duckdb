@@ -516,7 +516,7 @@ private:
 };
 
 //===--------------------------------------------------------------------===//
-// SetOptionsInfo
+// ResetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct ResetTableOptionsInfo : public AlterTableInfo {
 	ResetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options);
