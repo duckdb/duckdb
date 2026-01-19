@@ -330,9 +330,7 @@ public:
 			}
 
 			// Before looping back, check if we are interrupted
-			if (context.interrupted) {
-				throw InterruptException();
-			}
+			context.CheckTimeoutAndInterrupt();
 		} while (true);
 	}
 

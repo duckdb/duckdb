@@ -79,6 +79,8 @@ public:
 	shared_ptr<DatabaseInstance> db;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
+	//! The deadline for the current query (milliseconds since epoch, 0 = no deadline)
+	atomic<int64_t> query_deadline{0};
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
@@ -100,6 +102,9 @@ public:
 	DUCKDB_API bool IsInterrupted() const;
 	DUCKDB_API void ClearInterrupt();
 	DUCKDB_API void CancelTransaction();
+
+	//! Check for interrupt or timeout, throws InterruptException if triggered
+	DUCKDB_API void CheckTimeoutAndInterrupt() const;
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();

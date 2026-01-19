@@ -288,9 +288,7 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 			auto &chunk_state = iterator.GetChunkState();
 			do {
 				// Check for interrupts with each chunk
-				if (context.interrupted) {
-					throw InterruptException();
-				}
+				context.CheckTimeoutAndInterrupt();
 				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
 			} while (iterator.Next());
 

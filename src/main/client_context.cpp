@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
@@ -213,6 +214,14 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	active_query->query = query;
 
 	query_progress.Initialize();
+	// Set query deadline if max_execution_time is configured
+	if (config.max_execution_time > 0) {
+		auto now = steady_clock::now();
+		auto deadline_tp = now + milliseconds(config.max_execution_time);
+		query_deadline = duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count();
+	} else {
+		query_deadline = 0;
+	}
 	// Notify any registered state of query begin
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
@@ -238,6 +247,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
 	active_query.reset();
+	query_deadline = 0;
 	query_progress.Initialize();
 	ErrorData error;
 	try {
@@ -1121,6 +1131,19 @@ bool ClientContext::IsInterrupted() const {
 
 void ClientContext::ClearInterrupt() {
 	interrupted = false;
+}
+
+void ClientContext::CheckTimeoutAndInterrupt() const {
+	if (interrupted) {
+		throw InterruptException();
+	}
+	auto deadline = query_deadline.load(std::memory_order_relaxed);
+	if (deadline > 0) {
+		auto now = duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+		if (now >= deadline) {
+			throw InterruptException();
+		}
+	}
 }
 
 void ClientContext::CancelTransaction() {

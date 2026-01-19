@@ -1328,6 +1328,17 @@ struct ProgressBarTimeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaxExecutionTimeSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "max_execution_time";
+	static constexpr const char *Description =
+	    "The maximum execution time per query in milliseconds (0 = no limit)";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";
