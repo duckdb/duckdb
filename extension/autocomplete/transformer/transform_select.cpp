@@ -1207,7 +1207,10 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		auto group_by_list = group_by_expr->Cast<ListParseResult>();
 		auto type_str = transformer.Transform<string>(group_by_list.Child<ListParseResult>(0));
 		auto extract_parens = ExtractResultFromParens(group_by_list.Child<ListParseResult>(1));
-		auto expr_list = ExtractParseResultsFromList(extract_parens);
+		if (!extract_parens->Cast<OptionalParseResult>().HasResult()) {
+			throw ParserException("CUBE or ROLLUP column list cannot be emptied");
+		}
+		auto expr_list = ExtractParseResultsFromList(extract_parens->Cast<OptionalParseResult>().optional_result);
 
 		vector<GroupingSet> unfolding_sets;
 		for (auto &expr_node : expr_list) {
@@ -1477,7 +1480,7 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 	auto result = make_uniq<SampleOptions>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
-		throw NotImplementedException("Can only handle constant expressions for sample counts");
+		throw ParserException(expr->GetQueryLocation(), "Only constants are supported in sample clause currently");
 	}
 	auto &const_expr = expr->Cast<ConstantExpression>();
 	auto &sample_value = const_expr.value;
@@ -1501,6 +1504,12 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 		result->method = SampleMethod::RESERVOIR_SAMPLE;
 	}
 	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSampleValue(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 bool PEGTransformerFactory::TransformSampleUnit(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {

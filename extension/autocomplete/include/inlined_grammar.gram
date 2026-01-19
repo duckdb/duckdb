@@ -123,7 +123,7 @@ DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
+QualifiedTypeName <- (Identifier '.')* TypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList
 SetofType <- 'SETOF' Type
@@ -1301,7 +1301,8 @@ RepeatableSample <- 'REPEATABLE' Parens(SampleSeed)
 
 SampleSeed <- NumberLiteral
 
-SampleCount <- Expression SampleUnit?
+SampleCount <- SampleValue SampleUnit?
+SampleValue <- NumberLiteral / Parameter
 SampleUnit <- SamplePercentage / SampleRows
 SamplePercentage <- '%' / 'PERCENT'
 SampleRows <- 'ROWS'
@@ -1311,7 +1312,7 @@ GroupByAll <- 'ALL'
 GroupByList <- List(GroupByExpression)
 GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
 EmptyGroupingItem <- '(' ')'
-CubeOrRollupClause <- CubeOrRollup Parens(List(Expression))
+CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
 CubeOrRollup <- 'CUBE' / 'ROLLUP'
 GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
 

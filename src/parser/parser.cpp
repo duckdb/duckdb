@@ -250,7 +250,7 @@ void Parser::ParseQuery(const string &query) {
 					continue;
 				}
 
-				auto result = ext.parser_override(ext.parser_info.get(), query);
+				auto result = ext.parser_override(ext.parser_info.get(), query, options);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
 					return;

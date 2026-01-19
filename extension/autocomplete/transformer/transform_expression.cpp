@@ -349,7 +349,38 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	}
 	auto within_group_opt = list_pr.Child<OptionalParseResult>(2);
 	if (within_group_opt.HasResult()) {
-		throw NotImplementedException("Within group has not yet been implemented");
+		auto order_by_clause = transformer.Transform<vector<OrderByNode>>(within_group_opt.optional_result);
+		if (distinct) {
+			throw ParserException("DISTINCT is not allowed in combination with WITHIN GROUP");
+		}
+		if (!order_modifier->orders.empty()) {
+			throw ParserException("Cannot use multiple ORDER BY statements with WITHIN GROUP");
+		}
+		if (!order_modifier) {
+			throw InternalException("ORDER modifier for WITHIN GROUP is not initialized");
+		}
+		order_modifier->orders = std::move(order_by_clause);
+		if (order_modifier->orders.size() != 1) {
+			throw ParserException("Cannot use multiple ORDER BY clauses with WITHIN GROUP");
+		}
+		if (lowercase_name == "percentile_cont") {
+			if (function_children.size() != 1) {
+				throw ParserException("Wrong number of arguments for PERCENTILE_CONT");
+			}
+			lowercase_name = "quantile_cont";
+		} else if (lowercase_name == "percentile_disc") {
+			if (function_children.size() != 1) {
+				throw ParserException("Wrong number of arguments for PERCENTILE_DISC");
+			}
+			lowercase_name = "quantile_disc";
+		} else if (lowercase_name == "mode") {
+			if (!function_children.empty()) {
+				throw ParserException("Wrong number of arguments for MODE");
+			}
+			lowercase_name = "mode";
+		} else {
+			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
+		}
 	}
 	if (has_ignore_nulls_result) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
@@ -361,6 +392,14 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 
 	return std::move(result);
 }
+
+vector<OrderByNode> PEGTransformerFactory::TransformWithinGroupClause(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.GetChild(2));
+	return transformer.Transform<vector<OrderByNode>>(extract_parens);
+}
+
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -716,7 +755,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransf
 		return make_uniq<OperatorExpression>(expr_type, nullptr);
 	}
 	auto expr_type =
-	    not_expr.HasResult() ? ExpressionType::COMPARE_NOT_DISTINCT_FROM : ExpressionType::COMPARE_DISTINCT_FROM;
+	    not_expr.HasResult() ? ExpressionType::COMPARE_DISTINCT_FROM : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	return make_uniq<ComparisonExpression>(expr_type, nullptr, make_uniq<ConstantExpression>(literal_value));
 }
 
@@ -1119,6 +1158,9 @@ PEGTransformerFactory::TransformMultiplicativeExpression(PEGTransformer &transfo
 	for (auto &factor_expr : factor_repeat.children) {
 		auto &inner_list_pr = factor_expr->Cast<ListParseResult>();
 		auto factor = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
+		if (factor == "/" && transformer.options.integer_division) {
+			factor = "//";
+		}
 		vector<unique_ptr<ParsedExpression>> factor_children;
 		factor_children.push_back(std::move(expr));
 		factor_children.push_back(
@@ -1465,6 +1507,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIndirection(PEGTran
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPostfixOperator(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
+	vector<unique_ptr<ParsedExpression>> func_children;
+	return make_uniq<FunctionExpression>("factorial", std::move(func_children));
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCastOperator(PEGTransformer &transformer,
                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -1667,7 +1715,11 @@ qualified_column_set_t PEGTransformerFactory::TransformExcludeNameList(PEGTransf
 	auto exclude_name_list = ExtractParseResultsFromList(extract_parens);
 	qualified_column_set_t result;
 	for (auto exclude_name : exclude_name_list) {
-		result.insert(transformer.Transform<QualifiedColumnName>(exclude_name));
+		auto exclude_column = transformer.Transform<QualifiedColumnName>(exclude_name);
+		if (result.find(exclude_column) != result.end()) {
+			throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", exclude_column.ToString());
+		}
+		result.insert(std::move(exclude_column));
 	}
 	return result;
 }

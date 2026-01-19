@@ -66,9 +66,10 @@ public:
 	PEGTransformer(ArenaAllocator &allocator, PEGTransformerState &state,
 	               const case_insensitive_map_t<AnyTransformFunction> &transform_functions,
 	               const case_insensitive_map_t<PEGRule> &grammar_rules,
-	               const case_insensitive_map_t<unique_ptr<TransformEnumValue>> &enum_mappings)
+	               const case_insensitive_map_t<unique_ptr<TransformEnumValue>> &enum_mappings,
+	               ParserOptions &options_p)
 	    : allocator(allocator), state(state), grammar_rules(grammar_rules), transform_functions(transform_functions),
-	      enum_mappings(enum_mappings) {
+	      enum_mappings(enum_mappings), options(options_p) {
 	}
 
 public:
@@ -148,6 +149,8 @@ public:
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
 	case_insensitive_map_t<unique_ptr<WindowExpression>> window_clauses;
+
+	ParserOptions options;
 };
 
 class PEGTransformerFactory {
@@ -156,7 +159,7 @@ public:
 	explicit PEGTransformerFactory();
 
 	//! Helper functions
-	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, const char *root_rule = "Statement");
+	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, ParserOptions &options);
 	static optional_ptr<ParseResult> ExtractResultFromParens(optional_ptr<ParseResult> parse_result);
 	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
@@ -710,6 +713,8 @@ private:
 	static unique_ptr<ParsedExpression> TransformExponentiationExpression(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
 	static string TransformExponentOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformPostfixOperator(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformCollateExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAtTimeZoneExpression(PEGTransformer &transformer,
@@ -766,6 +771,8 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformCatalogReservedSchemaFunctionName(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
+	static vector<OrderByNode> TransformWithinGroupClause(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFilterClause(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
 
@@ -1240,6 +1247,8 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SampleOptions> TransformSampleCount(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformSampleValue(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
 	static bool TransformSampleUnit(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static pair<SampleMethod, optional_idx> TransformSampleProperties(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);

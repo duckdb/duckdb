@@ -26,7 +26,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, const char *root_rule) {
+unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options) {
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -52,12 +52,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
 	}
-	match_result->name = root_rule;
+	match_result->name = "Statement";
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
-	                           factory.parser.rules, factory.enum_mappings);
+	                           factory.parser.rules, factory.enum_mappings, options);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 	return result;
 }
@@ -416,6 +416,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformFactor);
 	REGISTER_TRANSFORM(TransformExponentiationExpression);
 	REGISTER_TRANSFORM(TransformExponentOperator);
+	REGISTER_TRANSFORM(TransformPostfixOperator);
 	REGISTER_TRANSFORM(TransformCollateExpression);
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
@@ -444,6 +445,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformArrayBoundedListExpression);
 	REGISTER_TRANSFORM(TransformArrayParensSelect);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
+	REGISTER_TRANSFORM(TransformWithinGroupClause);
 	REGISTER_TRANSFORM(TransformFilterClause);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 	REGISTER_TRANSFORM(TransformSchemaReservedFunctionName);
@@ -731,6 +733,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSampleEntryFunction);
 	REGISTER_TRANSFORM(TransformSampleEntryCount);
 	REGISTER_TRANSFORM(TransformSampleCount);
+	REGISTER_TRANSFORM(TransformSampleValue);
 	REGISTER_TRANSFORM(TransformSampleUnit);
 	REGISTER_TRANSFORM(TransformSampleProperties);
 	REGISTER_TRANSFORM(TransformSampleSeed);
