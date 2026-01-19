@@ -468,7 +468,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
 	                                                   config.options.block_allocator_size);
 	config.replacement_scans = std::move(new_config.replacement_scans);
-	config.parser_extensions = std::move(new_config.parser_extensions);
+	if (new_config.callback_manager) {
+		config.callback_manager = std::move(new_config.callback_manager);
+	}
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();

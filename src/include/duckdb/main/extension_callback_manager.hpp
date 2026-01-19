@@ -29,13 +29,18 @@ public:
 	ExtensionCallbackManager();
 	~ExtensionCallbackManager();
 
+	static ExtensionCallbackManager &Get(ClientContext &context);
+	static const ExtensionCallbackManager &Get(const ClientContext &context);
+
 	void Register(ParserExtension extension);
 	void Register(OptimizerExtension extension);
 	void Register(shared_ptr<OperatorExtension> extension);
 	void Register(shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
 
-	static ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions(ClientContext &context);
+	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
+	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
+	bool HasParserExtensions() const;
 
 private:
 	mutex registry_lock;

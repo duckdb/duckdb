@@ -610,7 +610,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
-	config.parser_extensions.push_back(QuackExtension());
+	ParserExtension::Register(config, QuackExtension());
 	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
 
 	// Bounded type

@@ -20,6 +20,14 @@ struct ExtensionCallbackRegistry {
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
 };
 
+ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
+	return DBConfig::GetConfig(context).GetCallbackManager();
+}
+
+const ExtensionCallbackManager &ExtensionCallbackManager::Get(const ClientContext &context) {
+	return DBConfig::GetConfig(context).GetCallbackManager();
+}
+
 ExtensionCallbackManager::ExtensionCallbackManager() : callback_registry(make_shared_ptr<ExtensionCallbackRegistry>()) {
 }
 ExtensionCallbackManager::~ExtensionCallbackManager() {
@@ -33,15 +41,22 @@ void ExtensionCallbackManager::Register(ParserExtension extension) {
 }
 
 void ExtensionCallbackManager::Register(OptimizerExtension extension) {
+	throw InternalException("eek");
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<OperatorExtension> extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->operator_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<StorageExtension> extension) {
+	throw InternalException("eek");
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension) {
+	throw InternalException("eek");
 }
 
 template <class T>
@@ -55,13 +70,28 @@ ExtensionCallbackIteratorHelper<T>::~ExtensionCallbackIteratorHelper() {
 }
 
 ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>
-ExtensionCallbackManager::OperatorExtensions(ClientContext &context) {
-	auto &callback_manager = DBConfig::GetConfig(context).GetCallbackManager();
-	auto registry = callback_manager.callback_registry.atomic_load();
+ExtensionCallbackManager::OperatorExtensions() const {
+	auto registry = callback_registry.atomic_load();
 	auto &operator_extensions = registry->operator_extensions;
 	return ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>(operator_extensions, std::move(registry));
 }
 
+ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::ParserExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	auto &parser_extensions = registry->parser_extensions;
+	return ExtensionCallbackIteratorHelper<ParserExtension>(parser_extensions, std::move(registry));
+}
+
+bool ExtensionCallbackManager::HasParserExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	return !registry->parser_extensions.empty();
+}
+
+void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
+template class ExtensionCallbackIteratorHelper<ParserExtension>;
 
 } // namespace duckdb

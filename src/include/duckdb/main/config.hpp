@@ -37,7 +37,6 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
 
@@ -208,8 +207,6 @@ public:
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! Database configuration variables as controlled by SET
 	GlobalUserSettings user_settings;
-	//! Extensions made to the parser
-	vector<ParserExtension> parser_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Extensions made to storage
@@ -309,6 +306,7 @@ public:
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
+	const ExtensionCallbackManager &GetCallbackManager() const;
 
 private:
 	mutable mutex config_lock;

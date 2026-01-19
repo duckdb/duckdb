@@ -41,7 +41,7 @@ public:
 	}
 
 	static ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> Iterate(ClientContext &context) {
-		return ExtensionCallbackManager::OperatorExtensions(context);
+		return ExtensionCallbackManager::Get(context).OperatorExtensions();
 	}
 };
 
