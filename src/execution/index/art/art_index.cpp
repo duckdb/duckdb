@@ -51,7 +51,7 @@ public:
 };
 
 // build_sink_init
-unique_ptr<IndexBuildState> ARTBuildGlobalInit(IndexBuildBindInput &input) {
+unique_ptr<IndexBuildState> ARTBuildGlobalInit(IndexBuildInitStateInput &input) {
 	auto state = make_uniq<ARTBuildGlobalState>();
 	auto &storage = input.table.GetStorage();
 	state->global_index = make_uniq<ART>(input.info.index_name, input.info.constraint_type, input.storage_ids,
@@ -178,12 +178,8 @@ IndexType ART::GetIndexTypeInfo() {
 	art_index_type.create_instance = ART::Create;
 	art_index_type.build_bind = ARTBuildBind;
 	art_index_type.build_sort = ARTBuildSort;
-	index_build_sink_init_t build_sink_init = nullptr;
-	index_build_sink_t build_sink = nullptr;
-	index_build_sink_combine_t build_sink_combine = nullptr;
-	art_index_type.build_sink_init = nullptr;
-	// art_index_type.build_global_init = ARTBuildGlobalInit;
-	// art_index_type.build_local_init = ARTBuildLocalInit;
+	art_index_type.build_init = ARTBuildGlobalInit;
+	art_index_type.build_sink_init = ARTBuildLocalInit;
 	art_index_type.build_sink = ARTBuildSink;
 	art_index_type.build_sink_combine = ARTBuildCombine;
 	art_index_type.build_finalize = ARTBuildFinalize;

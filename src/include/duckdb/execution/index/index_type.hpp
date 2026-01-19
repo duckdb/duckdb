@@ -139,9 +139,12 @@ struct IndexBuildSortInput {
 };
 
 struct IndexBuildPrepareInput {
+	ClientContext &context;
+	optional_ptr<IndexBuildState> global_state;
 	optional_ptr<IndexBuildBindData> bind_data;
 };
 
+// global state input
 struct IndexBuildInitStateInput {
 	optional_ptr<IndexBuildBindData> bind_data;
 	ClientContext &context;
@@ -149,13 +152,17 @@ struct IndexBuildInitStateInput {
 	CreateIndexInfo &info;
 	const vector<unique_ptr<Expression>> &expressions;
 	const vector<column_t> storage_ids;
+
+	const idx_t estimated_cardinality;
 };
 
 struct IndexBuildInitSinkInput {
 	optional_ptr<IndexBuildBindData> bind_data;
 	ClientContext &context;
 	DuckTableEntry &table;
+	// todo move to bind
 	CreateIndexInfo &info;
+	const vector<LogicalType> &data_types;
 	const vector<unique_ptr<Expression>> &expressions;
 	const vector<column_t> storage_ids;
 };
@@ -182,11 +189,15 @@ struct IndexBuildSinkCombineInput {
 
 struct IndexBuildInitWorkInput {
 	optional_ptr<IndexBuildBindData> bind_data;
+	optional_ptr<IndexBuildState> global_state;
 };
 
 struct IndexBuildWorkInput {
+	optional_ptr<IndexBuildState> global_state;
 	// local work state
-	optional_ptr<IndexBuildWorkState> state;
+	optional_ptr<IndexBuildWorkState> local_state;
+
+	const idx_t thread_id;
 };
 
 struct IndexBuildWorkCombineInput {
@@ -251,9 +262,10 @@ public:
 	// Callbacks
 	index_build_bind_t build_bind = nullptr;
 	index_build_sort_t build_sort = nullptr;
+	// former global init
 	index_build_init_t build_init = nullptr;
 
-	//! Sink phase
+	//! Sink phase; former local init
 	index_build_sink_init_t build_sink_init = nullptr;
 	index_build_sink_t build_sink = nullptr;
 

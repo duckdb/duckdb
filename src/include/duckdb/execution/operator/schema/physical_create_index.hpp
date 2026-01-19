@@ -19,7 +19,7 @@ class DuckTableEntry;
 class CreateIndexGlobalSinkState : public GlobalSinkState {
 public:
 	unique_ptr<IndexBuildState> gstate;
-	unique_ptr<BoundIndex> global_index;
+	vector<unique_ptr<IndexBuildWorkState>> work_states;
 };
 
 // build sink init
