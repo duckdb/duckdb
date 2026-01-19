@@ -43,13 +43,6 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 // Global Sink
 //---------------------------------------------------------------------------------------------------------------------
 
-// build init
-class CreateIndexGlobalSinkState : public GlobalSinkState {
-public:
-	unique_ptr<IndexBuildState> gstate;
-	unique_ptr<BoundIndex> global_index;
-};
-
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
 	auto g_sink_state = make_uniq<CreateIndexGlobalSinkState>();
 	IndexBuildInitStateInput global_state_input {bind_data.get(),     context,    table, *info,
@@ -62,14 +55,6 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 //-------------------------------------------------------------
 // Local Sink
 //-------------------------------------------------------------
-
-// build sink init
-class CreateIndexLocalSinkState : public LocalSinkState {
-public:
-	unique_ptr<IndexBuildSinkState> lstate;
-	DataChunk key_chunk;
-	DataChunk row_chunk;
-};
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
 	auto lstate = make_uniq<CreateIndexLocalSinkState>();
@@ -147,7 +132,7 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 }
 
 //-------------------------------------------------------------
-// Finalize
+// Work Phase
 //-------------------------------------------------------------
 
 class IndexConstructTask final : public ExecutorTask {
@@ -157,20 +142,24 @@ public:
 	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), index_op(op_p),
 	      local_scan_state() {
 		if (index_op.index_type.build_work_init) {
-			IndexBuildInitWorkInput work_init_input {
-			    index_op.bind_data,  context, index_op.table, *index_op.info, index_op.unbound_expressions,
-			    index_op.storage_ids};
+			IndexBuildInitWorkInput work_init_input {index_op.bind_data};
 			auto bound_index = index_op.index_type.build_work_init(work_init_input);
 		}
 	}
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		auto &work_state = gstate.Cast<IndexBuildWorkState>();
+
 		// TODO // what to do with this?
-		// I think we should abstract this
+		// I think we should abstract this, otherwise we might complicate it for the user
 		// if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
 		// 	return TaskExecutionResult::TASK_NOT_FINISHED;
 		// }
+
+		// execute build_work (do work per task)
+		IndexBuildWorkInput build_work_state {work_state};
+		index_op.index_type.build_work(build_work_state);
 
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -199,11 +188,11 @@ struct IndexConstructionEventInput {
 	DuckTableEntry &table;
 };
 
-class IndexConstructionEvent : public BasePipelineEvent {
+class IndexConstructionEvent final : public BasePipelineEvent {
 public:
 	explicit IndexConstructionEvent(const IndexConstructionEventInput &input)
 	    : BasePipelineEvent(input.pipeline), op(input.op), gstate(input.gstate), info(input.info),
-	      storage_ids(input.storage_ids), table(input.table), op_p(input.op) {
+	      storage_ids(input.storage_ids), table(input.table), context(pipeline->GetClientContext()) {
 	}
 
 	const PhysicalCreateIndex &op;
@@ -211,11 +200,10 @@ public:
 	CreateIndexInfo &info;
 	const vector<column_t> &storage_ids;
 	DuckTableEntry &table;
-	const PhysicalCreateIndex &op_p;
+	ClientContext &context;
 
 public:
 	void Schedule() override {
-		auto &context = pipeline->GetClientContext();
 		vector<shared_ptr<Task>> tasks;
 		idx_t num_tasks = 1;
 
@@ -224,31 +212,43 @@ public:
 			// Schedule tasks equal to the number of threads
 			auto &ts = TaskScheduler::GetScheduler(context);
 			num_tasks = NumericCast<size_t>(ts.NumberOfThreads());
+
+			// execute build_work_init
+			IndexBuildInitWorkInput build_work_input {op.bind_data};
+			op.index_type.build_work_init(build_work_input);
 		}
 
 		for (size_t tnum = 0; tnum < num_tasks; tnum++) {
-			tasks.push_back(make_uniq<IndexConstructTask>(shared_from_this(), context, gstate, tnum, op));
+			auto task = make_uniq<IndexConstructTask>(shared_from_this(), context, gstate, tnum, op);
+			tasks.push_back(std::move(task));
 		}
 
 		SetTasks(std::move(tasks));
 	}
 
 	void FinishEvent() override {
-		// get the bound index here
-		// do a callback, and then call
-		op.FinalizeIndexBuild(context, op.global_index);
+		auto &work_state = gstate.Cast<IndexBuildWorkState>();
+
+		IndexBuildWorkCombineInput work_combine_input {work_state};
+		op.index_type.build_work_combine(work_combine_input);
+
+		op.FinalizeIndexBuild(context, gstate);
 	}
 };
 
-void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, unique_ptr<BoundIndex> bound_index) {
+//-------------------------------------------------------------
+// Finalize
+//-------------------------------------------------------------
+
+void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, CreateIndexGlobalSinkState &state) const {
 	// Vacuum excess memory and verify.
-	bound_index->Vacuum();
+	state.global_index->Vacuum();
 
-	bound_index->Verify();
+	state.global_index->Verify();
 
-	D_ASSERT(!bound_index->ToString(true).empty());
+	D_ASSERT(!state.global_index->ToString(true).empty());
 
-	bound_index->VerifyAllocations();
+	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
 	if (!storage.IsMainTable()) {
@@ -273,7 +273,7 @@ void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, unique_ptr<
 		auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
 		D_ASSERT(index_entry);
 		auto &index = index_entry->Cast<DuckIndexEntry>();
-		index.initial_index_size = bound_index->GetInMemorySize();
+		index.initial_index_size = state.global_index->GetInMemorySize();
 
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
@@ -290,7 +290,7 @@ void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, unique_ptr<
 	}
 
 	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index));
+	storage.AddIndex(std::move(state.global_index));
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -318,9 +318,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		// const vector<unique_ptr<Expression>> &expressions;
 		// const vector<column_t> storage_ids;
 		// Create a new event that will construct the index
-		auto index_build_work_input =
-		    IndexBuildInitWorkInput(*this, context, table, index_type.index_info, pipeline, *info, storage_ids, table);
-		auto new_event = make_shared_ptr<IndexConstructionEvent>(index_build_work_input);
+		// auto index_build_work_input = make_uniq<IndexBuildInitWorkInput>(bind_data);
+		auto index_construction_event_input =
+		    IndexConstructionEventInput(*this, gstate, pipeline, *info, storage_ids, table);
+		auto new_event = make_shared_ptr<IndexConstructionEvent>(index_construction_event_input);
 		event.InsertEvent(std::move(new_event));
 	} else {
 		// Finalize the index

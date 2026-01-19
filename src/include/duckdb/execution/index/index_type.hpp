@@ -169,11 +169,6 @@ struct IndexBuildSinkCombineInput {
 
 struct IndexBuildInitWorkInput {
 	optional_ptr<IndexBuildBindData> bind_data;
-	ClientContext &context;
-	DuckTableEntry &table;
-	CreateIndexInfo &info;
-	const vector<unique_ptr<Expression>> &expressions;
-	const vector<column_t> storage_ids;
 };
 
 struct IndexBuildWorkInput {
@@ -181,7 +176,7 @@ struct IndexBuildWorkInput {
 };
 
 struct IndexBuildWorkCombineInput {
-	optional_ptr<IndexBuildBindData> bind_data;
+	optional_ptr<IndexBuildWorkState> state;
 };
 
 struct IndexBuildFinalizeInput {
@@ -244,10 +239,10 @@ public:
 	//! Sink phase
 	index_build_sink_init_t build_sink_init = nullptr;
 	index_build_sink_t build_sink = nullptr;
-	index_build_sink_combine_t build_sink_combine = nullptr;
 
 	//! Optional Callbacks
 	// -----------------------------------------------------
+	index_build_sink_combine_t build_sink_combine = nullptr;
 
 	//! Midpoint
 	index_build_prepare_t build_prepare = nullptr;
@@ -256,6 +251,7 @@ public:
 	index_build_work_init_t build_work_init = nullptr;
 	index_build_work_t build_work = nullptr;
 	index_build_work_combine_t build_work_combine = nullptr;
+
 	// -----------------------------------------------------
 
 	// Finalize

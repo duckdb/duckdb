@@ -16,6 +16,20 @@ namespace duckdb {
 
 class DuckTableEntry;
 
+class CreateIndexGlobalSinkState : public GlobalSinkState {
+public:
+	unique_ptr<IndexBuildState> gstate;
+	unique_ptr<BoundIndex> global_index;
+};
+
+// build sink init
+class CreateIndexLocalSinkState : public LocalSinkState {
+public:
+	unique_ptr<IndexBuildSinkState> lstate;
+	DataChunk key_chunk;
+	DataChunk row_chunk;
+};
+
 //! Physical index creation operator.
 class PhysicalCreateIndex : public PhysicalOperator {
 public:
@@ -49,9 +63,6 @@ public:
 	vector<column_t> indexed_columns;
 	vector<column_t> rowid_column;
 
-	//! Final global index
-	unique_ptr<BoundIndex> global_index;
-
 public:
 	//! Source interface, NOP for this operator
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -82,6 +93,8 @@ public:
 
 private:
 	unique_ptr<IndexBuildSinkState> GetLocalSinkState(IndexBuildInitSinkInput &input);
-	void FinalizeIndexBuild(ClientContext &context, unique_ptr<BoundIndex> bound_index);
+
+public:
+	void FinalizeIndexBuild(ClientContext &context, CreateIndexGlobalSinkState &state) const;
 };
 } // namespace duckdb
