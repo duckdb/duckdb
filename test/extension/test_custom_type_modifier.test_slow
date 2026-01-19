@@ -149,7 +149,7 @@ Binder Error: MINMAX type modifiers must be integers
 statement error
 SELECT 10::MINMAX(10, (NULL::INTEGER));
 ----
-Binder Error: MINMAX type modifiers cannot be NULL
+Parser Error: Expected a constant as type modifier
 
 statement error
 SELECT 10::MINMAX(15, 10);
