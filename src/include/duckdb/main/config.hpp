@@ -35,7 +35,6 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/user_settings.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
@@ -207,8 +206,6 @@ public:
 	shared_ptr<DatabaseFilePathManager> path_manager;
 	//! Database configuration variables as controlled by SET
 	GlobalUserSettings user_settings;
-	//! Extensions made to the optimizer
-	vector<OptimizerExtension> optimizer_extensions;
 	//! Extensions made to storage
 	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions

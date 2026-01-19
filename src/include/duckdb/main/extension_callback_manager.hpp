@@ -39,6 +39,7 @@ public:
 	void Register(shared_ptr<ExtensionCallback> extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
+	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
 	bool HasParserExtensions() const;
 

@@ -41,7 +41,10 @@ void ExtensionCallbackManager::Register(ParserExtension extension) {
 }
 
 void ExtensionCallbackManager::Register(OptimizerExtension extension) {
-	throw InternalException("eek");
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->optimizer_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
 }
 
 void ExtensionCallbackManager::Register(shared_ptr<OperatorExtension> extension) {
@@ -69,11 +72,16 @@ template <class T>
 ExtensionCallbackIteratorHelper<T>::~ExtensionCallbackIteratorHelper() {
 }
 
-ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>
-ExtensionCallbackManager::OperatorExtensions() const {
+ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> ExtensionCallbackManager::OperatorExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	auto &operator_extensions = registry->operator_extensions;
 	return ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>(operator_extensions, std::move(registry));
+}
+
+ExtensionCallbackIteratorHelper<OptimizerExtension> ExtensionCallbackManager::OptimizerExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	auto &optimizer_extensions = registry->optimizer_extensions;
+	return ExtensionCallbackIteratorHelper<OptimizerExtension>(optimizer_extensions, std::move(registry));
 }
 
 ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::ParserExtensions() const {
@@ -87,11 +95,20 @@ bool ExtensionCallbackManager::HasParserExtensions() const {
 	return !registry->parser_extensions.empty();
 }
 
+void OptimizerExtension::Register(DBConfig &config, OptimizerExtension extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
 void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
+void OperatorExtension::Register(DBConfig &config, shared_ptr<OperatorExtension> extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
+template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 
 } // namespace duckdb

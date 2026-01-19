@@ -40,6 +40,7 @@ public:
 	virtual ~OperatorExtension() {
 	}
 
+	static void Register(DBConfig &config, shared_ptr<OperatorExtension> extension);
 	static ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> Iterate(ClientContext &context) {
 		return ExtensionCallbackManager::Get(context).OperatorExtensions();
 	}
