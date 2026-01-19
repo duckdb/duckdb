@@ -48,7 +48,7 @@ static HighlightElement highlight_elements[] = {
     {"log_trace", PrintColor::BLUE, PrintIntensity::BOLD},
     {"log_debug", PrintColor::YELLOW, PrintIntensity::BOLD},
     {"log_info", PrintColor::GREEN, PrintIntensity::BOLD},
-    {"log_warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
+    {"log_warning", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD},
 };
