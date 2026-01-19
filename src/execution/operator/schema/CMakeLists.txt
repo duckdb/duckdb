@@ -4,7 +4,6 @@ add_library_unity(
   physical_alter.cpp
   physical_attach.cpp
   physical_create_index.cpp
-  physical_create_index_materialized.cpp
   physical_create_schema.cpp
   physical_create_type.cpp
   physical_create_sequence.cpp

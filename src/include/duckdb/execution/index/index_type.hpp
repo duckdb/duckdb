@@ -131,6 +131,7 @@ struct IndexBuildBindInput {
 	DuckTableEntry &table;
 	CreateIndexInfo &info;
 	const vector<unique_ptr<Expression>> &expressions;
+	const vector<column_t> storage_ids;
 };
 
 struct IndexBuildSortInput {
@@ -160,11 +161,23 @@ struct IndexBuildInitSinkInput {
 };
 
 struct IndexBuildSinkInput {
-	optional_ptr<IndexBuildSinkState> state;
+	// bind data
+	optional_ptr<IndexBuildBindData> bind_data;
+	// global State
+	optional_ptr<IndexBuildState> global_state;
+	// local sink state
+	optional_ptr<IndexBuildSinkState> local_state;
+	DuckTableEntry &table;
+	CreateIndexInfo &info;
 };
 
 struct IndexBuildSinkCombineInput {
+	// for combines we need local and global states
 	optional_ptr<IndexBuildBindData> bind_data;
+	optional_ptr<IndexBuildState> global_state;
+	optional_ptr<IndexBuildSinkState> local_state;
+	DuckTableEntry &table;
+	CreateIndexInfo &info;
 };
 
 struct IndexBuildInitWorkInput {
@@ -172,11 +185,15 @@ struct IndexBuildInitWorkInput {
 };
 
 struct IndexBuildWorkInput {
+	// local work state
 	optional_ptr<IndexBuildWorkState> state;
 };
 
 struct IndexBuildWorkCombineInput {
-	optional_ptr<IndexBuildWorkState> state;
+	optional_ptr<IndexBuildBindData> bind_data;
+	// Or should this be; IndexBuildSinkState?
+	optional_ptr<IndexBuildState> global_state;
+	optional_ptr<IndexBuildWorkState> local_state;
 };
 
 struct IndexBuildFinalizeInput {

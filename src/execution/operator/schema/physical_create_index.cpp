@@ -61,28 +61,12 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	IndexBuildInitSinkInput local_state_input {bind_data.get(), context.client,      table,
 	                                           *info,           unbound_expressions, storage_ids};
 
-	if (index_type.build_sink_init) {
-		lstate->lstate = index_type.build_sink_init(local_state_input);
-	}
-
+	lstate->lstate = index_type.build_sink_init(local_state_input);
 	lstate->key_chunk.InitializeEmpty(indexed_column_types);
 	lstate->row_chunk.InitializeEmpty({LogicalType::ROW_TYPE});
 
 	return std::move(lstate);
 }
-
-// typedef unique_ptr<IndexBuildState> (*index_build_init_t)(IndexBuildInitStateInput &input);
-// typedef unique_ptr<IndexBuildSinkState> (*index_build_sink_init_t)(IndexBuildInitSinkInput &input);
-// typedef void (*index_build_sink_t)(IndexBuildSinkInput &state, DataChunk &key_chunk, DataChunk &row_chunk);
-// typedef void (*index_build_sink_combine_t)(IndexBuildSinkCombineInput &input);
-
-//! Midpoint
-// index_build_prepare_t build_prepare = nullptr;
-//
-// //! Work phase
-// index_build_work_init_t build_work_init = nullptr;
-// index_build_work_t build_work = nullptr;
-// index_build_work_combine_t build_work_combine = nullptr;
 
 //-------------------------------------------------------------
 // Sink
@@ -111,8 +95,14 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 		}
 	}
 
+	// Is this correct?
+
+	// global state
+	auto &index_build_state = gstate.gstate->Cast<IndexBuildState>();
+	// local state
+	auto &index_build_sink_state = lstate.Cast<IndexBuildSinkState>();
 	// Sink into the index
-	IndexBuildSinkInput sink_input {lstate.lstate};
+	IndexBuildSinkInput sink_input {bind_data.get(), index_build_state, index_build_sink_state, table, *info};
 	index_type.build_sink(sink_input, lstate.key_chunk, lstate.row_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -122,9 +112,14 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
+	// global state
+	auto &index_build_state = gstate.gstate->Cast<IndexBuildState>();
+	// local state
+	auto &index_build_sink_state = lstate.Cast<IndexBuildSinkState>();
 
 	if (index_type.build_sink_combine) {
-		IndexBuildSinkCombineInput combine_input {bind_data};
+		IndexBuildSinkCombineInput combine_input {bind_data.get(), index_build_state, index_build_sink_state, table,
+		                                          *info};
 		index_type.build_sink_combine(combine_input);
 	}
 
@@ -141,10 +136,6 @@ public:
 	                   size_t thread_id_p, const PhysicalCreateIndex &op_p)
 	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), index_op(op_p),
 	      local_scan_state() {
-		if (index_op.index_type.build_work_init) {
-			IndexBuildInitWorkInput work_init_input {index_op.bind_data};
-			auto bound_index = index_op.index_type.build_work_init(work_init_input);
-		}
 	}
 
 public:
@@ -209,12 +200,19 @@ public:
 
 		// We only schedule a single task if there is no work_init callback
 		if (op.index_type.build_work_init) {
+			//! Midpoint
+			if (op.index_type.build_prepare) {
+				// prepare
+				IndexBuildPrepareInput prepare_input {op.bind_data.get()};
+				auto prepare = op.index_type.build_prepare;
+			}
+
 			// Schedule tasks equal to the number of threads
 			auto &ts = TaskScheduler::GetScheduler(context);
 			num_tasks = NumericCast<size_t>(ts.NumberOfThreads());
 
 			// execute build_work_init
-			IndexBuildInitWorkInput build_work_input {op.bind_data};
+			IndexBuildInitWorkInput build_work_input {op.bind_data.get()};
 			op.index_type.build_work_init(build_work_input);
 		}
 
@@ -227,9 +225,12 @@ public:
 	}
 
 	void FinishEvent() override {
-		auto &work_state = gstate.Cast<IndexBuildWorkState>();
+		// global and local states
+		// TODO; itterate over this; this is not correct yet
+		auto &global_work_state = gstate.Cast<IndexBuildState>();
+		auto &local_work_state = gstate.Cast<IndexBuildWorkState>();
 
-		IndexBuildWorkCombineInput work_combine_input {work_state};
+		IndexBuildWorkCombineInput work_combine_input {op.bind_data.get(), global_work_state, local_work_state};
 		op.index_type.build_work_combine(work_combine_input);
 
 		op.FinalizeIndexBuild(context, gstate);
@@ -297,28 +298,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
                                                OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 
-	//! Work phase
-	// index_build_work_init_t build_work_init = nullptr;
-	// index_build_work_t build_work = nullptr;
-	// index_build_work_combine_t build_work_combine = nullptr;
-
 	// determine if we still need to do some processing before finalizing
-	if (index_type.build_work) {
-		IndexBuildFinalizeInput finalize_input {*gstate.gstate};
-		auto bound_index = index_type.build_finalize(finalize_input);
-
+	if (index_type.build_work && index_type.build_work_init) {
 		// determine how many tasks we need to spawn
-		if (index_type.build_work_init) {
-		}
-
-		// optional_ptr<IndexBuildBindData> bind_data;
-		// ClientContext &context;
-		// DuckTableEntry &table;
-		// CreateIndexInfo &info;
-		// const vector<unique_ptr<Expression>> &expressions;
-		// const vector<column_t> storage_ids;
-		// Create a new event that will construct the index
-		// auto index_build_work_input = make_uniq<IndexBuildInitWorkInput>(bind_data);
 		auto index_construction_event_input =
 		    IndexConstructionEventInput(*this, gstate, pipeline, *info, storage_ids, table);
 		auto new_event = make_shared_ptr<IndexConstructionEvent>(index_construction_event_input);
@@ -326,8 +308,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	} else {
 		// Finalize the index
 		IndexBuildFinalizeInput finalize_input {*gstate.gstate};
-		auto bound_index = index_type.build_finalize(finalize_input);
+		gstate.global_index = index_type.build_finalize(finalize_input);
 	}
+
+	FinalizeIndexBuild(context, gstate);
 
 	return SinkFinalizeType::READY;
 }

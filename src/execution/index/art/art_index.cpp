@@ -95,7 +95,7 @@ unique_ptr<IndexBuildSinkState> ARTBuildLocalInit(IndexBuildInitSinkInput &input
 //----------------------------------------------------------------------------------------------------------------------
 
 void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
-	auto &l_state = input.local_state.Cast<ARTBuildLocalState>();
+	auto &l_state = input.local_state->Cast<ARTBuildLocalState>();
 	auto row_count = key_chunk.size();
 	auto &art = l_state.local_index->Cast<ART>();
 
@@ -113,7 +113,7 @@ void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, Data
 }
 
 void ARTBuildSinkSorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
-	auto &l_state = input.local_state.Cast<ARTBuildLocalState>();
+	auto &l_state = input.local_state->Cast<ARTBuildLocalState>();
 	auto &storage = input.table.GetStorage();
 	auto &l_index = l_state.local_index;
 
@@ -134,7 +134,7 @@ void ARTBuildSinkSorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataCh
 // build_sink
 void ARTBuildSink(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
 	auto &bind_data = input.bind_data->Cast<ARTBuildBindData>();
-	auto &lstate = input.local_state.Cast<ARTBuildLocalState>();
+	auto &lstate = input.local_state->Cast<ARTBuildLocalState>();
 
 	lstate.arena_allocator.Reset();
 
@@ -150,9 +150,9 @@ void ARTBuildSink(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &r
 //----------------------------------------------------------------------------------------------------------------------
 // Combine
 //----------------------------------------------------------------------------------------------------------------------
-void ARTBuildCombine(IndexBuildCombineInput &input) {
-	auto &gstate = input.global_state.Cast<ARTBuildGlobalState>();
-	auto &lstate = input.local_state.Cast<ARTBuildLocalState>();
+void ARTBuildCombine(IndexBuildSinkCombineInput &input) {
+	auto &gstate = input.global_state->Cast<ARTBuildGlobalState>();
+	auto &lstate = input.local_state->Cast<ARTBuildLocalState>();
 
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
