@@ -786,92 +786,92 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 			for (idx_t i = 0; i < tokens.size(); i++) {
 				if (!token_list.empty()) {
 					token_list += "\n";
-
-					if (i < 10) {
-						token_list += " ";
-					}
-					token_list += to_string(i) + ":" + tokens[i].text;
 				}
-				throw BinderException(
-				    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
-				    sql, state.token_index, tokens[state.token_index].text, token_list);
-			}
-		}
-		return nullptr;
-	}
-
-	void CheckPEGParserFunction(ClientContext & context, TableFunctionInput & data_p, DataChunk & output) {
-	}
-
-	class PEGParserExtension : public ParserExtension {
-	public:
-		PEGParserExtension() {
-			parser_override = PEGParser;
-		}
-
-		static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
-			vector<MatcherToken> root_tokens;
-			string clean_sql;
-
-			ParserTokenizer tokenizer(query, root_tokens);
-			tokenizer.TokenizeInput();
-			tokenizer.statements.push_back(std::move(root_tokens));
-
-			try {
-				vector<unique_ptr<SQLStatement>> result;
-				for (auto &tokenized_statement : tokenizer.statements) {
-					if (tokenized_statement.empty()) {
-						continue;
-					}
-					auto &transformer = PEGTransformerFactory::GetInstance();
-					auto statement = transformer.Transform(tokenized_statement, options);
-					if (statement) {
-						statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-						statement->stmt_length =
-						    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
-						                       tokenized_statement[tokenized_statement.size() - 1].length);
-					}
-					statement->query = query;
-					if (statement->type == StatementType::CREATE_STATEMENT) {
-						auto &create = statement->Cast<CreateStatement>();
-						create.info->sql = statement->query;
-					}
-					result.push_back(std::move(statement));
+				if (i < 10) {
+					token_list += " ";
 				}
-				return ParserOverrideResult(std::move(result));
-			} catch (std::exception &e) {
-				return ParserOverrideResult(e);
+				token_list += to_string(i) + ":" + tokens[i].text;
 			}
+			throw BinderException(
+			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
+			    state.token_index, tokens[state.token_index].text, token_list);
 		}
-	};
+	}
+	return nullptr;
+}
 
-	static void LoadInternal(ExtensionLoader & loader) {
-		TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
-		                                SQLAutoCompleteBind, SQLAutoCompleteInit);
-		auto_complete_fun.named_parameters["max_suggestion_count"] = LogicalType::UBIGINT;
-		auto_complete_fun.named_parameters["max_file_suggestion_count"] = LogicalType::UBIGINT;
-		auto_complete_fun.named_parameters["max_exact_suggestion_count"] = LogicalType::UBIGINT;
-		loader.RegisterFunction(auto_complete_fun);
+void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+}
 
-		TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
-		                                   CheckPEGParserBind, nullptr);
-		loader.RegisterFunction(check_peg_parser_fun);
-
-		auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-		config.parser_extensions.push_back(PEGParserExtension());
+class PEGParserExtension : public ParserExtension {
+public:
+	PEGParserExtension() {
+		parser_override = PEGParser;
 	}
 
-	void AutocompleteExtension::Load(ExtensionLoader & loader) {
-		LoadInternal(loader);
-	}
+	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
+		vector<MatcherToken> root_tokens;
+		string clean_sql;
 
-	std::string AutocompleteExtension::Name() {
-		return "autocomplete";
-	}
+		ParserTokenizer tokenizer(query, root_tokens);
+		tokenizer.TokenizeInput();
+		tokenizer.statements.push_back(std::move(root_tokens));
 
-	std::string AutocompleteExtension::Version() const {
-		return DefaultVersion();
+		try {
+			vector<unique_ptr<SQLStatement>> result;
+			for (auto &tokenized_statement : tokenizer.statements) {
+				if (tokenized_statement.empty()) {
+					continue;
+				}
+				auto &transformer = PEGTransformerFactory::GetInstance();
+				auto statement = transformer.Transform(tokenized_statement, options);
+				if (statement) {
+					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
+					statement->stmt_length =
+					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
+					                       tokenized_statement[tokenized_statement.size() - 1].length);
+				}
+				statement->query = query;
+				if (statement->type == StatementType::CREATE_STATEMENT) {
+					auto &create = statement->Cast<CreateStatement>();
+					create.info->sql = statement->query;
+				}
+				result.push_back(std::move(statement));
+			}
+			return ParserOverrideResult(std::move(result));
+		} catch (std::exception &e) {
+			return ParserOverrideResult(e);
+		}
 	}
+};
+
+static void LoadInternal(ExtensionLoader &loader) {
+	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
+	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
+	auto_complete_fun.named_parameters["max_suggestion_count"] = LogicalType::UBIGINT;
+	auto_complete_fun.named_parameters["max_file_suggestion_count"] = LogicalType::UBIGINT;
+	auto_complete_fun.named_parameters["max_exact_suggestion_count"] = LogicalType::UBIGINT;
+	loader.RegisterFunction(auto_complete_fun);
+
+	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
+	                                   CheckPEGParserBind, nullptr);
+	loader.RegisterFunction(check_peg_parser_fun);
+
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.parser_extensions.push_back(PEGParserExtension());
+}
+
+void AutocompleteExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
+}
+
+std::string AutocompleteExtension::Name() {
+	return "autocomplete";
+}
+
+std::string AutocompleteExtension::Version() const {
+	return DefaultVersion();
+}
 
 } // namespace duckdb
 extern "C" {
