@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
+class AttachedDatabase;
 class DatabaseInstance;
 class TableIOManager;
 class RowGroupCollection;
