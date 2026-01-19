@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/string.hpp"
@@ -18,6 +20,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 

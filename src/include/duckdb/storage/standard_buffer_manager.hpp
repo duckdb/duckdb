@@ -10,6 +10,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
