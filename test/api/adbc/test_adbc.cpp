@@ -2901,12 +2901,15 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 
 		AdbcError adbc_error = {};
 		InitializeADBCError(&adbc_error);
-		ArrowArrayStream arrow_stream;
+		ArrowArrayStream arrow_stream = {};
 
 		REQUIRE(!SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, 42, nullptr, nullptr, nullptr, nullptr, nullptr,
 		                                          &arrow_stream, &adbc_error)));
 		REQUIRE((std::strcmp(adbc_error.message, "Invalid value of Depth") == 0));
 		adbc_error.release(&adbc_error);
+		if (arrow_stream.release) {
+			arrow_stream.release(&arrow_stream);
+		}
 
 		// Invalid table type
 		std::vector<const char *> table_type = {"INVALID", nullptr};
@@ -2915,6 +2918,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((strcmp(adbc_error.message,
 		                "Table type must be \"LOCAL TABLE\", \"BASE TABLE\" or \"VIEW\": \"INVALID\"") == 0));
 		adbc_error.release(&adbc_error);
+		if (arrow_stream.release) {
+			arrow_stream.release(&arrow_stream);
+		}
 	}
 
 	// Test input quoting protection
@@ -2987,6 +2993,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 		int64_t rows_affected;
 		auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error);
 		REQUIRE(status == ADBC_STATUS_ALREADY_EXISTS);
+		// Release the error set by the failed query
+		adbc_error.release(&adbc_error);
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	}
 
