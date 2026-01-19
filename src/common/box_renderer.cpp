@@ -2182,8 +2182,7 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		render_anything = false;
 	}
 	// render the bottom of the result values, if there are any
-	RenderLayoutLine(ss, config.HORIZONTAL, config.DMIDDLE, render_anything ? config.LMIDDLE : config.LDCORNER,
-	                 render_anything ? config.RMIDDLE : config.RDCORNER);
+	RenderLayoutLine(ss, config.HORIZONTAL, config.DMIDDLE, config.LDCORNER, config.RDCORNER);
 	if (!render_anything) {
 		return;
 	}
@@ -2208,12 +2207,11 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		shown_str = string();
 	}
 
-	ss << config.VERTICAL;
-	ss << " ";
+	ss << "  ";
 	if (render_rows_and_columns) {
 		ss.Render(ResultRenderType::FOOTER, row_count_str);
 		if (!extra_render_str.empty()) {
-			ss.Render(ResultRenderType::NULL_VALUE, extra_render_str);
+			ss.Render(ResultRenderType::FOOTER, extra_render_str);
 		}
 		ss << string(padding, ' ');
 		ss.Render(ResultRenderType::FOOTER, column_count_str);
@@ -2223,12 +2221,10 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		ss << string(lpadding, ' ');
 		ss.Render(ResultRenderType::FOOTER, row_count_str);
 		if (!extra_render_str.empty()) {
-			ss.Render(ResultRenderType::NULL_VALUE, extra_render_str);
+			ss.Render(ResultRenderType::FOOTER, extra_render_str);
 		}
 		ss << string(rpadding, ' ');
 	}
-	ss << " ";
-	ss << config.VERTICAL;
 	ss << '\n';
 	if (!readable_rows_str.empty() || !shown_str.empty()) {
 		// we still need to render the readable rows/shown strings
@@ -2238,9 +2234,9 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 			// we can! merge them
 			ss << config.VERTICAL;
 			ss << " ";
-			ss.Render(ResultRenderType::NULL_VALUE, readable_rows_str);
+			ss.Render(ResultRenderType::FOOTER, readable_rows_str);
 			ss << string(total_render_length - combined_shown_length, ' ');
-			ss.Render(ResultRenderType::NULL_VALUE, shown_str);
+			ss.Render(ResultRenderType::FOOTER, shown_str);
 			ss << " ";
 			ss << config.VERTICAL;
 			ss << '\n';
@@ -2251,20 +2247,16 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		    render_rows_and_columns ? ValueRenderAlignment::LEFT : ValueRenderAlignment::MIDDLE;
 		vector<HighlightingAnnotation> annotations;
 		if (!readable_rows_str.empty()) {
-			RenderValue(ss, "(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE,
+			RenderValue(ss, "(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::FOOTER,
 			            annotations, alignment);
-			ss << config.VERTICAL;
 			ss << '\n';
 		}
 		if (!shown_str.empty()) {
-			RenderValue(ss, "(" + shown_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE, annotations,
+			RenderValue(ss, "(" + shown_str + ")", total_render_length - 4, ResultRenderType::FOOTER, annotations,
 			            alignment);
-			ss << config.VERTICAL;
 			ss << '\n';
 		}
 	}
-	// render the bottom line
-	RenderLayoutLine(ss, config.HORIZONTAL, config.HORIZONTAL, config.LDCORNER, config.RDCORNER);
 }
 
 //===--------------------------------------------------------------------===//
