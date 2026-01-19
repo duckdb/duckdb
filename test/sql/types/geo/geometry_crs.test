@@ -39,7 +39,7 @@ EPSG:3857
 statement error
 select 'POINT(0 1)'::GEOMETRY((['abc']));
 ----
-Binder Error: GEOMETRY type modifier must be a string with a coordinate system definition
+Parser Error: Expected a constant as type modifier
 
 statement error
 select 'POINT(0 1)'::GEOMETRY(4326);
