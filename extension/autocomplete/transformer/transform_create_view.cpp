@@ -21,6 +21,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 	}
 
 	auto recursive_node = make_uniq<RecursiveCTENode>();
+	recursive_node->cte_map = std::move(set_node.cte_map);
 	recursive_node->ctename = name;
 	recursive_node->aliases = aliases;
 
