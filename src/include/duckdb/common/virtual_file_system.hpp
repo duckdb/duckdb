@@ -93,7 +93,8 @@ private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<DatabaseInstance> database_instance);
 	FileSystem &FindFileSystem(const string &path);
 	optional_ptr<FileSystem> FindFileSystemInternal(const string &path);
-	// Return nullptr if no compression filesystem is found.
+	// Return nullptr if compression is not involved, throw exception if compression is requested but no usable
+	// filesystem gets registered.
 	FileSystem *FindCompressionFileSystem(FileCompressionType compression_type, const string &path);
 
 private:

@@ -21,7 +21,7 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 		return nullptr;
 	}
 
-	// For auto-detection mode, check it's a known pattern for duckdb internal compression.
+	// For auto-detection mode, check if it's a known pattern for duckdb internal compressions.
 	if (compression_type == FileCompressionType::AUTO_DETECT) {
 		auto lower_path = StringUtil::Lower(filepath);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
@@ -59,7 +59,7 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 		}
 	}
 
-	// No usable compression filesystem is found.
+	// No applicable compression filesystem is found, so we consider it uncompressed.
 	return nullptr;
 }
 
