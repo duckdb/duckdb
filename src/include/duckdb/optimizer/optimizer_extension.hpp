@@ -13,7 +13,7 @@
 #include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
-
+struct DBConfig;
 class Optimizer;
 class ClientContext;
 

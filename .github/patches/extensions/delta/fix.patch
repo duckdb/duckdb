@@ -1,8 +1,29 @@
+diff --git a/src/delta_extension.cpp b/src/delta_extension.cpp
+index 2485cd9..568c286 100644
+--- a/src/delta_extension.cpp
++++ b/src/delta_extension.cpp
+@@ -79,7 +79,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 
+ 	// Register the "single table" delta catalog (to ATTACH a single delta table)
+ 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+-	config.storage_extensions["delta"] = make_uniq<DeltaStorageExtension>();
++	StorageExtension::Register(config, "delta", make_shared_ptr<DeltaStorageExtension>());
+ 
+ 	config.AddExtensionOption("delta_scan_explain_files_filtered",
+ 	                          "Adds the filtered files to the explain output. Warning: this may impact performance of "
 diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
-index 3edbbea..9dc2d66 100644
+index 3edbbea..bfcede2 100644
 --- a/src/delta_utils.cpp
 +++ b/src/delta_utils.cpp
-@@ -1060,8 +1060,8 @@ LogLevel LoggerCallback::GetDuckDBLogLevel(ffi::Level level) {
+@@ -11,6 +11,7 @@
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+ #include "duckdb/common/exception/conversion_exception.hpp"
++#include "duckdb/parser/expression/columnref_expression.hpp"
+ #include "duckdb/parser/expression/conjunction_expression.hpp"
+ #include "duckdb/parser/expression/comparison_expression.hpp"
+ #include "duckdb/parser/expression/function_expression.hpp"
+@@ -1060,8 +1061,8 @@ LogLevel LoggerCallback::GetDuckDBLogLevel(ffi::Level level) {
  		return LogLevel::LOG_DEBUG;
  	case ffi::Level::INFO:
  		return LogLevel::LOG_INFO;
@@ -13,8 +34,26 @@ index 3edbbea..9dc2d66 100644
  	case ffi::Level::ERROR:
  		return LogLevel::LOG_ERROR;
  	default:
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index f94dee5..81047e0 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -9,11 +9,13 @@
+ #include "duckdb/main/query_profiler.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "duckdb/optimizer/filter_combiner.hpp"
++#include "duckdb/parser/expression/columnref_expression.hpp"
+ #include "duckdb/parser/expression/function_expression.hpp"
+ #include "duckdb/planner/table_filter.hpp"
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/parser/constraint.hpp"
+ #include "duckdb/parser/constraints/not_null_constraint.hpp"
++#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+ 
+ #include <regex>
+ 
 diff --git a/src/include/delta_kernel_ffi.hpp b/src/include/delta_kernel_ffi.hpp
-index df82fe1..9f4ea0e 100644
+index 07358d3..b714663 100644
 --- a/src/include/delta_kernel_ffi.hpp
 +++ b/src/include/delta_kernel_ffi.hpp
 @@ -68,7 +68,7 @@ enum class KernelError {
@@ -40,7 +79,7 @@ index cf74ede..1cc4cb7 100644
  	bool IsSource() const override {
  		return true;
 diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
-index 93ebf9f..08638b2 100644
+index ac73e47..604d603 100644
 --- a/src/storage/delta_insert.cpp
 +++ b/src/storage/delta_insert.cpp
 @@ -1,7 +1,5 @@
@@ -51,7 +90,15 @@ index 93ebf9f..08638b2 100644
  #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
  #include "duckdb/main/client_data.hpp"
  #include "duckdb/planner/operator/logical_copy_to_file.hpp"
-@@ -219,7 +217,7 @@ SinkResultType DeltaInsert::Sink(ExecutionContext &context, DataChunk &chunk, Op
+@@ -19,6 +17,7 @@
+ #include "duckdb/planner/expression/bound_cast_expression.hpp"
+ #include "duckdb/planner/expression/bound_reference_expression.hpp"
+ #include "functions/delta_scan/delta_multi_file_list.hpp"
++#include "duckdb/catalog/catalog_entry_retriever.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -219,7 +218,7 @@ SinkResultType DeltaInsert::Sink(ExecutionContext &context, DataChunk &chunk, Op
  //===--------------------------------------------------------------------===//
  // GetData
  //===--------------------------------------------------------------------===//
@@ -60,3 +107,16 @@ index 93ebf9f..08638b2 100644
      auto &global_state = sink_state->Cast<DeltaInsertGlobalState>();
      auto value = Value::BIGINT(global_state.insert_count);
      chunk.SetCardinality(1);
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index 1a60f23..f87d2f9 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -14,7 +14,7 @@
+ #include "duckdb/common/unordered_set.hpp"
+ #include "duckdb/parser/parsed_expression_iterator.hpp"
+ #include "duckdb/planner/tableref/bound_at_clause.hpp"
+-
++#include "duckdb/parser/expression/columnref_expression.hpp"
+ namespace duckdb {
+ 
+ DeltaSchemaEntry::DeltaSchemaEntry(Catalog &catalog, CreateSchemaInfo &info) : SchemaCatalogEntry(catalog, info) {
