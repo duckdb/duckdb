@@ -268,6 +268,14 @@ void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	child_column->VisitBlockIds(visitor);
 }
 
+const BaseStatistics &ArrayColumnData::GetChildStats(const ColumnData &child) const {
+	if (!RefersToSameObject(child, *child_column)) {
+		throw InternalException("ArrayColumnData::GetChildStats provided column data is not a child of this array");
+	}
+	auto &stats = GetStatisticsRef();
+	return ArrayStats::GetChildStats(stats);
+}
+
 void ArrayColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
 	if (validity) {
 		throw InternalException("ArrayColumnData::SetValidityData cannot be used to overwrite existing validity");

@@ -227,7 +227,7 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 	}
 }
 
-bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
+bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
                                                   idx_t vector_index, idx_t max_row) {
 	state.max_row = max_row;
