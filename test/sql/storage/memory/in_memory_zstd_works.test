@@ -24,3 +24,6 @@ query I
 select distinct compression = 'ZSTD' from pragma_storage_info('tbl') where segment_type = 'VARCHAR'
 ----
 true
+
+statement ok
+from tbl;
