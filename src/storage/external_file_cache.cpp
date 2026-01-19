@@ -1,5 +1,6 @@
 #include "duckdb/storage/external_file_cache.hpp"
 
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
