@@ -1,11 +1,13 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 

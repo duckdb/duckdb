@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -30,6 +31,7 @@ class ScalarMacroCatalogEntry;
 class TableMacroCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
+class TableDataWriter;
 class TypeCatalogEntry;
 struct BoundCreateTableInfo;
 

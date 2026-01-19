@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
