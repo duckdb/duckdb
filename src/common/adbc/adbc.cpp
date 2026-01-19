@@ -746,9 +746,8 @@ void release(struct ArrowArrayStream *stream) {
 			free(result_wrapper->last_error);
 			result_wrapper->last_error = nullptr;
 		}
-		// Clear adbc_error before freeing wrapper to avoid dangling pointers
-		result_wrapper->adbc_error.message = nullptr;
-		result_wrapper->adbc_error.release = nullptr;
+		// Release any error that was set on the stream wrapper
+		InitializeADBCError(&result_wrapper->adbc_error);
 	}
 	free(stream->private_data);
 	stream->private_data = nullptr;

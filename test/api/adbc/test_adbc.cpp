@@ -55,11 +55,12 @@ public:
 			arrow_stream.release(&arrow_stream);
 			arrow_stream.release = nullptr;
 		}
+		// Release any existing error before calling Release functions
+		InitializeADBCError(&adbc_error);
 		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
-		if (adbc_error.release) {
-			adbc_error.release(&adbc_error);
-		}
+		// Ensure error is released at the end
+		InitializeADBCError(&adbc_error);
 	}
 
 	bool QueryAndCheck(const string &query) {
@@ -294,6 +295,8 @@ TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
 	// After completion, cancelling again should fail.
 	// Driver manager returns INVALID_STATE when statement->private_driver is nullptr (set by StatementRelease).
 	REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_INVALID_STATE);
+	// Release the error set by the failed cancel
+	InitializeADBCError(&db.adbc_error);
 
 	// Connection should be reusable after cancel.
 	REQUIRE(db.QueryAndCheck("SELECT 1"));
