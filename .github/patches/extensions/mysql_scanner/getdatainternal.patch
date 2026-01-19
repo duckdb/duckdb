@@ -3,12 +3,12 @@ index 412f813..a59b7b9 100644
 --- a/src/include/storage/mysql_execute_query.hpp
 +++ b/src/include/storage/mysql_execute_query.hpp
 @@ -25,7 +25,7 @@ public:
- 
+
  public:
  	// Source interface
 -	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 +	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
- 
+
  	bool IsSource() const override {
  		return true;
 diff --git a/src/include/storage/mysql_index.hpp b/src/include/storage/mysql_index.hpp
@@ -16,12 +16,12 @@ index a674069..56ea40e 100644
 --- a/src/include/storage/mysql_index.hpp
 +++ b/src/include/storage/mysql_index.hpp
 @@ -23,7 +23,7 @@ public:
- 
+
  public:
  	// Source interface
 -	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 +	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
- 
+
  	bool IsSource() const override {
  		return true;
 diff --git a/src/include/storage/mysql_insert.hpp b/src/include/storage/mysql_insert.hpp
@@ -29,12 +29,12 @@ index 98ecde3..a0c9a56 100644
 --- a/src/include/storage/mysql_insert.hpp
 +++ b/src/include/storage/mysql_insert.hpp
 @@ -33,7 +33,7 @@ public:
- 
+
  public:
  	// Source interface
 -	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 +	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
- 
+
  	bool IsSource() const override {
  		return true;
 diff --git a/src/include/storage/mysql_optimizer.hpp b/src/include/storage/mysql_optimizer.hpp
@@ -43,10 +43,10 @@ index 7a44c5b..2b27c72 100644
 +++ b/src/include/storage/mysql_optimizer.hpp
 @@ -9,6 +9,7 @@
  #pragma once
- 
+
  #include "duckdb/main/config.hpp"
 +#include "duckdb/optimizer/optimizer_extension.hpp"
- 
+
  namespace duckdb {
  class MySQLOptimizer {
 diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
