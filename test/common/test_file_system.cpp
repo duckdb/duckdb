@@ -379,4 +379,9 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 	REQUIRE(compressed_file_handle.internal_file_handle != nullptr);
 	file_handle.reset();
 	fs->RemoveFile(filepath);
+
+	// If we give a new compressed file, which cannot be handled by already registered compression filesystems, we
+	// cannot proceed.
+	const string another_compressed_filepath = "fake_compression_file.another_compress";
+	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
 }

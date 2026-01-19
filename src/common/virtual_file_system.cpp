@@ -22,15 +22,17 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 	}
 
 	// For auto-detection mode, check it's a known pattern for duckdb internal compression.
-	auto lower_path = StringUtil::Lower(filepath);
-	if (StringUtil::EndsWith(lower_path, ".tmp")) {
-		// strip .tmp
-		lower_path = lower_path.substr(0, lower_path.length() - 4);
-	}
-	if (IsFileCompressed(lower_path, FileCompressionType::GZIP)) {
-		compression_type = FileCompressionType::GZIP;
-	} else if (IsFileCompressed(lower_path, FileCompressionType::ZSTD)) {
-		compression_type = FileCompressionType::ZSTD;
+	if (compression_type == FileCompressionType::AUTO_DETECT) {
+		auto lower_path = StringUtil::Lower(filepath);
+		if (StringUtil::EndsWith(lower_path, ".tmp")) {
+			// strip .tmp
+			lower_path = lower_path.substr(0, lower_path.length() - 4);
+		}
+		if (IsFileCompressed(lower_path, FileCompressionType::GZIP)) {
+			compression_type = FileCompressionType::GZIP;
+		} else if (IsFileCompressed(lower_path, FileCompressionType::ZSTD)) {
+			compression_type = FileCompressionType::ZSTD;
+		}
 	}
 
 	// If caller explicitly specifies a duckdb internal compression type to use, or a known pattern is detected, try to
