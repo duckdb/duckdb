@@ -190,7 +190,7 @@ public:
 	PiecewiseMergeJoinState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op)
 	    : client(client), allocator(Allocator::Get(client)), op(op), left_outer(IsLeftOuterJoin(op.join_type)),
 	      left_position(0), first_fetch(true), finished(true), right_position(0), right_chunk_index(0),
-	      rhs_executor(client) {
+	      rhs_executor(client), pred_executor(client) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 		lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 
@@ -215,6 +215,11 @@ public:
 
 		//	Since we have now materialized the payload, the keys will not have payloads?
 		sort_key_type = rhs_table.GetSortKeyType();
+
+		if (op.predicate) {
+			pred_executor.AddExpression(*op.predicate);
+			pred_matches.Initialize();
+		}
 	}
 
 	ClientContext &client;
@@ -250,6 +255,10 @@ public:
 	DataChunk rhs_keys;
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
+
+	//! Arbitrary expressions
+	ExpressionExecutor pred_executor;
+	SelectionVector pred_matches;
 
 public:
 	void ResolveJoinKeys(ExecutionContext &context, DataChunk &input) {
@@ -660,6 +669,14 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					}
 				}
 			}
+			chunk.SetCardinality(result_count);
+
+			//	Apply any arbitrary predicate
+			if (predicate) {
+				result_count = state.pred_executor.SelectExpression(chunk, state.pred_matches);
+				chunk.Slice(state.pred_matches, result_count);
+				sel = &state.pred_matches;
+			}
 
 			// found matches: mark the found matches if required
 			if (state.left_outer.Enabled()) {
@@ -673,7 +690,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
-			chunk.SetCardinality(result_count);
 			chunk.Verify();
 		}
 	} while (chunk.size() == 0);
