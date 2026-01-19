@@ -119,6 +119,8 @@ struct KeyRowIdOutput {
 	}
 };
 
+//! Scanning state. The scanning output policies allow us to pass in a capacity while scanning, so that when the
+//! scan fills up the capacity, we can pause the scan state at that location, and resume scanning later.
 enum class ARTScanResult : uint8_t { COMPLETED = 0, PAUSED = 1 };
 
 class Iterator {
