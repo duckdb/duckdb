@@ -147,7 +147,8 @@
         "test/sql/copy/csv/glob/copy_csv_glob.test",
         "test/sql/cte/recursive_cte_key_variant.test",
         "test/sql/overflow/expression_tree_depth.test",
-        "test/sql/error/lineitem_errors.test"
+        "test/sql/error/lineitem_errors.test",
+        "test/sql/select/test_select_locking.test"
       ]
     }
   ]
