@@ -1,5 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "test_helpers.hpp"
 
@@ -10,7 +12,7 @@ static void test_in_memory_initialization(string dbdir) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	duckdb::unique_ptr<DuckDB> db;
 	duckdb::unique_ptr<Connection> con;
-	string in_memory_tmp = ".tmp";
+	string in_memory_tmp = StringUtil::Format(".tmp_%s", UUIDv4::ToString(UUIDv4::GenerateRandomUUID()));
 
 	// make sure the temporary folder does not exist
 	DeleteDatabase(dbdir);
