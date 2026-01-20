@@ -1384,7 +1384,7 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
+vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path) {
 	vector<OpenFileInfo> result;
 	if (FileExists(path, opener) || IsPipe(path, opener)) {
 		result.emplace_back(path);
@@ -1502,13 +1502,39 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 	});
 }
 
-vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+
+struct LocalGlobResult : public MultiFileList {
+public:
+	LocalGlobResult(LocalFileSystem &fs, const string &path, FileGlobInput glob_input, optional_ptr<FileOpener> opener);
+
+	vector<OpenFileInfo> GetAllFiles() override;
+	FileExpandResult GetExpandResult() override;
+	idx_t GetTotalFileCount() override;
+
+protected:
+	OpenFileInfo GetFile(idx_t i) override;
+
+private:
+	bool ExpandNextFile();
+
+private:
+	LocalFileSystem &fs;
+	const string &path;
+	optional_ptr<FileOpener> opener;
+	vector<OpenFileInfo> result;
+	vector<PathSplit> splits;
+	queue<ExpandDirectory> expand_directories;
+	bool finished = false;
+	bool absolute_path = false;
+};
+
+LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobInput glob_input, optional_ptr<FileOpener> opener) :
+	MultiFileList({}, std::move(glob_input)), fs(fs), path(path_p), opener(opener) {
 	if (path.empty()) {
-		return vector<OpenFileInfo>();
+		finished = true;
+		return;
 	}
 	// split up the path into separate chunks
-	vector<PathSplit> splits;
-
 	idx_t file_url_path_offset = GetFileUrlOffset(path);
 
 	idx_t last_pos = 0;
@@ -1520,17 +1546,17 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 				continue;
 			}
 			if (splits.empty()) {
-				splits.emplace_back(*this, path.substr(0, i));
+				splits.emplace_back(fs, path.substr(0, i));
 			} else {
-				splits.emplace_back(*this, path.substr(last_pos, i - last_pos));
+				splits.emplace_back(fs, path.substr(last_pos, i - last_pos));
 			}
 			last_pos = i + 1;
 		}
 	}
-	splits.emplace_back(*this, path.substr(last_pos, path.size() - last_pos));
+	splits.emplace_back(fs, path.substr(last_pos, path.size() - last_pos));
 	// handle absolute paths
-	bool absolute_path = false;
-	if (IsPathAbsolute(path)) {
+	absolute_path = false;
+	if (fs.IsPathAbsolute(path)) {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
 	} else if (StringUtil::Contains(splits[0].path,
@@ -1539,22 +1565,25 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		absolute_path = true;
 	} else if (splits[0].path == "~") {
 		// starts with home directory
-		auto home_directory = GetHomeDirectory(opener);
+		auto home_directory = fs.GetHomeDirectory(opener);
 		if (!home_directory.empty()) {
 			absolute_path = true;
 			splits[0].path = home_directory;
 			D_ASSERT(path[0] == '~');
-			if (!HasGlob(path)) {
-				return Glob(home_directory + path.substr(1));
+			if (!fs.HasGlob(path)) {
+				result = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
+				finished = true;
+				return;
 			}
 		}
 	}
 	// Check if the path has a glob at all
-	if (!HasGlob(path)) {
+	if (!fs.HasGlob(path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		return FetchFileWithoutGlob(path, opener, absolute_path);
+		result = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+		finished = true;
+		return;
 	}
-	queue<ExpandDirectory> expand_directories;
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
 		// FIXME: we don't support /[GLOB]/.. - i.e. globs in the first level of an absolute path
@@ -1579,76 +1608,121 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 	if (HasMultipleCrawl(splits)) {
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
+}
 
-	vector<OpenFileInfo> result;
-	while (!expand_directories.empty()) {
-		auto expand_directory = std::move(expand_directories.front());
-		expand_directories.pop();
-		bool is_empty = expand_directory.is_empty;
-		auto split_index = expand_directory.split_index;
-		auto &current_path = expand_directory.path;
-		auto &next_split = splits[split_index];
-		bool is_last_component = split_index + 1 == splits.size();
-		auto &next_component = next_split.path;
-		bool has_glob = next_split.has_glob;
-		// if it's the last chunk we need to find files, otherwise we find directories
-		// not the last chunk: gather a list of all directories that match the glob pattern
-		if (!has_glob) {
-			// no glob, just append as-is
-			if (is_empty) {
-				if (is_last_component) {
-					throw InternalException("No glob in only component - but entire split has globs?");
+vector<OpenFileInfo> LocalGlobResult::GetAllFiles() {
+	while (ExpandNextFile()) {
+	}
+	return result;
+}
+
+FileExpandResult LocalGlobResult::GetExpandResult() {
+	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
+	GetFile(1);
+
+	if (result.size() > 1) {
+		return FileExpandResult::MULTIPLE_FILES;
+	} else if (result.size() == 1) {
+		return FileExpandResult::SINGLE_FILE;
+	}
+
+	return FileExpandResult::NO_FILES;
+}
+
+idx_t LocalGlobResult::GetTotalFileCount() {
+	while (ExpandNextFile()) {
+	}
+	return result.size();
+}
+
+OpenFileInfo LocalGlobResult::GetFile(idx_t i) {
+	while (i >= result.size() && ExpandNextFile()) {
+	}
+	if (i < result.size()) {
+		return result[i];
+	}
+	return OpenFileInfo("");
+}
+
+bool LocalGlobResult::ExpandNextFile() {
+	if (finished) {
+		return false;
+	}
+	if (expand_directories.empty()) {
+		if (result.empty()) {
+			// no result found that matches the glob
+			// last ditch effort: search the path as a string literal
+			result = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+		}
+		finished = true;
+		return false;
+	}
+	auto expand_directory = std::move(expand_directories.front());
+	expand_directories.pop();
+	bool is_empty = expand_directory.is_empty;
+	auto split_index = expand_directory.split_index;
+	auto &current_path = expand_directory.path;
+	auto &next_split = splits[split_index];
+	bool is_last_component = split_index + 1 == splits.size();
+	auto &next_component = next_split.path;
+	bool has_glob = next_split.has_glob;
+	// if it's the last chunk we need to find files, otherwise we find directories
+	// not the last chunk: gather a list of all directories that match the glob pattern
+	if (!has_glob) {
+		// no glob, just append as-is
+		if (is_empty) {
+			if (is_last_component) {
+				throw InternalException("No glob in only component - but entire split has globs?");
+			}
+			// no path yet - just append
+			expand_directories.emplace(next_component, split_index + 1);
+		} else {
+			if (is_last_component) {
+				// last component - we are emitting a result here
+				const string filename = fs.JoinPath(current_path, next_component);
+				if (fs.FileExists(filename, opener) || fs.DirectoryExists(filename, opener)) {
+					result.push_back(filename);
 				}
-				// no path yet - just append
-				expand_directories.emplace(next_component, split_index + 1);
 			} else {
-				if (is_last_component) {
-					// last component - we are emitting a result here
-					const string filename = JoinPath(current_path, next_component);
-					if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
-						result.push_back(filename);
-					}
-				} else {
-					// not the last component - add the next directory as "to-be-expanded"
-					expand_directories.emplace(JoinPath(current_path, next_component), split_index + 1);
-				}
+				// not the last component - add the next directory as "to-be-expanded"
+				expand_directories.emplace(fs.JoinPath(current_path, next_component), split_index + 1);
+			}
+		}
+	} else {
+		// glob - need to resolve the glob
+		if (IsCrawl(next_component)) {
+			if (is_last_component) {
+				// the crawl is the last component - we are looking for files in this directory
+				// any directories we encounter are added to the expand directories
+				CrawlDirectoryLevel(fs, current_path, result, expand_directories, split_index);
+			} else {
+				// not the last crawl
+				// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
+				expand_directories.emplace(current_path, split_index + 1);
+				// now crawl the contents of this directory - but don't add any files we find
+				CrawlDirectoryLevel(fs, current_path, nullptr, expand_directories, split_index);
 			}
 		} else {
-			// glob - need to resolve the glob
-			if (IsCrawl(next_component)) {
-				if (is_last_component) {
-					// the crawl is the last component - we are looking for files in this directory
-					// any directories we encounter are added to the expand directories
-					CrawlDirectoryLevel(*this, current_path, result, expand_directories, split_index);
-				} else {
-					// not the last crawl
-					// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
-					expand_directories.emplace(current_path, split_index + 1);
-					// now crawl the contents of this directory - but don't add any files we find
-					CrawlDirectoryLevel(*this, current_path, nullptr, expand_directories, split_index);
-				}
+			// glob this directory according to the next component
+			if (is_last_component) {
+				// last component - match files and place them in the result
+				GlobFilesInternal(fs, current_path, next_component, false, result);
 			} else {
-				// glob this directory according to the next component
-				if (is_last_component) {
-					// last component - match files and place them in the result
-					GlobFilesInternal(*this, current_path, next_component, false, result);
-				} else {
-					// not the last component - match directories and add to expansion list
-					vector<OpenFileInfo> child_directories;
-					GlobFilesInternal(*this, current_path, next_component, true, child_directories);
-					for (auto &file : child_directories) {
-						expand_directories.emplace(std::move(file.path), split_index + 1);
-					}
+				// not the last component - match directories and add to expansion list
+				vector<OpenFileInfo> child_directories;
+				GlobFilesInternal(fs, current_path, next_component, true, child_directories);
+				for (auto &file : child_directories) {
+					expand_directories.emplace(std::move(file.path), split_index + 1);
 				}
 			}
 		}
 	}
-	if (result.empty()) {
-		// no result found that matches the glob
-		// last ditch effort: search the path as a string literal
-		return FetchFileWithoutGlob(path, opener, absolute_path);
-	}
-	return result;
+	return true;
+}
+
+vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+	LocalGlobResult glob_result(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
+	return glob_result.GetAllFiles();
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {

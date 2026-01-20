@@ -100,6 +100,8 @@ public:
 	// returns a C-string of the path that trims any file:/ prefix
 	static const char *NormalizeLocalPath(const string &path);
 
+	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path);
+
 protected:
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
 	                       optional_ptr<FileOpener> opener) override;
@@ -112,8 +114,6 @@ private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
-
-	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
 };
 
 } // namespace duckdb
