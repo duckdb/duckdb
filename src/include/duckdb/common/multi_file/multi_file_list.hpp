@@ -17,9 +17,11 @@ namespace duckdb {
 class MultiFileList;
 
 enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
+enum class MultiFileListScanType : uint8_t { ALWAYS_FETCH, FETCH_IF_AVAILABLE };
 
 struct MultiFileListScanData {
 	idx_t current_file_idx = DConstants::INVALID_INDEX;
+	MultiFileListScanType scan_type = MultiFileListScanType::ALWAYS_FETCH;
 };
 
 class MultiFileListIterationHelper {
@@ -192,6 +194,10 @@ protected:
 	idx_t current_path;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
+	//! File lists for the underlying globs
+	mutable vector<unique_ptr<MultiFileList>> file_lists;
+	//! Current scan state
+	mutable MultiFileListScanData scan_state;
 
 	mutable mutex lock;
 };

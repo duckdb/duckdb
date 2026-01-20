@@ -252,9 +252,11 @@ public:
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener);
+	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
+	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFiles(const string &path,
-	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY, optional_ptr<FileOpener> opener = nullptr);
+	                                                       const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY,
+	                                                       optional_ptr<FileOpener> opener = nullptr);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -314,8 +316,8 @@ protected:
 	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
 
-	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(const string &path,
-											  const FileGlobInput &input, optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                                               optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsGlobExtended() const;
 
 public:

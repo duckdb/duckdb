@@ -53,8 +53,6 @@ public:
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
 
@@ -84,8 +82,8 @@ protected:
 		return true;
 	}
 
-	unique_ptr<MultiFileList> GlobFilesExtended(const string &path,
-											  const FileGlobInput &input, optional_ptr<FileOpener> opener) override;
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override;
 	bool SupportsGlobExtended() const override {
 		return true;
 	}

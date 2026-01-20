@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
 
@@ -185,7 +186,8 @@ protected:
 		return true;
 	}
 
-	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener) override {
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(path);
 		return GetFileSystem().Glob(path, input, GetOpener());

@@ -371,13 +371,36 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	if (current_path >= paths.size()) {
 		return false;
 	}
+	if (current_path >= file_lists.size()) {
+		// glob is not yet started for this file - start it and initiate the scan over this file
+		auto &fs = FileSystem::GetFileSystem(context);
+		auto glob_result = fs.GlobFiles(paths[current_path].path, glob_input);
+		scan_state = MultiFileListScanData();
+		glob_result->InitializeScan(scan_state);
+		file_lists.push_back(std::move(glob_result));
+	}
+	// get the next batch of files we can fetch through the glob
+	auto &glob_list = *file_lists[current_path];
+	scan_state.scan_type = MultiFileListScanType::ALWAYS_FETCH;
+	OpenFileInfo file;
+	if (!glob_list.Scan(scan_state, file)) {
+		// no more files available in this glob - move to the next glob
+		current_path++;
+		return true;
+	}
+	// we found a file as part of this glob - add it to the result
+	vector<OpenFileInfo> glob_files;
+	glob_files.push_back(std::move(file));
 
-	throw InternalException("FIXME: GlobMultiFileList::ExpandPathInternal");
+	// now continue scanning files that are already available (i.e. that don't require extra I/O operations to fetch)
+	scan_state.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
+	while (glob_list.Scan(scan_state, file)) {
+		glob_files.push_back(std::move(file));
+	}
 
-	// auto &fs = FileSystem::GetFileSystem(context);
-	// auto glob_files = fs.GlobFiles(paths[current_path].path, glob_input);
-	// std::sort(glob_files.begin(), glob_files.end());
-	// result.insert(result.end(), glob_files.begin(), glob_files.end());
+	// sort the files and add them to the list of files
+	std::sort(glob_files.begin(), glob_files.end());
+	result.insert(result.end(), glob_files.begin(), glob_files.end());
 
 	current_path++;
 	return true;

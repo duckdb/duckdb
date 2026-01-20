@@ -612,7 +612,8 @@ vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
-unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener) {
+unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInput &input,
+                                           optional_ptr<FileOpener> opener) {
 	if (!SupportsGlobExtended()) {
 		auto result = Glob(path, opener.get());
 		return make_uniq<SimpleMultiFileList>(std::move(result));
@@ -621,7 +622,8 @@ unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInp
 	}
 }
 
-unique_ptr<MultiFileList> FileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener) {
+unique_ptr<MultiFileList> FileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+                                                        optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: GlobFilesExtended is not implemented!", GetName());
 }
 
@@ -657,7 +659,8 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-unique_ptr<MultiFileList> FileSystem::GlobFiles(const string &pattern, const FileGlobInput &input, optional_ptr<FileOpener> opener) {
+unique_ptr<MultiFileList> FileSystem::GlobFiles(const string &pattern, const FileGlobInput &input,
+                                                optional_ptr<FileOpener> opener) {
 	auto result = GlobFilesExtended(pattern, input, opener);
 	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
