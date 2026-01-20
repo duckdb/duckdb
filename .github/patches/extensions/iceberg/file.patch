@@ -1,3 +1,17 @@
+diff --git a/src/iceberg_extension.cpp b/src/iceberg_extension.cpp
+index 4c3b4d5e..ae40ef9c 100644
+--- a/src/iceberg_extension.cpp
++++ b/src/iceberg_extension.cpp
+@@ -79,8 +79,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 
+ 	auto &log_manager = instance.GetLogManager();
+ 	log_manager.RegisterLogType(make_uniq<IcebergLogType>());
+-
+-	config.storage_extensions["iceberg"] = make_uniq<IRCStorageExtension>();
++	StorageExtension::Register(config, "iceberg", make_shared_ptr<IRCStorageExtension>());
+ }
+ 
+ void IcebergExtension::Load(ExtensionLoader &loader) {
 diff --git a/src/iceberg_logging.cpp b/src/iceberg_logging.cpp
 index f7b3fa02..6bedb2f6 100644
 --- a/src/iceberg_logging.cpp

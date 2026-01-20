@@ -764,6 +764,14 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
+ExtensionCallbackManager &DBConfig::GetCallbackManager() {
+	return *callback_manager;
+}
+
+const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
+	return *callback_manager;
+}
+
 string DBConfig::SanitizeAllowedPath(const string &path_p) const {
 	auto path_sep = file_system->PathSeparator(path_p);
 	auto path = path_p;

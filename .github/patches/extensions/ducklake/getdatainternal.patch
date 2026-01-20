@@ -1,3 +1,24 @@
+diff --git a/src/ducklake_extension.cpp b/src/ducklake_extension.cpp
+index 1064250..5a6fc2b 100644
+--- a/src/ducklake_extension.cpp
++++ b/src/ducklake_extension.cpp
+@@ -5,6 +5,7 @@
+ #include "storage/ducklake_storage.hpp"
+ #include "functions/ducklake_table_functions.hpp"
+ #include "storage/ducklake_secret.hpp"
++#include "duckdb/storage/storage_extension.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -12,7 +13,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	loader.SetDescription("Adds support for DuckLake, SQL as a Lakehouse Format");
+ 
+ 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+-	config.storage_extensions["ducklake"] = make_uniq<DuckLakeStorageExtension>();
++	StorageExtension::Register(config, "ducklake", make_shared_ptr<DuckLakeStorageExtension>());
+ 
+ 	config.AddExtensionOption("ducklake_max_retry_count",
+ 	                          "The maximum amount of retry attempts for a ducklake transaction", LogicalType::UBIGINT,
 diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
 index 27f3051..5264af9 100644
 --- a/src/functions/ducklake_add_data_files.cpp
@@ -132,10 +153,24 @@ index 024a1c2..69f6466 100644
  	auto &global_state = sink_state->Cast<DuckLakeDeleteGlobalState>();
  	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_deleted_count));
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
-index d14f968..354ed70 100644
+index d14f968..fc1ab36 100644
 --- a/src/storage/ducklake_insert.cpp
 +++ b/src/storage/ducklake_insert.cpp
-@@ -205,7 +205,7 @@ SinkResultType DuckLakeInsert::Sink(ExecutionContext &context, DataChunk &chunk,
+@@ -16,11 +16,13 @@
+ #include "duckdb/planner/operator/logical_create_table.hpp"
+ #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+ #include "duckdb/planner/expression/bound_cast_expression.hpp"
++#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+ #include "duckdb/planner/expression/bound_reference_expression.hpp"
+ #include "duckdb/common/multi_file/multi_file_reader.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+ #include "duckdb/function/function_binder.hpp"
+ #include "duckdb/planner/operator/logical_projection.hpp"
++#include "duckdb/planner/binder.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -205,7 +207,7 @@ SinkResultType DuckLakeInsert::Sink(ExecutionContext &context, DataChunk &chunk,
  //===--------------------------------------------------------------------===//
  // GetData
  //===--------------------------------------------------------------------===//
@@ -144,7 +179,7 @@ index d14f968..354ed70 100644
                                           OperatorSourceInput &input) const {
  	auto &global_state = sink_state->Cast<DuckLakeInsertGlobalState>();
  	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_insert_count));
-@@ -250,7 +250,7 @@ CopyFunctionCatalogEntry &DuckLakeFunctions::GetCopyFunction(ClientContext &cont
+@@ -250,7 +252,7 @@ CopyFunctionCatalogEntry &DuckLakeFunctions::GetCopyFunction(ClientContext &cont
  	// name), but that do not offer enough control
  	auto &db = *context.db;
  	string extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_COPY_FUNCTIONS);
@@ -216,6 +251,18 @@ index 7ebb3ed..5fe0a8e 100644
  		result.push_back(std::move(info));
  	}
  	return result;
+diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
+index 29634fd..147ba95 100644
+--- a/src/storage/ducklake_transaction.cpp
++++ b/src/storage/ducklake_transaction.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "common/ducklake_types.hpp"
+ #include "common/ducklake_util.hpp"
++#include "duckdb/catalog/catalog_search_path.hpp"
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/uuid.hpp"
+ #include "duckdb/main/attached_database.hpp"
 diff --git a/src/storage/ducklake_transaction_manager.cpp b/src/storage/ducklake_transaction_manager.cpp
 index 4ebc45f..d8ffb3d 100644
 --- a/src/storage/ducklake_transaction_manager.cpp
@@ -230,10 +277,18 @@ index 4ebc45f..d8ffb3d 100644
  		// no snapshot loaded yet for this transaction - load it
  		transaction->GetSnapshot();
 diff --git a/src/storage/ducklake_update.cpp b/src/storage/ducklake_update.cpp
-index f0bd68e..74d645f 100644
+index f0bd68e..f2e5cc6 100644
 --- a/src/storage/ducklake_update.cpp
 +++ b/src/storage/ducklake_update.cpp
-@@ -207,7 +207,7 @@ SinkFinalizeType DuckLakeUpdate::Finalize(Pipeline &pipeline, Event &event, Clie
+@@ -11,6 +11,7 @@
+ #include "duckdb/parallel/thread_context.hpp"
+ #include "duckdb/parser/expression/cast_expression.hpp"
+ #include "duckdb/planner/expression/bound_cast_expression.hpp"
++#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+ #include "duckdb/planner/expression/bound_function_expression.hpp"
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/planner/operator/logical_projection.hpp"
+@@ -207,7 +208,7 @@ SinkFinalizeType DuckLakeUpdate::Finalize(Pipeline &pipeline, Event &event, Clie
  //===--------------------------------------------------------------------===//
  // GetData
  //===--------------------------------------------------------------------===//
